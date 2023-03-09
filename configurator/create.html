@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Grocery Manager</title>
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  </head>
+  <body>
+  <section class="section">
+    <div class="container">
+      <h1 class="title">
+        Grocery Manager
+      </h1>
+      <form action="/create/" method="post">
+        <label for="product_name">Product Name:</label><br>
+        <input type="text" id="product_name" name="product_name" method="post"><br>
+        <input class="button is-success" type="submit" value="&#10133; Create">
+      </form> 
+
+      <form action="/create" method="post">
+        <input method="post" type="text" name="product_name">
+        <button class="w3-button w3-light-grey w3-padding-large" type="submit">
+            <i class="fa fa-paper-plane"></i> Submit
+        </button>
+      </form>
+
+      <form action="result/">
+        <p><input class="w3-input w3-padding-16" method = "post" type="text" placeholder="Playlist URI" required name="URI"></p>
+        <p><input class="w3-input w3-padding-16" method = "post" type="text" placeholder="Spotify Username" required name="Username"></p>
+        <p>
+          <button class="w3-button w3-light-grey w3-padding-large" type="submit">
+            <i class="fa fa-paper-plane"></i> Submit
+          </button>
+        </p>
+      </form>  
+  
+    </div>
+  </section>
+  </body>
+</html>

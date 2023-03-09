@@ -1,0 +1,28 @@
+For each product in grocy, store "search friendly product name"
+Search for deals for all products in grocy that have a "search friendly product name"
+Only include what's on special
+Order by priority:
+    1 - On grocy shopping list
+    2 - Low in stock
+    3 - all other deals
+Within priority groups, order by best deals, or highlight half price, or something
+Put headings for each group
+
+Store the general product where possible in Grocy
+Store specific product names as a list on the general Grocy product (is this mixing the domains?)
+Get list of products from shopping list and "all products" list
+
+Move to SQLite?
+
+
+REMINDER:
+    - Add scraping for ALDI
+    - Add scraping for Amazon
+
+
+
+Products to test with:
+    - Rice crackers             (many specific search items)
+    - Apples                    (one or two generic search items)
+    - Men's Antiperspirant      (one sort-of-specific search item that should match with many products and don't care which is on sale)
+    - Toothpaste                (has a search item, marked as inactive product for search)

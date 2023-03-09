@@ -3,7 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib, ssl
 import requests
-
+import json
 import arrow
 from rich import print
 
@@ -12,6 +12,7 @@ from emailing.generate import generate_weekly_email
 from search import coles, woolies
 from search.types import ProductOffers
 
+secrets = json.load(open('secrets.json'))
 
 def get_product_offers(product_names: List[str]) -> ProductOffers:
     """ Returns ProductOffers object with optimistic search results for product_names. """
@@ -59,10 +60,10 @@ def sendEmail(products: List[str]):
     # Generate & send email
     port = 587  # For starttls
     smtp_server = "smtp.gmail.com"
-    sender_email = ""
-    receiver1_email = ""
-    receiver2_email = ""
-    app_password = ""
+    sender_email = secrets['emails']['sender']
+    receiver1_email = secrets['emails']['ben']
+    receiver2_email = secrets['emails']['xi']
+    app_password = secrets['app_passwords']['google']
 
     context = ssl.create_default_context()
     with smtplib.SMTP(smtp_server, port) as server:
@@ -75,8 +76,8 @@ def sendEmail(products: List[str]):
 
 
 def getSearchItems():
-    _GrocyProducts = requests.get(/api/objects/products",
-                                  headers={"GROCY-API-KEY":""}).json()
+    _GrocyProducts = requests.get(f"{secrets['urls']['grocy']}/api/objects/products",
+                                  headers={"GROCY-API-KEY":secrets['api_keys']['grocy']}).json()
 
     _ActiveProducts = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', _GrocyProducts)
 

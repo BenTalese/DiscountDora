@@ -16,9 +16,10 @@ Move to SQLite?
 
 
 REMINDER:
-    - Add scraping for ALDI
-    - Add scraping for Amazon
 
+
+See summary in emails
+Configurator page showing this week's deals where you can change how they are sorted (best deals, deals by category of food, etc)
 
 
 Products to test with:
@@ -26,3 +27,8 @@ Products to test with:
     - Apples                    (one or two generic search items)
     - Men's Antiperspirant      (one sort-of-specific search item that should match with many products and don't care which is on sale)
     - Toothpaste                (has a search item, marked as inactive product for search)
+
+Configurator page ideas:
+    - Filtering on products (is active, is hidden, has search names, etc)
+    - Hide products
+    - Show hidden products

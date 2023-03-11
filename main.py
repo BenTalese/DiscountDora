@@ -1,17 +1,18 @@
 from typing import List, Any, Dict, Tuple
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import smtplib, ssl
 import requests
 import json
 from rich import print
+import os
 
 from examples import compare_offers, best_offers_by_merchant, generate_offer_table
-from emailing.generate import generate_weekly_email
-from search import coles, woolies
-from search.types import ProductOffers
+from web_scraper import coles, woolies
+from web_scraper.types import ProductOffers
+from emailer.delivery import send_email
 
-secrets = json.load(open('secrets.json'))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(current_dir, 'secrets.json'), 'r') as file:
+    SECRETS = json.load(file)
+
 
 def get_product_offers(product_names: List[str]) -> ProductOffers:
     """ Returns ProductOffers object with optimistic search results for product_names. """
@@ -40,40 +41,16 @@ def display(products: List[str]):
     compare_offers(product_offers)
     best_offers_by_merchant(product_offers)
     generate_offer_table(product_offers)
-    send_price_report_email(products)
+    send_email(product_offers,
+               SECRETS['emails']['sender'],
+               SECRETS['app_passwords']['google'],
+               [email for email in SECRETS['emails'].values() if email != SECRETS['emails']['sender']])
 
-
-def send_price_report_email(products: List[str]):
-    product_offers = get_product_offers(products)
-
-    text = "Oopsie, something went wrongsie :("
-    html = generate_weekly_email(product_offers)
-
-    message = MIMEMultipart('alternative')
-    message.attach(MIMEText(text, 'plain'))
-    message.attach(MIMEText(html, 'html'))
-
-    # Generate & send email
-    port = 587  # For starttls
-    smtp_server = "smtp.gmail.com"
-    sender_email = secrets['emails']['sender']
-    receiver1_email = secrets['emails']['ben']
-    receiver2_email = secrets['emails']['xi']
-    app_password = secrets['app_passwords']['google']
-
-    context = ssl.create_default_context()
-    with smtplib.SMTP(smtp_server, port) as server:
-        server.ehlo()
-        server.starttls(context=context)
-        server.ehlo()
-        server.login(sender_email, app_password)
-        server.sendmail(sender_email, receiver1_email, message.as_string())
-        #server.sendmail(sender_email, receiver2_email, message.as_string())
 
 
 def get_search_items():
-    grocy_products = requests.get(f"{secrets['urls']['grocy']}/api/objects/products",
-                                  headers={"GROCY-API-KEY":secrets['api_keys']['grocy']}).json()
+    grocy_products = requests.get(f"{SECRETS['urls']['grocy']}/api/objects/products",
+                                  headers={"GROCY-API-KEY":SECRETS['api_keys']['grocy']}).json()
 
     active_products = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', grocy_products)
 

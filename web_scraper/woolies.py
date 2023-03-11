@@ -3,8 +3,8 @@ from typing import Any, Optional, List, Generator
 
 from pydantic import BaseModel, Extra
 
-from search import types
-from search.session import new_session
+from web_scraper import types
+from web_scraper.session import new_session
 
 
 def _woolies_session():

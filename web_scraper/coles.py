@@ -5,8 +5,8 @@ from typing_extensions import Literal
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
 
-from search import types
-from search.session import new_session
+from web_scraper import types
+from web_scraper.session import new_session
 
 _session = new_session()
 

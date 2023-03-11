@@ -1,2 +1,14 @@
 
+.env
+
+.vscode
+
+__pycache__
+
 secrets.json
+
+venv
+
+search/__pycache__
+
+emailing/__pycache__

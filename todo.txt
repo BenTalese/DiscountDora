@@ -1,10 +1,10 @@
 For each product in grocy, store "search friendly product name"
 Search for deals for all products in grocy that have a "search friendly product name"
-Only include what's on special
 Order by priority:
     1 - On grocy shopping list
     2 - Low in stock
     3 - all other deals
+    4 - things not on sale
 Within priority groups, order by best deals, or highlight half price, or something
 Put headings for each group
 

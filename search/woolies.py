@@ -80,7 +80,7 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
     RichDescription: Optional[str]  # null
     IsDeliveryPass: bool  # false
     HideWasSavedPrice: bool  # false
-    Brand: str  # "Cadbury"
+    Brand: Optional[str]  # "Cadbury"
     IsRestrictedByDeliveryMethod: bool  # false
     Diagnostics: str  # "0"
     IsBundle: bool  # false

@@ -4,7 +4,6 @@ from email.mime.text import MIMEText
 import smtplib, ssl
 import requests
 import json
-import arrow
 from rich import print
 
 from examples import compare_offers, best_offers_by_merchant, generate_offer_table
@@ -26,9 +25,6 @@ def get_product_offers(product_names: List[str]) -> ProductOffers:
             if (product is not None):
                 product_offers[name].append(product)
 
-            #if (product := next(merchant_product_search, None)) is not None:
-            #    product_offers[name].append(product)
-
         if not product_offers[name]:
             print(f'[yellow]{name} could not be found!')
             product_offers.pop(name)
@@ -44,10 +40,10 @@ def display(products: List[str]):
     compare_offers(product_offers)
     best_offers_by_merchant(product_offers)
     generate_offer_table(product_offers)
-    sendEmail(products)
+    send_price_report_email(products)
 
 
-def sendEmail(products: List[str]):
+def send_price_report_email(products: List[str]):
     product_offers = get_product_offers(products)
 
     text = "Oopsie, something went wrongsie :("
@@ -75,23 +71,23 @@ def sendEmail(products: List[str]):
         #server.sendmail(sender_email, receiver2_email, message.as_string())
 
 
-def getSearchItems():
-    _GrocyProducts = requests.get(f"{secrets['urls']['grocy']}/api/objects/products",
+def get_search_items():
+    grocy_products = requests.get(f"{secrets['urls']['grocy']}/api/objects/products",
                                   headers={"GROCY-API-KEY":secrets['api_keys']['grocy']}).json()
 
-    _ActiveProducts = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', _GrocyProducts)
+    active_products = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', grocy_products)
 
-    _ProductsBySearchFriendlyNames = []
-    for product in _ActiveProducts:
-        _SearchName = product['userfields']['SearchNames']
-        if ("\n" in _SearchName):   # Grocy adds newline characters
-            _SearchNames = _SearchName.split('\n')
-            [_ProductsBySearchFriendlyNames.append(searchName) for searchName in _SearchNames]
+    products_by_search_friendly_names = []
+    for product in active_products:
+        search_name = product['userfields']['SearchNames']
+        if ("\n" in search_name):   # Grocy adds newline characters
+            search_names = search_name.split('\n')
+            [products_by_search_friendly_names.append(searchName) for searchName in search_names]
         else:
-            _ProductsBySearchFriendlyNames.append(_SearchName)
+            products_by_search_friendly_names.append(search_name)
 
-    return _ProductsBySearchFriendlyNames
+    return products_by_search_friendly_names
 
 
 if __name__ == '__main__':
-    display(products = getSearchItems())
+    display(products = get_search_items())

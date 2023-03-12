@@ -3,6 +3,9 @@
 
 ***
 
+### Vision Statement
+Discount Dora is a web-based, self-hosted grocery discount deal scanner, built to integrate seamlessly with the popular grocery management software, [Grocy](https://grocy.info/).
+
 ### Getting Started
 Installation
 

@@ -14,6 +14,11 @@ Get list of products from shopping list and "all products" list
 
 Move to SQLite?
 
+Examples of readme:
+    - https://github.com/adam-p/markdown-here/wiki/Markdown-Here-Cheatsheet
+    - https://raw.githubusercontent.com/grocy/grocy/master/README.md
+    - https://raw.githubusercontent.com/jellyfin/jellyfin/master/README.md
+
 
 REMINDER:
 
@@ -21,6 +26,7 @@ REMINDER:
 See summary in emails
 Configurator page showing this week's deals where you can change how they are sorted (best deals, deals by category of food, etc)
 
+Move away from Flask?
 
 Products to test with:
     - Rice crackers             (many specific search items)

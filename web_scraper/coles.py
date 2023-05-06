@@ -76,7 +76,7 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
 
     @property
     def is_on_special(self) -> Optional[bool]:
-        return self.pricing.saveAmount is not None
+        return self.pricing.saveAmount is not None if self.pricing is not None else False #FIXME: Put this if here just to stop it crashing when pricing is None
 
     @property
     def link(self) -> str:

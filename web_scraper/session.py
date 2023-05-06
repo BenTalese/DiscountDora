@@ -24,7 +24,7 @@ def new_session() -> requests.Session:
     )
     session.mount('https://', DefaultTimeoutAdapter(timeout=5, max_retries=retry_strategy))
     session.hooks = {
-        'response': lambda r, *args, **kwargs: r.raise_for_status()
+        'response': lambda r, *args, **kwargs: r.raise_for_status() #FIXME: Will crash when product search is empty, e.g. ""
     }
     session.headers.update({
         'User-Agent': 'coles_vs_woolies'  # some User-Agent

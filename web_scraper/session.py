@@ -10,7 +10,10 @@ class DefaultTimeoutAdapter(HTTPAdapter):
 
     def send(self, request: PreparedRequest, **kwargs) -> Response:
         kwargs['timeout'] = kwargs.get('timeout') or self.timeout
-        return super().send(request, **kwargs)
+        try:
+            return super().send(request, **kwargs)
+        except requests.exceptions.ReadTimeout: #FIXME: Bad way to do a retry
+            return super().send(request, **kwargs)
 
 
 def new_session() -> requests.Session:

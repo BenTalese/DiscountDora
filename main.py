@@ -13,6 +13,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'secrets.json'), 'r') as file:
     SECRETS = json.load(file)
 
+#TODO: Currently unavailable products come up as not found
 
 def get_product_offers(product_names: List[str]) -> ProductOffers:
     """ Returns ProductOffers object with optimistic search results for product_names. """
@@ -57,7 +58,7 @@ def get_search_items():
     products_by_search_friendly_names = []
     for product in active_products:
         search_name = product['userfields']['SearchNames']
-        if ("\n" in search_name):   # Grocy adds newline characters
+        if ("\n" in search_name):   #FIXME: Grocy adds newline characters
             search_names = search_name.split('\n')
             [products_by_search_friendly_names.append(searchName) for searchName in search_names]
         else:

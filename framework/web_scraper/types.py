@@ -4,6 +4,7 @@ from typing_extensions import Literal
 
 
 class Product(abc.ABC):
+    # NOTE: Only used by email template to show where offer came from
     merchant: Literal['coles', 'woolies']
 
     @property

@@ -4,7 +4,7 @@ import datetime
 from rich.console import Console
 from rich.table import Table
 
-from web_scraper.types import ProductOffers
+from framework.web_scraper.types import ProductOffers
 
 _SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
 _TEMPLATE_DIR = _SCRIPT_DIR / 'templates'

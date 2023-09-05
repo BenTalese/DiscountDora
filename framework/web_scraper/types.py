@@ -33,6 +33,8 @@ class Product(abc.ABC):
 
 
 ProductOffers = Dict[str, List[Product]]  # {'product_name': [Product, ...]}
+
+# NOTE: Only used under "examples", probably not needed
 Merchant = Literal['coles', 'woolies']
 
 

@@ -23,7 +23,7 @@ def new_session() -> requests.Session:
         total=3,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        method_whitelist=["HEAD", "GET", "OPTIONS"]
+        #method_whitelist=["HEAD", "GET", "OPTIONS"]
     )
     session.mount('https://', DefaultTimeoutAdapter(timeout=5, max_retries=retry_strategy))
     session.hooks = {

@@ -5,8 +5,8 @@ from typing_extensions import Literal
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
 
-from web_scraper import types
-from web_scraper.session import new_session
+from framework.web_scraper import types
+from framework.web_scraper.session import new_session
 
 _session = new_session()
 
@@ -22,40 +22,41 @@ def _init() -> str:
 
 _BUILD_ID = _init()
 
-
+# NOTE: This is product domain
 class Product(types.Product, BaseModel, extra=Extra.allow):
-    merchant = 'coles'
+    merchant: str = 'coles'
 
+    # NOTE: Looks like sub classes, should be domain entities also??
     class Pricing(BaseModel, extra=Extra.allow):
-        class Unit(BaseModel, extra=Extra.allow):
-            quantity: int  # 1
-            ofMeasureQuantity: Optional[int]  # 100
-            ofMeasureUnits: Optional[str]  # "g"
-            price: Optional[float]  # 2
-            ofMeasureType: Optional[str]  # "g"
-            isWeighted: bool = False  # false
+        #class Unit(BaseModel, extra=Extra.allow):
+            #quantity: int  # 1
+            #ofMeasureQuantity: Optional[int]  # 100
+            #ofMeasureUnits: Optional[str]  # "g"
+            #price: Optional[float]  # 2
+            #ofMeasureType: Optional[str]  # "g"
+            #isWeighted: bool = False  # false
 
         now: float  # 6
         was: float  # 6.5
-        saveAmount: Optional[float]  # 0.5
-        priceDescription: Optional[str]  # "Was $6.50 on Sep 2022"
-        savePercent: Optional[float]  # 50
-        saveStatement: Optional[str]  # "save $5.00"
-        unit: Unit
+        saveAmount: Optional[float] = 0  # 0.5
+        #priceDescription: Optional[str]  # "Was $6.50 on Sep 2022"
+        #savePercent: Optional[float]  # 50
+        saveStatement: Optional[str] = ""  # "save $5.00"
+        #unit: Unit
 
-        comparable: str  # "$2.00 per 100g"
-        promotionType: Optional[str]  # "DOWNDOWN", "SPECIAL"
-        specialType: Optional[str]  # "PERCENT_OFF", "MULTI_SAVE", "WHILE_STOCKS_LAST"
-        onlineSpecial: bool  # false
+        #comparable: str  # "$2.00 per 100g"
+        #promotionType: Optional[str]  # "DOWNDOWN", "SPECIAL"
+        #specialType: Optional[str]  # "PERCENT_OFF", "MULTI_SAVE", "WHILE_STOCKS_LAST"
+        #onlineSpecial: bool  # false
 
-    _type: Literal['PRODUCT']
+    #_type: Literal['PRODUCT']      TODO: WTF IS THIS?
     id: int  # 2351888
     name: str  # "Cadbury Clinkers Lollies"
     brand: str  # "Pascall"
-    description: str  # "PASCALL CADBURY CLINKERS 300G"
+    #description: str  # "PASCALL CADBURY CLINKERS 300G"
     size: str  # "300g"
     availability: bool  # true
-    availabilityType: str  # "InStoreAndOnline"
+    #availabilityType: str  # "InStoreAndOnline"
     pricing: Optional[Pricing]  # None if `availability=False`
 
     def __str__(self):
@@ -80,9 +81,10 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
 
     @property
     def link(self) -> str:
-        return f'https://www.coles.com.au/product/{self.display_name.replace(" ", "-")}-{self.id}'
+        return f'https://www.coles.com.au/product/{self.display_name.replace(" ", "-")}-{self.id}' # NOTE: Doesn't seem like it's necessary to have the display name, only ID required for URL to resolve
 
 
+# NOTE: Looks like webscraper-specific domain
 class ProductPageSearchResult(BaseModel, extra=Extra.allow):
     start: int  # 0
     didYouMean: Optional[list]  # null
@@ -127,6 +129,6 @@ def search(search_term: str, specials_only: bool = False) -> Generator[ProductPa
         params['page'] += 1
 
 
-if __name__ == '__main__':
-    gen = search('Cadbury Dairy Milk Chocolate Block 180g')
-    print(next(gen))
+# if __name__ == '__main__':
+#     gen = search('Cadbury Dairy Milk Chocolate Block 180g')
+#     print(next(gen))

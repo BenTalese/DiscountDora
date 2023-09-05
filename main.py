@@ -5,9 +5,9 @@ from rich import print
 import os
 
 from examples import compare_offers, best_offers_by_merchant, generate_offer_table
-from web_scraper import coles, woolies
-from web_scraper.types import ProductOffers
-from emailer.delivery import send_email
+from framework.web_scraper import coles, woolies
+from framework.web_scraper.types import ProductOffers
+from framework.emailer.delivery import send_email
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'secrets.json'), 'r') as file:
@@ -42,14 +42,16 @@ def display(products: List[str]):
     compare_offers(product_offers)
     best_offers_by_merchant(product_offers)
     generate_offer_table(product_offers)
-    send_email(product_offers,
-               SECRETS['emails']['sender'],
-               SECRETS['app_passwords']['google'],
-               [email for email in SECRETS['emails'].values() if email != SECRETS['emails']['sender']])
+    # send_email(product_offers,
+    #            SECRETS['emails']['sender'],
+    #            SECRETS['app_passwords']['google'],
+    #            [email for email in SECRETS['emails'].values() if email != SECRETS['emails']['sender']])
 
 
 
 def get_search_items():
+    return ["Cadbury Dairy Milk Chocolate Block 180g"]
+
     grocy_products = requests.get(f"{SECRETS['urls']['grocy']}/api/objects/products",
                                   headers={"GROCY-API-KEY":SECRETS['api_keys']['grocy']}).json()
 

@@ -6,7 +6,7 @@ import random
 import os
 
 from .generate import generate_email_body
-from web_scraper.types import ProductOffers
+from framework.web_scraper.types import ProductOffers
 
 
 

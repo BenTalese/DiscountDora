@@ -8,7 +8,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from web_scraper.types import ProductOffers, Merchant, Product
+from framework.web_scraper.types import ProductOffers, Merchant, Product
 
 _console = Console()
 

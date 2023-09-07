@@ -6,9 +6,9 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
 
 from framework.web_scraper import types
-from framework.web_scraper.session import new_session
+from framework.web_scraper.session import create_session
 
-_session = new_session()
+_session = create_session()
 
 
 def _init() -> str:

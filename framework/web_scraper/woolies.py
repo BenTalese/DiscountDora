@@ -4,11 +4,11 @@ from typing import Any, Optional, List, Generator
 from pydantic import BaseModel, Extra
 
 from framework.web_scraper import types
-from framework.web_scraper.session import new_session
+from framework.web_scraper.session import create_session
 
 
 def _woolies_session():
-    session = new_session()
+    session = create_session()
     session.get(url='https://www.woolworths.com.au')
     return session
 

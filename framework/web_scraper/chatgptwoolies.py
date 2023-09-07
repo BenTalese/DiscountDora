@@ -2,6 +2,8 @@ import requests
 from dataclasses import dataclass
 from typing import Optional
 
+from session import create_session
+
 @dataclass
 class Product:
     merchant: str = 'woolies'
@@ -31,6 +33,8 @@ def fetch_product(product_id: str) -> Product:
     )
 
 def search(search_term: str, page=1):
+    session = create_session()
+    session.get(url='https://www.woolworths.com.au')
     url = 'https://www.woolworths.com.au/shop/search/products'
     params = {
         'pageNumber': page,

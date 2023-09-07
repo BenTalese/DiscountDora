@@ -1,4 +1,5 @@
-from typing import List, Any, Dict, Tuple
+import asyncio
+from typing import List, Any, Dict
 import requests
 import json
 from rich import print
@@ -8,6 +9,10 @@ from examples import compare_offers, best_offers_by_merchant, generate_offer_tab
 from framework.web_scraper import coles, woolies
 from framework.web_scraper.types import ProductOffers
 from framework.emailer.delivery import send_email
+
+from dependency_injector import providers
+from clapy.dependency_injection import DependencyInjectorServiceProvider
+from clapy.pipeline import RequiredInputValidator
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'secrets.json'), 'r') as file:
@@ -52,22 +57,35 @@ def display(products: List[str]):
 def get_search_items():
     return ["Cadbury Dairy Milk Chocolate Block 180g"]
 
-    grocy_products = requests.get(f"{SECRETS['urls']['grocy']}/api/objects/products",
-                                  headers={"GROCY-API-KEY":SECRETS['api_keys']['grocy']}).json()
+    # grocy_products = requests.get(f"{SECRETS['urls']['grocy']}/api/objects/products",
+    #                               headers={"GROCY-API-KEY":SECRETS['api_keys']['grocy']}).json()
 
-    active_products = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', grocy_products)
+    # active_products = filter(lambda product: product['userfields']['IsActiveSearch'] == '1', grocy_products)
 
-    products_by_search_friendly_names = []
-    for product in active_products:
-        search_name = product['userfields']['SearchNames']
-        if ("\n" in search_name):   #FIXME: Grocy adds newline characters
-            search_names = search_name.split('\n')
-            [products_by_search_friendly_names.append(searchName) for searchName in search_names]
-        else:
-            products_by_search_friendly_names.append(search_name)
+    # products_by_search_friendly_names = []
+    # for product in active_products:
+    #     search_name = product['userfields']['SearchNames']
+    #     if ("\n" in search_name):   #FIXME: Grocy adds newline characters
+    #         search_names = search_name.split('\n')
+    #         [products_by_search_friendly_names.append(searchName) for searchName in search_names]
+    #     else:
+    #         products_by_search_friendly_names.append(search_name)
 
-    return products_by_search_friendly_names
+    # return products_by_search_friendly_names
 
 
 if __name__ == '__main__':
     display(products = get_search_items())
+
+async def main():
+
+    # Setup:
+    _ServiceProvider = DependencyInjectorServiceProvider
+    _UsecaseScanLocations = ["sample/use_cases"]
+    _ServiceProvider.configure_clapy_services(_UsecaseScanLocations, [r"venv", r"src"], [r".*main\.py"])
+
+    _ServiceProvider.register_service(providers.Factory, RequiredInputValidator)
+    # _ServiceProvider.register_service(providers.Factory, ConversationController)
+
+# if __name__ == "__main__":
+#     asyncio.run(main())

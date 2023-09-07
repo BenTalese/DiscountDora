@@ -10,26 +10,28 @@ class DefaultTimeoutAdapter(HTTPAdapter):
 
     def send(self, request: PreparedRequest, **kwargs) -> Response:
         kwargs['timeout'] = kwargs.get('timeout') or self.timeout
-        try:
-            return super().send(request, **kwargs)
-        except requests.exceptions.ReadTimeout: #FIXME: Bad way to do a retry
-            return super().send(request, **kwargs)
+        return super().send(request, **kwargs)
 
 
-def new_session() -> requests.Session:
-    """ Return requests.Session with batteries included; i.e. timeout, retries, error-raising. """
-    session = requests.session()
+def create_session(
+        user_agent: str = "DiscountDora/1.0.0 (ben.talese@gmail.com)",
+        max_retries: int = 3,
+        timeout: int = 10) -> requests.Session:
+    session = requests.Session()
+
+    session.headers.update({'User-Agent': user_agent})
+
     retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        #method_whitelist=["HEAD", "GET", "OPTIONS"]
+        total=max_retries,
+        backoff_factor = 2,
+        status_forcelist=[400, 401, 403, 404, 429, 500, 502, 503, 504]
     )
-    session.mount('https://', DefaultTimeoutAdapter(timeout=5, max_retries=retry_strategy))
+
     session.hooks = {
-        'response': lambda r, *args, **kwargs: r.raise_for_status() #FIXME: Will crash when product search is empty, e.g. ""
+        'response': lambda r, *args, **kwargs: r.raise_for_status()
     }
-    session.headers.update({
-        'User-Agent': 'coles_vs_woolies'  # some User-Agent
-    })
+
+    session.mount('http://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
+    session.mount('https://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
+
     return session

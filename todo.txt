@@ -22,3 +22,7 @@ Configurator page ideas:
     - Filtering on products (is active, is hidden, has search names, etc)
     - Hide products
     - Show hidden products
+
+
+Ability to search and pick which product to add from merchant (so grab list of products that come up based
+off search, like a test search and user can pick, which then picks and saves the product by ID)

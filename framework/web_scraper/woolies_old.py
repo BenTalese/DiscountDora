@@ -3,24 +3,23 @@ from typing import Any, Optional, List, Generator
 
 from pydantic import BaseModel, Extra
 
-from framework.web_scraper import types
-from framework.web_scraper.session import create_session
+from session import create_session
 
 
-def _woolies_session():
-    session = create_session()
-    session.get(url='https://www.woolworths.com.au')
-    return session
+# def _woolies_session():
+#     session = create_session()
+#     session.get(url='https://www.woolworths.com.au')
+#     return session
 
 
-_session = _woolies_session()
+# _session = _woolies_session()
 
 
-class Product(types.Product, BaseModel, extra=Extra.allow):
+class Product(BaseModel, extra=Extra.allow):
     merchant: str = 'woolies'
 
     #TileID: int  # 1
-    Stockcode: int  # 153266
+    Stockcode: int = 0 # 153266
     #Barcode: Optional[str]  # "9300617296027"
     #GtinFormat: int  # 13
     #CupPrice: Optional[float]  # 1.67
@@ -30,11 +29,11 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
     #InstoreCupString: str  # "$1.67 / 100G"
     #HasCupPrice: bool  # true
     #InstoreHasCupPrice: bool  # true
-    Price: Optional[float]  # None if `IsAvailable=False`
+    Price: Optional[float] = 1.0 # None if `IsAvailable=False`
     #InstorePrice: Optional[float]  # 6 if `IsAvailable=False`
     #Name: str  # "Cadbury Dairy Milk Chocolate Block"
-    DisplayName: str  # "Cadbury Dairy Milk Chocolate Block 360g"
-    UrlFriendlyName: str  # "cadbury-dairy-milk-chocolate-block"
+    DisplayName: str = "" # "Cadbury Dairy Milk Chocolate Block 360g"
+    UrlFriendlyName: str = "" # "cadbury-dairy-milk-chocolate-block"
     #Description: str  # " Cadbury Dairy Milk Chocolate<br>Block  360G"
     #SmallImageFile: str  # "https://cdn0.woolworths.media/content/wowproductimages/small/153266.jpg"
     #MediumImageFile: str  # "https://cdn0.woolworths.media/content/wowproductimages/medium/153266.jpg"
@@ -42,15 +41,15 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
     #IsNew: bool  # false
     #IsHalfPrice: bool  # false
     #IsOnlineOnly: bool  # false
-    IsOnSpecial: bool  # false
+    IsOnSpecial: bool = False # false
     #InstoreIsOnSpecial: bool  # false
     #IsEdrSpecial: bool  # false
     #SavingsAmount: Optional[float]  # 0
     #InstoreSavingsAmount: Optional[float]  # 0
-    WasPrice: float  # 6
-    InstoreWasPrice: float  # 6
+    WasPrice: float = 1.0 # 6
+    InstoreWasPrice: float = 1.0 # 6
     #QuantityInTrolley: int  # 0
-    Unit: str  # "Each"
+    Unit: str = "" # "Each"
     #MinimumQuantity: int  # 1
     #HasBeenBoughtBefore: bool  # false
     #IsInTrolley: bool  # false
@@ -71,7 +70,7 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
     #SupplyLimitMessage: str  # "'Cadbury Dairy Milk Chocolate Block' has a supply limit of 36. [...]'"
     #SmallFormatDescription: str  # "Cadbury Dairy Milk Chocolate Block "
     #FullDescription: str  # "Cadbury Dairy Milk Chocolate Block "
-    IsAvailable: bool  # true
+    IsAvailable: bool = False # true
     #InstoreIsAvailable: bool  # false
     #IsPurchasable: bool  # true
     #InstoreIsPurchasable: bool  # false
@@ -120,51 +119,52 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
         return Product.parse_obj(response.json())
 
 
-class ProductSearchResult(BaseModel, extra=Extra.allow):
-    Products: Optional[List[Product]]
-    Name: str
-    DisplayName: str
+# class ProductSearchResult(BaseModel, extra=Extra.allow):
+#     Products: Optional[List[Product]]
+#     Name: str
+#     DisplayName: str
 
 
-class ProductPageSearchResult(BaseModel, extra=Extra.allow):
-    Products: Optional[List[ProductSearchResult]]
-    SearchResultsCount: int
-    Corrections: Optional[Any]
-    SuggestedTerm: Optional[Any]
+# class ProductPageSearchResult(BaseModel, extra=Extra.allow):
+#     Products: Optional[List[ProductSearchResult]]
+#     SearchResultsCount: int
+#     Corrections: Optional[Any]
+#     SuggestedTerm: Optional[Any]
 
 
-def im_feeling_lucky(search_term: str) -> Generator[Product, None, None]:
-    paginated_search = search(search_term)
-    for page in paginated_search:
-        for product in page.Products:
-            for _product in product.Products:
-                yield _product
+# def im_feeling_lucky(search_term: str) -> Generator[Product, None, None]:
+#     paginated_search = search(search_term)
+#     for page in paginated_search:
+#         for product in page.Products:
+#             for _product in product.Products:
+#                 yield _product
+
+# # PROBABLY BETTER TO SEARCH AS REQUIRED, SO ON USER NAVIGATION IN UI
+# def search(search_term: str, page=1) -> Generator[ProductPageSearchResult, None, None]:
+#     url = 'https://www.woolworths.com.au/apis/ui/Search/products'
+#     body = {
+#         'Filters': [],
+#         'IsSpecial': False,
+#         'Location': f'/shop/search/products?{urllib.parse.urlencode({"searchTerm": search_term})}',
+#         'PageNumber': page,
+#         'PageSize': 36,
+#         'SearchTerm': search_term,
+#         'SortType': "TraderRelevance"
+#     }
+#     while True:
+#         response = _session.post(
+#             url=url,
+#             json=body,
+#         ).json()
+#         search_page = ProductPageSearchResult.parse_obj(response)
+#         if search_page.Products is None:
+#             break
+#         yield search_page
+#         body['PageNumber'] += 1
 
 
-def search(search_term: str, page=1) -> Generator[ProductPageSearchResult, None, None]:
-    url = 'https://www.woolworths.com.au/apis/ui/Search/products'
-    body = {
-        'Filters': [],
-        'IsSpecial': False,
-        'Location': f'/shop/search/products?{urllib.parse.urlencode({"searchTerm": search_term})}',
-        'PageNumber': page,
-        'PageSize': 36,
-        'SearchTerm': search_term,
-        'SortType': "TraderRelevance"
-    }
-    while True:
-        response = _session.post(
-            url=url,
-            # cookies={'bm_sz': _session.cookies.get('bm_sz')},
-            json=body,
-        ).json()
-        search_page = ProductPageSearchResult.parse_obj(response)
-        if search_page.Products is None:
-            break
-        yield search_page
-        body['PageNumber'] += 1
-
-
-if __name__ == '__main__':
-    gen = search('Cadbury Dairy Milk Chocolate Block 180g')
-    print(next(gen))
+# if __name__ == '__main__':
+#     gen = search('Chocolate')
+#     for x in gen:
+#         print(1)
+#     # print(next(gen))

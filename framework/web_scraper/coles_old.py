@@ -28,16 +28,16 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
 
     # NOTE: Looks like sub classes, should be domain entities also??
     class Pricing(BaseModel, extra=Extra.allow):
-        #class Unit(BaseModel, extra=Extra.allow):
-            #quantity: int  # 1
+        class Unit(BaseModel, extra=Extra.allow):
+            quantity: int = 0 # 1
             #ofMeasureQuantity: Optional[int]  # 100
             #ofMeasureUnits: Optional[str]  # "g"
             #price: Optional[float]  # 2
             #ofMeasureType: Optional[str]  # "g"
             #isWeighted: bool = False  # false
 
-        now: float  # 6
-        was: float  # 6.5
+        now: float = 0 # 6
+        was: float = 0 # 6.5
         saveAmount: Optional[float] = 0  # 0.5
         #priceDescription: Optional[str]  # "Was $6.50 on Sep 2022"
         #savePercent: Optional[float]  # 50
@@ -50,14 +50,14 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
         #onlineSpecial: bool  # false
 
     #_type: Literal['PRODUCT']      TODO: WTF IS THIS?
-    id: int  # 2351888
-    name: str  # "Cadbury Clinkers Lollies"
-    brand: str  # "Pascall"
+    id: int = 0 # 2351888
+    name: str = "" # "Cadbury Clinkers Lollies"
+    brand: str = "" # "Pascall"
     #description: str  # "PASCALL CADBURY CLINKERS 300G"
-    size: str  # "300g"
-    availability: bool  # true
+    size: str = "" # "300g"
+    availability: bool = False # true
     #availabilityType: str  # "InStoreAndOnline"
-    pricing: Optional[Pricing]  # None if `availability=False`
+    pricing: Optional[Pricing] = None # None if `availability=False`
 
     def __str__(self):
         price_str = f"unavailable ${self.pricing}"
@@ -86,13 +86,13 @@ class Product(types.Product, BaseModel, extra=Extra.allow):
 
 # NOTE: Looks like webscraper-specific domain
 class ProductPageSearchResult(BaseModel, extra=Extra.allow):
-    start: int  # 0
-    didYouMean: Optional[list]  # null
-    noOfResults: int  # 182
-    start: int  # 0
-    pageSize: int  # 48
-    keyword: str  # "cadbury chocolate"
-    resultType: int  # 1
+    start: int = 0 # 0
+    didYouMean: Optional[list] # null
+    noOfResults: int = 0 # 182
+    start: int = 0 # 0
+    pageSize: int = 0 # 48
+    keyword: str = "" # "cadbury chocolate"
+    resultType: int = 0 # 1
     results: List[Product]
 
     def search_exact(self, product_name: str) -> Optional[Product]:

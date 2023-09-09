@@ -6,7 +6,7 @@ from rich import print
 import os
 
 from examples import compare_offers, best_offers_by_merchant, generate_offer_table
-from framework.web_scraper import coles, woolies
+from framework.web_scraper import coles_old, woolies_old
 from framework.web_scraper.types import ProductOffers
 from framework.emailer.delivery import send_email
 
@@ -25,7 +25,7 @@ def get_product_offers(product_names: List[str]) -> ProductOffers:
     product_offers: Dict[str, List[Any]] = {}
     for name in product_names:
         product_offers[name] = []
-        for merchant in [coles, woolies]:
+        for merchant in [coles_old, woolies_old]:
             merchant_product_search = merchant.im_feeling_lucky(name)
 
             product = next(merchant_product_search, None)
@@ -55,7 +55,7 @@ def display(products: List[str]):
 
 
 def get_search_items():
-    return ["Cadbury Dairy Milk Chocolate Block 180g"]
+    return ["Chocolate"]
 
     # grocy_products = requests.get(f"{SECRETS['urls']['grocy']}/api/objects/products",
     #                               headers={"GROCY-API-KEY":SECRETS['api_keys']['grocy']}).json()

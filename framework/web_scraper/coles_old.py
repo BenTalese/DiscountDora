@@ -5,8 +5,7 @@ from typing_extensions import Literal
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
 
-from framework.web_scraper import types
-from framework.web_scraper.session import create_session
+from session import create_session
 
 _session = create_session()
 
@@ -23,7 +22,7 @@ def _init() -> str:
 _BUILD_ID = _init()
 
 # NOTE: This is product domain
-class Product(types.Product, BaseModel, extra=Extra.allow):
+class Product(BaseModel, extra=Extra.allow):
     merchant: str = 'coles'
 
     # NOTE: Looks like sub classes, should be domain entities also??
@@ -129,6 +128,6 @@ def search(search_term: str, specials_only: bool = False) -> Generator[ProductPa
         params['page'] += 1
 
 
-# if __name__ == '__main__':
-#     gen = search('Cadbury Dairy Milk Chocolate Block 180g')
-#     print(next(gen))
+if __name__ == '__main__':
+    gen = search('Chocolate')
+    print(next(gen))

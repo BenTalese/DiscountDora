@@ -22,21 +22,7 @@ COLES:
     availability
     pricing (Pricing)
 
-PRODUCT ENTITY
-ID
-?Brand?
-IsAvailable
-?ProductUrl? (Link)
-?Merchant?
-Name
-Deals (List of deal entity)
-?Size?
 
-DEAL ENTITY
-DateOfDeal
-PriceNow
-PriceWas
-IsOnSpecial (useless??)
 
 WOOLWORTHS <-> COLES
 Stockcode - id
@@ -55,21 +41,4 @@ Unit - ???
 ??? - size
 
 
-ScanJob:
-    - ScannedOnUtc
-    - Products
-.
-StockItem
-    - ID
-    - Name
-    - StockLevel
-    - StockLevelLastUpdatedOnUtc (so you can be notified an item's stock level has not changed in a long time, customisable frequency and can turn on/off)
-    - Location (StockLocation)
-
-StockLevel
-    - ID (needed?)
-    - Description
-
-StockLocation
-    - ID (needed?)
-    - Description
+WoolworthsProductOffer -> Product & ProductOffer

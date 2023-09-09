@@ -32,6 +32,7 @@ class WoolworthsProductOffer(BaseModel, extra='allow'):
     PackageSize: str # '333G'
     InstoreIsAvailable: bool
     Brand: str # 'Lindt'
+    Variety: str # 'Mineral Water'
 
 # TODO: This could be on the WoolworthsProductOffer? See remaining from old woolies search file
 def search_by_id(product_id: str):
@@ -81,6 +82,6 @@ def search(search_term: str, max_page_search: int = 0, start_page: int = 1):
         # if _Search_page.Products is None:
 
 if __name__ == '__main__':
-    gen = search('Chocolate', 1)
+    gen = search('Soda', 1)
     for x in gen:
         print(x)

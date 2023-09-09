@@ -1,5 +1,7 @@
 import asyncio
 from typing import List, Any, Dict
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
 import requests
 import json
 from rich import print
@@ -13,6 +15,11 @@ from framework.emailer.delivery import send_email
 from dependency_injector import providers
 from clapy.dependency_injection import DependencyInjectorServiceProvider
 from clapy.pipeline import RequiredInputValidator
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db' # TODO: appsettings.json
+db = SQLAlchemy(app)
+
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(current_dir, 'secrets.json'), 'r') as file:

@@ -16,5 +16,5 @@ class StockItem:
         self.id = id
         self.location = location
         self.name = name
-        self.stock = stock_level
+        self.stock_level = stock_level
         self.stock_level_last_updated_on_utc = stock_level_last_updated_on_utc

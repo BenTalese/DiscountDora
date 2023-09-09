@@ -1,3 +1,28 @@
+Main features:
+    - Maintaining a list of stock items
+    - Maintaining shopping list(s)
+    - Searching products available from merchants
+    - Weekly deals
+    - Linking merchant products to stock items
+    - Getting notifications
+        - A linked merchant product has come back in stock
+    - Meal tracking
+        - In stock
+        - Planning
+    - Recipe catalogue
+    - Users & authentication
+
+Inspiration: https://demo.grocy.info/stockoverview
+
+
+==============================================================================================================================
+==============================================================================================================================
+==============================================================================================================================
+==============================================================================================================================
+==============================================================================================================================
+
+
+
 Examples of readme:
     - https://github.com/adam-p/markdown-here/wiki/Markdown-Here-Cheatsheet
     - https://raw.githubusercontent.com/grocy/grocy/master/README.md
@@ -9,8 +34,6 @@ REMINDER:
 
 See summary in emails
 Configurator page showing this week's deals where you can change how they are sorted (best deals, deals by category of food, etc)
-
-Move away from Flask?
 
 Products to test with:
     - Rice crackers             (many specific search items)

@@ -26,3 +26,286 @@ Configurator page ideas:
 
 Ability to search and pick which product to add from merchant (so grab list of products that come up based
 off search, like a test search and user can pick, which then picks and saves the product by ID)
+
+#58 Only get on sale results for a product
+    - Would be good if you could tick an option for a product so that you only get results if that product has a sale.
+    - This would be good to combine with searching broadly for a product term.
+    - For example, I have a product "Olive Oil", I want Dora to scan for everything matching "Olive Oil" but I only want to see items that are on sale.
+    - Could report at the end on products that were found but were not on sale.
+
+#57 Ability to multi-search
+    - Would be good if you could create a product, click a button to "test search", see a list of products that came up for that search and tick on/off the ones you want to be included in the weekly deal scan.
+
+#56 Add reminder emails
+As a user, I want to be able to setup and receive reminders about sales.
+This could be in the form of:
+    - Turn on reminders option that will always email and specify day to get reminder
+    - Add "remind me" button to email so specific weekly deal email will be resent
+    - Add "remind me" button per product to email
+    - Do either both or one of the "remind me" button options in the dashboard
+
+#55 Toggle search result filtering
+As a consumer of the web scraper, I want to be able to toggle an option for specific products that will mean a broad search is done and the search yields multiple results.
+Scenario: I want to see deals for chicken breast, but I don't care what brand or what weight. Just show me everything for chicken breast.
+
+
+#54 Add logging
+As a developer of the dashboard, I want to have logging on what is happening in the program. Specifically, this should be when something goes wrong, I want a log file to tell me what went wrong.
+
+#53 Have a multi-selection action bar
+As a consumer of the dashboard, I want a multi-selection action bar to perform bulk actions.
+    - Should be a bar that pops up on the bottom of the screen
+    - Should report the number of actively selected items
+    - Should have buttons for each available bulk action for the currently selected items
+
+#52 Quick add selection of products to preferred store shopping list
+As a consumer of the dashboard, I want to be able to make a selection of products and click a button to "quick add" the products from the deals page to the preferred store's shopping list for those products.
+    - When creating a multi-selection, an option bar on the bottom should appear
+    - Should alert user if "some of the products are not cheapest their preferred store" at the time of adding
+    - Should notify of success
+
+#51 Quick add a specific product to the shopping list of the cheapest store
+As a consumer of the dashboard, I want to be able to "quick add" a product to the shopping list of the store that has the best deal for that product.
+    - Should be a button in the row of the product
+    - Need to visually differentiate between this quick add and the preferred store quick add
+
+#50 Add a specific product to a shopping list
+As a consumer of the dashboard, I want to be able to click a button that will allow me to add a product to a shopping list.
+    - Button should be in the row of the product
+    - Should pop up with a modal to select the shopping list to add to
+
+#49 Quick add a specific product to preferred store's shopping list
+As a consumer of the dashboard, I want to be able to click a button to "quick add" a product from the deals page to the preferred store's shopping list for that product.
+    - Should alert user if product is not cheapest from that store at the time of adding
+    - Should notify of success and inform of which shopping list the product was added to
+
+#48 See preferred store for products
+As a user of the dashboard, I want to be able to select and save a preferred store for products. This is so I can:
+    - Remember the store I prefer to buy a particular product from
+    - Quickly add a product to the shopping list of my preferred store
+    - Separate ticket: add option to sync preferred store in Dora to default store in Grocy (import data from Grocy, or match Grocy with Dora)
+
+#47 Add a report generator
+As a user of Dora, I want to be able to generate custom reports based on scan data.
+Ideas:
+    - Set custom date ranges
+    - Include / exclude groups of products (e.g. only report on low stock)
+    - Ability to save report to Dora "Reports" page
+    - Ability to export and download report as PDF
+
+#46 Add option to disable product groups from being scanned
+As a user of the web scraper, I want to be able to enable or disable groups of products from being included in the scan report.
+    - Could be actually not scanning the groups at all and not saving any data
+    - Could instead scan and save the data but not include it in the report
+    - Example 1: I want to include low stock items and exclude items not on sale at all
+    - Example 2: I only want to see deals for items on my shopping lists
+
+#45 Be able to change time between syncs
+As a user of the sync processor, I want to be able to change the amount of time before another sync iteration occurs.
+
+
+#44 Be able to trigger a manual sync of the processor
+As a user of the sync processor, I want to be able to trigger a manual sync.
+
+#43 Add a sync processor service
+As a user of Dora, I want to have a sync processor service to sync up Dora with Grocy.
+    - Should gather data from Grocy to pull over into Dora
+    - Does it require anything to be pushed over to Grocy from Dora?... unsure.
+
+#42 Have a sync processor page
+As a consumer of the dashboard, I want to be able to view and monitor the status of the Grocy sync processor.
+    Should have event logs showing:
+        - Exceptions in Dora
+        - Action type (Create, Read, Update, Delete)
+        - ID of sync event
+        - Response code from Grocy
+        - Response message from Grocy
+        - Number of event logs to process
+        - Status of the processor (disabled, running, waiting)
+        - Time till next sync run
+
+#41 Have a connection management page for Grocy integration
+As a user of the dashboard, I want to be able to setup and manage the integration with Grocy.
+    - Should be able to see connection status
+    - Will be where connection is setup with API key and Grocy URL
+
+#40 Be able to edit the mappings between Dora products and Grocy products
+As a user of the dashboard, I want to be able to edit the mappings of my products between Dora and Grocy.
+This will require:
+    - A page in Dora to edit mappings
+    - A nullable key on each Dora product representing the Grocy product ID
+    - Page should either be visible by default and say a message/have a link to "connect Dora to Grocy" which navigates to the connection management page, OR, pages relating to integration with Grocy should be hidden if Grocy is not connected
+
+#39 Track per gram or per mil price
+As a consumer of the web scraper, I want to have tracking of the per gram or per mil price of products and use that information in addition to work out the best deals.
+E.g. Maxibons might be on sale for half price but they're still $X/100ml which is still expensive compared to other ice creams.
+Also add automatic price compare (e.g. sort products by cheapest per x price)
+
+#38 Highlight frequency of grocery deals
+As a user of the dashboard, I want to clearly see the frequency of deals.
+    This should use the historical data tracked from the weekly scans
+    Deals that are infrequently on should be highlighted somehow, possibly with a solid line outline around the row
+    Deals that are frequently on should be highlighted as well, but in contrast to the infrequent deals (they are only highlighted to show they will likely go on sale again soon)
+    The frequency should probably be highlighted with a range from frequent to infrequent, with frequent less pronounced and infrequent more pronounced
+    Frequency can be calculated many ways:
+        Make range based on frequency of all deals
+        Make range based on individual product's sale frequency
+    Possibly a different ticket:
+        The above does not take into account the amount off the deal is, which is important in calculating deal frequency, for example oat milky may be 10% off every 2 weeks, but half price once a year.
+
+#37 Option to be alerted of products that are out of stock or had errors
+As a consumer of the dashboard, I want to be informed of products that are out of stock or have encountered errors from searching.
+    - Should be a configurable user option to see this information (should have separate options for out of stock and errored product warnings)
+    - Products with errors should be shown in red info boxes at the top
+    - Products that are out of stock should be shown in grey at the bottom of the list or in alphabetical ordering in their usual place but with less emphasis on them, whatever makes the most sense UI-wise
+
+#36 When scanning, recognise out of stock or unavailable
+As a consumer of the web scraper, I want the scraper to be able to tell when something is not in stock, unavailable or missing pricing information.
+    - Not in stock/unavailable should be marked as such in the scrape results
+    - If it fails to find the product entirely or pricing information is missing, this should also be marked as such in the scrape results
+
+#35 Be able to add product only to Dora
+As a user of Dora, I want to be able to add a product to be searched only in Dora and not synced across to Grocy.
+    - If it's a once off or unique search name, should it require a parent product?
+    - Alternative to above, instead of having search names without parent products, treat products without search names as their own search name (so search by the name of the parent product)
+
+#34 See total savings from price deal report
+As a consumer of the dashboard, I want to see how much I will be saving in total if I were to purchase all deals from the price report.
+    How will this work with multiple shopping lists?
+
+#33 See total savings from shopping list
+As a consumer of the dashboard, I want to see how much I will be saving in total if I were to purchase all deals on my shopping list.
+    How will this work with multiple shopping lists?
+
+#32 See total price of shopping list
+As a consumer of the dashboard, I want to see the total price of my shopping list from Grocy (or from Dora if Dora will have its own shopping lists sync'd with Grocy).
+    How will this work with multiple shopping lists either in Dora or Grocy or both?
+
+#31 Option to auto add best product deals to the Grocy shopping list
+    - Idea came from seeing option to have multiple shopping lists in Grocy where you could make a shopping list per shop (e.g. Coles, ALDI, etc)
+    - Depending on implementation, could require having a Grocy instance for feature to work, or if implementation is done all within Dora with shopping list being sync'd across to Grocy it may not require Grocy
+    - Another idea is Dora could see if shopping list exists for this week and add to that, if not it can create a Grocy shopping list
+    - Shopping list name could be generated as "_D/M"
+
+#30 Dockerise the software
+As a user of Discount Dora, I want to be able to set up Dora as a Docker container instance.
+
+#29 Add scraping for Amazon and IGA
+As a consumer of the discount web scraper, I want to also have search results from Amazon's website.
+
+#28 Add install requirements for project
+As a user of Discount Dora, I want all the requirements to run the program documented.
+    Also look into auto-installation of requirements
+
+#27 Add option to scan Grocy shopping list for products without search names
+    - Option to make this automatic on a schedule or manual
+    - Should scan all products from the Grocy shopping list and give a report either via email or immediately in the dashboard on what products are missing search-friendly names.
+
+#26 Add a "Run manual scan" button
+As a consumer of the dashboard, I want to be able to trigger a single scan of deals at any time. This is so that
+    - Does this require admin account?
+    - Will this trigger an email to be sent?
+
+#25 Have the ability to sync Grocy database to Discount Dora
+The end result should be that all products from Grocy have been added to Discount Dora (mirror sync).
+On a successful sync:
+    - The product name comes across
+    - Pre-existing products are not re-added
+    - Non-existent products are deleted
+
+#24 Setup SQLite database and connect database appropriately
+    - Database should be cleanly connected to all services that require it.
+    - Should be able to run migrations and generate the database from the code.
+
+#23 Save scan results to a database
+As a consumer of the web scraper, I want scraping results to be persisted to a database for later retrieval.
+
+#22 Be able to see historical prices
+As a consumer of the dashboard, I want to see tracking of historical product prices that were scanned.
+    - Should be its own page
+    - Could have graphs and analytics
+    - Could have a search function
+
+#21 Be able to see this week's deals
+As a consumer of the dashboard, I want to see this week's deals.
+Deals should have groupings and orderings, possibly:
+    Sorting within groups: alphabetical, by price off/best deal, etc
+    Groups in order:
+        On the Grocy shopping list already
+        Half price
+        Out of stock in Grocy
+        Low in stock in Grocy
+        All other deals
+        Not on sale
+    Groupings should have clearly shown headings
+
+#20 Add option to stay logged in
+On the login page, have the option to turn on "staying logged in".
+Will need to be looked into for how long this can last before expiring.
+
+#19 Be able to edit users
+As an admin of the dashboard, I want to be able to edit any user and grant admin powers.
+
+#18 Be able to delete users
+As an admin of the dashboard, I want to be able to delete users. Should not be able to delete my own user.
+
+#17 Be able to edit my user details
+As a consumer of the dashboard, I want to be able to edit my own user details including username and password.
+
+#16 Be able to see all users
+As an admin of the dashboard, I want to see a list of all users.
+
+#15 Be able to add new users
+As an admin of the dashboard, I want to be able to add new users.
+Account names should be sanitised by trimming white space and changing all characters to lowercase.
+
+#14 Have a default account for first setup
+As a consumer of the dashboard, I want to be able to login to the dashboard on first setup.
+This account should be marked as an admin account.
+
+#13 Have a logon page
+As a consumer of the dashboard, I want to be able to first see a logon page when visiting the dashboard.
+
+#12 Be able to change the status of a product's search name
+As a consumer of the dashboard, I want to be able to change whether a search name is active or inactive.
+    - If it is active, the search name should be searched for.
+    - If it is inactive, the search name should not be search for
+    - The product should still be searched if it has other search names.
+
+#11 Be able to change the status of a product
+As a consumer of the dashboard, I want to be able to change whether a product is active or inactive.
+    - If it is active, the product should be searched for with all its active search names.
+    - If it is inactive, the product should not be search for at all
+
+#10 Visually differentiate between active and inactive search names
+As a consumer of the dashboard, I want to easily tell between active and inactive search names for my products.
+
+#9 Visually differentiate between active, inactive and hidden products
+As a consumer of the dashboard, I want to clearly tell the difference between active, inactive and hidden products.
+
+#8 Be able to see search names for products
+As a consumer of the dashboard, I want to see for each Grocy product:
+
+    A list of all it's search names
+    The search names neatly, visually grouped under the parent Grocy product
+
+#7 Be able to see a list of all Grocy products
+As a consumer of the dashboard, I want to see a list of all my Grocy products.
+
+#6 Only show a summary of this week's deals in email
+As a consumer of the weekly discount emails, I don't want to be overwhelmed by a bazillion items in the list. I only want to see the best deals right now.
+
+#5 Add per kilo/per gram pricing in scan
+As a consumer of the web scraper, I want the data returned to have either one of or both whole item pricing and per kilo/per gram pricing.
+
+#4 Add categories for products in email
+As a consumer of the weekly discount emails, I want products to be sorted into categories with clear visual groupings, possibly by using separate tables.
+
+#3 Add scraping for ALDI
+As a consumer of the discount web scraper, I want to also have search results from ALDI's website
+
+#2 Better fit the table sent in the email
+As a consumer of the discount emails, I want to have an easily readable table with an appropriate size font while also having the columns neatly arranged and spaced.
+
+#1 Add alphabetical sorting for email
+As a consumer of the weekly discount emails, I want to see my grocery deals sorted alphabetically within categories the grocery items belong to (e.g. meat, dairy, etc).

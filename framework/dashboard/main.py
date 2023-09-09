@@ -1,5 +1,4 @@
 from flask import Flask, request
-import os
 
 app = Flask(__name__)
 app.config["DEBUG"] = False
@@ -53,7 +52,7 @@ def create():
     # TODO: find out if these could be combined by changing r and a into one of: r+, rb+ or a+
     with open('search_items.txt', 'r', encoding="utf-8") as file:
         next_available_id = int([product.split("<->") for product in file.read().splitlines()][-1][0])+1 # this looks complex, but it's just a combination of above lines of code
-    
+
     with open('search_items.txt', 'a', encoding="utf-8") as file:
         file.write(f"{next_available_id}<->{product_name}\n")
 

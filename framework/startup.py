@@ -5,7 +5,7 @@ import json
 from rich import print
 import os
 
-from examples import compare_offers, best_offers_by_merchant, generate_offer_table
+from _misc.examples import compare_offers, best_offers_by_merchant, generate_offer_table
 from framework.web_scraper import coles_old, woolies_old
 from framework.web_scraper.types import ProductOffers
 from framework.emailer.delivery import send_email

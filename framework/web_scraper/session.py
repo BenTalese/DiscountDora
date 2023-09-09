@@ -25,6 +25,7 @@ def create_session(
         backoff_factor = 2,
         status_forcelist=[429, 500, 502, 503, 504]
     )
+
     session.mount('http://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
     session.mount('https://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
 

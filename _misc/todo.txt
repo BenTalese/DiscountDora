@@ -14,6 +14,10 @@ Main features:
 
 Idea: change between g and kg / ml and l
 
+Emails should be stored in the database!
+
+Update gitignore to use */
+
 Inspiration: https://demo.grocy.info/stockoverview
 
 Changelog: https://github.com/grocy/grocy/blob/master/changelog/72_4.0.2_2023-08-19.md

@@ -5,10 +5,12 @@
 
 __pycache__
 
-secrets.json
-
 venv
 
 search/__pycache__
 
 emailing/__pycache__
+
+framework/database.db
+
+framework/appsettings.json

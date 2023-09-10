@@ -1,4 +1,3 @@
-
 .env
 
 .vscode
@@ -7,10 +6,8 @@ __pycache__
 
 venv
 
-search/__pycache__
+*/__pycache__
 
-emailing/__pycache__
+*/database.db
 
-framework/database.db
-
-framework/appsettings.json
+*/appsettings.json

@@ -1,11 +1,9 @@
-from abc import ABC, abstractproperty
 import asyncio
 from flask import Flask
 
 from flask_sqlalchemy import SQLAlchemy
 from application.services.ipersistence_context import IPersistenceContext
 from framework.persistence.models.stock_item_model import StockItemModel
-from .database import db
 from sqlalchemy.orm import noload, Query
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.session import Session
@@ -24,28 +22,28 @@ class PersistenceContext:#(IPersistenceContext):
     # ---------------- IPersistenceContext Methods ----------------
 
     def add(self, entity):
-        db.session.add(self.convert_to_model(entity))
+        self.db.session.add(self.convert_to_model(entity))
 
     def get_entities(self, entity_type):
         model_class = self.get_model_class(entity_type)
-        return QueryBuilder(db.session, model_class)
+        return QueryBuilder(self.db.session, model_class)
         #return db.session.query(model_class).all()#.options(noload('*')).all()
 
     def remove(self, entity):
-        db.session.delete(self.convert_to_model(entity))
+        self.db.session.delete(self.convert_to_model(entity))
 
     async def save_changes_async(self):
-        await asyncio.get_event_loop().run_in_executor(None, db.session.commit())
+        await asyncio.get_event_loop().run_in_executor(None, self.db.session.commit())
 
     # end IPersistenceContext Methods
 
     @classmethod
     def initialise(cls, app: Flask):
-        db.init_app(app)
+        PersistenceContext.db.init_app(app)
         with app.app_context():
             if app.config.get('DEBUG'): #TODO Options interface, abstract away how settings are stored
                 #db.drop_all()
-                db.create_all() #TODO: This doesn't handle migrations on existing tables
+                PersistenceContext.db.create_all() #TODO: This doesn't handle migrations on existing tables
                 #db.seed()  #TODO
                 #db.session.add(testconfig)
                 #db.session.commit()
@@ -53,7 +51,7 @@ class PersistenceContext:#(IPersistenceContext):
                 #x = PersistenceContext().find_model_for_entity(Test)
                 #v = 0
             else:
-                db.create_all() #TODO: This doesn't handle migrations on existing tables
+                PersistenceContext.db.create_all() #TODO: This doesn't handle migrations on existing tables
 
     def seed_database() -> None:
         pass

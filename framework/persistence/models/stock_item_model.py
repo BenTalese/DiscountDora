@@ -1,10 +1,10 @@
 import uuid
 
 from sqlalchemy import func
-from startup import db
+from persistence.infrastructure.persistence_context import db
 
 
-class StockItemConfiguration(db.Model):
+class StockItemModel(db.Model):
     __tablename__ = 'StockItem'
 
     id = db.Column(

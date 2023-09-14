@@ -21,5 +21,15 @@
       <form action="/create" method="get"><input class="button is-success" type="submit" value="&#10133; Add Product"></form>
     </div>
   </section>
+  <h1>Web Scraper</h1>
+  <form method="POST" action="/search">
+      <input type="text" name="search_term" placeholder="Enter search term">
+      <button type="submit">Search</button>
+  </form>
+  <ul>
+      {% for product in products %}
+          <li>{{ product.DisplayName }} - Price: {{ product.Price }}</li>
+      {% endfor %}
+  </ul>
   </body>
 </html>

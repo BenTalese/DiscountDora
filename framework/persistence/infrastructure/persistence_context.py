@@ -1,16 +1,17 @@
 import asyncio
-from flask import Flask
 
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from application.services.ipersistence_context import IPersistenceContext
-from framework.persistence.models.stock_item_model import StockItemModel
-from sqlalchemy.orm import noload, Query
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.session import Session
-from clapy.dependency_injection import IServiceProvider
+from sqlalchemy.orm import Query
+
+from application.services.iquerybuilder import IQueryBuilder
+
+
+db = SQLAlchemy()
 
 class PersistenceContext:#(IPersistenceContext):
-    db = SQLAlchemy()
 
     model_classes = {
         mapper.class_.__name__: mapper.class_
@@ -22,28 +23,29 @@ class PersistenceContext:#(IPersistenceContext):
     # ---------------- IPersistenceContext Methods ----------------
 
     def add(self, entity):
-        self.db.session.add(self.convert_to_model(entity))
+        db.session.add(self.convert_to_model(entity))
 
     def get_entities(self, entity_type):
         model_class = self.get_model_class(entity_type)
-        return QueryBuilder(self.db.session, model_class)
+        return QueryBuilder(db.session, model_class) # TODO: This won't work!
         #return db.session.query(model_class).all()#.options(noload('*')).all()
 
     def remove(self, entity):
-        self.db.session.delete(self.convert_to_model(entity))
+        db.session.delete(self.convert_to_model(entity))
 
     async def save_changes_async(self):
-        await asyncio.get_event_loop().run_in_executor(None, self.db.session.commit())
+        await asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
     # end IPersistenceContext Methods
 
     @classmethod
     def initialise(cls, app: Flask):
-        PersistenceContext.db.init_app(app)
+        db.app = app
+        db.init_app(app)
         with app.app_context():
             if app.config.get('DEBUG'): #TODO Options interface, abstract away how settings are stored
                 #db.drop_all()
-                PersistenceContext.db.create_all() #TODO: This doesn't handle migrations on existing tables
+                db.create_all() #TODO: This doesn't handle migrations on existing tables
                 #db.seed()  #TODO
                 #db.session.add(testconfig)
                 #db.session.commit()
@@ -51,7 +53,7 @@ class PersistenceContext:#(IPersistenceContext):
                 #x = PersistenceContext().find_model_for_entity(Test)
                 #v = 0
             else:
-                PersistenceContext.db.create_all() #TODO: This doesn't handle migrations on existing tables
+                db.create_all() #TODO: This doesn't handle migrations on existing tables
 
     def seed_database() -> None:
         pass
@@ -69,14 +71,17 @@ class PersistenceContext:#(IPersistenceContext):
 
 
 # TODO: Find a home for this...
-class QueryBuilder:
+class QueryBuilder(IQueryBuilder):
     def __init__(self, session: sa_orm.scoped_session[Session], model_class):
         self.session = session
         self.model = model_class
         self.query: Query = session.query(model_class)
 
-    def any(self, condition):
-        return self.query.filter(condition(self.model)).count() > 0
+    def any(self, condition = None):
+        if condition:
+            return self.query.filter(condition(self.model)).count() > 0
+        else:
+            return self.query.count() > 0
 
     def execute(self):
         return self.query.all()

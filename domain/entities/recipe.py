@@ -5,18 +5,11 @@ from domain.entities.stock_item import StockItem
 
 
 class Recipe:
-    def __init__(
-            self,
-            id: uuid,
-            image: bytes,
-            ingredients: List[StockItem],
-            instructions: str,
-            name: str):
-        self.id = id
-        self.image = image
-        self.ingredients = ingredients
-        self.instructions = instructions
-        self.name = name
+    id: uuid
+    image: bytes
+    ingredients: List[StockItem]
+    instructions: str
+    name: str
 
 
 # from typing import List, Optional

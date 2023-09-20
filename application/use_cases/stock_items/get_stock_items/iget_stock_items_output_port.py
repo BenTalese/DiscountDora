@@ -9,5 +9,5 @@ from application.dtos.stock_item_dto import StockItemDto
 class IGetStockItemsOutputPort(IOutputPort, ABC):
 
     @abstractmethod
-    async def present_stock_items(self, stock_items: List[StockItemDto]) -> None: # TODO: Wrong type for stock_items
+    async def present_stock_items_async(self, stock_items: List[StockItemDto]) -> None: # TODO: Wrong type for stock_items
         pass

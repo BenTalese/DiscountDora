@@ -1,0 +1,11 @@
+View - think of it like the mobile app built on top of the view models of oscapi
+    - All static files served by the flask app
+    - Vue.js
+    - HTML
+    - CSS
+
+Exactly like OSCAPI:
+    - View model (json response) (could be either in python or json...but might be better as python classes)
+    - Framework controller (flask method) (MUST HAVE) -> json response like an API
+    - Presenter (python)
+    - IA controller (python)

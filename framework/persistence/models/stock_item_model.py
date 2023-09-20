@@ -1,6 +1,8 @@
 import uuid
+from domain.entities.stock_level import StockLevel
+from domain.entities.stock_location import StockLocation
 
-from persistence.infrastructure.persistence_context import db
+from framework.startup import db
 from sqlalchemy import func
 from sqlalchemy_utils import UUIDType
 
@@ -17,14 +19,14 @@ class StockItemModel(db.Model):
 
     location_id = db.Column(
         db.String(36),
-        db.ForeignKey('location.id'))
+        db.ForeignKey(StockLocation.__name__ + ".id"))
 
     name = db.Column(
         db.String(255))
 
     stock_level_id = db.Column(
         db.String(36),
-        db.ForeignKey('stock_level.id'))
+        db.ForeignKey(StockLevel.__name__ + ".id"))
 
     stock_level_last_updated_on_utc = db.Column(
         db.DateTime(timezone=True),

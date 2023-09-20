@@ -1,9 +1,9 @@
 import uuid
 
-from persistence.infrastructure.persistence_context import db
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.stock_level import StockLevel
+from framework.startup import db
 
 
 class StockLevelModel(db.Model):

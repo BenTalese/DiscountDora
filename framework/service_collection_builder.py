@@ -5,7 +5,7 @@ from application.infrastructure.mapping.mapper import Mapper
 from application.services.imapper import IMapper
 from application.services.ipersistence_context import IPersistenceContext
 from framework.persistence.infrastructure.persistence_context import \
-    PersistenceContext
+    SqlAlchemyPersistenceContext
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
@@ -15,7 +15,7 @@ class ServiceCollectionBuilder:
         self.service_provider = service_provider
 
     def configure_persistence_services(self):
-        self.service_provider.register_service(providers.Factory, PersistenceContext, IPersistenceContext)
+        self.service_provider.register_service(providers.Factory, SqlAlchemyPersistenceContext, IPersistenceContext)
         return self
 
     def configure_application_services(self):

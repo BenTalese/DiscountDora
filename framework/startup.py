@@ -4,56 +4,29 @@ import os
 import sys
 from typing import List
 
-from flask_sqlalchemy import SQLAlchemy
-
 sys.path.append(os.getcwd())
 
-from clapy import DependencyInjectorServiceProvider, RequiredInputValidator
-from dependency_injector import providers
-from flask import Flask, current_app, render_template
+from clapy import DependencyInjectorServiceProvider
+from flask import Flask
 
-from application.infrastructure.mapping.mapper import Mapper
-from application.services.imapper import IMapper
-from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import \
     IGetStockItemsOutputPort
 from domain.entities.stock_item import StockItem
 from framework.dashboard import routes
 from framework.persistence.infrastructure.persistence_context import \
     PersistenceContext
+from framework.service_collection_builder import ServiceCollectionBuilder
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
-# from framework.persistence.models import *
-
-
-# TODO: Find a place for this to live:
-class ServiceCollectionBuilder:
-    def __init__(self, service_provider: DependencyInjectorServiceProvider):
-        self.service_provider = service_provider
-
-    def configure_persistence_services(self):
-        self.service_provider.register_service(providers.Factory, PersistenceContext, IPersistenceContext)
-        return self
-
-    def configure_application_services(self):
-        self.service_provider.register_service(providers.Factory, Mapper, IMapper) # TODO: Separate mapping services method??
-        return self
-
-    def configure_interface_adaptors_services(self):
-        self.service_provider.register_service(providers.Factory, StockItemController)
-        return self
-
-    def configure_clapy_services(self):
-        self.service_provider.configure_clapy_services(["application/use_cases"], [r"venv", r"src"], [r".*main\.py"])
-        return self
 
 class QuickTestPresenter(IGetStockItemsOutputPort):
-    async def present_stock_items(self, stock_items: List[StockItem]):
-        x = stock_items()()
+    async def present_stock_items_async(self, stock_items: List[StockItem]):
+        x = stock_items()
         print("Made it!")
 
 from framework.persistence.infrastructure.persistence_context import db
+
 
 async def startup():
     _ServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()) \
@@ -72,16 +45,9 @@ async def startup():
     app.add_url_rule("/", view_func=routes.index, methods=['GET'])
     app.add_url_rule("/search", view_func=routes.add_stock_item, methods=['POST'])
 
-    # import framework.persistence.models
+    await PersistenceContext.initialise(app)
 
-    # db.init_app(app)
-
-    # x = {
-    #         mapper.class_.__name__: mapper.class_
-    #         for mapper in db.Model.registry.mappers
-    #     }
-
-    PersistenceContext.initialise(app)
+    PersistenceContext.test(app)
 
     _Controller: StockItemController = _ServiceProvider.get_service(StockItemController)
     gg = QuickTestPresenter()
@@ -91,7 +57,7 @@ async def startup():
 
 # db = SQLAlchemy()
 # migrate = Migrate()
-# bcrypt = Bcrypt()
+# bcrypt = Bcrypt() # TODO: Look into this
 
 # def create_app():
 #     app = Flask(__name__, static_url_path='', static_folder='./../react/public')

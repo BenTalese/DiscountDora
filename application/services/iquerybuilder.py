@@ -22,7 +22,7 @@ class IQueryBuilder(ABC):
     def first_or_none(self, condition = None):
         return self
 
-    def select(self, selector):
+    def include(self, selector):
        return self
 
     def where(self, condition):

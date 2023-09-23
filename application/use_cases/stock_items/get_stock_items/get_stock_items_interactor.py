@@ -16,5 +16,6 @@ class GetStockItemsInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: GetStockItemsInputPort, output_port: IGetStockItemsOutputPort):
-        await output_port.present_stock_items(
+        x = self.persistence_context.get_entities(StockItem).execute()
+        await output_port.present_stock_items_async(
             self.mapper.project(self.persistence_context.get_entities(StockItem), get_stock_item_dto))

@@ -20,3 +20,4 @@ def get_stock_location_dto(stock_location: StockLocation) -> StockLocationDto:
     return dto
 
 # TODO: No tests to check if all properties are mapped
+# TODO: Look into tests to check all dto classes have an import statement in the __init__.py file, could use inspect.getsourcefile or something

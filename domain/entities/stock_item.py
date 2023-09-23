@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import datetime
 import uuid
 
@@ -5,6 +6,7 @@ from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 
 
+@dataclass
 class StockItem:
     id: uuid
     location: StockLocation

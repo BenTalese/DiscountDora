@@ -7,11 +7,11 @@ from domain.entities.stock_item import StockItem
 
 @dataclass
 class Recipe:
-    id: uuid
-    image: bytes
-    ingredients: List[StockItem]
-    instructions: str
-    name: str
+    id: uuid = None
+    image: bytes = None
+    ingredients: List[StockItem] = None
+    instructions: str = None
+    name: str = None
 
 
 # from typing import List, Optional

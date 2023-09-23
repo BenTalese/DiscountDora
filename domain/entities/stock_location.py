@@ -4,5 +4,5 @@ import uuid
 
 @dataclass
 class StockLocation:
-    id: uuid
-    description: str
+    id: uuid = None
+    description: str = None

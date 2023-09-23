@@ -8,18 +8,18 @@ from domain.entities.product_offer import ProductOffer
 
 @dataclass
 class Measurement: # TODO: This should be owned in DB
-    id: uuid
-    quantity: int
-    type: str
-    unit: str
+    id: uuid = None
+    quantity: int = None
+    type: str = None
+    unit: str = None
 
 @dataclass
 class Product:
-    id: uuid
-    brand: str
-    isAvailable: bool
-    measurement: Measurement
-    merchant: Merchant
-    name: str
-    offers: List[ProductOffer]
-    url: str
+    id: uuid = None
+    brand: str = None
+    isAvailable: bool = None
+    measurement: Measurement = None
+    merchant: Merchant = None
+    name: str = None
+    offers: List[ProductOffer] = None
+    url: str = None

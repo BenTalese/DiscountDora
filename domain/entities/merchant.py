@@ -4,6 +4,6 @@ import uuid
 
 @dataclass
 class Merchant:
-    id: uuid
-    name: str
-    url: str
+    id: uuid = None
+    name: str = None
+    url: str = None

@@ -7,6 +7,6 @@ from domain.entities.recipe import Recipe
 
 @dataclass
 class Meal:
-    id: uuid
-    name: str
-    recipes: List[Recipe]
+    id: uuid = None
+    name: str = None
+    recipes: List[Recipe] = None

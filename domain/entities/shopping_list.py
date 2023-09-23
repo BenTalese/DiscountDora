@@ -7,5 +7,5 @@ from domain.entities.stock_item import StockItem
 
 @dataclass
 class ShoppingList:
-    id: uuid
-    items: List[StockItem]
+    id: uuid = None
+    items: List[StockItem] = None

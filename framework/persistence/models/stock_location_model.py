@@ -1,4 +1,5 @@
 import uuid
+from sqlalchemy import Column, String
 
 from sqlalchemy_utils import UUIDType
 
@@ -9,10 +10,15 @@ from framework.startup import db
 class StockLocationModel(db.Model):
     __tablename__ = StockLocation.__name__
 
-    id = db.Column(
-        UUIDType(binary=False, native=False),
+    id = Column(
+        UUIDType,
         primary_key=True,
         default=uuid.uuid4)
 
-    description = db.Column(
-        db.String(255))
+    description = Column(
+        String(255))
+
+    def to_entity(self) -> StockLocation:
+        return StockLocation(
+            id = self.id,
+            description = self.description)

@@ -16,6 +16,7 @@ from sqlalchemy_utils import UUIDType
 
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
+from domain.entities.stock_item import StockItem
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
 db = SQLAlchemy()
@@ -27,8 +28,13 @@ class Money:
     currency: str
 
 @dataclass
+class ManyToOneTest:
+    y: str
+
+@dataclass
 class ChildThing:
     x: str
+    g: ManyToOneTest
 
 @dataclass
 class Bid:
@@ -45,17 +51,26 @@ class Listing:
     min_price: Money
     bids: List[Bid]
 
+class ManyToOneTestModel(db.Model):
+    __tablename__ = "many"
+    id = Column(UUIDType, primary_key=True, default=uuid.uuid4)
+    y = Column(String)
+
 class ChildThingModel(db.Model):
     __tablename__ = "child"
     id = Column(UUIDType, primary_key=True, default=uuid.uuid4) # <---------------------------- #TODO: APPLY EVERYWHERE!!
     x = Column(String)
+    g_id = Column(UUIDType, ForeignKey("many.id"))
     bid_id = Column(Integer,
                         ForeignKey("bid.idx"),
                         primary_key=True)
 
+    g = relationship("ManyToOneTestModel", lazy="noload")
+
     def to_entity(self) -> ChildThing:
         return ChildThing(
-            x = self.x
+            x = self.x,
+            g = self.g if self.g else None
         )
 
 class BidModel(db.Model):
@@ -108,9 +123,10 @@ class ListingModel(db.Model):
             bids=[BidModel.to_entity(bid) for bid in self.bids] if self.bids else None
         )
 
-class PersistenceContext(IPersistenceContext):
-    flask_app: Flask
-    model_classes: dict
+class SqlAlchemyPersistenceContext(IPersistenceContext):
+    _identity_map: dict
+    _flask_app: Flask
+    _model_classes: dict
 
     # TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
 
@@ -119,12 +135,16 @@ class PersistenceContext(IPersistenceContext):
     def add(self, entity):
         db.session.add(self.convert_to_model(entity))
 
-    # TODO: Could do find method that uses identity map
+    def find(self, entity_type, id):
+        if id in self._identity_map:
+            return self._identity_map[id]
+        result = self.get_entities(entity_type).first_by_id(id)
+        self._identity_map[id] = result
 
     def get_entities(self, entity_type):
-        with PersistenceContext.flask_app.app_context():
+        with SqlAlchemyPersistenceContext._flask_app.app_context():
             model_class = self.get_model_class(entity_type)
-            return SqlAlchemyQueryBuilder(db.session, model_class) # TODO: This won't work!
+            return SqlAlchemyQueryBuilder(db.session, model_class)
         #return db.session.query(model_class).all()#.options(noload('*')).all()
 
     def remove(self, entity):
@@ -141,13 +161,14 @@ class PersistenceContext(IPersistenceContext):
         import framework.persistence.models  # Must make models visible to db.init_app()
         db.init_app(app)
         app.db = db # TODO: This seems like very bad practice
-        PersistenceContext.flask_app = app
-        PersistenceContext.model_classes = {
+        SqlAlchemyPersistenceContext._flask_app = app
+        SqlAlchemyPersistenceContext._model_classes = {
             mapper.class_.__name__: mapper.class_
             for mapper in db.Model.registry.mappers
         }
+        SqlAlchemyPersistenceContext.identity_map = {}
         with app.app_context():
-            if app.config.get('DEBUG'): # TODO Options interface, abstract away how settings are stored
+            if app.config.get('DEBUG'): # TODO Options interface, abstract away how settings are stored (nah, should be in config file)
                 db.drop_all()
                 db.create_all()
                 Migrate().init_app(app, db) # TODO: Do i need a migrate here?...
@@ -156,11 +177,16 @@ class PersistenceContext(IPersistenceContext):
                 listing.min_price__amount = 1
                 listing.min_price__currency = "AUD"
 
+                manytoonetest = ManyToOneTestModel()
+                manytoonetest.y = "OHHWAAWAWA"
+
                 child1 = ChildThingModel()
                 child1.x = "AHHH"
+                child1.g = manytoonetest
 
                 child2 = ChildThingModel()
                 child2.x = "OHHH"
+                child2.g = manytoonetest
 
                 bid = BidModel()
                 bid.idx = 1
@@ -172,32 +198,28 @@ class PersistenceContext(IPersistenceContext):
                 db.session.add(listing)
                 db.session.commit()
 
-                result = db.session.query(ListingModel).all()
+                result = db.session.query(ListingModel).options(joinedload(ListingModel.bids)).all()
 
-                await seed_initial_data_async(PersistenceContext())
+                await seed_initial_data_async(SqlAlchemyPersistenceContext())
             else:
                 db.create_all() #TODO: This doesn't handle migrations on existing tables
                 Migrate().init_app(app, db) # TODO: Create, mirate, or both?
 
     def get_model_class(self, entity_type):
-        for model_class in self.model_classes.items():
+        for model_class in self._model_classes.items():
             if model_class[0].replace("Model", "") == entity_type.__name__:
                 return model_class[1]
         raise Exception(f"Model not found for: {entity_type.__name__}") #TODO: Test this is a good message
 
+    # FIXME (Potentially): If this ever gets too ugly, make "to_model" methods on each model
     def convert_to_model(self, entity):
         model_class = self.get_model_class(type(entity))
         model_data = vars(entity).copy()
         for attr_name, type_hint in get_type_hints(entity).items():
-            if (type_hint == uuid
-                or type_hint == datetime):
-                continue
-
-            if "entities" in type_hint.__module__ and model_data[attr_name]:
+            if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
                 model_data[attr_name + '_id'] = model_data[attr_name].id
                 del model_data[attr_name]
 
-        x = model_class(**model_data)
         return model_class(**model_data)
 
     @staticmethod
@@ -205,7 +227,7 @@ class PersistenceContext(IPersistenceContext):
         with app.app_context():
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
-            x = PersistenceContext().get_entities(Listing).execute()
+            x = SqlAlchemyPersistenceContext().get_entities(StockItem).include("stock_level").execute()
             v = 0
 
 # TODO IMPORTANT!!! : I have a feeling once i change the model into the domain entity, it will stop tracking changes...
@@ -214,12 +236,12 @@ class PersistenceContext(IPersistenceContext):
 # TODO: Find a home for this...
 # TODO: Match up IQueryBuilder to this
 class SqlAlchemyQueryBuilder(IQueryBuilder):
-    # def __init__(self, app_context: AppContext, session: sa_orm.scoped_session[Session], entity_type, model_class):
-    def __init__(self, session: sa_orm.scoped_session[Session], model_class):
+    def __init__(self, session: sa_orm.scoped_session[Session], model_class, included_attributes = None):
         self.session = session
         self.model = model_class
         self.query: Query = session.query(model_class)
-        self.included = None
+        self.included_attributes = included_attributes or []
+        self.included_model = None
 
     def any(self, condition = None):
         if condition:
@@ -228,7 +250,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             return self.query.count() > 0
 
     def execute(self):
-        with PersistenceContext.flask_app.app_context():
+        with SqlAlchemyPersistenceContext._flask_app.app_context():
             return [model_instance.to_entity() for model_instance in self.query.all()]
 
     # def find():
@@ -237,21 +259,23 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     def first(self, condition = None):
         if condition:
             return self.where(condition).first()
-        return self.query.one()
+        return self.query.one().to_entity()
 
     def first_by_id(self, id):
         result = self.session.get(id) # TODO: Wait how does this work? query is based on model, but this is based on what...?
         if result:
-            return result
+            return result.to_entity()
         else:
             raise Exception("Sequence contains no elements.") #TODO: Contains no elements, or not found...?
 
     def first_or_none(self, condition = None):
         if condition:
-            return self.where(condition).first_or_none()
-        return self.query.one_or_none()
+            result = self.where(condition).first_or_none()
+            return result.to_entity() if result else None
+        result = self.query.one_or_none().to_entity()
+        return result.to_entity() if result else None
 
-    # https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html
+    # # https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html
     def include(self, attribute_name: str):
         # a2 = x.add_columns()
         # a3 = x.add_entity()
@@ -261,17 +285,21 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         # a8 = x.params()
         # a9 = x.select_from()
         model_attribute = getattr(self.model, attribute_name)
-        self.query.options(joinedload(model_attribute))
-        self.included = model_attribute.comparator.entity.entity
-        return self
+        joined_query = SqlAlchemyQueryBuilder(self.session, self.model)
+        joined_query.query = self.query.options(joinedload(model_attribute))
+        joined_query.included_attributes = [model_attribute]
+        joined_query.included_model = model_attribute.comparator.entity.entity
+        return joined_query
 
     def then_include(self, attribute_name: str):
-        if not self.included:
+        if not self.included_attributes:
             raise Exception("No relationship included.") #TODO: Better exception type
-        model_attribute = getattr(self.included, attribute_name)
-        self.query.options(subqueryload(model_attribute))
-        self.included = model_attribute.comparator.entity.entity
-        return self
+        model_attribute = getattr(self.included_model, attribute_name)
+        joined_query = SqlAlchemyQueryBuilder(self.session, self.model, self.included_attributes)
+        joined_query.query = self.query.options(subqueryload(*self.included_attributes, model_attribute))
+        joined_query.included_attributes.append(model_attribute)
+        joined_query.included_model = model_attribute.comparator.entity.entity
+        return joined_query
 
     def where(self, condition):
         self.query = self.query.filter(condition(self.model))

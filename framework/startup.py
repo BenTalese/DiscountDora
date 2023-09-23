@@ -14,7 +14,7 @@ from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_p
 from domain.entities.stock_item import StockItem
 from framework.dashboard import routes
 from framework.persistence.infrastructure.persistence_context import \
-    PersistenceContext
+    SqlAlchemyPersistenceContext
 from framework.service_collection_builder import ServiceCollectionBuilder
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
@@ -45,9 +45,9 @@ async def startup():
     app.add_url_rule("/", view_func=routes.index, methods=['GET'])
     app.add_url_rule("/search", view_func=routes.add_stock_item, methods=['POST'])
 
-    await PersistenceContext.initialise(app)
+    await SqlAlchemyPersistenceContext.initialise(app)
 
-    PersistenceContext.test(app)
+    SqlAlchemyPersistenceContext.test(app)
 
     _Controller: StockItemController = _ServiceProvider.get_service(StockItemController)
     gg = QuickTestPresenter()

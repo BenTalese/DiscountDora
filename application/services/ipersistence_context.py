@@ -4,21 +4,17 @@ from application.services.iquerybuilder import IQueryBuilder
 
 class IPersistenceContext(ABC):
     @abstractmethod
-    def add(self, entity) -> None: #TODO: Check all interfaces have returns defined
+    def add(self, entity) -> None:
         pass
 
     @abstractmethod
-    async def save_changes_async(self) -> None: # FIXME: Only need self if requiring an instance...
+    def get_entities(self, entity_type) -> IQueryBuilder:
         pass
 
     @abstractmethod
     def remove(self, entity) -> None:
         pass
 
-    # @abstractmethod
-    # def get_by_id(self, model_class, model_id) -> ???:
-    #     pass
-
     @abstractmethod
-    def get_entities(self, entity_type) -> IQueryBuilder:
+    def save_changes_async(self) -> None:
         pass

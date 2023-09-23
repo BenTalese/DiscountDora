@@ -1,8 +1,5 @@
 import asyncio
-import datetime
-import uuid
-from dataclasses import dataclass
-from typing import List, get_type_hints
+from typing import get_type_hints
 
 from flask import Flask
 from flask_migrate import Migrate
@@ -10,48 +7,36 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.query import Query
 from flask_sqlalchemy.session import Session
-from sqlalchemy import UUID, Column, ForeignKey, Integer, String
-from sqlalchemy.orm import joinedload, relationship, subqueryload
-from sqlalchemy_utils import UUIDType
+from sqlalchemy.orm import joinedload, subqueryload
 from varname import nameof
 
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.stock_item import StockItem
 from framework.persistence.infrastructure.seed import seed_initial_data_async
+# TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
 
 db = SQLAlchemy()
 
 class SqlAlchemyPersistenceContext(IPersistenceContext):
-    _identity_map: dict # TODO: This isn't maintained...should I bother at all?
     _flask_app: Flask
     _model_classes: dict
-
-    # TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
 
     # ---------------- IPersistenceContext Methods ----------------
 
     def add(self, entity):
         db.session.add(self.convert_to_model(entity))
 
-    def find(self, entity_type, id):
-        if id in self._identity_map:
-            return self._identity_map[id]
-        result = self.get_entities(entity_type).first_by_id(id)
-        self._identity_map[id] = result
-
     def get_entities(self, entity_type):
-        with SqlAlchemyPersistenceContext._flask_app.app_context():
-            model_class = self.get_model_class(entity_type)
-            return SqlAlchemyQueryBuilder(db.session, model_class)
-        #return db.session.query(model_class).all()#.options(noload('*')).all()
+        model_class = self.get_model_class(entity_type)
+        return SqlAlchemyQueryBuilder(db.session, model_class)
 
     def remove(self, entity):
         db.session.delete(self.convert_to_model(entity))
 
-    async def save_changes_async(self):
+    def save_changes_async(self):
         db.session.commit()
-        # await asyncio.get_event_loop().run_in_executor(None, db.session.commit())
+        # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
     # end IPersistenceContext Methods
 
@@ -94,67 +79,62 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         return model_class(**model_data)
 
     @staticmethod
-    def test(app):
+    async def test(app):
         with app.app_context():
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.stock_level)).execute()
             v = 0
+            await SqlAlchemyPersistenceContext().save_changes_async()
 
 # TODO IMPORTANT!!! : I have a feeling once i change the model into the domain entity, it will stop tracking changes...
 # ^ THIS MAY NOT BE AN ISSUE...test what happens on an update first before jumping to conclusions
 
 # TODO: Find a home for this...
-# TODO: Match up IQueryBuilder to this
 class SqlAlchemyQueryBuilder(IQueryBuilder):
     def __init__(self, session: sa_orm.scoped_session[Session], model_class, included_attributes = None):
-        self.session = session
-        self.model = model_class
-        self.query: Query = session.query(model_class)
+        self._context = SqlAlchemyPersistenceContext._flask_app.app_context()
+        with self._context:
+            self.query: Query = session.query(model_class)
         self.included_attributes = included_attributes or []
         self.included_model = None
+        self.model = model_class
+        self.session = session
 
     def any(self, condition = None):
-        if condition:
-            return self.query.filter(condition(self.model)).count() > 0
-        else:
-            return self.query.count() > 0
+        with self._context:
+            if condition:
+                return self.query.filter(condition(self.model)).count() > 0
+            else:
+                return self.query.count() > 0
 
     def execute(self):
-        with SqlAlchemyPersistenceContext._flask_app.app_context():
+        with self._context:
             return [model_instance.to_entity() for model_instance in self.query.all()]
 
-    # def find():
-    #     pass # .get() # Investigate, .get() is on session and is apparently the one to use from docs, see if it executes
-
     def first(self, condition = None):
-        if condition:
-            return self.where(condition).first()
-        return self.query.one().to_entity()
+        with self._context:
+            if condition:
+                return self.where(condition).first()
+            return self.query.one().to_entity()
 
-    def first_by_id(self, id):
-        result = self.session.get(id) # TODO: Wait how does this work? query is based on model, but this is based on what...?
+    def first_by_id(self, *ids):
+        result = self.session.get(*ids) # TODO: Wait how does this work? query is based on model, but this is based on what...?
         if result:
             return result.to_entity()
         else:
             raise Exception("Sequence contains no elements.") #TODO: Contains no elements, or not found...?
 
     def first_or_none(self, condition = None):
-        if condition:
-            result = self.where(condition).first_or_none()
+        with self._context:
+            if condition:
+                result = self.where(condition).first_or_none()
+                return result.to_entity() if result else None
+            result = self.query.one_or_none().to_entity()
             return result.to_entity() if result else None
-        result = self.query.one_or_none().to_entity()
-        return result.to_entity() if result else None
 
     # # https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html
     def include(self, attribute_name: str):
-        # a2 = x.add_columns()
-        # a3 = x.add_entity()
-        # a4 = x.count() #TODO: Want this on save
-        # a6 = x.from_statement()
-        # a7 = x.options()
-        # a8 = x.params()
-        # a9 = x.select_from()
         model_attribute = getattr(self.model, attribute_name)
         joined_query = SqlAlchemyQueryBuilder(self.session, self.model)
         joined_query.query = self.query.options(joinedload(model_attribute))

@@ -1,4 +1,5 @@
 from clapy import Interactor
+from varname import nameof
 
 from application.infrastructure.mapping.dto_mappings import get_stock_item_dto
 from application.services.imapper import IMapper
@@ -16,6 +17,9 @@ class GetStockItemsInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: GetStockItemsInputPort, output_port: IGetStockItemsOutputPort):
-        x = self.persistence_context.get_entities(StockItem).execute()
-        await output_port.present_stock_items_async(
-            self.mapper.project(self.persistence_context.get_entities(StockItem), get_stock_item_dto))
+        query = self.persistence_context \
+            .get_entities(StockItem) \
+            .include(nameof(StockItem.location)) \
+            .include(nameof(StockItem.stock_level))
+
+        await output_port.present_stock_items_async(self.mapper.project(query, get_stock_item_dto))

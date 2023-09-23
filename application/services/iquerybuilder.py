@@ -10,20 +10,20 @@ class IQueryBuilder(ABC):
     def execute(self):
         pass
 
-    def find(self):
-        return self
-
     def first(self, condition = None):
         return self
 
-    def first_by_id(self, id):
+    def first_by_id(self, *ids):
         return self
 
     def first_or_none(self, condition = None):
         return self
 
-    def include(self, selector):
+    def include(self, attribute_name):
        return self
+
+    def then_include(self, attribute_name):
+        return self
 
     def where(self, condition):
         return self

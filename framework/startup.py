@@ -47,7 +47,7 @@ async def startup():
 
     await SqlAlchemyPersistenceContext.initialise(app)
 
-    SqlAlchemyPersistenceContext.test(app)
+    await SqlAlchemyPersistenceContext.test(app)
 
     _Controller: StockItemController = _ServiceProvider.get_service(StockItemController)
     gg = QuickTestPresenter()

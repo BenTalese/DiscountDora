@@ -9,7 +9,7 @@ def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
     dto.name = stock_item.name
     dto.stock_item_id = stock_item.id
     dto.stock_level_id = stock_item.stock_level.id
-    dto.stock_location_id = stock_item.location.id
+    dto.stock_location_id = stock_item.location.id if stock_item.location else None
     dto.stock_level_last_updated_on_utc = stock_item.stock_level_last_updated_on_utc
     return dto
 

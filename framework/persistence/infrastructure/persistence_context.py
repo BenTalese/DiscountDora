@@ -19,6 +19,8 @@ from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.stock_item import StockItem
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
+from varname import nameof
+
 db = SQLAlchemy()
 
 @dataclass
@@ -227,7 +229,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         with app.app_context():
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
-            x = SqlAlchemyPersistenceContext().get_entities(StockItem).include("stock_level").execute()
+            x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.stock_level)).execute()
             v = 0
 
 # TODO IMPORTANT!!! : I have a feeling once i change the model into the domain entity, it will stop tracking changes...

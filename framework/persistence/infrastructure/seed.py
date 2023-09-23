@@ -30,10 +30,10 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     await persistence.save_changes_async()
 
 def generate_entity(entity_type):
-    entity = entity_type()
-    for type in entity.__annotations__.items():
-        setattr(entity, type[0], get_value_for_type(type[1]))
-    return entity
+    data = {}
+    for attribute in entity_type.__annotations__.items():
+        data[attribute[0]] = get_value_for_type(attribute[1])
+    return entity_type(**data)
 
 def get_value_for_type(type):
     if type == uuid:

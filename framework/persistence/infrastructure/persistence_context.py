@@ -13,120 +13,17 @@ from flask_sqlalchemy.session import Session
 from sqlalchemy import UUID, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import joinedload, relationship, subqueryload
 from sqlalchemy_utils import UUIDType
+from varname import nameof
 
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.stock_item import StockItem
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
-from varname import nameof
-
 db = SQLAlchemy()
 
-@dataclass
-class Money:
-    """A value object that represents money"""
-    amount: int
-    currency: str
-
-@dataclass
-class ManyToOneTest:
-    y: str
-
-@dataclass
-class ChildThing:
-    x: str
-    g: ManyToOneTest
-
-@dataclass
-class Bid:
-    """A value object that represents a bid placed on a listing by a buyer"""
-    bidder_id: UUID
-    price: Money
-    childs: List[ChildThing]
-
-@dataclass
-class Listing:
-    """An entity that represents a listing with an ask price and all the bids already placed on this item"""
-    id: int
-    name: str
-    min_price: Money
-    bids: List[Bid]
-
-class ManyToOneTestModel(db.Model):
-    __tablename__ = "many"
-    id = Column(UUIDType, primary_key=True, default=uuid.uuid4)
-    y = Column(String)
-
-class ChildThingModel(db.Model):
-    __tablename__ = "child"
-    id = Column(UUIDType, primary_key=True, default=uuid.uuid4) # <---------------------------- #TODO: APPLY EVERYWHERE!!
-    x = Column(String)
-    g_id = Column(UUIDType, ForeignKey("many.id"))
-    bid_id = Column(Integer,
-                        ForeignKey("bid.idx"),
-                        primary_key=True)
-
-    g = relationship("ManyToOneTestModel", lazy="noload")
-
-    def to_entity(self) -> ChildThing:
-        return ChildThing(
-            x = self.x,
-            g = self.g if self.g else None
-        )
-
-class BidModel(db.Model):
-    entity_type = Bid
-    """ Stores Bid value object"""
-    __tablename__ = "bid"
-    # composite primary key
-    listing_id = Column(UUIDType,
-                        ForeignKey("listing.id"),
-                        primary_key=True)
-
-    # since bids are stored in an ordered collection (list), an index column is required
-    idx = Column(Integer, primary_key=True)
-
-    bidder_id = Column(UUIDType)
-    price__amount = Column(Integer)
-    price__currency = Column(String(3))
-
-    # parent relationship
-    listing = relationship("ListingModel", back_populates="bids", lazy="noload")
-
-    childs = relationship("ChildThingModel", lazy="noload")
-
-    def to_entity(self) -> Bid:
-        return Bid(
-            bidder_id=self.bidder_id,
-            childs=[ChildThingModel.to_entity(child) for child in self.childs],
-            price=Money(amount=self.price__amount, currency=self.price__currency)
-        )
-
-class ListingModel(db.Model):
-    entity_type = Listing
-    __tablename__ = "listing"
-
-    id = Column(UUIDType, primary_key=True, default=uuid.uuid4)
-    name = Column(String(30))
-
-    min_price__amount = Column(Integer)
-    min_price__currency = Column(String(3))
-
-    bids = relationship("BidModel",
-                        order_by="BidModel.idx.asc()",
-                        cascade="save-update, merge, delete, delete-orphan", lazy="noload")
-
-    def to_entity(self) -> Listing:
-        return Listing(
-            id=self.id,
-            name=self.name,
-            min_price=Money(amount=self.min_price__amount, currency=self.min_price__currency),
-            bids=[BidModel.to_entity(bid) for bid in self.bids] if self.bids else None
-        )
-
 class SqlAlchemyPersistenceContext(IPersistenceContext):
-    _identity_map: dict
+    _identity_map: dict # TODO: This isn't maintained...should I bother at all?
     _flask_app: Flask
     _model_classes: dict
 
@@ -174,34 +71,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 db.drop_all()
                 db.create_all()
                 Migrate().init_app(app, db) # TODO: Do i need a migrate here?...
-                listing = ListingModel()
-                listing.name = "Listing"
-                listing.min_price__amount = 1
-                listing.min_price__currency = "AUD"
-
-                manytoonetest = ManyToOneTestModel()
-                manytoonetest.y = "OHHWAAWAWA"
-
-                child1 = ChildThingModel()
-                child1.x = "AHHH"
-                child1.g = manytoonetest
-
-                child2 = ChildThingModel()
-                child2.x = "OHHH"
-                child2.g = manytoonetest
-
-                bid = BidModel()
-                bid.idx = 1
-                bid.price__amount = 1
-                bid.price__currency = "AUD"
-                bid.childs = [child1, child2]
-                listing.bids = [bid]
-
-                db.session.add(listing)
-                db.session.commit()
-
-                result = db.session.query(ListingModel).options(joinedload(ListingModel.bids)).all()
-
                 await seed_initial_data_async(SqlAlchemyPersistenceContext())
             else:
                 db.create_all() #TODO: This doesn't handle migrations on existing tables

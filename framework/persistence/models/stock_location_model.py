@@ -1,10 +1,10 @@
 import uuid
-from sqlalchemy import Column, String
 
+from sqlalchemy import Column, String
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.stock_location import StockLocation
-from framework.startup import db
+from framework.persistence.infrastructure.persistence_context import db
 
 
 class StockLocationModel(db.Model):

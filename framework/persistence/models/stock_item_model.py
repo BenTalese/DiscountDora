@@ -1,16 +1,16 @@
 import uuid
 
-from sqlalchemy.orm import relationship
-from domain.entities.stock_level import StockLevel
-from domain.entities.stock_location import StockLocation
-from framework.persistence.models.stock_level_model import StockLevelModel
-from framework.persistence.models.stock_location_model import StockLocationModel
-
-from framework.startup import db
 from sqlalchemy import Column, DateTime, ForeignKey, String, func
+from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.stock_item import StockItem
+from domain.entities.stock_level import StockLevel
+from domain.entities.stock_location import StockLocation
+from framework.persistence.infrastructure.persistence_context import db
+from framework.persistence.models.stock_level_model import StockLevelModel
+from framework.persistence.models.stock_location_model import \
+    StockLocationModel
 
 
 class StockItemModel(db.Model):

@@ -14,18 +14,18 @@ class ServiceCollectionBuilder:
     def __init__(self, service_provider: DependencyInjectorServiceProvider):
         self.service_provider = service_provider
 
-    def configure_persistence_services(self):
-        self.service_provider.register_service(providers.Factory, SqlAlchemyPersistenceContext, IPersistenceContext)
-        return self
-
     def configure_application_services(self):
         self.service_provider.register_service(providers.Factory, Mapper, IMapper) # TODO: Separate mapping services method??
+        return self
+
+    def configure_clapy_services(self):
+        self.service_provider.configure_clapy_services(["application/use_cases"], [r"venv", r"src"], [r".*main\.py"])
         return self
 
     def configure_interface_adaptors_services(self):
         self.service_provider.register_service(providers.Factory, StockItemController)
         return self
 
-    def configure_clapy_services(self):
-        self.service_provider.configure_clapy_services(["application/use_cases"], [r"venv", r"src"], [r".*main\.py"])
+    def configure_persistence_services(self):
+        self.service_provider.register_service(providers.Factory, SqlAlchemyPersistenceContext, IPersistenceContext)
         return self

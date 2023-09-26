@@ -40,6 +40,7 @@ def get_value_for_type(type):
         return uuid.uuid4()
 
     if type == str:
-        return ''.join(random.choices(string.ascii_letters, k=15))
+        return "Test"
+        # return ''.join(random.choices(string.ascii_letters, k=15))
 
     return None

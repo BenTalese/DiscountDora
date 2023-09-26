@@ -1,7 +1,7 @@
 from clapy import Interactor
 from varname import nameof
+from application.dtos.stock_item_dto import get_stock_item_dto
 
-from application.infrastructure.mapping.dto_mappings import get_stock_item_dto
 from application.services.imapper import IMapper
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_item import StockItem

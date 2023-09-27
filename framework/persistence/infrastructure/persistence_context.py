@@ -165,6 +165,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
@@ -178,9 +180,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 class SqlAlchemyQueryBuilder(IQueryBuilder):
     def __init__(self, session: sa_orm.scoped_session[Session], model_class, included_attributes = None):
         self._context = SqlAlchemyPersistenceContext._flask_app.app_context()
-        # with self._context:
-        #     self.query: Select = select(model_class)
-        self.query: Select
+        with self._context:
+            self.query: Select = select(model_class)
+        # self.query: Select
         self.included_attributes = included_attributes or []
         self.included_model = None
         self.model = model_class
@@ -200,38 +202,42 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def execute(self):
         with self._context:
-            if self.select_operations:
-                #model_attribute = getattr(self.model, attribute_name)
-                required_columns = [getattr(self.model, attr) for attr in self.select_mapping.values()]
-                for xg in required_columns:
-                    try:
-                        g = xg.comparator.entity.entity
-                    except:
-                        pass
-                    vv = 0
-                self.query = select(*required_columns)
-                x = self.session.execute(self.query).all()
-                attrs = {}
-                for row in x:
-                    columns = row._fields
-                    values = row._data
-                    col_vals = zip(columns, values)
-                    for ggg in col_vals:
-                        attrs[ggg[0]] = ggg[1]
-                ggh = self.model(**attrs).to_entity()
-                v = 0
-                #     for col in row:
-                #         for req_col in required_columns:
-                #         attrs[required_columns]
-                g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
-                # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
-                row_results = self.session.execute(self.query.options(load_only(*required_columns))).all()
-                x = 0
-            else:
-                self.query = select(self.model)
+            # if self.select_operations:
+            #     # #model_attribute = getattr(self.model, attribute_name)
+            #     # required_columns = [getattr(self.model, attr) for attr in self.select_mapping.values()]
+            #     # for xg in required_columns:
+            #     #     try:
+            #     #         g = xg.comparator.entity.entity
+            #     #     except:
+            #     #         pass
+            #     #     vv = 0
+            #     # self.query = select(*required_columns)
+            #     # x = self.session.execute(self.query).all()
+            #     # attrs = {}
+            #     # for row in x:
+            #     #     columns = row._fields
+            #     #     values = row._data
+            #     #     col_vals = zip(columns, values)
+            #     #     for ggg in col_vals:
+            #     #         attrs[ggg[0]] = ggg[1]
+            #     # ggh = self.model(**attrs).to_entity()
+            #     # v = 0
+            #     # #     for col in row:
+            #     # #         for req_col in required_columns:
+            #     # #         attrs[required_columns]
+            #     # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
+            #     # # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
+            #     # row_results = self.session.execute(self.query.options(load_only(*required_columns))).all()
+            #     x = 0
+            # else:
+            #     self.query = select(self.model)
                 for operation in self.query_operations:
                     operation()
-                return [row_result[0].to_entity() for row_result in self.session.execute(self.query).all()]
+                entities = [row_result[0].to_entity() for row_result in self.session.execute(self.query).all()]
+                if self.select_operations:
+                    for op in self.select_operations:
+                        entities = [op(entity) for entity in entities]
+                return entities
 
     #TODO: define a select, and use in mapper so it actually trims down the result set
 
@@ -261,6 +267,16 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     # # https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html
     def include(self, attribute_name: str):
+        # attr = getattr(self.model, attribute_name)
+        # selects = [self.model.name, attr.comparator.entity.entity.description]
+        # q = select(*selects).join(self.model.location)
+        # print(str(q))
+        # results = {}
+        # for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
+        #     results.setdefault(rslt, []).append(info)
+        # u = self.session.execute(q).all()[0]._mapping
+        # y = str(g)
+
         model_attribute = getattr(self.model, attribute_name)
         joined_query = SqlAlchemyQueryBuilder(self.session, self.model)
         joined_query.query = self.query.options(joinedload(model_attribute))
@@ -272,35 +288,38 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     # TODO: Test having more or less properties than expected
     def project(self, func):
         self.select_operations.append(func)
-        sources = func.__code__.co_names[1:]
-        destinations = func.__code__.co_consts[1]
-        attribute_mapping = zip(sources, destinations)
-        select_mapping = {}
-        # self.select_operations[func] = attribute_mapping
-        # self.select_mapping = attribute_mapping
+        # sources = set(func.__code__.co_names[1:])
+        # destinations = set(func.__code__.co_consts[1])
+        # select_mapping = {}
+        # # self.select_operations[func] = attribute_mapping
+        # # self.select_mapping = attribute_mapping
 
-        if not self.select_mapping:
-            entity_type = get_type_hints(self.model.to_entity)['return']
-            entity_attributes = [attr for attr in dir(entity_type)
-                                 if not attr.startswith("__") and not attr.endswith("__")]
-            self.select_operations.append(self.model.to_entity)
+        # if not self.select_mapping:
+        #     entity_type = get_type_hints(self.model.to_entity)['return']
+        #     entity_attributes = set([attr for attr in dir(entity_type)
+        #                          if not attr.startswith("__") and not attr.endswith("__")])
+        #     self.select_operations.append(self.model.to_entity)
 
-            for source, destination in attribute_mapping:
-                if source in entity_attributes:
-                    select_mapping[destination] = source
-        else:
-            for source, destination in attribute_mapping:
-                if source in self.select_mapping.keys():
-                    select_mapping[destination] = self.select_mapping[source]
-            # new_srcs = set(sources)
-            # old_dests = set(self.current_select_mapping.keys())
-            # common = new_srcs & old_dests
-            # excluded = old_dests - sources
-            # for val in self.current_select_mapping.values():
-            #     if val in excluded:
-            #         val = None
+        #     sources = sources & entity_attributes
+        #     attribute_mapping = zip(sources, destinations)
 
-        self.select_mapping = select_mapping
+
+        #     for source, destination in attribute_mapping:
+        #         if source in entity_attributes:
+        #             select_mapping[destination] = source
+        # else:
+        #     for source, destination in attribute_mapping:
+        #         if source in self.select_mapping.keys():
+        #             select_mapping[destination] = self.select_mapping[source]
+        #     # new_srcs = set(sources)
+        #     # old_dests = set(self.current_select_mapping.keys())
+        #     # common = new_srcs & old_dests
+        #     # excluded = old_dests - sources
+        #     # for val in self.current_select_mapping.values():
+        #     #     if val in excluded:
+        #     #         val = None
+
+        # self.select_mapping = select_mapping
         return self
 
     def then_include(self, attribute_name: str):

@@ -98,7 +98,6 @@ class Xor(BoolOperation):
     def to_str(self, model):
         return f"({self.exp1.to_str(model)} ^ {self.exp2.to_str(model)})"
 
-
 class SqlAlchemyPersistenceContext(IPersistenceContext):
     _flask_app: Flask
     _model_classes: dict
@@ -165,9 +164,10 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         with app.app_context():
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
-            x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).select(get_stock_item_dto).select(get_stock_item_view_model).select(get_stock_item_next_thing).execute()
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).select(get_stock_item_dto).execute()
+            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
+            x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
+            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
+            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             v = 0
             await SqlAlchemyPersistenceContext().save_changes_async()
 
@@ -203,10 +203,32 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             if self.select_operations:
                 #model_attribute = getattr(self.model, attribute_name)
                 required_columns = [getattr(self.model, attr) for attr in self.select_mapping.values()]
+                for xg in required_columns:
+                    try:
+                        g = xg.comparator.entity.entity
+                    except:
+                        pass
+                    vv = 0
+                self.query = select(*required_columns)
+                x = self.session.execute(self.query).all()
+                attrs = {}
+                for row in x:
+                    columns = row._fields
+                    values = row._data
+                    col_vals = zip(columns, values)
+                    for ggg in col_vals:
+                        attrs[ggg[0]] = ggg[1]
+                ggh = self.model(**attrs).to_entity()
+                v = 0
+                #     for col in row:
+                #         for req_col in required_columns:
+                #         attrs[required_columns]
+                g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
+                # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
                 row_results = self.session.execute(self.query.options(load_only(*required_columns))).all()
                 x = 0
             else:
-                # self.query = select(self.model)
+                self.query = select(self.model)
                 for operation in self.query_operations:
                     operation()
                 return [row_result[0].to_entity() for row_result in self.session.execute(self.query).all()]
@@ -248,7 +270,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     # TODO: Check source and dest types to ensure select is valid (e.g. not doing get_view_model with domain entity)
     # TODO: Test having more or less properties than expected
-    def select(self, func):
+    def project(self, func):
         self.select_operations.append(func)
         sources = func.__code__.co_names[1:]
         destinations = func.__code__.co_consts[1]
@@ -302,10 +324,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         # stmt = select(self.model).where(eval(sql))
         # result = self.session.execute(stmt).all()
         v = 0
-        filtered_query = SqlAlchemyQueryBuilder(self.session, self.model)
+        filtered_query = SqlAlchemyQueryBuilder(self.session, self.model) # TODO: Look into not doing this and keeping the same instance for simplicity
         def append_dis():
-            filtered_query.query = select(self.model).where(eval(sql))
-        filtered_query.query_operations.append(append_dis)
+            filtered_query.query = self.query.where(eval(sql))
+        self.query_operations.append(append_dis)
         # if type(condition) == Equal:
         #     attr = getattr(self.model, condition.operand_one)
         #     stmt = select(self.model).where(attr == condition.operand_two)

@@ -22,7 +22,7 @@ class IQueryBuilder(ABC):
     def include(self, attribute_name):
        return self
 
-    def select(self, *attributes):
+    def project(self, *attributes):
         return self
 
     def then_include(self, attribute_name):

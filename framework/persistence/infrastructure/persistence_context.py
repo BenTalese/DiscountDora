@@ -1,5 +1,6 @@
 import ast
 import inspect
+import re
 from enum import Enum
 from typing import get_type_hints
 
@@ -10,8 +11,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.query import Query
 from flask_sqlalchemy.session import Session
-from sqlalchemy import Select, select
-from sqlalchemy.orm import joinedload, load_only, subqueryload
+from sqlalchemy import Column, Select, select
+from sqlalchemy.orm import (InstrumentedAttribute, joinedload, load_only,
+                            subqueryload)
 from varname import nameof
 
 from application.dtos.stock_item_dto import get_stock_item_dto
@@ -165,7 +167,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
@@ -187,10 +189,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.included_model = None
         self.model = model_class
         self.session = session
-        self.select_operations = []
-        self.select_mapping = {}
-        self.selected_columns = set()
-        self.query_operations = []
+        self.projections = []
 
     def any(self, condition = None):
         raise NotImplementedError()
@@ -231,12 +230,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             #     x = 0
             # else:
             #     self.query = select(self.model)
-                for operation in self.query_operations:
-                    operation()
                 entities = [row_result[0].to_entity() for row_result in self.session.execute(self.query).all()]
-                if self.select_operations:
-                    for op in self.select_operations:
-                        entities = [op(entity) for entity in entities]
+                for projection in self.projections:
+                    entities = [projection(entity) for entity in entities]
                 return entities
 
     #TODO: define a select, and use in mapper so it actually trims down the result set
@@ -265,17 +261,28 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         #     result = self.query.one_or_none().to_entity()
         #     return result.to_entity() if result else None
 
-    # # https://docs.sqlalchemy.org/en/20/orm/queryguide/index.html
     def include(self, attribute_name: str):
-        # attr = getattr(self.model, attribute_name)
-        # selects = [self.model.name, attr.comparator.entity.entity.description]
-        # q = select(*selects).join(self.model.location)
-        # print(str(q))
-        # results = {}
-        # for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
-        #     results.setdefault(rslt, []).append(info)
-        # u = self.session.execute(q).all()[0]._mapping
-        # y = str(g)
+        attr = getattr(self.model, attribute_name)
+        selects = [self.model.name, attr.comparator.entity.entity.description]
+        q = select(*selects).join(self.model.location)
+        print(str(q))
+        results = {}
+        for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
+            results.setdefault(rslt, []).append(info)
+            if type(info) == InstrumentedAttribute:
+                v = 0
+            if issubclass(type(info), Column):
+                v = 0
+            if type(info) == str:
+                v = 0
+
+
+        row_results = self.session.execute(q).all()
+        for row_result in row_results:
+            column_metadata = row_result._key_to_index
+            column_data = row_result._mapping
+
+
 
         model_attribute = getattr(self.model, attribute_name)
         joined_query = SqlAlchemyQueryBuilder(self.session, self.model)
@@ -287,7 +294,17 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     # TODO: Check source and dest types to ensure select is valid (e.g. not doing get_view_model with domain entity)
     # TODO: Test having more or less properties than expected
     def project(self, func):
-        self.select_operations.append(func)
+        self.projections.append(func)
+        assignments = []
+        source_code = inspect.getsource(func)
+
+        assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
+
+        matches = re.findall(assignment_pattern, source_code)
+        for match in matches:
+            left_side, right_side = match
+            assignments.append((left_side, right_side))
+        v = 0
         # sources = set(func.__code__.co_names[1:])
         # destinations = set(func.__code__.co_consts[1])
         # select_mapping = {}
@@ -371,3 +388,51 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         # #     main()
 
         return filtered_query
+
+
+# def get_assignments(func):
+#     assignments = []
+#     source_code = inspect.getsource(func)
+#     assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
+
+#     matches = re.findall(assignment_pattern, source_code)
+#     for match in matches:
+#         left_side, right_side = match
+#         assignments.append((left_side.strip(), right_side.strip()))
+
+#     return assignments
+
+# def get_attribute_names(assignments, parameter_name):
+#     attribute_names = {}
+
+#     for left_side, right_side in assignments:
+#         # Match expressions that reference the parameter (e.g., stock_item.name)
+#         matches = re.findall(rf'{parameter_name}\.(\w+)', right_side)
+#         if matches:
+#             attribute_names[left_side] = matches[0]
+
+#     return attribute_names
+
+# assignments = get_assignments(get_stock_item_dto)
+# attribute_names = get_attribute_names(assignments, parameter_name)
+
+
+"""
+Get left and right sides of assignment
+Get a stripped down version of the right side of the assignment where it matches an attribute of the entity/model
+Get the type hints for all attributes
+For each stripped down right side string, check if the matching type hint is another entity/model and if so:
+    Add that model (instrumented attribute) to the list of joins
+    If there is an attribute match for the sub entity, add that to the selected columns
+    Otherwise there is nothing trailing on the right side assignment (e.g. ".id") (COULD MAYBE USE .to_entity() AS THE SIGN?)
+        Call this method again with this model to reach in further
+
+Otherwise add to list of model attributes to select
+
+If one of the attributes is a model/entity,
+
+Going back...
+<Create a model and assign the result set>
+"""
+
+v = 0

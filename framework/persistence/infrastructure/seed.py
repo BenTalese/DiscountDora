@@ -27,20 +27,24 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_one.stock_level = stock_level_medium
     persistence.add(stock_item_one)
 
+    stock_item_two = generate_entity(StockItem)
+    stock_item_two.location = stock_location_one
+    stock_item_two.stock_level = stock_level_medium
+    persistence.add(stock_item_two)
+
     await persistence.save_changes_async()
 
 def generate_entity(entity_type):
     data = {}
     for attribute in entity_type.__annotations__.items():
-        data[attribute[0]] = get_value_for_type(attribute[1])
+        data[attribute[0]] = get_value_for_type(attribute[1], attribute[0])
     return entity_type(**data)
 
-def get_value_for_type(type):
+def get_value_for_type(type, attr_name: str):
     if type == uuid:
         return uuid.uuid4()
 
     if type == str:
-        return "Test"
-        # return ''.join(random.choices(string.ascii_letters, k=15))
+        return ''.join([attr_name, '__'] + random.choices(string.ascii_letters, k=5))
 
     return None

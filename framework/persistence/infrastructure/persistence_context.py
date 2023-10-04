@@ -167,7 +167,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
@@ -263,14 +263,16 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def include(self, attribute_name: str):
         attr = getattr(self.model, attribute_name)
-        selects = [self.model.name, attr.comparator.entity.entity.description]
+        selected_model = self.get_model_from_attribute(attribute_name)
+        selects = [self.model.id, self.model.name, selected_model.id, selected_model.description] # ALWAYS GET ID
         q = select(*selects).join(self.model.location)
         print(str(q))
         results = {}
+        testthing = None
         for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
             results.setdefault(rslt, []).append(info)
             if type(info) == InstrumentedAttribute:
-                v = 0
+                testthing = info
             if issubclass(type(info), Column):
                 v = 0
             if type(info) == str:
@@ -278,9 +280,63 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
 
         row_results = self.session.execute(q).all()
+        # TODO: Add to collection of created models, do not add duplicates
+        # TODO: Link models together following relatonships
+        models_from_rows = []
         for row_result in row_results:
-            column_metadata = row_result._key_to_index
-            column_data = row_result._mapping
+            # # Get model types from row result
+            # models_from_row = []
+
+            # for metadata, column in column_metadata:
+            #     if type(metadata) == InstrumentedAttribute and not metadata.parent.entity in models_from_row:
+            #         models_from_row.append(metadata.parent.entity)
+
+            # # Get list of model instances
+            # model_instances = []
+            # for model in models_from_row:
+            #     model_instances.append(model())
+
+            # 1. Collate metadata of columns
+            metadata_by_column = {}
+            for metadata, column in row_result._key_to_index.items():
+                metadata_by_column.setdefault(column, []).append(metadata)
+
+            # 2. Append actual data to metadata collection
+            for column_name, column_data in row_result._mapping.items():
+                for column in metadata_by_column.values():
+                    if column[0] == column_name:
+                        column.append(column_data)
+
+            # 3. Collate model creation information
+            models_to_be_created = {}
+            for column in metadata_by_column.values():
+                models_to_be_created.setdefault(column[1].parent.entity, {})[column[1].name] = column[3]
+
+            # models_to_be_created = {}
+            # for col_name, data in column_data.items():
+            #     for col in metadata_by_column_index.values():
+            #         if col[0] == col_name:
+            #             models_to_be_created.setdefault(col[1].parent.entity, {})[col[1].name] = data
+
+            # 4. Create models
+            models_from_row = []
+            for model, attrs in models_to_be_created.items():
+                models_from_row.append(model(**attrs))
+
+            for model in models_from_row:
+                if not any(model.id == m.id for m in models_from_rows): # TODO: This assumes everything has one id...should compare entire object
+                    models_from_rows.append(model)
+
+            v = 0
+
+        g = results.values()
+        result_model = testthing.parent.entity
+        result_entity = result_model().to_entity()
+        t1 = testthing.prop
+        t2 = testthing.property
+        t3 = testthing.name
+
+
 
 
 
@@ -389,6 +445,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         return filtered_query
 
+    def get_model_from_attribute(self, attribute_name: str):
+        attr = getattr(self.model, attribute_name)
+        return attr.comparator.entity.entity
 
 # def get_assignments(func):
 #     assignments = []

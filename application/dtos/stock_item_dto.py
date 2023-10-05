@@ -26,7 +26,42 @@ def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
         dto_stock_level_last_updated_on_utc = stock_item.stock_level_last_updated_on_utc
     )
 
+def breadth_first_traversal(dictionary):
+    if not isinstance(dictionary, dict):
+        raise ValueError("Input must be a dictionary")
+
+    queue = [dictionary]
+
+    while queue:
+        current_dict = queue.pop(0)
+        keys = current_dict.keys()
+
+        for key in keys:
+            value = current_dict[key]
+            print(f"Key: {key}, Value: {value}")
+
+            if isinstance(value, dict):
+                queue.append(value)
+
+# Example usage
+nested_dict = {
+    'a': {
+        'b': {
+            'c': {
+                'd': 1
+            }
+        },
+        'e': 2
+    },
+    'f': {
+        'g': 3
+    }
+}
+
+
+
 if __name__ == "__main__":
+    breadth_first_traversal(nested_dict)
     x = get_stock_item_dto(StockItem(uuid.uuid4()))
     v= 0
 

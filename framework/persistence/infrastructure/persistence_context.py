@@ -10,6 +10,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.query import Query
+from sqlalchemy.orm import load_only, selectinload
 from flask_sqlalchemy.session import Session
 from sqlalchemy import Column, Select, select
 from sqlalchemy.orm import (InstrumentedAttribute, joinedload, load_only,
@@ -167,8 +168,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
@@ -262,13 +263,45 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         #     return result.to_entity() if result else None
 
     def include(self, attribute_name: str):
-        attr = getattr(self.model, attribute_name)
+        # attr = getattr(self.model, attribute_name)
         selected_model = self.get_model_from_attribute(attribute_name)
-        selects = [self.model.id, self.model.name, selected_model.id, selected_model.description] # ALWAYS GET ID
-        q = select(*selects).join(self.model.location)
+        # selects = [self.model.id, self.model.name, selected_model.id, selected_model.description] # ALWAYS GET ID
+        # q = select(*selects).join(self.model.location)
+        selects = [nameof(self.model.id), nameof(self.model.name), nameof(selected_model.description)] # ALWAYS GET ID
+        q = select(self.model).options(joinedload(self.model.location)) #OLD WAY
+        q = select(self.model).options(load_only(self.model.id), joinedload(self.model.location).load_only(selected_model.id)) #NEW WAY
         print(str(q))
         results = {}
         testthing = None
+        x = self.session.execute(q).all()
+        for h in x:
+            model_inst = h[0]
+            select_structure = {
+                'id': {},
+                'name': {},
+                'location': {
+                    'description': {},
+                }
+            }
+
+            queue = [select_structure]
+
+            while queue:
+                current_dict = queue.pop(0)
+                keys = current_dict.keys()
+
+                for key in keys:
+                    value = current_dict[key]
+                    # print(f"Key: {key}, Value: {value}")
+
+                    if value:
+                        queue.append(value)
+
+            # attrs = [getattr(model_inst, attr_name) for attr_name in selects]
+            print(vars(model_inst))
+            print(vars(model_inst.location))
+            test = getattr(getattr(model_inst, "location"), "description")
+            selected_model_inst = self.model()
         for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
             results.setdefault(rslt, []).append(info)
             if type(info) == InstrumentedAttribute:
@@ -283,6 +316,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         # TODO: Add to collection of created models, do not add duplicates
         # TODO: Link models together following relatonships
         models_from_rows = []
+        models_by_type = {}
         for row_result in row_results:
             # # Get model types from row result
             # models_from_row = []
@@ -327,7 +361,43 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 if not any(model.id == m.id for m in models_from_rows): # TODO: This assumes everything has one id...should compare entire object
                     models_from_rows.append(model)
 
-            v = 0
+            # Might need to do everything (linking) before adding to outside list
+
+            # Check relationship from relationship tree, go through one by one going inwards
+            # Identify many-one, one-one and one-many relationship
+            # Search for ID of relationship type and associate models
+            for model in models_from_row:
+                models_by_type.setdefault(type(model), []).append(model)
+
+        # structure = {
+        #     'StockItemModel': {
+        #         'StockLocationModel': {},
+        #         'OtherThing': {
+        #             'OtherOtherThing': {},
+        #             'OtherOtherThing2': {}
+        #         }
+        #     }
+        # }
+        structure = {
+            self.model: {
+                self.model.location.comparator.entity.entity: {},
+            }
+        }
+
+        queue = [structure]
+
+        while queue:
+            current_dict = queue.pop(0)
+            keys = current_dict.keys()
+
+            for key in keys:
+                value = current_dict[key]
+                print(f"Key: {key}, Value: {value}")
+
+                if value:
+                    queue.append(value)
+
+        v = 0
 
         g = results.values()
         result_model = testthing.parent.entity
@@ -337,7 +407,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         t3 = testthing.name
 
 
-
+        # NEW IDEA: Get list of properties/models to select, then do:
+        # setattr(model, selected_attribute_name, getattr(row_result, attribute_name))
 
 
         model_attribute = getattr(self.model, attribute_name)
@@ -351,15 +422,42 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     # TODO: Test having more or less properties than expected
     def project(self, func):
         self.projections.append(func)
-        assignments = []
+
+
+
+        # select_mapping = []
+        # source_code = inspect.getsource(func)
+
+        # assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
+
+        # matches = re.findall(assignment_pattern, source_code)
+        # for match in matches:
+        #     left_side, right_side = match
+        #     select_mapping.append((left_side, right_side))
+
+
+        select_mapping = {}
         source_code = inspect.getsource(func)
 
         assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
 
         matches = re.findall(assignment_pattern, source_code)
+        destination_type = list(inspect.signature(func).parameters.values())[0].annotation
+        attribute_names = [attr for attr in dir(destination_type) if not attr.startswith("__") and not attr.endswith("__")]
         for match in matches:
             left_side, right_side = match
-            assignments.append((left_side, right_side))
+            for attr_name in attribute_names:
+                if attr_name in right_side:
+                    select_mapping[left_side] = attr_name
+
+        attribute_types = get_type_hints(destination_type)
+
+        for attribute_name, attribute_type in attribute_types:
+            if "entities" in attribute_type.__module__:
+                v=0
+                #Add model (instrumented attribute) to the list of joins
+
+
         v = 0
         # sources = set(func.__code__.co_names[1:])
         # destinations = set(func.__code__.co_consts[1])
@@ -477,14 +575,14 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
 
 """
-Get left and right sides of assignment
-Get a stripped down version of the right side of the assignment where it matches an attribute of the entity/model
-Get the type hints for all attributes
+[DONE] Get left and right sides of assignment
+[DONE] Get a stripped down version of the right side of the assignment where it matches an attribute of the entity/model
+[DONE] Get the type hints for all attributes
 For each stripped down right side string, check if the matching type hint is another entity/model and if so:
     Add that model (instrumented attribute) to the list of joins
     If there is an attribute match for the sub entity, add that to the selected columns
     Otherwise there is nothing trailing on the right side assignment (e.g. ".id") (COULD MAYBE USE .to_entity() AS THE SIGN?)
-        Call this method again with this model to reach in further
+        Call this method again with this model to reach in further (NOT NEEDED, NEW DESIGN WILL JUST SELECT ALL)
 
 Otherwise add to list of model attributes to select
 

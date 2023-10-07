@@ -354,9 +354,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             else:
                 dict1[key] = value
 
-    def create_nested_dict(self, input_string, dict):
+    def create_nested_dict(self, input_string, dict, entity):
         # Split the input string by periods to get a list of attribute names
-        attributes = input_string.split('.')
+        attributes = input_string.split('.') # TODO: Move this out to main calling code
 
         # Recursive function to build the nested structure
         def build_nested_dict(d, attrs):
@@ -364,6 +364,18 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 return {}
 
             attr_name = attrs[0]
+            if len(attrs) == 1 and attr_name in get_type_hints(entity).keys():
+                attr_type = get_type_hints(entity)[attr_name]
+                if get_origin(attr_type) == list:
+                    attr_type = attr_type.__args__[0]
+                if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
+                    if attr_name not in dict:
+                        for attr in get_type_hints(entity).keys():
+                            ????
+                    x = {}
+                    for attr in get_type_hints(entity).keys():
+                        x[attr] = {}
+                    self.merge_nested_dicts(dict, x)
 
             if attr_name not in dict:
                 d[attr_name] = build_nested_dict({}, attrs[1:])
@@ -374,7 +386,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             return d
 
         # Call the recursive function to build the nested structure
-        build_nested_dict(dict, attributes)
+        build_nested_dict(dict, attributes) # TODO: Move this out to main calling code
 
         return dict
 
@@ -402,13 +414,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 'dto_stock_level_last_updated_on_utc': 'stock_level_last_updated_on_utc'
             }
             select_map_test2 = {
+                'dto_children': 'children',
                 'dto_grandchild_names': 'children.grandchild.name',
-                'dto_children': 'children'
             }
 
             select_structure_test = {}
-            for select_source in select_map_test2.values():
-                self.create_nested_dict(select_source, select_structure_test)
+            for select_source in select_map_test.values():
+                self.create_nested_dict(select_source, select_structure_test, StockItem)
                 # attributes = select_source.split(".")
                 # if len(attributes) > 1:
                 #     structure = {}

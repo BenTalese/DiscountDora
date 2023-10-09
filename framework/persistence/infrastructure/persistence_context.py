@@ -4,7 +4,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, get_origin, get_type_hints
+from typing import List, Tuple, get_origin, get_type_hints
 
 import sqlalchemy
 from flask import Flask
@@ -33,8 +33,26 @@ from framework.persistence.infrastructure.seed import seed_initial_data_async
 
 db = SQLAlchemy()
 
+class GreatGrandChildModel(db.Model):
+    __tablename__ = "GreatGrandChild"
+    id = Column(
+        UUIDType,
+        primary_key=True,
+        default=uuid.uuid4)
+    name = Column(String(255))
+
 class GrandChildModel(db.Model):
     __tablename__ = "GrandChild"
+    id = Column(
+        UUIDType,
+        primary_key=True,
+        default=uuid.uuid4)
+    name = Column(String(255))
+    greatgrandchild = relationship("GreatGrandChildModel", uselist=False, lazy="noload")
+    greatgrandchild_id = Column(UUIDType, ForeignKey("GreatGrandChild.id"))
+
+class OtherGrandChildModel(db.Model):
+    __tablename__ = "OtherGrandChild"
     id = Column(
         UUIDType,
         primary_key=True,
@@ -48,8 +66,19 @@ class ChildModel(db.Model):
         primary_key=True,
         default=uuid.uuid4)
     name = Column(String(255))
-    grandchild = relationship("GrandChildModel")
+    grandchild = relationship("GrandChildModel", lazy="noload")
     grandchild_id = Column(UUIDType, ForeignKey("GrandChild.id"))
+    parent_id = Column(UUIDType, ForeignKey("Parent.id"))
+
+class OtherChildModel(db.Model):
+    __tablename__ = "OtherChild"
+    id = Column(
+        UUIDType,
+        primary_key=True,
+        default=uuid.uuid4)
+    name = Column(String(255))
+    grandchild = relationship("OtherGrandChildModel", lazy="noload")
+    grandchild_id = Column(UUIDType, ForeignKey("OtherGrandChild.id"))
     parent_id = Column(UUIDType, ForeignKey("Parent.id"))
 
 class ParentModel(db.Model):
@@ -58,7 +87,8 @@ class ParentModel(db.Model):
         UUIDType,
         primary_key=True,
         default=uuid.uuid4)
-    children = relationship("ChildModel")
+    children = relationship("ChildModel", lazy="noload")
+    otherchild = relationship("OtherChildModel", uselist=False, lazy="noload")
 
 @dataclass
 class ChildDto:
@@ -189,11 +219,17 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             if app.config.get('DEBUG'): # TODO Options interface, abstract away how settings are stored (nah, should be in config file)
                 db.drop_all()
                 db.create_all()
-                grandchild = GrandChildModel(name="TestGrandChild")
+                greatgrandchild = GreatGrandChildModel(name="TestGreatGrandChild")
+                grandchild = GrandChildModel(name="TestGrandChild", greatgrandchild=greatgrandchild)
                 child1 = ChildModel(name="TestChild1", grandchild=grandchild)
                 child2 = ChildModel(name="TestChild2")
-                parent = ParentModel(children=[child1, child2])
+                othergrandchild = OtherGrandChildModel(name="TestOtherGrandChild")
+                otherchild = OtherChildModel(name="OtherChild")
+                parent = ParentModel(children=[child1, child2], otherchild=otherchild)
+                db.session.add(greatgrandchild)
                 db.session.add(grandchild)
+                db.session.add(othergrandchild)
+                db.session.add(otherchild)
                 db.session.add(child1)
                 db.session.add(child2)
                 db.session.add(parent)
@@ -227,8 +263,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_parent_dto).execute()
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
@@ -255,6 +292,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.session = session
         self.projections = []
         self.select_mapping = {}
+        self.join_statements = []
 
     def any(self, condition = None):
         raise NotImplementedError()
@@ -295,10 +333,37 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             #     x = 0
             # else:
             #     self.query = select(self.model)
-                entities = [row_result[0].to_entity() for row_result in self.session.execute(self.query).all()]
-                for projection in self.projections:
-                    entities = [projection(entity) for entity in entities]
-                return entities
+                # entities = [row_result[0].to_entity() for row_result in ]
+
+                # TODO: Prevent projection + include, won't work...or make one override the other
+                print(str(self.query))
+                stuff = [self.model.location, self.model.stock_level]
+                for x in stuff:
+                    self.query = self.query.options(joinedload(x))
+                row_results = self.session.execute(self.query).unique().all()
+                translated_select_tree = {}
+                if self.select_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
+                    for select_source in self.select_mapping.values():
+                        entity_type = get_type_hints(self.model.to_entity)['return']
+                        self.create_nested_dict(select_source, translated_select_tree, entity_type)
+
+                if translated_select_tree:
+                    models_from_select = []
+
+                    for row_result in row_results:
+                        result_instance = row_result[0]
+                        model_from_select = self.model()
+                        self.depth_first_traversal(result_instance, translated_select_tree, model_from_select)
+                        models_from_select.append(model_from_select)
+
+                    projected_results = [model.to_entity() for model in models_from_select]
+                    for projection in self.projections:
+                        projected_results = [projection(result) for result in projected_results]
+
+                    return projected_results
+
+
+                return [row_result[0].to_entity() for row_result in row_results]
 
     #TODO: define a select, and use in mapper so it actually trims down the result set
 
@@ -342,8 +407,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                         child_models.append(linked_model)
                     setattr(model_being_created, attribute_name, child_models)
                 else:
-                    linked_model = ChildModel()
-                    # linked_model = self.get_model_from_attribute(attribute_name)()
+                    linked_model = self.get_model_definition_from_attribute(attribute_name)()
                     self.depth_first_traversal(linked_model_from_row_result, child_attributes, linked_model)
                     setattr(model_being_created, attribute_name, linked_model)
 
@@ -369,13 +433,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 if get_origin(attr_type) == list:
                     attr_type = attr_type.__args__[0]
                 if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-                    if attr_name not in dict:
-                        for attr in get_type_hints(entity).keys():
-                            ????
                     x = {}
-                    for attr in get_type_hints(entity).keys():
+                    for attr in get_type_hints(attr_type).keys():
                         x[attr] = {}
-                    self.merge_nested_dicts(dict, x)
+                    if attr_name not in dict:
+                        d[attr_name] = x
+                    else:
+                        self.merge_nested_dicts(dict, x)
 
             if attr_name not in dict:
                 d[attr_name] = build_nested_dict({}, attrs[1:])
@@ -390,199 +454,17 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         return dict
 
+    # USEFUL MAYBE:
+    # q = select(*selects).join(self.model.location)
+    # q = select(self.model).options(joinedload(self.model.location)) #OLD WAY
+    # q = select(self.model).options(load_only(self.model.id), joinedload(self.model.location).load_only(selected_model.id)) #NEW WAY
+    # testparentchild = select(ParentModel).options(selectinload(ParentModel.children)) # USE SELECTINLOAD FOR EVERYTHING
     def include(self, attribute_name: str):
-        # attr = getattr(self.model, attribute_name)
-        selected_model = self.get_model_from_attribute(attribute_name)
-        # selects = [self.model.id, self.model.name, selected_model.id, selected_model.description] # ALWAYS GET ID
-        # q = select(*selects).join(self.model.location)
-        selects = [nameof(self.model.id), nameof(self.model.name), nameof(selected_model.description)] # ALWAYS GET ID
-        q = select(self.model).options(joinedload(self.model.location)) #OLD WAY
-        q = select(self.model).options(load_only(self.model.id), joinedload(self.model.location).load_only(selected_model.id)) #NEW WAY
-        testparentchild = select(ParentModel).options(selectinload(ParentModel.children))
-        print(str(q))
-        print(str(testparentchild))
-        results = {}
-        testthing = None
-        x = self.session.execute(testparentchild).all()
-        for h in x:
-            model_inst = h[0]
-            select_map_test = {
-                'dto_name': 'name',
-                'dto_stock_item_id': 'id',
-                'dto_stock_level_id': 'stock_level.id',
-                'dto_stock_location': 'location',
-                'dto_stock_level_last_updated_on_utc': 'stock_level_last_updated_on_utc'
-            }
-            select_map_test2 = {
-                'dto_children': 'children',
-                'dto_grandchild_names': 'children.grandchild.name',
-            }
-
-            select_structure_test = {}
-            for select_source in select_map_test.values():
-                self.create_nested_dict(select_source, select_structure_test, StockItem)
-                # attributes = select_source.split(".")
-                # if len(attributes) > 1:
-                #     structure = {}
-                #     for attribute in attributes:
-                #         select_structure_test[attribute]
-                # else:
-                #     select_structure_test[attribute] = {}
-
-            select_structure = {
-                'children': {
-                    'grandchild': {
-                        'name': {}
-                    },
-                }
-            }
-            # select_structure = {
-            #     'name': {},
-            #     'location': {
-            #         'description': {},
-            #     }
-            # }
-            model_result = self.model()
-            self.depth_first_traversal(model_inst, select_structure, model_result)
-
-            # I THINK THIS NEEDS TO BE DEPTH FIRST TRAVERSAL...MAYBE...POSSIBLY DOESN'T MATTER
-
-            queue = [select_structure]
-            current_model = self.model()
-
-            while queue:
-                current_dict = queue.pop(0)
-                keys = current_dict.keys()
-
-                for key in keys:
-                    value = current_dict[key]
-                    if not value:
-                        setattr(current_model, key, getattr(model_inst, key))
-                    else:
-                        queue.append(value)
-
-                    # print(f"Key: {key}, Value: {value}")
-
-
-            # attrs = [getattr(model_inst, attr_name) for attr_name in selects]
-            test = {
-                "location": self.model.location.comparator.entity.entity(description=getattr(getattr(model_inst, "location"), "description"))
-            }
-            selected_model_inst = self.model(**test)
-        for info, rslt in self.session.execute(q).all()[0]._key_to_index.items():
-            results.setdefault(rslt, []).append(info)
-            if type(info) == InstrumentedAttribute:
-                testthing = info
-            if issubclass(type(info), Column):
-                v = 0
-            if type(info) == str:
-                v = 0
-
-
-        row_results = self.session.execute(q).all()
-        # TODO: Add to collection of created models, do not add duplicates
-        # TODO: Link models together following relatonships
-        models_from_rows = []
-        models_by_type = {}
-        for row_result in row_results:
-            # # Get model types from row result
-            # models_from_row = []
-
-            # for metadata, column in column_metadata:
-            #     if type(metadata) == InstrumentedAttribute and not metadata.parent.entity in models_from_row:
-            #         models_from_row.append(metadata.parent.entity)
-
-            # # Get list of model instances
-            # model_instances = []
-            # for model in models_from_row:
-            #     model_instances.append(model())
-
-            # 1. Collate metadata of columns
-            metadata_by_column = {}
-            for metadata, column in row_result._key_to_index.items():
-                metadata_by_column.setdefault(column, []).append(metadata)
-
-            # 2. Append actual data to metadata collection
-            for column_name, column_data in row_result._mapping.items():
-                for column in metadata_by_column.values():
-                    if column[0] == column_name:
-                        column.append(column_data)
-
-            # 3. Collate model creation information
-            models_to_be_created = {}
-            for column in metadata_by_column.values():
-                models_to_be_created.setdefault(column[1].parent.entity, {})[column[1].name] = column[3]
-
-            # models_to_be_created = {}
-            # for col_name, data in column_data.items():
-            #     for col in metadata_by_column_index.values():
-            #         if col[0] == col_name:
-            #             models_to_be_created.setdefault(col[1].parent.entity, {})[col[1].name] = data
-
-            # 4. Create models
-            models_from_row = []
-            for model, attrs in models_to_be_created.items():
-                models_from_row.append(model(**attrs))
-
-            for model in models_from_row:
-                if not any(model.id == m.id for m in models_from_rows): # TODO: This assumes everything has one id...should compare entire object
-                    models_from_rows.append(model)
-
-            # Might need to do everything (linking) before adding to outside list
-
-            # Check relationship from relationship tree, go through one by one going inwards
-            # Identify many-one, one-one and one-many relationship
-            # Search for ID of relationship type and associate models
-            for model in models_from_row:
-                models_by_type.setdefault(type(model), []).append(model)
-
-        # structure = {
-        #     'StockItemModel': {
-        #         'StockLocationModel': {},
-        #         'OtherThing': {
-        #             'OtherOtherThing': {},
-        #             'OtherOtherThing2': {}
-        #         }
-        #     }
-        # }
-        structure = {
-            self.model: {
-                self.model.location.comparator.entity.entity: {},
-            }
-        }
-
-        queue = [structure]
-
-        while queue:
-            current_dict = queue.pop(0)
-            keys = current_dict.keys()
-
-            for key in keys:
-                value = current_dict[key]
-                print(f"Key: {key}, Value: {value}")
-
-                if value:
-                    queue.append(value)
-
-        v = 0
-
-        g = results.values()
-        result_model = testthing.parent.entity
-        result_entity = result_model().to_entity()
-        t1 = testthing.prop
-        t2 = testthing.property
-        t3 = testthing.name
-
-
-        # NEW IDEA: Get list of properties/models to select, then do:
-        # setattr(model, selected_attribute_name, getattr(row_result, attribute_name))
-
-
         model_attribute = getattr(self.model, attribute_name)
-        joined_query = SqlAlchemyQueryBuilder(self.session, self.model)
+        joined_query = SqlAlchemyQueryBuilder(self.session, self.model) #TODO: MAKE SURE EVERYTHING IS BEING MAINTAINED...OR MAYBE USE EVAL INSTEAD?
         joined_query.query = self.query.options(joinedload(model_attribute))
         joined_query.included_attributes = [model_attribute]
-        joined_query.included_model = model_attribute.comparator.entity.entity
+        joined_query.included_model = self.get_model_definition_from_attribute(attribute_name)
         return joined_query
 
     def get_assignment_source_attributes(self, source_type, string_to_search: str):
@@ -593,12 +475,12 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             potential_attributes = []
             for string in string_to_search.split("."):
                 potential_attributes.extend(string.split())
-            # potential_attributes = [s.split(' ')[0] for s in potential_attributes]
-            # potential_attributes = [item for sublist in potential_attributes for item in sublist]
             if attr_name in potential_attributes and not re.search(pattern, string_to_search):
                 if get_origin(attr_type) == list:
                     attr_type = attr_type.__args__[0]
                 if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
+                    # FIXME: QUICK DIRTY FIX, BAD PLACEMENT
+                    # self.query = self.query.options(selectinload(getattr(self.model, attr_name)))
                     child_attr = self.get_assignment_source_attributes(attr_type, string_to_search)
                     if child_attr:
                         return attr_name + "." + child_attr
@@ -608,49 +490,46 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         return ""
 
     # TODO: Check source and dest types to ensure select is valid (e.g. not doing get_view_model with domain entity)
-    # TODO: Test having more or less properties than expected
     def project(self, func):
         self.projections.append(func)
-
-
-
-        # select_mapping = []
-        # source_code = inspect.getsource(func)
-
-        # assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
-
-        # matches = re.findall(assignment_pattern, source_code)
-        # for match in matches:
-        #     left_side, right_side = match
-        #     select_mapping.append((left_side, right_side))
-
-        # END GOAL:
-        # select_structure = {
-        #     'name': {},
-        #     'location': {
-        #         'description': {},
-        #     }
-        # }
-
-        # example_mapping = {
-        #     "dto_name": "name",
-        #     "dto_children": ("children", [ "id", "name" ]),
-        #     "dto_child_names": ("children", [ "name" ]),
-        #     "dto_grand_names": ("children", [("grandchild", ["name"])])
-        # }
-        # ["children", []]
-
         assignment_pattern = r'(\w+)\s*=\s*(.*?)\n' # Compile regex?
 
-        # if not self.select_mapping:
-        #     source_code = inspect.getsource(self.model.to_entity)
-        #     assignments = re.findall(assignment_pattern, source_code)
-        #     for assignment in assignments:
-        #         left_side, right_side = assignment
-        #         self.select_mapping[left_side] = self.get_assignment_source_attributes(self.model, right_side)
+        # FIXME: Can only use joinedload for my design, selectinload no work ( ; n;)... might still be fine for non-projection...maybe not, check sql str
+        x = select(ParentModel) \
+            .options(joinedload(ParentModel.children)) \
+            .options(joinedload(ParentModel.children, ChildModel.grandchild)) \
+            .options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))
+        print(str(x))
+        b = self.session.execute(x).unique().all()[0]
 
-        # attribute_names = [attr for attr in dir(source_type) if not attr.startswith("__") and not attr.endswith("__")]
-        # attribute_types = get_type_hints(source_type).items()
+        stuff = [
+            [ParentModel.children],
+            [ParentModel.children, ChildModel.grandchild],
+            [ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild],
+            [ParentModel.otherchild],
+            [ParentModel.otherchild, OtherChildModel.grandchild]
+        ]
+        testuru = select(ParentModel)
+        for x in stuff:
+            testuru = testuru.options(joinedload(*x))
+
+        testu = self.session.execute(testuru).unique().all()[0]
+
+        # TODO: join other models, also remove them from joins when projected away
+        # END GOAL (W.I.P):
+        {
+            "location": ".options(selectinload(StockItem.location))",
+            "location.child": ".options(selectinload(Child.grandchild))",
+            "location.child.grandchild": ".options(selectinload(ParentModel.children, ChildModel.grandchild))"
+        }
+        # Then do .values() string.join() prepend "self.model", then eval()
+        # ONLY ADD when not in .keys()
+        # NEW IDEA:
+        [
+            ".options(joinedload(ParentModel.children))",
+            ".options(joinedload(ParentModel.children, ChildModel.grandchild))",
+            ".options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))"
+        ]
         if not self.select_mapping:
             source_code = inspect.getsource(func)
             assignments = re.findall(assignment_pattern, source_code)
@@ -675,76 +554,29 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                         new_select_mapping[left_side] = self.select_mapping[attr_name]
                         break
             self.select_mapping = new_select_mapping
-        # source_attributes = get_type_hints(source_type).items()
-        # for attr_name, attr_type in source_attributes:
-        #     # If entity attribute in assignment, and no other attribute precedes this attribute (avoid 'other_entity.id' bug)
-        #     pattern = r'(' + '|'.join(name for name, _ in source_attributes if name != attr_name) + r')\.' + attr_name
-        #     if not re.search(pattern, right_side) and attr_name in right_side:
-        #         if get_origin(attr_type) == list:
-        #             attr_type = attr_type.__args__[0]
-        #         if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-        #             src_attrs = get_type_hints(attr_type).items()
-        #             pattern = attr_name + r'\.(' + '|'.join(name for name, _ in src_attrs) + r')'
-        #             attr_matches = re.findall(pattern, right_side)
-        #             if attr_matches:
-        #                 select_mapping[left_side] = (attr_name, attr_matches)
-        #             else:
-        #                 select_mapping[left_side] = (attr_name, [name for name, _ in src_attrs]) # select all
-        #         else:
-        #             select_mapping[left_side] = attr_name
-        #             break
 
+        self.join_statements = self.get_join_statements() #TODO: This will recalculate every projection...good? bad? idk...
 
-        """
-        For each attribute of entity
-            If original RHS contains attribute AND attribute not in selected attributes
-                Add attribute to selected attributes
-            Else
-                Add all attributes to selected attributes (MUST REASSIGN DICT VALUE IN CASE PREVIOUSLY ATTRIBUTE ADDED)
-                Break
-        """
-
-        # for attribute_name, attribute_type in attribute_types:
-        #     if get_origin(attribute_type) == list:
-        #         attribute_type = attribute_type.__args__[0]
-        #     if hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__:
-        #         v=0
-        #         #Add model (instrumented attribute) to the list of joins
-
-        v = 0
-        # sources = set(func.__code__.co_names[1:])
-        # destinations = set(func.__code__.co_consts[1])
-        # select_mapping = {}
-        # # self.select_operations[func] = attribute_mapping
-        # # self.select_mapping = attribute_mapping
-
-        # if not self.select_mapping:
-        #     entity_type = get_type_hints(self.model.to_entity)['return']
-        #     entity_attributes = set([attr for attr in dir(entity_type)
-        #                          if not attr.startswith("__") and not attr.endswith("__")])
-        #     self.select_operations.append(self.model.to_entity)
-
-        #     sources = sources & entity_attributes
-        #     attribute_mapping = zip(sources, destinations)
-
-
-        #     for source, destination in attribute_mapping:
-        #         if source in entity_attributes:
-        #             select_mapping[destination] = source
-        # else:
-        #     for source, destination in attribute_mapping:
-        #         if source in self.select_mapping.keys():
-        #             select_mapping[destination] = self.select_mapping[source]
-        #     # new_srcs = set(sources)
-        #     # old_dests = set(self.current_select_mapping.keys())
-        #     # common = new_srcs & old_dests
-        #     # excluded = old_dests - sources
-        #     # for val in self.current_select_mapping.values():
-        #     #     if val in excluded:
-        #     #         val = None
-
-        # self.select_mapping = select_mapping
         return self
+
+    def get_join_statements(self):
+        joins = []
+        for attribute_path in self.select_mapping.values():
+            attributes_in_path = attribute_path.split('.')
+            attributes_to_join = []
+            model_type = self.model
+            while attributes_in_path:
+                attribute_name = attributes_in_path.pop(0)
+                if self.is_model(model_type, attribute_name):
+                    attributes_to_join.append(str(getattr(model_type, attribute_name)))
+                    join_str = f".options(joinedload({', '.join(attributes_to_join)}))"
+                    if join_str not in joins:
+                        joins.append(join_str)
+                    model_type = self.get_model_definition_from_attribute(model_type, attribute_name)
+        return joins
+
+    def is_model(self, model_type, attribute_name):
+        return hasattr(getattr(getattr(model_type, attribute_name), "comparator"), "entity")
 
     def then_include(self, attribute_name: str):
         if not self.included_attributes:
@@ -796,62 +628,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         return filtered_query
 
-    def get_model_from_attribute(self, attribute_name: str):
-        attr = getattr(self.model, attribute_name)
-        return attr.comparator.entity.entity
-
-# def get_assignments(func):
-#     assignments = []
-#     source_code = inspect.getsource(func)
-#     assignment_pattern = r'(\w+)\s*=\s*(.*?)\n'
-
-#     matches = re.findall(assignment_pattern, source_code)
-#     for match in matches:
-#         left_side, right_side = match
-#         assignments.append((left_side.strip(), right_side.strip()))
-
-#     return assignments
-
-# def get_attribute_names(assignments, parameter_name):
-#     attribute_names = {}
-
-#     for left_side, right_side in assignments:
-#         # Match expressions that reference the parameter (e.g., stock_item.name)
-#         matches = re.findall(rf'{parameter_name}\.(\w+)', right_side)
-#         if matches:
-#             attribute_names[left_side] = matches[0]
-
-#     return attribute_names
-
-# assignments = get_assignments(get_stock_item_dto)
-# attribute_names = get_attribute_names(assignments, parameter_name)
-
-
-"""
-[DONE] Get left and right sides of assignment
-[DONE] Get a stripped down version of the right side of the assignment where it matches an attribute of the entity/model
-[DONE] Get the type hints for all attributes
-[DONE] For each stripped down right side string, check if the matching type hint is another entity/model and if so:
-    Add that model (instrumented attribute) to the list of joins
-    If there is an attribute match for the sub entity, add that to the selected columns
-    Otherwise there is nothing trailing on the right side assignment (e.g. ".id") (COULD MAYBE USE .to_entity() AS THE SIGN?)
-        Call this method again with this model to reach in further (NOT NEEDED, NEW DESIGN WILL JUST SELECT ALL)
-
-Otherwise add to list of model attributes to select
-
-If one of the attributes is a model/entity,
-
-Going back...
-<Create a model and assign the result set>
-
-
-For each attribute of entity
-    If original RHS contains attribute AND attribute not in selected attributes
-        Add attribute to selected attributes
-    Else
-        Add all attributes to selected attributes
-        Break
-
-"""
-
-v = 0
+    def get_model_definition_from_attribute(self, model_type, attribute_name: str):
+        try:
+            return getattr(model_type, attribute_name).comparator.entity.entity
+        except:
+            return None

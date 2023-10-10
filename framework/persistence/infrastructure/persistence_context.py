@@ -265,6 +265,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
             # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Test")).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
@@ -281,18 +282,17 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
 # TODO: Find a home for this...
 class SqlAlchemyQueryBuilder(IQueryBuilder):
-    def __init__(self, session: sa_orm.scoped_session[Session], model_class, included_attributes = None):
+    def __init__(self, session: sa_orm.scoped_session[Session], model_class):
         self._context = SqlAlchemyPersistenceContext._flask_app.app_context()
         with self._context:
             self.query: Select = select(model_class)
-        # self.query: Select
-        self.included_attributes = included_attributes or []
+        self.included_attribute_path = ""
         self.included_model = None
         self.model = model_class
         self.session = session
         self.projections = []
         self.select_mapping = {}
-        self.join_statements = []
+        self.join_paths = {}
 
     def any(self, condition = None):
         raise NotImplementedError()
@@ -304,66 +304,34 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def execute(self):
         with self._context:
-            # if self.select_operations:
-            #     # #model_attribute = getattr(self.model, attribute_name)
-            #     # required_columns = [getattr(self.model, attr) for attr in self.select_mapping.values()]
-            #     # for xg in required_columns:
-            #     #     try:
-            #     #         g = xg.comparator.entity.entity
-            #     #     except:
-            #     #         pass
-            #     #     vv = 0
-            #     # self.query = select(*required_columns)
-            #     # x = self.session.execute(self.query).all()
-            #     # attrs = {}
-            #     # for row in x:
-            #     #     columns = row._fields
-            #     #     values = row._data
-            #     #     col_vals = zip(columns, values)
-            #     #     for ggg in col_vals:
-            #     #         attrs[ggg[0]] = ggg[1]
-            #     # ggh = self.model(**attrs).to_entity()
-            #     # v = 0
-            #     # #     for col in row:
-            #     # #         for req_col in required_columns:
-            #     # #         attrs[required_columns]
-            #     # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
-            #     # # g = [self.model.to_entity(self.model(*row_result[0])) for row_result in x]
-            #     # row_results = self.session.execute(self.query.options(load_only(*required_columns))).all()
-            #     x = 0
-            # else:
-            #     self.query = select(self.model)
-                # entities = [row_result[0].to_entity() for row_result in ]
+            for join_path in self.join_paths.values():
+                self.query = self.query.options(joinedload(*join_path))
+            print()
+            print(str(self.query))
+            row_results = self.session.execute(self.query).unique().all()
+            translated_select_tree = {}
+            if self.select_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
+                for select_source in self.select_mapping.values():
+                    entity_type = get_type_hints(self.model.to_entity)['return']
+                    self.create_nested_dict(select_source, translated_select_tree, entity_type)
 
-                # TODO: Prevent projection + include, won't work...or make one override the other
-                print(str(self.query))
-                stuff = [self.model.location, self.model.stock_level]
-                for x in stuff:
-                    self.query = self.query.options(joinedload(x))
-                row_results = self.session.execute(self.query).unique().all()
-                translated_select_tree = {}
-                if self.select_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
-                    for select_source in self.select_mapping.values():
-                        entity_type = get_type_hints(self.model.to_entity)['return']
-                        self.create_nested_dict(select_source, translated_select_tree, entity_type)
+            if translated_select_tree:
+                models_from_select = []
 
-                if translated_select_tree:
-                    models_from_select = []
+                for row_result in row_results:
+                    result_instance = row_result[0]
+                    model_from_select = self.model()
+                    self.depth_first_traversal(result_instance, translated_select_tree, model_from_select)
+                    models_from_select.append(model_from_select)
 
-                    for row_result in row_results:
-                        result_instance = row_result[0]
-                        model_from_select = self.model()
-                        self.depth_first_traversal(result_instance, translated_select_tree, model_from_select)
-                        models_from_select.append(model_from_select)
+                projected_results = [model.to_entity() for model in models_from_select]
+                for projection in self.projections:
+                    projected_results = [projection(result) for result in projected_results]
 
-                    projected_results = [model.to_entity() for model in models_from_select]
-                    for projection in self.projections:
-                        projected_results = [projection(result) for result in projected_results]
-
-                    return projected_results
+                return projected_results
 
 
-                return [row_result[0].to_entity() for row_result in row_results]
+            return [row_result[0].to_entity() for row_result in row_results]
 
     #TODO: define a select, and use in mapper so it actually trims down the result set
 
@@ -401,13 +369,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                     continue
                 if type(linked_model_from_row_result) == sqlalchemy.orm.collections.InstrumentedList:
                     child_models = []
-                    for listed_model in linked_model_from_row_result:
-                        linked_model = ChildModel()
-                        self.depth_first_traversal(listed_model, child_attributes, linked_model)
+                    for linked_model_from_list_result in linked_model_from_row_result:
+                        linked_model = self.get_model_definition_from_attribute(type(model_being_created), attribute_name)()
+                        self.depth_first_traversal(linked_model_from_list_result, child_attributes, linked_model)
                         child_models.append(linked_model)
                     setattr(model_being_created, attribute_name, child_models)
                 else:
-                    linked_model = self.get_model_definition_from_attribute(attribute_name)()
+                    linked_model = self.get_model_definition_from_attribute(type(model_being_created), attribute_name)()
                     self.depth_first_traversal(linked_model_from_row_result, child_attributes, linked_model)
                     setattr(model_being_created, attribute_name, linked_model)
 
@@ -454,18 +422,25 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         return dict
 
-    # USEFUL MAYBE:
+    # USEFUL MAYBE (THIS USES load_only ????):
     # q = select(*selects).join(self.model.location)
     # q = select(self.model).options(joinedload(self.model.location)) #OLD WAY
     # q = select(self.model).options(load_only(self.model.id), joinedload(self.model.location).load_only(selected_model.id)) #NEW WAY
     # testparentchild = select(ParentModel).options(selectinload(ParentModel.children)) # USE SELECTINLOAD FOR EVERYTHING
     def include(self, attribute_name: str):
-        model_attribute = getattr(self.model, attribute_name)
-        joined_query = SqlAlchemyQueryBuilder(self.session, self.model) #TODO: MAKE SURE EVERYTHING IS BEING MAINTAINED...OR MAYBE USE EVAL INSTEAD?
-        joined_query.query = self.query.options(joinedload(model_attribute))
-        joined_query.included_attributes = [model_attribute]
-        joined_query.included_model = self.get_model_definition_from_attribute(attribute_name)
-        return joined_query
+        if not hasattr(self.model, attribute_name):
+            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
+
+        if not self.is_model(self.model, attribute_name):
+            raise Exception("This property is not valid for include.")
+
+        attribute_to_join = getattr(self.model, attribute_name)
+        if nameof(attribute_to_join) not in self.join_paths.keys():
+            self.join_paths[str(attribute_to_join)] = [attribute_to_join]
+
+        self.included_attribute_path = nameof(attribute_to_join)
+        self.included_model = self.get_model_definition_from_attribute(self.model, attribute_name)
+        return self
 
     def get_assignment_source_attributes(self, source_type, string_to_search: str):
         source_attributes = get_type_hints(source_type).items()
@@ -479,8 +454,6 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 if get_origin(attr_type) == list:
                     attr_type = attr_type.__args__[0]
                 if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-                    # FIXME: QUICK DIRTY FIX, BAD PLACEMENT
-                    # self.query = self.query.options(selectinload(getattr(self.model, attr_name)))
                     child_attr = self.get_assignment_source_attributes(attr_type, string_to_search)
                     if child_attr:
                         return attr_name + "." + child_attr
@@ -495,41 +468,29 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         assignment_pattern = r'(\w+)\s*=\s*(.*?)\n' # Compile regex?
 
         # FIXME: Can only use joinedload for my design, selectinload no work ( ; n;)... might still be fine for non-projection...maybe not, check sql str
-        x = select(ParentModel) \
-            .options(joinedload(ParentModel.children)) \
-            .options(joinedload(ParentModel.children, ChildModel.grandchild)) \
-            .options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))
-        print(str(x))
-        b = self.session.execute(x).unique().all()[0]
 
-        stuff = [
-            [ParentModel.children],
-            [ParentModel.children, ChildModel.grandchild],
-            [ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild],
-            [ParentModel.otherchild],
-            [ParentModel.otherchild, OtherChildModel.grandchild]
-        ]
-        testuru = select(ParentModel)
-        for x in stuff:
-            testuru = testuru.options(joinedload(*x))
+        # x = select(ParentModel) \
+        #     .options(joinedload(ParentModel.children)) \
+        #     .options(joinedload(ParentModel.children, ChildModel.grandchild)) \
+        #     .options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))
+        # print(str(x))
+        # b = self.session.execute(x).unique().all()[0]
 
-        testu = self.session.execute(testuru).unique().all()[0]
+        # stuff = [
+        #     [ParentModel.children],
+        #     [ParentModel.children, ChildModel.grandchild],
+        #     [ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild],
+        #     [ParentModel.otherchild],
+        #     [ParentModel.otherchild, OtherChildModel.grandchild]
+        # ]
+        # testuru = select(ParentModel)
+        # for x in stuff:
+        #     testuru = testuru.options(joinedload(*x))
 
-        # TODO: join other models, also remove them from joins when projected away
-        # END GOAL (W.I.P):
-        {
-            "location": ".options(selectinload(StockItem.location))",
-            "location.child": ".options(selectinload(Child.grandchild))",
-            "location.child.grandchild": ".options(selectinload(ParentModel.children, ChildModel.grandchild))"
-        }
-        # Then do .values() string.join() prepend "self.model", then eval()
-        # ONLY ADD when not in .keys()
-        # NEW IDEA:
-        [
-            ".options(joinedload(ParentModel.children))",
-            ".options(joinedload(ParentModel.children, ChildModel.grandchild))",
-            ".options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))"
-        ]
+        # testu = self.session.execute(testuru).unique().all()[0]
+
+        # TODO: remove them from joins when projected away? currently just recalculates entire join structure
+
         if not self.select_mapping:
             source_code = inspect.getsource(func)
             assignments = re.findall(assignment_pattern, source_code)
@@ -555,24 +516,27 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                         break
             self.select_mapping = new_select_mapping
 
-        self.join_statements = self.get_join_statements() #TODO: This will recalculate every projection...good? bad? idk...
+        self.join_paths = self.get_join_statements() #TODO: This will recalculate every projection...good? bad? idk...
 
         return self
 
     def get_join_statements(self):
-        joins = []
+        joins = {}
         for attribute_path in self.select_mapping.values():
             attributes_in_path = attribute_path.split('.')
-            attributes_to_join = []
+            attribute_path_to_join = []
+            attribute_path_as_string = ""
             model_type = self.model
             while attributes_in_path:
                 attribute_name = attributes_in_path.pop(0)
                 if self.is_model(model_type, attribute_name):
-                    attributes_to_join.append(str(getattr(model_type, attribute_name)))
-                    join_str = f".options(joinedload({', '.join(attributes_to_join)}))"
-                    if join_str not in joins:
-                        joins.append(join_str)
+                    attribute_path_to_join.append(getattr(model_type, attribute_name))
+                    attribute_path_as_string = ''.join([attribute_path_as_string, str(getattr(model_type, attribute_name))])
+                    if attribute_path_as_string not in joins:
+                        joins[attribute_path_as_string] = attribute_path_to_join
                     model_type = self.get_model_definition_from_attribute(model_type, attribute_name)
+                else:
+                    break
         return joins
 
     def is_model(self, model_type, attribute_name):

@@ -13,7 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.query import Query
 from flask_sqlalchemy.session import Session
-from sqlalchemy import Column, ForeignKey, Select, String, select
+from sqlalchemy import Column, ForeignKey, Integer, Select, String, select
 from sqlalchemy.orm import (InstrumentedAttribute, joinedload, load_only,
                             relationship, selectinload, subqueryload)
 from sqlalchemy_utils import UUIDType
@@ -32,6 +32,18 @@ from framework.persistence.infrastructure.seed import seed_initial_data_async
 # TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
 
 db = SQLAlchemy()
+
+class TestModel(db.Model):
+    __tablename__ = "Test"
+    id1 = Column(
+        String,
+        primary_key=True,
+        default="1")
+    id2 = Column(
+        Integer,
+        primary_key=True,
+        default=2)
+    name = Column(String(255), default="Test")
 
 class GreatGrandChildModel(db.Model):
     __tablename__ = "GreatGrandChild"
@@ -118,7 +130,7 @@ class BoolOperation:
     def sanitise(self, model):
         try:
             getattr(model, self.exp1)
-            self.exp1 = f"self.model.{self.exp1}"
+            self.exp1 = f"self.model.{self.exp1}" #TODO: self.model. eeewwww
         except:
             if type(self.exp1) == str:
                 self.exp1 = f"'{self.exp1}'"
@@ -126,7 +138,7 @@ class BoolOperation:
             getattr(model, self.exp2)
             self.exp2 = f"self.model.{self.exp2}"
         except:
-            if type(self.exp2) == str:
+            if type(self.exp2) == str or type(self.exp2) == uuid.UUID:
                 self.exp2 = f"'{self.exp2}'"
 
     def to_str(self, model):
@@ -233,6 +245,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 db.session.add(child1)
                 db.session.add(child2)
                 db.session.add(parent)
+                db.session.add(TestModel())
                 db.session.commit()
                 Migrate().init_app(app, db) # TODO: Do i need a migrate here?...
                 await seed_initial_data_async(SqlAlchemyPersistenceContext())
@@ -264,6 +277,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
             # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).first_by_id(2, "1")
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).first(Equal(nameof(StockItem.id), uuid.uuid4()))
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
@@ -304,11 +319,14 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def execute(self):
         with self._context:
+            self.join_paths = self.get_join_statements()
             for join_path in self.join_paths.values():
                 self.query = self.query.options(joinedload(*join_path))
-            print()
-            print(str(self.query))
+
+            print() # TODO: Remove after testing finishes
+            print('\033[93m' + str(self.query) + '\033[0m')
             row_results = self.session.execute(self.query).unique().all()
+
             translated_select_tree = {}
             if self.select_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
                 for select_source in self.select_mapping.values():
@@ -330,34 +348,49 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
                 return projected_results
 
-
             return [row_result[0].to_entity() for row_result in row_results]
 
-    #TODO: define a select, and use in mapper so it actually trims down the result set
-
-    def first(self, condition = None):
-        raise NotImplementedError()
-        # with self._context:
-        #     if condition:
-        #         return self.where(condition).first()
-        #     return self.query.one().to_entity()
+    def first(self, condition: BoolOperation = None):
+        with self._context:
+            if condition:
+                return self.where(condition).first()
+            result = self.session.execute(self.query).unique().all()
+            if result:
+                return result[0][0].to_entity()
+            else:
+                raise Exception("Result set was empty.") # TODO: Better exception
 
     def first_by_id(self, *ids):
-        raise NotImplementedError()
-        # result = self.session.get(*ids) # TODO: Wait how does this work? query is based on model, but this is based on what...?
-        # if result:
-        #     return result.to_entity()
-        # else:
-        #     raise Exception("Sequence contains no elements.") #TODO: Contains no elements, or not found...?
+        '''
+        `HINT/USAGE`
+        Single id: first_by_id(1)
+        Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
+        Composite id style 2: first_by_id({"id1": 1, "id2": 2})
+        '''
+        result = self.session.get(self.model, ids)
+        if result:
+            return result.to_entity()
+        else:
+            raise Exception("No entity matching the provided ID.") # TODO: Better exception
 
-    def first_or_none(self, condition = None):
-        raise NotImplementedError()
-        # with self._context:
-        #     if condition:
-        #         result = self.where(condition).first_or_none()
-        #         return result.to_entity() if result else None
-        #     result = self.query.one_or_none().to_entity()
-        #     return result.to_entity() if result else None
+    def first_by_id_or_none(self, *ids):
+        '''
+        `HINT/USAGE`
+        Single id: first_by_id(1)
+        Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
+        Composite id style 2: first_by_id({"id1": 1, "id2": 2})
+        '''
+        return self.session.get(self.model, ids).to_entity()
+
+    def first_or_none(self, condition: BoolOperation = None):
+        with self._context:
+            if condition:
+                return self.where(condition).first_or_none()
+            result = self.session.execute(self.query).unique().all()
+            if result:
+                return result[0][0].to_entity()
+            else:
+                return None
 
     def depth_first_traversal(self, model_from_row_result, select_structure, model_being_created):
         for attribute_name, child_attributes in select_structure.items():
@@ -426,13 +459,12 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     # q = select(*selects).join(self.model.location)
     # q = select(self.model).options(joinedload(self.model.location)) #OLD WAY
     # q = select(self.model).options(load_only(self.model.id), joinedload(self.model.location).load_only(selected_model.id)) #NEW WAY
-    # testparentchild = select(ParentModel).options(selectinload(ParentModel.children)) # USE SELECTINLOAD FOR EVERYTHING
     def include(self, attribute_name: str):
         if not hasattr(self.model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
+            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.") #TODO: Better exception type
 
         if not self.is_model(self.model, attribute_name):
-            raise Exception("This property is not valid for include.")
+            raise Exception("Attribute '{attribute_name}' is not valid for include operation.") #TODO: Better exception type
 
         attribute_to_join = getattr(self.model, attribute_name)
         if nameof(attribute_to_join) not in self.join_paths.keys():
@@ -465,31 +497,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
     # TODO: Check source and dest types to ensure select is valid (e.g. not doing get_view_model with domain entity)
     def project(self, func):
         self.projections.append(func)
-        assignment_pattern = r'(\w+)\s*=\s*(.*?)\n' # Compile regex?
-
-        # FIXME: Can only use joinedload for my design, selectinload no work ( ; n;)... might still be fine for non-projection...maybe not, check sql str
-
-        # x = select(ParentModel) \
-        #     .options(joinedload(ParentModel.children)) \
-        #     .options(joinedload(ParentModel.children, ChildModel.grandchild)) \
-        #     .options(joinedload(ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild))
-        # print(str(x))
-        # b = self.session.execute(x).unique().all()[0]
-
-        # stuff = [
-        #     [ParentModel.children],
-        #     [ParentModel.children, ChildModel.grandchild],
-        #     [ParentModel.children, ChildModel.grandchild, GrandChildModel.greatgrandchild],
-        #     [ParentModel.otherchild],
-        #     [ParentModel.otherchild, OtherChildModel.grandchild]
-        # ]
-        # testuru = select(ParentModel)
-        # for x in stuff:
-        #     testuru = testuru.options(joinedload(*x))
-
-        # testu = self.session.execute(testuru).unique().all()[0]
-
-        # TODO: remove them from joins when projected away? currently just recalculates entire join structure
+        assignment_pattern = r'(\w+)\s*=\s*(.*?)\n' # TODO: Compile regex?
 
         if not self.select_mapping:
             source_code = inspect.getsource(func)
@@ -516,8 +524,6 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                         break
             self.select_mapping = new_select_mapping
 
-        self.join_paths = self.get_join_statements() #TODO: This will recalculate every projection...good? bad? idk...
-
         return self
 
     def get_join_statements(self):
@@ -543,8 +549,24 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         return hasattr(getattr(getattr(model_type, attribute_name), "comparator"), "entity")
 
     def then_include(self, attribute_name: str):
-        if not self.included_attributes:
+        if not self.included_model:
             raise Exception("No relationship included.") #TODO: Better exception type
+
+        if not hasattr(self.included_model, attribute_name):
+            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.") #TODO: Better exception type
+
+        if not self.is_model(self.included_model, attribute_name):
+            raise Exception("Attribute '{attribute_name}' is not valid for include operation.") #TODO: Better exception type
+
+        # NEED TO MAKE IT MORE LIKE get_join_statements
+        attribute_to_join = getattr(self.included_model, attribute_name)
+        if nameof(attribute_to_join) not in self.join_paths.keys():
+            self.join_paths[str(attribute_to_join)] = [attribute_to_join]
+
+        self.included_attribute_path = nameof(attribute_to_join)
+        self.included_model = self.get_model_definition_from_attribute(self.model, attribute_name)
+        return self
+
         model_attribute = getattr(self.included_model, attribute_name)
         joined_query = SqlAlchemyQueryBuilder(self.session, self.model, self.included_attributes)
         joined_query.query = self.query.options(selectinload(*self.included_attributes, model_attribute))
@@ -553,20 +575,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         return joined_query
 
     def where(self, condition: BoolOperation):
-        # g = sqlalchemy.sql.Select.filter
-        # lam = lambda x: str(x.name == "ggg")
-        # x = lam(self.model)
         if not isinstance(condition, BoolOperation):
             raise Exception("You picked the wrong type, fool!")
 
-        sql = condition.to_str(self.model)
-        # stmt = select(self.model).where(eval(sql))
-        # result = self.session.execute(stmt).all()
-        v = 0
-        filtered_query = SqlAlchemyQueryBuilder(self.session, self.model) # TODO: Look into not doing this and keeping the same instance for simplicity
-        def append_dis():
-            filtered_query.query = self.query.where(eval(sql))
-        self.query_operations.append(append_dis)
+        self.query = self.query.where(eval(condition.to_str(self.model)))
         # if type(condition) == Equal:
         #     attr = getattr(self.model, condition.operand_one)
         #     stmt = select(self.model).where(attr == condition.operand_two)
@@ -590,7 +602,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         # # if __name__ == "__main__":
         # #     main()
 
-        return filtered_query
+        return self
 
     def get_model_definition_from_attribute(self, model_type, attribute_name: str):
         try:

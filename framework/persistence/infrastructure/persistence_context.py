@@ -277,6 +277,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
             # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
+            g = SqlAlchemyPersistenceContext().get_entities(StockItem).any()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).first_by_id(2, "1")
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).first(Equal(nameof(StockItem.id), uuid.uuid4()))
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
@@ -309,13 +310,11 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.select_mapping = {}
         self.join_paths = {}
 
-    def any(self, condition = None):
-        raise NotImplementedError()
-        # with self._context:
-        #     if condition:
-        #         return self.query.filter(condition(self.model)).count() > 0
-        #     else:
-        #         return self.query.count() > 0
+    def any(self, condition: BoolOperation = None):
+        with self._context:
+            if condition:
+                return self.where(condition).any()
+            return len(self.session.execute(self.query).unique().all()) > 0
 
     def execute(self):
         with self._context:
@@ -354,11 +353,12 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         with self._context:
             if condition:
                 return self.where(condition).first()
+
             result = self.session.execute(self.query).unique().all()
             if result:
                 return result[0][0].to_entity()
-            else:
-                raise Exception("Result set was empty.") # TODO: Better exception
+
+            raise Exception("Result set was empty.") # TODO: Better exception
 
     def first_by_id(self, *ids):
         '''
@@ -370,8 +370,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         result = self.session.get(self.model, ids)
         if result:
             return result.to_entity()
-        else:
-            raise Exception("No entity matching the provided ID.") # TODO: Better exception
+
+        raise Exception("No entity matching the provided ID.") # TODO: Better exception
 
     def first_by_id_or_none(self, *ids):
         '''
@@ -386,11 +386,12 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         with self._context:
             if condition:
                 return self.where(condition).first_or_none()
+
             result = self.session.execute(self.query).unique().all()
             if result:
                 return result[0][0].to_entity()
-            else:
-                return None
+
+            return None
 
     def depth_first_traversal(self, model_from_row_result, select_structure, model_being_created):
         for attribute_name, child_attributes in select_structure.items():
@@ -576,32 +577,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def where(self, condition: BoolOperation):
         if not isinstance(condition, BoolOperation):
-            raise Exception("You picked the wrong type, fool!")
+            raise Exception(f"Only type '{nameof(BoolOperation)}' is supported for this operation.") # TODO: Better exception
 
         self.query = self.query.where(eval(condition.to_str(self.model)))
-        # if type(condition) == Equal:
-        #     attr = getattr(self.model, condition.operand_one)
-        #     stmt = select(self.model).where(attr == condition.operand_two)
-        #     result = self.session.execute(stmt).all()
-        #     v = 0
-        # self.query = self.query.filter(condition(self.model))
-        # # TODO: I doubt this will work, probably need to do something like this:
-
-        # # def evaluate_expression(expression):
-        # #     try:
-        # #         result = eval(expression)
-        # #         return result
-        # #     except Exception as e:
-        # #         return f"Error: {e}"
-
-        # # def main():
-        # #     expression = "x == 5"
-        # #     result = evaluate_expression(expression)
-        # #     print(f"Result of expression '{expression}': {result}")
-
-        # # if __name__ == "__main__":
-        # #     main()
-
         return self
 
     def get_model_definition_from_attribute(self, model_type, attribute_name: str):

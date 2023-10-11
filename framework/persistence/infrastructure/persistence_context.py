@@ -298,6 +298,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
 # TODO: Find a home for this...
 class SqlAlchemyQueryBuilder(IQueryBuilder):
+    ASSIGNMENT_PATTERN = re.compile(r'(\w+)\s*=\s*(.*?)\n')
+
     def __init__(self, session: sa_orm.scoped_session[Session], model_class):
         self._context = SqlAlchemyPersistenceContext._flask_app.app_context()
         with self._context:
@@ -307,7 +309,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.model = model_class
         self.session = session
         self.projections = []
-        self.select_mapping = {}
+        self.projection_mapping = {}
         self.join_paths = {}
 
     def any(self, condition: BoolOperation = None):
@@ -327,8 +329,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             row_results = self.session.execute(self.query).unique().all()
 
             translated_select_tree = {}
-            if self.select_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
-                for select_source in self.select_mapping.values():
+            if self.projection_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
+                for select_source in self.projection_mapping.values():
                     entity_type = get_type_hints(self.model.to_entity)['return']
                     self.create_nested_dict(select_source, translated_select_tree, entity_type)
 
@@ -475,7 +477,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.included_model = self.get_model_definition_from_attribute(self.model, attribute_name)
         return self
 
-    def get_assignment_source_attributes(self, source_type, string_to_search: str):
+    def get_assignment_source_attribute_path(self, source_type, string_to_search: str):
         source_attributes = get_type_hints(source_type).items()
         for attr_name, attr_type in source_attributes:
             # If entity attribute in assignment, and no other attribute precedes this attribute (avoid 'other_entity.id' bug)
@@ -487,7 +489,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 if get_origin(attr_type) == list:
                     attr_type = attr_type.__args__[0]
                 if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-                    child_attr = self.get_assignment_source_attributes(attr_type, string_to_search)
+                    child_attr = self.get_assignment_source_attribute_path(attr_type, string_to_search)
                     if child_attr:
                         return attr_name + "." + child_attr
                     return attr_name
@@ -495,41 +497,38 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                     return attr_name
         return ""
 
-    # TODO: Check source and dest types to ensure select is valid (e.g. not doing get_view_model with domain entity)
     def project(self, func):
         self.projections.append(func)
-        assignment_pattern = r'(\w+)\s*=\s*(.*?)\n' # TODO: Compile regex?
+        source_code = inspect.getsource(func)
+        attribute_assignments = self.ASSIGNMENT_PATTERN.findall(source_code)
+        projection_source_type = list(inspect.signature(func).parameters.values())[0].annotation
 
-        if not self.select_mapping:
-            source_code = inspect.getsource(func)
-            assignments = re.findall(assignment_pattern, source_code)
-            source_type = list(inspect.signature(func).parameters.values())[0].annotation
-            for assignment in assignments:
-                left_side, right_side = assignment
-                right_side = right_side.replace("[", "").replace("]", "").replace(",", "")
-                self.select_mapping[left_side] = self.get_assignment_source_attributes(source_type, right_side)
+        if not self.projection_mapping:
+            for assignment in attribute_assignments:
+                dest, src_path: str = assignment
+                src_path = src_path.replace("[", "").replace("]", "").replace(",", "")
+                self.projection_mapping[dest] = self.get_assignment_source_attribute_path(projection_source_type, src_path)
         else:
-            source_code = inspect.getsource(func)
-            assignments = re.findall(assignment_pattern, source_code)
-            source_type = list(inspect.signature(func).parameters.values())[0].annotation
-            new_select_mapping = {}
-            for assignment in assignments:
-                left_side, right_side = assignment
-                right_side = right_side.replace("[", "").replace("]", "").replace(",", "")
-                for attr_name, _ in get_type_hints(source_type).items():
-                    potential_attributes = []
-                    for string in right_side.split("."):
-                        potential_attributes.extend(string.split())
-                    if attr_name in potential_attributes:
-                        new_select_mapping[left_side] = self.select_mapping[attr_name]
+            new_projection_mapping = {}
+            for assignment in attribute_assignments:
+                dest, src_path: str = assignment
+                src_path = src_path.replace("[", "").replace("]", "").replace(",", "")
+
+                potential_attributes = []
+                for string in src_path.split("."):
+                    potential_attributes.extend(string.split())
+
+                for attribute_name in get_type_hints(projection_source_type).keys():
+                    if attribute_name in potential_attributes:
+                        new_projection_mapping[dest] = self.projection_mapping[attribute_name]
                         break
-            self.select_mapping = new_select_mapping
+            self.projection_mapping = new_projection_mapping
 
         return self
 
     def get_join_statements(self):
         joins = {}
-        for attribute_path in self.select_mapping.values():
+        for attribute_path in self.projection_mapping.values():
             attributes_in_path = attribute_path.split('.')
             attribute_path_to_join = []
             attribute_path_as_string = ""
@@ -577,7 +576,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def where(self, condition: BoolOperation):
         if not isinstance(condition, BoolOperation):
-            raise Exception(f"Only type '{nameof(BoolOperation)}' is supported for this operation.") # TODO: Better exception
+            raise Exception(f"Only '{nameof(BoolOperation)}' type is supported for this operation.") # TODO: Better exception
 
         self.query = self.query.where(eval(condition.to_str(self.model)))
         return self

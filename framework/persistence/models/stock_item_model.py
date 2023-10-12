@@ -14,6 +14,7 @@ from framework.persistence.models.stock_location_model import \
 
 
 class StockItemModel(db.Model):
+    __entity__ = StockItem
     __tablename__ = StockItem.__name__
 
     id = Column(

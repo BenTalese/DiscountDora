@@ -8,6 +8,7 @@ from framework.persistence.infrastructure.persistence_context import db
 
 
 class StockLocationModel(db.Model):
+    __entity__ = StockLocation
     __tablename__ = StockLocation.__name__
 
     id = Column(

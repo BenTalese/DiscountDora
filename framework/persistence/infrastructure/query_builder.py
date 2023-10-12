@@ -78,7 +78,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             if result:
                 return result[0][0].to_entity()
 
-            raise Exception("Result set was empty.") # TODO: Better exception
+            raise Exception("Result set was empty.")
 
     def first_by_id(self, *ids):
         '''
@@ -91,7 +91,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         if result:
             return result.to_entity()
 
-        raise Exception("No entity matching the provided ID.") # TODO: Better exception
+        raise Exception("No entity matching the provided ID.")
 
     def first_by_id_or_none(self, *ids):
         '''
@@ -115,10 +115,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def include(self, attribute_name: str):
         if not hasattr(self.model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.") #TODO: Better exception type
+            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
         if not self._is_model(self.model, attribute_name):
-            raise Exception("Attribute '{attribute_name}' is not valid for include operation.") #TODO: Better exception type
+            raise Exception("Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.model, attribute_name)
         if nameof(attribute_to_join) not in self.join_paths.keys():
@@ -159,13 +159,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def then_include(self, attribute_name: str):
         if not self.included_model:
-            raise Exception("No relationship included.") #TODO: Better exception type
+            raise Exception("No relationship included.")
 
         if not hasattr(self.included_model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.") #TODO: Better exception type
+            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
         if not self._is_model(self.included_model, attribute_name):
-            raise Exception("Attribute '{attribute_name}' is not valid for include operation.") #TODO: Better exception type
+            raise Exception("Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.included_model, attribute_name)
         attribute_path = self.included_attribute_path + "." + nameof(attribute_to_join)
@@ -178,7 +178,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     def where(self, condition: BoolOperation):
         if not isinstance(condition, BoolOperation):
-            raise Exception(f"Only '{nameof(BoolOperation)}' type is supported for this operation.") # TODO: Better exception
+            raise Exception(f"Only '{nameof(BoolOperation)}' type is supported for this operation.")
 
         condition_code = condition.to_str()
 

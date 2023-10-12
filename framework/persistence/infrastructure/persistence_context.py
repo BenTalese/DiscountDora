@@ -277,9 +277,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
             # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).any()
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).first_by_id(2, "1")
-            g = SqlAlchemyPersistenceContext().get_entities(StockItem).first(Equal(nameof(StockItem.id), uuid.uuid4()))
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).any()
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).first_by_id(2, "1")
+            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).first(Equal(nameof(StockItem.id), uuid.uuid4()))
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
             g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
@@ -328,19 +328,18 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
             print('\033[93m' + str(self.query) + '\033[0m')
             row_results = self.session.execute(self.query).unique().all()
 
-            translated_select_tree = {}
             if self.projection_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
+                translated_select_tree = {}
                 for select_source in self.projection_mapping.values():
-                    entity_type = get_type_hints(self.model.to_entity)['return']
-                    self.create_nested_dict(select_source, translated_select_tree, entity_type)
+                    self.translate_projection_source(
+                        translated_select_tree,
+                        select_source.split("."),
+                        get_type_hints(self.model.to_entity)['return'])
 
-            if translated_select_tree:
                 models_from_select = []
-
                 for row_result in row_results:
-                    result_instance = row_result[0]
                     model_from_select = self.model()
-                    self.depth_first_traversal(result_instance, translated_select_tree, model_from_select)
+                    self.depth_first_traversal(row_result[0], translated_select_tree, model_from_select)
                     models_from_select.append(model_from_select)
 
                 projected_results = [model.to_entity() for model in models_from_select]
@@ -415,48 +414,35 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                     self.depth_first_traversal(linked_model_from_row_result, child_attributes, linked_model)
                     setattr(model_being_created, attribute_name, linked_model)
 
-    def merge_nested_dicts(self, dict1, dict2):
-        for key, value in dict2.items():
-            if key in dict1 and isinstance(dict1[key], dict) and isinstance(value, dict):
-                self.merge_nested_dicts(dict1[key], value)
+    def translate_projection_source(self, projection_tree: dict, attributes: List[str], entity):
+        def merge_nested_dicts(dict1: dict, dict2: dict):
+            for key, value in dict2.items():
+                if key not in dict1:
+                    dict1[key] = value
+                else:
+                    merge_nested_dicts(dict1[key], value)
+
+        if len(attributes) == 0:
+            return {}
+
+        attribute_name = attributes[0]
+        attribute_type = get_type_hints(entity)[attribute_name]
+        if len(attributes) == 1 and attribute_name in get_type_hints(entity).keys() and self.is_entity(attribute_type):
+            entity_attributes = { attribute: {} for attribute in get_type_hints(attribute_type).keys() }
+            if attribute_name not in projection_tree:
+                projection_tree[attribute_name] = entity_attributes
             else:
-                dict1[key] = value
+                merge_nested_dicts(projection_tree[attribute_name], entity_attributes)
 
-    def create_nested_dict(self, input_string, dict, entity):
-        # Split the input string by periods to get a list of attribute names
-        attributes = input_string.split('.') # TODO: Move this out to main calling code
+        elif attribute_name in projection_tree:
+            source_to_merge = {}
+            source_to_merge[attribute_name] = self.translate_projection_source({}, attributes[1:], attribute_type)
+            merge_nested_dicts(projection_tree, source_to_merge)
 
-        # Recursive function to build the nested structure
-        def build_nested_dict(d, attrs):
-            if len(attrs) == 0:
-                return {}
+        else:
+            projection_tree[attribute_name] = self.translate_projection_source({}, attributes[1:], attribute_type)
 
-            attr_name = attrs[0]
-            if len(attrs) == 1 and attr_name in get_type_hints(entity).keys():
-                attr_type = get_type_hints(entity)[attr_name]
-                if get_origin(attr_type) == list:
-                    attr_type = attr_type.__args__[0]
-                if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-                    x = {}
-                    for attr in get_type_hints(attr_type).keys():
-                        x[attr] = {}
-                    if attr_name not in dict:
-                        d[attr_name] = x
-                    else:
-                        self.merge_nested_dicts(dict, x)
-
-            if attr_name not in dict:
-                d[attr_name] = build_nested_dict({}, attrs[1:])
-            else:
-                conflict = {}
-                conflict[attr_name] = build_nested_dict({}, attrs[1:])
-                self.merge_nested_dicts(dict, conflict)
-            return d
-
-        # Call the recursive function to build the nested structure
-        build_nested_dict(dict, attributes) # TODO: Move this out to main calling code
-
-        return dict
+        return projection_tree
 
     # USEFUL MAYBE (THIS USES load_only ????):
     # q = select(*selects).join(self.model.location)
@@ -477,25 +463,24 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.included_model = self.get_model_definition_from_attribute(self.model, attribute_name)
         return self
 
-    def get_assignment_source_attribute_path(self, source_type, string_to_search: str):
+    def get_source_attribute_path(self, source_type, assignment_path_to_search: str):
         source_attributes = get_type_hints(source_type).items()
-        for attr_name, attr_type in source_attributes:
+        for attribute_name, attribute_type in source_attributes:
             # If entity attribute in assignment, and no other attribute precedes this attribute (avoid 'other_entity.id' bug)
-            pattern = r'(' + '|'.join(name for name, _ in source_attributes if name != attr_name) + r')\.' + attr_name
+            pattern = r'(' + '|'.join(name for name, _ in source_attributes if name != attribute_name) + r')\.' + attribute_name
             potential_attributes = []
-            for string in string_to_search.split("."):
-                potential_attributes.extend(string.split())
-            if attr_name in potential_attributes and not re.search(pattern, string_to_search):
-                if get_origin(attr_type) == list:
-                    attr_type = attr_type.__args__[0]
-                if hasattr(attr_type, "__module__") and "entities" in attr_type.__module__:
-                    child_attr = self.get_assignment_source_attribute_path(attr_type, string_to_search)
-                    if child_attr:
-                        return attr_name + "." + child_attr
-                    return attr_name
-                else:
-                    return attr_name
+            for attribute in assignment_path_to_search.split("."): #TODO: There's gotta be regex for this...
+                potential_attributes.extend(attribute.split())
+            if attribute_name in potential_attributes and not re.search(pattern, assignment_path_to_search):
+                if self.is_entity(attribute_type) and (child_attribute := self.get_source_attribute_path(attribute_type, assignment_path_to_search)):
+                    return attribute_name + "." + child_attribute
+                return attribute_name
         return ""
+
+    def is_entity(self, attribute_type):
+        if get_origin(attribute_type) == list:
+            attribute_type = attribute_type.__args__[0]
+        return hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__
 
     def project(self, func):
         self.projections.append(func)
@@ -505,14 +490,14 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         if not self.projection_mapping:
             for assignment in attribute_assignments:
-                dest, src_path: str = assignment
-                src_path = src_path.replace("[", "").replace("]", "").replace(",", "")
-                self.projection_mapping[dest] = self.get_assignment_source_attribute_path(projection_source_type, src_path)
+                dest, src_path = assignment
+                src_path: str = src_path.replace("[", "").replace("]", "").replace(",", "")
+                self.projection_mapping[dest] = self.get_source_attribute_path(projection_source_type, src_path)
         else:
             new_projection_mapping = {}
             for assignment in attribute_assignments:
-                dest, src_path: str = assignment
-                src_path = src_path.replace("[", "").replace("]", "").replace(",", "")
+                dest, src_path = assignment
+                src_path: str = src_path.replace("[", "").replace("]", "").replace(",", "")
 
                 potential_attributes = []
                 for string in src_path.split("."):

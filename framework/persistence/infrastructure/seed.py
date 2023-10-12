@@ -1,5 +1,7 @@
+import datetime
 import random
 import string
+from typing import get_origin
 import uuid
 
 from application.services.ipersistence_context import IPersistenceContext
@@ -21,6 +23,7 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     persistence.add(stock_level_high)
     persistence.add(stock_level_medium)
     persistence.add(stock_level_low)
+    #session.add_all([x, y, z])
 
     stock_item_one = generate_entity(StockItem)
     stock_item_one.location = stock_location_one
@@ -34,17 +37,30 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
+def is_entity(attribute_type):
+        if get_origin(attribute_type) == list:
+            attribute_type = attribute_type.__args__[0]
+        return hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__
+
 def generate_entity(entity_type):
     data = {}
     for attribute in entity_type.__annotations__.items():
-        data[attribute[0]] = get_value_for_type(attribute[1], attribute[0])
+        data[attribute[0]] = get_value_for_type(attribute[0], attribute[1])
     return entity_type(**data)
 
-def get_value_for_type(type, attr_name: str):
+def get_value_for_type(attr_name, type):
+    if is_entity(type):
+        return generate_entity(type)
+
     if type == uuid:
         return uuid.uuid4()
 
     if type == str:
         return ''.join([attr_name, '__'] + random.choices(string.ascii_letters, k=5))
 
-    return None
+    if type == datetime:
+        start_date = datetime.datetime.now() - datetime.timedelta(days=500)
+        end_date = datetime.datetime.now() + datetime.timedelta(days=500)
+        return start_date + (end_date - start_date) * random.random()
+
+    raise Exception(f"Could not generate value, unsupported type: {type}")

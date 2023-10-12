@@ -90,14 +90,12 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
         return model_class(**model_data)
 
-    # BUG: query has more in it than final projection...
-    # BUG: where "not" explodes
     @staticmethod
     async def test(app):
         with app.app_context():
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
-            x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal(nameof(StockItem.name), "Test"))).execute()
+            x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
@@ -146,9 +144,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
                 self.query = self.query.options(joinedload(*join_path))
 
             print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
+            if self.projection_mapping: print('\033[32m' + f'Projection: {self.projection_mapping}' + '\033[0m')
             row_results = self.session.execute(self.query).unique().all()
 
-            if self.projection_mapping:                                     # This could be part of .project(), but if it was it would retranslate every project
+            if self.projection_mapping:
                 translated_projection_tree = {}
                 for select_source in self.projection_mapping.values():
                     self._translate_projection_source(

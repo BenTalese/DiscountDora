@@ -1,68 +1,74 @@
 import uuid
 
+from domain.generics import TEntity
+
 
 class BoolOperation:
-    def __init__(self, exp1, exp2):
-        self.exp1: BoolOperation = exp1
-        self.exp2: BoolOperation = exp2
+    def __init__(self, expression_one, expression_two):
+        self.expression_one: BoolOperation = expression_one
+        self.expression_two: BoolOperation = expression_two
 
-    def sanitise(self):
-        if type(self.exp1) == tuple:
-            self.exp1 = f"[[{self.exp1[0].__name__}]].{self.exp1[1]}"
-        elif (type(self.exp1) == str
-              or type(self.exp2) == uuid.UUID):
-            self.exp1 = f"'{self.exp1}'"
+    def _sanitise_expressions(self):
+        def sanitise_expression(exp):
+            if type(exp) == tuple:
+                return f"[[{exp[0].__name__}]].{exp[1]}"
 
-        if type(self.exp2) == tuple:
-            self.exp2 = f"[[{self.exp2[0].__name__}]].{self.exp2[1]}"
-        elif (type(self.exp2) == str
-              or type(self.exp2) == uuid.UUID):
-            self.exp2 = f"'{self.exp2}'"
+            if type(exp) == TEntity:
+                return f"[[{exp[0].__name__}]]"
 
-    def to_str(self):
+            if type(exp) == str:
+                return f"'{exp}'"
+
+            if type(exp) == uuid.UUID:
+                return f"'{exp}'"
+
+        self.expression_one = sanitise_expression(self.expression_one)
+        self.expression_two = sanitise_expression(self.expression_two)
+
+    def __str__(self):
         pass
 
 class Equal(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} == {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} == {self.expression_two}"
 
 class NotEqual(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} != {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} != {self.expression_two}"
 
 class Greater(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} > {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} > {self.expression_two}"
 
 class Less(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} < {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} < {self.expression_two}"
 
 class GreaterOrEqual(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} >= {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} >= {self.expression_two}"
 
 class LessOrEqual(BoolOperation):
-    def to_str(self):
-        self.sanitise()
-        return f"{self.exp1} <= {self.exp2}"
+    def __str__(self):
+        self._sanitise_expressions()
+        return f"{self.expression_one} <= {self.expression_two}"
 
 class Not(BoolOperation):
-    def __init__(self, exp: BoolOperation):
-        self.exp = exp
+    def __init__(self, expression: BoolOperation):
+        self.expression = expression
 
-    def to_str(self):
-        return f"~({self.exp.to_str()})"
+    def __str__(self):
+        return f"~({self.expression.__str__()})"
 
 class And(BoolOperation):
-    def to_str(self):
-        return f"({self.exp1.to_str()}) & ({self.exp2.to_str()})"
+    def __str__(self):
+        return f"({self.expression_one.__str__()}) & ({self.expression_two.__str__()})"
 
 class Or(BoolOperation):
-    def to_str(self):
-        return f"({self.exp1.to_str()}) | ({self.exp2.to_str()})"
+    def __str__(self):
+        return f"({self.expression_one.__str__()}) | ({self.expression_two.__str__()})"

@@ -45,10 +45,10 @@ def is_entity(attribute_type):
 def generate_entity(entity_type):
     data = {}
     for attribute in entity_type.__annotations__.items():
-        data[attribute[0]] = get_value_for_type(attribute[0], attribute[1])
+        data[attribute[0]] = get_value_for_type(entity_type, attribute[0], attribute[1])
     return entity_type(**data)
 
-def get_value_for_type(attr_name, type):
+def get_value_for_type(entity_type, attr_name, type):
     if is_entity(type):
         return generate_entity(type)
 
@@ -56,7 +56,7 @@ def get_value_for_type(attr_name, type):
         return uuid.uuid4()
 
     if type == str:
-        return ''.join([attr_name, '__'] + random.choices(string.ascii_letters, k=5))
+        return ''.join([entity_type.__name__, "__", attr_name, '__'] + random.choices(string.ascii_letters, k=5))
 
     if type == datetime:
         start_date = datetime.datetime.now() - datetime.timedelta(days=500)

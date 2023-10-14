@@ -7,6 +7,7 @@ from typing import List
 sys.path.append(os.getcwd())
 
 from application.dtos.stock_item_dto import StockItemDto
+from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import IGetStockItemsOutputPort
 from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from dependency_injector import containers, providers
 from flask import Flask
@@ -54,10 +55,10 @@ class Startup:
         # app.add_url_rule("/", view_func=routes.index, methods=['GET'])
         # app.add_url_rule("/search", view_func=routes.add_stock_item, methods=['POST'])
 
-
-        # _Controller: StockItemController = _ServiceProvider.get_service(StockItemController)
+        # _Controller: StockItemController = service_provider.get_service(StockItemController)
         # gg = QuickTestPresenter()
         # await _Controller.get_stock_items_async(gg)
+
         # v = 0
 
     # bcrypt = Bcrypt().init_app(app) # TODO: Look into this

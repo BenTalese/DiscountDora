@@ -6,6 +6,7 @@ from typing import List
 
 sys.path.append(os.getcwd())
 
+from application.dtos.stock_item_dto import StockItemDto
 from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from dependency_injector import containers, providers
 from flask import Flask

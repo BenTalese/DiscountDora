@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 from typing import List
-import uuid
+from domain.entities.base_entity import BaseEntity
 
 from domain.entities.recipe import Recipe
 
 
 @dataclass
-class Meal:
-    id: uuid = None
+class Meal(BaseEntity):
     name: str = None
     recipes: List[Recipe] = None

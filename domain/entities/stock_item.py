@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 import datetime
-import uuid
+from domain.entities.base_entity import BaseEntity
 
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 
 
 @dataclass
-class StockItem:
-    id: uuid = None
+class StockItem(BaseEntity):
     location: StockLocation = None
     name: str = None
     stock_level: StockLevel = None

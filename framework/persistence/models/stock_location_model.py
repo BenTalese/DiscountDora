@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy import Column, String
 from sqlalchemy_utils import UUIDType
+from domain.entities.base_entity import EntityID
 
 from domain.entities.stock_location import StockLocation
 from framework.persistence.infrastructure.persistence_context import db
@@ -21,5 +22,5 @@ class StockLocationModel(db.Model):
 
     def to_entity(self) -> StockLocation:
         return StockLocation(
-            id = self.id,
+            id = EntityID(self.id),
             description = self.description)

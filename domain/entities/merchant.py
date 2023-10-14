@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-import uuid
+
+from domain.entities.base_entity import BaseEntity
 
 
 @dataclass
-class Merchant:
-    id: uuid = None
+class Merchant(BaseEntity):
     name: str = None
     url: str = None

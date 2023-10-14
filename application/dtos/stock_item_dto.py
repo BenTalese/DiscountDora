@@ -1,16 +1,17 @@
 import datetime
 from dataclasses import dataclass
 
+from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 
 
 @dataclass
 class StockItemDto:
-    dto_name: str
-    dto_stock_item_id: uuid
-    dto_stock_level_id: uuid
-    dto_stock_location: StockLocationDto
-    dto_stock_level_last_updated_on_utc: datetime
+    name: str
+    stock_item_id: EntityID
+    stock_level_id: EntityID
+    stock_location_id: EntityID
+    stock_level_last_updated_on_utc: datetime
 
 def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
     return StockItemDto(

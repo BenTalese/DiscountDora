@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from typing import List
-import uuid
+from domain.entities.base_entity import BaseEntity
 
 from domain.entities.stock_item import StockItem
 
 
 @dataclass
-class ShoppingList:
-    id: uuid = None
+class ShoppingList(BaseEntity):
     items: List[StockItem] = None

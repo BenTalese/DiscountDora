@@ -4,6 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
+from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
@@ -48,7 +49,7 @@ class StockItemModel(db.Model):
 
     def to_entity(self) -> StockItem:
         return StockItem(
-            id = self.id,
+            id = EntityID(self.id),
             location = self.location.to_entity() if self.location else None,
             name = self.name,
             stock_level = self.stock_level.to_entity() if self.stock_level else None,

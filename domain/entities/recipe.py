@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 from typing import List
-import uuid
+from domain.entities.base_entity import BaseEntity
 
 from domain.entities.stock_item import StockItem
 
 
 @dataclass
-class Recipe:
-    id: uuid = None
+class Recipe(BaseEntity):
     image: bytes = None
     ingredients: List[StockItem] = None
     instructions: str = None

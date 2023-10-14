@@ -1,9 +1,9 @@
-import uuid
-
 from clapy import InputPort
+
+from domain.entities.base_entity import EntityID
 
 
 class CreateStockItemInputPort(InputPort):
-    location_id: uuid = None
+    location_id: EntityID = None
     name: str
-    stock_level_id: uuid = None
+    stock_level_id: EntityID = None

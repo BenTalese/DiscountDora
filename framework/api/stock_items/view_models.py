@@ -25,8 +25,8 @@ def get_stock_location_view_model(stock_location: StockLocationDto) -> StockLoca
 def get_stock_item_view_model(stock_item: StockItemDto) -> StockItemViewModel:
     return StockItemViewModel(
         name = stock_item.name,
-        stock_item_id = stock_item.stock_item_id.value,
-        stock_level_id = stock_item.stock_level_id.value,
-        stock_location_id = stock_item.stock_location_id.value,
+        stock_item_id = stock_item.stock_item_id.value if stock_item.stock_item_id else None,
+        stock_level_id = stock_item.stock_level_id.value if stock_item.stock_level_id else None,
+        stock_location_id = stock_item.stock_location_id.value if stock_item.stock_location_id else None,
         stock_level_last_updated_on_utc = stock_item.stock_level_last_updated_on_utc
     )

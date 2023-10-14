@@ -7,4 +7,4 @@ from .icreate_stock_item_output_port import ICreateStockItemOutputPort
 class CreateStockItemInteractor(Interactor):
 
     async def execute_async(self, input_port: CreateStockItemInputPort, output_port: ICreateStockItemOutputPort):
-        pass
+        raise NotImplementedError()

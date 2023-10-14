@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-import uuid
+
+from domain.entities.base_entity import BaseEntity
 
 
 @dataclass
-class StockLocation:
-    id: uuid = None
+class StockLocation(BaseEntity):
     description: str = None

@@ -1,6 +1,6 @@
 import inspect
 import re
-from typing import List, get_origin, get_type_hints
+from typing import Any, Generic, List, Type, get_origin, get_type_hints
 
 import sqlalchemy
 from flask import Flask
@@ -17,8 +17,8 @@ from application.infrastructure.bool_operation import BoolOperation, Equal, Not
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.stock_item import StockItem
-from framework.api.stock_items.view_models import (get_stock_item_next_thing,
-                                                   get_stock_item_view_model)
+from domain.generics import TEntity
+from framework.api.stock_items.view_models import get_stock_item_view_model
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
 # TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
@@ -44,6 +44,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         db.session.delete(self._convert_to_model(entity))
 
     # FIXME: dunno what to do about the async-ness of this
+    # FIXME: technically it would be best if save_changes was separate to the
+    # context, persisting is a framework concern, not an application concern
     async def save_changes_async(self):
         db.session.commit()
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
@@ -94,7 +96,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     async def test(app):
         with app.app_context():
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
-            things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
+            things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
@@ -114,7 +116,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
 
 #TODO: Put other regex up top if possible
-class SqlAlchemyQueryBuilder(IQueryBuilder):
+class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
     ASSIGNMENT_PATTERN = re.compile(r'(\w+)\s*=\s*(.*?)\n')
 
     def __init__(self, session: sa_orm.scoped_session[Session], model_class):
@@ -131,20 +133,20 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
     # ---------------- IQueryBuilder Methods ----------------
 
-    def any(self, condition: BoolOperation = None):
+    def any(self, condition: BoolOperation = None) -> bool:
         with self._context:
             if condition:
                 return self.where(condition).any()
             return len(self.session.execute(self.query).unique().all()) > 0
 
-    def execute(self):
+    def execute(self) -> List[Any]:
         with self._context:
             self.join_paths = self._get_join_statements()
             for join_path in self.join_paths.values():
                 self.query = self.query.options(joinedload(*join_path))
 
             print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
-            if self.projection_mapping: print('\033[32m' + f'Projection: {self.projection_mapping}' + '\033[0m')
+            if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
             row_results = self.session.execute(self.query).unique().all()
 
             if self.projection_mapping:
@@ -169,7 +171,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
             return [row_result[0].to_entity() for row_result in row_results]
 
-    def first(self, condition: BoolOperation = None):
+    def first(self, condition: BoolOperation = None) -> TEntity:
         with self._context:
             if condition:
                 return self.where(condition).first()
@@ -180,29 +182,29 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
             raise Exception("Result set was empty.")
 
-    def first_by_id(self, *ids):
+    def first_by_id(self, *entity_ids) -> TEntity:
         '''
         `HINT/USAGE`
         Single id: first_by_id(1)
         Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
         Composite id style 2: first_by_id({"id1": 1, "id2": 2})
         '''
-        result = self.session.get(self.model, ids)
+        result = self.session.get(self.model, entity_ids)
         if result:
             return result.to_entity()
 
         raise Exception("No entity matching the provided ID.")
 
-    def first_by_id_or_none(self, *ids):
+    def first_by_id_or_none(self, *entity_ids) -> TEntity | None:
         '''
         `HINT/USAGE`
         Single id: first_by_id(1)
         Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
         Composite id style 2: first_by_id({"id1": 1, "id2": 2})
         '''
-        return self.session.get(self.model, ids).to_entity()
+        return self.session.get(self.model, entity_ids).to_entity()
 
-    def first_or_none(self, condition: BoolOperation = None):
+    def first_or_none(self, condition: BoolOperation = None) -> TEntity | None:
         with self._context:
             if condition:
                 return self.where(condition).first_or_none()
@@ -213,7 +215,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
             return None
 
-    def include(self, attribute_name: str):
+    def include(self, attribute_name: str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not hasattr(self.model, attribute_name):
             raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
@@ -228,11 +230,11 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.included_model = self._get_model_type_from_attribute(self.model, attribute_name)
         return self
 
-    def project(self, func):
-        self.projections.append(func)
-        source_code = inspect.getsource(func)
+    def project(self, method_of_projection) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
+        self.projections.append(method_of_projection)
+        source_code = inspect.getsource(method_of_projection)
         attribute_assignments = self.ASSIGNMENT_PATTERN.findall(source_code)
-        projection_source_type = list(inspect.signature(func).parameters.values())[0].annotation
+        projection_source_type = list(inspect.signature(method_of_projection).parameters.values())[0].annotation
 
         if not self.projection_mapping:
             for assignment in attribute_assignments:
@@ -257,7 +259,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
 
         return self
 
-    def then_include(self, attribute_name: str):
+    def then_include(self, attribute_name: str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not self.included_model:
             raise Exception("No relationship included.")
 
@@ -276,11 +278,11 @@ class SqlAlchemyQueryBuilder(IQueryBuilder):
         self.included_model = self._get_model_type_from_attribute(self.included_model, attribute_name)
         return self
 
-    def where(self, condition: BoolOperation):
+    def where(self, condition: BoolOperation) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not isinstance(condition, BoolOperation):
             raise Exception(f"Only '{nameof(BoolOperation)}' type is supported for this operation.")
 
-        condition_code = condition.to_str()
+        condition_code = str(condition)
 
         pattern = re.compile(r'\[\[([^\]]+)\]\]')
         entities_in_condition = pattern.findall(condition_code)

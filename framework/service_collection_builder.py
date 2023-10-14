@@ -1,8 +1,6 @@
 from clapy import DependencyInjectorServiceProvider
 from dependency_injector import providers
 
-from application.infrastructure.mapping.mapper import Mapper
-from application.services.imapper import IMapper
 from application.services.ipersistence_context import IPersistenceContext
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
@@ -15,7 +13,6 @@ class ServiceCollectionBuilder:
         self.service_provider = service_provider
 
     def configure_application_services(self):
-        self.service_provider.register_service(providers.Factory, Mapper, IMapper) # TODO: Separate mapping services method??
         return self
 
     def configure_clapy_services(self):

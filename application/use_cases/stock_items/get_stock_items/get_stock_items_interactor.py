@@ -2,7 +2,6 @@ from clapy import Interactor
 from varname import nameof
 from application.dtos.stock_item_dto import get_stock_item_dto
 
-from application.services.imapper import IMapper
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_item import StockItem
 
@@ -12,8 +11,7 @@ from .iget_stock_items_output_port import IGetStockItemsOutputPort
 
 class GetStockItemsInteractor(Interactor):
 
-    def __init__(self, mapper: IMapper, persistence_context: IPersistenceContext):
-        self.mapper = mapper
+    def __init__(self, persistence_context: IPersistenceContext):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: GetStockItemsInputPort, output_port: IGetStockItemsOutputPort):

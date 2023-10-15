@@ -12,6 +12,13 @@ class ServiceCollectionBuilder:
     def __init__(self, service_provider: DependencyInjectorServiceProvider):
         self.service_provider = service_provider
 
+    def build_service_provider(self):
+        self.configure_persistence_services() \
+            .configure_application_services() \
+            .configure_clapy_services() \
+            .configure_interface_adaptors_services()
+        return self.service_provider
+
     def configure_application_services(self):
         return self
 

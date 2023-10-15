@@ -6,10 +6,7 @@ from typing import List
 
 sys.path.append(os.getcwd())
 
-from application.dtos.stock_item_dto import StockItemDto
-from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import IGetStockItemsOutputPort
-from clapy import DependencyInjectorServiceProvider, IServiceProvider
-from dependency_injector import containers, providers
+from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 
 from framework.api.middleware import middleware
@@ -27,12 +24,7 @@ from interface_adaptors.controllers.stock_item_controller import \
 class Startup:
 
     async def startup():
-        service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()) \
-            .configure_persistence_services() \
-            .configure_application_services() \
-            .configure_clapy_services() \
-            .configure_interface_adaptors_services() \
-            .service_provider
+        service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
 
         app = Flask(__name__)
 

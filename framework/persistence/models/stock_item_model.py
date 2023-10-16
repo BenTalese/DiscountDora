@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
+from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
@@ -23,25 +24,29 @@ class StockItemModel(db.Model):
         primary_key=True,
         default=uuid.uuid4)
 
+    location = relationship(
+        StockLocationModel.__name__,
+        lazy="noload")
+
     location_id = Column(
         UUIDType,
         ForeignKey(StockLocation.__name__ + ".id"),
         nullable=True)
 
-    location = relationship(
-        StockLocationModel.__name__,
-        lazy="noload")
-
     name = Column(
         String(255))
 
-    stock_level_id = Column(
+    shopping_list_id = Column(
         UUIDType,
-        ForeignKey(StockLevel.__name__ + ".id"))
+        ForeignKey(ShoppingList.__name__ + ".id"))
 
     stock_level = relationship(
         StockLevelModel.__name__,
         lazy="noload")
+
+    stock_level_id = Column(
+        UUIDType,
+        ForeignKey(StockLevel.__name__ + ".id"))
 
     stock_level_last_updated_on_utc = Column(
         DateTime(timezone=True),

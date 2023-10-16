@@ -23,6 +23,8 @@ from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
 from framework.api.stock_items.view_models import get_stock_item_view_model
+from framework.persistence.infrastructure.helpers import (is_entity, is_list,
+                                                          is_model)
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
 # TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
@@ -155,57 +157,34 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         # db.session.commit()
 
 
-
-        # def resolve_entity_attribute(attribute):
+        def convert_to_model(entity_instance):
+            # If already already added within this transaction, get same instance
+            if entity_instance.id and entity_instance.id.value in self._added_models:
+                return self._added_models[entity_instance.id.value]
+            # If already persisted entity
+            elif entity_instance.id:
+                return self._queried_models[entity_instance.id.value]
+            # If new entity, not yet added
+            else:
+                self.add(entity_instance)
+                return self._added_models[entity_instance.id.value]
 
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
-            # model = self._convert_to_model(entity)
 
             model_class = self._get_model_class(type(entity))
             model_data = vars(entity).copy()
             model_data["id"] = entity.id.value
-            for attribute_name, attribute_type in get_type_hints(entity).items():
-                is_list = False
-                if get_origin(attribute_type) == list:
-                    is_list = True
-                    attribute_type = attribute_type.__args__[0]
-                # If attribute is a domain entity, and has a value
-                if hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__ and model_data[attribute_name]:
-                    if is_list:
-                        converted_models = []
-                        for instance in model_data[attribute_name]:
-                            # If already already added within this transaction, get same instance
-                            if instance.id and instance.id.value in self._added_models:
-                                converted_models.append(self._added_models[instance.id.value])
-                            # If already persisted entity
-                            elif instance.id:
-                                self.get_entities(StockItem).execute()
-                                converted_models.append(self._queried_models[instance.id.value])
-                                # x_class = self._get_model_class(type(instance))
-                                # x_data = vars(instance).copy()
-                                # x_instance = x_class(**x_data) # FIXME: This has recursive problem
-                                # db.session.merge(instance)
-                                # model_data[attribute_name + '_id'] = model_data[attribute_name].id
-                                # del model_data[attribute_name]
-                            # If new entity, not yet added
-                            else:
-                                self.add(instance)
-                                converted_models.append(self._added_models[instance.id.value])
-                        model_data[attribute_name] = converted_models
 
+            for attribute_name, attribute_type in get_type_hints(entity).items():
+                if is_entity(attribute_type) and model_data[attribute_name]:
+                    if is_list(attribute_type):
+                        converted_models = []
+                        for entity_in_list in model_data[attribute_name]:
+                            converted_models.append(convert_to_model(entity_in_list))
+                        model_data[attribute_name] = converted_models
                     else:
-                        # If already already added within this transaction, get same instance
-                        if model_data[attribute_name].id and model_data[attribute_name].id.value in self._added_models:
-                            model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
-                        # If already persisted entity
-                        elif model_data[attribute_name].id:
-                            model_data[attribute_name + '_id'] = model_data[attribute_name].id
-                            del model_data[attribute_name]
-                        # If new entity, not yet added
-                        else:
-                            self.add(vars(entity)[attribute_name])
-                            model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
+                        model_data[attribute_name] = convert_to_model(model_data[attribute_name])
 
             model = model_class(**model_data)
 
@@ -435,8 +414,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if not hasattr(self.model, attribute_name):
             raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
-        if not self._is_model(self.model, attribute_name):
-            raise Exception("Attribute '{attribute_name}' is not valid for include operation.")
+        if not is_model(self.model, attribute_name):
+            raise Exception(f"Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.model, attribute_name)
         if nameof(attribute_to_join) not in self.join_paths.keys():
@@ -482,7 +461,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if not hasattr(self.included_model, attribute_name):
             raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
-        if not self._is_model(self.included_model, attribute_name):
+        if not is_model(self.included_model, attribute_name):
             raise Exception("Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.included_model, attribute_name)
@@ -547,7 +526,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
         attribute_name = attributes[0]
         attribute_type = get_type_hints(entity)[attribute_name]
-        if len(attributes) == 1 and attribute_name in get_type_hints(entity).keys() and self._is_entity(attribute_type):
+        if len(attributes) == 1 and attribute_name in get_type_hints(entity).keys() and is_entity(attribute_type):
             entity_attributes = { attribute: {} for attribute in get_type_hints(attribute_type).keys() }
             if attribute_name not in projection_tree:
                 projection_tree[attribute_name] = entity_attributes
@@ -573,15 +552,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             for attribute in assignment_path_to_search.split("."): #TODO: There's gotta be regex for this...
                 potential_attributes.extend(attribute.split())
             if attribute_name in potential_attributes and not re.search(pattern, assignment_path_to_search):
-                if self._is_entity(attribute_type) and (child_attribute := self._get_source_attribute_path(attribute_type, assignment_path_to_search)):
+                if is_entity(attribute_type) and (child_attribute := self._get_source_attribute_path(attribute_type, assignment_path_to_search)):
                     return attribute_name + "." + child_attribute
                 return attribute_name
         return ""
-
-    def _is_entity(self, attribute_type):
-        if get_origin(attribute_type) == list:
-            attribute_type = attribute_type.__args__[0]
-        return hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__
 
     def _get_join_statements(self):
         joins = {}
@@ -592,7 +566,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             model_type = self.model
             while attributes_in_path:
                 attribute_name = attributes_in_path.pop(0)
-                if self._is_model(model_type, attribute_name):
+                if is_model(model_type, attribute_name):
                     attribute_path_to_join.append(getattr(model_type, attribute_name))
                     attribute_path_as_string = ''.join([attribute_path_as_string, str(getattr(model_type, attribute_name))])
                     if attribute_path_as_string not in joins:
@@ -601,9 +575,6 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                 else:
                     break
         return joins
-
-    def _is_model(self, model_type, attribute_name):
-        return hasattr(getattr(getattr(model_type, attribute_name), "comparator"), "entity")
 
     def _get_model_type_from_attribute(self, model_type, attribute_name: str):
         try:

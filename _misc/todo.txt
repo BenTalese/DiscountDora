@@ -1,3 +1,6 @@
+Change all local variables to underscore pascal
+Check methods are ABC'd and methods are static where it makes sense
+
 Main features:
     - Maintaining a list of stock items
     - Maintaining shopping list(s)

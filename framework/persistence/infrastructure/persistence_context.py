@@ -18,6 +18,7 @@ from application.dtos.stock_item_dto import get_stock_item_dto
 from application.infrastructure.bool_operation import BoolOperation, Equal, Not
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
+from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
 from framework.api.stock_items.view_models import get_stock_item_view_model
@@ -32,11 +33,16 @@ db = SQLAlchemy()
 class SqlAlchemyPersistenceContext(IPersistenceContext):
     _flask_app: Flask
     _model_classes: dict
+    _added_models = {}
 
     # ---------------- IPersistenceContext Methods ----------------
 
     def add(self, entity):
-        db.session.add(self._convert_to_model(entity))
+        if not entity.id:
+            entity.id = EntityID(uuid.uuid4())
+            model = self._convert_to_model(entity)
+            self._added_models[entity.id.value] = model
+            db.session.add(model)
 
     def get_entities(self, entity_type):
         model_class = self._get_model_class(entity_type)
@@ -49,6 +55,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     # FIXME: technically it would be best if save_changes was separate to the
     # context, persisting is a framework concern, not an application concern
     async def save_changes_async(self):
+        self._added_models.clear()
         db.session.commit()
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
@@ -78,22 +85,29 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 db.create_all() #TODO: This doesn't handle migrations on existing tables
                 Migrate().init_app(app, db) # TODO: Create, mirate, or both?
 
+    # FIXME (Potentially): If this ever gets too ugly, make "to_model" methods on each model
+    def _convert_to_model(self, entity):
+        model_class = self._get_model_class(type(entity))
+        model_data = vars(entity).copy()
+        model_data["id"] = entity.id.value
+        for attr_name, type_hint in get_type_hints(entity).items():
+            if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
+                if model_data[attr_name].id and model_data[attr_name].id.value in self._added_models:
+                    model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
+                elif model_data[attr_name].id:
+                    model_data[attr_name + '_id'] = model_data[attr_name].id
+                    del model_data[attr_name]
+                else:
+                    self.add(model_data[attr_name])
+                    model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
+
+        return model_class(**model_data)
+
     def _get_model_class(self, entity_type):
         if entity_type in self._model_classes:
             return self._model_classes[entity_type]
 
         raise Exception(f"Model not found for: {entity_type.__name__}")
-
-    # FIXME (Potentially): If this ever gets too ugly, make "to_model" methods on each model
-    def _convert_to_model(self, entity):
-        model_class = self._get_model_class(type(entity))
-        model_data = vars(entity).copy()
-        for attr_name, type_hint in get_type_hints(entity).items():
-            if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
-                model_data[attr_name + '_id'] = model_data[attr_name].id
-                del model_data[attr_name]
-
-        return model_class(**model_data)
 
     @staticmethod
     def _verify_all_models_imported():

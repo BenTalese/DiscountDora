@@ -10,8 +10,9 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.session import Session
-from sqlalchemy import Select, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy import (Column, ForeignKey, Integer, Select, String, Table,
+                        select)
+from sqlalchemy.orm import joinedload, load_only, relationship
 from varname import nameof
 
 from application.dtos.stock_item_dto import get_stock_item_dto
@@ -30,14 +31,133 @@ from framework.persistence.infrastructure.seed import seed_initial_data_async
 
 db = SQLAlchemy()
 
+# class TestModel(db.Model):
+#     __entity__ = None
+#     __tablename__ = "Test"
+#     id = Column(
+#         Integer,
+#         primary_key=True)
+#     name = Column(String(255))
+
+# class ChildModel(db.Model):
+#     __entity__ = None
+#     __tablename__ = "Child"
+#     id = Column(
+#         Integer,
+#         primary_key=True)
+#     name = Column(String(255))
+#     parent_id = Column(Integer, ForeignKey("Parent.id"))
+
+# class Child:
+#     id: int = None
+#     name: str = None
+
+# class Parent:
+#     id: int = None
+#     name: str = None
+#     child: List[Child] = None
+
+# class ParentModel(db.Model):
+#     __entity__ = None
+#     __tablename__ = "Parent"
+#     id = Column(
+#         Integer,
+#         primary_key=True)
+#     name = Column(String(255))
+#     child = relationship("ChildModel", lazy="noload", cascade="all, delete-orphan")
+
+# student_course_association = db.Table(
+#     'student_course_association',
+#     db.Column('student_id', db.Integer, db.ForeignKey('students.id')),
+#     db.Column('course_id', db.Integer, db.ForeignKey('courses.id'))
+# )
+
+# class Student(db.Model):
+#     __entity__ = None
+#     __tablename__ = 'students'
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(255))
+#     courses = db.relationship('Course', secondary='student_course_association', back_populates='students')
+
+# class Course(db.Model):
+#     __entity__ = None
+#     __tablename__ = 'courses'
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(255))
+#     students = db.relationship('Student', secondary='student_course_association', back_populates='courses')
+
+
 class SqlAlchemyPersistenceContext(IPersistenceContext):
     _flask_app: Flask
     _model_classes: dict
     _added_models = {}
+    _queried_models = {}
 
     # ---------------- IPersistenceContext Methods ----------------
 
     def add(self, entity):
+        # x = TestModel(id=1, name="Test1")
+        # db.session.add(x)
+        # db.session.commit()
+        # self._queried_models[x.id] = x
+        # db.session.expunge_all()
+        # db.session.flush()
+        # h = TestModel(id=1, name=("AHH", False))
+        # g = TestModel(id=1, name=None)
+        # if g.id in self._queried_models:
+        #     g = self._queried_models[g.id]
+        #     g.name = h.name[0] if h.name[1] else g.name
+        # db.session.add(g)
+        # db.session.commit()
+
+
+
+        # parent = ParentModel(id=1, name="TestParent")
+        # child1 = ChildModel(id=1, name="TestChild1")
+        # child2 = ChildModel(id=2, name="TestChild2")
+        # parent.child = [child1, child2]
+        # db.session.add(parent)
+        # db.session.commit()
+        # # db.session.expunge_all()
+        # self._queried_models[parent.id] = db.session.query(ParentModel).options(joinedload(ParentModel.child)).all()[0]
+        # parent_update = Parent()
+        # parent_update.id = 1
+        # parent_update.name = "THIS IS SHIT"
+        # child2 = ChildModel(id=2, name="TestChild2")
+        # child3 = ChildModel(id=3, name="AAHHH")
+        # parent_update.child = [child2, child3]
+        # existing_parent = self._queried_models[parent_update.id]
+        # existing_data = vars(existing_parent)
+        # for attr, val in parent_update.__dict__.items():
+        #     if val != existing_data[attr]:
+        #         setattr(existing_parent, attr, val)
+
+        # db.session.commit()
+
+
+        # student1 = Student(id=1, name="Bob")
+        # student2 = Student(id=2, name="Bill")
+        # course = Course(id=5, name="Science")
+        # course.students = [student1, student2]
+        # db.session.add(course)
+        # db.session.commit()
+        # self._queried_models[course.id] = db.session.query(Course).options(joinedload(Course.students)).all()[0]
+        # self._queried_models[student1.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[0]
+        # self._queried_models[student2.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[1]
+
+        # student_update = { "id": 1, "name": "Bob", "courses": [] }
+        # existing_student = self._queried_models[1]
+        # existing_student_data = vars(existing_student)
+        # for attr, val in student_update.items():
+        #     if val != existing_student_data[attr]:
+        #         setattr(existing_student, attr, val)
+
+        # db.session.commit()
+
+
+
+        # def resolve_entity_attribute(attribute):
+
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
             # model = self._convert_to_model(entity)
@@ -46,19 +166,46 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             model_data = vars(entity).copy()
             model_data["id"] = entity.id.value
             for attribute_name, attribute_type in get_type_hints(entity).items():
+                is_list = False
+                if get_origin(attribute_type) == list:
+                    is_list = True
+                    attribute_type = attribute_type.__args__[0]
                 # If attribute is a domain entity, and has a value
                 if hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__ and model_data[attribute_name]:
-                    # If already already added within this transaction, get same instance
-                    if model_data[attribute_name].id and model_data[attribute_name].id.value in self._added_models:
-                        model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
-                    # If already persisted entity
-                    elif model_data[attribute_name].id:
-                        model_data[attribute_name + '_id'] = model_data[attribute_name].id
-                        del model_data[attribute_name]
-                    # If new entity, not yet added
+                    if is_list:
+                        converted_models = []
+                        for instance in model_data[attribute_name]:
+                            # If already already added within this transaction, get same instance
+                            if instance.id and instance.id.value in self._added_models:
+                                converted_models.append(self._added_models[instance.id.value])
+                            # If already persisted entity
+                            elif instance.id:
+                                self.get_entities(StockItem).execute()
+                                converted_models.append(self._queried_models[instance.id.value])
+                                # x_class = self._get_model_class(type(instance))
+                                # x_data = vars(instance).copy()
+                                # x_instance = x_class(**x_data) # FIXME: This has recursive problem
+                                # db.session.merge(instance)
+                                # model_data[attribute_name + '_id'] = model_data[attribute_name].id
+                                # del model_data[attribute_name]
+                            # If new entity, not yet added
+                            else:
+                                self.add(instance)
+                                converted_models.append(self._added_models[instance.id.value])
+                        model_data[attribute_name] = converted_models
+
                     else:
-                        self.add(vars(entity)[attribute_name])
-                        model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
+                        # If already already added within this transaction, get same instance
+                        if model_data[attribute_name].id and model_data[attribute_name].id.value in self._added_models:
+                            model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
+                        # If already persisted entity
+                        elif model_data[attribute_name].id:
+                            model_data[attribute_name + '_id'] = model_data[attribute_name].id
+                            del model_data[attribute_name]
+                        # If new entity, not yet added
+                        else:
+                            self.add(vars(entity)[attribute_name])
+                            model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
 
             model = model_class(**model_data)
 
@@ -67,7 +214,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     def get_entities(self, entity_type):
         model_class = self._get_model_class(entity_type)
-        return SqlAlchemyQueryBuilder(db.session, model_class)
+        return SqlAlchemyQueryBuilder(db.session, self, model_class)
 
     def remove(self, entity):
         db.session.delete(self._convert_to_model(entity))
@@ -170,14 +317,15 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
     ASSIGNMENT_PATTERN = re.compile(r'(\w+)\s*=\s*(.*?)\n')
 
-    def __init__(self, session: sa_orm.scoped_session[Session], model_class):
-        self._context = SqlAlchemyPersistenceContext._flask_app.app_context()
+    def __init__(self, session: sa_orm.scoped_session[Session], persistence_context: SqlAlchemyPersistenceContext, model_class):
+        self._context = persistence_context._flask_app.app_context()
         with self._context:
             self.query: Select = select(model_class)
         self.included_attribute_path = ""
         self.included_model = None
         self.model = model_class
         self.session = session
+        self.persistence_context = persistence_context
         self.projections = []
         self.projection_mapping = {}
         self.join_paths = {}
@@ -196,10 +344,6 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             for join_path in self.join_paths.values():
                 self.query = self.query.options(joinedload(*join_path))
 
-            print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
-            if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
-            row_results = self.session.execute(self.query).unique().all()
-
             if self.projection_mapping:
                 translated_projection_tree = {}
                 for select_source in self.projection_mapping.values():
@@ -207,6 +351,20 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                         translated_projection_tree,
                         select_source.split("."),
                         get_type_hints(self.model.to_entity)['return'])
+
+                # FIXME: Need to make this work on all joined entities
+                load_only_attributes = [attr for attr in translated_projection_tree.keys()]
+                for attr in load_only_attributes:
+                    if attr != "stock_level" and attr != "location":
+                        model_attr = getattr(self.model, attr)
+                        self.query = self.query.options(load_only(model_attr))
+
+                print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
+                if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
+                row_results = self.session.execute(self.query).unique().all()
+
+                for row_result in row_results:
+                    self.persistence_context._queried_models[row_result[0].id] = row_result[0]
 
                 projected_models = []
                 for row_result in row_results:
@@ -219,6 +377,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                     projected_results = [projection(result) for result in projected_results]
 
                 return projected_results
+
+            print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
+            if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
+            row_results = self.session.execute(self.query).unique().all()
+
+            for row_result in row_results:
+                self.persistence_context._queried_models[row_result[0].id] = row_result[0]
 
             return [row_result[0].to_entity() for row_result in row_results]
 
@@ -338,11 +503,11 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         pattern = re.compile(r'\[\[([^\]]+)\]\]')
         entities_in_condition = pattern.findall(condition_code)
         for entity_name in entities_in_condition:
-            model_name = [model.__name__ for entity, model in SqlAlchemyPersistenceContext._model_classes.items()
+            model_name = [model.__name__ for entity, model in self.persistence_context._model_classes.items()
                           if entity.__name__ == entity_name][0]
             condition_code = re.sub(pattern, model_name, condition_code)
 
-        context = { model_type.__name__: model_type for model_type in SqlAlchemyPersistenceContext._model_classes.values()}
+        context = { model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
 
         self.query = self.query.where(eval(condition_code, context))
         return self

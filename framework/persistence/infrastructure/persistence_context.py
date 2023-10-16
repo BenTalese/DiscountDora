@@ -40,7 +40,28 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     def add(self, entity):
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
-            model = self._convert_to_model(entity)
+            # model = self._convert_to_model(entity)
+
+            model_class = self._get_model_class(type(entity))
+            model_data = vars(entity).copy()
+            model_data["id"] = entity.id.value
+            for attribute_name, attribute_type in get_type_hints(entity).items():
+                # If attribute is a domain entity, and has a value
+                if hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__ and model_data[attribute_name]:
+                    # If already already added within this transaction, get same instance
+                    if model_data[attribute_name].id and model_data[attribute_name].id.value in self._added_models:
+                        model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
+                    # If already persisted entity
+                    elif model_data[attribute_name].id:
+                        model_data[attribute_name + '_id'] = model_data[attribute_name].id
+                        del model_data[attribute_name]
+                    # If new entity, not yet added
+                    else:
+                        self.add(vars(entity)[attribute_name])
+                        model_data[attribute_name] = self._added_models[model_data[attribute_name].id.value]
+
+            model = model_class(**model_data)
+
             self._added_models[entity.id.value] = model
             db.session.add(model)
 
@@ -87,21 +108,22 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     # FIXME (Potentially): If this ever gets too ugly, make "to_model" methods on each model
     def _convert_to_model(self, entity):
-        model_class = self._get_model_class(type(entity))
-        model_data = vars(entity).copy()
-        model_data["id"] = entity.id.value
-        for attr_name, type_hint in get_type_hints(entity).items():
-            if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
-                if model_data[attr_name].id and model_data[attr_name].id.value in self._added_models:
-                    model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
-                elif model_data[attr_name].id:
-                    model_data[attr_name + '_id'] = model_data[attr_name].id
-                    del model_data[attr_name]
-                else:
-                    self.add(model_data[attr_name])
-                    model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
+        # model_class = self._get_model_class(type(entity))
+        # model_data = vars(entity).copy()
+        # model_data["id"] = entity.id.value
+        # for attr_name, type_hint in get_type_hints(entity).items():
+        #     if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
+        #         if model_data[attr_name].id and model_data[attr_name].id.value in self._added_models:
+        #             model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
+        #         elif model_data[attr_name].id:
+        #             model_data[attr_name + '_id'] = model_data[attr_name].id
+        #             del model_data[attr_name]
+        #         else:
+        #             self.add(model_data[attr_name])
+        #             model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
 
-        return model_class(**model_data)
+        # return model_class(**model_data)
+        pass
 
     def _get_model_class(self, entity_type):
         if entity_type in self._model_classes:

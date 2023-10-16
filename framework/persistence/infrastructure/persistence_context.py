@@ -1,5 +1,7 @@
 import inspect
+import os
 import re
+import uuid
 from typing import Any, Generic, List, Type, get_origin, get_type_hints
 
 import sqlalchemy
@@ -55,6 +57,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     #TODO: Use class for options instead of .get("some string")
     @classmethod # TODO: Class method?? cls for what? maybe make static instead
     async def initialise(cls, app: Flask):
+        SqlAlchemyPersistenceContext._verify_all_models_imported()
         import framework.persistence.models  # Makes models visible to db.init_app()
         db.init_app(app)
         app.db = db # TODO: This seems like very bad practice
@@ -91,6 +94,18 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 del model_data[attr_name]
 
         return model_class(**model_data)
+
+    @staticmethod
+    def _verify_all_models_imported():
+        import framework.persistence.models as models_module
+        _Files = os.listdir(os.path.dirname(models_module.__file__))
+        _Files.remove('__pycache__')
+        _Files.remove('__init__.py')
+        _ModuleNames = [_File.rstrip(".py") for _File in _Files]
+        _Imports = inspect.getsource(models_module)
+        for _Name in _ModuleNames:
+            if _Name not in _Imports:
+                raise Exception(f"Not all models have been imported. Missing module: {_Name}.")
 
     @staticmethod
     async def test(app):

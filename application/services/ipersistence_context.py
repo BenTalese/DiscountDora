@@ -9,7 +9,7 @@ class IPersistenceContext(ABC):
         pass
 
     @abstractmethod
-    def get_entities(self, entity_type) -> IQueryBuilder[TEntity]:
+    def get_entities(self, entity_type: TEntity) -> IQueryBuilder[TEntity]:
         pass
 
     @abstractmethod
@@ -17,5 +17,9 @@ class IPersistenceContext(ABC):
         pass
 
     @abstractmethod
-    def save_changes_async(self: TEntity) -> None:
+    def save_changes_async(self) -> None:
+        pass
+
+    @abstractmethod
+    def update(self, entity: TEntity) -> None:
         pass

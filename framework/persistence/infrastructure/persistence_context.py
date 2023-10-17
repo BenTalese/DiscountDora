@@ -20,6 +20,7 @@ from application.infrastructure.bool_operation import BoolOperation, Equal, Not
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.base_entity import EntityID
+from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
 from framework.api.stock_items.view_models import get_stock_item_view_model
@@ -97,23 +98,63 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     # ---------------- IPersistenceContext Methods ----------------
 
-    def add(self, entity):
-        # x = TestModel(id=1, name="Test1")
-        # db.session.add(x)
-        # db.session.commit()
-        # self._queried_models[x.id] = x
-        # db.session.expunge_all()
-        # db.session.flush()
-        # h = TestModel(id=1, name=("AHH", False))
-        # g = TestModel(id=1, name=None)
-        # if g.id in self._queried_models:
-        #     g = self._queried_models[g.id]
-        #     g.name = h.name[0] if h.name[1] else g.name
-        # db.session.add(g)
-        # db.session.commit()
+    def _convert_to_model(self, entity: TEntity):
+        def convert_to_model(entity_instance):
+            # If already already added within this transaction, get same instance
+            if entity_instance.id and entity_instance.id.value in self._added_models:
+                return self._added_models[entity_instance.id.value]
+            # If already persisted entity
+            elif entity_instance.id:
+                return self._queried_models[entity_instance.id.value]
+            # If new entity, not yet added
+            else:
+                self.add(entity_instance)
+                return self._added_models[entity_instance.id.value]
+
+        model = self._get_model_type(type(entity))()
+        model.id = entity.id.value
+        # model_data = vars(entity).copy()
+        # del model_data["id"]
+
+        if entity.id.value in self._queried_models:
+            model = self._queried_models[entity.id.value]
+            # model_data = vars(model)
+
+        if entity.id.value in self._added_models:
+            model = self._added_models[entity.id.value]
+            # model_data = vars(model)
+
+        for attribute_name, value in entity.__dict__.items():
+            if attribute_name == "id":
+                continue
+
+            attribute_type = get_type_hints(entity)[attribute_name]
+            if is_entity(attribute_type) and value:
+                if is_list(attribute_type):
+                    converted_models = []
+                    for entity_in_list in value:
+                        converted_models.append(convert_to_model(entity_in_list))
+                    setattr(model, attribute_name, converted_models)
+                else:
+                    setattr(model, attribute_name, convert_to_model(value))
+
+            else:
+                setattr(model, attribute_name, value)
 
 
+        # for attribute_name, attribute_type in get_type_hints(entity).items():
+        #     if is_entity(attribute_type) and model_data[attribute_name]:
+        #         if is_list(attribute_type):
+        #             converted_models = []
+        #             for entity_in_list in model_data[attribute_name]:
+        #                 converted_models.append(convert_to_model(entity_in_list))
+        #             model_data[attribute_name] = converted_models
+        #         else:
+        #             model_data[attribute_name] = convert_to_model(model_data[attribute_name])
 
+        return model
+
+    def add(self, entity: TEntity):
         # parent = ParentModel(id=1, name="TestParent")
         # child1 = ChildModel(id=1, name="TestChild1")
         # child2 = ChildModel(id=2, name="TestChild2")
@@ -157,54 +198,66 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         # db.session.commit()
 
 
-        def convert_to_model(entity_instance):
-            # If already already added within this transaction, get same instance
-            if entity_instance.id and entity_instance.id.value in self._added_models:
-                return self._added_models[entity_instance.id.value]
-            # If already persisted entity
-            elif entity_instance.id:
-                return self._queried_models[entity_instance.id.value]
-            # If new entity, not yet added
-            else:
-                self.add(entity_instance)
-                return self._added_models[entity_instance.id.value]
-
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
 
-            model_class = self._get_model_class(type(entity))
-            model_data = vars(entity).copy()
-            model_data["id"] = entity.id.value
-
-            for attribute_name, attribute_type in get_type_hints(entity).items():
-                if is_entity(attribute_type) and model_data[attribute_name]:
-                    if is_list(attribute_type):
-                        converted_models = []
-                        for entity_in_list in model_data[attribute_name]:
-                            converted_models.append(convert_to_model(entity_in_list))
-                        model_data[attribute_name] = converted_models
-                    else:
-                        model_data[attribute_name] = convert_to_model(model_data[attribute_name])
-
-            model = model_class(**model_data)
+            model = self._convert_to_model(entity)
 
             self._added_models[entity.id.value] = model
             db.session.add(model)
 
-    def get_entities(self, entity_type):
-        model_class = self._get_model_class(entity_type)
+    def get_entities(self, entity_type: TEntity):
+        model_class = self._get_model_type(entity_type)
         return SqlAlchemyQueryBuilder(db.session, self, model_class)
 
-    def remove(self, entity):
+    #TODO: Turn on cascade delete for everything
+    def remove(self, entity: TEntity):
         db.session.delete(self._convert_to_model(entity))
 
     # FIXME: dunno what to do about the async-ness of this
     # FIXME: technically it would be best if save_changes was separate to the
     # context, persisting is a framework concern, not an application concern
+    # TODO: Find out if _queried_models should also be cleared here...me thinks maybe not
     async def save_changes_async(self):
-        self._added_models.clear()
         db.session.commit()
+        self._added_models.clear()
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
+
+    def update(self, entity: TEntity):
+        # student1 = Student(id=1, name="Bob")
+        # student2 = Student(id=2, name="Bill")
+        # course = Course(id=5, name="Science")
+        # course.students = [student1, student2]
+        # db.session.add(course)
+        # db.session.commit()
+        # self._queried_models[course.id] = db.session.query(Course).options(joinedload(Course.students)).all()[0]
+        # self._queried_models[student1.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[0]
+        # self._queried_models[student2.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[1]
+
+        # student_update = { "id": 1, "name": "Bob", "courses": [] }
+        # existing_student = self._queried_models[1]
+        # existing_student_data = vars(existing_student)
+        # for attr, val in student_update.items():
+        #     if val != existing_student_data[attr]:
+        #         setattr(existing_student, attr, val)
+
+        # db.session.commit()
+
+        # model_to_update = self._queried_models[entity.id.value]
+        # model_data = vars(model_to_update)
+        # for attr, val in entity.__dict__.items():
+        #     if attr == "id":
+        #         continue
+
+        #     attr_type = get_type_hints(entity)[attr]
+        #     if val != model_data[attr] and not is_entity(attr_type):
+        #         setattr(model_to_update, attr, val)
+
+        #     if val != model_data[attr] and is_entity(attr_type):
+        #         pass
+
+        db.session.add(self._convert_to_model(entity))
+        # db.session.merge(model_to_update) # TODO: The model is detached which I think makes this not work
 
     # end IPersistenceContext Methods
 
@@ -232,26 +285,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 db.create_all() #TODO: This doesn't handle migrations on existing tables
                 Migrate().init_app(app, db) # TODO: Create, mirate, or both?
 
-    # FIXME (Potentially): If this ever gets too ugly, make "to_model" methods on each model
-    def _convert_to_model(self, entity):
-        # model_class = self._get_model_class(type(entity))
-        # model_data = vars(entity).copy()
-        # model_data["id"] = entity.id.value
-        # for attr_name, type_hint in get_type_hints(entity).items():
-        #     if hasattr(type_hint, "__module__") and "entities" in type_hint.__module__ and model_data[attr_name]:
-        #         if model_data[attr_name].id and model_data[attr_name].id.value in self._added_models:
-        #             model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
-        #         elif model_data[attr_name].id:
-        #             model_data[attr_name + '_id'] = model_data[attr_name].id
-        #             del model_data[attr_name]
-        #         else:
-        #             self.add(model_data[attr_name])
-        #             model_data[attr_name] = self._added_models[model_data[attr_name].id.value]
-
-        # return model_class(**model_data)
-        pass
-
-    def _get_model_class(self, entity_type):
+    def _get_model_type(self, entity_type):
         if entity_type in self._model_classes:
             return self._model_classes[entity_type]
 
@@ -272,6 +306,14 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     @staticmethod
     async def test(app):
         with app.app_context():
+            # persistence = SqlAlchemyPersistenceContext()
+            # to_remove: StockItem = SqlAlchemyPersistenceContext().get_entities(StockItem).first()
+            # # might not work bc different instances of persistence
+            # to_remove.name = "AHHHHH IT WORKS!"
+            # SqlAlchemyPersistenceContext().update(to_remove)
+            to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include("items").first()
+            SqlAlchemyPersistenceContext().update(to_update)
+            await SqlAlchemyPersistenceContext().save_changes_async()
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute()
             x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
@@ -315,15 +357,16 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         with self._context:
             if condition:
                 return self.where(condition).any()
-            return len(self.session.execute(self.query).unique().all()) > 0
+            return len(self.execute()) > 0
 
     def execute(self) -> List[Any]:
         with self._context:
-            self.join_paths = self._get_join_statements()
-            for join_path in self.join_paths.values():
-                self.query = self.query.options(joinedload(*join_path))
-
+            # FIXME: A lot of this method is duplicated within itself
             if self.projection_mapping:
+                self.join_paths = self._get_projection_joins()
+                for join_path in self.join_paths.values():
+                    self.query = self.query.options(joinedload(*join_path))
+
                 translated_projection_tree = {}
                 for select_source in self.projection_mapping.values():
                     self._translate_projection_source(
@@ -342,6 +385,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                 if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
                 row_results = self.session.execute(self.query).unique().all()
 
+                # FIXME: This is hardcoded to work with a single ID (unless I don't
+                # have any composite keys, and make every entity have its own ID... problem solved!)
                 for row_result in row_results:
                     self.persistence_context._queried_models[row_result[0].id] = row_result[0]
 
@@ -357,6 +402,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
                 return projected_results
 
+            for join_path in self.join_paths.values():
+                    self.query = self.query.options(joinedload(*join_path))
+
             print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
             if self.projection_mapping: print('\033[32m' + f'PROJECTION: {self.projection_mapping}' + '\033[0m')
             row_results = self.session.execute(self.query).unique().all()
@@ -371,9 +419,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             if condition:
                 return self.where(condition).first()
 
-            result = self.session.execute(self.query).unique().all()
-            if result:
-                return result[0][0].to_entity()
+            if result:= self.execute():
+                return result[0]
 
             raise Exception("Result set was empty.")
 
@@ -384,8 +431,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
         Composite id style 2: first_by_id({"id1": 1, "id2": 2})
         '''
-        result = self.session.get(self.model, entity_ids)
-        if result:
+        ids = (id.value for id in entity_ids)
+        if result:= self.session.get(self.model, *ids):
+            self.persistence_context._queried_models[*ids] = result
             return result.to_entity()
 
         raise Exception("No entity matching the provided ID.")
@@ -397,16 +445,19 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
         Composite id style 2: first_by_id({"id1": 1, "id2": 2})
         '''
-        return self.session.get(self.model, entity_ids).to_entity()
+        ids = (id.value for id in entity_ids)
+        if result:= self.session.get(self.model, *ids):
+            self.persistence_context._queried_models[*ids] = result
+            return result.to_entity()
+        return None
 
     def first_or_none(self, condition: BoolOperation = None) -> TEntity | None:
         with self._context:
             if condition:
                 return self.where(condition).first_or_none()
 
-            result = self.session.execute(self.query).unique().all()
-            if result:
-                return result[0][0].to_entity()
+            if result:= self.execute():
+                return result[0]
 
             return None
 
@@ -557,7 +608,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                 return attribute_name
         return ""
 
-    def _get_join_statements(self):
+    def _get_projection_joins(self):
         joins = {}
         for attribute_path in self.projection_mapping.values():
             attributes_in_path = attribute_path.split('.')

@@ -21,7 +21,7 @@ def is_model_list(value):
     return type(value) == sqlalchemy.orm.collections.InstrumentedList
 
 def is_model(value):
-    if is_model_list(value):
+    if is_model_list(value) and value:
         value = value[0]
     return hasattr(type(value), "__module__") and "models" in type(value).__module__
 

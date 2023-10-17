@@ -59,3 +59,6 @@ class StockItemModel(db.Model):
             name = self.name,
             stock_level = self.stock_level.to_entity() if self.stock_level else None,
             stock_level_last_updated_on_utc = self.stock_level_last_updated_on_utc)
+
+    def get_key(self):
+        return self.id

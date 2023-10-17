@@ -26,3 +26,6 @@ class ShoppingListModel(db.Model):
         return ShoppingList(
             id = EntityID(self.id),
             items = [item.to_entity() for item in self.items])
+
+    def get_key(self):
+        return self.id

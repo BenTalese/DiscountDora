@@ -7,7 +7,7 @@ from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
-from framework.persistence.infrastructure.helpers import is_entity, is_list
+from framework.persistence.infrastructure.persistence_helper_methods import is_entity, is_list
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):

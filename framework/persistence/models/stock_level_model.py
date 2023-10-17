@@ -2,8 +2,8 @@ import uuid
 
 from sqlalchemy import Column, String
 from sqlalchemy_utils import UUIDType
-from domain.entities.base_entity import EntityID
 
+from domain.entities.base_entity import EntityID
 from domain.entities.stock_level import StockLevel
 from framework.persistence.infrastructure.persistence_context import db
 
@@ -24,3 +24,6 @@ class StockLevelModel(db.Model):
         return StockLevel(
             id = EntityID(self.id),
             description = self.description)
+
+    def get_key(self):
+        return self.id

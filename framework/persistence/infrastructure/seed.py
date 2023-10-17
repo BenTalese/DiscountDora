@@ -1,14 +1,13 @@
 import datetime
 import random
 import string
-from typing import get_origin
-import uuid
 
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
+from framework.persistence.infrastructure.helpers import is_entity, is_list
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):
@@ -36,7 +35,9 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_two.location = stock_location_one
     stock_item_two.stock_level = stock_level_medium
     persistence.add(stock_item_two)
+    await persistence.save_changes_async()
 
+    persistence.get_entities(StockItem).execute()
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)
     shopping_list_one.items.append(stock_item_two)
@@ -44,13 +45,9 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
-def is_entity(attribute_type):
-    if get_origin(attribute_type) == list:
-        attribute_type = attribute_type.__args__[0]
-    return hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__
 
-def is_list(attribute_type):
-    return get_origin(attribute_type) == list
+
+
 
 def generate_entity(entity_type):
     data = {}

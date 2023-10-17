@@ -31,72 +31,12 @@ from framework.persistence.infrastructure.persistence_helper_methods import (
     is_model_attribute, is_model_list, translate_projection_source)
 from framework.persistence.infrastructure.seed import seed_initial_data_async
 
-# TODO: Investigate getting IServiceProvider injected, do I need to register it against itself?
-# TODO IMPORTANT!!! : I have a feeling once i change the model into the domain entity, it will stop tracking changes...
-# ^ THIS MAY NOT BE AN ISSUE...test what happens on an update first before jumping to conclusions
-
 db = SQLAlchemy()
 
-# class TestModel(db.Model):
-#     __entity__ = None
-#     __tablename__ = "Test"
-#     id = Column(
-#         Integer,
-#         primary_key=True)
-#     name = Column(String(255))
-
-# class ChildModel(db.Model):
-#     __entity__ = None
-#     __tablename__ = "Child"
-#     id = Column(
-#         Integer,
-#         primary_key=True)
-#     name = Column(String(255))
-#     parent_id = Column(Integer, ForeignKey("Parent.id"))
-
-# class Child:
-#     id: int = None
-#     name: str = None
-
-# class Parent:
-#     id: int = None
-#     name: str = None
-#     child: List[Child] = None
-
-# class ParentModel(db.Model):
-#     __entity__ = None
-#     __tablename__ = "Parent"
-#     id = Column(
-#         Integer,
-#         primary_key=True)
-#     name = Column(String(255))
-#     child = relationship("ChildModel", lazy="noload", cascade="all, delete-orphan")
-
-# student_course_association = db.Table(
-#     'student_course_association',
-#     db.Column('student_id', db.Integer, db.ForeignKey('students.id')),
-#     db.Column('course_id', db.Integer, db.ForeignKey('courses.id'))
-# )
-
-# class Student(db.Model):
-#     __entity__ = None
-#     __tablename__ = 'students'
-#     id = db.Column(db.Integer, primary_key=True)
-#     name = db.Column(db.String(255))
-#     courses = db.relationship('Course', secondary='student_course_association', back_populates='students')
-
-# class Course(db.Model):
-#     __entity__ = None
-#     __tablename__ = 'courses'
-#     id = db.Column(db.Integer, primary_key=True)
-#     name = db.Column(db.String(255))
-#     students = db.relationship('Student', secondary='student_course_association', back_populates='courses')
-
-
 class SqlAlchemyPersistenceContext(IPersistenceContext):
+    _added_models = {}
     _flask_app: Flask
     _model_classes: dict
-    _added_models = {}
     _queried_models = {}
 
     # ---------------- IPersistenceContext Methods ----------------
@@ -143,49 +83,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         return model
 
     def add(self, entity: TEntity):
-        # parent = ParentModel(id=1, name="TestParent")
-        # child1 = ChildModel(id=1, name="TestChild1")
-        # child2 = ChildModel(id=2, name="TestChild2")
-        # parent.child = [child1, child2]
-        # db.session.add(parent)
-        # db.session.commit()
-        # # db.session.expunge_all()
-        # self._queried_models[parent.id] = db.session.query(ParentModel).options(joinedload(ParentModel.child)).all()[0]
-        # parent_update = Parent()
-        # parent_update.id = 1
-        # parent_update.name = "THIS IS SHIT"
-        # child2 = ChildModel(id=2, name="TestChild2")
-        # child3 = ChildModel(id=3, name="AAHHH")
-        # parent_update.child = [child2, child3]
-        # existing_parent = self._queried_models[parent_update.id]
-        # existing_data = vars(existing_parent)
-        # for attr, val in parent_update.__dict__.items():
-        #     if val != existing_data[attr]:
-        #         setattr(existing_parent, attr, val)
-
-        # db.session.commit()
-
-
-        # student1 = Student(id=1, name="Bob")
-        # student2 = Student(id=2, name="Bill")
-        # course = Course(id=5, name="Science")
-        # course.students = [student1, student2]
-        # db.session.add(course)
-        # db.session.commit()
-        # self._queried_models[course.id] = db.session.query(Course).options(joinedload(Course.students)).all()[0]
-        # self._queried_models[student1.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[0]
-        # self._queried_models[student2.id] = db.session.query(Student).options(joinedload(Student.courses)).all()[1]
-
-        # student_update = { "id": 1, "name": "Bob", "courses": [] }
-        # existing_student = self._queried_models[1]
-        # existing_student_data = vars(existing_student)
-        # for attr, val in student_update.items():
-        #     if val != existing_student_data[attr]:
-        #         setattr(existing_student, attr, val)
-
-        # db.session.commit()
-
-
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
 
@@ -211,19 +108,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
     def update(self, entity: TEntity):
-        # model_to_update = self._queried_models[entity.id.value]
-        # model_data = vars(model_to_update)
-        # for attr, val in entity.__dict__.items():
-        #     if attr == "id":
-        #         continue
-
-        #     attr_type = get_type_hints(entity)[attr]
-        #     if val != model_data[attr] and not is_entity(attr_type):
-        #         setattr(model_to_update, attr, val)
-
-        #     if val != model_data[attr] and is_entity(attr_type):
-        #         pass
-
         db.session.add(self._convert_to_model(entity))
         # db.session.merge(model_to_update) # TODO: The model is detached which I think makes this not work
 
@@ -280,7 +164,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # to_remove.name = "AHHHHH IT WORKS!"
             # SqlAlchemyPersistenceContext().update(to_remove)
             # things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute() # FIXME: Look into why execute is not recognised here
-            to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include("items").first()
+            to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
             SqlAlchemyPersistenceContext().update(to_update)
             await SqlAlchemyPersistenceContext().save_changes_async()
             things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()

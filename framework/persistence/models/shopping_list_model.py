@@ -18,7 +18,9 @@ class ShoppingListModel(db.Model):
         primary_key=True,
         default=uuid.uuid4)
 
-    items = relationship(StockItemModel.__name__, lazy="noload")
+    items = relationship(
+        StockItemModel.__name__,
+        lazy="noload")
 
     def to_entity(self) -> ShoppingList:
         return ShoppingList(

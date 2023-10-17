@@ -64,8 +64,8 @@ def get_value_for_type(entity_type, attr_name, type):
         return ''.join([entity_type.__name__, "__", attr_name, '__'] + random.choices(string.ascii_letters, k=5))
 
     if type == datetime:
-        start_date = datetime.datetime.now() - datetime.timedelta(days=500)
-        end_date = datetime.datetime.now() + datetime.timedelta(days=500)
+        start_date = datetime.datetime.now() - datetime.timedelta(days=2000)
+        end_date = datetime.datetime.now() + datetime.timedelta(days=2000)
         return start_date + (end_date - start_date) * random.random()
 
     raise Exception(f"Could not generate value, unsupported type: {type}")

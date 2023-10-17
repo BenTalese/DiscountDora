@@ -21,10 +21,10 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_level_low = generate_entity(StockLevel)
     stock_level_low.description = "Low"
     persistence.add(stock_level_high)
-    # persistence.add(stock_level_medium)
+    persistence.add(stock_level_medium)
     persistence.add(stock_level_low)
     #session.add_all([x, y, z])
-    # TODO: add(*entities)
+    # TODO: add(*entities) (actually, why?...for this one file?)
 
     stock_item_one = generate_entity(StockItem)
     stock_item_one.location = stock_location_one
@@ -35,9 +35,7 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_two.location = stock_location_one
     stock_item_two.stock_level = stock_level_medium
     persistence.add(stock_item_two)
-    await persistence.save_changes_async()
 
-    persistence.get_entities(StockItem).execute()
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)
     shopping_list_one.items.append(stock_item_two)

@@ -5,7 +5,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
-from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
@@ -36,9 +35,11 @@ class StockItemModel(db.Model):
     name = Column(
         String(255))
 
-    shopping_list_id = Column(
-        UUIDType,
-        ForeignKey(ShoppingList.__name__ + ".id"))
+    shopping_lists = relationship(
+        'ShoppingListModel',
+        secondary = 'ShoppingListStockItem',
+        back_populates = 'items',
+        lazy = "noload")
 
     stock_level = relationship(
         StockLevelModel.__name__,

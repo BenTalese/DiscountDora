@@ -1,6 +1,8 @@
 Change all local variables to underscore pascal
 Check methods are ABC'd and methods are static where it makes sense
 
+Add requirements somewhere so they can be easily installed via terminal
+
 Main features:
     - Maintaining a list of stock items
     - Maintaining shopping list(s)

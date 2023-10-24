@@ -4,13 +4,16 @@ import os
 import sys
 from typing import List
 
+from flask_cors import CORS
+
 sys.path.append(os.getcwd())
 
 from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 
+from framework.api.error_handlers import error_handlers
 from framework.api.middleware import middleware
-from framework.api.stock_items.stock_items_controller import stock_items
+from framework.api.routes.stock_items.stock_items_controller import stock_items
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
 from framework.service_collection_builder import ServiceCollectionBuilder
@@ -28,6 +31,8 @@ class Startup:
 
         app = Flask(__name__)
 
+        CORS(app, resources={r'/api/*': {'origins': '*'}}) # FIXME: DO NOT LEAVE LIKE THIS, BAD
+
         app.service_provider = service_provider
 
         basedir = os.path.abspath(os.path.dirname(__file__))
@@ -37,6 +42,8 @@ class Startup:
         await SqlAlchemyPersistenceContext.initialise(app)
 
         app.register_blueprint(middleware)
+        app.register_blueprint(error_handlers)
+
         app.register_blueprint(stock_items)
 
         app.stock_item_controller = service_provider.get_service(StockItemController)

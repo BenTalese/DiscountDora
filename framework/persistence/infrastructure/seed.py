@@ -43,10 +43,6 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
-
-
-
-
 def generate_entity(entity_type):
     data = {}
     for attribute_name, attribute_type in entity_type.__annotations__.items():

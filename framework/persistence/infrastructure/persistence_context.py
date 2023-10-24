@@ -24,7 +24,7 @@ from domain.entities.base_entity import EntityID
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
-from framework.api.stock_items.view_models import get_stock_item_view_model
+from framework.api.view_models.stock_item_view_model import get_stock_item_view_model
 from framework.persistence.infrastructure.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,

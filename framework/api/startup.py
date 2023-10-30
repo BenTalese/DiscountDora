@@ -16,7 +16,7 @@ from framework.api.middleware import middleware
 from framework.api.routes.stock_items.stock_items_controller import stock_items
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
-from framework.service_collection_builder import ServiceCollectionBuilder
+from framework.api.service_collection_builder import ServiceCollectionBuilder
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
@@ -31,7 +31,7 @@ class Startup:
 
         app = Flask(__name__)
 
-        CORS(app, resources={r'/api/*': {'origins': '*'}}) # FIXME: DO NOT LEAVE LIKE THIS, BAD
+        CORS(app, resources={r'/api/*': {'origins': ['http://localhost:5173'], "allow_headers": "Access-Control-Allow-Origin"}})
 
         app.service_provider = service_provider
 

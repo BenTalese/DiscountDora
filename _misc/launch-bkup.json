@@ -35,5 +35,20 @@
       "name": "API + Web App",
       "configurations": ["Flask API", "Vue Web App"]
     }
-  ]
+  ],
+  "tasks (put in tasks.json)": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "type": "npm",
+        "script": "dev",
+        "path": "framework/web_app",
+        "problemMatcher": [],
+        "label": "npm: dev",
+        "detail": "vite",
+        "isBackground": true
+      }
+    ]
+  }
+
 }

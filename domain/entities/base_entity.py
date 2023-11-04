@@ -1,10 +1,11 @@
+from abc import ABC
 from collections import namedtuple
 from dataclasses import dataclass
 
 EntityID = namedtuple("id", "value")
 
 @dataclass
-class BaseEntity:
+class BaseEntity(ABC):
     id: EntityID = None
 
     def __eq__(self, other):

@@ -1,10 +1,11 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "app/**/*", "app/**/*.vue"],
+  "include": ["env.d.ts", "app/**/*", "app/**/*.vue", "app/**/*.ts"],
   "exclude": ["app/**/__tests__/*"],
   "compilerOptions": {
     "composite": true,
     "baseUrl": ".",
+    "module": "ESNext",
     "moduleResolution": "node",
     "paths": {
       "@/*": ["./app/*"]

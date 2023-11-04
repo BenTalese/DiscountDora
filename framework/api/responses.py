@@ -39,7 +39,7 @@ def get_problem_details(type, title, detail, instance, status, errors):
     response = Response(
         response = jsonify(problem_details),
         status = status,
-        headers = { 'Content-Language': 'en' },
+        headers = { 'Content-Language': 'en', 'Access-Control-Allow-Origin': 'http://localhost:5173' },
         content_type = 'application/problem+json'
     )
 

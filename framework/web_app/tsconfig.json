@@ -9,7 +9,8 @@
     }
   ],
   "compilerOptions": {
-    "module": "es2022",
+    "module": "ESNext",
+    "target": "ESNext",
     "moduleResolution": "Node"
   }
 }

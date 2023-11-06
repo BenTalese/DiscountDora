@@ -1,6 +1,9 @@
 clapy == 2.1.3
 Flask == 2.3.3
 Flask-Cors == 4.0.0
-sqlalchemy == 2.0.20
-
-# TODO: There is more...
+Flask-SQLAlchemy == 3.0.5
+pydantic == 2.3.0
+SQLAlchemy == 2.0.20
+SQLAlchemy-Utils == 0.41.1
+dependency-injector == 4.41.0
+gunicorn == 21.2.0

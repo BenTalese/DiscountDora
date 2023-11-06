@@ -6,11 +6,11 @@ __pycache__
 
 venv
 
-*/__pycache__
+**/__pycache__
 
 **/database.db
 
-*/appsettings.json
+**/appsettings.json
 
 # Logs
 logs

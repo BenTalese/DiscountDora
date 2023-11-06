@@ -15,9 +15,10 @@ class Measurement(BaseEntity): # TODO: This should be owned in DB
 @dataclass
 class Product(BaseEntity):
     brand: str = None
+    current_offer: ProductOffer = None # flatten onto Product?
+    # historical_offers: List[ProductOffer] = None
     isAvailable: bool = None
     measurement: Measurement = None
     merchant: Merchant = None
     name: str = None
-    offers: List[ProductOffer] = None
     url: str = None

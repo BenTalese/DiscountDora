@@ -1,54 +1,65 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Flask API",
-      "type": "python",
-      "request": "launch",
-      "program": "framework/api/startup.py",
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
-      "name": "Vue Web App",
-      "type": "firefox",
-      "request": "launch",
-      "preLaunchTask": "npm: dev",
-      "url": "http://localhost:5173",
-      "webRoot": "${workspaceFolder}/framework/web_app"
-    },
-    {
-      "name": "Python: Current File",
-      "type": "python",
-      "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "env": {
-        "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
-        "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
-      }
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "API",
+            "type": "python",
+            "request": "launch",
+            "program": "framework/api/startup.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Emailer",
+            "type": "python",
+            "request": "launch",
+            "program": "framework/emailer/startup.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Web App",
+            "type": "firefox",
+            "request": "launch",
+            "preLaunchTask": "npm: dev",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/framework/web_app"
+        },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
+                "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run All",
+            "configurations": [
+                "API",
+                "Web App",
+                "Emailer"
+            ]
+        }
+    ],
+    "tasks (put in tasks.json)": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "type": "npm",
+                "script": "dev",
+                "path": "framework/web_app",
+                "problemMatcher": [],
+                "label": "npm: dev",
+                "detail": "vite",
+                "isBackground": true
+            }
+        ]
     }
-  ],
-  "compounds": [
-    {
-      "name": "API + Web App",
-      "configurations": ["Flask API", "Vue Web App"]
-    }
-  ],
-  "tasks (put in tasks.json)": {
-    "version": "2.0.0",
-    "tasks": [
-      {
-        "type": "npm",
-        "script": "dev",
-        "path": "framework/web_app",
-        "problemMatcher": [],
-        "label": "npm: dev",
-        "detail": "vite",
-        "isBackground": true
-      }
-    ]
-  }
-
 }

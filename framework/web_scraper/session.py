@@ -1,4 +1,3 @@
-import requests
 from requests import PreparedRequest, Response
 from requests.adapters import HTTPAdapter, Retry
 import requests_cache

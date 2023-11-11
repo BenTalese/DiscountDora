@@ -12,6 +12,8 @@ from framework.api.routes.stock_items.stock_items_controller import \
 
 middleware = Blueprint('middleware', __name__)
 
+# TODO: ApiAuditing (make a metadata.db)
+
 # @middleware.before_app_request
 # async def pre_process():
     # if request.endpoint not in REQUEST_OBJECTS:

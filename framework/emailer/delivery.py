@@ -1,48 +1,43 @@
-from typing import List
+import json
+import os
+import random
+import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import smtplib, ssl
-import random
-import os
+from typing import List
+
+# from framework.web_scraper.types import ProductOffers
 
 from .generate import generate_email_body
-from framework.web_scraper.types import ProductOffers
-
 
 
 def send_email(
-        product_offers: ProductOffers,
+        product_offers,
         sender_user: str,
         sender_password: str,
-        receivers: List[str]) -> None:
+        recipients: List[str]) -> None:
 
-    port = 587
-    smtp_server = "smtp.gmail.com"
     context = ssl.create_default_context()
     message = prepare_email(product_offers)
 
-    with smtplib.SMTP(smtp_server, port) as server:
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
         server.ehlo()
         server.starttls(context=context)
         server.ehlo()
         server.login(sender_user, sender_password)
-        for recipient in receivers:
+        for recipient in recipients:
             server.sendmail(sender_user, recipient, message)
 
 
-
-def prepare_email(product_offers: ProductOffers) -> str:
-    text_body = "Oops, you should use an email client that supports HTML rendering to view this email."
-    html_body = generate_email_body(product_offers)
-
+def prepare_email(product_offers) -> str:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(current_dir, 'food_emojis.txt'), 'r') as file:
         food_emojis = file.read().split()
-    random_food_emoji = random.choice(food_emojis)
 
     message = MIMEMultipart('alternative')
-    message['Subject'] = f"Discount Dora: {random_food_emoji} Weekly Price Report!"
-    message.attach(MIMEText(text_body, 'plain'))
-    message.attach(MIMEText(html_body, 'html'))
+    message['Subject'] = f"Discount Dora: {random.choice(food_emojis)} Weekly Price Report!"
+    body = MIMEText(generate_email_body(product_offers), 'html')
+    message.attach(body)
 
     return message.as_string()

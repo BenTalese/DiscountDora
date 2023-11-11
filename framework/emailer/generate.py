@@ -1,16 +1,16 @@
-import pathlib
 import datetime
+import pathlib
 
 from rich.console import Console
 from rich.table import Table
 
-from framework.web_scraper.types import ProductOffers
+# from framework.web_scraper.types import ProductOffers
 
 _SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
 _TEMPLATE_DIR = _SCRIPT_DIR / 'templates'
 
 
-def generate_email_body(product_offers: ProductOffers, out_path: str = None) -> str:
+def generate_email_body(product_offers, out_path: str = None) -> str:
     """
     Returns a Mailersend email template populated from product_offers & save to out_path.
     :param product_offers: ProductOffers used for populating email template.

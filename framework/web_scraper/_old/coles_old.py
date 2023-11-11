@@ -1,11 +1,19 @@
+import os
+import sys
+from urllib.parse import urljoin
+
+import requests
+
+sys.path.append(os.getcwd())
+
 import json
-from typing import List, Optional, Generator
-from typing_extensions import Literal
+from typing import Generator, List, Optional
 
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
+from typing_extensions import Literal
 
-from session import create_session
+from framework.web_scraper.session import create_session
 
 _session = create_session()
 
@@ -48,7 +56,7 @@ class Product(BaseModel, extra=Extra.allow):
         #specialType: Optional[str]  # "PERCENT_OFF", "MULTI_SAVE", "WHILE_STOCKS_LAST"
         #onlineSpecial: bool  # false
 
-    #_type: Literal['PRODUCT']      TODO: WTF IS THIS?
+    #_type: Literal['PRODUCT']     # TODO: WTF IS THIS?
     id: int = 0 # 2351888
     name: str = "" # "Cadbury Clinkers Lollies"
     brand: str = "" # "Pascall"
@@ -68,7 +76,7 @@ class Product(BaseModel, extra=Extra.allow):
 
     @property
     def display_name(self) -> str:
-        return f"{self.brand} {self.name} {self.size}"
+        return f""
 
     @property
     def price(self) -> Optional[float]:
@@ -80,7 +88,7 @@ class Product(BaseModel, extra=Extra.allow):
 
     @property
     def link(self) -> str:
-        return f'https://www.coles.com.au/product/{self.display_name.replace(" ", "-")}-{self.id}' # NOTE: Doesn't seem like it's necessary to have the display name, only ID required for URL to resolve
+        return f'https://www.coles.com.au/product/{self.id}' # NOTE: Doesn't seem like it's necessary to have the display name, only ID required for URL to resolve
 
 
 # NOTE: Looks like webscraper-specific domain
@@ -119,9 +127,16 @@ def search(search_term: str, specials_only: bool = False) -> Generator[ProductPa
     if specials_only:
         params['filter_Special'] = 'all'
 
+    _SuggestedTerm: str = None
     while True:
         response = _session.get(url=url, params=params).json()
-        search_page = ProductPageSearchResult.parse_obj(response['pageProps']['searchResults'])
+        # # TODO: for each coles product, set the image uri
+        # xyz = requests.get('https://www.coles.com.au/product/8836879')
+        # img_tags = BeautifulSoup(xyz.text, 'html.parser').find_all('img')
+        # img_urls = [urljoin(url, img['src']) for img in img_tags]
+
+        _SuggestedTerm = response['pageProps']['searchResults']['didYouMean'] # TOOD: Return out of use case as separate parameter
+        search_page = ProductPageSearchResult.model_validate(response['pageProps']['searchResults'])
         if search_page.noOfResults == 0:
             break
         yield search_page
@@ -129,5 +144,5 @@ def search(search_term: str, specials_only: bool = False) -> Generator[ProductPa
 
 
 if __name__ == '__main__':
-    gen = search('Chocolate')
+    gen = search('soda')
     print(next(gen))

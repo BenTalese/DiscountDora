@@ -3,7 +3,7 @@ from typing import Any, Optional, List, Generator
 
 from pydantic import BaseModel, Extra
 
-from session import create_session
+from framework.web_scraper.session import create_session
 
 
 # def _woolies_session():

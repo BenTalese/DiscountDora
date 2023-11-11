@@ -12,7 +12,7 @@ def get_by_id(product_id: str):
     _Response = _Session.get(url = f'https://www.woolworths.com.au/api/v3/ui/schemaorg/product/{product_id}')
     return WoolworthsProductOffer.model_construct(**_Response.json())
 
-def search(session: CachedSession, search_term: str, start_page: int = 1, max_page: int = 0):
+def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):
     _Url = 'https://www.woolworths.com.au/apis/ui/Search/products'
     _Body = {
         'Filters': [],
@@ -25,12 +25,13 @@ def search(session: CachedSession, search_term: str, start_page: int = 1, max_pa
     }
 
     _SuggestedTerm: str = None
+    _ResultCount = 0
     while True:
         _PageSearchResult = session.post(_Url, json=_Body).json()
         _SuggestedTerm = _PageSearchResult['SuggestedTerm'] # TOOD: Return out of use case as separate parameter
 
         if not _PageSearchResult['Products']:
-            break
+            return
 
         # TODO: Figure out if validation would be useful
         # Remove '.model_construct' to get validation
@@ -38,8 +39,12 @@ def search(session: CachedSession, search_term: str, start_page: int = 1, max_pa
         for _ProductSearchResult in _PageSearchResult['Products']:
             yield WoolworthsProductOffer.model_construct(**_ProductSearchResult['Products'][0])
 
+            _ResultCount += 1
+            if _ResultCount == max_results:
+                return
+
         if _Body['PageNumber'] == max_page:
-            break
+            return
 
         _Body['PageNumber'] += 1
 

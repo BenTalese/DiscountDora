@@ -6,7 +6,7 @@ from requests_cache import CachedSession
 from framework.web_scraper.models import ColesProductOffer
 
 
-def search(session: CachedSession, search_term: str, start_page: int = 1, max_page: int = 0):
+def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):
     _Response = session.get('https://www.coles.com.au/')
     _Soup = BeautifulSoup(_Response.text, features="html.parser")
     _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']
@@ -14,12 +14,13 @@ def search(session: CachedSession, search_term: str, start_page: int = 1, max_pa
     _Url = f'https://www.coles.com.au/_next/data/{_BuildID}/en/search.json'
     _Params = {
         'q': search_term,
-        'page': start_page,
+        'page': start_page
     }
     # if specials_only:
     #     params['filter_Special'] = 'all'
 
     _SuggestedTerm: str = None
+    _ResultCount = 0
     while True:
         _PageSearchResult = session.get(_Url, _Params).json()['pageProps']['searchResults']
         # TODO: Return out of use case as separate parameter
@@ -27,12 +28,16 @@ def search(session: CachedSession, search_term: str, start_page: int = 1, max_pa
         _SuggestedTerm = _PageSearchResult['didYouMean']
 
         if not _PageSearchResult['results']:
-            break
+            return
 
         for _ProductSearchResult in _PageSearchResult['results']:
             yield ColesProductOffer.model_validate(_ProductSearchResult)
 
+            _ResultCount += 1
+            if _ResultCount == max_results:
+                return
+
         if _Params['page'] == max_page:
-            break
+            return
 
         _Params['page'] += 1

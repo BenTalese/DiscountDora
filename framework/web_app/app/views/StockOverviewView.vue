@@ -34,6 +34,7 @@ function decodeBase64Image(encodedImage) {
 }
 
 // TODO: Loading text using fallback
+// TODO: Loading spinner for API call (e.g. while scraping results)
 </script>
 
 <template>

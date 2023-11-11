@@ -14,4 +14,4 @@ class StockItem(BaseEntity):
     name: str = None
     # products: List[Product] = None
     stock_level: StockLevel = None
-    stock_level_last_updated_on_utc: datetime = None
+    stock_level_last_updated: datetime = None

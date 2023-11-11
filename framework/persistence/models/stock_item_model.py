@@ -49,7 +49,7 @@ class StockItemModel(db.Model):
         UUIDType,
         ForeignKey(StockLevel.__name__ + ".id"))
 
-    stock_level_last_updated_on_utc = Column(
+    stock_level_last_updated = Column(
         DateTime(timezone=True),
         server_default=func.now())
 
@@ -59,7 +59,7 @@ class StockItemModel(db.Model):
             location = self.location.to_entity() if self.location else None,
             name = self.name,
             stock_level = self.stock_level.to_entity() if self.stock_level else None,
-            stock_level_last_updated_on_utc = self.stock_level_last_updated_on_utc)
+            stock_level_last_updated = self.stock_level_last_updated)
 
     def get_key(self):
         return self.id

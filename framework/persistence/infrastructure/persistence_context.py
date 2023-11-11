@@ -86,6 +86,10 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         if not entity.id:
             entity.id = EntityID(uuid.uuid4())
 
+            # IDEA:
+            # if any(get_type_hints(entity).values() == File):
+            #     save to file system and get file path
+
             model = self._convert_to_model(entity)
 
             self._added_models[entity.id.value] = model
@@ -103,6 +107,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     # context, persisting is a framework concern, not an application concern
     # TODO: Find out if _queried_models should also be cleared here...me thinks maybe not
     async def save_changes_async(self):
+        # for x in db.session.new:
+        #     print(x)
         db.session.commit()
         self._added_models.clear()
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())

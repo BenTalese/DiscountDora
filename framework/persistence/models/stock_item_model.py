@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
@@ -13,7 +13,7 @@ from framework.persistence.models.stock_level_model import StockLevelModel
 from framework.persistence.models.stock_location_model import \
     StockLocationModel
 
-
+# TODO: for all models figure out "required", "min value", "relationship existence constraint" etc...
 class StockItemModel(db.Model):
     __entity__ = StockItem
     __tablename__ = StockItem.__name__
@@ -30,10 +30,9 @@ class StockItemModel(db.Model):
     location_id = Column(
         UUIDType,
         ForeignKey(StockLocation.__name__ + ".id"),
-        nullable=True)
+        nullable = True)
 
-    name = Column(
-        String(255))
+    name = Column(String(255))
 
     shopping_lists = relationship(
         'ShoppingListModel',
@@ -49,9 +48,7 @@ class StockItemModel(db.Model):
         UUIDType,
         ForeignKey(StockLevel.__name__ + ".id"))
 
-    stock_level_last_updated = Column(
-        DateTime(timezone=True),
-        server_default=func.now())
+    stock_level_last_updated = Column(DateTime(timezone = True))
 
     def to_entity(self) -> StockItem:
         return StockItem(

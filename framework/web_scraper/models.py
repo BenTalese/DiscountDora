@@ -1,13 +1,13 @@
 # TODO: Learn https://docs.pydantic.dev/2.3/usage/models/
 # TODO: Learn https://docs.pydantic.dev/2.3/errors/errors/
 import base64
+import re
 from dataclasses import dataclass
 from enum import Enum
-import re
 from typing import List, Optional, Tuple
 
-from pydantic import BaseModel
 import requests
+from pydantic import BaseModel
 
 
 class WoolworthsProductOffer(BaseModel, extra='allow'):
@@ -41,12 +41,12 @@ class ColesProductOffer(BaseModel, extra='allow'):
 
 @dataclass
 class ScrapedProductOffer:
-    # id: int #possibly irrelevant, might just want url/link
     brand: str
-    image: str
+    image: bytes
     image_uri: str
     is_available: bool
     merchant: str # TODO: hmm...str? or id of merchant? would have to use GetMerchants or create if not found
+    merchant_stockcode: str
     name: str
     price_now: float
     price_was: float
@@ -89,11 +89,11 @@ class ScrapedProductOffer:
 
         return ScrapedProductOffer(
             brand = offer.Brand,
-            # id = offer.Stockcode,
             image = None,
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
             merchant = "Woolworths",
+            merchant_stockcode = offer.Stockcode,
             name = offer.Name,
             price_now = offer.Price or offer.InstorePrice,
             price_was = offer.WasPrice or offer.InstoreWasPrice,
@@ -107,11 +107,11 @@ class ScrapedProductOffer:
 
         return ScrapedProductOffer(
             brand = offer.brand,
-            # id = offer.id,
             image = None,
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
             merchant = "Coles",
+            merchant_stockcode = offer.id,
             name = offer.name,
             price_now = offer.pricing.now if offer.pricing else None,
             price_was = offer.pricing.was if offer.pricing else None,

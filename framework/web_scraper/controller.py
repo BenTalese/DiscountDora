@@ -32,7 +32,7 @@ def search_for_product(search_term: str, start_page: int = 1, limit_results_to: 
 
         _ScrapedOffers = _WoolworthsProductOffers + _ColesProductOffers
         for _Offer in _ScrapedOffers:
-            _Offer.image = base64.b64encode(_Session.get(_Offer.image_uri).content).decode('utf-8')
+            _Offer.image = base64.b64encode(_Session.get(_Offer.image_uri).content)
 
         return _ScrapedOffers
 

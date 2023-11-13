@@ -7,5 +7,7 @@ web_scraper = Blueprint("web_scraper", __name__, url_prefix="/api/webScraper")
 @web_scraper.route("/doTheThing", methods=["POST"])
 async def do_the_thing():
     x = search_for_product(request.get_json()['searchTerm'], request.get_json()['startPage'])
+    for y in x:
+        y.image = y.image.decode('utf-8') # TODO: do in view model mapping
     response = jsonify(x)
     return response

@@ -16,8 +16,8 @@ from framework.web_scraper.models import ScrapedProductOffer
 from framework.web_scraper.session import create_session
 
 # TODO: Make into use cases, this'll do for now though
-
-# This is probably an action (combining use cases)
+# TODO: Logging --- would be useful to know what the search term was that caused the error, and which merchant, etc
+# TODO: This is probably an action (combining use cases)
 def search_for_product(search_term: str, start_page: int = 1, limit_results_to: int = 10) -> List[ScrapedProductOffer]:
     with create_session() as _Session:
         _Session.get('https://www.woolworths.com.au') # TODO: Why do .get() here?

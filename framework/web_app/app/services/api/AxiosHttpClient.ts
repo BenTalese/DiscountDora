@@ -10,6 +10,7 @@ export interface HttpClient {
     delete<T = unknown>(path: string): Promise<HttpClientResponse<T>>
 }
 
+// TODO: Error logs
 export default class AxiosHttpClient implements HttpClient {
     private axios: Axios
 

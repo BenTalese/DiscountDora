@@ -39,6 +39,7 @@ class ColesProductOffer(BaseModel, extra='allow'):
     availability: bool
     pricing: Optional[Pricing] # None if `availability=False`
 
+# TODO: Possibly want price_was to be nullable (appears as 0 sometimes...)
 @dataclass
 class ScrapedProductOffer:
     brand: str

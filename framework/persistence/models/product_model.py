@@ -29,10 +29,6 @@ class ProductModel(db.Model):
         lazy = "noload",
         uselist = False)
 
-    current_offer_id = Column(
-        UUIDType,
-        ForeignKey(ProductOffer.__name__ + ".id"))
-
     historical_offers = relationship(
         ProductOfferModel.__name__,
         lazy = "noload")

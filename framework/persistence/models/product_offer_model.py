@@ -26,7 +26,7 @@ class ProductOfferModel(db.Model):
 
     product_id = Column(
         UUIDType,
-        ForeignKey(Product.__name__),
+        ForeignKey(Product.__name__ + ".id"),
         nullable = False)
 
     def to_entity(self) -> ProductOffer:

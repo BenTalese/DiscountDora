@@ -4,7 +4,7 @@ import base64
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import requests
 from pydantic import BaseModel
@@ -31,6 +31,7 @@ class ColesProductOffer(BaseModel, extra='allow'):
         now: float
         was: float
 
+    _type: Literal['PRODUCT']
     imageUris: List[ImageInfo]
     id: int
     name: str

@@ -1,21 +1,24 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView } from 'vue-router';
 </script>
 
 <template>
-    <header>
-        <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-
-        <div class="container">
-
-            <nav>
-                <RouterLink to="/">Home</RouterLink>
-                <RouterLink to="/about">About</RouterLink>
+    <div class="container">
+        <header>
+            <!-- <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" /> -->
+            <nav class="nav nav-tabs flex-column">
+                <div class="container-fluid">
+                    <RouterLink class="navbar-brand" to="/">
+                        <!-- <a class="nav-link active" href="#" aria-current="page">Active link</a> -->
+                        <!-- TODO: Logo -->
+                        Home
+                    </RouterLink>
+                    <RouterLink class="nav-link" to="/about">About</RouterLink>
+                </div>
             </nav>
-        </div>
-    </header>
-
-    <RouterView />
+        </header>
+        <RouterView />
+    </div>
 </template>
 
 <!-- <style scoped>

@@ -9,8 +9,8 @@ const products = ref([])
 
 const test = ref("Turtles!!")
 
-const itemApiService = new StockItemApiService()
-onMounted(async () => (stockItems.value = await itemApiService.getAll()))
+const stockItemApiService = new StockItemApiService()
+onMounted(async () => (stockItems.value = await stockItemApiService.getAll()))
 
 const testApi = async () => {
     try {
@@ -28,56 +28,29 @@ const testApi = async () => {
     }
 };
 
-function decodeBase64Image(encodedImage) {
-    // Decode the base64-encoded image and return the data URI
-    return `data:image/jpeg;base64,${encodedImage}`;
-}
-
 // TODO: Loading text using fallback
 // TODO: Loading spinner for API call (e.g. while scraping results)
 </script>
 
 <template>
-    <main>
-        <button type="button" class="btn btn-success" @click="testApi">{{ test }}</button>
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="stockItem in stockItems" :key="stockItem.stock_item_id">
-                    <td>{{ stockItem.name }}</td>
-                    <td>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-warning btn-sm">Update</button>
-                            <button type="button" class="btn btn-danger btn-sm">Delete</button>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="stockItem in products" :key="stockItem.stock_item_id">
-                    <td>{{ stockItem.name }}</td>
-                    <td><img :src="decodeBase64Image(stockItem.image)" alt="Product Image" :style="{ width: '100%', maxWidth: '200px', height: 'auto' }" /></td>
-                    <td>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-warning btn-sm">Update</button>
-                            <button type="button" class="btn btn-danger btn-sm">Delete</button>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </main>
+    <button type="button" class="btn btn-success" @click="testApi">{{ test }}</button>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr v-for="stockItem in stockItems" :key="stockItem.stock_item_id">
+                <td>{{ stockItem.name }}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-warning btn-sm">Update</button>
+                        <button type="button" class="btn btn-danger btn-sm">Delete</button>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
 </template>

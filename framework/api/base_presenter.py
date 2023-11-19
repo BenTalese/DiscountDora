@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from http.client import CREATED, FORBIDDEN, INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK, UNAUTHORIZED, UNPROCESSABLE_ENTITY
+from http.client import BAD_REQUEST, CREATED, FORBIDDEN, INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK, UNAUTHORIZED, UNPROCESSABLE_ENTITY
 from typing import Any, Callable, List, Tuple
 import uuid
 
@@ -35,8 +35,15 @@ class BasePresenter(
             title = "Business rule violation.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
-    async def bad_request_async(self):
-        raise NotImplementedError() # TODO: Implement bad request
+    async def bad_request_async(self, error_message: str):
+        response = jsonify(ProblemDetails(
+            detail = error_message,
+            status = BAD_REQUEST,
+            title = error_message,
+            type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"))
+        response.content_type = 'application/problem+json'
+        response.status_code = BAD_REQUEST
+        self.result = response
 
     async def created_async(self, result: CreatedViewModel, get_route: Callable = None):
         response = jsonify(result)
@@ -125,6 +132,7 @@ class BasePresenter(
             response.status_code = UNPROCESSABLE_ENTITY
             self.result = response
         elif self.result.data['status'] == UNPROCESSABLE_ENTITY:
+            self.result.data['title'] = "Various errors."
             for property, error in problem_details.errors:
                 if property in self.result.data['errors']:
                     self.result.data['errors'][property] = self.result.data['errors'][property] + error

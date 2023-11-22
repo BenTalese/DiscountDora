@@ -1,4 +1,6 @@
 from clapy import DependencyInjectorServiceProvider
+from dependency_injector import providers
+from framework.api.routes.products.create_product_presenter import CreateProductPresenter
 
 from framework.persistence.infrastructure.configure_services import \
     configure_persistence_services
@@ -15,7 +17,12 @@ class ServiceCollectionBuilder:
             .configure_persistence_services() \
             .configure_clapy_services() \
             .configure_core_services() \
+            .register_presenters() \
             .service_provider
+
+    def register_presenters(self):
+        self.service_provider.register_service(providers.Factory, CreateProductPresenter)
+        return self
 
     def configure_core_services(self):
         configure_interface_adaptors_services(self.service_provider)

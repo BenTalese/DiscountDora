@@ -31,7 +31,8 @@ def search(session: CachedSession, search_term: str, start_page: int, max_page: 
             return
 
         for _ProductSearchResult in _PageSearchResult['results']:
-            yield ColesProductOffer.model_validate(_ProductSearchResult)
+            if _ProductSearchResult['_type'] == "PRODUCT":
+                yield ColesProductOffer.model_validate(_ProductSearchResult)
 
             _ResultCount += 1
             if _ResultCount == max_results:

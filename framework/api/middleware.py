@@ -1,28 +1,34 @@
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from varname import nameof
 
-from framework.api.responses import bad_request
-# from framework.api.stock_items.request_objects import GetStockItemsQuery
-from framework.api.routes.stock_items.stock_items_controller import \
-    get_stock_items_async
+from framework.api.routes.products.create_product_command import \
+    CreateProductCommand
+from framework.api.routes.products.product_router import create_product_async
+from framework.api.routes.web_scraper.search_for_product_query import SearchForProductCommand
+from framework.api.routes.web_scraper.web_scraper_router import search_for_product_async
 
-# REQUEST_OBJECTS = {
-#     nameof(get_stock_items_async): GetStockItemsQuery
-# }
+REQUEST_OBJECTS = {
+    nameof(create_product_async): CreateProductCommand,
+    nameof(search_for_product_async): SearchForProductCommand
+}
 
 middleware = Blueprint('middleware', __name__)
 
 # TODO: ApiAuditing (make a metadata.db)
 
-# @middleware.before_app_request
-# async def pre_process():
-    # if request.endpoint not in REQUEST_OBJECTS:
-    #     return bad_request() #TODO can't leave it as generic
-    # data = {}
-    # x = REQUEST_OBJECTS[request.endpoint](**data)
-    # d = request.data
-    # f = request.json
-    # setattr(request, "request_object", REQUEST_OBJECTS[request.endpoint](**request.json))
+@middleware.before_app_request
+async def add_cors_headers(response: Response):
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+@middleware.before_app_request
+async def deserialise_web_request():
+    _RequestEndpoint = request.endpoint.split(".")[-1]
+    if _RequestEndpoint in REQUEST_OBJECTS:
+        deserialised_request = REQUEST_OBJECTS[_RequestEndpoint](**request.get_json())
+        setattr(request, "request_object", deserialised_request)
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

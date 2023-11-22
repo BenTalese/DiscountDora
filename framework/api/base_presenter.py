@@ -1,22 +1,25 @@
+import uuid
 from abc import ABC
 from dataclasses import dataclass
-from http.client import BAD_REQUEST, CREATED, FORBIDDEN, INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK, UNAUTHORIZED, UNPROCESSABLE_ENTITY
-from typing import Any, Callable, List, Tuple
-import uuid
+from http.client import (BAD_REQUEST, CREATED, FORBIDDEN,
+                         INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK,
+                         UNAUTHORIZED, UNPROCESSABLE_ENTITY)
+from typing import Any, Callable, Tuple
 
-from flask import Response, jsonify, url_for
 from clapy import (IAuthenticationOutputPort, IAuthorisationOutputPort,
                    IValidationOutputPort)
 from clapy.outputs import AuthorisationResult, ValidationResult
+from flask import Response, jsonify, url_for
 
 from framework.api.view_models.created_view_model import CreatedViewModel
 
+
 @dataclass
 class ProblemDetails:
-    detail: str = None
-    errors: dict = {}
+    detail: str
     status: int
-    title: str = None
+    errors: dict
+    title: str
     type: str
 
 class BasePresenter(
@@ -24,6 +27,7 @@ class BasePresenter(
     IAuthorisationOutputPort,
     IValidationOutputPort,
     ABC):
+    get_route: Callable
     result: Response
     _not_found_current_route_segment: int
 
@@ -38,6 +42,7 @@ class BasePresenter(
     async def bad_request_async(self, error_message: str):
         response = jsonify(ProblemDetails(
             detail = error_message,
+            errors = {},
             status = BAD_REQUEST,
             title = error_message,
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"))
@@ -45,11 +50,11 @@ class BasePresenter(
         response.status_code = BAD_REQUEST
         self.result = response
 
-    async def created_async(self, result: CreatedViewModel, get_route: Callable = None):
+    async def created_async(self, result: CreatedViewModel):
         response = jsonify(result)
         response.status_code = CREATED
-        if get_route is not None:
-            response.headers['Location'] = url_for(get_route.__name__, resource_id = result.id, _external=True)
+        if self.get_route is not None:
+            response.headers['Location'] = url_for(self.get_route.__name__, resource_id = result.id, _external=True)
         self.result = response
 
     async def entity_existence_failure_async(self, property_in_error: str, id: uuid.UUID):
@@ -71,6 +76,7 @@ class BasePresenter(
     async def internal_server_error_async(self, error_message: str):
         response = jsonify(ProblemDetails(
             detail = error_message,
+            errors = {},
             status = INTERNAL_SERVER_ERROR,
             title = "Internal server error.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1"))
@@ -100,6 +106,7 @@ class BasePresenter(
     async def present_unauthenticated_async(self):
         response = jsonify(ProblemDetails(
             detail = "Unauthenticated client.",
+            errors = {},
             status = UNAUTHORIZED,
             title = "Unauthenticated client.",
             type = "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1"))
@@ -110,6 +117,7 @@ class BasePresenter(
     async def present_unauthorised_async(self, authorisation_failure: AuthorisationResult):
         response = jsonify(ProblemDetails(
             detail = authorisation_failure.reason,
+            errors = {},
             status = FORBIDDEN,
             title = "Forbidden.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3"))

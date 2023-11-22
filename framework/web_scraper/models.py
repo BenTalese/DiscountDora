@@ -31,7 +31,6 @@ class ColesProductOffer(BaseModel, extra='allow'):
         now: float
         was: float
 
-    _type: Literal['PRODUCT']
     imageUris: List[ImageInfo]
     id: int
     name: str

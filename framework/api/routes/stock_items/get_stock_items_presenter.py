@@ -20,8 +20,4 @@ from framework.api.view_models.stock_item_view_model import \
 
 class GetStockItemsPresenter(BasePresenter, IGetStockItemsOutputPort):
     async def present_stock_items_async(self, stock_items: IQueryBuilder[StockItemDto]):
-        service_provider: IServiceProvider = current_app.service_provider
-        # x = stock_items.project(get_stock_item_view_model).execute()
-        # f = asdict(x[0])
-        # v = f["name"]
         await self.ok_async(stock_items.project(get_stock_item_view_model).execute())

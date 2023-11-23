@@ -1,14 +1,13 @@
-import StockOverviewView from '@/views/StockOverviewView.vue'
+import ProductSearchView from '@/views/ProductSearchView.vue'
 import { createRouter, createWebHistory } from 'vue-router'
-// import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
         {
             path: '/',
-            name: 'StockItemsOverview',
-            component: StockOverviewView
+            name: 'ProductSearch',
+            component: ProductSearchView
         }
         // {
         //   path: '/about',

@@ -6,11 +6,11 @@ from domain.entities.merchant import Merchant
 
 @dataclass
 class MerchantDto:
-    id: EntityID
+    merchant_id: EntityID
     name: str
 
 def get_merchant_dto(merchant: Merchant) -> MerchantDto:
     return MerchantDto(
-        id = merchant.id,
+        merchant_id = merchant.id,
         name = merchant.name
     )

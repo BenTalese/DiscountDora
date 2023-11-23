@@ -12,6 +12,7 @@ from flask_cors import CORS
 
 from framework.api.error_handlers import error_handlers
 from framework.api.middleware import middleware
+from framework.api.routes.merchants.merchant_router import merchant_router
 from framework.api.routes.products.product_router import product_router
 from framework.api.routes.stock_items.stock_item_router import \
     stock_item_router
@@ -45,9 +46,10 @@ async def startup():
     app.run()
 
 def register_routers(app: Flask):
+    app.register_blueprint(merchant_router)
+    app.register_blueprint(product_router)
     app.register_blueprint(stock_item_router)
     app.register_blueprint(web_scraper_router)
-    app.register_blueprint(product_router)
 
 if __name__ == '__main__':
     asyncio.run(startup())

@@ -40,6 +40,7 @@ class ColesProductOffer(BaseModel, extra='allow'):
     pricing: Optional[Pricing] # None if `availability=False`
 
 # TODO: Possibly want price_was to be nullable (appears as 0 sometimes...)
+# TODO: Remove image from here, and put image on dto instead of image_uri
 @dataclass
 class ScrapedProductOffer:
     brand: str

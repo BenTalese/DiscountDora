@@ -8,7 +8,7 @@ from framework.web_scraper.controller import search_for_product
 
 web_scraper_router = Blueprint("web_scraper_router", __name__, url_prefix="/api/webScraper")
 
-@web_scraper_router.route("/search")
+@web_scraper_router.route("/search", methods=["POST"])
 async def search_for_product_async():
     # _ServiceProvider: IServiceProvider = current_app.service_provider
     # _ProductController: ProductController = _ServiceProvider.get_service(ProductController)

@@ -3,7 +3,7 @@ import axios, { Axios } from 'axios'
 export type HttpClientResponse<T> = T
 
 export interface HttpClient {
-    get<T = unknown>(path: string, body?: any): Promise<HttpClientResponse<T>>
+    get<T = unknown>(path: string): Promise<HttpClientResponse<T>>
     post<T = unknown>(path: string, body: any): Promise<HttpClientResponse<T>>
     put<T = unknown>(path: string, body: any): Promise<HttpClientResponse<T>>
     patch<T = unknown>(path: string, body: any): Promise<HttpClientResponse<T>>
@@ -21,9 +21,9 @@ export default class AxiosHttpClient implements HttpClient {
         })
     }
 
-    async get<T = unknown>(path: string, body?: any): Promise<HttpClientResponse<T>> {
+    async get<T = unknown>(path: string): Promise<HttpClientResponse<T>> {
         try {
-            const { data } = await this.axios.get<T>(path, body)
+            const { data } = await this.axios.get<T>(path)
             return data
         } catch (error) {
             console.error(error)

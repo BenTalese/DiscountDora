@@ -22,7 +22,7 @@
             "type": "firefox",
             "request": "launch",
             "preLaunchTask": "npm: dev",
-            "url": "http://localhost:5173",
+            "url": "http://localhost:5174",
             "webRoot": "${workspaceFolder}/framework/web_app"
         },
         {

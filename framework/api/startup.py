@@ -26,7 +26,7 @@ from framework.persistence.infrastructure.persistence_context import \
 async def startup():
     app = Flask(__name__)
 
-    CORS(app, resources={r'/api/*': {'origins': 'http://localhost:5173', "allow_headers": ["*", "Content-Type"]}})
+    CORS(app, resources={r'/api/*': {'origins': 'http://localhost:5174', "allow_headers": ["*", "Content-Type"]}})
 
     app.service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
 

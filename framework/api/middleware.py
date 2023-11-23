@@ -1,11 +1,13 @@
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 from varname import nameof
 
 from framework.api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.api.routes.products.product_router import create_product_async
-from framework.api.routes.web_scraper.search_for_product_query import SearchForProductQuery
-from framework.api.routes.web_scraper.web_scraper_router import search_for_product_async
+from framework.api.routes.web_scraper.search_for_product_query import \
+    SearchForProductQuery
+from framework.api.routes.web_scraper.web_scraper_router import \
+    search_for_product_async
 
 REQUEST_OBJECTS = {
     nameof(create_product_async): CreateProductCommand,
@@ -17,11 +19,15 @@ middleware = Blueprint('middleware', __name__)
 # TODO: ApiAuditing (make a metadata.db)
 
 @middleware.before_app_request
-async def add_cors_headers(response: Response):
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
+async def handle_cors_preflight_request():
+    if request.method.upper() == 'OPTIONS':
+        return jsonify({
+            'Access-Control-Allow-Origin': 'http://localhost:5174',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+        })
+
+# TODO: 400 bad request validation for required inputs
 
 @middleware.before_app_request
 async def deserialise_web_request():

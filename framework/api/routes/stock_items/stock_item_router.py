@@ -1,3 +1,4 @@
+from clapy import IServiceProvider
 from flask import Blueprint, current_app
 
 from framework.api.routes.stock_items.get_stock_items_presenter import \
@@ -5,7 +6,7 @@ from framework.api.routes.stock_items.get_stock_items_presenter import \
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
-stock_items = Blueprint("stock_items", __name__, url_prefix="/api/stockItems")
+stock_item_router = Blueprint("stock_item_router", __name__, url_prefix="/api/stockItems")
 
 # Filtering options:
 # Here in controller action
@@ -13,10 +14,12 @@ stock_items = Blueprint("stock_items", __name__, url_prefix="/api/stockItems")
 # Pass to base presenter
 # Middleware after_app_request
 
-@stock_items.route("")
-@stock_items.route("<query>")
+@stock_item_router.route("")
+@stock_item_router.route("<query>")
 async def get_stock_items_async(query = None):
-    stock_item_controller: StockItemController = current_app.stock_item_controller
+    service_provider: IServiceProvider = current_app.service_provider
+    stock_item_controller: StockItemController = service_provider.get_service(StockItemController)
     presenter = GetStockItemsPresenter()
+
     await stock_item_controller.get_stock_items_async(presenter)
     return presenter.result

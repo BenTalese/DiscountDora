@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Product } from '@/models/Product';
+import type { Merchant } from '@/models/Merchant';
+import type { ScrapedProductOffer } from '@/models/ScrapedProductOffer';
 import ProductApiService from '@/services/api/ProductApiService';
 import ImageService from '@/services/files/ImageService';
 import { Ref, ref } from 'vue';
@@ -7,15 +8,31 @@ import { Ref, ref } from 'vue';
 const searchTerm = ref('')
 const productApiService = new ProductApiService()
 const imageService = new ImageService()
-const products: Ref<Product[]> = ref([])
+const product_offers: Ref<ScrapedProductOffer[]> = ref([])
+const merchants: Ref<Merchant[]> = ref([])
 
 let currentPage = 1
 
 const search = async () => {
-    (await productApiService.searchByTerm(searchTerm.value, currentPage)).forEach(product => {
-        products.value.push(product)
-    });
+    // (await productApiService.searchByTerm(searchTerm.value, currentPage)).forEach(product => {
+    //     products.value.push(product)
+    // });
+    product_offers.value = await productApiService.searchByTerm({ search_term: searchTerm.value, start_page: currentPage })
 };
+
+const add = async (product_offer: ScrapedProductOffer) => await productApiService.create({
+    brand: product_offer.brand,
+    image: product_offer.image,
+    is_available: product_offer.is_available,
+    merchant_id: merchants.value.find((merchant) => merchant.name === product_offer.merchant)?.merchant_id!,
+    merchant_stockcode: product_offer.merchant_stockcode,
+    name: product_offer.name,
+    price_now: product_offer.price_now,
+    price_was: product_offer.price_was,
+    size_unit: product_offer.size_unit,
+    size_value: product_offer.size_value,
+    web_url: product_offer.web_url
+});
 
 // BUG: Can keep pressing search button and it will continue to append...not how pagination should work
 // TODO: Order results by best match first (by default, sorting can be changed)
@@ -27,22 +44,23 @@ const search = async () => {
     <input v-model="searchTerm" />
     <button class="btn btn-success" @click="search">Search</button>
     <div class="row">
-        <div class="col-sm-3" v-for="product in products" :key="product.merchant_stockcode"> <!-- col-sm-6??? -->
+        <div class="col-sm-3" v-for="offer in product_offers" :key="offer.merchant_stockcode"> <!-- col-sm-6??? -->
             <div class="card">
-                <img :src="imageService.decodeBase64Image(product.image)" class="card-img-top" alt="product image">
+                <img :src="imageService.decodeBase64Image(offer.image)" class="card-img-top" alt="product image">
+                <!-- TODO: Could put decode method in api service, will need to re-encode though -->
                 <div class="card-body">
-                    <h5 class="card-title">{{ product.name }}</h5>
-                    <p class="card-text">{{ product.brand }}</p>
-                    <p class="card-text">Now: ${{ product.price_now }}</p>
-                    <p class="card-text">Was: ${{ product.price_was }}</p>
-                    <p class="card-text">{{ product.size_value }}{{ product.size_unit }}</p>
-                    <button class="btn">Add? Link? Save to 'My Products'?</button>
+                    <h5 class="card-title">{{ offer.name }}</h5>
+                    <p class="card-text">{{ offer.brand }}</p>
+                    <p class="card-text">Now: ${{ offer.price_now }}</p>
+                    <p class="card-text">Was: ${{ offer.price_was }}</p>
+                    <p class="card-text">{{ offer.size_value }}{{ offer.size_unit }}</p>
+                    <button class="btn" @click="add(offer)">Add? Link? Save to 'My Products'?</button>
                 </div>
                 <div :class="['card-footer', {
-                    'text-white bg-success': product.merchant === 'Woolworths',
-                    'text-white bg-danger': product.merchant === 'Coles'
+                    'text-white bg-success': offer.merchant === 'Woolworths',
+                    'text-white bg-danger': offer.merchant === 'Coles'
                 }]">
-                    <p>{{ product.merchant }}</p>
+                    <p>{{ offer.merchant }}</p>
                 </div>
             </div>
         </div>

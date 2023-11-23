@@ -4,12 +4,12 @@ from varname import nameof
 from framework.api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.api.routes.products.product_router import create_product_async
-from framework.api.routes.web_scraper.search_for_product_query import SearchForProductCommand
+from framework.api.routes.web_scraper.search_for_product_query import SearchForProductQuery
 from framework.api.routes.web_scraper.web_scraper_router import search_for_product_async
 
 REQUEST_OBJECTS = {
     nameof(create_product_async): CreateProductCommand,
-    nameof(search_for_product_async): SearchForProductCommand
+    nameof(search_for_product_async): SearchForProductQuery
 }
 
 middleware = Blueprint('middleware', __name__)

@@ -3,6 +3,7 @@ import random
 import string
 
 from application.services.ipersistence_context import IPersistenceContext
+from domain.entities.merchant import Merchant
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
@@ -11,6 +12,14 @@ from framework.persistence.infrastructure.persistence_helper_methods import is_e
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):
+    # TODO: Find a place for system controlled data such as merchants
+    merchant_one = generate_entity(Merchant)
+    merchant_one.name = "Woolworths"
+    merchant_two = generate_entity(Merchant)
+    merchant_two.name = "Coles"
+    persistence.add(merchant_one)
+    persistence.add(merchant_two)
+
     stock_location_one = generate_entity(StockLocation)
     persistence.add(stock_location_one)
 
@@ -35,6 +44,12 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_two.location = stock_location_one
     stock_item_two.stock_level = stock_level_medium
     persistence.add(stock_item_two)
+    persistence.add(stock_item_one)
+
+    stock_item_three = generate_entity(StockItem)
+    stock_item_three.location = stock_location_one
+    stock_item_three.stock_level = stock_level_medium
+    persistence.add(stock_item_three)
 
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)

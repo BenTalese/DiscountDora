@@ -1,5 +1,7 @@
-from clapy import DependencyInjectorServiceProvider
+from clapy import DependencyInjectorServiceProvider, Engine, IPipelineFactory, IUseCaseInvoker, InputTypeValidator, PipelineFactory, RequiredInputValidator, UseCaseInvoker
 from dependency_injector import providers
+from application.infrastructure.configure_services import configure_application_services
+from domain.infrastructure.configure_services import configure_domain_services
 from framework.api.routes.products.create_product_presenter import CreateProductPresenter
 
 from framework.persistence.infrastructure.configure_services import \
@@ -15,7 +17,6 @@ class ServiceCollectionBuilder:
     def build_service_provider(self):
         return self \
             .configure_persistence_services() \
-            .configure_clapy_services() \
             .configure_core_services() \
             .register_presenters() \
             .service_provider
@@ -25,11 +26,10 @@ class ServiceCollectionBuilder:
         return self
 
     def configure_core_services(self):
-        configure_interface_adaptors_services(self.service_provider)
-        return self
-
-    def configure_clapy_services(self):
+        configure_domain_services(self.service_provider)
+        configure_application_services(self.service_provider)
         self.service_provider.configure_clapy_services(["application/use_cases"], [r"venv", r"src"], [r".*main\.py"])
+        configure_interface_adaptors_services(self.service_provider)
         return self
 
     def configure_persistence_services(self):

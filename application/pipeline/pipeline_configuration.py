@@ -11,8 +11,8 @@ class PipelineConfiguration(Enum):
     DefaultConfiguration = [
         PipeConfiguration(AuthenticationVerifier),
         PipeConfiguration(AuthorisationEnforcer),
-        PipeConfiguration(RequiredInputValidator, PipeConfigurationOption.INSERT, True),
-        PipeConfiguration(InputTypeValidator, PipeConfigurationOption.INSERT, True),
+        PipeConfiguration(RequiredInputValidator, PipeConfigurationOption.INSERT),
+        PipeConfiguration(InputTypeValidator, PipeConfigurationOption.INSERT),
         PipeConfiguration(EntityExistenceChecker),
         PipeConfiguration(InputPortValidator),
         PipeConfiguration(Interactor)

@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import type { Merchant } from '@/models/Merchant';
 import type { ScrapedProductOffer } from '@/models/ScrapedProductOffer';
+import MerchantApiService from '@/services/api/MerchantApiService';
 import ProductApiService from '@/services/api/ProductApiService';
 import ImageService from '@/services/files/ImageService';
-import { Ref, ref } from 'vue';
+import { onMounted, Ref, ref } from 'vue';
+
+const productApiService = new ProductApiService()
+const merchantApiService = new MerchantApiService()
+const imageService = new ImageService()
 
 const searchTerm = ref('')
-const productApiService = new ProductApiService()
-const imageService = new ImageService()
 const product_offers: Ref<ScrapedProductOffer[]> = ref([])
 const merchants: Ref<Merchant[]> = ref([])
 
@@ -20,24 +23,29 @@ const search = async () => {
     product_offers.value = await productApiService.searchByTerm({ search_term: searchTerm.value, start_page: currentPage })
 };
 
-const add = async (product_offer: ScrapedProductOffer) => await productApiService.create({
-    brand: product_offer.brand,
-    image: product_offer.image,
-    is_available: product_offer.is_available,
-    merchant_id: merchants.value.find((merchant) => merchant.name === product_offer.merchant)?.merchant_id!,
-    merchant_stockcode: product_offer.merchant_stockcode,
-    name: product_offer.name,
-    price_now: product_offer.price_now,
-    price_was: product_offer.price_was,
-    size_unit: product_offer.size_unit,
-    size_value: product_offer.size_value,
-    web_url: product_offer.web_url
-});
+const add = async (product_offer: ScrapedProductOffer) =>
+    await productApiService.create({
+        brand: product_offer.brand,
+        image: product_offer.image,
+        is_available: product_offer.is_available,
+        merchant_id: merchants.value.find((merchant) => merchant.name === product_offer.merchant)?.merchant_id!,
+        merchant_stockcode: product_offer.merchant_stockcode,
+        name: product_offer.name,
+        price_now: product_offer.price_now,
+        price_was: product_offer.price_was,
+        size_unit: product_offer.size_unit,
+        size_value: product_offer.size_value,
+        web_url: product_offer.web_url
+    });
 
+onMounted(async () => { (merchants.value = await merchantApiService.getAll()); console.log(merchants.value) })
+
+// BUG: What if there's no internet? Need to handle this and say "you're offline!" or something
 // BUG: Can keep pressing search button and it will continue to append...not how pagination should work
 // TODO: Order results by best match first (by default, sorting can be changed)
 // TODO: Pressing enter should search
 // TODO: Should it auto-search if input text changes? (with delay of course)
+// TODO: Enter key press doesn't search
 </script>
 
 <template>

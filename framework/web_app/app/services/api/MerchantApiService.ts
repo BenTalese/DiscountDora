@@ -1,4 +1,4 @@
-import { Merchant } from "@/models/Merchant";
+import type { Merchant } from "@/models/Merchant";
 import AxiosHttpClient from "./AxiosHttpClient";
 
 export default class MerchantApiService {

@@ -212,7 +212,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
     # ---------------- IQueryBuilder Methods ----------------
 
-    def any(self, condition: BoolOperation = None) -> bool:
+    def any(self, condition: BoolOperation | str = None) -> bool:
         with self._context:
             if condition:
                 return self.where(condition).any()
@@ -252,6 +252,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
                     casted_models.append(casted_model)
                 models_from_query_result = casted_models
 
+            # TODO: I don't think projections need to be tracked...not sure, but they show up as "transient"
+            # because they're translated to new models...may or may not want to exclude them. Including might bring more performance.
+            # if not self.projections:
             self._track_queried_models(models_from_query_result)
 
             entities = [model.to_entity() for model in models_from_query_result]
@@ -261,7 +264,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
             return entities
 
-    def first(self, condition: BoolOperation = None) -> TEntity:
+    def first(self, condition: BoolOperation | str = None) -> TEntity:
         if condition:
             return self.where(condition).first()
 
@@ -270,34 +273,16 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
         raise Exception("Result set was empty.")
 
-    def first_by_id(self, *entity_ids) -> TEntity:
-        '''
-        `HINT/USAGE`
-        Single id: first_by_id(1)
-        Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
-        Composite id style 2: first_by_id({"id1": 1, "id2": 2})
-        '''
-        ids = (id.value for id in entity_ids)
-        if result:= self.session.get(self.model, *ids):
-            self.persistence_context._queried_models[*ids] = result
-            return result.to_entity()
+    def first_by_id(self, entity_id: EntityID) -> TEntity:
+        if result:= self.first_or_none(Equal(entity_id, (self.model.__entity__, "id"))):
+            return result
 
         raise Exception("No entity matching the provided ID.")
 
-    def first_by_id_or_none(self, *entity_ids) -> TEntity | None:
-        '''
-        `HINT/USAGE`
-        Single id: first_by_id(1)
-        Composite id style 1: first_by_id(1, 2) `Order must match order of column definitions`
-        Composite id style 2: first_by_id({"id1": 1, "id2": 2})
-        '''
-        ids = (id.value for id in entity_ids)
-        if result:= self.session.get(self.model, *ids):
-            self.persistence_context._queried_models[*ids] = result
-            return result.to_entity()
-        return None
+    def first_by_id_or_none(self, entity_id: EntityID) -> TEntity | None:
+        return self.first_or_none(Equal(entity_id, (self.model.__entity__, "id")))
 
-    def first_or_none(self, condition: BoolOperation = None) -> TEntity | None:
+    def first_or_none(self, condition: BoolOperation | str = None) -> TEntity | None:
         if condition:
             return self.where(condition).first_or_none()
 
@@ -369,22 +354,23 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         self.included_model = get_model_type_from_attribute(self.included_model, attribute_name)
         return self
 
-    def where(self, condition: BoolOperation) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
-        if not isinstance(condition, BoolOperation):
-            raise Exception(f"Only '{nameof(BoolOperation)}' type is supported for this operation.")
+    def where(self, condition: BoolOperation | str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
+        if not isinstance(condition, BoolOperation) and not isinstance(condition, str):
+            raise Exception(f"Only '{nameof(BoolOperation)}' and 'str' types are supported for this operation.")
 
-        condition_code = str(condition)
+        condition = str(condition)
 
         pattern = re.compile(r'\[\[([^\]]+)\]\]')
-        entities_in_condition = pattern.findall(condition_code)
+        entities_in_condition = pattern.findall(condition)
         for entity_name in entities_in_condition:
             model_name = [model.__name__ for entity, model in self.persistence_context._model_classes.items()
-                          if entity.__name__ == entity_name][0]
-            condition_code = re.sub(pattern, model_name, condition_code)
+                        if entity.__name__ == entity_name][0]
+            condition = re.sub(pattern, model_name, condition)
 
         context = { model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
 
-        self.query = self.query.where(eval(condition_code, context))
+        print('\033[35m' + f"TRANSLATED CONDITION: {condition}" + '\033[0m')
+        self.query = self.query.where(eval(condition, context))
         return self
 
     # end IQueryBuilder Methods

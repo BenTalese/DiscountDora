@@ -62,7 +62,7 @@ onMounted(async () => { (merchants.value = await merchantApiService.getAll()); c
                     <p class="card-text">Now: ${{ offer.price_now }}</p>
                     <p class="card-text">Was: ${{ offer.price_was }}</p>
                     <p class="card-text">{{ offer.size_value }}{{ offer.size_unit }}</p>
-                    <button class="btn" @click="add(offer)">Add? Link? Save to 'My Products'?</button>
+                    <button class="btn" @click="add(offer)">Add/Save to 'My Products' / + </button>
                 </div>
                 <div :class="['card-footer', {
                     'text-white bg-success': offer.merchant === 'Woolworths',

@@ -1,3 +1,4 @@
+from datetime import datetime
 import inspect
 import os
 import re
@@ -21,10 +22,14 @@ from application.infrastructure.bool_operation import BoolOperation, Equal, Not
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.base_entity import EntityID
+from domain.entities.merchant import Merchant
+from domain.entities.product import Product
+from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
-from framework.api.view_models.stock_item_view_model import get_stock_item_view_model
+from framework.api.view_models.stock_item_view_model import \
+    get_stock_item_view_model
 from framework.persistence.infrastructure.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,
@@ -170,11 +175,58 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             # to_remove.name = "AHHHHH IT WORKS!"
             # SqlAlchemyPersistenceContext().update(to_remove)
             # things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute() # FIXME: Look into why execute is not recognised here
-            to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
-            SqlAlchemyPersistenceContext().update(to_update)
-            await SqlAlchemyPersistenceContext().save_changes_async()
-            things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
-            x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
+
+            # x: Merchant = SqlAlchemyPersistenceContext().get_entities(Merchant).first()
+
+            # y = SqlAlchemyPersistenceContext().get_entities(Merchant).first_or_none(Equal(x.id, (Merchant, nameof(Merchant.id))))
+            # z = SqlAlchemyPersistenceContext().get_entities(Merchant).first_by_id_or_none(x.id)
+            # v = SqlAlchemyPersistenceContext().get_entities(Merchant).first(f"'{x.id.value}' == MerchantModel.id")
+
+            # to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
+            # lx = SqlAlchemyPersistenceContext().get_entities(StockItem).execute()[2]
+            # to_update.items.append(lx)
+
+            # await SqlAlchemyPersistenceContext().save_changes_async()
+            # new_list = ShoppingList(items = [lx])
+            # SqlAlchemyPersistenceContext().add(new_list)
+
+            # await SqlAlchemyPersistenceContext().save_changes_async()
+
+            # persist = SqlAlchemyPersistenceContext()
+
+            # merch = persist.get_entities(Merchant).first()
+
+            # persist.get_entities(Merchant).first_by_id(uuid.uuid4()) != None
+
+            # merch = persist.get_entities(Merchant).first(Equal(merch.id, (Merchant, nameof(Merchant.id))))
+
+            # product = Product(
+            #     brand = "A",
+            #     current_offer = ProductOffer(
+            #         offered_on = datetime.utcnow(),
+            #         price_now = 5,
+            #         price_was = 5
+            #     ),
+            #     historical_offers = [],
+            #     image = None,
+            #     is_available = False,
+            #     merchant = merch,
+            #     merchant_stockcode = "A",
+            #     name = "A",
+            #     size_unit = "A",
+            #     size_value = 5,
+            #     web_url = "A"
+            # )
+
+            # persist.add(product)
+
+            # await SqlAlchemyPersistenceContext().save_changes_async()
+
+            # SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
+            # SqlAlchemyPersistenceContext().update(to_update)
+            # things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
+            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
+            # await SqlAlchemyPersistenceContext().save_changes_async()
             # result = app.db.session.query(ListingModel).all()
             # g = result[0].bids[0].listing
             # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()

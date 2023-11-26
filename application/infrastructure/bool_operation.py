@@ -1,4 +1,5 @@
 import uuid
+from domain.entities.base_entity import EntityID
 
 from domain.generics import TEntity
 
@@ -19,8 +20,8 @@ class BoolOperation:
             if type(exp) == str:
                 return f"'{exp}'"
 
-            if type(exp) == uuid.UUID:
-                return f"'{exp}'"
+            if type(exp) == EntityID:
+                return f"'{exp.value}'"
 
         self.expression_one = sanitise_expression(self.expression_one)
         self.expression_two = sanitise_expression(self.expression_two)

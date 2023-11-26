@@ -18,12 +18,18 @@
             "justMyCode": true
         },
         {
-            "name": "Web App",
             "type": "firefox",
             "request": "launch",
-            "preLaunchTask": "npm: dev",
+            "name": "Web App",
             "url": "http://localhost:5174",
-            "webRoot": "${workspaceFolder}/framework/web_app"
+            "preLaunchTask": "Sleepdelay",
+            "webRoot": "${workspaceFolder}/framework/web_app/app",
+            "pathMappings": [
+                {
+                    "url": "http://localhost:5174/app",
+                    "path": "${workspaceFolder}/framework/web_app/app"
+                }
+            ]
         },
         {
             "name": "Python: Current File",
@@ -41,25 +47,11 @@
     "compounds": [
         {
             "name": "Run All",
-            "configurations": [
-                "API",
-                "Web App",
-                "Emailer"
-            ]
+            "configurations": ["API", "Web App", "Emailer"]
+        },
+        {
+            "name": "Run Web App + API",
+            "configurations": ["API", "Web App"]
         }
-    ],
-    "tasks (put in tasks.json)": {
-        "version": "2.0.0",
-        "tasks": [
-            {
-                "type": "npm",
-                "script": "dev",
-                "path": "framework/web_app",
-                "problemMatcher": [],
-                "label": "npm: dev",
-                "detail": "vite",
-                "isBackground": true
-            }
-        ]
-    }
+    ]
 }

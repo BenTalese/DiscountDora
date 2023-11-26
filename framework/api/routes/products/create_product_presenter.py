@@ -13,7 +13,7 @@ class CreateProductPresenter(BasePresenter, ICreateProductOutputPort):
         self.persistence = persistence
 
     async def present_product_created_async(self, product: ProductDto):
-        self.persistence.save_changes_async()
+        await self.persistence.save_changes_async()
         await self.created_async(CreatedViewModel(product.id.value))
 
     async def present_merchant_not_found_async(self, merchant_id: EntityID):

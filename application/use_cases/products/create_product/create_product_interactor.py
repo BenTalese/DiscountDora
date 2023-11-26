@@ -18,15 +18,16 @@ class CreateProductInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: CreateProductInputPort, output_port: ICreateProductOutputPort):
-        merchant = self.persistence_context.get_entities(Merchant).first(Equal(input_port.merchant_id, nameof(Merchant.id)))
+        merchant = self.persistence_context.get_entities(Merchant).first_by_id(input_port.merchant_id)
 
         product = Product(
             brand = input_port.brand,
             current_offer = ProductOffer(
-                offered_on = datetime.utcnow,
+                offered_on = datetime.utcnow(),
                 price_now = input_port.price_now,
                 price_was = input_port.price_was
             ),
+            historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
             image = input_port.image,
             is_available = input_port.is_available,
             merchant = merchant,
@@ -39,4 +40,4 @@ class CreateProductInteractor(Interactor):
 
         self.persistence_context.add(product)
 
-        output_port.present_product_created_async(get_product_dto(product))
+        await output_port.present_product_created_async(get_product_dto(product))

@@ -1,18 +1,21 @@
-from datetime import datetime
 import json
 import logging
-from logging.handlers import TimedRotatingFileHandler
 import os
 import sys
+from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from clapy import DependencyInjectorServiceProvider
+
+from framework.emailer.service_collection_builder import \
+    ServiceCollectionBuilder
 
 sys.path.append(os.getcwd())
 from framework.emailer.delivery import send_email
 
 '''
 TODO:
-    - Service collection
     - Add users to domain
     - Add users to database
     - Add user dto
@@ -27,6 +30,7 @@ TODO:
         - Send email with current offers to all recipients
 '''
 logger: logging.Logger
+service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
 
 def startup():
     logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)

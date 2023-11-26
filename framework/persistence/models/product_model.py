@@ -24,6 +24,7 @@ class ProductModel(db.Model):
 
     brand = Column(String(255))
 
+    # TODO: See console output on startup for issue
     current_offer = relationship(
         ProductOfferModel.__name__,
         lazy = "noload",

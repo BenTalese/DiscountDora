@@ -6,9 +6,9 @@ from framework.api.view_models.scraped_product_offer_view_model import \
     get_scraped_product_offer_view_model
 from framework.web_scraper.controller import search_for_product
 
-web_scraper_router = Blueprint("web_scraper_router", __name__, url_prefix="/api/webScraper")
+WEB_SCRAPER_ROUTER = Blueprint("web_scraper_router", __name__, url_prefix="/api/webScraper")
 
-@web_scraper_router.route("/search", methods=["POST"])
+@WEB_SCRAPER_ROUTER.route("/search", methods=["POST"])
 async def search_for_product_async():
     # _ServiceProvider: IServiceProvider = current_app.service_provider
     # _ProductController: ProductController = _ServiceProvider.get_service(ProductController)

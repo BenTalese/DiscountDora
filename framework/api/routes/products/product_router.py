@@ -5,9 +5,9 @@ from framework.api.routes.products.create_product_presenter import CreateProduct
 
 from interface_adaptors.controllers.product_controller import ProductController
 
-product_router = Blueprint("product_router", __name__, url_prefix="/api/products")
+PRODUCT_ROUTER = Blueprint("product_router", __name__, url_prefix="/api/products")
 
-@product_router.route("", methods=["POST"])
+@PRODUCT_ROUTER.route("", methods=["POST"])
 async def create_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
@@ -17,8 +17,8 @@ async def create_product_async():
     return _Presenter.result
 
 
-@product_router.route("")
-@product_router.route("<query>")
+@PRODUCT_ROUTER.route("")
+@PRODUCT_ROUTER.route("<query>")
 async def get_products_async(query = None):
     pass
     # service_provider: IServiceProvider = current_app.service_provider

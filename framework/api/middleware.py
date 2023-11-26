@@ -1,6 +1,7 @@
 from base64 import b64decode, b64encode
 from dataclasses import asdict
 from typing import get_type_hints
+
 from flask import Blueprint, jsonify, request
 from varname import nameof
 
@@ -17,11 +18,11 @@ REQUEST_OBJECTS = {
     nameof(search_for_product_async): SearchForProductQuery
 }
 
-middleware = Blueprint('middleware', __name__)
+MIDDLEWARE = Blueprint('middleware', __name__)
 
 # TODO: ApiAuditing (make a metadata.db)
 
-@middleware.before_app_request
+@MIDDLEWARE.before_app_request
 async def handle_cors_preflight_request():
     if request.method.upper() == 'OPTIONS':
         return jsonify({
@@ -32,7 +33,7 @@ async def handle_cors_preflight_request():
 
 # TODO: 400 bad request validation for required inputs
 
-@middleware.before_app_request
+@MIDDLEWARE.before_app_request
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_OBJECTS:

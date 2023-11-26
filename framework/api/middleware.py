@@ -1,3 +1,6 @@
+from base64 import b64decode, b64encode
+from dataclasses import asdict
+from typing import get_type_hints
 from flask import Blueprint, jsonify, request
 from varname import nameof
 
@@ -33,8 +36,18 @@ async def handle_cors_preflight_request():
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_OBJECTS:
-        deserialised_request = REQUEST_OBJECTS[_RequestEndpoint](**request.get_json())
-        setattr(request, "request_object", deserialised_request)
+        _RequestData: dict = request.get_json()
+
+        for _AttributeName, _AttributeType in get_type_hints(REQUEST_OBJECTS[_RequestEndpoint]).items():
+            _Data = _RequestData[_AttributeName]
+
+            if _AttributeType is bytes:
+                _Data = b64decode(_Data)
+
+            _RequestData[_AttributeName] = _AttributeType(_Data)
+
+        _DeserialisedRequest = REQUEST_OBJECTS[_RequestEndpoint](**_RequestData)
+        setattr(request, "request_object", _DeserialisedRequest)
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

@@ -1,6 +1,6 @@
 from clapy import Interactor
-from application.dtos.stock_item_dto import get_stock_item_dto
 
+from application.dtos.stock_item_dto import get_stock_item_dto
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_item import StockItem
 

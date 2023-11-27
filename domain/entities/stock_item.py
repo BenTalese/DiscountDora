@@ -1,8 +1,6 @@
 from dataclasses import dataclass
-import datetime
-from typing import List
+from datetime import datetime
 from domain.entities.base_entity import BaseEntity
-from domain.entities.product import Product
 
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation

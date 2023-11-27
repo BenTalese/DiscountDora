@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import random
 import string
 
@@ -75,8 +75,8 @@ def get_value_for_type(entity_type, attr_name, type):
         return ''.join([entity_type.__name__, "__", attr_name, '__'] + random.choices(string.ascii_letters, k=5))
 
     if type == datetime:
-        start_date = datetime.datetime.now() - datetime.timedelta(days=2000)
-        end_date = datetime.datetime.now() + datetime.timedelta(days=2000)
+        start_date = datetime.now() - timedelta(days=2000)
+        end_date = datetime.now() + timedelta(days=2000)
         return start_date + (end_date - start_date) * random.random()
 
     return type()

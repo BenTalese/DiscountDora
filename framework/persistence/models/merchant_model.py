@@ -1,5 +1,4 @@
-import uuid
-
+from uuid import uuid4
 from sqlalchemy import Column, String
 from sqlalchemy_utils import UUIDType
 
@@ -15,7 +14,7 @@ class MerchantModel(db.Model):
     id = Column(
         UUIDType,
         primary_key=True,
-        default=uuid.uuid4)
+        default=uuid4)
 
     name = Column(String(255))
 

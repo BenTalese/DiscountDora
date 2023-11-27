@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import datetime
+from datetime import datetime
 from uuid import UUID
 
 from application.dtos.stock_item_dto import StockItemDto

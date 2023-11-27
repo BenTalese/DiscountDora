@@ -1,4 +1,3 @@
-import uuid
 from domain.entities.base_entity import EntityID
 
 from domain.generics import TEntity

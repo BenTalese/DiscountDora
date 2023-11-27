@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import pathlib
 
 from rich.console import Console
@@ -47,7 +47,7 @@ def generate_email_body(product_offers, out_path: str = None) -> str:
     html_template = html_template.replace('{{ table }}', html_table)
 
     # Add time
-    year, week, weekday = datetime.datetime.now().isocalendar()
+    year, week, weekday = datetime.now().isocalendar()
     week_start, week_fin = (week - 1, week) if weekday < 3 else (week, week + 1)
     #start = datetime.datetime.fromisocalendar(year, week_start, 3)
     #fin = datetime.datetime.fromisocalendar(year, week_fin, 2)

@@ -2,9 +2,9 @@ from datetime import datetime
 import inspect
 import os
 import re
-import uuid
 from collections import deque
 from typing import Any, Generic, List, Type, get_origin, get_type_hints
+from uuid import uuid4
 
 import sqlalchemy
 from flask import Flask
@@ -89,7 +89,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     def add(self, entity: TEntity):
         if not entity.id:
-            entity.id = EntityID(uuid.uuid4())
+            entity.id = EntityID(uuid4())
 
             # IDEA:
             # if any(get_type_hints(entity).values() == File):

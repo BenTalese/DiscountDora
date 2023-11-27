@@ -1,5 +1,4 @@
-import uuid
-
+from uuid import uuid4
 from sqlalchemy import Boolean, Column, Float, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
@@ -20,7 +19,7 @@ class ProductModel(db.Model):
     id = Column(
         UUIDType,
         primary_key=True,
-        default=uuid.uuid4)
+        default=uuid4)
 
     brand = Column(String(255))
 

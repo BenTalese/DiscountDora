@@ -1,5 +1,5 @@
-import datetime
 from dataclasses import dataclass
+from datetime import datetime
 
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem

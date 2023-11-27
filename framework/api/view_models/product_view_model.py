@@ -15,7 +15,7 @@ class ProductViewModel:
     name: str
     price_now: float
     price_was: float
-    product_id: UUID # FIXME: Fix uuid and datetime types everywhere, should be from datetime and from uuid, not modules themselves
+    product_id: UUID
     size_unit: str
     size_value: float
     web_url: str

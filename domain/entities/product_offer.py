@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import datetime
+from datetime import datetime
 
 from domain.entities.base_entity import BaseEntity
 

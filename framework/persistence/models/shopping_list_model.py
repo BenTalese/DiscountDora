@@ -1,5 +1,4 @@
-import uuid
-
+from uuid import uuid4
 from sqlalchemy import Column
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
@@ -16,7 +15,7 @@ class ShoppingListModel(db.Model):
     id = Column(
         UUIDType,
         primary_key=True,
-        default=uuid.uuid4)
+        default=uuid4)
 
     items = relationship(
         'StockItemModel',

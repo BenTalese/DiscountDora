@@ -1,5 +1,4 @@
-import uuid
-
+from uuid import uuid4
 from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
@@ -21,7 +20,7 @@ class StockItemModel(db.Model):
     id = Column(
         UUIDType,
         primary_key=True,
-        default=uuid.uuid4)
+        default=uuid4)
 
     location = relationship(
         StockLocationModel.__name__,

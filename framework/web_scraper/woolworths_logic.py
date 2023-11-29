@@ -7,9 +7,8 @@ from framework.web_scraper.models import WoolworthsProductOffer
 from framework.web_scraper.session import create_session
 
 
-def get_by_id(product_id: str):
-    _Session = create_session()
-    _Response = _Session.get(url = f'https://www.woolworths.com.au/api/v3/ui/schemaorg/product/{product_id}')
+def get_by_stockcode(session: CachedSession, stockcode: str):
+    _Response = session.get(f'https://www.woolworths.com.au/api/v3/ui/schemaorg/product/{stockcode}')
     return WoolworthsProductOffer.model_construct(**_Response.json())
 
 def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):

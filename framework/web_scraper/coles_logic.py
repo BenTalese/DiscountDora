@@ -6,6 +6,10 @@ from requests_cache import CachedSession
 from framework.web_scraper.models import ColesProductOffer
 
 
+def get_by_stockcode(session: CachedSession, stockcode: str):
+    _Response = session.get(f'https://www.coles.com.au/product/{stockcode}')
+    return ColesProductOffer.model_construct(**_Response.json())
+
 def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):
     _Response = session.get('https://www.coles.com.au/')
     _Soup = BeautifulSoup(_Response.text, features="html.parser")

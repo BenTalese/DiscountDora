@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -5,23 +6,24 @@ import sys
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from clapy import DependencyInjectorServiceProvider
 
+from framework.emailer.get_users_presenter import GetUsersPresenter
 from framework.emailer.service_collection_builder import \
     ServiceCollectionBuilder
+from interface_adaptors.controllers.user_controller import UserController
 
 sys.path.append(os.getcwd())
 from framework.emailer.delivery import send_email
 
 '''
 TODO:
-    - Add users to domain
-    - Add users to database
-    - Add user dto
-    - Seed my email into database
-    - Add "get users" use case
-    - Call "get users" use case from emailer
+    - Store system email into database (hmm...can't do this with the app password though, may need to prompt for it and store it hashed)
+        - Could stay in appsettings?
+        - Could prompt for it in front end?
+        - System email is not a user, you cannot "log in" with it
+    - Prompt for email registration in front end, save to DB
     - Figure out where email schedule preferences should be stored, feels slightly weird being with user...just slightly though
 
     - Filter to users needing emailing
@@ -30,19 +32,33 @@ TODO:
         - Send email with current offers to all recipients
 '''
 logger: logging.Logger
-service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
 
-def startup():
+async def startup():
     logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)
-    scheduler = BlockingScheduler()
+    scheduler = AsyncIOScheduler()
     scheduler.add_job(process, 'interval', hours=1)
     scheduler.start()
 
-def process():
+async def process():
     try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(current_dir, 'appsettings.json'), 'r') as file:
-            SECRETS = json.load(file)
+        _CurrentDirectory = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(_CurrentDirectory, 'appsettings.json'), 'r') as _File:
+            SECRETS = json.load(_File)
+
+        _ServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
+        _UserController: UserController = _ServiceProvider.get_service(UserController)
+        _Presenter = GetUsersPresenter()
+        await _UserController.get_users_async(_Presenter)
+
+        _Recipients = []
+        for _User in _Presenter.users:
+            _DayOfWeekToday = datetime.now().weekday()
+            if _User.send_deals_on_day.weekday() == _DayOfWeekToday:
+                _Recipients.append(_User.email)
+
+        if _Recipients:
+            _Offers = [] # TODO: Get offers, must call API
+            send_email(_Offers, SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], _Recipients)
 
         send_email([], SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], ["ben.talese@gmail.com"])
 
@@ -63,5 +79,6 @@ def configure_logger() -> logging.Logger:
 
     return logger
 
-if __name__ == '__main__':
-    startup()
+
+if __name__ == "__main__":
+    asyncio.run(startup())

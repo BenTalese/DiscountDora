@@ -10,7 +10,7 @@ class UserDto:
     email: str = None
     send_deals_on_day: datetime = None
     username: str = None
-    user_id: EntityID
+    user_id: EntityID = None
 
 def get_user_dto(user: User) -> UserDto:
     return UserDto(

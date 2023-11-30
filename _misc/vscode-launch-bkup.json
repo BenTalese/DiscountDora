@@ -22,7 +22,7 @@
             "request": "launch",
             "name": "Web App",
             "url": "http://localhost:5174",
-            "preLaunchTask": "Sleepdelay",
+            "preLaunchTask": "npm: dev",
             "webRoot": "${workspaceFolder}/framework/web_app/app",
             "pathMappings": [
                 {

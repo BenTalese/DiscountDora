@@ -12,10 +12,13 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "dependsOn": [
+                "sleepdelay"
+            ]
         },
         {
-            "label": "Sleepdelay",
+            "label": "sleepdelay",
             "type": "shell",
             "command": "sleep 2",
             "windows": {

@@ -1,10 +1,8 @@
 from datetime import datetime
 from clapy import Interactor
 from application.dtos.product_dto import get_product_dto
-from application.infrastructure.bool_operation import Equal
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.create_product.create_product_input_port import CreateProductInputPort
-from varname import nameof
 
 from application.use_cases.products.create_product.icreate_product_output_port import ICreateProductOutputPort
 from domain.entities.merchant import Merchant

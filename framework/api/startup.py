@@ -40,10 +40,10 @@ async def startup():
     app.register_blueprint(ERROR_HANDLERS)
 
     register_routers(app)
-
     await SqlAlchemyPersistenceContext.test(app)
 
-    app.run()
+
+    app.run(debug = app.config.get('DEBUG'), use_reloader=False) # TODO: appsettings
 
 def register_routers(app: Flask):
     app.register_blueprint(MERCHANT_ROUTER)

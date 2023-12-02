@@ -11,7 +11,7 @@ from framework.api.routes.products.create_product_presenter import \
     CreateProductPresenter
 from interface_adaptors.controllers.product_controller import ProductController
 
-PRODUCT_ROUTER = Blueprint("product_router", __name__, url_prefix="/api/products")
+PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 @PRODUCT_ROUTER.route("", methods=["POST"])
 async def create_product_async():

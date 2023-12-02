@@ -6,7 +6,7 @@ from framework.api.routes.merchants.get_merchants_presenter import \
 from interface_adaptors.controllers.merchant_controller import \
     MerchantController
 
-MERCHANT_ROUTER = Blueprint("merchant_router", __name__, url_prefix="/api/merchants")
+MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 
 @MERCHANT_ROUTER.route("")
 @MERCHANT_ROUTER.route("<query>")

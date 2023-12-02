@@ -1,3 +1,4 @@
+from varname import nameof
 from application.dtos.product_dto import ProductDto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.create_product.icreate_product_output_port import \
@@ -14,7 +15,7 @@ class CreateProductPresenter(BasePresenter, ICreateProductOutputPort):
 
     async def present_product_created_async(self, product: ProductDto):
         await self.persistence.save_changes_async()
-        await self.created_async(CreatedViewModel(product.id.value))
+        await self.created_async(CreatedViewModel(product.product_id.value))
 
     async def present_merchant_not_found_async(self, merchant_id: EntityID):
-        await self.entity_existence_failure_async(merchant_id.__name__, merchant_id.value)
+        await self.entity_existence_failure_async(nameof(merchant_id), merchant_id.value)

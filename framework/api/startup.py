@@ -16,6 +16,7 @@ from framework.api.routes.merchants.merchant_router import MERCHANT_ROUTER
 from framework.api.routes.products.product_router import PRODUCT_ROUTER
 from framework.api.routes.stock_items.stock_item_router import \
     STOCK_ITEM_ROUTER
+from framework.api.routes.users.user_router import USER_ROUTER
 from framework.api.routes.web_scraper.web_scraper_router import \
     WEB_SCRAPER_ROUTER
 from framework.api.service_collection_builder import ServiceCollectionBuilder
@@ -49,6 +50,7 @@ def register_routers(app: Flask):
     app.register_blueprint(MERCHANT_ROUTER)
     app.register_blueprint(PRODUCT_ROUTER)
     app.register_blueprint(STOCK_ITEM_ROUTER)
+    app.register_blueprint(USER_ROUTER)
     app.register_blueprint(WEB_SCRAPER_ROUTER)
 
 if __name__ == '__main__':

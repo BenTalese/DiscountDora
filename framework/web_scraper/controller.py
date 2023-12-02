@@ -1,15 +1,16 @@
 import base64
 import os
 import sys
-from datetime import datetime
-from io import BytesIO
 
-import requests
-from PIL import Image
-from framework.web_scraper.get_products_presenter import GetProductsPresenter
+from application.dtos.product_dto import ProductDto
+from application.use_cases.products.update_product.update_product_input_port import \
+    UpdateProductInputPort
 from framework.web_scraper.get_merchants_presenter import GetMerchantsPresenter
-from interface_adaptors.controllers.merchant_controller import MerchantController
-
+from framework.web_scraper.get_products_presenter import GetProductsPresenter
+from framework.web_scraper.update_product_presenter import \
+    UpdateProductPresenter
+from interface_adaptors.controllers.merchant_controller import \
+    MerchantController
 from interface_adaptors.controllers.product_controller import ProductController
 
 sys.path.append(os.getcwd())
@@ -47,15 +48,17 @@ class WebScraper:
 
             return _ScrapedOffers
 
-    def scrape_product_offers(self) -> List[ScrapedProductOffer]:
+    async def get_product_offers_async(self) -> List[ProductDto]:
         # TODO: Either own service collection, or this is part of the API...
         #       -> I think make this a hosted service, kept here in this folder, with the product controller as a dependency
+        # TODO: register this controller as a service that can be DI'ed
+
 
         _GetMerchantsPresenter = GetMerchantsPresenter()
-        self.merchant_controller.get_merchants_async(_GetMerchantsPresenter)
+        await self.merchant_controller.get_merchants_async(_GetMerchantsPresenter)
 
         _GetProductsPresenter = GetProductsPresenter()
-        self.product_controller.get_products_async(_GetProductsPresenter)
+        await self.product_controller.get_products_async(_GetProductsPresenter)
 
         with create_session() as _Session:
             _WoolworthsMerchantID = next(_Merchant.merchant_id for _Merchant in _GetMerchantsPresenter.merchants if _Merchant.name == "Woolworths")
@@ -74,9 +77,20 @@ class WebScraper:
                 if _Product.merchant_id == _ColesMerchantID
             ]
 
-            # TODO: save new deals (new use case, UpdateProduct)
-            # TODO: register this controller as a service that can be DI'ed
-            # return new deals? (I think so...return the updated products)
+            _UpdatedProducts: List[ProductDto] = []
+            for _Product, _Offer in _WoolworthsProductOffers + _ColesProductOffers:
+                _InputPort = UpdateProductInputPort(
+                    is_available = _Offer.is_available,
+                    price_now = _Offer.price_now,
+                    price_was = _Offer.price_was,
+                    product_id = _Product.product_id)
+
+                _Presenter = UpdateProductPresenter()
+                await self.product_controller.update_product_async(_InputPort, _Presenter)
+                _UpdatedProducts.append(_Presenter.result)
+
+            return _UpdatedProducts
+
 
 
 

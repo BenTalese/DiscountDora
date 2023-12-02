@@ -8,6 +8,7 @@ from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
+from domain.entities.user import User
 from framework.persistence.infrastructure.persistence_helper_methods import is_entity, is_list
 
 
@@ -19,6 +20,11 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     merchant_two.name = "Coles"
     persistence.add(merchant_one)
     persistence.add(merchant_two)
+
+    # TEST DATA:
+    user = generate_entity(User)
+    user.send_deals_on_day = datetime.now().day
+    user.email = "ben.talese@gmail.com"
 
     stock_location_one = generate_entity(StockLocation)
     persistence.add(stock_location_one)

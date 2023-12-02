@@ -9,7 +9,7 @@ from application.use_cases.users.get_users.iget_users_output_port import \
 from domain.entities.user import User
 
 
-class GetStockItemsInteractor(Interactor):
+class GetUsersInteractor(Interactor):
 
     def __init__(self, persistence_context: IPersistenceContext):
         self.persistence_context = persistence_context

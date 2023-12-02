@@ -45,7 +45,7 @@ async def deserialise_web_request():
             if _AttributeType is bytes:
                 _Data = b64decode(_Data)
 
-            _RequestData[_AttributeName] = _AttributeType(_Data)
+            _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_OBJECTS[_RequestEndpoint](**_RequestData)
         setattr(request, "request_object", _DeserialisedRequest)

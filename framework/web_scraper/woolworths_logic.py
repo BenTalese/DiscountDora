@@ -1,4 +1,3 @@
-
 import urllib.parse
 
 from requests_cache import CachedSession
@@ -8,8 +7,19 @@ from framework.web_scraper.session import create_session
 
 
 def get_by_stockcode(session: CachedSession, stockcode: str):
-    _Response = session.get(f'https://www.woolworths.com.au/api/v3/ui/schemaorg/product/{stockcode}')
-    return WoolworthsProductOffer.model_construct(**_Response.json())
+    # _Response = session.get(f'https://www.woolworths.com.au/api/v3/ui/schemaorg/product/{stockcode}')
+
+    _Url = 'https://www.woolworths.com.au/apis/ui/Search/products'
+    _Body = {
+        'Location': f'/shop/search/products?{urllib.parse.urlencode({"searchTerm": stockcode})}',
+        'PageNumber': 1,
+        'PageSize': 36,
+        'SearchTerm': stockcode,
+        'SortType': "TraderRelevance"
+    }
+
+    _PageSearchResult = session.post(_Url, json=_Body).json()
+    return WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
 
 def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):
     _Url = 'https://www.woolworths.com.au/apis/ui/Search/products'

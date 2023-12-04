@@ -4,11 +4,26 @@ from bs4 import BeautifulSoup
 from requests_cache import CachedSession
 
 from framework.web_scraper.models import ColesProductOffer
+from framework.web_scraper.session import create_session
 
 
-def get_by_stockcode(session: CachedSession, stockcode: str):
-    _Response = session.get(f'https://www.coles.com.au/product/{stockcode}')
-    return ColesProductOffer.model_construct(**_Response.json())
+def get_by_stockcode(session: CachedSession, stockcode: str, product_name: str):
+    # _Response = session.get(f'https://www.coles.com.au/product/{stockcode}')
+    _Response = session.get('https://www.coles.com.au/')
+    _Soup = BeautifulSoup(_Response.text, features="html.parser")
+    _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']
+
+    _Url = f'https://www.coles.com.au/_next/data/{_BuildID}/en/search.json'
+    _Params = {
+        'q': product_name,
+        'page': 1
+    }
+
+    _PageSearchResult = session.get(_Url, _Params).json()['pageProps']['searchResults']
+    for _ProductSearchResult in _PageSearchResult['results']:
+        if _ProductSearchResult['_type'] == "PRODUCT" and str(_ProductSearchResult["id"]) == stockcode:
+            return ColesProductOffer.model_validate(_ProductSearchResult)
+
 
 def search(session: CachedSession, search_term: str, start_page: int, max_page: int, max_results: int):
     _Response = session.get('https://www.coles.com.au/')

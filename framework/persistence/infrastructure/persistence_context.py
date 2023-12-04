@@ -124,7 +124,8 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     # end IPersistenceContext Methods
 
-    #TODO: Use class for options instead of .get("some string")
+    # TODO: Use class for options instead of .get("some string")
+    # TODO: Test on start that all entity properties have been configured (do name match)
     @classmethod # TODO: Class method?? cls for what? maybe make static instead
     async def initialise(cls, app: Flask):
         SqlAlchemyPersistenceContext._verify_all_models_imported()
@@ -367,7 +368,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if not self.projection_mapping:
             for assignment in attribute_assignments:
                 dest, src_path = assignment
-                src_path: str = src_path.replace("[", "").replace("]", "").replace(",", "")
+                src_path: str = src_path.replace("[", "").replace("]", "").replace(",", "").replace("(", "").replace(")", "")
                 self.projection_mapping[dest] = get_source_attribute_path(projection_source_type, src_path)
         else:
             new_projection_mapping = {}

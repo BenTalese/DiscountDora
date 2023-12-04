@@ -1,5 +1,4 @@
-from base64 import b64decode, b64encode
-from dataclasses import asdict
+from base64 import b64decode
 from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request

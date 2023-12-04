@@ -23,8 +23,9 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     # TEST DATA:
     user = generate_entity(User)
-    user.send_deals_on_day = datetime.now().day
+    user.send_deals_on_day = datetime.now().weekday()
     user.email = "ben.talese@gmail.com"
+    persistence.add(user)
 
     stock_location_one = generate_entity(StockLocation)
     persistence.add(stock_location_one)

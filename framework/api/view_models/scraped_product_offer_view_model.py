@@ -22,7 +22,7 @@ class ScrapedProductOfferViewModel:
 def get_scraped_product_offer_view_model(scraped_product_offer: ScrapedProductOffer) -> ScrapedProductOfferViewModel:
     return ScrapedProductOfferViewModel(
         brand = scraped_product_offer.brand,
-        image = scraped_product_offer.image.decode('utf-8'),
+        image = scraped_product_offer.image.decode('utf-8'), # TODO: Is this the correct place to do this?
         is_available = scraped_product_offer.is_available,
         merchant = scraped_product_offer.merchant,
         merchant_stockcode = scraped_product_offer.merchant_stockcode,

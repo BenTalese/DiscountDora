@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from application.dtos.user_dto import UserDto
@@ -8,7 +7,7 @@ from application.dtos.user_dto import UserDto
 @dataclass
 class UserViewModel:
     email: str
-    send_deals_on_day: datetime
+    send_deals_on_day: int
     username: str
     user_id: UUID
 

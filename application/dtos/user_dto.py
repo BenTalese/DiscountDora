@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime
 
 from domain.entities.base_entity import EntityID
 from domain.entities.user import User
@@ -8,7 +7,7 @@ from domain.entities.user import User
 @dataclass
 class UserDto:
     email: str = None
-    send_deals_on_day: datetime = None
+    send_deals_on_day: int = None
     username: str = None
     user_id: EntityID = None
 

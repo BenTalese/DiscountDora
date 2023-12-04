@@ -10,6 +10,7 @@ from domain.entities.base_entity import EntityID
 # TODO: Errors in previous pipes not checked?? Check clapy, i thought it would check all prev pipes or something
 class CreateProductInputPort(InputPort):
     # TODO: Maybe just delete this? I feel explicit mapping is best
+    # UPDATED OPINION: Seems useful, can do keyword assignment in constructor
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 

@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import Column, String
+from sqlalchemy import Column, Integer, String
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
@@ -19,7 +19,7 @@ class UserModel(db.Model):
 
     email = Column(String(255))
 
-    send_deals_on_day = Column(String(255))
+    send_deals_on_day = Column(Integer)
 
     username = Column(String(255))
 

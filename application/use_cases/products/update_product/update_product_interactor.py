@@ -26,7 +26,7 @@ class UpdateProductInteractor(Interactor):
             .first_by_id(input_port.product_id)
 
         if input_port.is_available.has_been_set:
-            _Product.is_available = input_port.is_available
+            _Product.is_available = input_port.is_available.value
 
         if input_port.price_now.has_been_set and input_port.price_was.has_been_set:
             _Product.historical_offers.append(ProductOffer(
@@ -36,7 +36,7 @@ class UpdateProductInteractor(Interactor):
 
             _Product.current_offer = ProductOffer(
                 offered_on = datetime.utcnow(),
-                price_now = input_port.price_now,
-                price_was = input_port.price_was)
+                price_now = input_port.price_now.value,
+                price_was = input_port.price_was.value)
 
         await output_port.present_product_updated_async(get_product_dto(_Product))

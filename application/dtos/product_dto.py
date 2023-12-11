@@ -28,7 +28,7 @@ def get_product_dto(product: Product) -> ProductDto:
         historical_offers = [get_product_offer_dto(offer) for offer in product.historical_offers],
         image = product.image,
         is_available = product.is_available,
-        merchant_id = product.merchant.id,
+        merchant_id = product.merchant.id if product.merchant else None,
         merchant_stockcode = product.merchant_stockcode,
         name = product.name,
         product_id = product.id,

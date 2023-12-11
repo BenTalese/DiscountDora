@@ -9,8 +9,9 @@ from typing import List
 
 # from framework.web_scraper.types import ProductOffers
 
-from .generate import generate_email_body
+from .generate import generate_email_body, generate_html, heml_test, mjml_test
 
+# TODO: Add requirements mjml or heml (npm install -g mjml)
 
 def send_email(
         product_offers,
@@ -37,7 +38,8 @@ def prepare_email(product_offers) -> str:
 
     message = MIMEMultipart('alternative')
     message['Subject'] = f"Discount Dora: {random.choice(food_emojis)} Weekly Price Report!"
-    body = MIMEText(generate_email_body(product_offers), 'html')
+    # body = MIMEText(generate_email_body(product_offers), 'html')
+    body = MIMEText(mjml_test(), 'html')
     message.attach(body)
 
     return message.as_string()

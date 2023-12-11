@@ -1,6 +1,8 @@
-from datetime import datetime
 import pathlib
+from datetime import datetime
+import tempfile
 
+from jinja2 import Environment, PackageLoader, select_autoescape
 from rich.console import Console
 from rich.table import Table
 
@@ -29,7 +31,7 @@ def generate_email_body(product_offers, out_path: str = None) -> str:
     rows = []
     green = '#008000'
     light_grey = '#afafaf'
-    for product_name, offers in product_offers.items():
+    for product in product_offers:
         row_ = html_table_row
         row_ = row_.replace('{{ product }}', product_name)
         lowest_price = min(offers).price
@@ -61,3 +63,136 @@ def generate_email_body(product_offers, out_path: str = None) -> str:
             f.write(html_template)
 
     return html_template
+
+def generate_html():
+    stock_items = [
+        {
+            "name": "Apples",
+            "products": [
+                {"name": "Product 1", "brand": "Brand A", "current_offer": {"price_now": 19.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller X", "size": "Medium", "image": None},
+                {"name": "Product 2", "brand": "Brand B", "current_offer": {"price_now": 29.99, "price_was": 39.99}, "availability": "Out of Stock", "seller": "Seller Y", "size": "Large", "image": None},
+                {"name": "Product 3", "brand": "Brand C", "current_offer": {"price_now": 14.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller Z", "size": "Small", "image": None},
+                {"name": "Product 4", "brand": "Brand D", "current_offer": {"price_now": 24.99, "price_was": 49.99}, "availability": "In Stock", "seller": "Seller W", "size": "Large", "image": None},
+            ]
+        },
+        {
+            "name": "Oranges",
+            "products": [
+                {"name": "Product 3", "brand": "Brand C", "current_offer": {"price_now": 14.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller Z", "size": "Small", "image": None},
+                {"name": "Product 4", "brand": "Brand D", "current_offer": {"price_now": 24.99, "price_was": 49.99}, "availability": "In Stock", "seller": "Seller W", "size": "Large", "image": None},
+            ]
+        },
+        {
+            "name": "Bananas",
+            "products": [
+                {"name": "Product 1", "brand": "Brand A", "current_offer": {"price_now": 19.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller X", "size": "Medium", "image": None},
+                {"name": "Product 2", "brand": "Brand B", "current_offer": {"price_now": 29.99, "price_was": 39.99}, "availability": "Out of Stock", "seller": "Seller Y", "size": "Large", "image": None},
+                {"name": "Product 3", "brand": "Brand C", "current_offer": {"price_now": 14.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller Z", "size": "Small", "image": None},
+            ]
+        },
+        {
+            "name": "Grapes",
+            "products": [
+                {"name": "Product 3", "brand": "Brand C", "current_offer": {"price_now": 14.99, "price_was": 29.99}, "availability": "In Stock", "seller": "Seller Z", "size": "Small", "image": None},
+                {"name": "Product 4", "brand": "Brand D", "current_offer": {"price_now": 24.99, "price_was": 49.99}, "availability": "In Stock", "seller": "Seller W", "size": "Large", "image": None},
+            ]
+        },
+    ]
+    # env = Environment(
+    #     loader=PackageLoader('framework.emailer'),
+    #     autoescape=select_autoescape(['html', 'xml'])
+    # )
+
+    # # Load the HTML template
+    # template = env.get_template('draft_email_template.html')
+
+    # # Render the template with stock item data
+    # html_content = template.render(stock_items=stock_items)
+
+    email_template_path = 'framework/emailer/templates/mjml_test.mjml'
+
+    html_content = compile_mjml_from_file(email_template_path)
+
+    return html_content
+
+
+
+import subprocess
+
+def compile_mjml_from_file(file_path):
+    try:
+        mjml_cli_command = ["mjml", file_path]
+
+        process = subprocess.Popen(mjml_cli_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        output, error = process.communicate(timeout=10)
+
+        if process.returncode != 0:
+            print(f"Error compiling MJML: {error}") # FIXME: Logging
+            return None
+
+        html_start = output.find("<!doctype html>")
+        html_end = output.find("</html>") + len("</html>")
+        html_content = output[html_start:html_end]
+
+        return html_content
+
+    except Exception as e:
+        print(f"An error occurred: {e}") # FIXME: Logging
+        return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import subprocess
+
+def compile_heml_from_file(file_path):
+    try:
+        # Create a temporary file to store the HTML output
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.html') as temp_file:
+            temp_file_path = temp_file.name
+
+            # HEML CLI command
+            heml_command = ["heml", "build", file_path, "-o", temp_file_path]
+
+            # Run the HEML CLI as a subprocess
+            process = subprocess.Popen(heml_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            _, error = process.communicate(timeout=10)
+
+            # Check for errors
+            if process.returncode != 0:
+                print(f"Error compiling HEML: {error}")
+                return None
+
+            # Read the HTML content from the temporary file
+            with open(temp_file_path, 'r') as html_file:
+                html_content = html_file.read()
+
+            return html_content
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+def heml_test():
+    # Specify the path to your HEML file
+    heml_file_path = 'framework/emailer/templates/heml_test.heml'
+
+    # Compile HEML to HTML
+    html_output = compile_heml_from_file(heml_file_path)
+
+    # Print or use the HTML output as needed
+    return html_output
+
+

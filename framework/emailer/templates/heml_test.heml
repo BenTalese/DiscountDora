@@ -1,0 +1,67 @@
+<heml>
+
+    <head>
+        <subject>Email is awesome</subject>
+        <preview>Learn about all the cool things you can do with email today!</preview>
+
+        <style>
+            body {
+                background: #EEE;
+            }
+
+            container {
+                background: white;
+                max-width: 700px;
+                margin: 10px auto;
+                padding: 10px 20px;
+            }
+
+            hr {
+                border-color: #DDD;
+            }
+
+            button {
+                background: #333;
+                padding: 10px 20px;
+                margin: 10px 0;
+            }
+
+            column {
+                padding: 0 10px;
+            }
+        </style>
+
+    </head>
+
+    <body>
+        <container>
+            <row>
+                <column>
+                    <h1>Hey there! 👋</h1>
+                    <p>Thanks for giving HEML a try! Let us know if you run into any issues or build something awesome
+                        with it!</p>
+                </column>
+            </row>
+            <hr>
+            <row>
+                <column>
+                    <h3>Make games</h3>
+                    <p>The dynamic duo, Camiah, have made some awesome games in emails!</p>
+                    <button href="https://codepen.io/reallygoodemails/pen/WGzdXk">Sweep bombs 💣</button>
+                </column>
+                <column>
+                    <h3>Show a slideshow</h3>
+                    <p>Lego sent out an email showing off some of their new sets.</p>
+                    <button href="https://codepen.io/reallygoodemails/pen/EXdgjY">Check it out 🕵</button>
+                </column>
+                <column>
+                    <h3>Win back customers</h3>
+                    <p>Really Good Emails has collected a series of emails to win you back.</p>
+                    <button href="https://reallygoodemails.com/category/promotional/winback/">Open your heart
+                        ❤️</button>
+                </column>
+            </row>
+        </container>
+    </body>
+
+</heml>

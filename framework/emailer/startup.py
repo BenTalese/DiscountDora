@@ -1,21 +1,21 @@
+import os
+import sys
+from uuid import uuid4
+
+sys.path.append(os.getcwd())
+
 import asyncio
 import json
 import logging
-import os
-import sys
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 
+import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from clapy import DependencyInjectorServiceProvider
 
-from framework.emailer.get_users_presenter import GetUsersPresenter
-from framework.emailer.service_collection_builder import \
-    ServiceCollectionBuilder
-from interface_adaptors.controllers.user_controller import UserController
-
-sys.path.append(os.getcwd())
 from framework.emailer.delivery import send_email
+from framework.emailer.product_model import ProductModel
+from framework.emailer.user_model import UserModel
 
 '''
 TODO:
@@ -31,39 +31,6 @@ TODO:
         - Get current offers (invoke scraper directly, not through API)
         - Send email with current offers to all recipients
 '''
-logger: logging.Logger
-
-async def startup():
-    logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(process, 'interval', hours=1)
-    scheduler.start()
-
-async def process():
-    try:
-        _CurrentDirectory = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(_CurrentDirectory, 'appsettings.json'), 'r') as _File:
-            SECRETS = json.load(_File)
-
-        _ServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
-        _UserController: UserController = _ServiceProvider.get_service(UserController)
-        _Presenter = GetUsersPresenter()
-        await _UserController.get_users_async(_Presenter)
-
-        _Recipients = []
-        for _User in _Presenter.users:
-            _DayOfWeekToday = datetime.now().weekday()
-            if _User.send_deals_on_day.weekday() == _DayOfWeekToday:
-                _Recipients.append(_User.email)
-
-        if _Recipients:
-            _Offers = [] # TODO: Get offers, must call API
-            send_email(_Offers, SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], _Recipients)
-
-        send_email([], SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], ["ben.talese@gmail.com"])
-
-    except Exception:
-        logger.exception("An exception occurred: ")
 
 def configure_logger() -> logging.Logger:
     log_folder = os.path.join(os.path.dirname(__file__), "logs")
@@ -79,6 +46,64 @@ def configure_logger() -> logging.Logger:
 
     return logger
 
+logger: logging.Logger = configure_logger()
+
+def startup():
+    asyncio.run(process())
+    # logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)
+    # scheduler = AsyncIOScheduler()
+    # scheduler.add_job(process, 'interval', hours=1)
+    # scheduler.start()
+    # asyncio.get_event_loop().run_forever()
+
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+    # loop.run_forever()
+
+async def process():
+    # print("Emailing")
+    try:
+        _CurrentDirectory = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(_CurrentDirectory, 'appsettings.json'), 'r') as _File:
+            SECRETS = json.load(_File)
+
+        _DayOfWeekToday = datetime.now().weekday()
+
+        # _Recipients = [UserModel(**_UserData).email
+        #                for _UserData
+        #                in requests.get("http://127.0.0.1:5000/api/users").json()
+        #                if _UserData['send_deals_on_day'] == _DayOfWeekToday]
+
+        # if _Recipients:
+        #     _Offers = [ProductModel(**_OfferData)
+        #                for _OfferData
+        #                in requests.get("http://127.0.0.1:5000/api/webScraper/offers").json()]
+
+            # TODO: at the minimum, need to send in stock items against the products so they can be grouped by stock item
+            # At some point will need shopping list information too
+
+            # send_email(_Offers, SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], _Recipients)
+
+        send_email([ProductModel(
+            "Cadbury",
+            None,
+            True,
+            uuid4(),
+            869235,
+            "Chocolate Thing",
+            5.5,
+            7.8,
+            uuid4(),
+            "g",
+            150,
+            "https://www.woolworths.com.au/shop/productdetails/869235"
+        )],
+        SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], ["ben.talese@gmail.com"])
+
+    except Exception as e:
+        logger.exception("An exception occurred:")
+        raise e
+
 
 if __name__ == "__main__":
-    asyncio.run(startup())
+    startup()

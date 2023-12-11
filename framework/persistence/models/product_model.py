@@ -46,6 +46,10 @@ class ProductModel(db.Model):
         ForeignKey(Merchant.__name__ + ".id"),
         nullable = False)
 
+    merchant_stockcode = Column(
+        String(255),
+        nullable = False)
+
     name = Column(
         String(255),
         nullable = False)
@@ -64,7 +68,8 @@ class ProductModel(db.Model):
             historical_offers = [offer.to_entity() for offer in self.historical_offers],
             image = self.image,
             is_available = self.is_available,
-            merchant = self.merchant.to_entity(),
+            merchant = self.merchant.to_entity() if self.merchant else None,
+            merchant_stockcode = self.merchant_stockcode,
             name = self.name,
             size_unit = self.size_unit,
             size_value = self.size_value,

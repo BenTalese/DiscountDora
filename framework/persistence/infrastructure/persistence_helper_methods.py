@@ -44,6 +44,10 @@ def translate_projection_source(projection_tree: dict, attributes: List[str], en
 
     attribute_name = attributes[0]
     attribute_type = get_type_hints(entity)[attribute_name]
+
+    if is_list(attribute_type):
+        attribute_type = attribute_type.__args__[0]
+
     if len(attributes) == 1 and attribute_name in get_type_hints(entity).keys() and is_entity(attribute_type):
         entity_attributes = { attribute: {} for attribute in get_type_hints(attribute_type).keys() }
         if attribute_name not in projection_tree:
@@ -62,6 +66,9 @@ def translate_projection_source(projection_tree: dict, attributes: List[str], en
     return projection_tree
 
 def get_source_attribute_path(source_type, assignment_path_to_search: str):
+    if is_list(source_type):
+        source_type = source_type.__args__[0]
+
     source_attributes = get_type_hints(source_type).items()
     for attribute_name, attribute_type in source_attributes:
         # If entity attribute in assignment, and no other attribute precedes this attribute (avoid 'other_entity.id' bug)

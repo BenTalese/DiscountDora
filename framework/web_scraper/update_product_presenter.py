@@ -12,6 +12,7 @@ class UpdateProductPresenter(IUpdateProductOutputPort):
 
     async def present_product_updated_async(self, product: ProductDto):
         self.result = product
+        # TODO: SAVE! (requires DI)
 
     async def present_validation_failure_async(self, validation_failure: ValidationResult):
         raise NotImplementedError()

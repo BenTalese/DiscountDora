@@ -6,6 +6,8 @@ from application.infrastructure.configure_services import \
 from domain.infrastructure.configure_services import configure_domain_services
 from framework.api.routes.products.create_product_presenter import \
     CreateProductPresenter
+from framework.api.routes.products.get_products_presenter import \
+    GetProductsPresenter
 from framework.persistence.infrastructure.configure_services import \
     configure_persistence_services
 from interface_adaptors.infrastructure.configure_services import \
@@ -25,6 +27,7 @@ class ServiceCollectionBuilder:
 
     def register_presenters(self):
         self.service_provider.register_service(providers.Factory, CreateProductPresenter)
+        self.service_provider.register_service(providers.Factory, GetProductsPresenter)
         return self
 
     def configure_core_services(self):

@@ -1,5 +1,14 @@
 <script setup lang="ts">
+// import ErrorPopup from '@/components/ErrorPopup.vue';
+// import { onErrorCaptured, ref } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
+
+// const errorMessage = ref('');
+// onErrorCaptured((err) => {
+//     errorMessage.value = 'An error occurred: ' + err.message;
+//     return false;
+// });
+
 </script>
 
 <template>
@@ -17,6 +26,7 @@ import { RouterLink, RouterView } from 'vue-router';
                 </div>
             </nav>
         </header>
+        <!-- <ErrorPopup :msg="errorMessage" /> -->
         <RouterView />
     </div>
 </template>

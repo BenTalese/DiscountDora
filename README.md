@@ -28,6 +28,3 @@ Installation
 ### System Dependencies
 
 ### Known Limitations
-
-### Attribution
-This project was started off as an idea to build upon the work of [Matthew Timms](https://github.com/MattTimms) and further develop the features and capabilities of his original work. See his project at: [Coles vs Woolies](https://github.com/MattTimms/coles_vs_woolies).

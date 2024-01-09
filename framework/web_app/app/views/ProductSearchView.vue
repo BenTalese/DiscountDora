@@ -38,7 +38,7 @@ const add = async (product_offer: ScrapedProductOffer) =>
         web_url: product_offer.web_url
     });
 
-onMounted(async () => { (merchants.value = await merchantApiService.getAll()); console.log(merchants.value) })
+onMounted(async () => merchants.value = await merchantApiService.getAll())
 
 // BUG: What if there's no internet? Need to handle this and say "you're offline!" or something
 // BUG: Can keep pressing search button and it will continue to append...not how pagination should work

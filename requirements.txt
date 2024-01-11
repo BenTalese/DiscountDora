@@ -1,6 +1,6 @@
 apscheduler==3.10.4
 beautifulsoup4==4.12.2
-clapy==2.2.0
+clapy==2.2.1
 dependency_injector==4.41.0
 Flask==3.0.0
 Flask_Cors==4.0.0
@@ -12,6 +12,6 @@ Requests==2.31.0
 requests_cache==1.1.1
 rich==13.7.0
 SQLAlchemy==2.0.25
-sqlalchemy_utils==0.41.1
+SQLAlchemy_Utils==0.41.1
 typing_extensions==4.9.0
 varname==0.12.2

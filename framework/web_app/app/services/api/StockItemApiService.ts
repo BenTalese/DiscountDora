@@ -1,4 +1,4 @@
-import type { StockItem } from "@/models/StockItem";
+import type { CreateStockItemCommand, StockItem } from "@/models/StockItem";
 import AxiosHttpClient from "./AxiosHttpClient";
 
 export default class StockItemApiService {
@@ -8,14 +8,14 @@ export default class StockItemApiService {
         this.httpClient = new AxiosHttpClient();
     }
 
-    create = async (stockItem: StockItem): Promise<StockItem> =>
-        await this.httpClient.post<StockItem>("/stockItems", stockItem);
+    create = async (stockItem: CreateStockItemCommand): Promise<number> =>
+        await this.httpClient.post<number>("/stockItems", stockItem);
 
-    delete = async (stockItemId: number): Promise<void> =>
-        await this.httpClient.delete(`/stockItems/${stockItemId}`);
+    delete = async (stockItemID: number): Promise<void> =>
+        await this.httpClient.delete(`/stockItems/${stockItemID}`);
 
-    get = async (stockItemId: number): Promise<StockItem> =>
-        await this.httpClient.get<StockItem>(`/stockItems/${stockItemId}`);
+    get = async (stockItemID: number): Promise<StockItem> =>
+        await this.httpClient.get<StockItem>(`/stockItems/${stockItemID}`);
 
     getAll = async (): Promise<StockItem[]> =>
         await this.httpClient.get<StockItem[]>('/stockItems');

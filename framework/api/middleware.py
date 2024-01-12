@@ -17,7 +17,7 @@ REQUEST_OBJECTS = {
     nameof(search_for_product_async): SearchForProductQuery
 }
 
-MIDDLEWARE = Blueprint('middleware', __name__)
+MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
 # TODO: ApiAuditing (make a metadata.db)
 

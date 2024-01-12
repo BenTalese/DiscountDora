@@ -18,6 +18,6 @@ def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
         name = stock_item.name,
         stock_item_id = stock_item.id,
         stock_level_id = stock_item.stock_level.id if stock_item.stock_level else None,
-        stock_location_id = stock_item.location.id if stock_item.location else None,
+        stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,
         stock_level_last_updated = stock_item.stock_level_last_updated
     )

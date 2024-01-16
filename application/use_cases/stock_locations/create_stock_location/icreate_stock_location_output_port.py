@@ -1,10 +1,12 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 
 from clapy import IOutputPort
 
-from domain.entities.stock_location import StockLocation
+from application.dtos.stock_location_dto import StockLocationDto
 
-class ICreateStockLocation(IOutputPort, ABC):
+
+class ICreateStockLocationOutputPort(IOutputPort, ABC):
     
-    async def present_stock_location_created_async(stockLocation: StockLocation):
+    @abstractmethod
+    async def present_stock_location_created_async(self, stock_location: StockLocationDto) -> None:
         pass

@@ -26,10 +26,10 @@ class ServiceCollectionBuilder:
         return self \
             .configure_persistence_services() \
             .configure_core_services() \
-            .register_presenters() \
+            .register_api_presenters() \
             .service_provider
 
-    def register_presenters(self):
+    def register_api_presenters(self):
         _PresenterClasses = []
 
         for _Root, _Directories, _Files in os.walk("framework/api/routes"):

@@ -1,6 +1,6 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify, request
-from framework.api.middleware import request_object
+from framework.api.infrastructure.request_object_decorator import request_object
 
 from framework.api.routes.web_scraper.search_for_product_query import \
     SearchForProductQuery

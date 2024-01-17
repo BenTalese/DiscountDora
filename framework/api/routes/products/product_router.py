@@ -5,7 +5,7 @@ from varname import nameof
 from application.use_cases.products.create_product.create_product_input_port import \
     CreateProductInputPort
 from domain.entities.base_entity import EntityID
-from framework.api.middleware import request_object
+from framework.api.infrastructure.request_object_decorator import request_object
 from framework.api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.api.routes.products.create_product_presenter import \

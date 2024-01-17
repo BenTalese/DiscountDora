@@ -3,7 +3,7 @@ from flask import Blueprint, current_app, request
 from varname import nameof
 from application.use_cases.stock_items.create_stock_item.create_stock_item_input_port import CreateStockItemInputPort
 from domain.entities.base_entity import EntityID
-from framework.api.middleware import request_object
+from framework.api.infrastructure.request_object_decorator import request_object
 from framework.api.routes.products.product_router import PRODUCT_ROUTER, get_products_async
 from framework.api.routes.stock_items.create_stock_item_command import CreateStockItemCommand
 from framework.api.routes.stock_items.create_stock_item_presenter import CreateStockItemPresenter

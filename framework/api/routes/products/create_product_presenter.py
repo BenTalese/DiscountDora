@@ -4,7 +4,7 @@ from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.create_product.icreate_product_output_port import \
     ICreateProductOutputPort
 from domain.entities.base_entity import EntityID
-from framework.api.base_presenter import BasePresenter
+from framework.api.infrastructure.base_presenter import BasePresenter
 from framework.api.view_models.created_view_model import CreatedViewModel
 
 

@@ -3,13 +3,7 @@ from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request
 
-REQUEST_OBJECTS_BY_ENDPOINT = {}
-
-def request_object(endpoint_name, request_object_class):
-    def decorator(func):
-        REQUEST_OBJECTS_BY_ENDPOINT[endpoint_name] = request_object_class
-        return func
-    return decorator
+from framework.api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -29,8 +23,6 @@ async def handle_cors_preflight_request():
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
-    if _RequestEndpoint in REQUEST_OBJECTS_BY_ENDPOINT:
-        x = 0
     if _RequestEndpoint in REQUEST_OBJECTS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
 

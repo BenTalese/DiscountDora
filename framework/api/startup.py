@@ -10,8 +10,8 @@ from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 from flask_cors import CORS
 
-from framework.api.error_handlers import ERROR_HANDLERS
-from framework.api.middleware import MIDDLEWARE
+from framework.api.infrastructure.error_handlers import ERROR_HANDLERS
+from framework.api.infrastructure.middleware import MIDDLEWARE
 from framework.api.routes.merchants.merchant_router import MERCHANT_ROUTER
 from framework.api.routes.products.product_router import PRODUCT_ROUTER
 from framework.api.routes.stock_items.stock_item_router import \

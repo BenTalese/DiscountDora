@@ -13,7 +13,7 @@ from framework.api.routes.stock_items.get_stock_items_presenter import \
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
-STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/stockItems")
+STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/stock-items")
 
 # Filtering options:
 # Here in controller action

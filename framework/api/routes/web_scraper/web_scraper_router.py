@@ -12,7 +12,7 @@ from interface_adaptors.controllers.merchant_controller import \
     MerchantController
 from interface_adaptors.controllers.product_controller import ProductController
 
-WEB_SCRAPER_ROUTER = Blueprint("WEB_SCRAPER_ROUTER", __name__, url_prefix="/api/webScraper")
+WEB_SCRAPER_ROUTER = Blueprint("WEB_SCRAPER_ROUTER", __name__, url_prefix="/api/web-scraper")
 
 
 # TODO: Possibly just belongs on the product router?? why make this distinction (feels bad tbh, shows implementation details)

@@ -1,5 +1,5 @@
 import type { ScrapedProductOffer } from "@/models/ScrapedProductOffer";
-import AxiosHttpClient from "./AxiosHttpClient";
+import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
 
 export default class ProductApiService {
     private httpClient: AxiosHttpClient;
@@ -8,8 +8,8 @@ export default class ProductApiService {
         this.httpClient = new AxiosHttpClient();
     }
 
-    create = async (command: CreateProductCommand): Promise<void> =>
-        await this.httpClient.post<void>("/products", command);
+    create = async (command: CreateProductCommand): Promise<CreatedResponse> =>
+        await this.httpClient.post<CreatedResponse>("/products", command);
 
     searchByTerm = async (searchByTermQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.httpClient.post<ScrapedProductOffer[]>("/webScraper/search", searchByTermQuery);

@@ -18,7 +18,7 @@ WEB_SCRAPER_ROUTER = Blueprint("WEB_SCRAPER_ROUTER", __name__, url_prefix="/api/
 # TODO: Possibly just belongs on the product router?? why make this distinction (feels bad tbh, shows implementation details)
 # TODO Should use DI once web scraper is setup more clean, web scraper is a hosted service under the API
 @WEB_SCRAPER_ROUTER.route("/search", methods=["POST"])
-@request_object('create_product_async', SearchForProductQuery)
+@request_object('search_for_product_async', SearchForProductQuery)
 async def search_for_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)

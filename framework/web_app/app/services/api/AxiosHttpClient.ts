@@ -2,6 +2,10 @@ import axios, { Axios } from 'axios'
 
 export type HttpClientResponse<T> = T
 
+export type CreatedResponse = {
+    id: string;
+}
+
 export interface HttpClient {
     get<T = unknown>(path: string): Promise<HttpClientResponse<T>>
     post<T = unknown>(path: string, body: any): Promise<HttpClientResponse<T>>

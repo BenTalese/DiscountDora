@@ -43,18 +43,18 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     # TODO: add(*entities) (actually, why?...for this one file?)
 
     stock_item_one = generate_entity(StockItem)
-    stock_item_one.location = stock_location_one
+    stock_item_one.stock_location = stock_location_one
     stock_item_one.stock_level = stock_level_medium
     persistence.add(stock_item_one)
 
     stock_item_two = generate_entity(StockItem)
-    stock_item_two.location = stock_location_one
+    stock_item_two.stock_location = stock_location_one
     stock_item_two.stock_level = stock_level_medium
     persistence.add(stock_item_two)
     persistence.add(stock_item_one)
 
     stock_item_three = generate_entity(StockItem)
-    stock_item_three.location = stock_location_one
+    stock_item_three.stock_location = stock_location_one
     stock_item_three.stock_level = stock_level_medium
     persistence.add(stock_item_three)
 

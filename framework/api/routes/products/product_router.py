@@ -5,16 +5,19 @@ from varname import nameof
 from application.use_cases.products.create_product.create_product_input_port import \
     CreateProductInputPort
 from domain.entities.base_entity import EntityID
+from framework.api.infrastructure.request_object_decorator import request_object
 from framework.api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.api.routes.products.create_product_presenter import \
     CreateProductPresenter
-from framework.api.routes.products.get_products_presenter import GetProductsPresenter
+from framework.api.routes.products.get_products_presenter import \
+    GetProductsPresenter
 from interface_adaptors.controllers.product_controller import ProductController
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 @PRODUCT_ROUTER.route("", methods=["POST"])
+@request_object('create_product_async', CreateProductCommand)
 async def create_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)

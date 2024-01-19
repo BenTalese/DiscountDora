@@ -4,6 +4,6 @@ from domain.entities.base_entity import EntityID
 
 
 class CreateStockItemInputPort(InputPort):
-    location_id: EntityID = None
     name: str
-    stock_level_id: EntityID = None
+    stock_level_id: EntityID
+    stock_location_id: EntityID = None

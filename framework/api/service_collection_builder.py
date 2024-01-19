@@ -1,4 +1,8 @@
-from clapy import DependencyInjectorServiceProvider
+import importlib
+import inspect
+import os
+
+from clapy import Common, DependencyInjectorServiceProvider
 from dependency_injector import providers
 
 from application.infrastructure.configure_services import \
@@ -22,12 +26,31 @@ class ServiceCollectionBuilder:
         return self \
             .configure_persistence_services() \
             .configure_core_services() \
-            .register_presenters() \
+            .register_api_presenters() \
             .service_provider
 
-    def register_presenters(self):
-        self.service_provider.register_service(providers.Factory, CreateProductPresenter)
-        self.service_provider.register_service(providers.Factory, GetProductsPresenter)
+    def register_api_presenters(self):
+        _PresenterClasses = []
+
+        for _Root, _Directories, _Files in os.walk("framework/api/routes"):
+
+            DIR_EXCLUSIONS = [r"__pycache__"]
+            FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
+            Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
+            Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
+
+            for _File in _Files:
+                _Namespace = _Root.replace('/', '.').lstrip(".") + "." + _File[:-3]
+                _Module = importlib.import_module(_Namespace, package=None)
+                if _Module.__name__.endswith('presenter'):
+                    [_PresenterClasses.append((_Class))
+                     for _, _Class
+                     in inspect.getmembers(_Module, inspect.isclass)
+                     if _Class.__module__ == _Module.__name__]
+
+        for _Presenter in _PresenterClasses:
+            self.service_provider.register_service(providers.Factory, _Presenter)
+
         return self
 
     def configure_core_services(self):

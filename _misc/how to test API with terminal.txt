@@ -1,0 +1,17 @@
+Test an API endpoint via terminal:
+
+GET
+curl http://localhost:5000/api/get_endpoint
+
+POST
+curl -X POST -H "Content-Type: application/json" -d '{"<key>": "<value>"}' http://localhost:5000/api/<endpoint>
+curl -X POST -H "Content-Type: application/json" -d '{"name": "TEST NAME", "stock_level_id": "ec1e748e-20a6-48f1-a262-b1689fc86749", "stock_location_id": "ec1e748e-20a6-48f1-a262-b1689fc86749"}' http://localhost:5000/api/stockItems
+
+DELETE
+curl -X DELETE http://localhost:5000/api/delete_endpoint
+
+PATCH
+curl -X PATCH -H "Content-Type: application/json" -d '{"key1": "new_value1"}' http://localhost:5000/api/patch_endpoint
+
+PUT
+curl -X PUT -H "Content-Type: application/json" -d '{"key1": "updated_value1"}' http://localhost:5000/api/put_endpoint

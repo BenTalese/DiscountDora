@@ -6,7 +6,7 @@ from application.dtos.stock_item_dto import StockItemDto
 from application.services.iquerybuilder import IQueryBuilder
 from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import \
     IGetStockItemsOutputPort
-from framework.api.base_presenter import BasePresenter
+from framework.api.infrastructure.base_presenter import BasePresenter
 from framework.api.view_models.stock_item_view_model import \
     get_stock_item_view_model
 

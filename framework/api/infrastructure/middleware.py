@@ -2,22 +2,10 @@ from base64 import b64decode
 from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request
-from varname import nameof
 
-from framework.api.routes.products.create_product_command import \
-    CreateProductCommand
-from framework.api.routes.products.product_router import create_product_async
-from framework.api.routes.web_scraper.search_for_product_query import \
-    SearchForProductQuery
-from framework.api.routes.web_scraper.web_scraper_router import \
-    search_for_product_async
+from framework.api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
 
-REQUEST_OBJECTS = {
-    nameof(create_product_async): CreateProductCommand,
-    nameof(search_for_product_async): SearchForProductQuery
-}
-
-MIDDLEWARE = Blueprint('middleware', __name__)
+MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
 # TODO: ApiAuditing (make a metadata.db)
 
@@ -35,10 +23,10 @@ async def handle_cors_preflight_request():
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
-    if _RequestEndpoint in REQUEST_OBJECTS:
+    if _RequestEndpoint in REQUEST_OBJECTS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
 
-        for _AttributeName, _AttributeType in get_type_hints(REQUEST_OBJECTS[_RequestEndpoint]).items():
+        for _AttributeName, _AttributeType in get_type_hints(REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint]).items():
             _Data = _RequestData[_AttributeName]
 
             if _AttributeType is bytes:
@@ -46,7 +34,7 @@ async def deserialise_web_request():
 
             _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
-        _DeserialisedRequest = REQUEST_OBJECTS[_RequestEndpoint](**_RequestData)
+        _DeserialisedRequest = REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
         setattr(request, "request_object", _DeserialisedRequest)
 
 # @middleware.after_app_request

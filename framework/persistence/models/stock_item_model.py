@@ -22,11 +22,11 @@ class StockItemModel(db.Model):
         primary_key=True,
         default=uuid4)
 
-    location = relationship(
+    stock_location = relationship(
         StockLocationModel.__name__,
         lazy="noload")
 
-    location_id = Column(
+    stock_location_id = Column(
         UUIDType,
         ForeignKey(StockLocation.__name__ + ".id"),
         nullable = True)
@@ -52,7 +52,7 @@ class StockItemModel(db.Model):
     def to_entity(self) -> StockItem:
         return StockItem(
             id = EntityID(self.id),
-            location = self.location.to_entity() if self.location else None,
+            stock_location = self.stock_location.to_entity() if self.stock_location else None,
             name = self.name,
             stock_level = self.stock_level.to_entity() if self.stock_level else None,
             stock_level_last_updated = self.stock_level_last_updated)

@@ -1,5 +1,5 @@
-import type { StockItem } from "@/models/StockItem";
-import AxiosHttpClient from "./AxiosHttpClient";
+import type { CreateStockItemCommand, StockItem } from "@/models/StockItem";
+import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
@@ -8,23 +8,23 @@ export default class StockItemApiService {
         this.httpClient = new AxiosHttpClient();
     }
 
-    create = async (stockItem: StockItem): Promise<StockItem> =>
-        await this.httpClient.post<StockItem>("/stockItems", stockItem);
+    create = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>
+        await this.httpClient.post<CreatedResponse>("/stock-items", stockItem);
 
-    delete = async (stockItemId: number): Promise<void> =>
-        await this.httpClient.delete(`/stockItems/${stockItemId}`);
+    delete = async (stockItemID: string): Promise<void> =>
+        await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    get = async (stockItemId: number): Promise<StockItem> =>
-        await this.httpClient.get<StockItem>(`/stockItems/${stockItemId}`);
+    get = async (stockItemID: string): Promise<StockItem> =>
+        await this.httpClient.get<StockItem>(`/stock-items/${stockItemID}`);
 
     getAll = async (): Promise<StockItem[]> =>
-        await this.httpClient.get<StockItem[]>('/stockItems');
+        await this.httpClient.get<StockItem[]>('/stock-items');
 
     paginate = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
         await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
-            `/stockItems?page=${page}&pageSize=${pageSize}`
+            `/stock-items?page=${page}&pageSize=${pageSize}`
         );
 
-    update = async (stockItemId: number, stockItem: Partial<StockItem>): Promise<StockItem> =>
-        await this.httpClient.patch<StockItem>(`/stockItems/${stockItemId}`, stockItem);
+    update = async (stockItemId: string, stockItem: Partial<StockItem>): Promise<StockItem> =>
+        await this.httpClient.patch<StockItem>(`/stock-items/${stockItemId}`, stockItem);
 }

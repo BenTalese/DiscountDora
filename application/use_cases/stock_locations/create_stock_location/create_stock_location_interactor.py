@@ -9,7 +9,7 @@ from application.dtos.stock_location_dto import get_stock_location_dto
 from application.services.ipersistence_context import IPersistenceContext
 
 
-class CreateStockLocationInterator(Interactor):
+class CreateStockLocationInteractor(Interactor):
 
     def __init__(self, persistence_context: IPersistenceContext):
         self.persistence_context = persistence_context
@@ -23,4 +23,4 @@ class CreateStockLocationInterator(Interactor):
 
         self.persistence_context.add(stock_location)
 
-        output_port.present_stock_location_created_async(get_stock_location_dto(stock_location))
+        await output_port.present_stock_location_created_async(get_stock_location_dto(stock_location))

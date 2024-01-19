@@ -22,7 +22,7 @@ export default class StockItemApiService {
 
     paginate = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
         await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
-            `/stock-items?page=${page}&pageSize=${pageSize}`
+            `/stock-items?page=${page}&page-size=${pageSize}`
         );
 
     update = async (stockItemId: string, stockItem: Partial<StockItem>): Promise<StockItem> =>

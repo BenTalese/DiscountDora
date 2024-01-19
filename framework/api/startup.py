@@ -10,15 +10,7 @@ from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 from flask_cors import CORS
 
-from framework.api.infrastructure.error_handlers import ERROR_HANDLERS
-from framework.api.infrastructure.middleware import MIDDLEWARE
-from framework.api.routes.merchants.merchant_router import MERCHANT_ROUTER
-from framework.api.routes.products.product_router import PRODUCT_ROUTER
-from framework.api.routes.stock_items.stock_item_router import \
-    STOCK_ITEM_ROUTER
-from framework.api.routes.users.user_router import USER_ROUTER
-from framework.api.routes.web_scraper.web_scraper_router import \
-    WEB_SCRAPER_ROUTER
+from application.infrastructure.utils import get_attributes_ending_with
 from framework.api.service_collection_builder import ServiceCollectionBuilder
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
@@ -36,22 +28,15 @@ async def startup():
         app.config.update(json.load(_Configuration))
 
     await SqlAlchemyPersistenceContext.initialise(app)
-
-    app.register_blueprint(MIDDLEWARE)
-    app.register_blueprint(ERROR_HANDLERS)
-
-    register_routers(app)
     await SqlAlchemyPersistenceContext.test(app)
 
-
+    register_routers(app)
     app.run(debug = app.config.get('DEBUG'), use_reloader=False) # TODO: appsettings
 
 def register_routers(app: Flask):
-    app.register_blueprint(MERCHANT_ROUTER)
-    app.register_blueprint(PRODUCT_ROUTER)
-    app.register_blueprint(STOCK_ITEM_ROUTER)
-    app.register_blueprint(USER_ROUTER)
-    app.register_blueprint(WEB_SCRAPER_ROUTER)
+    _Routers = get_attributes_ending_with('ROUTER', 'framework/api/routes')
+    for _Router in _Routers:
+        app.register_blueprint(_Router)
 
 if __name__ == '__main__':
     asyncio.run(startup())

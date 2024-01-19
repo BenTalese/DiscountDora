@@ -7,6 +7,7 @@ from dependency_injector import providers
 
 from application.infrastructure.configure_services import \
     configure_application_services
+from application.infrastructure.utils import get_classes_ending_with
 from domain.infrastructure.configure_services import configure_domain_services
 from framework.api.routes.products.create_product_presenter import \
     CreateProductPresenter
@@ -30,25 +31,7 @@ class ServiceCollectionBuilder:
             .service_provider
 
     def register_api_presenters(self):
-        _PresenterClasses = []
-
-        for _Root, _Directories, _Files in os.walk("framework/api/routes"):
-
-            DIR_EXCLUSIONS = [r"__pycache__"]
-            FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
-            Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
-            Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
-
-            for _File in _Files:
-                _Namespace = _Root.replace('/', '.').lstrip(".") + "." + _File[:-3]
-                _Module = importlib.import_module(_Namespace, package=None)
-                if _Module.__name__.endswith('presenter'):
-                    [_PresenterClasses.append((_Class))
-                     for _, _Class
-                     in inspect.getmembers(_Module, inspect.isclass)
-                     if _Class.__module__ == _Module.__name__]
-
-        for _Presenter in _PresenterClasses:
+        for _Presenter in get_classes_ending_with('Presenter', 'framework/api/routes'):
             self.service_provider.register_service(providers.Factory, _Presenter)
 
         return self

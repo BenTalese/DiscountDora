@@ -30,32 +30,32 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_location_one = generate_entity(StockLocation)
     persistence.add(stock_location_one)
 
-    stock_level_high = generate_entity(StockLevel)
-    stock_level_high.description = "High"
-    stock_level_medium = generate_entity(StockLevel)
-    stock_level_medium.description = "Medium"
-    stock_level_low = generate_entity(StockLevel)
-    stock_level_low.description = "Low"
-    persistence.add(stock_level_high)
-    persistence.add(stock_level_medium)
-    persistence.add(stock_level_low)
+    stock_level_one = generate_entity(StockLevel)
+    stock_level_one.description = "Well-Stocked"
+    stock_level_two = generate_entity(StockLevel)
+    stock_level_two.description = "Low Stock"
+    stock_level_three = generate_entity(StockLevel)
+    stock_level_three.description = "Out of Stock"
+    persistence.add(stock_level_one)
+    persistence.add(stock_level_two)
+    persistence.add(stock_level_three)
     #session.add_all([x, y, z])
     # TODO: add(*entities) (actually, why?...for this one file?)
 
     stock_item_one = generate_entity(StockItem)
     stock_item_one.stock_location = stock_location_one
-    stock_item_one.stock_level = stock_level_medium
+    stock_item_one.stock_level = stock_level_one
     persistence.add(stock_item_one)
 
     stock_item_two = generate_entity(StockItem)
     stock_item_two.stock_location = stock_location_one
-    stock_item_two.stock_level = stock_level_medium
+    stock_item_two.stock_level = stock_level_two
     persistence.add(stock_item_two)
     persistence.add(stock_item_one)
 
     stock_item_three = generate_entity(StockItem)
     stock_item_three.stock_location = stock_location_one
-    stock_item_three.stock_level = stock_level_medium
+    stock_item_three.stock_level = stock_level_three
     persistence.add(stock_item_three)
 
     shopping_list_one = generate_entity(ShoppingList)

@@ -16,8 +16,6 @@ class CreateStockLocationInteractor(Interactor):
 
     async def execute_async(self, input_port: CreateStockLocationInputPort, output_port: ICreateStockLocationOutputPort):
         stock_location = StockLocation( 
-            #how does this work, the class() takes base entity,
-            #this is just python syntax for new() { description: ...}>
             description = input_port.description
         )
 

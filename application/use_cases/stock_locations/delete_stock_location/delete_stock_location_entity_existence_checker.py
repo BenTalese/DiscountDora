@@ -15,8 +15,5 @@ class DeleteStockLocationEntityExistenceChecker(EntityExistenceChecker):
 
     async def execute_async(self, input_port: DeleteStockLocationInputPort, output_port: IDeleteStockLocationOutputPort):
         if not self.entity_existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id):
-            # self.has_failures = True
-            # ^ is this dynamically defining this variable in this instance?
-            
-            return output_port.stock_location_not_found_async(input_port.stock_location_id)
-            #^ do we need to await? nothing else async is going on
+            self.has_failures = True
+            await output_port.stock_location_not_found_async(input_port.stock_location_id)

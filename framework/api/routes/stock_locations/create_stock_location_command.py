@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from uuid import UUID
 
 
 @dataclass
-class CreateStockLocationCommand():
+class CreateStockLocationCommand:
     description: str

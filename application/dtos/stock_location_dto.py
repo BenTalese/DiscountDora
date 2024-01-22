@@ -14,8 +14,3 @@ def get_stock_location_dto(stock_location: StockLocation) -> StockLocationDto:
         description = stock_location.description,
         stock_location_id = stock_location.id
     )
-
-#??????????
-# TODO: Map explicitly
-# def get_stock_location_dto(stock_location: StockLocation) -> StockLocationDto:
-#     return StockLocationDto(**asdict(stock_location))

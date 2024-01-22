@@ -5,7 +5,5 @@ from application.infrastructure.attribute_change_tracker import \
 from domain.entities.base_entity import EntityID
 
 class UpdateStockLocationInputPort(InputPort):
-    description = AttributeChangeTracker[str] = AttributeChangeTracker[str] #How restrictive do we want to be? Can they provide nothing?
-    stock_location_id = EntityID
-
-#Do we want validation against description? not empty / empty str
+    description: AttributeChangeTracker[str] = AttributeChangeTracker[str]
+    stock_location_id: EntityID

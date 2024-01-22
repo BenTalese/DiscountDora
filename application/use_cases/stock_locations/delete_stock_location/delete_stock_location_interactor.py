@@ -19,5 +19,4 @@ class DeleteStockLocationInteractor(Interactor):
 
         self.persistence_context.remove(_StockLocation)
 
-        # await
-        output_port.stock_location_deleted_async(input_port.stock_location_id)
+        await output_port.stock_location_deleted_async(input_port.stock_location_id)

@@ -7,7 +7,7 @@ from domain.entities.base_entity import EntityID
 class IDeleteStockLocationOutputPort(IOutputPort, ABC):
 
     @abstractmethod
-    async def stock_location_deleted_async(self, stock_location_id: EntityID) -> None: # Do i want to send out the ID?
+    async def stock_location_deleted_async(self, stock_location_id: EntityID) -> None:
         pass
 
     @abstractmethod

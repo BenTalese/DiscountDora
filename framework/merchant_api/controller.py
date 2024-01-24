@@ -6,12 +6,12 @@ from application.infrastructure.attribute_change_tracker import \
     AttributeChangeTracker
 from application.use_cases.products.update_product.update_product_input_port import \
     UpdateProductInputPort
-from framework.web_scraper import coles_logic, woolworths_logic
-from framework.web_scraper.get_merchants_presenter import GetMerchantsPresenter
-from framework.web_scraper.get_products_presenter import GetProductsPresenter
-from framework.web_scraper.models import ScrapedProductOffer
-from framework.web_scraper.session import create_session
-from framework.web_scraper.update_product_presenter import \
+from framework.merchant_api import coles_logic, woolworths_logic
+from framework.merchant_api.get_merchants_presenter import GetMerchantsPresenter
+from framework.merchant_api.get_products_presenter import GetProductsPresenter
+from framework.merchant_api.models import ScrapedProductOffer
+from framework.merchant_api.session import create_session
+from framework.merchant_api.update_product_presenter import \
     UpdateProductPresenter
 from interface_adaptors.controllers.merchant_controller import \
     MerchantController

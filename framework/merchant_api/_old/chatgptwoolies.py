@@ -2,7 +2,7 @@ import requests
 from dataclasses import dataclass
 from typing import Optional
 
-from framework.web_scraper.session import create_session
+from framework.merchant_api.session import create_session
 
 @dataclass
 class Product:

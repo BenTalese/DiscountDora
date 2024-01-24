@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel, Extra
 from typing_extensions import Literal
 
-from framework.web_scraper.session import create_session
+from framework.merchant_api.session import create_session
 
 _session = create_session()
 

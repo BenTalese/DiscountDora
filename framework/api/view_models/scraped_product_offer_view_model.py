@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from framework.web_scraper.models import ScrapedProductOffer
+from framework.merchant_api.models import ScrapedProductOffer
 
 
 @dataclass

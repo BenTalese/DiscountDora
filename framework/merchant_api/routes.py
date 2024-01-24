@@ -6,11 +6,12 @@ from application.infrastructure.attribute_change_tracker import \
     AttributeChangeTracker
 from application.use_cases.products.update_product.update_product_input_port import \
     UpdateProductInputPort
-from framework.merchant_api import coles_logic, woolworths_logic
+from framework.merchant_api.scrapers import coles_scraper
 from framework.merchant_api.get_merchants_presenter import GetMerchantsPresenter
 from framework.merchant_api.get_products_presenter import GetProductsPresenter
-from framework.merchant_api.models import ScrapedProductOffer
-from framework.merchant_api.session import create_session
+from framework.merchant_api.domain.scraped_product_offer import ScrapedProductOffer
+from framework.merchant_api.scrapers import woolworths_scraper
+from framework.merchant_api.infrastructure.session import create_session
 from framework.merchant_api.update_product_presenter import \
     UpdateProductPresenter
 from interface_adaptors.controllers.merchant_controller import \
@@ -32,12 +33,12 @@ class WebScraper:
             # TODO: Why do .get() here? seems you get connection time out without it when making request inside .search()
             _WoolworthsProductOffers = [ScrapedProductOffer.translate_woolworths_offer(_ProductOffer)
                                         for _ProductOffer
-                                        in woolworths_logic.search(_Session, search_term, start_page, start_page + 1, limit_results_to)]
+                                        in woolworths_scraper.search(_Session, search_term, start_page, start_page + 1, limit_results_to)]
 
             _Session.get('https://www.coles.com.au/')
             _ColesProductOffers = [ScrapedProductOffer.translate_coles_offer(_ProductOffer)
                                 for _ProductOffer
-                                in coles_logic.search(_Session, search_term, start_page, start_page + 1, limit_results_to)]
+                                in coles_scraper.search(_Session, search_term, start_page, start_page + 1, limit_results_to)]
 
             _ScrapedOffers = _WoolworthsProductOffers + _ColesProductOffers
             for _Offer in _ScrapedOffers:
@@ -61,7 +62,7 @@ class WebScraper:
             _Session.get('https://www.woolworths.com.au')
             _WoolworthsMerchantID = next(_Merchant.merchant_id for _Merchant in _GetMerchantsPresenter.merchants if _Merchant.name == "Woolworths")
             _WoolworthsProductOffers = [
-                (_Product, ScrapedProductOffer.translate_woolworths_offer(woolworths_logic.get_by_stockcode(_Session, _Product.merchant_stockcode)))
+                (_Product, ScrapedProductOffer.translate_woolworths_offer(woolworths_scraper.get_by_stockcode(_Session, _Product.merchant_stockcode)))
                 for _Product
                 in _GetProductsPresenter.products
                 if _Product.merchant_id == _WoolworthsMerchantID
@@ -70,7 +71,7 @@ class WebScraper:
             _Session.get('https://www.coles.com.au/')
             _ColesMerchantID = next(_Merchant.merchant_id for _Merchant in _GetMerchantsPresenter.merchants if _Merchant.name == "Coles")
             _ColesProductOffers = [
-                (_Product, ScrapedProductOffer.translate_coles_offer(coles_logic.get_by_stockcode(_Session, _Product.merchant_stockcode, _Product.name)))
+                (_Product, ScrapedProductOffer.translate_coles_offer(coles_scraper.get_by_stockcode(_Session, _Product.merchant_stockcode, _Product.name)))
                 for _Product
                 in _GetProductsPresenter.products
                 if _Product.merchant_id == _ColesMerchantID

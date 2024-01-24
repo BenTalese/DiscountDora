@@ -2,8 +2,8 @@ import urllib.parse
 
 from requests_cache import CachedSession
 
-from framework.merchant_api.models import WoolworthsProductOffer
-from framework.merchant_api.session import create_session
+from framework.merchant_api.domain.scraped_product_offer import WoolworthsProductOffer
+from framework.merchant_api.infrastructure.session import create_session
 
 
 def get_by_stockcode(session: CachedSession, stockcode: str):

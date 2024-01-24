@@ -3,8 +3,8 @@ import json
 from bs4 import BeautifulSoup
 from requests_cache import CachedSession
 
-from framework.merchant_api.models import ColesProductOffer
-from framework.merchant_api.session import create_session
+from framework.merchant_api.domain.scraped_product_offer import ColesProductOffer
+from framework.merchant_api.infrastructure.session import create_session
 
 
 def get_by_stockcode(session: CachedSession, stockcode: str, product_name: str):

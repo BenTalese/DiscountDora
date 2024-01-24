@@ -2,7 +2,7 @@ import requests
 from dataclasses import dataclass
 from typing import Optional
 
-from framework.merchant_api.session import create_session
+from framework.merchant_api.infrastructure.session import create_session
 
 @dataclass
 class Product:

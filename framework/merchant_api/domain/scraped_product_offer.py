@@ -1,43 +1,11 @@
 # TODO: Learn https://docs.pydantic.dev/2.3/usage/models/
 # TODO: Learn https://docs.pydantic.dev/2.3/errors/errors/
-import base64
 import re
 from dataclasses import dataclass
-from enum import Enum
-from typing import List, Literal, Optional, Tuple
+from framework.merchant_api.domain.coles_product_offer import ColesProductOffer
 
-import requests
-from pydantic import BaseModel
+from framework.merchant_api.domain.woolworths_product_offer import WoolworthsProductOffer
 
-
-class WoolworthsProductOffer(BaseModel, extra='allow'):
-    Brand: str # 'Lindt'
-    Stockcode: int
-    IsAvailable: bool
-    InstoreIsAvailable: bool
-    Name: str # 'Lindt Lindor Milk Chocolate Balls'
-    Price: float
-    InstorePrice: float
-    WasPrice: float
-    InstoreWasPrice: float
-    LargeImageFile: str # 'https://cdn0.woolworths.media/content/wowproductimages/large/114682.jpg'
-    PackageSize: str # '333G'
-
-class ColesProductOffer(BaseModel, extra='allow'):
-    class ImageInfo(BaseModel, extra='allow'):
-        uri: str
-
-    class Pricing(BaseModel, extra='allow'):
-        now: float
-        was: float
-
-    imageUris: List[ImageInfo]
-    id: int
-    name: str
-    brand: str
-    size: str # "352g"
-    availability: bool
-    pricing: Optional[Pricing] # None if `availability=False`
 
 # TODO: Possibly want price_was to be nullable (appears as 0 sometimes...)
 # TODO: Remove image from here, and put image on dto instead of image_uri

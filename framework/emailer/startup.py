@@ -77,7 +77,7 @@ async def process():
         # if _Recipients:
         #     _Offers = [ProductModel(**_OfferData)
         #                for _OfferData
-        #                in requests.get("http://127.0.0.1:5000/api/webScraper/offers").json()]
+        #                in requests.get("http://127.0.0.1:5000/api/products/offers").json()]
 
             # TODO: at the minimum, need to send in stock items against the products so they can be grouped by stock item
             # At some point will need shopping list information too

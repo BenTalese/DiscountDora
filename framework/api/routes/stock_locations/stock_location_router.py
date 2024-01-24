@@ -6,6 +6,8 @@ from application.use_cases.stock_locations.create_stock_location.create_stock_lo
     CreateStockLocationInputPort
 from application.use_cases.stock_locations.delete_stock_location.delete_stock_location_input_port import \
     DeleteStockLocationInputPort
+from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import \
+    UpdateStockLocationInputPort
 from framework.api.infrastructure.request_object_decorator import request_object
 from framework.api.routes.stock_locations.create_stock_location_command import \
     CreateStockLocationCommand
@@ -17,6 +19,10 @@ from framework.api.routes.stock_locations.delete_stock_location_command import \
     DeleteStockLocationCommand
 from framework.api.routes.stock_locations.delete_stock_location_presenter import \
     DeleteStockLocationPresenter
+from framework.api.routes.stock_locations.update_stock_location_command import \
+    UpdateStockLocationCommand
+from framework.api.routes.stock_locations.update_stock_location_presenter import \
+    UpdateStockLocationPresenter
 from interface_adaptors.controllers.stock_location_controller import \
     StockLocationController
 
@@ -62,4 +68,20 @@ async def get_stock_locations_async(query = None):
     _Presenter = GetStockLocationsPresenter()
 
     await _StockLocationController.get_stock_locations_async(_Presenter)
+    return _Presenter.result
+
+@STOCK_LOCATION_ROUTER.route("", methods=["PATCH"])
+@request_object("update_stock_location_async", DeleteStockLocationCommand)
+async def update_stock_location_async():
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
+    _Presenter: UpdateStockLocationPresenter = _ServiceProvider.get_service(UpdateStockLocationPresenter)
+
+    _Command: UpdateStockLocationCommand = current_app.request_object
+    _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
+        description = _Command.description,
+        stock_location_id = _Command.stock_location_id
+    )
+
+    await _StockLocationController.update_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result

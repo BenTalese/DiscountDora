@@ -17,6 +17,11 @@ from application.use_cases.stock_locations.get_stock_locations.get_stock_locatio
 from application.use_cases.stock_locations.get_stock_locations.iget_stock_locations_output_port import \
     IGetStockLocationsOutputPort
 
+from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import \
+    UpdateStockLocationInputPort
+from application.use_cases.stock_locations.update_stock_location.iupdate_stock_location_output_port import \
+    IUpdateStockLocationOutputPort
+
 from .base_controller import BaseController, DEFAULT_PIPELINE
 
 
@@ -41,3 +46,10 @@ class StockLocationController(BaseController):
             output_port: IGetStockLocationsOutputPort,
             pipeline_configuration: List[PipeConfiguration] = DEFAULT_PIPELINE):
         await self._use_case_invoker.invoke_usecase_async(GetStockLocationsInputPort(), output_port, pipeline_configuration)
+
+    async def update_stock_location_async(
+            self,
+            input_port: IUpdateStockLocationOutputPort,
+            output_port: IUpdateStockLocationOutputPort,
+            pipeline_configuration: List[PipeConfiguration] = DEFAULT_PIPELINE):
+        await self._use_case_invoker.invoke_usecase_async(input_port, output_port, pipeline_configuration)

@@ -31,16 +31,16 @@ class ServiceCollectionBuilder:
 
     def register_api_presenters(self):
         _PresenterClasses = []
-
-        for _Root, _Directories, _Files in os.walk("framework/api/routes"):
+        
+        for _Root, _Directories, _Files in os.walk(os.path.normpath("framework/api/routes")):
 
             DIR_EXCLUSIONS = [r"__pycache__"]
             FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
             Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
             Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
-
+            
             for _File in _Files:
-                _Namespace = _Root.replace('/', '.').lstrip(".") + "." + _File[:-3]
+                _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".") + "." + _File[:-3]
                 _Module = importlib.import_module(_Namespace, package=None)
                 if _Module.__name__.endswith('presenter'):
                     [_PresenterClasses.append((_Class))

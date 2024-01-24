@@ -25,6 +25,8 @@ from interface_adaptors.controllers.product_controller import ProductController
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
+
+#TODO: probably want to have map methods (e.g. get_create_product_input_port()) instead of doing mapping directly in route method
 @PRODUCT_ROUTER.route("")
 @PRODUCT_ROUTER.route("<query>")
 async def get_products_async(query = None):

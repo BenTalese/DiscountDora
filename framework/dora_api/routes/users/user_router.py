@@ -1,6 +1,6 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app
-from framework.api.routes.users.get_users_presenter import GetUsersPresenter
+from framework.dora_api.routes.users.get_users_presenter import GetUsersPresenter
 
 from interface_adaptors.controllers.user_controller import UserController
 

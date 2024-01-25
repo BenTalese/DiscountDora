@@ -10,16 +10,16 @@ from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 from flask_cors import CORS
 
-from framework.api.infrastructure.error_handlers import ERROR_HANDLERS
-from framework.api.infrastructure.middleware import MIDDLEWARE
-from framework.api.routes.merchants.merchant_router import MERCHANT_ROUTER
-from framework.api.routes.products.product_router import PRODUCT_ROUTER
-from framework.api.routes.stock_items.stock_item_router import \
+from framework.dora_api.infrastructure.error_handlers import ERROR_HANDLERS
+from framework.dora_api.infrastructure.middleware import MIDDLEWARE
+from framework.dora_api.routes.merchants.merchant_router import MERCHANT_ROUTER
+from framework.dora_api.routes.products.product_router import PRODUCT_ROUTER
+from framework.dora_api.routes.stock_items.stock_item_router import \
     STOCK_ITEM_ROUTER
-from framework.api.routes.users.user_router import USER_ROUTER
-from framework.api.routes.web_scraper.web_scraper_router import \
+from framework.dora_api.routes.users.user_router import USER_ROUTER
+from framework.dora_api.routes.web_scraper.web_scraper_router import \
     WEB_SCRAPER_ROUTER
-from framework.api.service_collection_builder import ServiceCollectionBuilder
+from framework.dora_api.service_collection_builder import ServiceCollectionBuilder
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
 

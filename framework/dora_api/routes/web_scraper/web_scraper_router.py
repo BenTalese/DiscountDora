@@ -1,11 +1,11 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify, request
-from framework.api.infrastructure.request_object_decorator import request_object
+from framework.dora_api.infrastructure.request_object_decorator import request_object
 
-from framework.api.routes.web_scraper.search_for_product_query import \
+from framework.dora_api.routes.web_scraper.search_for_product_query import \
     SearchForProductQuery
-from framework.api.view_models.product_view_model import get_product_view_model
-from framework.api.view_models.scraped_product_offer_view_model import \
+from framework.dora_api.view_models.product_view_model import get_product_view_model
+from framework.dora_api.view_models.scraped_product_offer_view_model import \
     get_scraped_product_offer_view_model
 from framework.merchant_api.routes import WebScraper
 from interface_adaptors.controllers.merchant_controller import \

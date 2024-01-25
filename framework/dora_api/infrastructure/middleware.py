@@ -3,7 +3,7 @@ from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request
 
-from framework.api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
+from framework.dora_api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 

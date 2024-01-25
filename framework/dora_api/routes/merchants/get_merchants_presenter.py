@@ -2,8 +2,8 @@ from application.dtos.merchant_dto import MerchantDto
 from application.services.iquerybuilder import IQueryBuilder
 from application.use_cases.merchants.get_merchants.iget_merchants_output_port import \
     IGetMerchantsOutputPort
-from framework.api.infrastructure.base_presenter import BasePresenter
-from framework.api.view_models.merchant_view_model import \
+from framework.dora_api.infrastructure.base_presenter import BasePresenter
+from framework.dora_api.view_models.merchant_view_model import \
     get_merchant_view_model
 
 

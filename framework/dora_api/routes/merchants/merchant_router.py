@@ -1,7 +1,7 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app
 
-from framework.api.routes.merchants.get_merchants_presenter import \
+from framework.dora_api.routes.merchants.get_merchants_presenter import \
     GetMerchantsPresenter
 from interface_adaptors.controllers.merchant_controller import \
     MerchantController

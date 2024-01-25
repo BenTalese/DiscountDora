@@ -11,7 +11,7 @@ from clapy import (IAuthenticationOutputPort, IAuthorisationOutputPort,
 from clapy.outputs import AuthorisationResult, ValidationResult
 from flask import Response, jsonify, url_for
 
-from framework.api.view_models.created_view_model import CreatedViewModel
+from framework.dora_api.view_models.created_view_model import CreatedViewModel
 
 
 @dataclass

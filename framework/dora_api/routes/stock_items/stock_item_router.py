@@ -3,12 +3,12 @@ from flask import Blueprint, current_app, request
 from varname import nameof
 from application.use_cases.stock_items.create_stock_item.create_stock_item_input_port import CreateStockItemInputPort
 from domain.entities.base_entity import EntityID
-from framework.api.infrastructure.request_object_decorator import request_object
-from framework.api.routes.products.product_router import PRODUCT_ROUTER, get_products_async
-from framework.api.routes.stock_items.create_stock_item_command import CreateStockItemCommand
-from framework.api.routes.stock_items.create_stock_item_presenter import CreateStockItemPresenter
+from framework.dora_api.infrastructure.request_object_decorator import request_object
+from framework.dora_api.routes.products.product_router import PRODUCT_ROUTER, get_products_async
+from framework.dora_api.routes.stock_items.create_stock_item_command import CreateStockItemCommand
+from framework.dora_api.routes.stock_items.create_stock_item_presenter import CreateStockItemPresenter
 
-from framework.api.routes.stock_items.get_stock_items_presenter import \
+from framework.dora_api.routes.stock_items.get_stock_items_presenter import \
     GetStockItemsPresenter
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController

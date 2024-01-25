@@ -28,7 +28,7 @@ from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
-from framework.api.view_models.stock_item_view_model import \
+from framework.dora_api.view_models.stock_item_view_model import \
     get_stock_item_view_model
 from framework.persistence.infrastructure.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,

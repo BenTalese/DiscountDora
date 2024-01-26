@@ -43,8 +43,8 @@ async def startup():
     register_routers(app)
     await SqlAlchemyPersistenceContext.test(app)
 
-
     app.run('localhost', 5170, app.config.get('DEBUG'), use_reloader=False) # TODO: appsettings
+
 
 def register_routers(app: Flask):
     app.register_blueprint(MERCHANT_ROUTER)
@@ -52,6 +52,7 @@ def register_routers(app: Flask):
     app.register_blueprint(STOCK_ITEM_ROUTER)
     app.register_blueprint(USER_ROUTER)
     app.register_blueprint(WEB_SCRAPER_ROUTER)
+
 
 if __name__ == '__main__':
     asyncio.run(startup())

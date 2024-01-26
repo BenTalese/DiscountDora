@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List
+from application.dtos.merchant_dto import MerchantDto, get_merchant_dto
 from application.dtos.product_offer_dto import ProductOfferDto, get_product_offer_dto
 
 from domain.entities.base_entity import EntityID
@@ -13,7 +14,7 @@ class ProductDto:
     historical_offers: List[ProductOfferDto]
     image: bytes
     is_available: bool
-    merchant_id: EntityID
+    merchant: MerchantDto
     merchant_stockcode: str
     name: str
     product_id: EntityID
@@ -28,7 +29,7 @@ def get_product_dto(product: Product) -> ProductDto:
         historical_offers = [get_product_offer_dto(offer) for offer in product.historical_offers],
         image = product.image,
         is_available = product.is_available,
-        merchant_id = product.merchant.id if product.merchant else None,
+        merchant = get_merchant_dto(product.merchant) if product.merchant else None,
         merchant_stockcode = product.merchant_stockcode,
         name = product.name,
         product_id = product.id,

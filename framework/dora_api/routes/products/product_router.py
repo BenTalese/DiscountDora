@@ -4,8 +4,8 @@ from varname import nameof
 
 from application.use_cases.products.create_product.create_product_input_port import \
     CreateProductInputPort
-from domain.entities.base_entity import EntityID
-from framework.dora_api.infrastructure.request_object_decorator import request_object
+from framework.dora_api.infrastructure.request_object_decorator import \
+    request_object
 from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.dora_api.routes.products.create_product_presenter import \
@@ -23,13 +23,14 @@ async def create_product_async():
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
     _Presenter: CreateProductPresenter = _ServiceProvider.get_service(CreateProductPresenter)
 
-    _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
     _Command: CreateProductCommand = request.request_object
+    _Presenter.request_object: CreateProductCommand = _Command
+    _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
     _InputPort = CreateProductInputPort(
         brand = _Command.brand,
         image = _Command.image,
         is_available = _Command.is_available,
-        merchant_id = EntityID(_Command.merchant_id),
+        merchant_name = _Command.merchant_name,
         merchant_stockcode = _Command.merchant_stockcode,
         name = _Command.name,
         price_now = _Command.price_now,

@@ -11,6 +11,7 @@ class ProductViewModel:
     image: bytes
     is_available: bool
     merchant_id: UUID
+    merchant_name: str
     merchant_stockcode: str
     name: str
     price_now: float
@@ -24,9 +25,10 @@ class ProductViewModel:
 def get_product_view_model(product: ProductDto) -> ProductViewModel:
     return ProductViewModel(
         brand = product.brand,
-        image = product.image.decode('utf-8'), # TODO: Is this the correct place to do this?
+        image = product.image.decode('utf-8'),
         is_available = product.is_available,
-        merchant_id = product.merchant_id.value if product.merchant_id else None,
+        merchant_id = product.merchant.merchant_id.value if product.merchant else None,
+        merchant_name = product.merchant.name if product.merchant else None,
         merchant_stockcode = product.merchant_stockcode,
         name = product.name,
         price_now = product.current_offer.price_now if product.current_offer else None,

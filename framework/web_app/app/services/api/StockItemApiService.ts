@@ -1,5 +1,6 @@
 import type { CreateStockItemCommand, StockItem } from "@/models/StockItem";
-import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
+import AxiosHttpClient from "./AxiosHttpClient";
+import type { CreatedResponse } from "./AxiosHttpClient"
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;

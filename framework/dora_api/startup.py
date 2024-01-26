@@ -17,8 +17,6 @@ from framework.dora_api.routes.products.product_router import PRODUCT_ROUTER
 from framework.dora_api.routes.stock_items.stock_item_router import \
     STOCK_ITEM_ROUTER
 from framework.dora_api.routes.users.user_router import USER_ROUTER
-from framework.dora_api.routes.web_scraper.web_scraper_router import \
-    WEB_SCRAPER_ROUTER
 from framework.dora_api.service_collection_builder import ServiceCollectionBuilder
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
@@ -51,7 +49,6 @@ def register_routers(app: Flask):
     app.register_blueprint(PRODUCT_ROUTER)
     app.register_blueprint(STOCK_ITEM_ROUTER)
     app.register_blueprint(USER_ROUTER)
-    app.register_blueprint(WEB_SCRAPER_ROUTER)
 
 
 if __name__ == '__main__':

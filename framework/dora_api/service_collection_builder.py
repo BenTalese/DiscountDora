@@ -32,7 +32,7 @@ class ServiceCollectionBuilder:
     def register_api_presenters(self):
         _PresenterClasses = []
 
-        for _Root, _Directories, _Files in os.walk("framework/api/routes"):
+        for _Root, _Directories, _Files in os.walk("framework/dora_api/routes"):
 
             DIR_EXCLUSIONS = [r"__pycache__"]
             FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]

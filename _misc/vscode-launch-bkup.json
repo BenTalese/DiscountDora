@@ -2,12 +2,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "API",
+            "name": "DAPI",
             "type": "python",
             "request": "launch",
-            "program": "framework/api/startup.py",
+            "program": "framework/dora_api/startup.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
+        },
+        {
+            "name": "MAPI",
+            "type": "python",
+            "request": "launch",
+            "program": "framework/merchant_api/startup.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         },
         {
             "name": "Emailer",
@@ -47,11 +55,19 @@
     "compounds": [
         {
             "name": "Run All",
-            "configurations": ["API", "Web App", "Emailer"]
+            "configurations": ["DAPI", "MAPI", "Web App", "Emailer"]
         },
         {
-            "name": "Run Web App + API",
-            "configurations": ["API", "Web App"]
+            "name": "Run Web App + DAPI",
+            "configurations": ["DAPI", "Web App"]
+        },
+        {
+            "name": "Run Web App + MAPI",
+            "configurations": ["MAPI", "Web App"]
+        },
+        {
+            "name": "Run Web App + DAPI + MAPI",
+            "configurations": ["DAPI", "MAPI", "Web App"]
         }
     ]
 }

@@ -6,7 +6,7 @@ export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient(5070);
+        this.httpClient = new AxiosHttpClient(5170);
     }
 
     create = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>

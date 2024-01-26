@@ -5,7 +5,7 @@ export default class MerchantApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient(5070);
+        this.httpClient = new AxiosHttpClient(5170);
     }
 
     getAll = async (): Promise<Merchant[]> =>

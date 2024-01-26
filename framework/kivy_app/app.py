@@ -3,7 +3,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 
+
 class MainApp(App):
+    from separate_test import on_solution
+
     def build(self):
         self.operators = ["/", "*", "+", "-"]
         self.last_was_operator = None
@@ -58,12 +61,6 @@ class MainApp(App):
                 self.solution.text = new_text
         self.last_button = button_text
         self.last_was_operator = self.last_button in self.operators
-
-    def on_solution(self, instance):
-        text = self.solution.text
-        if text:
-            solution = str(eval(self.solution.text))
-            self.solution.text = solution
 
 
 if __name__ == "__main__":

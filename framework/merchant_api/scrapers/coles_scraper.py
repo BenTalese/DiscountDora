@@ -3,12 +3,11 @@ import json
 from bs4 import BeautifulSoup
 from requests_cache import CachedSession
 
-from framework.merchant_api.domain.scraped_product_offer import ColesProductOffer
-from framework.merchant_api.infrastructure.session import create_session
+from framework.merchant_api.domain.entities.coles_product_offer import \
+    ColesProductOffer
 
 
 def get_by_stockcode(session: CachedSession, stockcode: str, product_name: str):
-    # _Response = session.get(f'https://www.coles.com.au/product/{stockcode}')
     _Response = session.get('https://www.coles.com.au/')
     _Soup = BeautifulSoup(_Response.text, features="html.parser")
     _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']

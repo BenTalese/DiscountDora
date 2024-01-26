@@ -2,9 +2,13 @@
 # TODO: Learn https://docs.pydantic.dev/2.3/errors/errors/
 import re
 from dataclasses import dataclass
-from framework.merchant_api.domain.coles_product_offer import ColesProductOffer
 
-from framework.merchant_api.domain.woolworths_product_offer import WoolworthsProductOffer
+from framework.merchant_api.domain.entities.coles_product_offer import \
+    ColesProductOffer
+from framework.merchant_api.domain.entities.woolworths_product_offer import \
+    WoolworthsProductOffer
+from framework.merchant_api.domain.enumerations.supported_merchant import \
+    SupportedMerchant
 
 
 # TODO: Possibly want price_was to be nullable (appears as 0 sometimes...)
@@ -62,7 +66,7 @@ class ScrapedProductOffer:
             image = None,
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
-            merchant = "Woolworths",
+            merchant = SupportedMerchant.WOOLWORTHS.value,
             merchant_stockcode = offer.Stockcode,
             name = offer.Name,
             price_now = offer.Price or offer.InstorePrice,
@@ -80,7 +84,7 @@ class ScrapedProductOffer:
             image = None,
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
-            merchant = "Coles",
+            merchant = SupportedMerchant.COLES.value,
             merchant_stockcode = offer.id,
             name = offer.name,
             price_now = offer.pricing.now if offer.pricing else None,

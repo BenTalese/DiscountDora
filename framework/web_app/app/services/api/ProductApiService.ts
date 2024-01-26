@@ -13,7 +13,7 @@ export default class ProductApiService {
         await this.httpClient.post<CreatedResponse>("/products", command);
 
     searchByTerm = async (searchByTermQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
-        await this.httpClient.post<ScrapedProductOffer[]>("/products/search", searchByTermQuery);
+        await this.httpClient.post<ScrapedProductOffer[]>("/web-scraper/search", searchByTermQuery);
 }
 
 export type SearchByTermQuery = {

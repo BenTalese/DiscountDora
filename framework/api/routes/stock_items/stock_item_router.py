@@ -23,17 +23,6 @@ STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/st
 # Pass to base presenter
 # Middleware after_app_request
 
-@STOCK_ITEM_ROUTER.route("")
-@STOCK_ITEM_ROUTER.route("<query>")
-async def get_stock_items_async(query = None):
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
-    _Presenter = GetStockItemsPresenter()
-
-    await _StockItemController.get_stock_items_async(_Presenter)
-    return _Presenter.result
-
-
 @STOCK_ITEM_ROUTER.route("", methods=["POST"])
 @request_object('create_stock_item_async', CreateStockItemCommand)
 async def create_stock_item_async():
@@ -52,7 +41,6 @@ async def create_stock_item_async():
     await _StockItemController.create_stock_item_async(_InputPort, _Presenter)
     return _Presenter.result
 
-
 @STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["DELETE"])
 async def delete_stock_item_async(stock_item_id):
     _ServiceProvider: IServiceProvider = current_app.service_provider
@@ -63,4 +51,14 @@ async def delete_stock_item_async(stock_item_id):
     _InputPort.stock_item_id = EntityID(stock_item_id)
 
     await _StockItemController.delete_stock_item_async(_InputPort, _Presenter)
+    return _Presenter.result
+
+@STOCK_ITEM_ROUTER.route("")
+@STOCK_ITEM_ROUTER.route("<query>")
+async def get_stock_items_async(query = None):
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
+    _Presenter = GetStockItemsPresenter()
+
+    await _StockItemController.get_stock_items_async(_Presenter)
     return _Presenter.result

@@ -6,7 +6,7 @@ export default class ProductApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient();
+        this.httpClient = new AxiosHttpClient(5070);
     }
 
     create = async (command: CreateProductCommand): Promise<CreatedResponse> =>

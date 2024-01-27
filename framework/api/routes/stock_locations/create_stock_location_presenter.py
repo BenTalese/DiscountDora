@@ -15,4 +15,4 @@ class CreateStockLocationPresenter(BasePresenter, ICreateStockLocationOutputPort
 
     async def present_stock_location_created_async(self, stock_location: StockLocationDto):
         await self.persistence_context.save_changes_async()
-        await self.created_async(CreatedViewModel(stock_location.stock_location_id))
+        await self.created_async(CreatedViewModel(stock_location.stock_location_id.value))

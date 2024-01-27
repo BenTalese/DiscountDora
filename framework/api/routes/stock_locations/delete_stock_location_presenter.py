@@ -14,6 +14,5 @@ class DeleteStockLocationPresenter(BasePresenter, IDeleteStockLocationOutputPort
         await self.persistence_context.save_changes_async()
         await self.no_content_async()
 
-    #understand how this is defined
     async def stock_location_not_found_async(self, stock_location_id : EntityID):
         await self.entity_existence_failure_async(nameof(stock_location_id), stock_location_id.value)

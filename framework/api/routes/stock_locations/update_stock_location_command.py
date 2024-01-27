@@ -5,5 +5,4 @@ from application.infrastructure.attribute_change_tracker import \
 
 @dataclass
 class UpdateStockLocationCommand:
-    description: AttributeChangeTracker[str] = AttributeChangeTracker[str] 
-    stock_location_id: UUID
+    description: AttributeChangeTracker[str] = AttributeChangeTracker[str]()

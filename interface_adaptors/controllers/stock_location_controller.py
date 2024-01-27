@@ -49,7 +49,7 @@ class StockLocationController(BaseController):
 
     async def update_stock_location_async(
             self,
-            input_port: IUpdateStockLocationOutputPort,
+            input_port: UpdateStockLocationInputPort,
             output_port: IUpdateStockLocationOutputPort,
             pipeline_configuration: List[PipeConfiguration] = DEFAULT_PIPELINE):
         await self._use_case_invoker.invoke_usecase_async(input_port, output_port, pipeline_configuration)

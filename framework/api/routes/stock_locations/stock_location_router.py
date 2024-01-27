@@ -67,18 +67,17 @@ async def get_stock_locations_async(query = None):
     await _StockLocationController.get_stock_locations_async(_Presenter)
     return _Presenter.result
 
-@STOCK_LOCATION_ROUTER.route("", methods=["PATCH"])
-@request_object("update_stock_location_async", DeleteStockLocationCommand)
-async def update_stock_location_async():
+@STOCK_LOCATION_ROUTER.route("/<stock_location_id>", methods=["PATCH"])
+@request_object("update_stock_location_async", UpdateStockLocationCommand)
+async def update_stock_location_async(stock_location_id):
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
     _Presenter: UpdateStockLocationPresenter = _ServiceProvider.get_service(UpdateStockLocationPresenter)
 
-    _Command: UpdateStockLocationCommand = current_app.request_object
+    _Command: UpdateStockLocationCommand = request.request_object
     _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
-        description = _Command.description,
-        stock_location_id = _Command.stock_location_id
-    )
+        description = AttributeChangeTracker(_Command.description),
+        stock_location_id = EntityID(stock_location_id))
 
     await _StockLocationController.update_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result

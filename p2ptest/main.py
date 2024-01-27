@@ -1,4 +1,5 @@
 # main.py
+import platform
 import select
 import socket
 import threading
@@ -7,6 +8,7 @@ from kivy.app import App
 from kivy.clock import Clock, mainthread
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
@@ -94,7 +96,7 @@ class P2PApp(App):
         self.server_socket.bind(('0.0.0.0', 12345))
         self.server_socket.listen(1)
         try:
-            self.client_socket, addr = self.server_socket.accept()
+            self.client_socket, addr = self.server_socket.accept()                      # FIXME! It gets to here and waits, then upon connect request resumes and makes the connection successful, bypassing all the other code
             self.start_receive_data_clock()  # Start periodic checking for new data
             self.server_running = True
             self.update_connection_status('Connection successful!', (0, 1, 0, 1))  # Green color
@@ -110,15 +112,50 @@ class P2PApp(App):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             # Set a connection timeout of 5 seconds
-            self.client_socket.settimeout(5)
+            # self.client_socket.settimeout(5)
             self.client_socket.connect((peer_ip, 12345))
             self.start_receive_data_clock()  # Start periodic checking for new data
-            self.update_connection_status('Connection successful!', (0, 1, 0, 1))  # Green color
-            self.update_peer_list()  # Update the list of peer addresses
+
+            # Send a connection request to the target device
+            device_info = f"{platform.system()} {platform.release()} - {platform.machine()}"
+            self.send_data(f"CONNECTION_REQUEST:{device_info}")
+
+            response = self.wait_for_connection_response()
+
+            if response == "ACCEPT":
+                # Continue with connection setup logic here
+                self.update_connection_status('Connection successful!', (0, 1, 0, 1))  # Green color
+                self.update_peer_list()  # Update the list of peer addresses
+                #self.send_device_info()  # Send device info to the connected peer
+            elif response == "DECLINE":
+                self.update_connection_status('Connection declined', (1, 0, 0, 1))  # Red color
+            else:
+                self.update_connection_status('Connection timed out', (1, 1, 0, 1))  # Yellow color
+
         except socket.timeout:
             self.update_connection_status('Connection timed out', (1, 1, 0, 1))  # Yellow color
         except socket.error:
             self.update_connection_status('Connection failed', (1, 0, 0, 1))  # Red color
+
+    def wait_for_connection_response(self):
+        # Function to wait for the user's response to the connection request
+        # For simplicity, you can use a simple variable to store the response
+
+        # Reset the response variable before waiting for a new response
+        self.connect_request_response = None
+
+        # Show a popup with accept and decline buttons
+        # self.show_connection_request_popup()
+
+        # Wait for the user's response
+        while True:
+            if self.connect_request_response:
+                response = self.connect_request_response
+                self.connect_request_response = None
+                return response
+
+    def dismiss_popup(self):
+        self.connect_request_popup.dismiss()
 
     def start_receive_data_clock(self):
         if not self.receive_data_clock_event:
@@ -147,13 +184,75 @@ class P2PApp(App):
             for sock in ready_to_read:
                 data = sock.recv(1024).decode()
                 if data:
-                    # Display received message in the box
-                    received_message_label = Label(text=data, size_hint_y=None, height=30)
-                    self.messages_layout.add_widget(received_message_label)
-                    # Scroll to the latest message
-                    self.messages_box.scroll_y = 0
+                    # Check if the received data is a connection request
+                    if data.startswith("CONNECTION_REQUEST:"):
+                        _, device_info = data.split(":", 1)
+                        self.handle_connection_request(device_info)
+                    elif data.startswith("CONNECTION_RESPONSE:"):
+                        _, response = data.split(":", 1)
+                        self.connect_request_response = response
+                    else:
+                        # Display received message in the box
+                        received_message_label = Label(text=data, size_hint_y=None, height=30)
+                        self.messages_layout.add_widget(received_message_label)
+                        # Scroll to the latest message
+                        self.messages_box.scroll_y = 0
         except socket.error:
             self.stop_receive_data_clock()  # Stop periodic checking for new data
+
+    # TODO: THIS IS THE NEW POPUP
+    @mainthread
+    def handle_connection_request(self, device_info):
+        content = BoxLayout(orientation='vertical', spacing=10, size_hint=(None, None), size=(300, 200))
+        content.add_widget(Label(text="Connection request received", size_hint_y=None, height=50))
+
+        # Accept button callback
+        def accept_connection(instance):
+            self.connect_request_response = "ACCEPT"
+            self.dismiss_popup()
+
+        # Decline button callback
+        def decline_connection(instance):
+            self.connect_request_response = "DECLINE"
+            self.dismiss_popup()
+
+        accept_button = Button(text='Accept', on_press=accept_connection, size_hint_y=None, height=50)
+        decline_button = Button(text='Decline', on_press=decline_connection, size_hint_y=None, height=50)
+
+        content.add_widget(accept_button)
+        content.add_widget(decline_button)
+
+        self.connect_request_popup = Popup(title='Connection Request', content=content, size_hint=(None, None), size=(300, 200))
+        self.connect_request_popup.open()
+
+    # TODO: THIS IS THE OLD POPUP
+    # @mainthread
+    # def handle_connection_request(self, device_info):
+    #     # Function to handle the incoming connection request and show the popup
+    #     peer_ip = self.client_socket.getpeername()[0]
+    #     content = BoxLayout(orientation='vertical', spacing=10)
+    #     content.add_widget(Label(text=f"Connection request from {peer_ip}:\n{device_info}"))
+
+    #     # Accept button callback
+    #     def accept_connection(instance):
+    #         self.dismiss_popup()
+    #         self.send_data("CONNECTION_RESPONSE:ACCEPT")
+
+    #         # Continue with the connection setup logic here
+
+    #     # Decline button callback
+    #     def decline_connection(instance):
+    #         self.dismiss_popup()
+    #         self.send_data("CONNECTION_RESPONSE:DECLINE")
+
+    #     accept_button = Button(text='Accept', on_press=accept_connection)
+    #     decline_button = Button(text='Decline', on_press=decline_connection)
+
+    #     content.add_widget(accept_button)
+    #     content.add_widget(decline_button)
+
+    #     self.connect_request_popup = Popup(title='Connection Request', content=content, size_hint=(None, None), size=(300, 200))
+    #     self.connect_request_popup.open()
 
     def get_ip_address(self):
         try:
@@ -184,3 +283,45 @@ class P2PApp(App):
 
 if __name__ == '__main__':
     P2PApp().run()
+
+
+
+# def send_device_info(self):
+#         device_info = f"{platform.system()} {platform.release()} - {platform.machine()}"
+#         self.send_data(f"DEVICE_INFO:{device_info}")
+
+# encryption example:
+# $ pip install pynacl
+# from nacl.public import PrivateKey, PublicKey, Box
+
+# def generate_key_pair():
+#     # Generate a key pair for public-key cryptography
+#     private_key = PrivateKey.generate()
+#     public_key = private_key.public_key
+#     return private_key, public_key
+
+# def encrypt_message(message, sender_private_key, recipient_public_key):
+#     # Create a Box for secure communication between sender and recipient
+#     box = Box(sender_private_key, recipient_public_key)
+#     # Encrypt the message
+#     encrypted_message = box.encrypt(message.encode())
+#     return encrypted_message
+
+# def decrypt_message(encrypted_message, sender_public_key, recipient_private_key):
+#     # Create a Box for secure communication between sender and recipient
+#     box = Box(recipient_private_key, sender_public_key)
+#     # Decrypt the message
+#     decrypted_message = box.decrypt(encrypted_message)
+#     return decrypted_message.decode()
+
+# # Example usage
+# alice_private_key, alice_public_key = generate_key_pair()
+# bob_private_key, bob_public_key = generate_key_pair()
+
+# # Alice sends an encrypted message to Bob
+# message_to_bob = "Hello Bob, this is Alice!"
+# encrypted_message = encrypt_message(message_to_bob, alice_private_key, bob_public_key)
+
+# # Bob decrypts the message
+# decrypted_message = decrypt_message(encrypted_message, alice_public_key, bob_private_key)
+# print(f"Bob received: {decrypted_message}")

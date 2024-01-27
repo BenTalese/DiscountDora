@@ -1,0 +1,25 @@
+BoxLayout:
+    orientation: 'vertical'
+    padding: 10
+
+    TextInput:
+        id: ip_input
+        hint_text: "Enter peer's IP Address"
+        multiline: False
+
+    Button:
+        text: 'Connect'
+        on_press: app.connect_to_peer(self)
+
+    TextInput:
+        id: message_input
+        hint_text: 'Type your message'
+        multiline: False
+
+    Button:
+        text: 'Send'
+        on_press: app.send_message(self)
+
+    Label:
+        id: chat_label
+        text: 'Chat:\n'

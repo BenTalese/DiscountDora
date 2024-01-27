@@ -44,3 +44,4 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+*.apk

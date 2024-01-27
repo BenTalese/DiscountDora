@@ -24,8 +24,14 @@ class P2PApp(App):
 
         self.layout = BoxLayout(orientation='vertical', spacing=10)
 
-        # Label to display connection status
-        self.connection_status_label = Label(text='', size_hint=(1, None), height=30, color=(1, 1, 1, 1))
+        # Status bar at the top
+        self.status_bar = BoxLayout(orientation='horizontal', size_hint=(1, None), height=30, spacing=10)
+        self.connection_status_label = Label(text='', color=(1, 1, 1, 1))
+        self.ip_address_label = Label(text='', color=(1, 1, 1, 1))
+        self.peers_label = Label(text='', color=(1, 1, 1, 1))
+        self.status_bar.add_widget(self.connection_status_label)
+        self.status_bar.add_widget(self.ip_address_label)
+        self.status_bar.add_widget(self.peers_label)
 
         # Draw a line as a visual separator
         with self.layout.canvas.before:
@@ -43,7 +49,7 @@ class P2PApp(App):
         self.btn_start_server = Button(text='Start Server', on_press=self.start_server, disabled=False)
         self.btn_send = Button(text='Send', on_press=self.send_message)
 
-        self.layout.add_widget(self.connection_status_label)
+        self.layout.add_widget(self.status_bar)
         self.layout.add_widget(self.messages_box)
         self.layout.add_widget(self.input_ip)
         self.layout.add_widget(self.btn_connect)
@@ -55,6 +61,8 @@ class P2PApp(App):
         self.client_socket = None
         self.server_running = False
 
+        self.peers = []
+
         self.receive_data_clock_event = None  # Store the clock event for later cancellation
 
         return self.layout
@@ -63,6 +71,14 @@ class P2PApp(App):
     def update_connection_status(self, status, color):
         self.connection_status_label.text = status
         self.connection_status_label.color = color
+
+    @mainthread
+    def update_ip_address(self, ip_address):
+        self.ip_address_label.text = f'IP: {ip_address}'
+
+    @mainthread
+    def update_peers(self, peers):
+        self.peers_label.text = f'Peers: {", ".join(peers)}'
 
     def connect_to_peer(self, instance):
         peer_ip = self.input_ip.text
@@ -82,6 +98,7 @@ class P2PApp(App):
             self.start_receive_data_clock()  # Start periodic checking for new data
             self.server_running = True
             self.update_connection_status('Connection successful!', (0, 1, 0, 1))  # Green color
+            self.update_peer_list()  # Update the list of peer addresses
         except socket.timeout:
             self.update_connection_status('Connection timed out', (1, 1, 0, 1))  # Yellow color
             self.btn_start_server.disabled = False
@@ -97,6 +114,7 @@ class P2PApp(App):
             self.client_socket.connect((peer_ip, 12345))
             self.start_receive_data_clock()  # Start periodic checking for new data
             self.update_connection_status('Connection successful!', (0, 1, 0, 1))  # Green color
+            self.update_peer_list()  # Update the list of peer addresses
         except socket.timeout:
             self.update_connection_status('Connection timed out', (1, 1, 0, 1))  # Yellow color
         except socket.error:
@@ -137,6 +155,26 @@ class P2PApp(App):
         except socket.error:
             self.stop_receive_data_clock()  # Stop periodic checking for new data
 
+    def get_ip_address(self):
+        try:
+            # Use a dummy socket to get the local IP address
+            dummy_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            dummy_socket.connect(('8.8.8.8', 80))
+            local_ip_address = dummy_socket.getsockname()[0]
+            dummy_socket.close()
+            print(local_ip_address)
+            return local_ip_address
+        except socket.error:
+            return 'Unknown'
+
+    def update_peer_list(self):
+        # Update the list of peer addresses
+        if self.server_running:
+            peers = [self.get_ip_address()]
+            if self.client_socket:
+                peers.append(self.client_socket.getpeername()[0])
+            self.peers = peers
+            self.update_peers(peers)
 
     def on_stop(self):
         if self.server_socket:

@@ -1,12 +1,11 @@
 from clapy import Interactor
 
-from .create_stock_location_input_port import CreateStockLocationInputPort
-from .icreate_stock_location_output_port import ICreateStockLocationOutputPort
-
-from domain.entities.stock_location import StockLocation
-
 from application.dtos.stock_location_dto import get_stock_location_dto
 from application.services.ipersistence_context import IPersistenceContext
+from domain.entities.stock_location import StockLocation
+
+from .create_stock_location_input_port import CreateStockLocationInputPort
+from .icreate_stock_location_output_port import ICreateStockLocationOutputPort
 
 
 class CreateStockLocationInteractor(Interactor):

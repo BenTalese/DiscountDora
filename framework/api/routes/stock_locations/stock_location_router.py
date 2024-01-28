@@ -1,7 +1,7 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, request
 from varname import nameof
-from domain.entities.base_entity import EntityID
+
 from application.infrastructure.attribute_change_tracker import \
     AttributeChangeTracker
 from application.use_cases.stock_locations.create_stock_location.create_stock_location_input_port import \
@@ -10,22 +10,23 @@ from application.use_cases.stock_locations.delete_stock_location.delete_stock_lo
     DeleteStockLocationInputPort
 from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import \
     UpdateStockLocationInputPort
-from framework.api.infrastructure.request_object_decorator import request_object
+from domain.entities.base_entity import EntityID
+from framework.api.infrastructure.request_object_decorator import \
+    request_object
 from framework.api.routes.stock_locations.create_stock_location_command import \
     CreateStockLocationCommand
 from framework.api.routes.stock_locations.create_stock_location_presenter import \
     CreateStockLocationPresenter
-from framework.api.routes.stock_locations.get_stock_locations_presenter import \
-     GetStockLocationsPresenter
 from framework.api.routes.stock_locations.delete_stock_location_presenter import \
     DeleteStockLocationPresenter
+from framework.api.routes.stock_locations.get_stock_locations_presenter import \
+    GetStockLocationsPresenter
 from framework.api.routes.stock_locations.update_stock_location_command import \
     UpdateStockLocationCommand
 from framework.api.routes.stock_locations.update_stock_location_presenter import \
     UpdateStockLocationPresenter
 from interface_adaptors.controllers.stock_location_controller import \
     StockLocationController
-
 
 STOCK_LOCATION_ROUTER = Blueprint("STOCK_LOCATION_ROUTER", __name__,  url_prefix="/api/stock-locations")
 

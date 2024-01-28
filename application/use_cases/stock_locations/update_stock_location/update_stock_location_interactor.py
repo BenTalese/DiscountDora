@@ -1,8 +1,11 @@
 from clapy import Interactor
-from .update_stock_location_input_port import UpdateStockLocationInputPort
-from .iupdate_stock_location_output_port import IUpdateStockLocationOutputPort
+
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_location import StockLocation
+
+from .iupdate_stock_location_output_port import IUpdateStockLocationOutputPort
+from .update_stock_location_input_port import UpdateStockLocationInputPort
+
 
 class UpdateStockLocationInteractor(Interactor):
 

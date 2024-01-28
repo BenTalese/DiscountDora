@@ -4,6 +4,7 @@ from clapy import IOutputPort
 
 from domain.entities.base_entity import EntityID
 
+
 class IDeleteStockLocationOutputPort(IOutputPort, ABC):
 
     @abstractmethod

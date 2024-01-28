@@ -1,9 +1,11 @@
 from varname import nameof
-from domain.entities.base_entity import EntityID
-from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port \
-    import IDeleteStockLocationOutputPort
-from framework.api.infrastructure.base_presenter import BasePresenter
+
 from application.services.ipersistence_context import IPersistenceContext
+from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port import \
+    IDeleteStockLocationOutputPort
+from domain.entities.base_entity import EntityID
+from framework.api.infrastructure.base_presenter import BasePresenter
+
 
 class DeleteStockLocationPresenter(BasePresenter, IDeleteStockLocationOutputPort):
 

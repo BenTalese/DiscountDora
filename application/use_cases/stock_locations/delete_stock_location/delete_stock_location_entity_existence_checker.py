@@ -1,12 +1,13 @@
 from clapy import EntityExistenceChecker
 
+from application.services.ientity_existence_checker import \
+    IEntityExistenceChecker
+from application.use_cases.stock_locations.delete_stock_location.delete_stock_location_input_port import \
+    DeleteStockLocationInputPort
+from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port import \
+    IDeleteStockLocationOutputPort
 from domain.entities.stock_location import StockLocation
 
-from application.services.ientity_existence_checker import IEntityExistenceChecker
-from application.use_cases.stock_locations.delete_stock_location.delete_stock_location_input_port \
-    import DeleteStockLocationInputPort
-from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port \
-    import IDeleteStockLocationOutputPort
 
 class DeleteStockLocationEntityExistenceChecker(EntityExistenceChecker):
     

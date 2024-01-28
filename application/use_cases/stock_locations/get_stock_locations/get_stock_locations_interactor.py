@@ -1,8 +1,8 @@
 from clapy import Interactor
 
-from domain.entities.stock_location import StockLocation
 from application.dtos.stock_location_dto import get_stock_location_dto
 from application.services.ipersistence_context import IPersistenceContext
+from domain.entities.stock_location import StockLocation
 
 from .get_stock_locations_input_port import GetStockLocationsInputPort
 from .iget_stock_locations_output_port import IGetStockLocationsOutputPort

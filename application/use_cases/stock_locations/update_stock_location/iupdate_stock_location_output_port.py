@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
+
 from clapy import IOutputPort
+
 from domain.entities.base_entity import EntityID
+
 
 # class IUpdateStockLocationOutputPort(ABC, IOutputPort):
 #understand how it is figuring the inheritance ordering is wrong

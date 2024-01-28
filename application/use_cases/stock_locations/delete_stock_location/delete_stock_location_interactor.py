@@ -1,10 +1,10 @@
 from clapy import Interactor
 
+from application.services.ipersistence_context import IPersistenceContext
+from domain.entities.stock_location import StockLocation
+
 from .delete_stock_location_input_port import DeleteStockLocationInputPort
 from .idelete_stock_location_output_port import IDeleteStockLocationOutputPort
-
-from domain.entities.stock_location import StockLocation
-from application.services.ipersistence_context import IPersistenceContext
 
 
 class DeleteStockLocationInteractor(Interactor):

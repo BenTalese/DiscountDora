@@ -1,9 +1,13 @@
 from clapy import EntityExistenceChecker
 from clapy.outputs import IOutputPort
-from .update_stock_location_input_port import UpdateStockLocationInputPort
-from .iupdate_stock_location_output_port import IUpdateStockLocationOutputPort
-from application.services.ientity_existence_checker import IEntityExistenceChecker
+
+from application.services.ientity_existence_checker import \
+    IEntityExistenceChecker
 from domain.entities.stock_location import StockLocation
+
+from .iupdate_stock_location_output_port import IUpdateStockLocationOutputPort
+from .update_stock_location_input_port import UpdateStockLocationInputPort
+
 
 class UpdateStockLocationEntityExistenceChecker(EntityExistenceChecker):
 

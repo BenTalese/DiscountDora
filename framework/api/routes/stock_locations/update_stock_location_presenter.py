@@ -1,9 +1,11 @@
+from varname import nameof
+
+from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_locations.update_stock_location.iupdate_stock_location_output_port import \
     IUpdateStockLocationOutputPort
-from framework.api.infrastructure.base_presenter import BasePresenter
 from domain.entities.base_entity import EntityID
-from varname import nameof
-from application.services.ipersistence_context import IPersistenceContext 
+from framework.api.infrastructure.base_presenter import BasePresenter
+
 
 class UpdateStockLocationPresenter(BasePresenter, IUpdateStockLocationOutputPort):
 

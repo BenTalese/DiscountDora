@@ -3,7 +3,7 @@ from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request
 
-from framework.dora_api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
+from framework.dora_api.infrastructure.request_body_decorator import REQUEST_OBJECTS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -35,7 +35,7 @@ async def deserialise_web_request():
             _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
-        setattr(request, "request_object", _DeserialisedRequest)
+        setattr(request, "request_body", _DeserialisedRequest)
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

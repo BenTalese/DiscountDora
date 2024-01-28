@@ -4,8 +4,8 @@ from varname import nameof
 
 from application.use_cases.products.create_product.create_product_input_port import \
     CreateProductInputPort
-from framework.dora_api.infrastructure.request_object_decorator import \
-    request_object
+from framework.dora_api.infrastructure.request_body_decorator import \
+    has_request_body
 from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.dora_api.routes.products.create_product_presenter import \
@@ -17,14 +17,14 @@ from interface_adaptors.controllers.product_controller import ProductController
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 @PRODUCT_ROUTER.route("", methods=["POST"])
-@request_object('create_product_async', CreateProductCommand)
+@has_request_body('create_product_async', CreateProductCommand)
 async def create_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
     _Presenter: CreateProductPresenter = _ServiceProvider.get_service(CreateProductPresenter)
 
-    _Command: CreateProductCommand = request.request_object
-    _Presenter.request_object: CreateProductCommand = _Command
+    _Command: CreateProductCommand = request.request_body
+    _Presenter.request_body: CreateProductCommand = _Command
     _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
     _InputPort = CreateProductInputPort(
         brand = _Command.brand,

@@ -1,13 +1,18 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, request
 from varname import nameof
-from application.use_cases.stock_items.create_stock_item.create_stock_item_input_port import CreateStockItemInputPort
-from domain.entities.base_entity import EntityID
-from framework.dora_api.infrastructure.request_object_decorator import request_object
-from framework.dora_api.routes.products.product_router import PRODUCT_ROUTER, get_products_async
-from framework.dora_api.routes.stock_items.create_stock_item_command import CreateStockItemCommand
-from framework.dora_api.routes.stock_items.create_stock_item_presenter import CreateStockItemPresenter
 
+from application.use_cases.stock_items.create_stock_item.create_stock_item_input_port import \
+    CreateStockItemInputPort
+from domain.entities.base_entity import EntityID
+from framework.dora_api.infrastructure.request_body_decorator import \
+    has_request_body
+from framework.dora_api.routes.products.product_router import (
+    PRODUCT_ROUTER, get_products_async)
+from framework.dora_api.routes.stock_items.create_stock_item_command import \
+    CreateStockItemCommand
+from framework.dora_api.routes.stock_items.create_stock_item_presenter import \
+    CreateStockItemPresenter
 from framework.dora_api.routes.stock_items.get_stock_items_presenter import \
     GetStockItemsPresenter
 from interface_adaptors.controllers.stock_item_controller import \
@@ -22,14 +27,14 @@ STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/st
 # Middleware after_app_request
 
 @STOCK_ITEM_ROUTER.route("", methods=["POST"])
-@request_object('create_stock_item_async', CreateStockItemCommand)
+@has_request_body('create_stock_item_async', CreateStockItemCommand)
 async def create_stock_item_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
     _Presenter: CreateStockItemPresenter = _ServiceProvider.get_service(CreateStockItemPresenter)
 
     _Presenter.get_route = f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items_async)}"
-    _Command: CreateStockItemCommand = request.request_object
+    _Command: CreateStockItemCommand = request.request_body
     _InputPort = CreateStockItemInputPort()
     _InputPort.name = _Command.name
     if _Command.stock_level_id:

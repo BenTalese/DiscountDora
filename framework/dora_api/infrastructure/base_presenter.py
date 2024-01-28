@@ -28,7 +28,7 @@ class BasePresenter(
     IValidationOutputPort,
     ABC):
     get_route: str = None
-    request_object: Any = None
+    request_body: Any = None
     result: Response = None
     _not_found_current_route_segment: int = None
 

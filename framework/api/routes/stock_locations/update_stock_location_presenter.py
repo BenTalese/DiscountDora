@@ -13,8 +13,8 @@ class UpdateStockLocationPresenter(BasePresenter, IUpdateStockLocationOutputPort
         self.persistence_context = persistence_context
 
     async def stock_location_not_found_async(self, stock_location_id: EntityID):
-        self.entity_existence_failure_async(nameof(stock_location_id), stock_location_id)
+        await self.entity_existence_failure_async(nameof(stock_location_id), stock_location_id.value)
 
     async def stock_location_updated_async(self):
-        await self.persistence_context.save_changes_async
-        await self.no_content_async
+        await self.persistence_context.save_changes_async()
+        await self.no_content_async()

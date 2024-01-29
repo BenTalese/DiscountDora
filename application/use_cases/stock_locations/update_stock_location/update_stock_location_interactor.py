@@ -18,7 +18,7 @@ class UpdateStockLocationInteractor(Interactor):
             .first_by_id(input_port.stock_location_id)
         
         if input_port.description.has_been_set:
-            _StockLocation.description = input_port.description
+            _StockLocation.description = input_port.description.value
 
         #dto, do we send out dtos usually? is there a benefit?
-        await output_port.stock_location_updated_async
+        await output_port.stock_location_updated_async()

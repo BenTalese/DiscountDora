@@ -40,7 +40,7 @@ class ServiceCollectionBuilder:
             Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
             
             for _File in _Files:
-                _Namespace = _Root.replace('/', '.').lstrip(".") + "." + _File[:-3]
+                _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".") + "." + _File[:-3]
                 _Module = importlib.import_module(_Namespace, package=None)
                 if _Module.__name__.endswith('presenter'):
                     [_PresenterClasses.append((_Class))

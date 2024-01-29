@@ -77,7 +77,7 @@ async def update_stock_location_async(stock_location_id):
 
     _Command: UpdateStockLocationCommand = request.request_object
     _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
-        description = AttributeChangeTracker(_Command.description),
+        description = _Command.description,
         stock_location_id = EntityID(stock_location_id))
 
     await _StockLocationController.update_stock_location_async(_InputPort, _Presenter)

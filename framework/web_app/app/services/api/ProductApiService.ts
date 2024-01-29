@@ -1,5 +1,6 @@
 import type { ScrapedProductOffer } from "@/models/ScrapedProductOffer";
-import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
+import AxiosHttpClient from "./AxiosHttpClient";
+import type { CreatedResponse } from "./AxiosHttpClient";
 
 export default class ProductApiService {
     private httpClient: AxiosHttpClient;

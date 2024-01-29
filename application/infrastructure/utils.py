@@ -15,9 +15,9 @@ def get_classes_ending_with(term: str, path_to_search: str):
         Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
         Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
 
+        _Namespace = _Root.replace('/', '.').replace('\\\\', '.').lstrip(".")
         for _File in _Files:
-            _Namespace = _Root.replace('/', '.').lstrip(".") + "." + _File[:-3]
-            _Module = importlib.import_module(_Namespace, package=None)
+            _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
             if _Module.__name__.lower().endswith(term.lower()):
                 [_Classes.append((_Class))
                     for _, _Class

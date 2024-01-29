@@ -3,7 +3,8 @@ from typing import get_type_hints
 
 from flask import Blueprint, jsonify, request
 
-from framework.dora_api.infrastructure.request_body_decorator import REQUEST_OBJECTS_BY_ENDPOINT
+from framework.dora_api.infrastructure.request_body_decorator import \
+    REQUEST_BODYS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -23,10 +24,10 @@ async def handle_cors_preflight_request():
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
-    if _RequestEndpoint in REQUEST_OBJECTS_BY_ENDPOINT:
+    if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
 
-        for _AttributeName, _AttributeType in get_type_hints(REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint]).items():
+        for _AttributeName, _AttributeType in get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items():
             _Data = _RequestData[_AttributeName]
 
             if _AttributeType is bytes:
@@ -34,7 +35,7 @@ async def deserialise_web_request():
 
             _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
-        _DeserialisedRequest = REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
+        _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
         setattr(request, "request_body", _DeserialisedRequest)
 
 # @middleware.after_app_request

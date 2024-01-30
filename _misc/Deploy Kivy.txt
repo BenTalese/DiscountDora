@@ -1,0 +1,58 @@
+LATEST INFO: https://buildozer.readthedocs.io/en/latest/installation.html#targeting-android
+
+$ sudo apt update
+$ sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+$ pip install cython
+$ pip install kivy
+
+# find bashrc file
+$ ls ~/.bashrc
+
+# add one of the following at the end of your ~/.bashrc file:
+export PATH=$PATH:~/.local/bin/
+
+# OR
+
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
+
+$ source ~/.bashrc
+
+# check java version
+$ which java
+
+# see versions of java
+$ update-alternatives --config java
+
+$ pip install buildozer
+$ cd ROOT_PATH_OF_KIVY_APP
+
+# Ensure app has "main.py" file
+
+$ buildozer init
+
+# Update buildozer.spec file that gets generated
+
+$ buildozer setdefault android debug deploy run logcat -s
+$ sudo apt install adb
+
+===================== ON PHONE (for Xiaomi MIUI phone) ==============================
+1) Settings > About phone > tap MIUI version 7 times
+2) Go back all the way > Addtional settings > Developer options (down the bottom)
+3) Tick options:
+    - Don't lock screen
+    - USB debugging
+    - Wireless debugging
+    - Install via USB
+4) Connect phone via USB
+5) Choose non-data transfer option (just charging)
+6) Accept any prompt for connection (may need to run buildozer command once)
+=====================================================================================
+
+$ adb start-server
+$ buildozer
+
+# stop and uninstall when done, replace "org.test.myapp" with the actual package name of your app
+$ adb shell am force-stop org.test.myapp
+$ adb uninstall org.test.myapp
+$ adb kill-server

@@ -20,5 +20,7 @@ class UpdateStockLocationInteractor(Interactor):
         if input_port.description.has_been_set:
             _StockLocation.description = input_port.description.value
 
+        self.persistence_context.update(_StockLocation)
+
         #dto, do we send out dtos usually? is there a benefit?
         await output_port.stock_location_updated_async()

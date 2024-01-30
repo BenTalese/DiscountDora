@@ -1,9 +1,7 @@
-from clapy import IServiceProvider
+from clapy import AttributeChangeTracker, IServiceProvider
 from flask import Blueprint, current_app, request
 from varname import nameof
 
-from application.infrastructure.attribute_change_tracker import \
-    AttributeChangeTracker
 from application.use_cases.stock_locations.create_stock_location.create_stock_location_input_port import \
     CreateStockLocationInputPort
 from application.use_cases.stock_locations.delete_stock_location.delete_stock_location_input_port import \

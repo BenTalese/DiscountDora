@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from application.infrastructure.attribute_change_tracker import \
-    AttributeChangeTracker
+from clapy import AttributeChangeTracker
+
 
 
 @dataclass

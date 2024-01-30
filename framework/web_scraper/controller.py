@@ -1,9 +1,9 @@
 from base64 import b64encode
 from typing import List
 
+from clapy import AttributeChangeTracker
+
 from application.dtos.product_dto import ProductDto
-from application.infrastructure.attribute_change_tracker import \
-    AttributeChangeTracker
 from application.use_cases.products.update_product.update_product_input_port import \
     UpdateProductInputPort
 from framework.web_scraper import coles_logic, woolworths_logic

@@ -28,7 +28,7 @@ from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.generics import TEntity
-from framework.api.view_models.stock_item_view_model import \
+from framework.dora_api.view_models.stock_item_view_model import \
     get_stock_item_view_model
 from framework.persistence.infrastructure.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
@@ -413,12 +413,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
         condition = str(condition)
 
-        pattern = re.compile(r'\[\[([^\]]+)\]\]')
-        entities_in_condition = pattern.findall(condition)
+        find_pattern = re.compile(r'\[\[([^\]]+)\]\]')
+        entities_in_condition = find_pattern.findall(condition)
         for entity_name in entities_in_condition:
             model_name = [model.__name__ for entity, model in self.persistence_context._model_classes.items()
                         if entity.__name__ == entity_name][0]
-            condition = re.sub(pattern, model_name, condition)
+            replace_pattern = re.compile(rf'\[\[{re.escape(entity_name)}\]\]')
+            condition = re.sub(replace_pattern, model_name, condition)
 
         context = { model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
 

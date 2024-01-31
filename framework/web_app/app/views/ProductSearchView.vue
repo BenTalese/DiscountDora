@@ -4,7 +4,8 @@ import type { ScrapedProductOffer } from '@/models/ScrapedProductOffer';
 import MerchantApiService from '@/services/api/MerchantApiService';
 import ProductApiService from '@/services/api/ProductApiService';
 import ImageService from '@/services/files/ImageService';
-import { onMounted, Ref, ref } from 'vue';
+import type { Ref } from 'vue';
+import { ref } from 'vue';
 
 const productApiService = new ProductApiService()
 const merchantApiService = new MerchantApiService()
@@ -28,7 +29,7 @@ const add = async (product_offer: ScrapedProductOffer) =>
         brand: product_offer.brand,
         image: product_offer.image,
         is_available: product_offer.is_available,
-        merchant_id: merchants.value.find((merchant) => merchant.name === product_offer.merchant)?.merchant_id!,
+        merchant_name: product_offer.merchant,
         merchant_stockcode: product_offer.merchant_stockcode,
         name: product_offer.name,
         price_now: product_offer.price_now,
@@ -38,7 +39,7 @@ const add = async (product_offer: ScrapedProductOffer) =>
         web_url: product_offer.web_url
     });
 
-onMounted(async () => merchants.value = await merchantApiService.getAll())
+// onMounted(async () => merchants.value = await merchantApiService.getAll())
 
 // BUG: What if there's no internet? Need to handle this and say "you're offline!" or something
 // BUG: Can keep pressing search button and it will continue to append...not how pagination should work

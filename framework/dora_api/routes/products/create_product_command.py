@@ -1,9 +1,10 @@
-from clapy import InputPort
+from dataclasses import dataclass
 
 
-class CreateProductInputPort(InputPort):
-    brand: str = None
-    image: bytes = None
+@dataclass
+class CreateProductCommand:
+    brand: str
+    image: bytes
     is_available: bool
     merchant_name: str
     merchant_stockcode: str
@@ -11,5 +12,5 @@ class CreateProductInputPort(InputPort):
     price_now: float
     price_was: float
     size_unit: str
-    size_value: float = 0 # TODO: Can be nothing?
+    size_value: float
     web_url: str

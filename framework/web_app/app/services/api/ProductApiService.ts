@@ -1,18 +1,21 @@
 import type { ScrapedProductOffer } from "@/models/ScrapedProductOffer";
-import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
+import type { CreatedResponse } from "./AxiosHttpClient";
+import AxiosHttpClient from "./AxiosHttpClient";
 
 export default class ProductApiService {
-    private httpClient: AxiosHttpClient;
+    private dapiHttpClient: AxiosHttpClient;
+    private mapiHttpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient();
+        this.dapiHttpClient = new AxiosHttpClient(5170);
+        this.mapiHttpClient = new AxiosHttpClient(5172);
     }
 
     create = async (command: CreateProductCommand): Promise<CreatedResponse> =>
-        await this.httpClient.post<CreatedResponse>("/products", command);
+        await this.dapiHttpClient.post<CreatedResponse>("/products", command);
 
-    searchByTerm = async (searchByTermQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
-        await this.httpClient.post<ScrapedProductOffer[]>("/web-scraper/search", searchByTermQuery);
+    searchByTerm = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
+        await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${query.search_term}`);
 }
 
 export type SearchByTermQuery = {
@@ -24,7 +27,7 @@ export type CreateProductCommand = {
     brand: string
     image: string
     is_available: boolean
-    merchant_id: string
+    merchant_name: string
     merchant_stockcode: string
     name: string
     price_now: number

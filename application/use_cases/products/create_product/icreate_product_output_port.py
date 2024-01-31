@@ -13,5 +13,9 @@ class ICreateProductOutputPort(IOutputPort, ABC):
         pass
 
     @abstractmethod
+    async def present_product_already_exists_async(self) -> None:
+        pass
+
+    @abstractmethod
     async def present_product_created_async(self, product: ProductDto) -> None:
         pass

@@ -71,13 +71,13 @@ async def process():
 
         # _Recipients = [UserModel(**_UserData).email
         #                for _UserData
-        #                in requests.get("http://127.0.0.1:5000/api/users").json()
+        #                in requests.get("http://127.0.0.1:5170/api/users").json()
         #                if _UserData['send_deals_on_day'] == _DayOfWeekToday]
 
         # if _Recipients:
         #     _Offers = [ProductModel(**_OfferData)
         #                for _OfferData
-        #                in requests.get("http://127.0.0.1:5000/api/webScraper/offers").json()]
+        #                in requests.get("http://127.0.0.1:5170/api/webScraper/offers").json()]
 
             # TODO: at the minimum, need to send in stock items against the products so they can be grouped by stock item
             # At some point will need shopping list information too

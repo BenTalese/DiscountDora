@@ -1,11 +1,12 @@
 import type { CreateStockItemCommand, StockItem } from "@/models/StockItem";
-import AxiosHttpClient, { CreatedResponse } from "./AxiosHttpClient";
+import AxiosHttpClient from "./AxiosHttpClient";
+import type { CreatedResponse } from "./AxiosHttpClient"
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient();
+        this.httpClient = new AxiosHttpClient(5170);
     }
 
     create = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { StockItem } from '@/models/StockItem';
 import StockItemApiService from '@/services/api/StockItemApiService';
-import { onMounted, Ref, ref } from 'vue';
+import type { Ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 const stockItems: Ref<StockItem[]> = ref([])
 

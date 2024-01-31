@@ -1,7 +1,7 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app
 
-from framework.api.routes.stock_levels.get_stock_levels_presenter import \
+from framework.dora_api.routes.stock_levels.get_stock_levels_presenter import \
     GetStockLevelsPresenter
 from interface_adaptors.controllers.stock_level_controller import \
     StockLevelController

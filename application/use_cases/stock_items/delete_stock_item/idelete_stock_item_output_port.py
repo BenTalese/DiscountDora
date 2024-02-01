@@ -12,5 +12,5 @@ class IDeleteStockItemOutputPort(IOutputPort, ABC):
         pass
 
     @abstractmethod
-    async def present_stock_item_not_found_async(self, stock_level_id: EntityID) -> None:
+    async def present_stock_item_not_found_async(self, stock_item_id: EntityID) -> None:
         pass

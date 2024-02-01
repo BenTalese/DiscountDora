@@ -1,7 +1,3 @@
-from dataclasses import asdict
-from clapy import IServiceProvider
-from flask import current_app
-
 from application.dtos.stock_item_dto import StockItemDto
 from application.services.iquerybuilder import IQueryBuilder
 from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import \

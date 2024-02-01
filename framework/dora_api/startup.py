@@ -10,14 +10,11 @@ from clapy import DependencyInjectorServiceProvider
 from flask import Flask
 from flask_cors import CORS
 
+from application.infrastructure.utils import get_attributes_ending_with
 from framework.dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from framework.dora_api.infrastructure.middleware import MIDDLEWARE
-from framework.dora_api.routes.merchants.merchant_router import MERCHANT_ROUTER
-from framework.dora_api.routes.products.product_router import PRODUCT_ROUTER
-from framework.dora_api.routes.stock_items.stock_item_router import \
-    STOCK_ITEM_ROUTER
-from framework.dora_api.routes.users.user_router import USER_ROUTER
-from framework.dora_api.service_collection_builder import ServiceCollectionBuilder
+from framework.dora_api.service_collection_builder import \
+    ServiceCollectionBuilder
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
 
@@ -34,21 +31,21 @@ async def startup():
         app.config.update(json.load(_Configuration))
 
     await SqlAlchemyPersistenceContext.initialise(app)
-
-    app.register_blueprint(MIDDLEWARE)
-    app.register_blueprint(ERROR_HANDLERS)
-
-    register_routers(app)
     await SqlAlchemyPersistenceContext.test(app)
 
+    register_routers(app)
+    register_api_infrastructure(app)
     app.run('localhost', 5170, app.config.get('DEBUG'), use_reloader=False) # TODO: appsettings
 
 
 def register_routers(app: Flask):
-    app.register_blueprint(MERCHANT_ROUTER)
-    app.register_blueprint(PRODUCT_ROUTER)
-    app.register_blueprint(STOCK_ITEM_ROUTER)
-    app.register_blueprint(USER_ROUTER)
+    for _Router in get_attributes_ending_with('router', os.path.normpath('framework/api/routes')):
+        app.register_blueprint(_Router)
+
+
+def register_api_infrastructure(app: Flask):
+    app.register_blueprint(MIDDLEWARE)
+    app.register_blueprint(ERROR_HANDLERS)
 
 
 if __name__ == '__main__':

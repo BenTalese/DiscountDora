@@ -17,7 +17,7 @@ class IPersistenceContext(ABC):
         pass
 
     @abstractmethod
-    def save_changes_async(self) -> None:
+    async def save_changes_async(self) -> None:
         pass
 
     @abstractmethod

@@ -1,10 +1,11 @@
 from base64 import b64decode
-from typing import get_type_hints
+from typing import get_origin, get_type_hints
 
 from clapy import AttributeChangeTracker
 from flask import Blueprint, jsonify, request
 
-from framework.api.infrastructure.request_object_decorator import REQUEST_OBJECTS_BY_ENDPOINT
+from framework.api.infrastructure.request_object_decorator import \
+    REQUEST_OBJECTS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -28,10 +29,10 @@ async def deserialise_web_request():
         _RequestData: dict = request.get_json()
 
         for _AttributeName, _AttributeType in get_type_hints(REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint]).items():
-            
+
             _Data = _RequestData.get(_AttributeName)
 
-            if isinstance(_AttributeType(_Data), AttributeChangeTracker):
+            if issubclass(get_origin(_AttributeType), AttributeChangeTracker):
                 __deserialise_attribute_change_tracker(_AttributeName, _RequestData)
                 continue
 
@@ -39,30 +40,27 @@ async def deserialise_web_request():
                 _Data = b64decode(_Data)
 
             _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
-        
+
         _DeserialisedRequest = REQUEST_OBJECTS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
         setattr(request, "request_object", _DeserialisedRequest)
 
 def __deserialise_attribute_change_tracker(attribute_name: str, request_data: dict):
     '''
+        Overrides, or sets the value of request_data[attribute_name] to the deserialised AttributeChangeTracker value.
 
         Args:
-            attribute_name (str): The name of the attribute 
-            request_data (dict): The request data which may require deserialisation for the value
-                of key 'attribute_name'. If not found
-                The deserialised attribute change tracker will be inserted or override the corresponding 
-                value for 'attribute_name'... STILL WRITING DOCUMENTATION
+            attribute_name (str): The name of the attribute which requires deserialisation.
+            request_data (dict): The data which may contain the attribute_name as a key.
     '''
-    
+
     if attribute_name not in request_data.keys():
         request_data[attribute_name] = AttributeChangeTracker()
-        return    
 
-    if request_data[attribute_name] is None:
+    elif request_data[attribute_name] is None:
         request_data[attribute_name] = AttributeChangeTracker(None, True)
-        return
 
-    request_data[attribute_name] = AttributeChangeTracker(request_data[attribute_name])
+    else:
+        request_data[attribute_name] = AttributeChangeTracker(request_data[attribute_name])
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

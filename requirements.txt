@@ -1,6 +1,6 @@
 apscheduler==3.10.4
 beautifulsoup4==4.12.3
-clapy==2.2.3
+clapy==2.2.6
 Flask_Cors==4.0.0
 Flask_Migrate==4.0.5
 Requests==2.31.0

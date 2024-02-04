@@ -39,7 +39,7 @@ async def startup():
 
 
 def register_routers(app: Flask):
-    for _Router in get_attributes_ending_with('router', os.path.normpath('framework/api/routes')):
+    for _Router in get_attributes_ending_with('router', os.path.normpath('framework/dora_api/routes')):
         app.register_blueprint(_Router)
 
 

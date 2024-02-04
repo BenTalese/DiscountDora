@@ -1,8 +1,10 @@
 from application.dtos.stock_level_dto import StockLevelDto
 from application.services.iquerybuilder import IQueryBuilder
-from application.use_cases.stock_levels.get_stock_levels.iget_stock_levels_output_port import IGetStockLevelsOutputPort
-from framework.api.infrastructure.base_presenter import BasePresenter
-from framework.api.view_models.stock_level_view_model import get_stock_level_view_model
+from application.use_cases.stock_levels.get_stock_levels.iget_stock_levels_output_port import \
+    IGetStockLevelsOutputPort
+from framework.dora_api.infrastructure.base_presenter import BasePresenter
+from framework.dora_api.view_models.stock_level_view_model import \
+    get_stock_level_view_model
 
 
 class GetStockLevelsPresenter(BasePresenter, IGetStockLevelsOutputPort):

@@ -25,7 +25,7 @@ class ServiceCollectionBuilder:
             .service_provider
 
     def register_api_presenters(self):
-        for _Presenter in get_classes_ending_with('presenter', os.path.normpath('framework/api/routes')):
+        for _Presenter in get_classes_ending_with('presenter', os.path.normpath('framework/dora_api/routes')):
             self.service_provider.register_service(providers.Factory, _Presenter)
 
         return self

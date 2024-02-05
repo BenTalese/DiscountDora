@@ -14,10 +14,10 @@ class CreateStockLocationInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: CreateStockLocationInputPort, output_port: ICreateStockLocationOutputPort):
-        stock_location = StockLocation(
+        _StockLocation = StockLocation(
             description = input_port.description
         )
 
-        self.persistence_context.add(stock_location)
+        self.persistence_context.add(_StockLocation)
 
-        await output_port.present_stock_location_created_async(get_stock_location_dto(stock_location))
+        await output_port.present_stock_location_created_async(get_stock_location_dto(_StockLocation))

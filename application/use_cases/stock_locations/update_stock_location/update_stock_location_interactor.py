@@ -22,4 +22,4 @@ class UpdateStockLocationInteractor(Interactor):
 
         self.persistence_context.update(_StockLocation)
 
-        await output_port.stock_location_updated_async()
+        await output_port.present_stock_location_updated_async()

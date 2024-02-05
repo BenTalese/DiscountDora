@@ -16,4 +16,4 @@ class UpdateStockLocationEntityExistenceChecker(EntityExistenceChecker):
     async def execute_async(self, input_port: UpdateStockLocationInputPort, output_port: IUpdateStockLocationOutputPort) -> None:
         if not self.entity_existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id):
             self.has_failures = True
-            await output_port.stock_location_not_found_async(input_port.stock_location_id)
+            await output_port.present_stock_location_not_found_async(input_port.stock_location_id)

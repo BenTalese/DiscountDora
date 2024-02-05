@@ -36,7 +36,7 @@ async def create_stock_location_async():
     _Presenter: CreateStockLocationPresenter = _ServiceProvider.get_service(CreateStockLocationPresenter)
     _Presenter.get_route = f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations_async)}"
 
-    _Command: CreateStockLocationCommand = request.request_object
+    _Command: CreateStockLocationCommand = request.request_body
     _InputPort = CreateStockLocationInputPort(
         description = _Command.description
     )
@@ -73,7 +73,7 @@ async def update_stock_location_async(stock_location_id):
     _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
     _Presenter: UpdateStockLocationPresenter = _ServiceProvider.get_service(UpdateStockLocationPresenter)
 
-    _Command: UpdateStockLocationCommand = request.request_object
+    _Command: UpdateStockLocationCommand = request.request_body
     _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
         description = _Command.description,
         stock_location_id = EntityID(stock_location_id))

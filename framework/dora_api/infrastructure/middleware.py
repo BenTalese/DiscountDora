@@ -39,23 +39,25 @@ async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
+        _DeserialisedRequestData : dict = dict()
 
         for _AttributeName, _AttributeType in get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items():
             _Data = _RequestData.get(_AttributeName)
 
-            if issubclass(get_origin(_AttributeType), AttributeChangeTracker):
-                __deserialise_attribute_change_tracker(_AttributeName, _RequestData)
+            _AttributeTypeOrigin = get_origin(_AttributeType)
+            if _AttributeTypeOrigin is not None and issubclass(_AttributeTypeOrigin, AttributeChangeTracker):
+                __deserialise_attribute_change_tracker(_AttributeName, _RequestData, _DeserialisedRequestData)
                 continue
 
             if _AttributeType is bytes:
                 _Data = b64decode(_Data)
 
-            _RequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
+            _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _DeserialisedRequestData else None
 
-        _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_RequestData)
+        _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
         setattr(request, "request_body", _DeserialisedRequest)
 
-def __deserialise_attribute_change_tracker(attribute_name: str, request_data: dict):
+def __deserialise_attribute_change_tracker(attribute_name: str, src_data: dict, dest_data: dict):
     '''
         Overrides, or sets the value of request_data[attribute_name] to the deserialised AttributeChangeTracker value.
 
@@ -63,15 +65,15 @@ def __deserialise_attribute_change_tracker(attribute_name: str, request_data: di
             attribute_name (str): The name of the attribute which requires deserialisation.
             request_data (dict): The data which may contain the attribute_name as a key.
     '''
+    #TODO: Update comment
+    if attribute_name not in src_data.keys():
+        dest_data[attribute_name] = AttributeChangeTracker()
 
-    if attribute_name not in request_data.keys():
-        request_data[attribute_name] = AttributeChangeTracker()
-
-    elif request_data[attribute_name] is None:
-        request_data[attribute_name] = AttributeChangeTracker(None, True)
+    elif src_data[attribute_name] is None:
+        dest_data[attribute_name] = AttributeChangeTracker(None, True)
 
     else:
-        request_data[attribute_name] = AttributeChangeTracker(request_data[attribute_name])
+        dest_data[attribute_name] = AttributeChangeTracker(src_data[attribute_name])
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

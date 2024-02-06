@@ -7,9 +7,8 @@ from framework.merchant_api.domain.entities.coles_product_offer import \
     ColesProductOffer
 
 
-def get_by_stockcode(session: CachedSession, stockcode: str, product_name: str):
-    _Response = session.get('https://www.coles.com.au/')
-    _Soup = BeautifulSoup(_Response.text, features="html.parser")
+def get_by_stockcode(session: CachedSession, response_text: str, stockcode: str, product_name: str):
+    _Soup = BeautifulSoup(response_text, features="html.parser")
     _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']
 
     _Url = f'https://www.coles.com.au/_next/data/{_BuildID}/en/search.json'
@@ -51,8 +50,8 @@ def search(session: CachedSession, search_term: str, start_page: int, max_page: 
         for _ProductSearchResult in _PageSearchResult['results']:
             if _ProductSearchResult['_type'] == "PRODUCT":
                 yield ColesProductOffer.model_validate(_ProductSearchResult)
+                _ResultCount += 1
 
-            _ResultCount += 1
             if _ResultCount == max_results:
                 return
 

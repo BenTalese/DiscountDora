@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from framework.merchant_api.domain.entities.coles_product_offer import \
     ColesProductOffer
+from framework.merchant_api.domain.entities.iga_product_offer import IgaProductOffer
 from framework.merchant_api.domain.entities.woolworths_product_offer import \
     WoolworthsProductOffer
 from framework.merchant_api.domain.enumerations.supported_merchant import \
@@ -58,24 +59,6 @@ class ScrapedProductOffer:
             #TODO: LOG
             return None, None
 
-    def translate_woolworths_offer(offer: WoolworthsProductOffer) -> 'ScrapedProductOffer':
-        _Value, _Unit = ScrapedProductOffer.get_size(offer.PackageSize)
-
-        return ScrapedProductOffer(
-            brand = offer.Brand,
-            image = None,
-            image_uri = offer.LargeImageFile,
-            is_available = offer.IsAvailable or offer.InstoreIsAvailable,
-            merchant = SupportedMerchant.WOOLWORTHS.value,
-            merchant_stockcode = offer.Stockcode,
-            name = offer.Name,
-            price_now = offer.Price or offer.InstorePrice,
-            price_was = offer.WasPrice or offer.InstoreWasPrice,
-            size_unit = _Unit or offer.PackageSize,
-            size_value = _Value,
-            web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
-        )
-
     def translate_coles_offer(offer: ColesProductOffer) -> 'ScrapedProductOffer':
         _Value, _Unit = ScrapedProductOffer.get_size(offer.size)
 
@@ -92,4 +75,38 @@ class ScrapedProductOffer:
             size_unit = _Unit or offer.size,
             size_value = _Value,
             web_url = f"https://www.coles.com.au/product/{offer.id}"
+        )
+
+    def translate_iga_offer(offer: IgaProductOffer) -> 'ScrapedProductOffer':
+        return ScrapedProductOffer(
+            brand = offer.brand,
+            image = None,
+            image_uri = offer.image['default'],
+            is_available = offer.available,
+            merchant = SupportedMerchant.IGA.value,
+            merchant_stockcode = offer.productId,
+            name = offer.name,
+            price_now = offer.priceNumeric,
+            price_was = offer.wasPriceNumeric,
+            size_unit = offer.unitOfSize.abbreviation,
+            size_value = float(offer.unitOfSize.size),
+            web_url = f"https://www.igashop.com.au/product/{'-'.join(offer.name.lower().split()) + '-' + offer.productId}"
+        )
+
+    def translate_woolworths_offer(offer: WoolworthsProductOffer) -> 'ScrapedProductOffer':
+        _Value, _Unit = ScrapedProductOffer.get_size(offer.PackageSize)
+
+        return ScrapedProductOffer(
+            brand = offer.Brand,
+            image = None,
+            image_uri = offer.LargeImageFile,
+            is_available = offer.IsAvailable or offer.InstoreIsAvailable,
+            merchant = SupportedMerchant.WOOLWORTHS.value,
+            merchant_stockcode = offer.Stockcode,
+            name = offer.Name,
+            price_now = offer.Price or offer.InstorePrice,
+            price_was = offer.WasPrice or offer.InstoreWasPrice,
+            size_unit = _Unit or offer.PackageSize,
+            size_value = _Value,
+            web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
         )

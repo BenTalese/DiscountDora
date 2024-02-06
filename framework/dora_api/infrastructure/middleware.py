@@ -33,47 +33,48 @@ async def verify_endpoint_exists():
             title = "Endpoint was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")), 404
 
-# BUG: (Potentially) may have issue if not all properties of the command/query are supplied on the web request body
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
-        _DeserialisedRequestData : dict = dict()
+        _DeserialisedRequestData : dict = {}
 
         for _AttributeName, _AttributeType in get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items():
             _Data = _RequestData.get(_AttributeName)
 
             _AttributeTypeOrigin = get_origin(_AttributeType)
-            if _AttributeTypeOrigin is not None and issubclass(_AttributeTypeOrigin, AttributeChangeTracker):
-                __deserialise_attribute_change_tracker(_AttributeName, _RequestData, _DeserialisedRequestData)
-                continue
+            if _AttributeTypeOrigin and _AttributeTypeOrigin is AttributeChangeTracker:
+                _DeserialisedRequestData[_AttributeName] = __get_deserialised_attribute_change_tracker(_AttributeName, _RequestData)
 
-            if _AttributeType is bytes:
-                _Data = b64decode(_Data)
+            else:
+                if _AttributeType is bytes:
+                    _Data = b64decode(_Data)
 
-            _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _DeserialisedRequestData else None
+                _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
         setattr(request, "request_body", _DeserialisedRequest)
 
-def __deserialise_attribute_change_tracker(attribute_name: str, src_data: dict, dest_data: dict):
+def __get_deserialised_attribute_change_tracker(attribute_name: str, request_data: dict) -> AttributeChangeTracker:
     '''
-        Overrides, or sets the value of request_data[attribute_name] to the deserialised AttributeChangeTracker value.
-
         Args:
             attribute_name (str): The name of the attribute which requires deserialisation.
             request_data (dict): The data which may contain the attribute_name as a key.
-    '''
-    #TODO: Update comment
-    if attribute_name not in src_data.keys():
-        dest_data[attribute_name] = AttributeChangeTracker()
 
-    elif src_data[attribute_name] is None:
-        dest_data[attribute_name] = AttributeChangeTracker(None, True)
+        Returns:
+            AttributeChangeTracker: The deserialised value if attribute_name exists on request_data,
+            otherwise the default AttributeChangeTracker.
+    '''
+
+    if attribute_name not in request_data.keys():
+        return AttributeChangeTracker()
+
+    elif request_data[attribute_name] is None:
+        return AttributeChangeTracker(None, True)
 
     else:
-        dest_data[attribute_name] = AttributeChangeTracker(src_data[attribute_name])
+        return AttributeChangeTracker(request_data[attribute_name])
 
 # @middleware.after_app_request
 # async def post_process(response: Response):

@@ -1,16 +1,6 @@
 {
-  "files": [],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    },
-    {
-      "path": "./tsconfig.app.json"
-    }
-  ],
+  "extends": "@quasar/app-vite/tsconfig-preset",
   "compilerOptions": {
-    "module": "ESNext",
-    "target": "ESNext",
-    "moduleResolution": "Node"
+    "baseUrl": "."
   }
 }

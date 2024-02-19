@@ -93,6 +93,7 @@ export default configure((/* ctx */) => {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#devServer
     devServer: {
       // https: true
+      port: 5174,
       open: true // opens browser window automatically
     },
 
@@ -133,7 +134,7 @@ export default configure((/* ctx */) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/developing-ssr/configuring-ssr
     ssr: {
-      prodPort: 3000, // The default port that the production server should use
+      prodPort: 5174, // The default port that the production server should use
                       // (gets superseded if process.env.PORT is specified at runtime)
 
       middlewares: [

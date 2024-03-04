@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
+import { ProductSearchSortOptions } from 'src/helpers/ProductSearchSortOptions';
+import { ProductSearchSortOption } from 'src/helpers/ProductSearchSortOption.1';
 
 const productApiService = new ProductApiService();
 
@@ -9,15 +11,27 @@ const productApiService = new ProductApiService();
 // Should we make more specific/unique IDs?
 export const useProductStore = defineStore('product', {
     state: () => ({
-        //TODO: Can i strongly type this?
-        savedProducts: new Array<Product>,
-        scrapedProductOffers: new Array<ScrapedProductOffer>
+        // TODO: Switch this with sort by relevance, this is the default
+        activeSortOption: ProductSearchSortOptions.find(opts => opts.Description === 'A - Z') as ProductSearchSortOption,
+        savedProducts: null as Array<Product> | null,
+        scrapedProductOffers: null as Array<ScrapedProductOffer> | null,
     }),
+    // TODO: Investigate sortedProductOffers executed twice on sort update
     getters: {
+        sortedProductOffers: (state): Array<ScrapedProductOffer> | null => {
+            if(state.scrapedProductOffers === null)
+                return null;
+
+            return state.activeSortOption.Apply(state.scrapedProductOffers)
+        }
     },
     actions: {
-        saveProduct(productOffer: ScrapedProductOffer){
-            productApiService.create({
+        async getProducts(){
+            productApiService.getAll()
+                .then((products) => this.savedProducts = products)
+        },
+        async saveProduct(productOffer: ScrapedProductOffer){
+            await productApiService.create({
                 brand: productOffer.brand,
                 image: productOffer.image,
                 is_available: productOffer.is_available,
@@ -31,15 +45,9 @@ export const useProductStore = defineStore('product', {
                 web_url: productOffer.web_url
             })
 
-            .then((createdResponse) => {
-                console.log(createdResponse)
-                // TODO: Utilise the ID on the createdResponse to query only the single product.
-                // Then push to the savedProducts array rather than replacing it.
-                // productApiService.getAll()
-                    // .then((products) => this.savedProducts = products)
-            })
-            // TODO: How do i know the a scraped product offer & a product is the same?
-            // Do we want scraped products to appear favorited on the search if i have it saved?
+            // TODO: need to query by the newly created product when getting products
+            // Otherwise, manually create the new product & add it to state
+            await this.getProducts()
         },
         // TODO: Do i need to await?
         // TODO: should searchByTerm be named searchByTermAsync?
@@ -47,12 +55,15 @@ export const useProductStore = defineStore('product', {
             productApiService.searchByTerm(searchByTermQuery)
                 // TODO: this is overwriting, we may want to only add new & keep previous search data
                 // Can't see how this would be helpful though, maintaining stale data...
-                .then((scrapedProductOffers) => this.scrapedProductOffers = scrapedProductOffers)
+                .then((offers) => {
+                    this.scrapedProductOffers = offers
+                    //TODO: These share the same reference. Need to deep clone.
+                })
                 .catch(() => {})
                 .finally(() => {});
 
             // TODO: check this does not violate flux pattern, may not be useful anyways
             return this.scrapedProductOffers;
-        },
+        }
     }
 })

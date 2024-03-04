@@ -1,5 +1,5 @@
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import { ProductSearchSortOption } from './ProductSearchSortOption.1';
+import { ProductSearchSortOption } from './ProductSearchSortOption';
 
 export const ProductSearchSortOptions: ProductSearchSortOption[] = [
     {

@@ -3,7 +3,7 @@ import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
 import { ProductSearchSortOptions } from 'src/helpers/ProductSearchSortOptions';
-import { ProductSearchSortOption } from 'src/helpers/ProductSearchSortOption.1';
+import { ProductSearchSortOption } from 'src/helpers/ProductSearchSortOption';
 
 const productApiService = new ProductApiService();
 

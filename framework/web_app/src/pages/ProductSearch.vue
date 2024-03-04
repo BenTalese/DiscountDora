@@ -71,7 +71,8 @@
 import CardComponent from 'src/components/CardComponent.vue';
 import DropdownComponent from 'src/components/DropdownComponent.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
-import { ProductSearchSortOption, ProductSearchSortOptions } from 'src/helpers/ProductSearchFilter';
+import { ProductSearchSortOption } from 'src/helpers/ProductSearchSortOption';
+import { ProductSearchSortOptions } from 'src/helpers/ProductSearchSortOptions';
 import { Product } from 'src/models/Product';
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import ImageService from 'src/services/files/ImageService';

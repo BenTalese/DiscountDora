@@ -15,7 +15,7 @@ export default class ProductApiService {
     // TODO: Need to decide how to deal with delete product
     // Do we just want to archive/active-inactive in order continue tracking products
     create = async (command: CreateProductCommand): Promise<CreatedResponse> =>
-        await this.dapiHttpClient.post<CreatedResponse>("/products", command);
+        await this.dapiHttpClient.post<CreatedResponse>('/products', command);
 
     getAll = async (): Promise<Product[]> =>
         await this.dapiHttpClient.get<Product[]>('/products');

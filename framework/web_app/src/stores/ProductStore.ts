@@ -1,37 +1,78 @@
 import { defineStore } from 'pinia';
+import { ProductSearchSortByOption } from 'src/helpers/ProductSearchSortByOption';
+import { ProductSearchSortByOptions } from 'src/helpers/ProductSearchSortByOptions';
+import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
+import MerchantApiService from 'src/services/api/MerchantApiService';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
-import { ProductSearchSortOptions } from 'src/helpers/ProductSearchSortOptions';
-import { ProductSearchSortOption } from 'src/helpers/ProductSearchSortOption';
 
+const merchantApiService = new MerchantApiService();
 const productApiService = new ProductApiService();
 
-// TODO: store IDs must be unique, can we foresee any clashes?
-// Should we make more specific/unique IDs?
 export const useProductStore = defineStore('product', {
     state: () => ({
-        // TODO: Switch this with sort by relevance, this is the default
-        activeSortOption: ProductSearchSortOptions.find(opts => opts.Description === 'A - Z') as ProductSearchSortOption,
-        savedProducts: null as Array<Product> | null,
-        scrapedProductOffers: null as Array<ScrapedProductOffer> | null,
+        //TODO: We can use an interface instead of type assertions like below.
+        //Architecture decision.
+        merchants: undefined as Merchant[] | undefined,
+        filterOptions: {
+            isAvailable: false as boolean,
+            isSaved: false as boolean,
+            // TODO: Create relevance algorithm & set as default sortBy
+            sortBy: ProductSearchSortByOptions.find(opts => opts.Description === 'A - Z') as ProductSearchSortByOption,
+            stores: [] as Merchant[]
+        },
+        productOffers: undefined as Array<ScrapedProductOffer> | undefined,
+        products: undefined as Array<Product> | undefined
     }),
     // TODO: Investigate sortedProductOffers executed twice on sort update
     getters: {
-        sortedProductOffers: (state): Array<ScrapedProductOffer> | null => {
-            if(state.scrapedProductOffers === null)
-                return null;
+        filteredProductOffers(state): Array<ScrapedProductOffer> | undefined {
+            if(state.productOffers === undefined)
+                return undefined;
 
-            return state.activeSortOption.Apply(state.scrapedProductOffers)
+            let shallowOffersCopy = state.productOffers.slice();
+
+            shallowOffersCopy = shallowOffersCopy.filter(off => {
+                //TODO: my naming conventions are likely off
+                //TODO: readability of this logic is bad
+                return (off.is_available === state.filterOptions.isAvailable || off.is_available === true)
+                && (state.filterOptions.isSaved ?
+                    state.products?.find(pro => off.merchant_stockcode == pro.merchant_stockcode
+                        && off.merchant === pro.merchant_name)
+                        != undefined
+                    : true)
+                    //TODO: pinia, getter accessing getter
+                && this.merchantNames?.includes(off.merchant)
+            });
+
+            state.filterOptions.sortBy.Apply(shallowOffersCopy);
+
+            return shallowOffersCopy;
+        },
+        merchantNames(): string[] | undefined {
+            return this.filterOptions.stores?.map(sto => sto.name);
         }
     },
     actions: {
-        async getProducts(){
-            productApiService.getAll()
-                .then((products) => this.savedProducts = products)
+        getMerchants(){
+            merchantApiService.getAll()
+                .then((merchants) => {
+                    const collator = new Intl.Collator('en', {'sensitivity': 'base'});
+
+                    this.merchants = merchants.sort((merchant1, merchant2) =>
+                        collator.compare(merchant1.name, merchant2.name))
+
+                    this.filterOptions.stores?.push(...this.merchants);
+                });
         },
-        async saveProduct(productOffer: ScrapedProductOffer){
-            await productApiService.create({
+        getProducts(){
+            productApiService.getAll()
+                .then((products) => this.products = products);
+        },
+        saveProduct(productOffer: ScrapedProductOffer){
+            // TODO: offers return merchant stock code as number BUT get products returns it as a string
+            productApiService.create({
                 brand: productOffer.brand,
                 image: productOffer.image,
                 is_available: productOffer.is_available,
@@ -44,26 +85,26 @@ export const useProductStore = defineStore('product', {
                 size_value: productOffer.size_value,
                 web_url: productOffer.web_url
             })
-
-            // TODO: need to query by the newly created product when getting products
-            // Otherwise, manually create the new product & add it to state
-            await this.getProducts()
+                .then(() => {
+                    // TODO: need to query by the newly created product when getting products
+                    // Otherwise, manually create the new product & add it to state
+                    this.getProducts()
+                });
         },
-        // TODO: Do i need to await?
-        // TODO: should searchByTerm be named searchByTermAsync?
+        // TODO: offers return merchant stock code as number BUT get products returns it as a string
         searchByTerm(searchByTermQuery: SearchByTermQuery){
             productApiService.searchByTerm(searchByTermQuery)
-                // TODO: this is overwriting, we may want to only add new & keep previous search data
-                // Can't see how this would be helpful though, maintaining stale data...
-                .then((offers) => {
-                    this.scrapedProductOffers = offers
-                    //TODO: These share the same reference. Need to deep clone.
-                })
+                .then((offers) => this.productOffers = offers)
                 .catch(() => {})
                 .finally(() => {});
 
-            // TODO: check this does not violate flux pattern, may not be useful anyways
-            return this.scrapedProductOffers;
-        }
+            return this.productOffers;
+        },
+        toggleIsSavedFilter(){
+            this.filterOptions.isSaved = !this.filterOptions.isSaved;
+        },
+        toggleIsAvailableFilter(){
+            this.filterOptions.isAvailable = !this.filterOptions.isAvailable;
+        },
     }
 })

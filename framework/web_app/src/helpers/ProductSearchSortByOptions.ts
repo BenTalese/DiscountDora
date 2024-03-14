@@ -1,7 +1,7 @@
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import { ProductSearchSortOption } from './ProductSearchSortOption';
+import { ProductSearchSortByOption } from './ProductSearchSortByOption';
 
-export const ProductSearchSortOptions: ProductSearchSortOption[] = [
+export const ProductSearchSortByOptions: ProductSearchSortByOption[] = [
     {
         Description: 'A - Z',
         Apply: (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
@@ -45,34 +45,3 @@ export const ProductSearchSortOptions: ProductSearchSortOption[] = [
             })
     }
 ]
-
-// export class ProductSearchSortOptions {
-//     SortOptions: [];
-
-//     NameAsc: ProductSearchSortOption = {
-//         Description: 'A - Z',
-//         Apply: (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-//             offers.sort((a, b) => {
-//                 const _A = a.name.toLowerCase();
-//                 const _B = b.name.toLowerCase();
-
-//                 if(_A < _B) return -1;
-//                 else if(_A > _B) return 1;
-//                 else return 0;
-//             }),
-//     };
-
-//     NameDesc: ProductSearchSortOption = {
-//         Description: 'Z - A',
-//         Apply: (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-//             offers.sort((a, b) => {
-//                 const _A = a.name.toLowerCase();
-//                 const _B = b.name.toLowerCase();
-
-//                 if(_A < _B) return 1;
-//                 else if(_A > _B) return -1;
-//                 else return 0;
-//             }),
-//     };
-
-// }

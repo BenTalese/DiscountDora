@@ -1,7 +1,7 @@
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 
 
-export interface ProductSearchSortOption {
+export interface ProductSearchSortByOption {
     Description: string;
     Apply: (offers: ScrapedProductOffer[]) => ScrapedProductOffer[];
 }

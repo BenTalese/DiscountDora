@@ -1,5 +1,4 @@
 <template>
-    <!-- Calculate min-width -->
     <q-select
         bg-color="white"
         class="q-ma-sm shadow-3 rounded-borders"
@@ -27,23 +26,15 @@
                 </q-item-section>
             </q-item>
         </template>
-        <!-- TODO: this pops up as a dialog on large screen, investigate -->
         <template v-if="multiple" v-slot:option="scope">
-            <!-- TODO: prop for icon,default and active,
-                    they can send in a function that takes in a bool and returns string
-                    OR just send in a string -->
             <q-item v-ripple clickable @click="scope.itemProps.onClick">
                 <div class="row" style="align-items: center; flex-wrap: nowrap;">
-                    <!-- <q-icon
-                        size="md"
-                        class="q-pr-sm"
-                        :name="scope.selected ? 'check_box' : 'check_box_outline_blank'" /> -->
                     <q-icon
                         size="md"
                         class="q-pr-sm"
                         :name="typeof iconName === 'function'
                             ? iconName(scope.selected)
-                            : ''" />
+                            : iconName" />
                     <q-item-label style="font-weight:400">
                         {{ typeof optionLabel === 'string'
                         ? scope.opt[optionLabel]

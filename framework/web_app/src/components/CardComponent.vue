@@ -1,5 +1,4 @@
 <template>
-  <!-- TODO: Loader colour, match colour scheme -->
     <q-card
       bordered
       class="rounded-borders text-white"
@@ -9,15 +8,14 @@
         class="bg-white"
         img-class="q-pa-lg"
         loading="lazy"
-        spinner-color="primary"
+        spinner-color="info"
         spinner-size="2rem"
-        placeholder-src=""
-        :src="img ?? 'https://shop.coles.com.au/wcsstore/Coles-CAS/images/1/9/8/198393-zm.jpg'"
+        src="img"
       >
         <template v-slot:error>
-          <div class="absolute-full flex flex-center bg-negative text-white">
-            Panic
-          </div>
+          <div class="absolute-full flex flex-center">
+          Error encountered
+        </div>
         </template>
       </q-img>
 
@@ -38,15 +36,15 @@
 
         <q-card-section class="bg-blue-grey q-pt-none" style="flex: 1;">
           <div class="col text-h7">
-            {{ bodyMainText ?? 'Cosmic Zooper Dooper'}}
+            {{ bodyMainText }}
           </div>
           <div class="text-subtitle1">
-            ${{ bodySubtitleText ?? '5.99'}}
+            {{ bodySubtitleText }}
           </div>
         </q-card-section>
 
         <q-card-actions align="right" class="bg-blue-grey">
-          <q-chip color="grey" :label="chipLabel ?? 'Coles' " text-color="white">
+          <q-chip color="grey" :label="chipLabel" text-color="white">
           </q-chip>
         </q-card-actions>
 
@@ -60,17 +58,20 @@
     (e: 'icon-click'): void
   }>()
 
-  defineProps<{
+  interface cardComponentProps {
     // TODO: Figure what data is received when an image does not exist.
     // Empty img should be replaced with a default/placeholder img.
-    bodyMainText: string
-    bodySubtitleText: string
-    chipLabel: string
+    bodyMainText?: string
+    bodySubtitleText?: string
+    chipLabel?: string
     icon: string
     iconClass: string
-    img: string
-  }>()
+    img?: string
+  }
 
-  // TODO: Define defaults & remove conditional defaults from template.
-  // Ensure where appropriate the usage of props have default values being utilised, e.g., placeholder img
+  withDefaults(defineProps<cardComponentProps>(), {
+    img: '../../src/assets/dora-logo.png'
+  })
+
+  // TODO: Ensure where appropriate the usage of props have default values being utilised, e.g., placeholder img
 </script>

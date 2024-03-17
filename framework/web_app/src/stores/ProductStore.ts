@@ -6,6 +6,7 @@ import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import MerchantApiService from 'src/services/api/MerchantApiService';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
+import { Loading } from 'quasar';
 
 const merchantApiService = new MerchantApiService();
 const productApiService = new ProductApiService();
@@ -93,10 +94,12 @@ export const useProductStore = defineStore('product', {
         },
         // TODO: offers return merchant stock code as number BUT get products returns it as a string
         searchByTerm(searchByTermQuery: SearchByTermQuery){
+            Loading.show();
+
             productApiService.searchByTerm(searchByTermQuery)
                 .then((offers) => this.productOffers = offers)
                 .catch(() => {})
-                .finally(() => {});
+                .finally(() => Loading.hide());
 
             return this.productOffers;
         },

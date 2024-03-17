@@ -3,7 +3,8 @@
         <!-- TODO: Disable until results are rendered, expensive operation -->
         <q-input
             @keydown.enter="search"
-            dense outlined square v-model="searchTerm" placeholder="Search" class="bg-white col">
+            dense outlined square v-model="searchTerm" placeholder="Search"
+            class="bg-white col">
             <template v-slot:append>
                 <q-btn round dense flat icon="search" @click="search" />
                 <q-btn round dense flat icon="tune" @click="toggleFilter" />
@@ -11,16 +12,11 @@
         </q-input>
     </div>
         <!-- TODO: research ordering convention of component props -->
-        <!-- TODO: props position, loading -->
-        <!-- TODO: Vue set prop to bool without binding, :persistent="false"-->
-        <!-- Transition is likely redundant, may be worth Ben testing on Linux (doc says known windows issues) -->
+        <!-- TODO: Transition on filter section toggle -->
         <!-- loader -->
         <!-- unsave product -->
-        <Transition appear :duration="300"
-            enter-active-class="animated fadeIn"
-            leave-active-class="animated fadeOut">
             <div class="row q-pa-sm" v-show="showFilter">
-                <SelectComponent
+                <select-component
                     label="Stores"
                     :icon-name="(isSelected: boolean): string => isSelected ? 'check_box' : 'check_box_outline_blank'"
                     :multiple="true"
@@ -28,7 +24,7 @@
                     :option-label="(merchant: Merchant) => merchant.name"
                     v-model="productStore.filterOptions.stores"
                 />
-                <SelectComponent
+                <select-component
                     label="Sort By"
                     :options="ProductSearchSortByOptions"
                     :option-label="optionLabelSelector"
@@ -46,7 +42,6 @@
                 >
                     <template v-slot>
                         <span style="font-weight:400">In Stock</span>
-                        <!-- OG 500 WEIGHT -->
                     </template>
                 </q-btn>
                 <q-btn
@@ -65,26 +60,26 @@
                     </template>
                 </q-btn>
                 <!-- TODO: mock has 'specials', do we want this? should it be a filter rather than sort? -->
-
-                <!-- TODO: Binding the state directly to components which modify it may be bad -->
             </div>
-        </Transition>
 
-        <!-- TODO: PRICE NOW comes as null sometimes, encountered in Woolies response -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-        <!-- TODO: COLES, Add offer.brand back in, not all names contain the brand -->
-            <div
+        <!-- TODO: PRICE NOW comes as null sometimes, encountered in Woolies response.
+            What should we display instead?-->
+    <div
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+        <div
             class="q-pa-md"
             v-for="offer in productStore.filteredProductOffers" :key="offer.merchant_stockcode">
-            <CardComponent
+            <card-component
                 :body-main-text="getOfferFullName(offer.brand, offer.name)"
-                :body-subtitle-text="offer.price_now?.toFixed(2).toString()"
+                :body-subtitle-text="`$${offer.price_now?.toFixed(2).toString()}`"
                 :chip-label="offer.merchant"
                 icon="favorite"
                 :icon-class="isSavedProduct(offer) ? 'text-red-12' : 'text-grey'"
                 :img="imageService.decodeBase64Image(offer.image)"
                 @icon-click="productStore.saveProduct(offer)"
             />
+            <!-- TODO: 0 search results found or a display if productStore.filteredProductOffers is empty
+                , may be able to do per component too-->
         </div>
     </div>
 </template>
@@ -113,6 +108,10 @@ let currentPage = 1;
 productStore.getProducts();
 productStore.getMerchants();
 
+/// <Summary>
+/// Retrieves a product offer's name, including the brand name.
+/// E.g., the Coles offers don't always contain the brand in the name.
+/// </Summary>
 const getOfferFullName = (brand: string, name: string): string =>
     name.includes(brand) ? name : `${brand} ${name}`;
 

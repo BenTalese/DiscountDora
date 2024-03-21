@@ -30,23 +30,50 @@
             "console": "integratedTerminal",
             "justMyCode": true
         },
+        // {
+        //     "type": "node",
+        //     "request": "launch",
+        //     "name": "Web App",
+        //     "preLaunchTask": "quasar:dev"
+        // },
+        // {
+        //     "type": "firefox",
+        //     "request": "launch",
+        //     "name": "Web App (Old)",
+        //     "url": "http://localhost:5174",
+        //     "preLaunchTask": "npm: dev",
+        //     "webRoot": "${workspaceFolder}/framework/web_app_old/app",
+        //     "pathMappings": [
+        //         {
+        //             "url": "http://localhost:5174/app",
+        //             "path": "${workspaceFolder}/framework/web_app_old/app"
+        //         }
+        //     ]
+        // },
         {
-            "type": "node",
+            "type": "chrome",
             "request": "launch",
-            "name": "Web App",
-            "preLaunchTask": "quasar:dev",
+            "name": "Web App: Chrome",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/src",
+            "sourceMapPathOverrides": {
+                "webpack:///src/*": "${webRoot}/*"
+            }
         },
         {
             "type": "firefox",
             "request": "launch",
-            "name": "Web App (Old)",
+            "name": "Web App: Firefox",
             "url": "http://localhost:5174",
-            "preLaunchTask": "npm: dev",
-            "webRoot": "${workspaceFolder}/framework/web_app_old/app",
+            "webRoot": "${workspaceFolder}/framework/web_app/src",
             "pathMappings": [
                 {
-                    "url": "http://localhost:5174/app",
-                    "path": "${workspaceFolder}/framework/web_app_old/app"
+                    "url": "http://localhost:5174/src",
+                    "path": "${workspaceFolder}/framework/web_app/src"
+                },
+                {
+                    "url": "webpack:///framework/web_app/src/",
+                    "path": "${webRoot}/"
                 }
             ]
         },
@@ -66,19 +93,19 @@
     "compounds": [
         {
             "name": "Run All",
-            "configurations": ["DAPI", "MAPI", "Web App", "Emailer"]
+            "configurations": ["DAPI", "MAPI", "Web App: Firefox", "Emailer"]
         },
         {
             "name": "Run Web App + DAPI",
-            "configurations": ["DAPI", "Web App"]
+            "configurations": ["DAPI", "Web App: Firefox"]
         },
         {
             "name": "Run Web App + MAPI",
-            "configurations": ["MAPI", "Web App"]
+            "configurations": ["MAPI", "Web App: Firefox"]
         },
         {
             "name": "Run Web App + DAPI + MAPI",
-            "configurations": ["DAPI", "MAPI", "Web App"]
+            "configurations": ["DAPI", "MAPI", "Web App: Firefox"]
         }
     ]
 }

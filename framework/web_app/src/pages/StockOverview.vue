@@ -1,23 +1,14 @@
 <script setup lang="ts">
-import { StockItem } from 'src/models/StockItem';
-import { StockLevel } from 'src/models/StockLevel';
-import StockItemApiService from 'src/services/api/StockItemApiService';
-import StockLevelApiService from 'src/services/api/StockLevelApiService';
-import type { Ref } from 'vue';
-import { onMounted, reactive, ref } from 'vue';
+import { useStockItemStore } from 'src/stores/stockItemStore';
+import { useStockLevelStore } from 'src/stores/stockLevelStore';
+import { onMounted, ref } from 'vue';
 
-const stockItems: Ref<StockItem[]> = ref([]);
-const stockLevels: Ref<StockLevel[]> = ref([]);
-
-const stockItemApiService = new StockItemApiService();
-const stockLevelApiService = new StockLevelApiService();
+const stockItemStore = useStockItemStore();
+const stockLevelStore = useStockLevelStore();
 
 onMounted(async () => {
-    stockItems.value = await stockItemApiService.getAll();
-    stockLevels.value = await stockLevelApiService.getAll();
-    console.log(stockItems.value[0])
-    console.log(stockLevels.value)
-    form.stock_level_id = stockLevels.value[0].stock_level_id
+    stockItemStore.getStockItems();
+    stockLevelStore.getStockLevels();
 })
 
 // const test = async () => await stockItemApiService.create(form);
@@ -26,13 +17,15 @@ onMounted(async () => {
 // }
 
 //    <button class="btn" @click="test">Add/Save to 'My Products' / + </button>
-const form = reactive({
-    name: "",
-    stock_level_id: "stockLevels.value[0].stock_level_id",
-    stock_location_id: null
-});
+// const form = reactive({
+//     name: "",
+//     stock_level_id: "stockLevels.value[0].stock_level_id",
+//     stock_location_id: null
+// });
 
-const model = ref(null)
+// const model = ref(null)
+
+const addToShoppingCartModal = ref(false)
 
 // TODO: Need to order these in the UI
 const stockLevelTestData = ref([
@@ -43,9 +36,9 @@ const stockLevelTestData = ref([
 ])
 
 const stockItemTestData = ref([
-    { name: 'Bananas', stock_item_id: '1', stock_level_id: '4', stock_level_colour: 'green', stock_location_id: '7' },
-    { name: 'Apples', stock_item_id: '2', stock_level_id: '5', stock_level_colour: 'yellow', stock_location_id: '8' },
-    { name: 'Watermelon', stock_item_id: '3', stock_level_id: '6', stock_level_colour: 'red', stock_location_id: '9' },
+    { name: 'Bananas', stock_item_id: '1', stock_level_id: '4', stock_level_colour: 'green', stock_location: 'Pantry', stock_group: 'Fruit' },
+    { name: 'Apples', stock_item_id: '2', stock_level_id: '5', stock_level_colour: 'yellow', stock_location: 'Kitchen Bench', stock_group: 'Fruit' },
+    { name: 'Watermelon', stock_item_id: '3', stock_level_id: '6', stock_level_colour: 'red', stock_location: 'Fridge', stock_group: 'Not Not Fruit' }
 ])
 
 const updateStockLevel = (stockItemID: string, stockLevelColour: string) => {
@@ -64,9 +57,9 @@ const updateStockLevel = (stockItemID: string, stockLevelColour: string) => {
         { label: 'Expanded', value: 'Expanded' }
     ]" />
 
-    <q-card v-for="item in stockItemTestData" :key="item.stock_item_id" class="no-shadow" bordered>
-        <q-btn-dropdown :color="item.stock_level_colour" :items="stockLevelTestData" dropdown-icon="none"
-            class="q-pa-xs" push no-caps>
+    <!-- <q-card v-for="item in stockItemTestData" :key="item.stock_item_id" class="no-shadow" bordered>
+        <q-btn-dropdown :color="item.stock_level_colour" :items="stockLevelTestData" dropdown-icon="none" class="q-pa-xs"
+            push no-caps>
             <q-item clickable v-close-popup v-for="level in stockLevelTestData" :key="level.name"
                 @click="updateStockLevel(item.stock_item_id, level.colour)">
                 <q-item-section avatar>
@@ -78,87 +71,67 @@ const updateStockLevel = (stockItemID: string, stockLevelColour: string) => {
             </q-item>
         </q-btn-dropdown>
         {{ item.name }}
-    </q-card>
+    </q-card> -->
 
-    <q-card v-for="item in stockItemTestData" :key="item.stock_item_id" class="no-shadow q-ma-sm" bordered>
-        <q-card-section class="q-pa-sm">
-            <!-- <q-avatar :color="item.stock_level_colour" size="25px" style="border: 2px solid rgb(126, 126, 126);"
-                    class="q-mr-xs"></q-avatar> -->
-            <!-- <q-btn-dropdown icon="check" :label="item.selectedStatus"
-                    :items="statusOptions.map(status => ({ label: status, value: status }))" dense /> -->
-            <q-btn-dropdown :color="item.stock_level_colour" :items="stockLevelTestData" dense rounded dropdown-icon="none"
-                class="q-pa-xs" push no-caps>
-                <q-item clickable v-close-popup v-for="level in stockLevelTestData" :key="level.name"
-                    @click="updateStockLevel(item.stock_item_id, level.colour)">
-                    <q-item-section avatar>
-                        <q-avatar :color="level.colour" size="25px" />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label>{{ level.name }}</q-item-label>
-                    </q-item-section>
-                </q-item>
-            </q-btn-dropdown>
-            {{ item.name }}
+    <q-btn color="green" class="q-ma-sm">
+        <q-icon name="add" size="30px" color="dark-green" />
+    </q-btn>
+
+    <q-card v-for="item in stockItemTestData" :key="item.stock_item_id" class="no-shadow q-ma-sm" bordered vertical="false">
+        <q-card-section horizontal class="row justify-between">
+
+            <!-- <q-card-actions class="col" style="border-right: 3px black solid;"> -->
+            <q-card-actions class="col">
+                <q-btn-dropdown class="q-mx-sm" :color="item.stock_level_colour" :items="stockLevelTestData"
+                    style="width: 28px;" dense rounded dropdown-icon="none" push no-caps>
+                    <q-item clickable v-close-popup v-for="level in stockLevelTestData" :key="level.name"
+                        @click="updateStockLevel(item.stock_item_id, level.colour)">
+                        <q-item-section avatar>
+                            <q-avatar :color="level.colour" size="25px" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>{{ level.name }}</q-item-label>
+                        </q-item-section>
+                    </q-item>
+                </q-btn-dropdown>
+                <q-btn class="q-mx-sm" flat rounded icon="shopping_cart" @click="addToShoppingCartModal = true" />
+
+                <q-separator class="q-ml-sm q-mr-md" vertical />
+                <p class="text-bold q-ma-sm">{{ item.name }}</p>
+            </q-card-actions>
+
+            <!-- Possibly want to group all cols together under one parent, and have buttons their own parent -->
+            <!-- <q-card-section class="col">
+                <p class="text-bold">{{ item.name }}</p>
+            </q-card-section> -->
+
+            <q-card-section class="col">
+                <p class="text-weight-bold q-ma-none">Location</p>
+                <p class="q-ma-none">{{ item.stock_location }}</p>
+            </q-card-section>
+
+            <q-card-section class="col">
+                Stock Group: {{ item.stock_group }}
+            </q-card-section>
+
         </q-card-section>
-
-        <q-card-actions>
-            <q-btn flat rounded icon=""/>
-        </q-card-actions>
     </q-card>
 
-    <!-- <form @submit.prevent="test">
-        <label for="name">Name</label>
-        <input id="name" v-model="form.name" />
+    <!-- <q-dialog>
+        <q-form @submit="onSubmit" @reset="onReset" class="q-gutter-md">
+        </q-form>
+    </q-dialog> -->
 
-        <br />
+    <q-dialog v-model="addToShoppingCartModal">
+        <q-card style="width: 700px; max-width: 80vw;">
+            <q-card-section class="row items-center">
+                <span class="q-ml-sm">Add {{ "stock item" }} to a shopping list.</span>
+            </q-card-section>
 
-        <label for="stockLevel">Stock Level</label>
-        <select id="stockLevel" v-model="form.stock_level_id">
-            <option v-for="stockLevel in stockLevels" :key="stockLevel.stock_level_id" :value="stockLevel.stock_level_id">
-                {{ stockLevel.description }}
-            </option>
-        </select>
-
-        <br />
-
-        <input type="email" v-model="form.a" />
-
-        <label>Message is: {{ message }}</label>
-        <input v-model="message" placeholder="edit me" />
-
-
-        <textarea v-model="form.b" />
-
-
-        <select v-model="form.c">
-            <option value="new-york">New York</option>
-            <option value="moscow">Moscow</option>
-        </select>
-
-        <input type="checkbox" v-model="form.d" />
-
-        <input type="radio" value="weekly" v-model="form.e" />
-        <input type="radio" value="monthly" v-model="form.f" />
-
-        <button type="submit">Submit</button>
-    </form>
-    <table class="table table-hover">
-        <thead>
-            <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr v-for="stockItem in stockItems" :key="stockItem.stock_item_id">
-                <td>{{ stockItem.name }}</td>
-                <td>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-warning btn-sm">Edit</button>
-                        <button type="button" class="btn btn-danger btn-sm">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        </tbody>
-    </table> -->
+            <q-card-actions align="right">
+                <q-btn flat label="Cancel" color="primary" v-close-popup />
+                <q-btn flat label="Add to list" color="primary" v-close-popup />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
 </template>

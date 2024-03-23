@@ -26,9 +26,10 @@
                 </q-item-section>
             </q-item>
         </template>
+
         <template v-if="multiple" v-slot:option="scope">
             <q-item v-ripple clickable @click="scope.itemProps.onClick">
-                <div class="row" style="align-items: center; flex-wrap: nowrap;">
+                <div class="items-center no-wrap row">
                     <q-icon
                         size="md"
                         class="q-pr-sm"
@@ -45,28 +46,46 @@
                 </div>
             </q-item>
         </template>
+
     </q-select>
 </template>
 
 <script setup lang="ts">
 
+    //#region Props & Emits
+
+    interface ISelectComponentProps {
+        clearable?: boolean
+        /**
+         * The name of the icon. Refer to the Quasar Select Component name prop for guidelines.
+         * Only supported when the multiple prop is set to true.
+         */
+        iconName?: ((selected :boolean) => string) | string
+        label: string
+        modelValue: Array<unknown> | unknown
+        multiple?: boolean
+        options: Array<unknown>
+        optionLabel?: ((option: string | unknown) => string) | string | undefined
+    }
+
+    const props = withDefaults(defineProps<ISelectComponentProps>(),{
+        clearable: false,
+        multiple: false
+    });
+
     const emit = defineEmits<{
         (e: 'update:model-value', value: unknown) : void
     }>();
 
-    const props = defineProps<{
-        clearable?: boolean
-        // iconName only supported alongside multiple = true
-        iconName?: ((selected :boolean) => string) | string
-        label: string
-        multiple?: boolean
-        options: Array<unknown>
-        optionLabel?: ((option: string | unknown) => string) | string | undefined
-        modelValue: Array<unknown> | unknown
-    }>()
+    //#endregion Props & Emits
+
+    //#region Model Value
 
     const internalModelValue = props.modelValue;
 
     const onUpdateModelValue = (value: string | null): void =>
         emit('update:model-value', value);
+
+    //#endregion Model Value
+
 </script>

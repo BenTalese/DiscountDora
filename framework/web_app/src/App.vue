@@ -12,7 +12,7 @@ import { useProductStore } from './stores/ProductStore';
   //  (no data for some components, partially working pages)
   // Solution is likely to conditionally re-fetch in the store as Ben suggested
   // or to re fetch on pages that require it if there is no data
-  productStore.getMerchants();
-  productStore.getProducts();
+  productStore.getMerchantsAsync();
+  productStore.getProductsAsync();
 
 </script>

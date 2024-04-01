@@ -14,13 +14,13 @@ export default class ProductApiService {
 
     // TODO: Need to decide how to deal with delete product
     // Do we just want to archive/active-inactive in order continue tracking products
-    create = async (command: CreateProductCommand): Promise<CreatedResponse> =>
+    createAsync = async (command: CreateProductCommand): Promise<CreatedResponse> =>
         await this.dapiHttpClient.post<CreatedResponse>('/products', command);
 
-    getAll = async (): Promise<Product[]> =>
+    getAllAsync = async (): Promise<Product[]> =>
         await this.dapiHttpClient.get<Product[]>('/products');
 
-    searchByTerm = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
+    searchByTermAsync = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${query.search_term}`);
 }
 
@@ -30,7 +30,7 @@ export type SearchByTermQuery = {
 }
 
 export type CreateProductCommand = {
-    brand: string
+    brand: string | null
     image: string //TODO: Check if img is good before saving it, prob in use case
     is_available: boolean
     merchant_name: string

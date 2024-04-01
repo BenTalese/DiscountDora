@@ -30,12 +30,13 @@
           />
         </q-card-section>
 
-        <q-card-section class="bg-blue-grey q-pt-none" style="flex: 1;">
-          <div class="col text-h7"> {{ bodyMainText }} </div>
-          <div class="text-subtitle1"> {{ bodySubtitleText }} </div>
-        </q-card-section>
+        <slot name="body">
+          <q-card-section class="bg-blue-grey" style="flex: 1;">
+            {{ body }}
+          </q-card-section>
+        </slot>
 
-        <q-card-actions align="right" class="bg-blue-grey">
+        <q-card-actions v-if="chipLabel"  align="right" class="bg-blue-grey">
           <q-chip :color="chipColour" :label="chipLabel" text-color="white" />
         </q-card-actions>
       </div>
@@ -47,8 +48,7 @@
   //#region Props & Emits
 
   interface ICardComponentProps {
-    bodyMainText?: string
-    bodySubtitleText?: string
+    body?: string
     chipLabel?: string
     chipColour?: string
     icon: string

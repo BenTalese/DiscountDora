@@ -1,23 +1,22 @@
 <template>
     <q-select
         bg-color="white"
-        class="q-ma-sm shadow-3 rounded-borders"
+        class="q-ma-sm shadow-1 rounded-borders"
         :clearable="clearable"
         clear-icon="cancel"
         dense
         color="black"
+        square
         dropdown-icon="expand_more"
         :label="label"
         label-color="black"
         :multiple="multiple"
         :options="options"
         :option-label="optionLabel"
-        standout="bg-teal text-yellow"
-        style="min-width: 175px;"
+        standout="bg-teal"
+        style="min-width: 200px;"
         v-model="internalModelValue"
         @update:model-value="onUpdateModelValue"
-        transition-show="jump-up"
-        transition-hide="jump-up"
     >
         <template v-slot:no-option>
             <q-item>

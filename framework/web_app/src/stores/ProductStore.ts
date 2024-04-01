@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
-import { OfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferSaved } from 'src/helpers/ProductLogic';
+import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
+import { isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
@@ -15,21 +15,15 @@ const productApiService = new ProductApiService();
 // TODO:
 // New Features:
 // - Create a relevance algorithm & set as default sortBy
-// - Add ability to unsave a product
-// - Query functionality on get products. After the saveProduct(), add the new product to state using query.
+// - Add ability to un-favourite a product
+// - Add query functionality on get products.
+    //In the .Then for addOfferToFavouritesAsync(),
+    //add the new product to state using a query specifically for that product rather than getting all products.
+// - Add quasar notify/toast OR other feedback for when a product is favourited
 
 // TODO:
 // Issues:
 // - Scraped offers return merchant stock code as a number BUT get products returns it as a string
-// Consider:
-// - PRICE NOW is null sometimes (encountered in Woolies response). What should we display instead?
-// Future:
-// - Ability to unsave product
-// Do:
-// - Have a display for when 0 search results are found.
-// - Add specials filter (show price was). Could also sort by specials biggest/smallest
-// - Transition on filter section toggle
-
 
 export const useProductStore = defineStore('product', () => {
 
@@ -37,15 +31,17 @@ export const useProductStore = defineStore('product', () => {
 
     interface IOfferFilters {
         showOnlyAvailable: boolean,
-        showOnlySaved: boolean,
-        sortBy: OfferSortByOption,
+        showOnlyFavourites: boolean,
+        showOnlySpecials: boolean,
+        sortBy: IOfferSortByOption,
         stores: Merchant[]
     }
 
     const offerFilters = reactive<IOfferFilters>({
         showOnlyAvailable: false,
-        showOnlySaved: false,
-        sortBy: OfferSortByOptions.find(opts => opts.Description === 'A - Z') as OfferSortByOption,
+        showOnlyFavourites: false,
+        showOnlySpecials: false,
+        sortBy: OfferSortByOptions.find(opts => opts.Description === 'Name (A - Z)') as IOfferSortByOption,
         stores: []
     })
 
@@ -53,11 +49,13 @@ export const useProductStore = defineStore('product', () => {
 
     const setStoresFilter = (merchantsData: Merchant[]): void => { offerFilters.stores = merchantsData; };
 
-    const setSortByFilter = (sortBy: OfferSortByOption) => { offerFilters.sortBy = sortBy };
+    const setSortByFilter = (sortBy: IOfferSortByOption) => { offerFilters.sortBy = sortBy };
 
-    const toggleIsAvailableFilter = (): void => { offerFilters.showOnlyAvailable = !offerFilters.showOnlyAvailable; };
+    const toggleShowOnlyAvailable = (): void => { offerFilters.showOnlyAvailable = !offerFilters.showOnlyAvailable; };
 
-    const toggleIsSavedFilter = (): void => { offerFilters.showOnlySaved = !offerFilters.showOnlySaved; };
+    const toggleShowOnlyFavourites = (): void => { offerFilters.showOnlyFavourites = !offerFilters.showOnlyFavourites; };
+
+    const toggleShowOnlySpecials = (): void => { offerFilters.showOnlySpecials = !offerFilters.showOnlySpecials; };
 
     //#endregion Filters
 
@@ -67,8 +65,9 @@ export const useProductStore = defineStore('product', () => {
 
     const merchantNames = computed(() => offerFilters.stores?.map(sto => sto.name))
 
-    function getMerchants(){
-        merchantApiService.getAll()
+    async function getMerchantsAsync(){
+        merchantApiService
+            .getAllAsync()
             .then((merchantsData) => {
                 const collator = new Intl.Collator('en', {'sensitivity': 'base'});
 
@@ -85,28 +84,14 @@ export const useProductStore = defineStore('product', () => {
 
     const products = ref<Product[]>()
 
-    //TODO: Async
-    function getProducts(){
-        productApiService.getAll()
+    const getProductsAsync = async () =>
+        productApiService
+            .getAllAsync()
             .then((productsData) => products.value = productsData);
-    };
 
-    function saveProduct(productOffer: ScrapedProductOffer){
-        productApiService.create({
-            brand: productOffer.brand,
-            image: productOffer.image,
-            is_available: productOffer.is_available,
-            merchant_name: productOffer.merchant,
-            merchant_stockcode: productOffer.merchant_stockcode,
-            name: productOffer.name,
-            price_now: productOffer.price_now,
-            price_was: productOffer.price_was,
-            size_unit: productOffer.size_unit,
-            size_value: productOffer.size_value,
-            web_url: productOffer.web_url
-        })
-        .then(() => getProducts());
-    };
+    const addOfferToFavouritesAsync = async (offer: ScrapedProductOffer) =>
+        productApiService.createAsync(offer)
+        .then(() => getProductsAsync());
 
     //#endregion
 
@@ -122,28 +107,27 @@ export const useProductStore = defineStore('product', () => {
 
         let shallowOffersCopy = productOffers.value.slice();
 
-        shallowOffersCopy = shallowOffersCopy.filter(off => {
-            //TODO: review naming conventions
-            //TODO: Should logic be modified to only apply the saved filter if products is not undefined
-            return (off.is_available === offerFilters.showOnlyAvailable || off.is_available === true)
-                && (offerFilters.showOnlySaved ? isOfferSaved(off, products.value) : true)
-                && merchantNames.value?.includes(off.merchant)
-        });
+        shallowOffersCopy = shallowOffersCopy.filter(off =>
+            (offerFilters.showOnlyAvailable ? off.is_available === true : true) &&
+            (offerFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
+            (offerFilters.showOnlySpecials ?  off.price_now < off.price_was : true) &&
+            merchantNames.value?.includes(off.merchant_name) &&
+            // Don't display products that don't have a current price
+            off.price_now != null);
 
         offerFilters.sortBy.Apply(shallowOffersCopy);
 
         return shallowOffersCopy;
     });
 
-    function searchByTerm(query: SearchByTermQuery){
-
-        if(!query.search_term?.trim()){
+    async function searchByTermAsync(query: SearchByTermQuery){
+        if(!query.search_term?.trim())
             return;
-        }
 
         Loading.show();
 
-        productApiService.searchByTerm(query)
+        productApiService
+            .searchByTermAsync(query)
             .then((offers) => productOffers.value = offers)
             .catch(() => {})
             .finally(() => Loading.hide());
@@ -152,24 +136,25 @@ export const useProductStore = defineStore('product', () => {
     //#endregion
 
     return {
-        filterOptions: offerFilters,
-        pushFilterStores: pushToStoresFilter,
+        offerFilters,
+        pushToStoresFilter,
         setStoresFilter,
         setSortByFilter,
-        toggleIsAvailableFilter,
-        toggleIsSavedFilter,
+        toggleShowOnlyAvailable,
+        toggleShowOnlyFavourites,
+        toggleShowOnlySpecials,
 
         merchants,
         merchantNames,
-        getMerchants,
+        getMerchantsAsync,
 
         products,
-        getProducts,
-        saveProduct,
+        addOfferToFavouritesAsync,
+        getProductsAsync,
 
         productOffers,
         filteredProductOffers,
-        searchByTerm,
+        searchByTermAsync
     };
 
 });

@@ -19,7 +19,7 @@ class ScrapedProductOffer:
     image: bytes
     image_uri: str
     is_available: bool
-    merchant: str # TODO: hmm...str? or id of merchant? would have to use GetMerchants or create if not found
+    merchant_name: str # TODO: hmm...str? or id of merchant? would have to use GetMerchants or create if not found
     merchant_stockcode: str
     name: str
     price_now: float
@@ -66,7 +66,7 @@ class ScrapedProductOffer:
             image = None,
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
-            merchant = SupportedMerchant.WOOLWORTHS.value,
+            merchant_name = SupportedMerchant.WOOLWORTHS.value,
             merchant_stockcode = offer.Stockcode,
             name = offer.Name,
             price_now = offer.Price or offer.InstorePrice,
@@ -84,7 +84,7 @@ class ScrapedProductOffer:
             image = None,
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
-            merchant = SupportedMerchant.COLES.value,
+            merchant_name = SupportedMerchant.COLES.value,
             merchant_stockcode = offer.id,
             name = offer.name,
             price_now = offer.pricing.now if offer.pricing else None,

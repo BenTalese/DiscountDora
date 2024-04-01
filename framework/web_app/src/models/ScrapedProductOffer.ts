@@ -1,8 +1,8 @@
 export type ScrapedProductOffer = {
-    brand: string
+    brand: string | null
     image: string
     is_available: boolean
-    merchant: string
+    merchant_name: string
     merchant_stockcode: string
     name: string
     price_now: number

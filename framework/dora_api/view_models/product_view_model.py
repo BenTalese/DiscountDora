@@ -25,7 +25,7 @@ class ProductViewModel:
 def get_product_view_model(product: ProductDto) -> ProductViewModel:
     return ProductViewModel(
         brand = product.brand,
-        image = product.image.decode('utf-8'),
+        image = product.image.decode('utf-8', 'ignore'),
         is_available = product.is_available,
         merchant_id = product.merchant.merchant_id.value if product.merchant else None,
         merchant_name = product.merchant.name if product.merchant else None,

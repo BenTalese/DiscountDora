@@ -83,12 +83,19 @@
             />
 
         </div>
-
+    <div
+        v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
+        class="row text-h3 q-ma-sm items-center">
+        <img src="../../src/assets/banana-peel.jpg" class="q-pa-sm" style="border-radius: 50%; width: 230px;" />
+        <span class="text-h5 q-pa-sm">
+            No products found for '{{ previousSearchTerm }}'.
+        </span>
     </div>
 </template>
 
 <script setup lang="ts">
 
+import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
 import { OfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
@@ -102,15 +109,17 @@ const imageService = new ImageService();
 const productStore = useProductStore();
 
 const searchTerm = ref('');
+const previousSearchTerm = ref<undefined | string>();
 const showFilters = ref(true);
 
 let currentPage = 1;
 
-const search = (): void =>
-    productStore.searchByTerm({
+const search = (): Promise<string> =>
+    productStore.searchByTermAsync({
         search_term: searchTerm.value,
         start_page: currentPage
-    });
+    })
+    .then(() => previousSearchTerm.value = searchTerm.value);
 
 const toggleShowFilters = (): boolean =>
     showFilters.value = !showFilters.value;

@@ -32,15 +32,10 @@
                     <q-icon
                         size="md"
                         class="q-pr-sm"
-                        :name="typeof iconName === 'function'
-                            ? iconName(scope.selected)
-                            : iconName" />
+                        :name="getOptionIconName(scope)"
+                    />
                     <q-item-label style="font-weight:400">
-                        {{ typeof optionLabel === 'string'
-                        ? scope.opt[optionLabel]
-                        : typeof optionLabel === 'function'
-                            ? optionLabel(scope.opt)
-                            : scope.opt }}
+                        {{ getOptionLabel(scope) }}
                     </q-item-label>
                 </div>
             </q-item>
@@ -54,26 +49,76 @@
     //#region Props & Emits
 
     interface ISelectComponentProps {
-        clearable?: boolean
+
         /**
-         * The name of the icon. Refer to the Quasar Select Component name prop for guidelines.
-         * Only supported when the multiple prop is set to true.
+         * Appends clearable icon when a value (not undefined or null) is set; When clicked, model becomes null
+         * Default value: false
          */
-        iconName?: ((selected :boolean) => string) | string
-        label: string
-        modelValue: Array<unknown> | unknown
-        multiple?: boolean
-        options: Array<unknown>
+        clearable?: boolean | undefined
+
+        /**
+         * A text label that will “float” up above the input field, once the field gets focus
+         */
+        label: string | undefined
+
+        /**
+         * Model of the component;
+         * Must be Array if using 'multiple' prop;
+         * Either use this property (along with a listener for 'update:modelValue' event) OR use v-model directive
+         */
+        modelValue: unknown
+
+        /**
+         * Allow multiple selection; Model must be Array
+         */
+        multiple?: boolean | undefined
+
+        /**
+         * Available options that the user can select from. For best performance freeze the list of options.
+         * Default value: []
+         */
+        options?: readonly unknown[] | undefined
+
+        /**
+         * Icon prefixing the option label; Only supported when the multiple prop is set to true;
+         * If using a function then for best performance, reference it from your scope and do not define it inline;
+         * Icon Name must follow Quasar convention;
+         * Make sure you have the icon library installed unless you are using 'img:' prefix;
+         * If 'none' (String) is used as value then no icon is rendered (but screen real estate will still be used for it)
+         * @param isOptionSelected The selected state of the current option being processed
+         * @returns Name of the icon
+         */
+        optionIconName?: ((isOptionSelected :boolean) => string) | string | undefined
+
+        /**
+         * Property of option which holds the 'label';
+         * If using a function then for best performance, reference it from your scope and do not define it inline;
+         * Example function: (item) => item === null ? 'Null value' : item.itemName;
+         * Example string: 'itemName';
+         * Default value: label;
+         * @param option The current option being processed
+         * @returns Label of the current option
+         */
         optionLabel?: ((option: string | unknown) => string) | string | undefined
+
     }
 
     const props = withDefaults(defineProps<ISelectComponentProps>(),{
         clearable: false,
-        multiple: false
+        multiple: false,
+        // Object or array defaults must be returned from a factory function.
+        // The function receives the raw props received by the component as the argument.
+        options: () => []
     });
 
     const emit = defineEmits<{
+
+        /**
+         * Emitted when the component needs to change the model; Is also used by v-model
+         * @param value New model value
+         */
         (e: 'update:model-value', value: unknown) : void
+
     }>();
 
     //#endregion Props & Emits
@@ -86,5 +131,39 @@
         emit('update:model-value', value);
 
     //#endregion Model Value
+
+    //#region Multiple
+
+    interface Scope {
+
+        /**
+         * Option -- its value is taken from 'options' prop
+         */
+        opt: unknown;
+
+        /**
+         * Is option selected?
+         */
+        selected: boolean;
+
+    }
+
+    const getOptionIconName = (scope: Scope): string =>
+        props.optionIconName instanceof Function
+            ? props.optionIconName(scope.selected)
+            : props.optionIconName as string;
+
+    function getOptionLabel(scope: Scope) : string {
+        if(props.optionLabel instanceof String){
+            const opt = scope.opt as { [key: string]: string }
+            return (opt[props.optionLabel as string]);
+        }
+        else if(props.optionLabel instanceof Function)
+            return props.optionLabel(scope.opt);
+        else
+            return scope.opt as string;
+    }
+
+    //#endregion Multiple
 
 </script>

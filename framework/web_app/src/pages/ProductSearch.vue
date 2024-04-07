@@ -1,10 +1,10 @@
 <template>
     <div class="row no-wrap q-pa-md" style="min-width: 100px; width: 100%;">
-        <!-- TODO: Disable until results are rendered, expensive operation -->
         <q-input
             autofocus
             @keydown.enter="search"
             v-model="searchTerm"
+            :disable="Loading.isActive"
             placeholder="Search"
             dense
             outlined
@@ -22,11 +22,11 @@
         <select-component
             label="Stores"
             :multiple="true"
-            :options="productStore.merchants ?? []"
+            :options="productStore.merchants"
             :option-label="(merchant: Merchant) => merchant.name"
             :model-value="productStore.offerFilters.stores"
             @update:model-value="productStore.setStoresFilter"
-            :icon-name="(isSelected: boolean): string => isSelected ? 'check_box' : 'check_box_outline_blank'"
+            :optionIconName="(isSelected: boolean): string => isSelected ? 'check_box' : 'check_box_outline_blank'"
         />
 
         <select-component
@@ -150,12 +150,12 @@ import ImageService from 'src/services/files/ImageService';
 import { useProductStore } from 'src/stores/ProductStore';
 import { ref } from 'vue';
 
-const imageService = new ImageService();
 const productStore = useProductStore();
+
+//#region Search
 
 const searchTerm = ref('');
 const previousSearchTerm = ref<undefined | string>();
-const showFilters = ref(true);
 
 let currentPage = 1;
 
@@ -166,11 +166,23 @@ const search = (): Promise<string> =>
     })
     .then(() => previousSearchTerm.value = searchTerm.value);
 
+//#endregion Search
+
+//#region Filters
+
+const showFilters = ref(true);
+
 const toggleShowFilters = (): boolean =>
     showFilters.value = !showFilters.value;
 
 const optionLabelSelector = (option: IOfferSortByOption): string =>
     option.Description;
+
+//#endregion Filters
+
+//#region Offers
+
+const imageService = new ImageService();
 
 const colourByMerchant: { [key: string]: string } = {
     Coles: 'red-14',
@@ -179,5 +191,7 @@ const colourByMerchant: { [key: string]: string } = {
 
 const getMerchantColour = (merchantName: string): string =>
     colourByMerchant[merchantName];
+
+//#endregion Offers
 
 </script>

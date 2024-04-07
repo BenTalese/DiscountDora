@@ -74,7 +74,11 @@ export const useProductStore = defineStore('product', () => {
                 merchants.value = merchantsData.sort((merchant1, merchant2) =>
                     collator.compare(merchant1.name, merchant2.name))
 
-                pushToStoresFilter(merchants.value);
+                // TODO: test the push vs set one more time, if push add helpful comment here
+                // The merchants are options but not selected if Set rather than push
+                // setStoresFilter(merchants.value);
+                if(!offerFilters.stores.length)
+                    pushToStoresFilter(merchants.value);
             });
     };
 
@@ -90,17 +94,16 @@ export const useProductStore = defineStore('product', () => {
             .then((productsData) => products.value = productsData);
 
     const addOfferToFavouritesAsync = async (offer: ScrapedProductOffer) =>
-        productApiService.createAsync(offer)
-        .then(() => getProductsAsync());
+        productApiService
+            .createAsync(offer)
+            .then(() => getProductsAsync());
 
-    //#endregion
+    //#endregion Products
 
     //#region Product Offers
 
     const productOffers = ref<ScrapedProductOffer[]>();
 
-    // TODO: Investigate whether filteredProductOffers executed twice
-    //  on sort update is due to binding state direct to component.
     const filteredProductOffers = computed(() => {
         if(productOffers.value === undefined)
             return undefined;
@@ -133,7 +136,7 @@ export const useProductStore = defineStore('product', () => {
             .finally(() => Loading.hide());
     }
 
-    //#endregion
+    //#endregion Product Offers
 
     return {
         offerFilters,

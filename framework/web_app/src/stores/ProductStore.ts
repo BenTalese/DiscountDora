@@ -41,7 +41,7 @@ export const useProductStore = defineStore('product', () => {
         showOnlyAvailable: false,
         showOnlyFavourites: false,
         showOnlySpecials: false,
-        sortBy: OfferSortByOptions.find(opts => opts.Description === 'Name (A - Z)') as IOfferSortByOption,
+        sortBy: OfferSortByOptions.find(opts => opts.IsDefault === true) as IOfferSortByOption,
         stores: []
     })
 

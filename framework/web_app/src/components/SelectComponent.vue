@@ -1,7 +1,7 @@
 <template>
     <q-select
         bg-color="white"
-        class="q-ma-sm shadow-1 rounded-borders"
+        class="min-width-200 q-ma-sm rounded-borders shadow-1"
         :clearable="clearable"
         clear-icon="cancel"
         dense
@@ -14,7 +14,6 @@
         :options="options"
         :option-label="optionLabel"
         standout="bg-teal"
-        style="min-width: 200px;"
         v-model="internalModelValue"
         @update:model-value="onUpdateModelValue"
     >
@@ -34,7 +33,7 @@
                         class="q-pr-sm"
                         :name="getOptionIconName(scope)"
                     />
-                    <q-item-label style="font-weight:400">
+                    <q-item-label class="font-weight-400">
                         {{ getOptionLabel(scope) }}
                     </q-item-label>
                 </div>
@@ -167,3 +166,16 @@
     //#endregion Multiple
 
 </script>
+
+<!-- TODO: Move to global styling accessible by all componets -->
+<style scoped>
+
+.font-weight-400 {
+    font-weight: 400;
+}
+
+.min-width-200 {
+    min-width: 200px;
+}
+
+</style>

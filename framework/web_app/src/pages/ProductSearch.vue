@@ -1,5 +1,5 @@
 <template>
-    <div class="row no-wrap q-pa-md" style="min-width: 100px; width: 100%;">
+    <div class="no-wrap q-pa-md row min-width-100 width-100">
         <q-input
             autofocus
             @keydown.enter="search"
@@ -17,7 +17,7 @@
         </q-input>
     </div>
 
-    <div v-show="showFilters" class="no-wrap row q-pa-sm scroll" style="scrollbar-width: none;">
+    <div v-show="showFilters" class="no-wrap row q-pa-sm scroll scrollbar-none">
 
         <select-component
             label="Stores"
@@ -49,7 +49,7 @@
             square
         >
             <template v-slot>
-                <span style="font-weight:400">In Stock</span>
+                <span class="font-weight-400">In Stock</span>
             </template>
         </q-btn>
 
@@ -66,7 +66,7 @@
             square
         >
             <template v-slot>
-                <span style="font-weight:400">Favourites</span>
+                <span class="font-weight-400">Favourites</span>
             </template>
         </q-btn>
 
@@ -83,13 +83,13 @@
             square
         >
             <template v-slot>
-                <span style="font-weight:400">Specials</span>
+                <span class="font-weight-400">Specials</span>
             </template>
         </q-btn>
 
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+    <div class="card-grid">
 
         <div
             v-for="offer in productStore.filteredProductOffers" :key="offer.merchant_stockcode"
@@ -104,7 +104,7 @@
                 :icon-class="isOfferFavourited(offer, productStore.products) ? 'text-red-12' : 'text-grey'"
             >
                 <template v-slot:body>
-                    <q-card-section class="q-py-none" style="flex: 1;">
+                    <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
                             <div class="text-body2 text-weight-regular q-pb-sm">
                                 {{ `${getOfferFullName(offer.brand, offer.name)} | ${getOfferSize(offer.size_value, offer.size_unit)}` }}
@@ -131,7 +131,7 @@
     <div
         v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
         class="row text-h3 q-ma-sm items-center">
-        <img src="../../src/assets/banana-peel.jpg" class="q-pa-sm" style="border-radius: 50%; width: 230px;" />
+        <img src="../../src/assets/banana-peel.jpg" class="q-pa-sm round-img" />
         <span class="text-h5 q-pa-sm">
             No products found for '{{ previousSearchTerm }}'.
         </span>
@@ -195,3 +195,41 @@ const getMerchantColour = (merchantName: string): string =>
 //#endregion Offers
 
 </script>
+
+<!-- TODO: Move to global styling accessible by all componets -->
+<style scoped>
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.font-weight-400 {
+    font-weight: 400;
+}
+
+.round-img {
+    border-radius: 50%;
+    width: 230px;
+}
+
+.min-width-100 {
+    min-width: 100px;
+}
+
+.scrollbar-none {
+    scrollbar-width: none;
+}
+
+/* TODO: Quasar may already have this class */
+.width-100 {
+    width: 100%;
+}
+
+/* TODO: re-readup on mixins to make some of these styles more dynamic, possibly mixins */
+
+</style>

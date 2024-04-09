@@ -17,7 +17,7 @@
         </template>
       </q-img>
 
-      <div class="bg-blue-grey column row" style="flex: 1;">
+      <div class="bg-blue-grey column flex-1 row">
         <q-card-section>
           <q-btn
             :icon="icon ?? 'favorite'"
@@ -25,13 +25,12 @@
             @click="emit('icon-click')"
             :class="iconClass"
             color="white"
-            class="absolute"
-            style="top: 0; right: 12px; transform: translateY(-50%);"
+            class="absolute top-right-offset"
           />
         </q-card-section>
 
         <slot name="body">
-          <q-card-section class="bg-blue-grey" style="flex: 1;">
+          <q-card-section class="bg-blue-grey flex-1">
             {{ body }}
           </q-card-section>
         </slot>
@@ -68,3 +67,18 @@
   //#endregion Props & Emits
 
 </script>
+
+<!-- TODO: Move to global styling accessible by all components -->
+<style scoped>
+
+.flex-1 {
+  flex: 1;
+}
+
+.top-right-offset {
+  right: 12px;
+  top: 0;
+  transform: translateY(-50%);
+}
+
+</style>

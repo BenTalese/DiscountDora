@@ -20,7 +20,7 @@
       <div class="bg-blue-grey column flex-1 row">
         <q-card-section>
           <q-btn
-            :icon="icon ?? 'favorite'"
+            :icon="icon"
             fab
             @click="emit('icon-click')"
             :class="iconClass"

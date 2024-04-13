@@ -31,12 +31,6 @@
             "justMyCode": true
         },
         // {
-        //     "type": "node",
-        //     "request": "launch",
-        //     "name": "Web App",
-        //     "preLaunchTask": "quasar:dev"
-        // },
-        // {
         //     "type": "firefox",
         //     "request": "launch",
         //     "name": "Web App (Old)",
@@ -66,6 +60,7 @@
             "name": "Web App: Firefox",
             "url": "http://localhost:5174",
             "webRoot": "${workspaceFolder}/framework/web_app/src",
+            "preLaunchTask": "quasar:dev",
             "pathMappings": [
                 {
                     "url": "http://localhost:5174/src",

@@ -33,12 +33,15 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_level_one = generate_entity(StockLevel)
     stock_level_one.description = "Well-Stocked"
     stock_level_two = generate_entity(StockLevel)
-    stock_level_two.description = "Low Stock"
+    stock_level_two.description = "Sufficient Stock"
     stock_level_three = generate_entity(StockLevel)
-    stock_level_three.description = "Out of Stock"
+    stock_level_three.description = "Low Stock"
+    stock_level_four = generate_entity(StockLevel)
+    stock_level_four.description = "Out of Stock"
     persistence.add(stock_level_one)
     persistence.add(stock_level_two)
     persistence.add(stock_level_three)
+    persistence.add(stock_level_four)
     #session.add_all([x, y, z])
     # TODO: add(*entities) (actually, why?...for this one file?)
 

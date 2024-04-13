@@ -8,6 +8,6 @@ export default class StockLevelApiService {
         this.httpClient = new AxiosHttpClient(5170);
     }
 
-    getAll = async (): Promise<StockLevel[]> =>
+    getAllAsync = async (): Promise<StockLevel[]> =>
         await this.httpClient.get<StockLevel[]>('/stock-levels');
 }

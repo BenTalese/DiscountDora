@@ -1,4 +1,4 @@
-import type { CreateStockItemCommand, StockItem } from "src/models/StockItem";
+import type { StockItem } from "src/models/StockItem";
 import AxiosHttpClient from "./AxiosHttpClient";
 import type { CreatedResponse } from "./AxiosHttpClient"
 
@@ -9,23 +9,35 @@ export default class StockItemApiService {
         this.httpClient = new AxiosHttpClient(5170);
     }
 
-    create = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>
+    createAsync = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>
         await this.httpClient.post<CreatedResponse>("/stock-items", stockItem);
 
-    delete = async (stockItemID: string): Promise<void> =>
+    deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    get = async (stockItemID: string): Promise<StockItem> =>
+    getAsync = async (stockItemID: string): Promise<StockItem> =>
         await this.httpClient.get<StockItem>(`/stock-items/${stockItemID}`);
 
-    getAll = async (): Promise<StockItem[]> =>
+    getAllAsync = async (): Promise<StockItem[]> =>
         await this.httpClient.get<StockItem[]>('/stock-items');
 
-    paginate = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
+    paginateAsync = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
         await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
             `/stock-items?page=${page}&page-size=${pageSize}`
         );
 
-    update = async (stockItemId: string, stockItem: Partial<StockItem>): Promise<StockItem> =>
-        await this.httpClient.patch<StockItem>(`/stock-items/${stockItemId}`, stockItem);
+    updateAsync = async (stockItemID: string, stockItem: Partial<UpdateStockItemCommand>): Promise<void> =>
+        await this.httpClient.patch<void>(`/stock-items/${stockItemID}`, stockItem);
+}
+
+export type CreateStockItemCommand = {
+    name: string;
+    stock_level_id: string;
+    stock_location_id: string | null;
+}
+
+export type UpdateStockItemCommand = {
+    name: string | null;
+    stock_level_id: string | null;
+    stock_location_id: string | null;
 }

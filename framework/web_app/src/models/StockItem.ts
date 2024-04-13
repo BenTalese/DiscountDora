@@ -12,9 +12,3 @@ export type StockItem = {
     stock_level_id: string;
     stock_location_id: string | null;
 }
-
-export type CreateStockItemCommand = {
-    name: string;
-    stock_level_id: string;
-    stock_location_id: string | null;
-}

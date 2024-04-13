@@ -12,9 +12,9 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
     // Getters
 
     // Actions
-    const getStockLevels = async () => await stockLevelApiService
-        .getAll()
+    const getStockLevelsAsync = async () => await stockLevelApiService
+        .getAllAsync()
         .then((res) => stockLevels.value = res)
 
-    return { stockLevels, getStockLevels }
+    return { stockLevels, getStockLevelsAsync }
 });

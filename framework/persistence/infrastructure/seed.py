@@ -61,6 +61,7 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_three.stock_level = stock_level_three
     persistence.add(stock_item_three)
 
+    # FIXME: This is still creating an additional stock item even with gen navs false???
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)
     shopping_list_one.items.append(stock_item_two)
@@ -68,18 +69,18 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
-def generate_entity(entity_type):
+def generate_entity(entity_type, should_generate_navigations: bool = False):
     data = {}
     for attribute_name, attribute_type in entity_type.__annotations__.items():
-        data[attribute_name] = get_value_for_type(entity_type, attribute_name, attribute_type)
+        data[attribute_name] = get_value_for_type(entity_type, attribute_name, attribute_type, should_generate_navigations)
     return entity_type(**data)
 
-def get_value_for_type(entity_type, attr_name, type):
+def get_value_for_type(entity_type, attr_name, type, should_generate_navigations):
     if is_list(type):
-        return [get_value_for_type(entity_type, attr_name, type.__args__[0])]
+        return [get_value_for_type(entity_type, attr_name, type.__args__[0], should_generate_navigations)]
 
-    if is_entity(type):
-        return generate_entity(type)
+    if is_entity(type) and should_generate_navigations:
+        return generate_entity(type, should_generate_navigations)
 
     if type == str:
         return ''.join([entity_type.__name__, "__", attr_name, '__'] + random.choices(string.ascii_letters, k=5))

@@ -6,6 +6,7 @@ from application.use_cases.stock_items.create_stock_item.create_stock_item_input
     CreateStockItemInputPort
 from application.use_cases.stock_items.delete_stock_item.delete_stock_item_input_port import \
     DeleteStockItemInputPort
+from application.use_cases.stock_items.update_stock_item.update_stock_item_input_port import UpdateStockItemInputPort
 from domain.entities.base_entity import EntityID
 from framework.dora_api.infrastructure.request_body_decorator import \
     has_request_body
@@ -17,6 +18,7 @@ from framework.dora_api.routes.stock_items.delete_stock_item_presenter import \
     DeleteStockItemPresenter
 from framework.dora_api.routes.stock_items.get_stock_items_presenter import \
     GetStockItemsPresenter
+from framework.dora_api.routes.stock_items.update_stock_item_presenter import UpdateStockItemPresenter
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
@@ -67,4 +69,16 @@ async def get_stock_items_async(query = None):
     _Presenter = GetStockItemsPresenter()
 
     await _StockItemController.get_stock_items_async(_Presenter)
+    return _Presenter.result
+
+@STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["PATCH"])
+async def update_stock_item_async(stock_item_id):
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
+    _Presenter: UpdateStockItemPresenter = _ServiceProvider.get_service(UpdateStockItemPresenter)
+
+    _InputPort = UpdateStockItemInputPort()
+    _InputPort.stock_item_id = EntityID(stock_item_id)
+
+    await _StockItemController.update_stock_item_async(_InputPort, _Presenter)
     return _Presenter.result

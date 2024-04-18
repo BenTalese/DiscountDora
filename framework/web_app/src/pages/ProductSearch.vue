@@ -11,21 +11,21 @@
             square
             class="bg-white col">
             <template v-slot:prepend>
-                <q-btn round dense flat icon="tune" @click="toggleShowFilters" />
+                <q-btn round dense flat icon="tune" @click="toggleShowFiltersContainer" />
                 <q-btn round dense flat icon="search" @click="search" />
             </template>
         </q-input>
     </div>
 
-    <div v-show="showFilters" class="no-wrap row q-pa-sm scroll scrollbar-none">
+    <div v-show="showFiltersContainer" class="no-wrap row q-pa-sm scroll scrollbar-none">
 
         <select-component
             label="Stores"
             :multiple="true"
             :options="merchantStore.merchants"
             :option-label="(merchant: Merchant) => merchant.name"
-            :model-value="productStore.offerFilters.stores"
-            @update:model-value="productStore.setStoresFilter"
+            :model-value="productStore.productSearchOfferFilters.stores"
+            @update:model-value="productStore.setProductSearchStoresFilter"
             :optionIconName="(isSelected: boolean): string => isSelected ? 'check_box' : 'check_box_outline_blank'"
         />
 
@@ -33,18 +33,18 @@
             label="Sort By"
             :options="OfferSortByOptions"
             :option-label="optionLabelSelector"
-            :model-value="productStore.offerFilters.sortBy"
-            @update:model-value="productStore.setSortByFilter"
+            :model-value="productStore.productSearchOfferFilters.sortBy"
+            @update:model-value="productStore.setProductSearchSortByFilter"
         />
 
         <q-btn
             type="button"
-            @click="productStore.toggleShowOnlyAvailable"
+            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
-            :class="productStore.offerFilters.showOnlyAvailable ? 'bg-blue': 'bg-white'"
+            :class="productStore.productSearchOfferFilters.showOnlyAvailable ? 'bg-blue': 'bg-white'"
             class="q-ma-sm"
             square
         >
@@ -55,13 +55,13 @@
 
         <q-btn
             type="button"
-            @click="productStore.toggleShowOnlyFavourites"
+            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
             text-color="black"
-            :class="productStore.offerFilters.showOnlyFavourites ? 'bg-blue': 'bg-white'"
+            :class="productStore.productSearchOfferFilters.showOnlyFavourites ? 'bg-blue': 'bg-white'"
             class="q-ma-sm"
             square
         >
@@ -72,13 +72,13 @@
 
         <q-btn
             type="button"
-            @click="productStore.toggleShowOnlySpecials"
+            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
             text-color="black"
-            :class="productStore.offerFilters.showOnlySpecials ? 'bg-blue': 'bg-white'"
+            :class="productStore.productSearchOfferFilters.showOnlySpecials ? 'bg-blue': 'bg-white'"
             class="q-ma-sm"
             square
         >
@@ -143,11 +143,14 @@
 import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
+import { nameof } from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
 import { getOfferFullName, getOfferSize, isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import ImageService from 'src/services/files/ImageService';
 import { useMerchantStore } from 'src/stores/MerchantStore';
+import { IProductSearchFilters, useProductStore } from 'src/stores/ProductStore';
+import { ref, watch } from 'vue';
 
 const merchantStore = useMerchantStore();
 const productStore = useProductStore();
@@ -170,12 +173,16 @@ const search = (): Promise<string> =>
 
 //#region Filters
 
-const showFilters = ref(true);
+const showFiltersContainer = ref(true);
 
-const toggleShowFilters = (): boolean =>
-    showFilters.value = !showFilters.value;
+const toggleShowFiltersContainer = (): boolean =>
+    showFiltersContainer.value = !showFiltersContainer.value;
+
+const toggleSearchFilter = (filterName: string): void =>
+    productStore.toggleProductSearchFilter(filterName as keyof IProductSearchFilters);
 
 const optionLabelSelector = (option: IOfferSortByOption): string =>
+    option.description;
     option.Description;
 
 //#endregion Filters

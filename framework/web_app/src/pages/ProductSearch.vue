@@ -22,7 +22,7 @@
         <select-component
             label="Stores"
             :multiple="true"
-            :options="productStore.merchants"
+            :options="merchantStore.merchants"
             :option-label="(merchant: Merchant) => merchant.name"
             :model-value="productStore.offerFilters.stores"
             @update:model-value="productStore.setStoresFilter"
@@ -147,9 +147,9 @@ import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByO
 import { getOfferFullName, getOfferSize, isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import ImageService from 'src/services/files/ImageService';
-import { useProductStore } from 'src/stores/ProductStore';
-import { ref } from 'vue';
+import { useMerchantStore } from 'src/stores/MerchantStore';
 
+const merchantStore = useMerchantStore();
 const productStore = useProductStore();
 
 //#region Search

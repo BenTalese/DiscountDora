@@ -1,13 +1,32 @@
 import { defineStore } from 'pinia';
+import { Merchant } from 'src/models/Merchant';
+import MerchantApiService from 'src/services/api/MerchantApiService';
+import { ref } from 'vue';
 
-export const useMerchantStore = defineStore('merchant', {
-    state: () => ({
+const merchantApiService = new MerchantApiService();
 
-    }),
-    getters: {
+export const useMerchantStore = defineStore('merchant', () => {
 
-    },
-    actions: {
+//#region Merchants
 
-    }
+const merchants = ref<Merchant[]>([]);
+
+async function getMerchantsAsync(){
+    merchantApiService
+        .getAllAsync()
+        .then((merchantsData) => {
+            const collator = new Intl.Collator('en', {'sensitivity': 'base'});
+
+            merchants.value = merchantsData.sort((merchant1, merchant2) =>
+                collator.compare(merchant1.name, merchant2.name));
+        });
+};
+
+//#endregion Merchants
+
+return {
+    merchants,
+    getMerchantsAsync
+};
+
 });

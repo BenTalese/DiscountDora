@@ -3,8 +3,10 @@
 </template>
 
 <script setup lang="ts">
+import { useMerchantStore } from './stores/MerchantStore';
 import { useProductStore } from './stores/ProductStore';
 
+  const merchantStore = useMerchantStore();
   const productStore = useProductStore();
 
   //TODO: If initial load up fails.
@@ -12,7 +14,7 @@ import { useProductStore } from './stores/ProductStore';
   //  (no data for some components, partially working pages)
   // Solution is likely to conditionally re-fetch in the store as Ben suggested
   // or to re fetch on pages that require it if there is no data
-  productStore.getMerchantsAsync();
+  merchantStore.getMerchantsAsync();
   productStore.getProductsAsync();
 
 </script>

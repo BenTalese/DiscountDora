@@ -2,35 +2,35 @@ import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import { sortOffersByFullNameAsc, sortOffersByFullNameDesc, sortOffersByPriceHighToLow, sortOffersByPriceLowToHigh, sortOffersBySpecialBestToWorst } from './ScrapedProductOfferLogic';
 
 export interface IOfferSortByOption {
-    Description: string;
-    IsDefault: boolean;
-    Apply: (offers: ScrapedProductOffer[]) => ScrapedProductOffer[];
+    description: string;
+    isDefault: boolean;
+    sort: (offers: ScrapedProductOffer[]) => ScrapedProductOffer[];
 }
 
 export const OfferSortByOptions: IOfferSortByOption[] = [
     {
-        Description: 'Name (A - Z)',
-        IsDefault: true,
-        Apply: sortOffersByFullNameAsc
+        description: 'Name (A - Z)',
+        isDefault: true,
+        sort: sortOffersByFullNameAsc
     },
     {
-        Description: 'Name (Z - A)',
-        IsDefault: false,
-        Apply: sortOffersByFullNameDesc
+        description: 'Name (Z - A)',
+        isDefault: false,
+        sort: sortOffersByFullNameDesc
     },
     {
-        Description: 'Price (low to high)',
-        IsDefault: false,
-        Apply: sortOffersByPriceLowToHigh
+        description: 'Price (low to high)',
+        isDefault: false,
+        sort: sortOffersByPriceLowToHigh
     },
     {
-        Description: 'Price (high to low)',
-        IsDefault: false,
-        Apply: sortOffersByPriceHighToLow
+        description: 'Price (high to low)',
+        isDefault: false,
+        sort: sortOffersByPriceHighToLow
     },
     {
-        Description: 'Special (best to worst)',
-        IsDefault: false,
-        Apply: sortOffersBySpecialBestToWorst
+        description: 'Special (best to worst)',
+        isDefault: false,
+        sort: sortOffersBySpecialBestToWorst
     }
 ];

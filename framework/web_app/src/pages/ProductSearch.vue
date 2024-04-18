@@ -183,7 +183,14 @@ const toggleSearchFilter = (filterName: string): void =>
 
 const optionLabelSelector = (option: IOfferSortByOption): string =>
     option.description;
-    option.Description;
+
+/**
+ * Initialises filters requiring merchants, once they exist.
+ */
+const unwatchMerchants = watch(() => merchantStore.merchants, async (newValue: Merchant[]) => {
+    productStore.addStoresToProductSearchFilter(newValue);
+    unwatchMerchants();
+});
 
 //#endregion Filters
 

@@ -1,7 +1,7 @@
 export default class NotSupportedError extends Error {
 
-    constructor(){
-        super()
+    constructor(message: string = ''){
+        super(message)
 
         this.name = 'NotSupportedError';
     }

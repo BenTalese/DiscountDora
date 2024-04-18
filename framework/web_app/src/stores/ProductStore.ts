@@ -1,15 +1,14 @@
 import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
+import NotSupportedError from 'src/exceptions/NotSupportedError';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
 import { isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import MerchantApiService from 'src/services/api/MerchantApiService';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
 import { computed, reactive, ref } from 'vue';
 
-const merchantApiService = new MerchantApiService();
 const productApiService = new ProductApiService();
 
 // TODO:
@@ -25,64 +24,60 @@ const productApiService = new ProductApiService();
 // Issues:
 // - Scraped offers return merchant stock code as a number BUT get products returns it as a string
 
+export interface IProductSearchFilters {
+    showOnlyAvailable: boolean,
+    showOnlyFavourites: boolean,
+    showOnlySpecials: boolean,
+    sortBy: IOfferSortByOption,
+    stores: Merchant[]
+}
+
 export const useProductStore = defineStore('product', () => {
 
     //#region Filters
 
-    interface IOfferFilters {
-        showOnlyAvailable: boolean,
-        showOnlyFavourites: boolean,
-        showOnlySpecials: boolean,
-        sortBy: IOfferSortByOption,
-        stores: Merchant[]
-    }
-
-    const offerFilters = reactive<IOfferFilters>({
+    const productSearchOfferFilters = reactive<IProductSearchFilters>({
         showOnlyAvailable: false,
         showOnlyFavourites: false,
         showOnlySpecials: false,
-        sortBy: OfferSortByOptions.find(opts => opts.IsDefault === true) as IOfferSortByOption,
+        sortBy: OfferSortByOptions.find(opts => opts.isDefault === true) as IOfferSortByOption,
         stores: []
     })
 
-    const pushToStoresFilter = (merchantsData: Merchant[]): void => { offerFilters.stores.push(...merchantsData); };
+    /**
+     * Adds stores to the product search filter.
+     * @param merchantsData An array of Merchants representing the stores to add to the filter.
+     * @returns The new length of the stores array after adding the new merchants.
+     */
+    const addStoresToProductSearchFilter = (merchantsData: Merchant[]): number => productSearchOfferFilters.stores.push(...merchantsData);
 
-    const setStoresFilter = (merchantsData: Merchant[]): void => { offerFilters.stores = merchantsData; };
+    /**
+     * Replaces the product search filter for stores with the provided data.
+     * @param merchantsData An array of Merchants representing the stores that are being filtered.
+     */
+    const setProductSearchStoresFilter = (merchantsData: Merchant[]): void => { productSearchOfferFilters.stores = merchantsData; };
 
-    const setSortByFilter = (sortBy: IOfferSortByOption) => { offerFilters.sortBy = sortBy };
+    /**
+     * Sets the sorting criteria for product search results.
+     * @param sortBy An object representing the sorting options for product search results.
+     */
+    const setProductSearchSortByFilter = (sortBy: IOfferSortByOption): void => { productSearchOfferFilters.sortBy = sortBy };
 
-    const toggleShowOnlyAvailable = (): void => { offerFilters.showOnlyAvailable = !offerFilters.showOnlyAvailable; };
+    /**
+     * Toggles the specified boolean property of the product search filter.
+     * @param propertyName The name of the property to toggle within the product search filters.
+     * @throws {NotSupportedError} If the property type is not boolean.
+     */
+    function toggleProductSearchFilter(propertyName: keyof IProductSearchFilters): void {
+        if(typeof productSearchOfferFilters[propertyName] === 'boolean')
+            (productSearchOfferFilters[propertyName] as boolean) = !productSearchOfferFilters[propertyName];
+        else
+            throw new NotSupportedError('Filter to toggle is not of type boolean.');
+    }
 
-    const toggleShowOnlyFavourites = (): void => { offerFilters.showOnlyFavourites = !offerFilters.showOnlyFavourites; };
-
-    const toggleShowOnlySpecials = (): void => { offerFilters.showOnlySpecials = !offerFilters.showOnlySpecials; };
+    const ProductSearchFilterStoreNames = computed(() => productSearchOfferFilters.stores?.map(sto => sto.name))
 
     //#endregion Filters
-
-    //#region Merchants
-
-    const merchants = ref<Merchant[]>();
-
-    const merchantNames = computed(() => offerFilters.stores?.map(sto => sto.name))
-
-    async function getMerchantsAsync(){
-        merchantApiService
-            .getAllAsync()
-            .then((merchantsData) => {
-                const collator = new Intl.Collator('en', {'sensitivity': 'base'});
-
-                merchants.value = merchantsData.sort((merchant1, merchant2) =>
-                    collator.compare(merchant1.name, merchant2.name))
-
-                // TODO: test the push vs set one more time, if push add helpful comment here
-                // The merchants are options but not selected if Set rather than push
-                // setStoresFilter(merchants.value);
-                if(!offerFilters.stores.length)
-                    pushToStoresFilter(merchants.value);
-            });
-    };
-
-    //#endregion Merchants
 
     //#region Products
 
@@ -111,14 +106,14 @@ export const useProductStore = defineStore('product', () => {
         let shallowOffersCopy = productOffers.value.slice();
 
         shallowOffersCopy = shallowOffersCopy.filter(off =>
-            (offerFilters.showOnlyAvailable ? off.is_available === true : true) &&
-            (offerFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
-            (offerFilters.showOnlySpecials ?  off.price_now < off.price_was : true) &&
-            merchantNames.value?.includes(off.merchant_name) &&
+            (productSearchOfferFilters.showOnlyAvailable ? off.is_available === true : true) &&
+            (productSearchOfferFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
+            (productSearchOfferFilters.showOnlySpecials ?  off.price_now < off.price_was : true) &&
+            ProductSearchFilterStoreNames.value?.includes(off.merchant_name) &&
             // Don't display products that don't have a current price
             off.price_now != null);
 
-        offerFilters.sortBy.Apply(shallowOffersCopy);
+        productSearchOfferFilters.sortBy.sort(shallowOffersCopy);
 
         return shallowOffersCopy;
     });
@@ -132,24 +127,19 @@ export const useProductStore = defineStore('product', () => {
         productApiService
             .searchByTermAsync(query)
             .then((offers) => productOffers.value = offers)
-            .catch(() => {})
+            .catch(() => {}) //TODO: Implement an internal server error msg
             .finally(() => Loading.hide());
     }
 
     //#endregion Product Offers
 
     return {
-        offerFilters,
-        pushToStoresFilter,
-        setStoresFilter,
-        setSortByFilter,
-        toggleShowOnlyAvailable,
-        toggleShowOnlyFavourites,
-        toggleShowOnlySpecials,
-
-        merchants,
-        merchantNames,
-        getMerchantsAsync,
+        productSearchOfferFilters,
+        ProductSearchFilterStoreNames,
+        addStoresToProductSearchFilter,
+        setProductSearchStoresFilter,
+        setProductSearchSortByFilter,
+        toggleProductSearchFilter,
 
         products,
         addOfferToFavouritesAsync,

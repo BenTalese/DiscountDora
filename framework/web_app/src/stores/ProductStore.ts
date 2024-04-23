@@ -2,12 +2,12 @@ import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/NotSupportedError';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
+import { isOfferFavourited, isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, readonly, ref } from 'vue';
 
 const productApiService = new ProductApiService();
 
@@ -97,7 +97,7 @@ export const useProductStore = defineStore('product', () => {
 
     //#region Product Offers
 
-    const productOffers = ref<ScrapedProductOffer[]>();
+    const productOffers = ref<ScrapedProductOffer[] | undefined>();
 
     const filteredProductOffers = computed(() => {
         if(productOffers.value === undefined)
@@ -106,12 +106,10 @@ export const useProductStore = defineStore('product', () => {
         let shallowOffersCopy = productOffers.value.slice();
 
         shallowOffersCopy = shallowOffersCopy.filter(off =>
-            (productSearchOfferFilters.showOnlyAvailable ? off.is_available === true : true) &&
+            (productSearchOfferFilters.showOnlyAvailable ? off.is_available : true) &&
             (productSearchOfferFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
-            (productSearchOfferFilters.showOnlySpecials ?  off.price_now < off.price_was : true) &&
-            ProductSearchFilterStoreNames.value?.includes(off.merchant_name) &&
-            // Don't display products that don't have a current price
-            off.price_now != null);
+            (productSearchOfferFilters.showOnlySpecials ? isOfferOnSpecial(off) : true) &&
+            ProductSearchFilterStoreNames.value?.includes(off.merchant_name));
 
         productSearchOfferFilters.sortBy.sort(shallowOffersCopy);
 
@@ -127,7 +125,6 @@ export const useProductStore = defineStore('product', () => {
         productApiService
             .searchByTermAsync(query)
             .then((offers) => productOffers.value = offers)
-            .catch(() => {}) //TODO: Implement an internal server error msg
             .finally(() => Loading.hide());
     }
 
@@ -141,11 +138,11 @@ export const useProductStore = defineStore('product', () => {
         setProductSearchSortByFilter,
         toggleProductSearchFilter,
 
-        products,
+        products: readonly(products),
         addOfferToFavouritesAsync,
         getProductsAsync,
 
-        productOffers,
+        productOffers: readonly(productOffers),
         filteredProductOffers,
         searchByTermAsync
     };

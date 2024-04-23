@@ -2,22 +2,6 @@ import { Product } from 'src/models/Product';
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 
 /**
- * E.g., Coles offers don't always contain the brand in the name.
- */
-export function getOfferFullName(brand: string | null, name: string): string {
-    if(brand === null)
-        return name;
-
-    return name.includes(brand) ? name : `${brand} ${name}`;
-}
-
-/**
- * E.g., Coles donuts have a null value and a '6 pack' unit.
- */
-export const getOfferSize = (value: number, unit: string): string =>
-    value ? `${value}${unit}` : unit;
-
-/**
  * Determines whether a scraped product offer exists as a product, infering that it is saved.
  * @param offer the scraped product offer that requires determination
  * @param products the saved products
@@ -34,6 +18,9 @@ export function isOfferFavourited(offer: ScrapedProductOffer, products: Product[
 
     return savedProduct != undefined;
 };
+
+export const isOfferOnSpecial = (offer: ScrapedProductOffer): boolean =>
+    offer.price_now > 0 && offer.price_now < offer.price_was;
 
 export const sortOffersBySpecialBestToWorst = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
     offers.sort((offerA, offerB) => {

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { Merchant } from 'src/models/Merchant';
 import MerchantApiService from 'src/services/api/MerchantApiService';
-import { ref } from 'vue';
+import { readonly, ref } from 'vue';
 
 const merchantApiService = new MerchantApiService();
 
@@ -25,7 +25,7 @@ async function getMerchantsAsync(){
 //#endregion Merchants
 
 return {
-    merchants,
+    merchants: readonly(merchants),
     getMerchantsAsync
 };
 

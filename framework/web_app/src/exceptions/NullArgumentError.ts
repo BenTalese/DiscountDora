@@ -2,8 +2,8 @@ export default class NullArgumentError extends Error {
 
     constructor(argument: string) {
         super(`${argument} cannot be null`);
-
-        this.name = 'NullArgumentError';
-    }
+    };
 
 }
+
+NullArgumentError.prototype.name = 'NullArgumentError';

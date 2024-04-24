@@ -24,8 +24,8 @@ export const isOfferOnSpecial = (offer: ScrapedProductOffer): boolean =>
 
 export const sortOffersBySpecialBestToWorst = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
     offers.sort((offerA, offerB) => {
-        const _OfferA = (offerA.price_was ?? 0) - (offerA.price_now ?? 0);
-        const _OfferB = (offerB.price_was ?? 0) - (offerB.price_now ?? 0);
+        const _OfferA = offerA.price_was - offerA.price_now;
+        const _OfferB = offerB.price_was - offerB.price_now;
 
         if(_OfferA < _OfferB) return 1;
         else if(_OfferA > _OfferB) return -1;
@@ -34,8 +34,8 @@ export const sortOffersBySpecialBestToWorst = (offers: ScrapedProductOffer[]): S
 
 export const sortOffersByFullNameAsc = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
     offers.sort((offerA, offerB) => {
-        const _OfferA = getOfferFullName(offerA.brand?.toLowerCase() ?? null, offerA.name.toLowerCase());
-        const _OfferB = getOfferFullName(offerB.brand?.toLowerCase() ?? null, offerB.name.toLowerCase());
+        const _OfferA = offerA.name.toLowerCase();
+        const _OfferB = offerB.name.toLowerCase();
 
         if(_OfferA < _OfferB) return -1;
         else if(_OfferA > _OfferB) return 1;
@@ -44,8 +44,8 @@ export const sortOffersByFullNameAsc = (offers: ScrapedProductOffer[]): ScrapedP
 
 export const sortOffersByFullNameDesc = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
     offers.sort((offerA, offerB) => {
-        const _OfferA = getOfferFullName(offerA.brand?.toLowerCase() ?? null, offerA.name.toLowerCase());
-        const _OfferB = getOfferFullName(offerB.brand?.toLowerCase() ?? null, offerB.name.toLowerCase());
+        const _OfferA = offerA.name.toLowerCase();
+        const _OfferB = offerB.name.toLowerCase();
 
         if(_OfferA < _OfferB) return 1;
         else if(_OfferA > _OfferB) return -1;

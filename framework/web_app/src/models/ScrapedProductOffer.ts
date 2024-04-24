@@ -5,8 +5,10 @@ export type ScrapedProductOffer = {
     merchant_name: string
     merchant_stockcode: string
     name: string
+    price_difference: number
     price_now: number
     price_was: number
+    size: string
     size_unit: string
     size_value: number
     web_url: string

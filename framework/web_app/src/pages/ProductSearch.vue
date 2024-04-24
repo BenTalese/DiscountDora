@@ -23,28 +23,28 @@
             label="Stores"
             :multiple="true"
             :options="merchantStore.merchants"
-            :option-label="(merchant: Merchant) => merchant.name"
+            :option-label="getStoresOptionLabel"
             :model-value="productStore.productSearchOfferFilters.stores"
             @update:model-value="productStore.setProductSearchStoresFilter"
-            :optionIconName="(isSelected: boolean): string => isSelected ? 'check_box' : 'check_box_outline_blank'"
+            :optionIconName="getStoresOptionIcon"
         />
 
         <select-component
             label="Sort By"
             :options="OfferSortByOptions"
-            :option-label="optionLabelSelector"
+            :option-label="getSortByOptionLabel"
             :model-value="productStore.productSearchOfferFilters.sortBy"
             @update:model-value="productStore.setProductSearchSortByFilter"
         />
 
         <q-btn
             type="button"
-            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
+            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
-            :class="productStore.productSearchOfferFilters.showOnlyAvailable ? 'bg-blue': 'bg-white'"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)"
             class="q-ma-sm"
             square
         >
@@ -55,13 +55,13 @@
 
         <q-btn
             type="button"
-            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
+            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
             text-color="black"
-            :class="productStore.productSearchOfferFilters.showOnlyFavourites ? 'bg-blue': 'bg-white'"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyFavourites)"
             class="q-ma-sm"
             square
         >
@@ -72,13 +72,13 @@
 
         <q-btn
             type="button"
-            @click="toggleSearchFilter(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
+            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
             no-caps
             no-wrap
             size="md"
             :stretch="false"
             text-color="black"
-            :class="productStore.productSearchOfferFilters.showOnlySpecials ? 'bg-blue': 'bg-white'"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)"
             class="q-ma-sm"
             square
         >
@@ -178,19 +178,19 @@ const showFiltersContainer = ref(true);
 const toggleShowFiltersContainer = (): boolean =>
     showFiltersContainer.value = !showFiltersContainer.value;
 
-const toggleSearchFilter = (filterName: string): void =>
+const toggleFilterFlag = (filterName: string): void =>
     productStore.toggleProductSearchFilter(filterName as keyof IProductSearchFilters);
 
-const optionLabelSelector = (option: IOfferSortByOption): string =>
+const getFilterBttnClass = (isSelected: boolean) => isSelected ? 'bg-blue': 'bg-white';
+
+const getSortByOptionLabel = (option: IOfferSortByOption): string =>
     option.description;
 
-/**
- * Initialises filters requiring merchants, once they exist.
- */
-const unwatchMerchants = watch(() => merchantStore.merchants, async (newValue: Merchant[]) => {
-    productStore.addStoresToProductSearchFilter(newValue);
-    unwatchMerchants();
-});
+const getStoresOptionLabel = (merchant: Merchant) =>
+    merchant.name;
+
+const getStoresOptionIcon = (isSelected: boolean): string =>
+    isSelected ? 'check_box' : 'check_box_outline_blank';
 
 //#endregion Filters
 

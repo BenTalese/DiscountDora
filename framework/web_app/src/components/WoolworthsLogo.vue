@@ -8,7 +8,7 @@
 
 <script setup lang="ts">
 
-    interface WoolworthsLogoProps {
+    interface IWoolworthsLogoProps {
 
         /**
          * Sets the width of the logo in pixels.
@@ -17,7 +17,7 @@
 
     }
 
-    withDefaults(defineProps<WoolworthsLogoProps>(), {
+    withDefaults(defineProps<IWoolworthsLogoProps>(), {
         width: 32
     })
 

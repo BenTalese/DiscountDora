@@ -133,7 +133,7 @@
 
     //#region Multiple
 
-    interface Scope {
+    interface IScope {
 
         /**
          * Option -- its value is taken from 'options' prop
@@ -150,12 +150,12 @@
     /**
      * Retrieves the name of the icon from the optionIconName prop.
      */
-    const getOptionIconName = (scope: Scope): string =>
+    const getOptionIconName = (scope: IScope): string =>
         props.optionIconName instanceof Function
             ? props.optionIconName(scope.selected)
             : props.optionIconName as string;
 
-    function getOptionLabel(scope: Scope) : string {
+    function getOptionLabel(scope: IScope) : string {
         if(props.optionLabel instanceof String){
             const opt = scope.opt as { [key: string]: string }
             return (opt[props.optionLabel as string]);

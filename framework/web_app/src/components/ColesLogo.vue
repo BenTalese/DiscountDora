@@ -27,7 +27,7 @@
 
     //#region Props
 
-    interface ColesLogoProps {
+    interface IColesLogoProps {
 
         /**
          * The height of the logo in pixels;
@@ -43,7 +43,7 @@
 
     }
 
-    withDefaults(defineProps<ColesLogoProps>(), {
+    withDefaults(defineProps<IColesLogoProps>(), {
         height: 32,
         width: 48
     });

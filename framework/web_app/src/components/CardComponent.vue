@@ -35,9 +35,8 @@
           </q-card-section>
         </slot>
 
-        <q-card-actions v-if="chipLabel"  align="right" class="bg-blue-grey">
-          <q-chip :color="chipColour" :label="chipLabel" text-color="white" />
-        </q-card-actions>
+        <slot name="footer"></slot>
+
       </div>
     </q-card>
 </template>
@@ -54,20 +53,6 @@
      * Recommended component for slot: QCardSection;
      */
     body?: string
-
-    /**
-     * The label of the quasar chip component in the card footer;
-     * Only rendered when a value is supplied;
-     */
-    chipLabel?: string | undefined
-
-    /**
-     * The colour applied to the chip in the card footer;
-     * Only applied if the chipLabel prop has a value;
-     * Default: grey;
-     */
-    chipColour?: string | undefined
-
 
     /**
      * Icon name following Quasar convention; Make sure you have the icon library installed unless you are using 'img:' prefix; If 'none' (String) is used as value then no icon is rendered (but screen real estate will still be used for it);

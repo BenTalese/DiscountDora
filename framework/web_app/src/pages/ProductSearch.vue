@@ -124,6 +124,12 @@
                         </div>
                     </q-card-section>
                 </template>
+
+                <template v-slot:footer>
+                    <q-card-actions align="right" class="bg-off-white">
+                        <component :is="merchantLogoComponents[offer.merchant_name]" />
+                    </q-card-actions>
+                </template>
             </card-component>
 
         </div>
@@ -131,10 +137,13 @@
     <div
         v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
         class="row text-h3 q-ma-sm items-center">
+
         <img src="../../src/assets/banana-peel.jpg" class="q-pa-sm round-img" />
+
         <span class="text-h5 q-pa-sm">
             No products found for '{{ previousSearchTerm }}'.
         </span>
+
     </div>
 </template>
 
@@ -142,7 +151,9 @@
 
 import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
+import ColesLogo from 'src/components/ColesLogo.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
+import WoolworthsLogo from 'src/components/WoolworthsLogo.vue';
 import { nameof } from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
 import { getOfferFullName, getOfferSize, isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
@@ -198,13 +209,10 @@ const getStoresOptionIcon = (isSelected: boolean): string =>
 
 const imageService = new ImageService();
 
-const colourByMerchant: { [key: string]: string } = {
-    Coles: 'red-14',
-    Woolworths: 'green-14'
-};
-
-const getMerchantColour = (merchantName: string): string =>
-    colourByMerchant[merchantName];
+const merchantLogoComponents: { [key: string]: unknown } = {
+    Coles: ColesLogo,
+    Woolworths: WoolworthsLogo
+}
 
 //#endregion Offers
 

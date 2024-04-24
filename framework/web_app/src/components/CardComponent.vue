@@ -2,7 +2,7 @@
     <q-card
       bordered
       flat
-      class="column full-height no-wrap rounded-borders row text-white"
+      class="column full-height no-wrap rounded-borders row text-black"
     >
       <q-img
         :src="img"
@@ -17,7 +17,7 @@
         </template>
       </q-img>
 
-      <div class="bg-blue-grey column flex-1 row">
+      <div class="bg-off-white column flex-1 row">
         <q-card-section>
           <q-btn
             :icon="icon"
@@ -30,7 +30,7 @@
         </q-card-section>
 
         <slot name="body">
-          <q-card-section class="bg-blue-grey flex-1">
+          <q-card-section class="flex-1">
             {{ body }}
           </q-card-section>
         </slot>
@@ -105,12 +105,7 @@
 
 </script>
 
-<!-- TODO: Move to global styling accessible by all components -->
 <style scoped>
-
-.flex-1 {
-  flex: 1;
-}
 
 .top-right-offset {
   right: 12px;

@@ -170,12 +170,7 @@
 
 </script>
 
-<!-- TODO: Move to global styling accessible by all componets -->
 <style scoped>
-
-.font-weight-400 {
-    font-weight: 400;
-}
 
 .min-width-200 {
     min-width: 200px;

@@ -1,5 +1,5 @@
 <template>
-    <div class="no-wrap q-pa-md row min-width-100 width-100">
+    <div class="no-wrap q-pa-md row min-width-100 full-width">
         <q-input
             autofocus
             @keydown.enter="search"
@@ -210,7 +210,6 @@ const getMerchantColour = (merchantName: string): string =>
 
 </script>
 
-<!-- TODO: Move to global styling accessible by all componets -->
 <style scoped>
 
 .card-grid {
@@ -218,12 +217,20 @@ const getMerchantColour = (merchantName: string): string =>
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-.flex-1 {
-    flex: 1;
+.h-px-20 {
+    height: 20px;
 }
 
-.font-weight-400 {
-    font-weight: 400;
+.h-px-32 {
+    height: 32px;
+}
+
+.w-px-32 {
+    width: 32px;
+}
+
+.w-px-48 {
+    width: 48px;
 }
 
 .round-img {
@@ -238,12 +245,5 @@ const getMerchantColour = (merchantName: string): string =>
 .scrollbar-none {
     scrollbar-width: none;
 }
-
-/* TODO: Quasar may already have this class */
-.width-100 {
-    width: 100%;
-}
-
-/* TODO: re-readup on mixins to make some of these styles more dynamic, possibly mixins */
 
 </style>

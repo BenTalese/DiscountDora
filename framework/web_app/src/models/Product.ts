@@ -12,5 +12,3 @@ export type Product = {
     size_value: number
     web_url: string
 }
-
-// This is the view model with logic, callbacks, etc... maybe?

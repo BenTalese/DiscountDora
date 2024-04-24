@@ -147,6 +147,9 @@
 
     }
 
+    /**
+     * Retrieves the name of the icon from the optionIconName prop.
+     */
     const getOptionIconName = (scope: Scope): string =>
         props.optionIconName instanceof Function
             ? props.optionIconName(scope.selected)

@@ -19,17 +19,17 @@ export const OfferSortByOptions: IOfferSortByOption[] = [
         sort: sortOffersByFullNameDesc
     },
     {
-        description: 'Price (low to high)',
+        description: 'Price (Low to High)',
         isDefault: false,
         sort: sortOffersByPriceLowToHigh
     },
     {
-        description: 'Price (high to low)',
+        description: 'Price (High to Low)',
         isDefault: false,
         sort: sortOffersByPriceHighToLow
     },
     {
-        description: 'Special (best to worst)',
+        description: 'Specials',
         isDefault: false,
         sort: sortOffersBySpecialBestToWorst
     }

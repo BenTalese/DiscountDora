@@ -19,7 +19,7 @@ class ScrapedProductOffer:
     image: bytes
     image_uri: str
     is_available: bool
-    merchant_name: str # TODO: hmm...str? or id of merchant? would have to use GetMerchants or create if not found
+    merchant_name: str
     merchant_stockcode: str
     name: str
     price_now: float

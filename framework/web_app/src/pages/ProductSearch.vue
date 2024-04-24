@@ -99,27 +99,37 @@
                 :img="imageService.decodeBase64Image(offer.image)"
                 icon="favorite"
                 @icon-click="productStore.addOfferToFavouritesAsync(offer)"
-                :chip-label="offer.merchant_name"
-                :chip-colour="getMerchantColour(offer.merchant_name)"
-                :icon-class="isOfferFavourited(offer, productStore.products) ? 'text-red-12' : 'text-grey'"
+                :icon-class="isOfferFavourited(offer, productStore.products as Product[]) ? 'text-red-12' : 'text-grey'"
             >
                 <template v-slot:body>
                     <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
                             <div class="text-body2 text-weight-regular q-pb-sm">
-                                {{ `${getOfferFullName(offer.brand, offer.name)} | ${getOfferSize(offer.size_value, offer.size_unit)}` }}
+                                {{ `${offer.name} | ${offer.size}` }}
                             </div>
                             <div>
-                                <div class="text-body2 text-weight-medium">
-                                    {{ `$${offer.price_now?.toFixed(2).toString()}` }}
+                                <div class="items-center no-wrap row text-body2 text-weight-medium">
+
+                                    <span>
+                                        {{ offer.price_now > 0
+                                            ? `$${offer.price_now}`
+                                            : 'Price Unavailable' }}
+                                    </span>
+
+                                    <q-badge
+                                        v-if="offer.price_difference > 0"
+                                        class="q-mx-sm"
+                                        color="yellow-6"
+                                        text-color="black"
+                                    >
+                                        SAVE ${{ offer.price_difference }}
+                                    </q-badge>
                                 </div>
-                                <div class="text-caption text-weight-regular">
-                                    {{
-                                        `was $${offer.price_was
-                                            ? offer.price_was?.toFixed(2).toString()
-                                            : offer.price_now?.toFixed(2).toString()}`
-                                    }}
+
+                                <div class="h-px-20 text-caption text-weight-regular">
+                                    <span v-if="offer.price_was > 0">was {{ `$${offer.price_was}` }}</span>
                                 </div>
+
                             </div>
                         </div>
                     </q-card-section>
@@ -156,12 +166,13 @@ import SelectComponent from 'src/components/SelectComponent.vue';
 import WoolworthsLogo from 'src/components/WoolworthsLogo.vue';
 import { nameof } from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { getOfferFullName, getOfferSize, isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
+import { isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
+import { Product } from 'src/models/Product';
 import ImageService from 'src/services/files/ImageService';
 import { useMerchantStore } from 'src/stores/MerchantStore';
 import { IProductSearchFilters, useProductStore } from 'src/stores/ProductStore';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 
 const merchantStore = useMerchantStore();
 const productStore = useProductStore();

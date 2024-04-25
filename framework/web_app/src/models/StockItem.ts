@@ -1,4 +1,3 @@
-
 export type StockItem = {
     name: string;
     stock_item_id: string;

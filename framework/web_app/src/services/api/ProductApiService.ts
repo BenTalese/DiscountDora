@@ -12,8 +12,6 @@ export default class ProductApiService {
         this.mapiHttpClient = new AxiosHttpClient(5172);
     }
 
-    // TODO: Need to decide how to deal with delete product
-    // Do we just want to archive/active-inactive in order continue tracking products
     createAsync = async (command: CreateProductCommand): Promise<CreatedResponse> =>
         await this.dapiHttpClient.post<CreatedResponse>('/products', command);
 

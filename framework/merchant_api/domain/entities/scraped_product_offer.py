@@ -78,7 +78,7 @@ class ScrapedProductOffer:
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
             merchant_name = SupportedMerchant.WOOLWORTHS.value,
-            merchant_stockcode = offer.Stockcode,
+            merchant_stockcode = str(offer.Stockcode),
             name = offer.Name,
             price_now = offer.Price or offer.InstorePrice or 0,
             price_per_cup = (offer.CupString.upper() if offer.CupString else None)
@@ -98,7 +98,7 @@ class ScrapedProductOffer:
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
             merchant_name = SupportedMerchant.COLES.value,
-            merchant_stockcode = offer.id,
+            merchant_stockcode = str(offer.id),
             name = offer.name,
             price_now = offer.pricing.now if offer.pricing else 0,
             price_per_cup = offer.pricing.comparable.upper() if offer.pricing else None,

@@ -11,19 +11,6 @@ import { computed, reactive, readonly, ref } from 'vue';
 
 const productApiService = new ProductApiService();
 
-// TODO:
-// New Features:
-// - Create a relevance algorithm & set as default sortBy
-// - Add ability to un-favourite a product
-// - Add query functionality on get products.
-    //In the .Then for addOfferToFavouritesAsync(),
-    //add the new product to state using a query specifically for that product rather than getting all products.
-// - Add quasar notify/toast OR other feedback for when a product is favourited
-
-// TODO:
-// Issues:
-// - Scraped offers return merchant stock code as a number BUT get products returns it as a string
-
 export interface IProductSearchFilters {
     showOnlyAvailable: boolean,
     showOnlyFavourites: boolean,

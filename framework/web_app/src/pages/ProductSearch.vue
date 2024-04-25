@@ -97,6 +97,7 @@
 
             <card-component
                 :img="imageService.decodeBase64Image(offer.image)"
+                :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'"
                 icon="favorite"
                 @icon-click="productStore.addOfferToFavouritesAsync(offer)"
                 :icon-class="isOfferFavourited(offer, productStore.products as Product[]) ? 'text-red-12' : 'text-grey'"
@@ -110,20 +111,23 @@
                             <div>
                                 <div class="items-center no-wrap row text-body2 text-weight-medium">
 
-                                    <span>
-                                        {{ offer.price_now > 0
-                                            ? `$${offer.price_now}`
-                                            : 'Price Unavailable' }}
-                                    </span>
+                                    <template v-if="offer.price_now > 0">
+                                        <span>
+                                            {{ `$${offer.price_now}`}}
+                                        </span>
 
-                                    <q-badge
-                                        v-if="offer.price_difference > 0"
-                                        class="q-mx-sm"
-                                        color="yellow-6"
-                                        text-color="black"
-                                    >
-                                        SAVE ${{ offer.price_difference }}
-                                    </q-badge>
+                                        <q-badge
+                                            v-if="offer.price_difference > 0"
+                                            class="q-mx-sm"
+                                            color="yellow-6"
+                                            text-color="black"
+                                        >
+                                            SAVE ${{ offer.price_difference }}
+                                        </q-badge>
+                                    </template>
+                                    <span v-else>
+                                        Price Unavailable
+                                    </span>
                                 </div>
 
                                 <div class="h-px-20 text-caption text-weight-regular">

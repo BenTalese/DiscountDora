@@ -13,7 +13,7 @@ export function isOfferFavourited(offer: ScrapedProductOffer, products: Product[
     }
 
     const savedProduct = products?.find((product: Product) =>
-        product.merchant_stockcode == offer.merchant_stockcode &&
+        product.merchant_stockcode === offer.merchant_stockcode &&
         product.merchant_name === offer.merchant_name)
 
     return savedProduct != undefined;

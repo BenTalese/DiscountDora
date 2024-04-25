@@ -12,8 +12,14 @@
         img-class="q-pa-lg"
         class="bg-white"
       >
+        <div v-if="imgCaption" class="absolute-top text-center">
+            <span class="ltr-sp-3 text-subtitle2 text-weight-regular">{{ imgCaption }}</span>
+        </div>
+
         <template v-slot:error>
-          <div class="absolute-full flex flex-center"> Error encountered </div>
+          <div class="absolute-full flex flex-center">
+            Error encountered
+          </div>
         </template>
       </q-img>
 
@@ -70,6 +76,11 @@
      */
     img?: string | undefined
 
+    /**
+     * A caption for the img; Only renders when a value is provided.
+     */
+    imgCaption?: string | undefined
+
   }
 
   withDefaults(defineProps<ICardComponentProps>(), {
@@ -91,6 +102,10 @@
 </script>
 
 <style scoped>
+
+.ltr-sp-3 {
+  letter-spacing: 3px;
+}
 
 .top-right-offset {
   right: 12px;

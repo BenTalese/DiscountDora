@@ -26,18 +26,15 @@ class ScrapedProductOffer:
     price_now: float
     price_per_cup: str | None
     price_was: float
-    size : str = field(init=False)
+    size : str
     size_unit: str
     size_value: float
     web_url: str
 
-    # TODO LOOk if can do in method before translates
     def __post_init__(self):
-        self.name = self.name if self.brand in self.name else f"{self.brand} {self.name}"
         self.price_difference = "{:.2f}".format(self.price_was - self.price_now)
         self.price_now = "{:.2f}".format(self.price_now)
         self.price_was = "{:.2f}".format(self.price_was)
-        self.size = f"{self.size_value}{self.size_unit}" if self.size_value else self.size_unit
 
     def get_size(size: str):
         # TODO: Instead make the unit the PK for the unit entity...ooooorrr...just don't worry about it and keep it as str
@@ -73,7 +70,7 @@ class ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer.get_size(offer.PackageSize)
 
         return ScrapedProductOffer(
-            brand = offer.Brand or '',
+            brand = offer.Brand,
             image = None,
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
@@ -84,6 +81,7 @@ class ScrapedProductOffer:
             price_per_cup = (offer.CupString.upper() if offer.CupString else None)
                 or (offer.InstoreCupString.upper() if offer.InstoreCupString else None),
             price_was = offer.WasPrice or offer.InstoreWasPrice or 0,
+            size = offer.PackageSize.upper(),
             size_unit = _Unit or offer.PackageSize.upper(),
             size_value = _Value,
             web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
@@ -93,16 +91,17 @@ class ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer.get_size(offer.size)
 
         return ScrapedProductOffer(
-            brand = offer.brand or '',
+            brand = offer.brand,
             image = None,
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
             merchant_name = SupportedMerchant.COLES.value,
             merchant_stockcode = str(offer.id),
-            name = offer.name,
+            name = offer.name if offer.brand in offer.name else f"{offer.brand} {offer.name}",
             price_now = offer.pricing.now if offer.pricing else 0,
             price_per_cup = offer.pricing.comparable.upper() if offer.pricing else None,
             price_was = offer.pricing.was if offer.pricing else 0,
+            size = offer.size.upper(),
             size_unit = _Unit or offer.size.upper(),
             size_value = _Value,
             web_url = f"https://www.coles.com.au/product/{offer.id}"

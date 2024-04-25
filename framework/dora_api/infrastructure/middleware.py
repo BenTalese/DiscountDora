@@ -1,13 +1,18 @@
+import json
 from base64 import b64decode
-from http.client import NOT_FOUND
+from http.client import BAD_REQUEST, NOT_FOUND
 from typing import get_origin, get_type_hints
 
 from clapy import AttributeChangeTracker
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
+from application.infrastructure.utils import try_parse_uuid
+from domain.entities.base_entity import EntityID
 from framework.dora_api.infrastructure.base_presenter import ProblemDetails
 from framework.dora_api.infrastructure.request_body_decorator import \
     REQUEST_BODYS_BY_ENDPOINT
+from framework.dora_api.infrastructure.view_model_decorator import \
+    VIEW_MODELS_BY_ENDPOINT
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -23,6 +28,7 @@ async def handle_cors_preflight_request():
             'Access-Control-Allow-Headers': 'Content-Type'
         })
 
+
 @MIDDLEWARE.before_app_request
 async def verify_endpoint_exists():
     if not request.endpoint:
@@ -32,6 +38,7 @@ async def verify_endpoint_exists():
             errors = {},
             title = "Endpoint was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")), 404
+
 
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
@@ -51,10 +58,14 @@ async def deserialise_web_request():
                 if _AttributeType is bytes:
                     _Data = b64decode(_Data)
 
+                if _Parsed_UUID := try_parse_uuid(_Data):
+                    _Data = EntityID(_Parsed_UUID)
+
                 _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
         setattr(request, "request_body", _DeserialisedRequest)
+
 
 def __get_deserialised_attribute_change_tracker(attribute_name: str, request_data: dict) -> AttributeChangeTracker:
     '''
@@ -74,6 +85,9 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
         return AttributeChangeTracker(None, True)
 
     else:
+        if _Parsed_UUID := try_parse_uuid(request_data[attribute_name]):
+            return AttributeChangeTracker(EntityID(_Parsed_UUID), True)
+
         return AttributeChangeTracker(request_data[attribute_name])
 
 # @middleware.after_app_request

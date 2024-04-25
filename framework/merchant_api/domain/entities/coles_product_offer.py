@@ -11,10 +11,10 @@ class ColesProductOffer(BaseModel, extra='allow'):
         now: float
         was: float
 
-    imageUris: List[ImageInfo]
-    id: int
-    name: str
-    brand: str
-    size: str # "352g"
     availability: bool
+    brand: str
+    id: int
+    imageUris: List[ImageInfo]
+    name: str
     pricing: Optional[Pricing] # None if `availability=False`
+    size: str # "352g"

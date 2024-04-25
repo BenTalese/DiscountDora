@@ -55,13 +55,17 @@ export const useProductStore = defineStore('product', () => {
      * Replaces the product search filter for stores with the provided data.
      * @param merchantsData An array of Merchants representing the stores that are being filtered.
      */
-    const setProductSearchStoresFilter = (merchantsData: Merchant[]): void => { productSearchOfferFilters.stores = merchantsData; };
+    const setProductSearchStoresFilter = (merchantsData: Merchant[]): void => {
+        productSearchOfferFilters.stores = merchantsData;
+    }
 
     /**
      * Sets the sorting criteria for product search results.
      * @param sortBy An object representing the sorting options for product search results.
      */
-    const setProductSearchSortByFilter = (sortBy: IOfferSortByOption): void => { productSearchOfferFilters.sortBy = sortBy };
+    const setProductSearchSortByFilter = (sortBy: IOfferSortByOption): void => {
+        productSearchOfferFilters.sortBy = sortBy;
+    }
 
     /**
      * Toggles the specified boolean property of the product search filter.
@@ -75,7 +79,7 @@ export const useProductStore = defineStore('product', () => {
             throw new NotSupportedError('Filter to toggle is not of type boolean.');
     }
 
-    const ProductSearchFilterStoreNames = computed(() => productSearchOfferFilters.stores?.map(sto => sto.name))
+    const productSearchFilterStoreNames = computed(() => productSearchOfferFilters.stores.map(sto => sto.name))
 
     //#endregion Filters
 
@@ -109,7 +113,7 @@ export const useProductStore = defineStore('product', () => {
             (productSearchOfferFilters.showOnlyAvailable ? off.is_available : true) &&
             (productSearchOfferFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
             (productSearchOfferFilters.showOnlySpecials ? isOfferOnSpecial(off) : true) &&
-            ProductSearchFilterStoreNames.value?.includes(off.merchant_name));
+            productSearchFilterStoreNames.value?.includes(off.merchant_name));
 
         productSearchOfferFilters.sortBy.sort(shallowOffersCopy);
 
@@ -132,7 +136,7 @@ export const useProductStore = defineStore('product', () => {
 
     return {
         productSearchOfferFilters,
-        ProductSearchFilterStoreNames,
+        productSearchFilterStoreNames,
         addStoresToProductSearchFilter,
         setProductSearchStoresFilter,
         setProductSearchSortByFilter,

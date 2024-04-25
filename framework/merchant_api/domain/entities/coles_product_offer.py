@@ -7,6 +7,7 @@ class ColesProductOffer(BaseModel, extra='allow'):
         uri: str
 
     class Pricing(BaseModel, extra='allow'):
+        comparable: str # '$0.54 per 1ea'
         now: float
         was: float
 

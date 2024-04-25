@@ -127,7 +127,13 @@
                                 </div>
 
                                 <div class="h-px-20 text-caption text-weight-regular">
-                                    <span v-if="offer.price_was > 0">was {{ `$${offer.price_was}` }}</span>
+                                    <span v-if="isOfferOnSpecial(offer)">
+                                       <s>{{ `$${offer.price_was}` }}</s>
+                                       &nbsp;
+                                    </span>
+                                    <span>
+                                        {{ offer.price_per_cup }}
+                                    </span>
                                 </div>
 
                             </div>
@@ -166,7 +172,7 @@ import SelectComponent from 'src/components/SelectComponent.vue';
 import WoolworthsLogo from 'src/components/WoolworthsLogo.vue';
 import { nameof } from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferFavourited } from 'src/helpers/ScrapedProductOfferLogic';
+import { isOfferFavourited, isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import { Product } from 'src/models/Product';
 import ImageService from 'src/services/files/ImageService';

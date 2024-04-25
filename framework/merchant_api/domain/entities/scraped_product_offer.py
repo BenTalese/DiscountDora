@@ -24,6 +24,7 @@ class ScrapedProductOffer:
     name: str
     price_difference: float = field(init=False)
     price_now: float
+    price_per_cup: str | None
     price_was: float
     size : str = field(init=False)
     size_unit: str
@@ -80,6 +81,8 @@ class ScrapedProductOffer:
             merchant_stockcode = offer.Stockcode,
             name = offer.Name,
             price_now = offer.Price or offer.InstorePrice or 0,
+            price_per_cup = (offer.CupString.upper() if offer.CupString else None)
+                or (offer.InstoreCupString.upper() if offer.InstoreCupString else None),
             price_was = offer.WasPrice or offer.InstoreWasPrice or 0,
             size_unit = _Unit or offer.PackageSize.upper(),
             size_value = _Value,
@@ -98,6 +101,7 @@ class ScrapedProductOffer:
             merchant_stockcode = offer.id,
             name = offer.name,
             price_now = offer.pricing.now if offer.pricing else 0,
+            price_per_cup = offer.pricing.comparable.upper() if offer.pricing else None,
             price_was = offer.pricing.was if offer.pricing else 0,
             size_unit = _Unit or offer.size.upper(),
             size_value = _Value,

@@ -13,3 +13,5 @@ class WoolworthsProductOffer(BaseModel, extra='allow'):
     InstoreWasPrice: float
     LargeImageFile: str # 'https://cdn0.woolworths.media/content/wowproductimages/large/114682.jpg'
     PackageSize: str # '333G'
+    CupString: str # '$0.80 / 100G'
+    InstoreCupString: str

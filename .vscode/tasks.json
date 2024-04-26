@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "dev",
+            "path": "framework/web_app_old",
+            "problemMatcher": [],
+            "label": "npm: dev",
+            "detail": "vite",
+            "isBackground": true,
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "npm",
+            "script": "dev",
+            "path": "framework/web_app",
+            "problemMatcher": [],
+            "label": "quasar:dev",
+            "isBackground": true,
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

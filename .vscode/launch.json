@@ -1,4 +1,9 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+
+    // program was "${file}" but changed so it will always start debugging from main.py
     "version": "0.2.0",
     "configurations": [
         {
@@ -7,7 +12,7 @@
             "request": "launch",
             "program": "framework/dora_api/startup.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true
         },
         {
             "name": "MAPI",
@@ -15,7 +20,7 @@
             "request": "launch",
             "program": "framework/merchant_api/startup.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true
         },
         {
             "name": "Emailer",
@@ -26,16 +31,22 @@
             "justMyCode": true
         },
         {
-            "type": "firefox",
+            "type": "node",
             "request": "launch",
             "name": "Web App",
+            "preLaunchTask": "quasar:dev",
+        },
+        {
+            "type": "firefox",
+            "request": "launch",
+            "name": "Web App (Old)",
             "url": "http://localhost:5174",
             "preLaunchTask": "npm: dev",
-            "webRoot": "${workspaceFolder}/framework/web_app/app",
+            "webRoot": "${workspaceFolder}/framework/web_app_old/app",
             "pathMappings": [
                 {
                     "url": "http://localhost:5174/app",
-                    "path": "${workspaceFolder}/framework/web_app/app"
+                    "path": "${workspaceFolder}/framework/web_app_old/app"
                 }
             ]
         },
@@ -45,7 +56,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "env": {
                 "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
                 "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"

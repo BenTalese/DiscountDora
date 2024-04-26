@@ -28,15 +28,6 @@
             </template>
         </q-btn>
 
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
-            no-caps no-wrap size="md" :stretch="false" text-color="black"
-            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyFavourites)" class="q-ma-sm"
-            square>
-            <template v-slot>
-                <span class="font-weight-400">Favourites</span>
-            </template>
-        </q-btn>
-
         <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
             no-caps no-wrap size="md" :stretch="false" text-color="black"
             :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)" class="q-ma-sm" square>

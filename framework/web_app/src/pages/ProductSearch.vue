@@ -1,15 +1,7 @@
 <template>
     <div class="no-wrap q-pa-md row min-width-100 full-width">
-        <q-input
-            autofocus
-            @keydown.enter="search"
-            v-model="searchTerm"
-            :disable="Loading.isActive"
-            placeholder="Search"
-            dense
-            outlined
-            square
-            class="bg-white col">
+        <q-input autofocus @keydown.enter="search" v-model="searchTerm" :disable="Loading.isActive" placeholder="Search"
+            dense outlined square class="bg-white col">
             <template v-slot:prepend>
                 <q-btn round dense flat icon="tune" @click="toggleShowFiltersContainer" />
                 <q-btn round dense flat icon="search" @click="search" />
@@ -19,69 +11,35 @@
 
     <div v-show="showFiltersContainer" class="no-wrap row q-pa-sm scroll scrollbar-none">
 
-        <select-component
-            label="Stores"
-            :multiple="true"
-            :options="merchantStore.merchants"
-            :option-label="getStoresOptionLabel"
-            :model-value="productStore.productSearchOfferFilters.stores"
-            @update:model-value="productStore.setProductSearchStoresFilter"
-            :optionIconName="getStoresOptionIcon"
-        />
+        <select-component label="Stores" :multiple="true" :options="merchantStore.merchants"
+            :option-label="getStoresOptionLabel" :model-value="productStore.productSearchOfferFilters.stores"
+            @update:model-value="productStore.setProductSearchStoresFilter" :optionIconName="getStoresOptionIcon" />
 
-        <select-component
-            label="Sort By"
-            :options="OfferSortByOptions"
-            :option-label="getSortByOptionLabel"
+        <select-component label="Sort By" :options="OfferSortByOptions" :option-label="getSortByOptionLabel"
             :model-value="productStore.productSearchOfferFilters.sortBy"
-            @update:model-value="productStore.setProductSearchSortByFilter"
-        />
+            @update:model-value="productStore.setProductSearchSortByFilter" />
 
-        <q-btn
-            type="button"
-            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
-            no-caps
-            no-wrap
-            size="md"
-            :stretch="false"
-            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)"
-            class="q-ma-sm"
-            square
-        >
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
+            no-caps no-wrap size="md" :stretch="false"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)" class="q-ma-sm"
+            square>
             <template v-slot>
                 <span class="font-weight-400">In Stock</span>
             </template>
         </q-btn>
 
-        <q-btn
-            type="button"
-            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
-            no-caps
-            no-wrap
-            size="md"
-            :stretch="false"
-            text-color="black"
-            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyFavourites)"
-            class="q-ma-sm"
-            square
-        >
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
+            no-caps no-wrap size="md" :stretch="false" text-color="black"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyFavourites)" class="q-ma-sm"
+            square>
             <template v-slot>
                 <span class="font-weight-400">Favourites</span>
             </template>
         </q-btn>
 
-        <q-btn
-            type="button"
-            @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
-            no-caps
-            no-wrap
-            size="md"
-            :stretch="false"
-            text-color="black"
-            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)"
-            class="q-ma-sm"
-            square
-        >
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
+            no-caps no-wrap size="md" :stretch="false" text-color="black"
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)" class="q-ma-sm" square>
             <template v-slot>
                 <span class="font-weight-400">Specials</span>
             </template>
@@ -91,17 +49,12 @@
 
     <div class="card-grid">
 
-        <div
-            v-for="offer in productStore.filteredProductOffers" :key="offer.merchant_stockcode"
-            class="q-pa-md">
+        <div v-for="offer in productStore.filteredProductOffers" :key="offer.merchant_stockcode" class="q-pa-md">
 
-            <card-component
-                :img="imageService.decodeBase64Image(offer.image)"
-                :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'"
-                icon="favorite"
+            <card-component :img="imageService.decodeBase64Image(offer.image)"
+                :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'" icon="favorite"
                 @icon-click="productStore.addOfferToFavouritesAsync(offer)"
-                :icon-class="isOfferFavourited(offer, productStore.products as Product[]) ? 'text-red-12' : 'text-grey'"
-            >
+                :icon-class="isOfferFavourited(offer, productStore.products as Product[]) ? 'text-red-12' : 'text-grey'">
                 <template v-slot:body>
                     <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
@@ -113,15 +66,11 @@
 
                                     <template v-if="offer.price_now > 0">
                                         <span>
-                                            {{ `$${offer.price_now}`}}
+                                            {{ `$${offer.price_now}` }}
                                         </span>
 
-                                        <q-badge
-                                            v-if="offer.price_difference > 0"
-                                            class="q-mx-sm"
-                                            color="yellow-6"
-                                            text-color="black"
-                                        >
+                                        <q-badge v-if="offer.price_difference > 0" class="q-mx-sm" color="yellow-6"
+                                            text-color="black">
                                             SAVE ${{ offer.price_difference }}
                                         </q-badge>
                                     </template>
@@ -132,8 +81,8 @@
 
                                 <div class="h-px-20 text-caption text-weight-regular">
                                     <span v-if="isOfferOnSpecial(offer)">
-                                       <s>{{ `$${offer.price_was}` }}</s>
-                                       &nbsp;
+                                        <s>{{ `$${offer.price_was}` }}</s>
+                                        &nbsp;
                                     </span>
                                     <span>
                                         {{ offer.price_per_cup }}
@@ -154,8 +103,7 @@
 
         </div>
     </div>
-    <div
-        v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
+    <div v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
         class="row text-h3 q-ma-sm items-center">
 
         <img src="../../src/assets/banana-peel.jpg" class="q-pa-sm round-img" />
@@ -199,7 +147,7 @@ const search = (): Promise<string> =>
         search_term: searchTerm.value,
         start_page: currentPage
     })
-    .then(() => previousSearchTerm.value = searchTerm.value);
+        .then(() => previousSearchTerm.value = searchTerm.value);
 
 //#endregion Search
 
@@ -213,7 +161,7 @@ const toggleShowFiltersContainer = (): boolean =>
 const toggleFilterFlag = (filterName: string): void =>
     productStore.toggleProductSearchFilter(filterName as keyof IProductSearchFilters);
 
-const getFilterBttnClass = (isSelected: boolean) => isSelected ? 'bg-blue': 'bg-white';
+const getFilterBttnClass = (isSelected: boolean) => isSelected ? 'bg-blue' : 'bg-white';
 
 const getSortByOptionLabel = (option: IOfferSortByOption): string =>
     option.description;
@@ -240,7 +188,6 @@ const merchantLogoComponents: { [key: string]: unknown } = {
 </script>
 
 <style scoped>
-
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -274,5 +221,4 @@ const merchantLogoComponents: { [key: string]: unknown } = {
 .scrollbar-none {
     scrollbar-width: none;
 }
-
 </style>

@@ -1,57 +1,40 @@
 <template>
-    <q-card
-      bordered
-      flat
-      class="column full-height no-wrap rounded-borders row text-black"
-    >
-      <q-img
-        :src="img"
-        loading="lazy"
-        spinner-color="info"
-        spinner-size="2rem"
-        img-class="q-pa-lg"
-        class="bg-white"
-      >
-        <div v-if="imgCaption" class="absolute-top text-center">
-            <span class="ltr-sp-3 text-subtitle2 text-weight-regular">{{ imgCaption }}</span>
+    <q-card bordered flat class="column full-height no-wrap rounded-borders row text-black">
+        <q-img :src="img" loading="lazy" spinner-color="info" spinner-size="2rem" img-class="q-pa-lg" class="bg-white">
+            <div v-if="imgCaption" class="absolute-top text-center">
+                <span class="ltr-sp-3 text-subtitle2 text-weight-regular">{{ imgCaption }}</span>
+            </div>
+
+            <template v-slot:error>
+                <div class="absolute-full flex flex-center">
+                    Error encountered
+                </div>
+            </template>
+        </q-img>
+
+        <div class="bg-off-white column flex-1 row">
+            <q-card-section>
+                <q-btn :icon="icon" fab @click="emit('icon-click')" :class="iconClass" color="white"
+                    class="absolute top-right-offset" />
+            </q-card-section>
+
+            <slot name="body">
+                <q-card-section class="flex-1">
+                    {{ body }}
+                </q-card-section>
+            </slot>
+
+            <slot name="footer"></slot>
+
         </div>
-
-        <template v-slot:error>
-          <div class="absolute-full flex flex-center">
-            Error encountered
-          </div>
-        </template>
-      </q-img>
-
-      <div class="bg-off-white column flex-1 row">
-        <q-card-section>
-          <q-btn
-            :icon="icon"
-            fab
-            @click="emit('icon-click')"
-            :class="iconClass"
-            color="white"
-            class="absolute top-right-offset"
-          />
-        </q-card-section>
-
-        <slot name="body">
-          <q-card-section class="flex-1">
-            {{ body }}
-          </q-card-section>
-        </slot>
-
-        <slot name="footer"></slot>
-
-      </div>
     </q-card>
 </template>
 
 <script setup lang="ts">
 
-  //#region Props & Emits
+//#region Props & Emits
 
-  interface ICardComponentProps {
+interface ICardComponentProps {
 
     /**
      * The text displayed in the body of the card;
@@ -81,36 +64,34 @@
      */
     imgCaption?: string | undefined
 
-  }
+}
 
-  withDefaults(defineProps<ICardComponentProps>(), {
+withDefaults(defineProps<ICardComponentProps>(), {
     chipColour: 'grey',
     img: '../../src/assets/dora-logo.png'
-  })
+})
 
-  const emit = defineEmits<{
+const emit = defineEmits<{
 
     /**
      * Emitted when the click event is triggered on the card component's icon;
      */
     (e: 'icon-click'): void
 
-  }>()
+}>()
 
-  //#endregion Props & Emits
+//#endregion Props & Emits
 
 </script>
 
 <style scoped>
-
 .ltr-sp-3 {
-  letter-spacing: 3px;
+    letter-spacing: 3px;
 }
 
 .top-right-offset {
-  right: 12px;
-  top: 0;
-  transform: translateY(-50%);
+    right: 12px;
+    top: 0;
+    transform: translateY(-50%);
 }
-
 </style>

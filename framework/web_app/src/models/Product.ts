@@ -2,7 +2,7 @@ export type Product = {
     brand: string
     image: string
     is_available: boolean
-    merchant: string
+    merchant_name: string
     merchant_stockcode: string
     name: string
     price_now: number
@@ -12,5 +12,3 @@ export type Product = {
     size_value: number
     web_url: string
 }
-
-// This is the view model with logic, callbacks, etc... maybe?

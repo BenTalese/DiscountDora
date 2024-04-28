@@ -1,5 +1,7 @@
 .env
 
+.vscode
+
 __pycache__
 
 venv
@@ -36,9 +38,15 @@ coverage
 /cypress/screenshots/
 
 # Editor directories and files
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+framework/web_app/.vscode/*
+framework/web_app_old/.vscode/*
 .idea
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+*.json
 *.sw?

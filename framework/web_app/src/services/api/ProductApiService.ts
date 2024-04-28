@@ -1,6 +1,7 @@
 import type { ScrapedProductOffer } from "src/models/ScrapedProductOffer";
 import type { CreatedResponse } from "./AxiosHttpClient";
 import AxiosHttpClient from "./AxiosHttpClient";
+import { Product } from "src/models/Product";
 
 export default class ProductApiService {
     private dapiHttpClient: AxiosHttpClient;
@@ -11,10 +12,13 @@ export default class ProductApiService {
         this.mapiHttpClient = new AxiosHttpClient(5172);
     }
 
-    create = async (command: CreateProductCommand): Promise<CreatedResponse> =>
-        await this.dapiHttpClient.post<CreatedResponse>("/products", command);
+    createAsync = async (command: CreateProductCommand): Promise<CreatedResponse> =>
+        await this.dapiHttpClient.post<CreatedResponse>('/products', command);
 
-    searchByTerm = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
+    getAllAsync = async (): Promise<Product[]> =>
+        await this.dapiHttpClient.get<Product[]>('/products');
+
+    searchByTermAsync = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${query.search_term}`);
 }
 
@@ -24,8 +28,8 @@ export type SearchByTermQuery = {
 }
 
 export type CreateProductCommand = {
-    brand: string
-    image: string
+    brand: string | null
+    image: string //TODO: Check if img is good before saving it, prob in use case
     is_available: boolean
     merchant_name: string
     merchant_stockcode: string

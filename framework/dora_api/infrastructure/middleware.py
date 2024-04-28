@@ -90,10 +90,53 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
 
         return AttributeChangeTracker(request_data[attribute_name])
 
-# @middleware.after_app_request
-# async def post_process(response: Response):
-#     if "query" in request.view_args and (filter:= request.view_args["query"]):
-#         x = 0
+#stock/id eq 1&other_property ne sometext
+#GET /api/stock_items/filter=stock_item_id:eq:12345&sort=age_or_something:asc&page=1&limit=10
+@MIDDLEWARE.after_app_request
+async def apply_query_filter(response: Response):
+    _Data: dict = response.get_json()
 
-#     data = response.get_json()
-#     response = response
+    if "query" in request.view_args and (_QueryString:= request.view_args["query"]):
+        # TODO: Check property exists on request body, if not fail
+        # TODO: Check if operator supported
+        # TODO: Validate query string format is correct
+        _QueryString: str
+        _RequestEndpoint = request.endpoint.split(".")[-1]
+
+        if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
+            x = 0 # TODO: DEV ERROR!
+
+        _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
+
+        _QueryOperations = _QueryString.split("&")
+
+        _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
+
+
+        for _Filter in _FilterOperations:
+            _Field, _Operator, _Value = _Filter.split(':')
+
+            if _Operator == 'eq':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) == _Value]
+            elif _Operator == 'lt':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) < _Value]
+            elif _Operator == 'gt':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) > _Value]
+            elif _Operator == 'le':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) <= _Value]
+            elif _Operator == 'ge':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) >= _Value]
+            elif _Operator == 'ne':
+                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) != _Value]
+            else:
+                return jsonify(ProblemDetails(
+                    detail = f"The filter operator {_Operator} is not supported. Supported operators"+\
+                    " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.",
+                    status = BAD_REQUEST,
+                    errors = {},
+                    title = "Filter operator not supported.",
+                    type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")), 400
+
+        response.set_data(json.dumps(_Data))
+
+    return response

@@ -15,16 +15,16 @@ export default class StockItemApiService {
     deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    getAsync = async (stockItemID: string): Promise<StockItem> =>
-        await this.httpClient.get<StockItem>(`/stock-items/${stockItemID}`);
+    getAsync = async (stockItemID: string): Promise<StockItem[]> =>
+        await this.httpClient.get<StockItem[]>(`/stock-items/filter=stock_item_id:eq:${stockItemID}`); // TODO: Construct string using methods
 
     getAllAsync = async (): Promise<StockItem[]> =>
         await this.httpClient.get<StockItem[]>('/stock-items');
 
-    paginateAsync = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
-        await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
-            `/stock-items?page=${page}&page-size=${pageSize}`
-        );
+    // paginateAsync = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
+    //     await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
+    //         `/stock-items?page=${page}&page-size=${pageSize}`
+    //     );
 
     updateAsync = async (stockItemID: string, stockItem: Partial<UpdateStockItemCommand>): Promise<void> =>
         await this.httpClient.patch<void>(`/stock-items/${stockItemID}`, stockItem);

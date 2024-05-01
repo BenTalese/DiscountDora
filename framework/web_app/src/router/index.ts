@@ -7,6 +7,7 @@ import {
 } from 'vue-router';
 
 import routes from './routes';
+import { Notify } from 'quasar';
 
 /*
  * If not building with SSR mode, you can
@@ -34,6 +35,7 @@ export default route(function (/* { store, ssrContext } */) {
 
     Router.onError(err => {
         console.error('Vue Router Error: ' + err.message)
+        Notify.create('Oops, something went wrong...')
     })
 
     return Router;

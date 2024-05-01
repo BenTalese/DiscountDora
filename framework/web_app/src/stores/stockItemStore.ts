@@ -16,17 +16,26 @@ export const useStockItemStore = defineStore('stockItem', () => {
         .getAllAsync()
         .then((res) => stockItems.value = res)
 
+    const getStockItemAsync = async (stockItemID: string) => await stockItemApiService
+        .getAsync(stockItemID)
+
     const createStockItemAsync = async (stockItemToCreate: CreateStockItemCommand) => await stockItemApiService
         .createAsync(stockItemToCreate)
-        .then(async (res) => stockItems.value.push(await stockItemApiService.getAsync(res.id)))
+        .then(async (res) => stockItems.value.push((await stockItemApiService.getAsync(res.id))[0]))
 
-    const updateStockLevelAsync = async (stockItemID: string, stockLevelID: string) => await stockItemApiService
-        .updateAsync(stockItemID, { stock_level_id: stockLevelID })
-        .then(async () => {
-            // TODO: Loading
-            const stockItemIndex = stockItems.value.findIndex(si => si.stock_item_id == stockItemID);
-            stockItems.value[stockItemIndex] = await stockItemApiService.getAsync(stockItemID);
-        })
+    async function updateStockLevelAsync(stockItemID: string, stockLevelID: string) {
+        const stockItemIndex = stockItems.value.findIndex(si => si.stock_item_id == stockItemID);
+        const originalStockLevel = stockItems.value[stockItemIndex].stock_level_id
+        stockItems.value[stockItemIndex].stock_level_id = stockLevelID
+
+        await stockItemApiService
+            .updateAsync(stockItemID, { stock_level_id: stockLevelID })
+            .then(async () => stockItems.value[stockItemIndex] = (await getStockItemAsync(stockItemID))[0])
+            .catch(() => {
+                stockItems.value[stockItemIndex].stock_level_id = originalStockLevel
+            })
+    }
 
     return { stockItems, getStockItemsAsync, createStockItemAsync, updateStockLevelAsync }
 });
+

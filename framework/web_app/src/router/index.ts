@@ -35,7 +35,7 @@ export default route(function (/* { store, ssrContext } */) {
 
     Router.onError(err => {
         console.error('Vue Router Error: ' + err.message)
-        Notify.create('Oops, something went wrong...')
+        Notify.create({})
     })
 
     return Router;

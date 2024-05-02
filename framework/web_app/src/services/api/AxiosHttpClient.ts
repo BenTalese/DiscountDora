@@ -57,7 +57,7 @@ export default class AxiosHttpClient implements HttpClient {
         else {
             console.error(`API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`);
         }
-        Notify.create('Oops, something went wrong...') // TODO: Make specific responses for UI (also styling) (this may not be the place for that)
+        Notify.create({}) // TODO: Make specific responses for UI (also styling) (this may not be the place for that)
         throw error
     }
 

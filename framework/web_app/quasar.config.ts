@@ -124,7 +124,13 @@ export default configure((/* ctx */) => {
                     spinner: 'QSpinnerTail'
                 }, /* look at QuasarConfOptions from the API card */
                 notify: {
-                    // TODO: CONFIGURE!
+                    color: 'red-5',
+                    message: 'Oops, something went wrong...',
+                    icon: 'error',
+                    iconColor: 'white',
+                    iconSize: '30px',
+                    progress: true,
+                    timeout: 3000
                 }
             }
         },

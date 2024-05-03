@@ -2,7 +2,8 @@ import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/NotSupportedError';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferFavourited, isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
+import { isOfferOnSpecial, isOfferActive } from 'src/helpers/ScrapedProductOfferLogic';
+import { PartialWithRequired } from 'src/helpers/UtilityTypes';
 import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
@@ -13,7 +14,6 @@ const productApiService = new ProductApiService();
 
 export interface IProductSearchFilters {
     showOnlyAvailable: boolean,
-    showOnlyFavourites: boolean,
     showOnlySpecials: boolean,
     sortBy: IOfferSortByOption,
     stores: Merchant[]
@@ -25,7 +25,6 @@ export const useProductStore = defineStore('product', () => {
 
     const productSearchOfferFilters = reactive<IProductSearchFilters>({
         showOnlyAvailable: false,
-        showOnlyFavourites: false,
         showOnlySpecials: false,
         sortBy: OfferSortByOptions.find(opts => opts.isDefault === true) as IOfferSortByOption,
         stores: []
@@ -74,14 +73,19 @@ export const useProductStore = defineStore('product', () => {
 
     const products = ref<Product[]>()
 
-    const getProductsAsync = async () =>
+    const createProductAsync = (product: Partial<Product>): Promise<void> =>
+        productApiService
+            .createAsync(product)
+            .then(() => getProductsAsync());
+
+    const getProductsAsync = (): Promise<void> =>
         productApiService
             .getAllAsync()
-            .then((productsData) => products.value = productsData);
+            .then((productsData) => { products.value = productsData; });
 
-    const addOfferToFavouritesAsync = async (offer: ScrapedProductOffer) =>
+    const updateProductAsync = (product: PartialWithRequired<Product, 'product_id'>): Promise<void> =>
         productApiService
-            .createAsync(offer)
+            .updateAsync(product)
             .then(() => getProductsAsync());
 
     //#endregion Products
@@ -89,6 +93,16 @@ export const useProductStore = defineStore('product', () => {
     //#region Product Offers
 
     const productOffers = ref<ScrapedProductOffer[] | undefined>();
+
+    const updateProductOffer = (offer: PartialWithRequired<ScrapedProductOffer, 'merchant_name' | 'merchant_stockcode'>) => {
+        const index = productOffers.value?.findIndex(off =>
+            off.merchant_name === offer.merchant_name
+            && off.merchant_stockcode === offer.merchant_stockcode)
+            ?? -1;
+
+        if(index > -1 && productOffers.value)
+            productOffers.value[index] = {...productOffers.value[index], ...offer} ;
+    };
 
     const filteredProductOffers = computed(() => {
         if(productOffers.value === undefined)
@@ -98,7 +112,6 @@ export const useProductStore = defineStore('product', () => {
 
         shallowOffersCopy = shallowOffersCopy.filter(off =>
             (productSearchOfferFilters.showOnlyAvailable ? off.is_available : true) &&
-            (productSearchOfferFilters.showOnlyFavourites ? isOfferFavourited(off, products.value) : true) &&
             (productSearchOfferFilters.showOnlySpecials ? isOfferOnSpecial(off) : true) &&
             productSearchFilterStoreNames.value?.includes(off.merchant_name));
 
@@ -107,7 +120,7 @@ export const useProductStore = defineStore('product', () => {
         return shallowOffersCopy;
     });
 
-    async function searchByTermAsync(query: SearchByTermQuery){
+    async function searchByTermAsync(query: SearchByTermQuery): Promise<void> {
         if(!query.search_term?.trim())
             return;
 
@@ -115,7 +128,12 @@ export const useProductStore = defineStore('product', () => {
 
         productApiService
             .searchByTermAsync(query)
-            .then((offers) => productOffers.value = offers)
+            .then((offers) => {
+                productOffers.value = offers.map(off => {
+                    off.is_active = isOfferActive(off, products.value);
+                    return off;
+                });
+            })
             .finally(() => Loading.hide());
     }
 
@@ -130,11 +148,13 @@ export const useProductStore = defineStore('product', () => {
         toggleProductSearchFilter,
 
         products: readonly(products),
-        addOfferToFavouritesAsync,
+        createProductAsync,
         getProductsAsync,
+        updateProductAsync,
 
         productOffers: readonly(productOffers),
         filteredProductOffers,
+        updateProductOffer,
         searchByTermAsync
     };
 

@@ -86,7 +86,7 @@
 
                 <template v-slot:footer>
                     <q-card-actions align="right" class="bg-off-white">
-                        <component :is="merchantLogoComponents[offer.merchant_name]" />
+                        <component :is="MerchantLogoOptions[offer.merchant_name]" />
                     </q-card-actions>
                 </template>
             </card-component>
@@ -109,9 +109,8 @@
 
 import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
-import ColesLogo from 'src/components/ColesLogo.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
-import WoolworthsLogo from 'src/components/WoolworthsLogo.vue';
+import MerchantLogoOptions from 'src/helpers/MerchantLogoOptions';
 import nameof from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
 import { isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
@@ -167,11 +166,6 @@ const getStoresOptionIcon = (isSelected: boolean): string =>
 //#region Offers
 
 const imageService = new ImageService();
-
-const merchantLogoComponents: { [key: string]: unknown } = {
-    Coles: ColesLogo,
-    Woolworths: WoolworthsLogo
-}
 
 /**
  * Updates the offer and its matching saved product.

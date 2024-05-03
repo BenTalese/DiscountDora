@@ -25,6 +25,9 @@ class UpdateProductInteractor(Interactor):
             .include(nameof(Product.historical_offers)) \
             .first_by_id(input_port.product_id)
 
+        if input_port.is_active.has_been_set:
+            _Product.is_active = input_port.is_active.value
+
         if input_port.is_available.has_been_set:
             _Product.is_available = input_port.is_available.value
 
@@ -38,5 +41,7 @@ class UpdateProductInteractor(Interactor):
                 offered_on = datetime.utcnow(),
                 price_now = input_port.price_now.value,
                 price_was = input_port.price_was.value)
+
+        self.persistence_context.update(_Product)
 
         await output_port.present_product_updated_async(get_product_dto(_Product))

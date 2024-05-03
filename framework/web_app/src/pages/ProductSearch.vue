@@ -19,8 +19,8 @@
             :model-value="productStore.productSearchOfferFilters.sortBy"
             @update:model-value="productStore.setProductSearchSortByFilter" />
 
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlyAvailable'))"
-            no-caps no-wrap size="md" :stretch="false"
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlyAvailable'))" no-caps
+            no-wrap size="md" :stretch="false"
             :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)" class="q-ma-sm"
             square>
             <template v-slot>
@@ -28,8 +28,8 @@
             </template>
         </q-btn>
 
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlySpecials'))"
-            no-caps no-wrap size="md" :stretch="false" text-color="black"
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlySpecials'))" no-caps
+            no-wrap size="md" :stretch="false" text-color="black"
             :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)" class="q-ma-sm" square>
             <template v-slot>
                 <span class="font-weight-400">Specials</span>
@@ -44,8 +44,7 @@
 
             <card-component :img="imageService.decodeBase64Image(offer.image)"
                 :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'" icon="favorite"
-                @icon-click="onIconClick(offer)"
-                :icon-class="offer.is_active ? 'text-red-12' : 'text-grey'">
+                @icon-click="onIconClick(offer)" :icon-class="offer.is_active ? 'text-red-12' : 'text-grey'">
                 <template v-slot:body>
                     <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
@@ -188,11 +187,11 @@ const onIconClick = (offer: ScrapedProductOffer): void => {
         p.merchant_name === offer.merchant_name
         && p.merchant_stockcode === offer.merchant_stockcode);
 
-    if(product)
+    if (product)
         productStore.updateProductAsync({ is_active: !is_active, product_id: product.product_id });
 
     else
-        productStore.createProductAsync({ ...offer,  is_active: !is_active});
+        productStore.createProductAsync({ ...offer, is_active: !is_active });
 }
 
 //#endregion Offers

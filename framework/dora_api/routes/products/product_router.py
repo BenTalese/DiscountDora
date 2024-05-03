@@ -30,12 +30,14 @@ async def create_product_async():
     _InputPort = CreateProductInputPort(
         brand = _Command.brand,
         image = _Command.image,
+        is_active = _Command.is_active,
         is_available = _Command.is_available,
         merchant_name = _Command.merchant_name,
         merchant_stockcode = _Command.merchant_stockcode,
         name = _Command.name,
         price_now = _Command.price_now,
         price_was = _Command.price_was,
+        size = _Command.size,
         size_unit = _Command.size_unit,
         size_value = _Command.size_value,
         web_url = _Command.web_url)

@@ -21,7 +21,7 @@ export interface IProductSearchFilters {
 
 export const useProductStore = defineStore('product', () => {
 
-    //#region Filters
+    // region Filters
 
     const productSearchOfferFilters = reactive<IProductSearchFilters>({
         showOnlyAvailable: false,
@@ -68,9 +68,9 @@ export const useProductStore = defineStore('product', () => {
 
     const productSearchFilterStoreNames = computed(() => productSearchOfferFilters.stores.map(sto => sto.name))
 
-    //#endregion Filters
+    // endregion Filters
 
-    //#region Products
+    // region Products
 
     const products = ref<Product[]>()
 
@@ -84,9 +84,9 @@ export const useProductStore = defineStore('product', () => {
             .createAsync(offer)
             .then(() => getProductsAsync());
 
-    //#endregion Products
+    // endregion Products
 
-    //#region Product Offers
+    // region Product Offers
 
     const productOffers = ref<ScrapedProductOffer[] | undefined>();
 
@@ -119,7 +119,7 @@ export const useProductStore = defineStore('product', () => {
             .finally(() => Loading.hide());
     }
 
-    //#endregion Product Offers
+    // endregion Product Offers
 
     return {
         productSearchOfferFilters,

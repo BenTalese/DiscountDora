@@ -1,17 +1,16 @@
 import { defineStore } from 'pinia';
 import type { StockItem } from 'src/models/StockItem';
 import StockItemApiService, { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
-import { Ref, ref } from 'vue';
+import { readonly, Ref, ref } from 'vue';
 
 const stockItemApiService = new StockItemApiService();
 
 export const useStockItemStore = defineStore('stockItem', () => {
-    // States
+
+    // region Stock Items
+
     const stockItems: Ref<StockItem[]> = ref([])
 
-    // Getters
-
-    // Actions
     const getStockItemsAsync = async () => await stockItemApiService
         .getAllAsync()
         .then((res) => stockItems.value = res)
@@ -23,6 +22,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
         .createAsync(stockItemToCreate)
         .then(async (res) => stockItems.value.push((await stockItemApiService.getAsync(res.id))[0]))
 
+    // TODO: Check Atif's idea for simpler actions
     async function updateStockLevelAsync(stockItemID: string, stockLevelID: string) {
         const stockItemIndex = stockItems.value.findIndex(si => si.stock_item_id == stockItemID);
         const originalStockLevel = stockItems.value[stockItemIndex].stock_level_id
@@ -36,6 +36,13 @@ export const useStockItemStore = defineStore('stockItem', () => {
             })
     }
 
-    return { stockItems, getStockItemsAsync, createStockItemAsync, updateStockLevelAsync }
+    // endregion Stock Items
+
+    return {
+        stockItems: readonly(stockItems),
+        getStockItemsAsync,
+        createStockItemAsync,
+        updateStockLevelAsync
+    }
 });
 

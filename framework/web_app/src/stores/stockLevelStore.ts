@@ -6,15 +6,19 @@ import { Ref, ref } from 'vue';
 const stockLevelApiService = new StockLevelApiService();
 
 export const useStockLevelStore = defineStore('stockLevel', () => {
-    // States
+
+    // region Stock Levels
+
     const stockLevels: Ref<StockLevel[]> = ref([])
 
-    // Getters
-
-    // Actions
     const getStockLevelsAsync = async () => await stockLevelApiService
         .getAllAsync()
-        .then((res) => stockLevels.value = res)
+        .then((res) => stockLevels.value = res.sort((sl1, sl2) => sl1.sequence - sl2.sequence))
 
-    return { stockLevels, getStockLevelsAsync }
+    // endregion Stock Levels
+
+    return {
+        stockLevels,
+        getStockLevelsAsync
+    }
 });

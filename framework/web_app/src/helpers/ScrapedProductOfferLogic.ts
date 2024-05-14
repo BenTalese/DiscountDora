@@ -2,22 +2,16 @@ import { Product } from 'src/models/Product';
 import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 
 /**
- * Determines whether the product matching the offer is active.
- * If no match, returns false.
+ * Finds the saved product matching the merchant name & merchant stockcode of the product offer.
+ * If no match, returns undefined.
  * @param offer the product offer
- * @param products the saved products
- * @returns boolean
+ * @param products all saved products
+ * @returns the saved product or undefined
  */
-export function isOfferActive(offer: ScrapedProductOffer, products: Product[] | undefined): boolean {
-    if(products === undefined)
-        return false;
-
-    const savedProduct = products?.find((product: Product) =>
+export const findSavedProduct = (offer: ScrapedProductOffer, products: Product[] | undefined): Product | undefined =>
+    products?.find((product: Product) =>
         product.merchant_stockcode === offer.merchant_stockcode &&
         product.merchant_name === offer.merchant_name);
-
-    return savedProduct?.is_active ?? false;
-};
 
 export const isOfferOnSpecial = (offer: ScrapedProductOffer): boolean =>
     offer.price_now > 0 && offer.price_now < offer.price_was;

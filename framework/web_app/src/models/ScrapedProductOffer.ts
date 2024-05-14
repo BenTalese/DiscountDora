@@ -1,5 +1,3 @@
-import { Product } from "./Product"
-
 export type ScrapedProductOffer = {
     brand: string | null
     image: string

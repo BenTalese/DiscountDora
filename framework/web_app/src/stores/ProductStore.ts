@@ -2,12 +2,11 @@ import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/NotSupportedError';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferOnSpecial, isOfferActive } from 'src/helpers/ScrapedProductOfferLogic';
-import { PartialWithRequired } from 'src/helpers/UtilityTypes';
+import { isOfferOnSpecial, findSavedProduct } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
 import type { Product } from 'src/models/Product';
 import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import ProductApiService, { SearchByTermQuery } from 'src/services/api/ProductApiService';
+import ProductApiService, { CreateProductCommand, SearchByTermQuery, UpdateProductCommand } from 'src/services/api/ProductApiService';
 import { computed, reactive, readonly, ref } from 'vue';
 
 const productApiService = new ProductApiService();
@@ -17,6 +16,13 @@ export interface IProductSearchFilters {
     showOnlySpecials: boolean,
     sortBy: IOfferSortByOption,
     stores: Merchant[]
+}
+
+export type UpdateScrapedProductOfferCommand = {
+    is_saved?: boolean
+    is_saved_product_active?: boolean
+    merchant_name: string
+    merchant_stockcode: string
 }
 
 export const useProductStore = defineStore('product', () => {
@@ -35,7 +41,8 @@ export const useProductStore = defineStore('product', () => {
      * @param merchantsData An array of Merchants representing the stores to add to the filter.
      * @returns The new length of the stores array after adding the new merchants.
      */
-    const addStoresToProductSearchFilter = (merchantsData: Merchant[]): number => productSearchOfferFilters.stores.push(...merchantsData);
+    const addStoresToProductSearchFilter = (merchantsData: Merchant[]): number =>
+        productSearchOfferFilters.stores.push(...merchantsData);
 
     /**
      * Replaces the product search filter for stores with the provided data.
@@ -73,9 +80,9 @@ export const useProductStore = defineStore('product', () => {
 
     const products = ref<Product[]>()
 
-    const createProductAsync = (product: Partial<Product>): Promise<void> =>
+    const createProductAsync = (command: CreateProductCommand): Promise<void> =>
         productApiService
-            .createAsync(product)
+            .createAsync(command)
             .then(() => getProductsAsync());
 
     const getProductsAsync = (): Promise<void> =>
@@ -83,9 +90,9 @@ export const useProductStore = defineStore('product', () => {
             .getAllAsync()
             .then((productsData) => { products.value = productsData; });
 
-    const updateProductAsync = (product: PartialWithRequired<Product, 'product_id'>): Promise<void> =>
+    const updateProductAsync = (command: UpdateProductCommand): Promise<void> =>
         productApiService
-            .updateAsync(product)
+            .updateAsync(command)
             .then(() => getProductsAsync());
 
     //#endregion Products
@@ -94,14 +101,14 @@ export const useProductStore = defineStore('product', () => {
 
     const productOffers = ref<ScrapedProductOffer[] | undefined>();
 
-    const updateProductOffer = (offer: PartialWithRequired<ScrapedProductOffer, 'merchant_name' | 'merchant_stockcode'>) => {
+    const updateProductOffer = (command: UpdateScrapedProductOfferCommand) => {
         const index = productOffers.value?.findIndex(off =>
-            off.merchant_name === offer.merchant_name
-            && off.merchant_stockcode === offer.merchant_stockcode)
+            off.merchant_name === command.merchant_name
+            && off.merchant_stockcode === command.merchant_stockcode)
             ?? -1;
 
         if(index > -1 && productOffers.value)
-            productOffers.value[index] = {...productOffers.value[index], ...offer} ;
+            productOffers.value[index] = {...productOffers.value[index], ...command} ;
     };
 
     const filteredProductOffers = computed(() => {
@@ -130,7 +137,9 @@ export const useProductStore = defineStore('product', () => {
             .searchByTermAsync(query)
             .then((offers) => {
                 productOffers.value = offers.map(off => {
-                    off.is_active = isOfferActive(off, products.value);
+                    const savedProduct = findSavedProduct(off, products.value);
+                    off.is_saved = !!savedProduct;
+                    off.is_saved_product_active = savedProduct?.is_active;
                     return off;
                 });
             })

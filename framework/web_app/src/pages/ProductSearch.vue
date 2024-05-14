@@ -44,7 +44,7 @@
 
             <card-component :img="imageService.decodeBase64Image(offer.image)"
                 :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'" icon="favorite"
-                @icon-click="onIconClick(offer)" :icon-class="offer.is_active ? 'text-red-12' : 'text-grey'">
+                @icon-click="onIconClick(offer)" :icon-class="offer.is_saved && offer.is_saved_product_active ? 'text-red-12' : 'text-grey'">
                 <template v-slot:body>
                     <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
@@ -174,18 +174,34 @@ const imageService = new ImageService();
  */
 const onIconClick = (offer: ScrapedProductOffer): void => {
 
-    const { is_active, merchant_name, merchant_stockcode } = offer;
-    productStore.updateProductOffer({ is_active: !is_active, merchant_name, merchant_stockcode });
+    const { is_saved_product_active, merchant_name, merchant_stockcode } = offer;
 
     const product = productStore.products?.find(p =>
         p.merchant_name === offer.merchant_name
         && p.merchant_stockcode === offer.merchant_stockcode);
 
     if (product)
-        productStore.updateProductAsync({ is_active: !is_active, product_id: product.product_id });
+        productStore.updateProductAsync({
+            is_active: !is_saved_product_active,
+            product_id: product.product_id
+        })
+        .then(() => productStore.updateProductOffer({
+            is_saved_product_active: !is_saved_product_active,
+            merchant_name,
+            merchant_stockcode
+        }));
 
     else
-        productStore.createProductAsync({ ...offer, is_active: !is_active });
+        productStore.createProductAsync({
+            ...offer,
+            is_active: true
+        })
+        .then(() => productStore.updateProductOffer({
+            is_saved: true,
+            is_saved_product_active: true,
+            merchant_name,
+            merchant_stockcode
+        }));
 }
 
 //#endregion Offers

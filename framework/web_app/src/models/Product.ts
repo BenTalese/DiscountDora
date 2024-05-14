@@ -1,5 +1,5 @@
 export type Product = {
-    brand: string | null
+    brand: string
     image: string
     is_active: boolean
     is_available: boolean

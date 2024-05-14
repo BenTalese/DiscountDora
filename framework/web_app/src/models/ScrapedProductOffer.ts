@@ -1,8 +1,11 @@
+import { Product } from "./Product"
+
 export type ScrapedProductOffer = {
     brand: string | null
     image: string
-    is_active: boolean
     is_available: boolean
+    is_saved: boolean
+    is_saved_product_active?: boolean
     merchant_name: string
     merchant_stockcode: string
     name: string

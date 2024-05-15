@@ -35,6 +35,8 @@ class ProductModel(db.Model):
 
     image = Column(LargeBinary)
 
+    is_active = Column(Boolean)
+
     is_available = Column(Boolean)
 
     merchant = relationship(
@@ -54,6 +56,8 @@ class ProductModel(db.Model):
         String(255),
         nullable = False)
 
+    size = Column(String(255))
+
     size_unit = Column(String(255))
 
     size_value = Column(Float)
@@ -67,10 +71,12 @@ class ProductModel(db.Model):
             current_offer = self.current_offer.to_entity() if self.current_offer else None,
             historical_offers = [offer.to_entity() for offer in self.historical_offers],
             image = self.image,
+            is_active = self.is_active,
             is_available = self.is_available,
             merchant = self.merchant.to_entity() if self.merchant else None,
             merchant_stockcode = self.merchant_stockcode,
             name = self.name,
+            size = self.size,
             size_unit = self.size_unit,
             size_value = self.size_value,
             web_url = self.web_url)

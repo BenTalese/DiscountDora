@@ -35,10 +35,12 @@ class CreateProductInteractor(Interactor):
             ),
             historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
             image = input_port.image,
+            is_active = input_port.is_active,
             is_available = input_port.is_available,
             merchant = merchant,
             merchant_stockcode = input_port.merchant_stockcode,
             name = input_port.name,
+            size = input_port.size,
             size_unit = input_port.size_unit,
             size_value = input_port.size_value,
             web_url = input_port.web_url

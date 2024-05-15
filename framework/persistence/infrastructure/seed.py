@@ -1,15 +1,17 @@
-from datetime import datetime, timedelta
 import random
 import string
+from datetime import datetime, timedelta
 
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.merchant import Merchant
+from domain.entities.product import Product
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.persistence.infrastructure.persistence_helper_methods import is_entity, is_list
+from framework.persistence.infrastructure.persistence_helper_methods import (
+    is_entity, is_list)
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):
@@ -20,6 +22,31 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     merchant_two.name = "Coles"
     persistence.add(merchant_one)
     persistence.add(merchant_two)
+
+    product_one = generate_entity(Product)
+    product_one.is_active = True
+    product_one.is_available = True
+    product_one.merchant = merchant_one
+    product_one.merchant_stockcode = "51741"
+    product_one.name = "Cadbury Freddo Cake"
+    product_one.size = "1.5L"
+    product_one.size_unit = "L"
+    product_one.size_value = 1.0
+    product_one.web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
+
+    product_two = generate_entity(Product)
+    product_two.is_active = True
+    product_two.is_available = True
+    product_two.merchant = merchant_two
+    product_two.merchant_stockcode = "3056737"
+    product_two.name = "Betty Crocker Gluten Free Vanilla Cupcake Mix"
+    product_two.size = "460G"
+    product_two.size_unit = "G"
+    product_two.size_value = 460.0
+    product_two.web_url = "https://www.coles.com.au/product/3056737"
+
+    persistence.add(product_one)
+    persistence.add(product_two)
 
     # TEST DATA:
     user = generate_entity(User)

@@ -19,8 +19,8 @@
             :model-value="productStore.productSearchOfferFilters.sortBy"
             @update:model-value="productStore.setProductSearchSortByFilter" />
 
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyAvailable))"
-            no-caps no-wrap size="md" :stretch="false"
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlyAvailable'))" no-caps
+            no-wrap size="md" :stretch="false"
             :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)" class="q-ma-sm"
             square>
             <template v-slot>
@@ -28,17 +28,8 @@
             </template>
         </q-btn>
 
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlyFavourites))"
-            no-caps no-wrap size="md" :stretch="false" text-color="black"
-            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyFavourites)" class="q-ma-sm"
-            square>
-            <template v-slot>
-                <span class="font-weight-400">Favourites</span>
-            </template>
-        </q-btn>
-
-        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>(src => src.showOnlySpecials))"
-            no-caps no-wrap size="md" :stretch="false" text-color="black"
+        <q-btn type="button" @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlySpecials'))" no-caps
+            no-wrap size="md" :stretch="false" text-color="black"
             :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)" class="q-ma-sm" square>
             <template v-slot>
                 <span class="font-weight-400">Specials</span>
@@ -53,8 +44,7 @@
 
             <card-component :img="imageService.decodeBase64Image(offer.image)"
                 :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'" icon="favorite"
-                @icon-click="productStore.addOfferToFavouritesAsync(offer)"
-                :icon-class="isOfferFavourited(offer, productStore.products as Product[]) ? 'text-red-12' : 'text-grey'">
+                @icon-click="onIconClick(offer)" :icon-class="offer.is_saved && offer.is_saved_product_active ? 'text-red-12' : 'text-grey'">
                 <template v-slot:body>
                     <q-card-section class="flex-1 q-py-none">
                         <div class="column full-height no-wrap justify-between">
@@ -96,7 +86,7 @@
 
                 <template v-slot:footer>
                     <q-card-actions align="right" class="bg-off-white">
-                        <component :is="merchantLogoComponents[offer.merchant_name]" />
+                        <component :is="MerchantLogoOptions[offer.merchant_name]" />
                     </q-card-actions>
                 </template>
             </card-component>
@@ -119,14 +109,13 @@
 
 import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
-import ColesLogo from 'src/components/ColesLogo.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
-import WoolworthsLogo from 'src/components/WoolworthsLogo.vue';
-import { nameof } from 'src/helpers/Nameof';
+import MerchantLogoOptions from 'src/helpers/MerchantLogoOptions';
+import nameof from 'src/helpers/Nameof';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferFavourited, isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
+import { isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
 import { Merchant } from 'src/models/Merchant';
-import { Product } from 'src/models/Product';
+import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
 import ImageService from 'src/services/files/ImageService';
 import { useMerchantStore } from 'src/stores/MerchantStore';
 import { IProductSearchFilters, useProductStore } from 'src/stores/ProductStore';
@@ -178,9 +167,41 @@ const getStoresOptionIcon = (isSelected: boolean): string =>
 
 const imageService = new ImageService();
 
-const merchantLogoComponents: { [key: string]: unknown } = {
-    Coles: ColesLogo,
-    Woolworths: WoolworthsLogo
+/**
+ * Updates the offer and its matching saved product.
+ * Creates the saved product if it does not exist.
+ * @param offer the product offer
+ */
+const onIconClick = (offer: ScrapedProductOffer): void => {
+
+    const { is_saved_product_active, merchant_name, merchant_stockcode } = offer;
+
+    const product = productStore.products?.find(p =>
+        p.merchant_name === offer.merchant_name
+        && p.merchant_stockcode === offer.merchant_stockcode);
+
+    if (product)
+        productStore.updateProductAsync({
+            is_active: !is_saved_product_active,
+            product_id: product.product_id
+        })
+        .then(() => productStore.updateProductOffer({
+            is_saved_product_active: !is_saved_product_active,
+            merchant_name,
+            merchant_stockcode
+        }));
+
+    else
+        productStore.createProductAsync({
+            ...offer,
+            is_active: true
+        })
+        .then(() => productStore.updateProductOffer({
+            is_saved: true,
+            is_saved_product_active: true,
+            merchant_name,
+            merchant_stockcode
+        }));
 }
 
 //#endregion Offers

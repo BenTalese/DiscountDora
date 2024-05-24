@@ -31,7 +31,9 @@ export default class StockItemApiService {
 }
 
 export type CreateStockItemCommand = {
+    days_until_stocktake_alert: number;
     name: string;
+    stock_group_id: string | null;
     stock_level_id: string;
     stock_location_id: string | null;
 }

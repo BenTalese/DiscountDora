@@ -11,6 +11,7 @@ class Recipe(BaseEntity):
     ingredients: List[StockItem] = None
     instructions: str = None
     name: str = None
+    #nutritional information (either as own object, or flatten onto this class, e.g. salt, sugar, fat)
 
 
 # from typing import List, Optional

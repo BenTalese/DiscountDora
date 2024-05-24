@@ -1,8 +1,14 @@
 {
-    "singleQuote": true,
-    "semi": false,
+    "arrowParens": "always",
+    "bracketSameLine": false,
+    "bracketSpacing": true,
     "htmlWhitespaceSensitivity": "ignore",
-    "vueIndentScriptAndStyle": true,
+    "jsxSingleQuote": true,
+    "printWidth": 80,
+    "semi": true,
     "singleAttributePerLine": true,
-    "tabWidth": 4
+    "singleQuote": true,
+    "tabWidth": 4,
+    "trailingComma": "none",
+    "vueIndentScriptAndStyle": true
 }

@@ -16,7 +16,6 @@ from framework.dora_api.infrastructure.view_model_decorator import \
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
-# TODO: ApiAuditing (make a metadata.db)
 # TODO: 400 bad request validation for required inputs
 
 @MIDDLEWARE.before_app_request
@@ -50,17 +49,17 @@ async def deserialise_web_request():
         for _AttributeName, _AttributeType in get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items():
             _Data = _RequestData.get(_AttributeName)
 
-            _AttributeTypeOrigin = get_origin(_AttributeType)
-            if _AttributeTypeOrigin and _AttributeTypeOrigin is AttributeChangeTracker:
-                _DeserialisedRequestData[_AttributeName] = __get_deserialised_attribute_change_tracker(_AttributeName, _RequestData)
+            if _AttributeTypeOrigin:= get_origin(_AttributeType):
+                if _AttributeTypeOrigin is AttributeChangeTracker:
+                    _DeserialisedRequestData[_AttributeName] = __get_deserialised_attribute_change_tracker(_AttributeName, _RequestData)
+
+            elif _ParsedUUID := try_parse_uuid(_Data):
+                _DeserialisedRequestData[_AttributeName] = EntityID(_ParsedUUID)
+
+            elif _AttributeType is bytes and _Data:
+                _DeserialisedRequestData[_AttributeName] = _AttributeType(b64decode(_Data))
 
             else:
-                if _AttributeType is bytes:
-                    _Data = b64decode(_Data)
-
-                if _Parsed_UUID := try_parse_uuid(_Data):
-                    _Data = EntityID(_Parsed_UUID)
-
                 _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
@@ -85,8 +84,8 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
         return AttributeChangeTracker(None, True)
 
     else:
-        if _Parsed_UUID := try_parse_uuid(request_data[attribute_name]):
-            return AttributeChangeTracker(EntityID(_Parsed_UUID), True)
+        if _ParsedUUID := try_parse_uuid(request_data[attribute_name]):
+            return AttributeChangeTracker(EntityID(_ParsedUUID), True)
 
         return AttributeChangeTracker(request_data[attribute_name])
 

@@ -1,9 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-
-    // program was "${file}" but changed so it will always start debugging from main.py
     "version": "0.2.0",
     "configurations": [
         {
@@ -30,20 +25,6 @@
             "console": "integratedTerminal",
             "justMyCode": true
         },
-        // {
-        //     "type": "firefox",
-        //     "request": "launch",
-        //     "name": "Web App (Old)",
-        //     "url": "http://localhost:5174",
-        //     "preLaunchTask": "npm: dev",
-        //     "webRoot": "${workspaceFolder}/framework/web_app_old/app",
-        //     "pathMappings": [
-        //         {
-        //             "url": "http://localhost:5174/app",
-        //             "path": "${workspaceFolder}/framework/web_app_old/app"
-        //         }
-        //     ]
-        // },
         {
             "type": "chrome",
             "request": "launch",
@@ -69,6 +50,10 @@
                 {
                     "url": "webpack:///framework/web_app/src/",
                     "path": "${webRoot}/"
+                },
+                {
+                    "url": "webpack:///",
+                    "path": "${workspaceFolder}/framework/web_app/src"
                 }
             ]
         },

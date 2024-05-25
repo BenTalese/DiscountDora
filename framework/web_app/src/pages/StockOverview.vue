@@ -23,7 +23,6 @@
             horizontal
         >
             <q-card-actions class="col">
-                <!-- style="border-right: 3px black solid;" /> -->
                 <q-btn-dropdown
                     class="q-mx-sm"
                     :color="getStockLevelColour(item.stock_level_id)"
@@ -55,6 +54,7 @@
                                 size="25px"
                             />
                         </q-item-section>
+
                         <q-item-section>
                             <q-item-label>{{ level.description }}</q-item-label>
                         </q-item-section>
@@ -74,11 +74,6 @@
                 />
                 <p class="text-bold q-ma-sm">{{ item.name }}</p>
             </q-card-actions>
-
-            <!-- Possibly want to group all cols together under one parent, and have buttons their own parent -->
-            <!-- <q-card-section class="col">
-                <p class="text-bold">{{ item.name }}</p>
-            </q-card-section> -->
 
             <q-card-section class="col">
                 <p class="text-weight-bold q-ma-none">Location</p>
@@ -101,7 +96,7 @@
             >
                 <q-input
                     :rules="[
-                        (val) =>
+                        (val: string) =>
                             (val && val.length > 0) || 'Please type something'
                     ]"
                     filled
@@ -114,6 +109,7 @@
                     type="number"
                     filled
                     label="Days Until Stocktake Alert"
+                    default="0"
                 />
 
                 <q-select
@@ -199,42 +195,13 @@
     const stockLevelStore = useStockLevelStore();
 
     const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
+    const { getStockLevelColour } = stockLevelStore;
 
-    // TODO: Not sure if this is the best type to use here
     const createStockItemForm: Ref<CreateStockItemCommand> = ref({
         days_until_stocktake_alert: 0,
         name: '',
-        stock_group_id: '',
+        stock_group_id: null,
         stock_level_id: '',
-        stock_location_id: ''
+        stock_location_id: null
     });
-
-    // TODO: Move to logic file
-    // TODO: Look into PartialWithRequired tht atif uses
-    // TODO: Look into "...offer" and how it works
-    function getStockLevelColour(stockLevelID: string) {
-        let stock_level = stockLevelStore.stockLevels.find(
-            (sl) => sl.stock_level_id == stockLevelID
-        );
-
-        if (stock_level?.description == 'Well-Stocked') {
-            return 'green';
-        }
-
-        if (stock_level?.description == 'Sufficient Stock') {
-            return 'yellow';
-        }
-
-        if (stock_level?.description == 'Low Stock') {
-            return 'red';
-        }
-
-        if (stock_level?.description == 'Out of Stock') {
-            return 'grey';
-        }
-
-        throw new Error(
-            `Colour not configured for stock level '${stock_level?.description}'.`
-        );
-    }
 </script>

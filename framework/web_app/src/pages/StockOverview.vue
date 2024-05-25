@@ -1,26 +1,26 @@
 <template>
     <q-btn
-        color="green"
         class="q-ma-sm"
         @click="shouldDisplayCreateStockItemModal = true"
+        color="green"
     >
         <q-icon
             name="add"
-            size="30px"
             color="dark-green"
+            size="30px"
         />
     </q-btn>
 
     <q-card
-        v-for="item in stockItemStore.stockItems"
-        :key="item.stock_item_id"
         class="no-shadow q-ma-sm"
+        :key="item.stock_item_id"
         bordered
+        v-for="item in stockItemStore.stockItems"
         vertical="false"
     >
         <q-card-section
-            horizontal
             class="row justify-between"
+            horizontal
         >
             <q-card-actions class="col">
                 <!-- style="border-right: 3px black solid;" /> -->
@@ -28,24 +28,24 @@
                     class="q-mx-sm"
                     :color="getStockLevelColour(item.stock_level_id)"
                     :items="stockLevelStore.stockLevels"
-                    style="width: 28px"
                     dense
-                    rounded
                     dropdown-icon="none"
-                    push
                     no-caps
+                    push
+                    rounded
+                    style="width: 28px"
                 >
                     <q-item
-                        clickable
-                        v-close-popup
-                        v-for="level in stockLevelStore.stockLevels"
                         :key="level.sequence"
                         @click="
                             updateStockLevelAsync(
                                 item.stock_item_id,
-                                level.stock_level_id,
+                                level.stock_level_id
                             )
                         "
+                        clickable
+                        v-close-popup
+                        v-for="level in stockLevelStore.stockLevels"
                     >
                         <q-item-section avatar>
                             <q-avatar
@@ -62,10 +62,10 @@
                 </q-btn-dropdown>
                 <q-btn
                     class="q-mx-sm"
-                    flat
-                    rounded
-                    icon="shopping_cart"
                     @click="shouldDisplayAddToShoppingCartModal = true"
+                    flat
+                    icon="shopping_cart"
+                    rounded
                 />
 
                 <q-separator
@@ -96,31 +96,31 @@
         <q-card class="q-pa-md">
             <p class="text-h4">Add a new stock item</p>
             <q-form
-                @submit="createStockItemAsync(createStockItemForm)"
                 class="q-gutter-md"
+                @submit="createStockItemAsync(createStockItemForm)"
             >
                 <q-input
-                    label="Name"
-                    filled
-                    lazy-rules
                     :rules="[
                         (val) =>
-                            (val && val.length > 0) || 'Please type something',
+                            (val && val.length > 0) || 'Please type something'
                     ]"
+                    filled
+                    label="Name"
+                    lazy-rules
                     v-model="createStockItemForm.name"
                 />
 
                 <q-input
-                    filled
                     type="number"
+                    filled
                     label="Days Until Stocktake Alert"
                 />
 
                 <q-select
-                    label="Stock Level"
                     :option-label="nameof<StockLevel>((src) => src.description)"
-                    option-value="stock_level_id"
                     :options="stockLevelStore.stockLevels"
+                    label="Stock Level"
+                    option-value="stock_level_id"
                     v-model="createStockItemForm.stock_level_id"
                 >
                     <template v-slot:option="scope">
@@ -129,7 +129,7 @@
                                 <q-avatar
                                     :color="
                                         getStockLevelColour(
-                                            scope.opt.stock_level_id,
+                                            scope.opt.stock_level_id
                                         )
                                     "
                                     size="25px"
@@ -151,9 +151,9 @@
                 <q-select label="Stock Location"></q-select>
 
                 <q-btn
-                    label="Submit"
                     type="submit"
                     color="primary"
+                    label="Submit"
                 />
             </q-form>
         </q-card>
@@ -169,15 +169,15 @@
 
             <q-card-actions align="right">
                 <q-btn
+                    color="primary"
                     flat
                     label="Cancel"
-                    color="primary"
                     v-close-popup
                 />
                 <q-btn
+                    color="primary"
                     flat
                     label="Add to list"
-                    color="primary"
                     v-close-popup
                 />
             </q-card-actions>
@@ -185,20 +185,20 @@
     </q-dialog>
 </template>
 
-<script setup lang="ts">
-    import { nameof } from 'src/helpers/Nameof'
-    import { StockLevel } from 'src/models/StockLevel'
-    import { CreateStockItemCommand } from 'src/services/api/StockItemApiService'
-    import { useStockItemStore } from 'src/stores/stockItemStore'
-    import { useStockLevelStore } from 'src/stores/stockLevelStore'
-    import { Ref, ref } from 'vue'
+<script lang="ts" setup>
+    import { nameof } from 'src/helpers/Nameof';
+    import { StockLevel } from 'src/models/StockLevel';
+    import { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { Ref, ref } from 'vue';
 
-    const shouldDisplayAddToShoppingCartModal = ref(false)
-    const shouldDisplayCreateStockItemModal = ref(false)
-    const stockItemStore = useStockItemStore()
-    const stockLevelStore = useStockLevelStore()
+    const shouldDisplayAddToShoppingCartModal = ref(false);
+    const shouldDisplayCreateStockItemModal = ref(false);
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
 
-    const { createStockItemAsync, updateStockLevelAsync } = stockItemStore
+    const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
 
     // TODO: Not sure if this is the best type to use here
     const createStockItemForm: Ref<CreateStockItemCommand> = ref({
@@ -206,35 +206,35 @@
         name: '',
         stock_group_id: '',
         stock_level_id: '',
-        stock_location_id: '',
-    })
+        stock_location_id: ''
+    });
 
     // TODO: Move to logic file
     // TODO: Look into PartialWithRequired tht atif uses
     // TODO: Look into "...offer" and how it works
     function getStockLevelColour(stockLevelID: string) {
         let stock_level = stockLevelStore.stockLevels.find(
-            (sl) => sl.stock_level_id == stockLevelID,
-        )
+            (sl) => sl.stock_level_id == stockLevelID
+        );
 
         if (stock_level?.description == 'Well-Stocked') {
-            return 'green'
+            return 'green';
         }
 
         if (stock_level?.description == 'Sufficient Stock') {
-            return 'yellow'
+            return 'yellow';
         }
 
         if (stock_level?.description == 'Low Stock') {
-            return 'red'
+            return 'red';
         }
 
         if (stock_level?.description == 'Out of Stock') {
-            return 'grey'
+            return 'grey';
         }
 
         throw new Error(
-            `Colour not configured for stock level '${stock_level?.description}'.`,
-        )
+            `Colour not configured for stock level '${stock_level?.description}'.`
+        );
     }
 </script>

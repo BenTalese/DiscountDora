@@ -6,8 +6,8 @@ import {
     createWebHistory,
 } from 'vue-router';
 
-import routes from './routes';
 import { Notify } from 'quasar';
+import routes from './routes';
 
 /*
  * If not building with SSR mode, you can
@@ -35,7 +35,7 @@ export default route(function (/* { store, ssrContext } */) {
 
     Router.onError(err => {
         console.error('Vue Router Error: ' + err.message)
-        Notify.create({})
+        Notify.create({ type: 'oopsie' })
     })
 
     return Router;

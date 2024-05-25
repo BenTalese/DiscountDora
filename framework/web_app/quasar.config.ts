@@ -28,7 +28,8 @@ export default configure((/* ctx */) => {
         boot: [
             'i18n',
             'axios',
-            'globalErrorHandler'
+            'globalErrorHandler',
+            'notifyTypeRegistration'
         ],
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css
@@ -122,16 +123,7 @@ export default configure((/* ctx */) => {
                     messageColor: 'info',
                     spinnerColor: 'info',
                     spinner: 'QSpinnerTail'
-                }, /* look at QuasarConfOptions from the API card */
-                notify: {
-                    color: 'red-5',
-                    message: 'Oops, something went wrong...',
-                    icon: 'error',
-                    iconColor: 'white',
-                    iconSize: '30px',
-                    progress: true,
-                    timeout: 3000
-                }
+                } /* look at QuasarConfOptions from the API card */
             }
         },
 

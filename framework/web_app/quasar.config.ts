@@ -26,10 +26,11 @@ export default configure((/* ctx */) => {
         // --> boot files are part of "main.js"
         // https://v2.quasar.dev/quasar-cli-vite/boot-files
         boot: [
-            'i18n',
             'axios',
             'globalErrorHandler',
-            'notifyTypeRegistration'
+            'i18n',
+            'notifyTypeRegistration',
+            'stores'
         ],
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css

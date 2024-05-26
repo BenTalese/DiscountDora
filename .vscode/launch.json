@@ -28,7 +28,7 @@
         {
             "type": "chrome",
             "request": "launch",
-            "name": "Web App: Chrome",
+            "name": "Chrome",
             "url": "http://localhost:5174",
             "webRoot": "${workspaceFolder}/src",
             "sourceMapPathOverrides": {
@@ -38,7 +38,7 @@
         {
             "type": "firefox",
             "request": "launch",
-            "name": "Web App: Firefox",
+            "name": "Firefox",
             "url": "http://localhost:5174",
             "webRoot": "${workspaceFolder}/framework/web_app/src",
             "preLaunchTask": "quasar:dev",
@@ -72,20 +72,28 @@
     ],
     "compounds": [
         {
-            "name": "Run All",
-            "configurations": ["DAPI", "MAPI", "Web App: Firefox", "Emailer"]
+            "name": "Firefox: All",
+            "configurations": ["DAPI", "MAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + DAPI",
-            "configurations": ["DAPI", "Web App: Firefox"]
+            "name": "Firefox: WebApp + DAPI",
+            "configurations": ["DAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + MAPI",
-            "configurations": ["MAPI", "Web App: Firefox"]
+            "name": "Firefox: WebApp + MAPI",
+            "configurations": ["MAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + DAPI + MAPI",
-            "configurations": ["DAPI", "MAPI", "Web App: Firefox"]
+            "name": "Chrome: All",
+            "configurations": ["DAPI", "MAPI", "Chrome"]
+        },
+        {
+            "name": "Chrome: WebApp + DAPI",
+            "configurations": ["DAPI", "Chrome"]
+        },
+        {
+            "name": "Chrome: WebApp + MAPI",
+            "configurations": ["MAPI", "Chrome"]
         }
     ]
 }

@@ -21,7 +21,8 @@ from framework.dora_api.routes.stock_items.delete_stock_item_presenter import \
     DeleteStockItemPresenter
 from framework.dora_api.routes.stock_items.get_stock_items_presenter import \
     GetStockItemsPresenter
-from framework.dora_api.routes.stock_items.update_stock_item_command import UpdateStockItemCommand
+from framework.dora_api.routes.stock_items.update_stock_item_command import \
+    UpdateStockItemCommand
 from framework.dora_api.routes.stock_items.update_stock_item_presenter import \
     UpdateStockItemPresenter
 from framework.dora_api.view_models.stock_item_view_model import \
@@ -31,12 +32,6 @@ from interface_adaptors.controllers.stock_item_controller import \
 
 STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/stock-items")
 
-# TODO
-# Filtering options:
-# Here in controller action
-# Pass to presenter
-# Pass to base presenter
-# Middleware after_app_request
 
 #TODO: Has view model???
 @STOCK_ITEM_ROUTER.route("", methods=["POST"])
@@ -48,11 +43,7 @@ async def create_stock_item_async():
 
     _Presenter.get_route = f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items_async)}"
     _Command: CreateStockItemCommand = request.request_body
-    _InputPort = CreateStockItemInputPort()
-    _InputPort.name = _Command.name
-    if _Command.stock_level_id:
-        _InputPort.stock_level_id = EntityID(_Command.stock_level_id)
-    _InputPort.stock_location_id = EntityID(_Command.stock_location_id) if _Command.stock_location_id else None
+    _InputPort = CreateStockItemInputPort(**_Command.__dict__)
 
     await _StockItemController.create_stock_item_async(_InputPort, _Presenter)
     return _Presenter.result

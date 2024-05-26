@@ -15,7 +15,7 @@
         class="no-shadow q-ma-sm"
         :key="item.stock_item_id"
         bordered
-        v-for="item in stockItemStore.stockItems"
+        v-for="item in stockItems"
         vertical="false"
     >
         <q-card-section
@@ -88,35 +88,48 @@
     </q-card>
 
     <q-dialog v-model="shouldDisplayCreateStockItemModal">
-        <q-card class="q-pa-md">
+        <q-card
+            class="q-pa-md"
+            style="width: 700px; max-width: 80vw"
+        >
             <p class="text-h4">Add a new stock item</p>
             <q-form
                 class="q-gutter-md"
-                @submit="createStockItemAsync(createStockItemForm)"
+                @submit="
+                    createStockItemAsync(createStockItemForm).then(
+                        clearCreateStockItemForm
+                    )
+                "
             >
                 <q-input
                     :rules="[
                         (val: string) =>
                             (val && val.length > 0) || 'Please type something'
                     ]"
+                    autofocus
                     filled
                     label="Name"
-                    lazy-rules
                     v-model="createStockItemForm.name"
                 />
 
                 <q-input
                     type="number"
                     filled
+                    hint="Alerts disabled if set to zero"
                     label="Days Until Stocktake Alert"
-                    default="0"
+                    v-model="createStockItemForm.days_until_stocktake_alert"
                 />
 
                 <q-select
-                    :option-label="nameof<StockLevel>((src) => src.description)"
+                    :option-label="(opt: StockLevel) => opt.description"
+                    :option-value="(opt: StockLevel) => opt.stock_level_id"
                     :options="stockLevelStore.stockLevels"
+                    :rules="[
+                        (val: string) => !!val || 'Please select a stock level'
+                    ]"
+                    emit-value
                     label="Stock Level"
-                    option-value="stock_level_id"
+                    map-options
                     v-model="createStockItemForm.stock_level_id"
                 >
                     <template v-slot:option="scope">
@@ -141,16 +154,34 @@
                 </q-select>
 
                 <!-- TODO: IMPLEMENT -->
-                <q-select label="Stock Group"></q-select>
+                <q-select
+                    label="Stock Group"
+                    v-model="createStockItemForm.stock_group_id"
+                ></q-select>
 
                 <!-- TODO: IMPLEMENT -->
-                <q-select label="Stock Location"></q-select>
+                <q-select
+                    label="Stock Location"
+                    v-model="createStockItemForm.stock_location_id"
+                ></q-select>
 
-                <q-btn
-                    type="submit"
-                    color="primary"
-                    label="Submit"
-                />
+                <q-card-actions align="right">
+                    <q-btn
+                        type="submit"
+                        align="right"
+                        color="cyan"
+                        label="Save & Continue"
+                        size="lg"
+                    />
+                    <q-btn
+                        type="submit"
+                        align="right"
+                        color="green"
+                        label="Save & Close"
+                        size="lg"
+                        v-close-popup
+                    />
+                </q-card-actions>
             </q-form>
         </q-card>
     </q-dialog>
@@ -182,26 +213,48 @@
 </template>
 
 <script lang="ts" setup>
-    import { nameof } from 'src/helpers/Nameof';
     import { StockLevel } from 'src/models/StockLevel';
     import { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { Ref, ref } from 'vue';
 
-    const shouldDisplayAddToShoppingCartModal = ref(false);
-    const shouldDisplayCreateStockItemModal = ref(false);
+    // region Common
+
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
 
-    const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
-    const { getStockLevelColour } = stockLevelStore;
+    const { createStockItemAsync, updateStockLevelAsync, stockItems } =
+        stockItemStore;
+    const { getStockLevelColour, stockLevels } = stockLevelStore;
 
-    const createStockItemForm: Ref<CreateStockItemCommand> = ref({
+    // end region Common
+
+    // region Create Stock Item
+
+    const shouldDisplayCreateStockItemModal = ref(false);
+
+    const defaultCreateStockItemForm = {
         days_until_stocktake_alert: 0,
         name: '',
         stock_group_id: null,
-        stock_level_id: '',
+        stock_level_id: stockLevels[0]?.stock_level_id,
         stock_location_id: null
+    };
+
+    const createStockItemForm: Ref<CreateStockItemCommand> = ref({
+        ...defaultCreateStockItemForm
     });
+
+    function clearCreateStockItemForm() {
+        Object.assign(createStockItemForm.value, defaultCreateStockItemForm);
+    }
+
+    // end region Create Stock Item
+
+    // region Shopping List
+
+    const shouldDisplayAddToShoppingCartModal = ref(false);
+
+    // end region Shopping List
 </script>

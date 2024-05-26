@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { StockLevel } from 'src/models/StockLevel';
 import StockLevelApiService from 'src/services/api/StockLevelApiService';
-import { Ref, ref } from 'vue';
+import { readonly, Ref, ref } from 'vue';
 
 const stockLevelApiService = new StockLevelApiService();
 
@@ -42,7 +42,7 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
     // endregion Stock Levels
 
     return {
-        stockLevels,
+        stockLevels: readonly(stockLevels),
         getStockLevelColour,
         getStockLevelsAsync
     }

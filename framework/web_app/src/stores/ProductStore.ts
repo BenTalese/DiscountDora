@@ -60,7 +60,7 @@ export const useProductStore = defineStore('product', () => {
      * @throws {NotSupportedError} If the property type is not boolean.
      */
     function toggleProductSearchFilter(propertyName: keyof IProductSearchFilters): void {
-        if(typeof productSearchOfferFilters[propertyName] === 'boolean')
+        if (typeof productSearchOfferFilters[propertyName] === 'boolean')
             (productSearchOfferFilters[propertyName] as boolean) = !productSearchOfferFilters[propertyName];
         else
             throw new NotSupportedError('Filter to toggle is not of type boolean.');
@@ -91,7 +91,7 @@ export const useProductStore = defineStore('product', () => {
     const productOffers = ref<ScrapedProductOffer[] | undefined>();
 
     const filteredProductOffers = computed(() => {
-        if(productOffers.value === undefined)
+        if (productOffers.value === undefined)
             return undefined;
 
         let shallowOffersCopy = productOffers.value.slice();
@@ -107,8 +107,8 @@ export const useProductStore = defineStore('product', () => {
         return shallowOffersCopy;
     });
 
-    async function searchByTermAsync(query: SearchByTermQuery){
-        if(!query.search_term?.trim())
+    async function searchByTermAsync(query: SearchByTermQuery) {
+        if (!query.search_term?.trim())
             return;
 
         Loading.show();

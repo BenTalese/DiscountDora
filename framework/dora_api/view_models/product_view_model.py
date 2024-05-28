@@ -1,5 +1,5 @@
+from base64 import b64decode
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from application.dtos.product_dto import ProductDto
@@ -27,10 +27,7 @@ class ProductViewModel:
 def get_product_view_model(product: ProductDto) -> ProductViewModel:
     return ProductViewModel(
         brand = product.brand,
-        # HACK: The Get Products use case decode fails.
-        # 'ignore' is a hack solution to remporarily ignore the decoding errors.
-        # The My Products/Favorites page will need to address this issue.
-        image = product.image.decode('utf-8', 'ignore'),
+        image = product.image.decode(),
         is_active = product.is_active,
         is_available = product.is_available,
         merchant_id = product.merchant.merchant_id.value if product.merchant else None,

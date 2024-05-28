@@ -1,3 +1,5 @@
+from base64 import b64encode
+
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, request
 from varname import nameof
@@ -36,7 +38,7 @@ async def create_product_async():
     _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
     _InputPort = CreateProductInputPort(
         brand = _Command.brand,
-        image = _Command.image,
+        image = b64encode(_Command.image),
         is_active = _Command.is_active,
         is_available = _Command.is_available,
         merchant_name = _Command.merchant_name,

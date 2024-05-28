@@ -5,13 +5,13 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
-      { path: '', component: () => import('pages/StockOverview.vue') },
-      { path: 'product-search', component: () => import('pages/ProductSearch.vue') }
+      { path: '', redirect: 'my-products' },
+
+      { path: 'my-products', component: () => import('pages/MyProducts.vue') },
+      { path: 'product-search', component: () => import('pages/ProductSearch.vue') },
+      { path: 'stock', component: () => import('pages/StockOverview.vue') }
     ],
   },
-
-  // Always leave this as last one,
-  // but you can also remove it
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/ErrorNotFound.vue'),

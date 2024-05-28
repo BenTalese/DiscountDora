@@ -43,10 +43,16 @@ const essentialLinks: EssentialLinkProps[] = [
         link: 'http://localhost:5174/#/product-search'
     },
     {
+        title: 'My Products',
+        caption: 'My Products',
+        icon: 'search',
+        link: 'http://localhost:5174/#/my-products'
+    },
+    {
         title: 'Stock',
         caption: 'Stock',
         icon: 'stock',
-        link: 'http://localhost:5174/#'
+        link: 'http://localhost:5174/#/stock'
     }
 ];
 

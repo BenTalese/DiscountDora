@@ -44,7 +44,8 @@ class StockItemModel(db.Model):
 
     stock_group_id = Column(
         UUIDType,
-        ForeignKey(StockGroup.__name__ + ".id"))
+        ForeignKey(StockGroup.__name__ + ".id"),
+        nullable = True)
 
     stock_level = relationship(
         StockLevelModel.__name__,

@@ -6,7 +6,7 @@ def has_view_model(endpoint_name, view_model_class):
     the purpose of which is to provide the response body to the query filtering middleware for
     validation.
 
-    Using this decorator indicates this endpoint supports query filtering.
+    Using this decorator indicates this endpoint supports query filtering on the result set.
     """
     def decorator(func):
         VIEW_MODELS_BY_ENDPOINT[endpoint_name] = view_model_class

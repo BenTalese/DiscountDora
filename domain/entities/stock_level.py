@@ -5,5 +5,5 @@ from domain.entities.base_entity import BaseEntity
 
 @dataclass
 class StockLevel(BaseEntity):
-    description: str = None # TODO: change all description properties to "name"
+    name: str = None
     sequence: int = None

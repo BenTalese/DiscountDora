@@ -31,16 +31,16 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     persistence.add(stock_location_one)
 
     stock_level_one = generate_entity(StockLevel)
-    stock_level_one.description = "Well-Stocked"
+    stock_level_one.name = "Well-Stocked"
     stock_level_one.sequence = 0
     stock_level_two = generate_entity(StockLevel)
-    stock_level_two.description = "Sufficient Stock"
+    stock_level_two.name = "Sufficient Stock"
     stock_level_two.sequence = 1
     stock_level_three = generate_entity(StockLevel)
-    stock_level_three.description = "Low Stock"
+    stock_level_three.name = "Low Stock"
     stock_level_three.sequence = 2
     stock_level_four = generate_entity(StockLevel)
-    stock_level_four.description = "Out of Stock"
+    stock_level_four.name = "Out of Stock"
     stock_level_four.sequence = 3
     persistence.add(stock_level_one)
     persistence.add(stock_level_two)

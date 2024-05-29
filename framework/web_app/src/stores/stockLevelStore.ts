@@ -16,23 +16,23 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
             (sl) => sl.stock_level_id == stockLevelID
         );
 
-        if (stockLevel?.description == 'Well-Stocked') {
+        if (stockLevel?.name == 'Well-Stocked') {
             return 'green';
         }
 
-        if (stockLevel?.description == 'Sufficient Stock') {
+        if (stockLevel?.name == 'Sufficient Stock') {
             return 'yellow';
         }
 
-        if (stockLevel?.description == 'Low Stock') {
+        if (stockLevel?.name == 'Low Stock') {
             return 'red';
         }
 
-        if (stockLevel?.description == 'Out of Stock') {
+        if (stockLevel?.name == 'Out of Stock') {
             return 'grey';
         }
 
-        console.error(`Colour not configured for stock level '${stockLevel?.description}'.`)
+        console.error(`Colour not configured for stock level '${stockLevel?.name}'.`)
     }
 
     const getStockLevelsAsync = async () => await stockLevelApiService

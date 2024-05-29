@@ -37,9 +37,7 @@ async def create_stock_location_async():
     _Presenter.get_route = f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations_async)}"
 
     _Command: CreateStockLocationCommand = request.request_body
-    _InputPort = CreateStockLocationInputPort(
-        description = _Command.description
-    )
+    _InputPort = CreateStockLocationInputPort(**_Command.__dict__)
 
     await _StockLocationController.create_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result
@@ -75,7 +73,7 @@ async def update_stock_location_async(stock_location_id):
 
     _Command: UpdateStockLocationCommand = request.request_body
     _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
-        description = _Command.description,
+        name = _Command.name,
         stock_location_id = EntityID(stock_location_id))
 
     await _StockLocationController.update_stock_location_async(_InputPort, _Presenter)

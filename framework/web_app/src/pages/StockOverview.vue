@@ -56,7 +56,7 @@
                         </q-item-section>
 
                         <q-item-section>
-                            <q-item-label>{{ level.description }}</q-item-label>
+                            <q-item-label>{{ level.name }}</q-item-label>
                         </q-item-section>
                     </q-item>
                 </q-btn-dropdown>
@@ -121,7 +121,7 @@
                 />
 
                 <q-select
-                    :option-label="(opt: StockLevel) => opt.description"
+                    :option-label="(opt: StockLevel) => opt.name"
                     :option-value="(opt: StockLevel) => opt.stock_level_id"
                     :options="stockLevelStore.stockLevels"
                     :rules="[
@@ -146,7 +146,7 @@
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>
-                                    {{ scope.opt.description }}
+                                    {{ scope.opt.name }}
                                 </q-item-label>
                             </q-item-section>
                         </q-item>

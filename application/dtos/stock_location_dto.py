@@ -6,11 +6,11 @@ from domain.entities.stock_location import StockLocation
 
 @dataclass
 class StockLocationDto:
-    description: str
+    name: str
     stock_location_id: EntityID
 
 def get_stock_location_dto(stock_location: StockLocation) -> StockLocationDto:
     return StockLocationDto(
-        description = stock_location.description,
+        name = stock_location.name,
         stock_location_id = stock_location.id
     )

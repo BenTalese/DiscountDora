@@ -26,14 +26,14 @@ class StockLevelModel(db.Model):
         primary_key=True,
         default=uuid4)
 
-    description = Column(String(255))
+    name = Column(String(255))
 
     sequence = Column(Integer)
 
     def to_entity(self) -> StockLevel:
         return StockLevel(
             id = EntityID(self.id),
-            description = self.description,
+            name = self.name,
             sequence = self.sequence)
 
     def get_key(self):

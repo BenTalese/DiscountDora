@@ -44,7 +44,7 @@ async def create_stock_location_async():
     await _StockLocationController.create_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result
 
-@STOCK_LOCATION_ROUTER.route("/<stock_location_id>", methods=["DELETE"])
+@STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["DELETE"])
 async def delete_stock_location_async(stock_location_id):
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
@@ -67,7 +67,7 @@ async def get_stock_locations_async(query = None):
     await _StockLocationController.get_stock_locations_async(_Presenter)
     return _Presenter.result
 
-@STOCK_LOCATION_ROUTER.route("/<stock_location_id>", methods=["PATCH"])
+@STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["PATCH"])
 @has_request_body("update_stock_location_async", UpdateStockLocationCommand)
 async def update_stock_location_async(stock_location_id):
     _ServiceProvider: IServiceProvider = current_app.service_provider

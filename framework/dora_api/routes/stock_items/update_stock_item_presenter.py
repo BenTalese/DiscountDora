@@ -1,9 +1,9 @@
-
-
 from varname import nameof
+
 from application.dtos.stock_item_dto import StockItemDto
 from application.services.ipersistence_context import IPersistenceContext
-from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_output_port import IUpdateStockItemOutputPort
+from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_output_port import \
+    IUpdateStockItemOutputPort
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel

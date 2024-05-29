@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
-from domain.entities.base_entity import BaseEntity
 
+from domain.entities.base_entity import BaseEntity
 from domain.entities.stock_item import StockItem
 
 
@@ -11,7 +11,6 @@ class Recipe(BaseEntity):
     ingredients: List[StockItem] = None
     instructions: str = None
     name: str = None
-    #nutritional information (either as own object, or flatten onto this class, e.g. salt, sugar, fat)
 
 
 # from typing import List, Optional

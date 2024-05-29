@@ -1,7 +1,11 @@
 VIEW_MODELS_BY_ENDPOINT = {}
 
-# TODO: Document what this is and why use it/what it affects
 def has_view_model(endpoint_name, view_model_class):
+    """
+    `has_view_model` is a decorator that registers an endpoint name against a view model class,
+    the purpose of which is to provide the response body to the query filtering middleware for
+    validation.
+    """
     def decorator(func):
         VIEW_MODELS_BY_ENDPOINT[endpoint_name] = view_model_class
         return func

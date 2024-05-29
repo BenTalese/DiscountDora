@@ -10,7 +10,7 @@ export const useMerchantStore = defineStore('merchant', () => {
 
     const productStore = useProductStore();
 
-    // region Merchants
+    //#region Merchants
 
     const merchants = ref<Merchant[]>([]);
 
@@ -27,7 +27,7 @@ export const useMerchantStore = defineStore('merchant', () => {
             });
     };
 
-    // endregion Merchants
+    //#endregion Merchants
 
     return {
         merchants: readonly(merchants),

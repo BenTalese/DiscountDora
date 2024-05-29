@@ -219,7 +219,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { Ref, ref } from 'vue';
 
-    // region Common
+    //#region Common
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
@@ -228,9 +228,9 @@
         stockItemStore;
     const { getStockLevelColour, stockLevels } = stockLevelStore;
 
-    // end region Common
+    //#endregion Common
 
-    // region Create Stock Item
+    //#region Create Stock Item
 
     const shouldDisplayCreateStockItemModal = ref(false);
 
@@ -250,11 +250,11 @@
         Object.assign(createStockItemForm.value, defaultCreateStockItemForm);
     }
 
-    // end region Create Stock Item
+    //#endregion Create Stock Item
 
-    // region Shopping List
+    //#region Shopping List
 
     const shouldDisplayAddToShoppingCartModal = ref(false);
 
-    // end region Shopping List
+    //#endregion Shopping List
 </script>

@@ -8,6 +8,7 @@ from application.use_cases.stock_items.update_stock_item.update_stock_item_input
     UpdateStockItemInputPort
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
+from domain.entities.stock_location import StockLocation
 
 
 class UpdateStockItemInteractor(Interactor):
@@ -29,7 +30,9 @@ class UpdateStockItemInteractor(Interactor):
                 .first_by_id(input_port.stock_level_id.value)
 
         if input_port.stock_location_id.has_been_set:
-            _StockItem.stock_location = input_port.stock_location_id.value
+            _StockItem.stock_location = self.persistence_context \
+                .get_entities(StockLocation) \
+                .first_by_id(input_port.stock_location_id.value)
 
         self.persistence_context.update(_StockItem)
         await output_port.present_stock_item_updated_async(get_stock_item_dto(_StockItem))

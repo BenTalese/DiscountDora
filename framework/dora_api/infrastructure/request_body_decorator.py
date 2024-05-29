@@ -6,7 +6,7 @@ def has_request_body(endpoint_name, request_body_class):
     the purpose of which is to provide the expected request body to the deserialisation middleware
     for incoming web requests.
 
-    Using this decorator indicates this endpoint has a request body.
+    Using this decorator indicates this endpoint expects a request body.
     """
     def decorator(func):
         REQUEST_BODYS_BY_ENDPOINT[endpoint_name] = request_body_class

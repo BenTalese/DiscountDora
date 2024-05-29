@@ -11,6 +11,7 @@ from application.use_cases.stock_locations.update_stock_location.update_stock_lo
 from domain.entities.base_entity import EntityID
 from framework.dora_api.infrastructure.request_body_decorator import \
     has_request_body
+from framework.dora_api.infrastructure.view_model_decorator import has_view_model
 from framework.dora_api.routes.stock_locations.create_stock_location_command import \
     CreateStockLocationCommand
 from framework.dora_api.routes.stock_locations.create_stock_location_presenter import \
@@ -23,6 +24,7 @@ from framework.dora_api.routes.stock_locations.update_stock_location_command imp
     UpdateStockLocationCommand
 from framework.dora_api.routes.stock_locations.update_stock_location_presenter import \
     UpdateStockLocationPresenter
+from framework.dora_api.view_models.stock_location_view_model import StockLocationViewModel
 from interface_adaptors.controllers.stock_location_controller import \
     StockLocationController
 
@@ -56,6 +58,7 @@ async def delete_stock_location_async(stock_location_id):
 
 @STOCK_LOCATION_ROUTER.route("")
 @STOCK_LOCATION_ROUTER.route("<query>")
+@has_view_model('get_stock_locations_async', StockLocationViewModel)
 async def get_stock_locations_async(query = None):
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)

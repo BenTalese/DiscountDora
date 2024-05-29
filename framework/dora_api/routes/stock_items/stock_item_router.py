@@ -33,7 +33,6 @@ from interface_adaptors.controllers.stock_item_controller import \
 STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/stock-items")
 
 
-#TODO: Has view model???
 @STOCK_ITEM_ROUTER.route("", methods=["POST"])
 @has_request_body('create_stock_item_async', CreateStockItemCommand)
 async def create_stock_item_async():

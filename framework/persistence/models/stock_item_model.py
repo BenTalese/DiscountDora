@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
@@ -65,6 +65,8 @@ class StockItemModel(db.Model):
         UUIDType,
         ForeignKey(StockLocation.__name__ + ".id"),
         nullable = True)
+
+    stocktake_alerts_are_enabled = Column(Boolean)
 
     def to_entity(self) -> StockItem:
         return StockItem(

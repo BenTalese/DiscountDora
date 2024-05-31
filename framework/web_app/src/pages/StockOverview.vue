@@ -1,7 +1,7 @@
 <template>
     <q-btn
         class="q-ma-sm"
-        @click="shouldDisplayCreateStockItemModal = true"
+        @click="onCreateStockItemButtonClick"
         color="green"
     >
         <q-icon
@@ -62,7 +62,7 @@
                 </q-btn-dropdown>
                 <q-btn
                     class="q-mx-sm"
-                    @click="shouldDisplayAddToShoppingCartModal = true"
+                    @click="onShoppingListButtonClick"
                     flat
                     icon="shopping_cart"
                     rounded
@@ -102,10 +102,7 @@
                 "
             >
                 <q-input
-                    :rules="[
-                        (val: string) =>
-                            (val && val.length > 0) || 'Please type something'
-                    ]"
+                    :rules="nameInputRules"
                     autofocus
                     filled
                     label="Name"
@@ -121,12 +118,10 @@
                 />
 
                 <q-select
-                    :option-label="(opt: StockLevel) => opt.name"
-                    :option-value="(opt: StockLevel) => opt.stock_level_id"
+                    :option-label="getStockLevelName"
+                    :option-value="getStockLevelId"
                     :options="stockLevelStore.stockLevels"
-                    :rules="[
-                        (val: string) => !!val || 'Please select a stock level'
-                    ]"
+                    :rules="stockLevelSelectRules"
                     emit-value
                     label="Stock Level"
                     map-options
@@ -213,20 +208,24 @@
 </template>
 
 <script lang="ts" setup>
+    import { storeToRefs } from 'pinia';
+    import { ValidationRule } from 'quasar';
     import { StockLevel } from 'src/models/StockLevel';
     import { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { Ref, ref } from 'vue';
+    import { reactive, ref } from 'vue';
 
     //#region Common
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
 
-    const { createStockItemAsync, updateStockLevelAsync, stockItems } =
-        stockItemStore;
-    const { getStockLevelColour, stockLevels } = stockLevelStore;
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
+
+    const { stockLevels } = storeToRefs(stockLevelStore);
+    const { getStockLevelColour } = stockLevelStore;
 
     //#endregion Common
 
@@ -238,23 +237,50 @@
         days_until_stocktake_alert: 0,
         name: '',
         stock_group_id: null,
-        stock_level_id: stockLevels[0]?.stock_level_id,
+        stock_level_id: stockLevels.value[0]?.stock_level_id,
         stock_location_id: null
     };
 
-    const createStockItemForm: Ref<CreateStockItemCommand> = ref({
+    const createStockItemForm: CreateStockItemCommand = reactive({
         ...defaultCreateStockItemForm
     });
 
     function clearCreateStockItemForm() {
-        Object.assign(createStockItemForm.value, defaultCreateStockItemForm);
+        Object.assign(createStockItemForm, defaultCreateStockItemForm);
     }
 
+    const onCreateStockItemButtonClick = () =>
+        shouldDisplayCreateStockItemModal.value = true;
+
     //#endregion Create Stock Item
+
+    //#region Create Stock Item Rules
+
+    const nameInputRules: ValidationRule[] = [
+        (val: string) => (val && val.length > 0) || 'Please type something'
+    ];
+
+    const stockLevelSelectRules: ValidationRule[] = [
+        (val: string) => !!val || 'Please select a stock level'
+    ];
+
+    //#endregion Create Stock Item Rules
 
     //#region Shopping List
 
     const shouldDisplayAddToShoppingCartModal = ref(false);
 
+    const onShoppingListButtonClick = () =>
+        shouldDisplayAddToShoppingCartModal.value = true;
+
     //#endregion Shopping List
+
+    //#region Stock Level
+
+    const getStockLevelId = (stockLevel: StockLevel) => stockLevel.stock_level_id;
+
+    const getStockLevelName = (stockLevel: StockLevel) => stockLevel.name;
+
+    //#endregion Stock Level
+
 </script>

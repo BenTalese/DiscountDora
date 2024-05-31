@@ -12,7 +12,7 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
     const stockLevels: Ref<StockLevel[]> = ref([])
 
     function getStockLevelColour(stockLevelID: string) {
-        let stockLevel = stockLevels.value.find(
+        const stockLevel = stockLevels.value.find(
             (sl) => sl.stock_level_id == stockLevelID
         );
 

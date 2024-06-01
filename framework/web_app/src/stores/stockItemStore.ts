@@ -7,13 +7,18 @@ const stockItemApiService = new StockItemApiService();
 
 export const useStockItemStore = defineStore('stockItem', () => {
 
-    // region Stock Items
+    //#region Stock Items
 
     const stockItems: Ref<StockItem[]> = ref([])
 
     const getStockItemsAsync = async () => await stockItemApiService
         .getAllAsync()
-        .then((res) => stockItems.value = res)
+        .then((stockItemData) => {
+            const collator = new Intl.Collator('en', { 'sensitivity': 'base' });
+
+            stockItems.value = stockItemData.sort((si1, si2) =>
+                collator.compare(si1.name, si2.name));
+        })
 
     const getStockItemAsync = async (stockItemID: string) => await stockItemApiService
         .getAsync(stockItemID)
@@ -36,7 +41,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
             })
     }
 
-    // endregion Stock Items
+    //#endregion Stock Items
 
     return {
         stockItems: readonly(stockItems),

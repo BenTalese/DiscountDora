@@ -13,6 +13,6 @@ window.onerror = function (msg, url, line, col, error) {
     Notify.create({ type: 'oopsie' });
 }
 
-window.addEventListener('unhandledrejection', function (event) {
+window.addEventListener('unhandledrejection', function () {
     Notify.create({ type: 'oopsie' });
 });

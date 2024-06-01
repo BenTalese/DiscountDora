@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
 import random
 import string
+from datetime import datetime, timedelta
 
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.merchant import Merchant
@@ -9,7 +9,8 @@ from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.persistence.infrastructure.persistence_helper_methods import is_entity, is_list
+from framework.persistence.infrastructure.persistence_helper_methods import (
+    is_entity, is_list)
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):
@@ -30,18 +31,11 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_location_one = generate_entity(StockLocation)
     persistence.add(stock_location_one)
 
-    stock_level_one = generate_entity(StockLevel)
-    stock_level_one.name = "Well-Stocked"
-    stock_level_one.sequence = 0
-    stock_level_two = generate_entity(StockLevel)
-    stock_level_two.name = "Sufficient Stock"
-    stock_level_two.sequence = 1
-    stock_level_three = generate_entity(StockLevel)
-    stock_level_three.name = "Low Stock"
-    stock_level_three.sequence = 2
-    stock_level_four = generate_entity(StockLevel)
-    stock_level_four.name = "Out of Stock"
-    stock_level_four.sequence = 3
+    stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
+    stock_level_two = StockLevel(name = "Sufficient Stock", sequence = 1)
+    stock_level_three = StockLevel(name = "Low Stock", sequence = 2)
+    stock_level_four = StockLevel(name = "Out of Stock", sequence = 3)
+
     persistence.add(stock_level_one)
     persistence.add(stock_level_two)
     persistence.add(stock_level_three)
@@ -65,7 +59,6 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     stock_item_three.stock_level = stock_level_three
     persistence.add(stock_item_three)
 
-    # FIXME: This is still creating an additional stock item even with gen navs false???
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)
     shopping_list_one.items.append(stock_item_two)
@@ -76,7 +69,12 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 def generate_entity(entity_type, should_generate_navigations: bool = False):
     data = {}
     for attribute_name, attribute_type in entity_type.__annotations__.items():
-        data[attribute_name] = get_value_for_type(entity_type, attribute_name, attribute_type, should_generate_navigations)
+        if is_entity(attribute_type) and should_generate_navigations or not is_entity(attribute_type):
+            data[attribute_name] = get_value_for_type(entity_type, attribute_name, attribute_type, should_generate_navigations)
+
+        if is_entity(attribute_type) and is_list(attribute_type) and not should_generate_navigations:
+            data[attribute_name] = []
+
     return entity_type(**data)
 
 def get_value_for_type(entity_type, attr_name, type, should_generate_navigations):

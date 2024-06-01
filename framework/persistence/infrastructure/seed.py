@@ -14,7 +14,6 @@ from framework.persistence.infrastructure.persistence_helper_methods import (
 
 
 async def seed_initial_data_async(persistence: IPersistenceContext):
-    # TODO: Find a place for system controlled data such as merchants
     merchant_one = generate_entity(Merchant)
     merchant_one.name = "Woolworths"
     merchant_two = generate_entity(Merchant)
@@ -22,7 +21,6 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     persistence.add(merchant_one)
     persistence.add(merchant_two)
 
-    # TEST DATA:
     user = generate_entity(User)
     user.send_deals_on_day = datetime.now().weekday()
     user.email = "ben.talese@gmail.com"
@@ -40,8 +38,6 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     persistence.add(stock_level_two)
     persistence.add(stock_level_three)
     persistence.add(stock_level_four)
-    #session.add_all([x, y, z])
-    # TODO: add(*entities) (actually, why?...for this one file?)
 
     stock_item_one = generate_entity(StockItem)
     stock_item_one.stock_location = stock_location_one

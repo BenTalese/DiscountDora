@@ -12,7 +12,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
 
     const stockItems: Ref<StockItem[]> = ref([])
 
-    const getStockItemsAsync = async () => await stockItemApiService
+    const getStockItemsAsync = () => stockItemApiService
         .getAllAsync()
         .then((stockItemData) => {
             const collator = new Intl.Collator('en', { 'sensitivity': 'base' });
@@ -21,12 +21,12 @@ export const useStockItemStore = defineStore('stockItem', () => {
                 collator.compare(si1.name, si2.name));
         })
 
-    const getStockItemAsync = async (stockItemID: string) => await stockItemApiService
+    const getStockItemAsync = (stockItemID: string) => stockItemApiService
         .getAsync(stockItemID)
 
-    const createStockItemAsync = async (stockItemToCreate: CreateStockItemCommand) => await stockItemApiService
+    const createStockItemAsync = (stockItemToCreate: CreateStockItemCommand) => stockItemApiService
         .createAsync(stockItemToCreate)
-        .then(async (res) => stockItems.value.push((await stockItemApiService.getAsync(res.id))[0]))
+        .then(async (resource) => stockItems.value.push((await stockItemApiService.getAsync(resource.id))[0]))
 
     // TODO: Check Atif's idea for simpler actions
     async function updateStockLevelAsync(stockItemID: string, stockLevelID: string) {

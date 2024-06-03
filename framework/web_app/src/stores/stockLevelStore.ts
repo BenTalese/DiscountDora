@@ -35,7 +35,7 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
         console.error(`Colour not configured for stock level '${stockLevel?.name}'.`)
     }
 
-    const getStockLevelsAsync = async () => await stockLevelApiService
+    const getStockLevelsAsync = () => stockLevelApiService
         .getAllAsync()
         .then((res) => stockLevels.value = res.sort((sl1, sl2) => sl1.sequence - sl2.sequence))
 

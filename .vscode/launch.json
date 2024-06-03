@@ -68,6 +68,19 @@
                 "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
                 "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
             }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "TypeScript: Current File",
+            "program": "${workspaceFolder}/framework/web_app/node_modules/ts-node/dist/bin.js",
+            "args": ["${file}"],
+            "runtimeArgs": ["--loader", "ts-node/esm"],
+            "sourceMaps": true,
+            "cwd": "${workspaceFolder}/framework/web_app",
+            "console": "integratedTerminal",
+            "outFiles": ["${workspaceFolder}/framework/web_app/dist/**/*.js"],
+            "skipFiles": ["<node_internals>/**"]
         }
     ],
     "compounds": [

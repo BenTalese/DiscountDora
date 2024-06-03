@@ -50,3 +50,5 @@ framework/web_app_old/.vscode/*
 *.sln
 *.json
 *.sw?
+*.cjs
+*.prettierrc

@@ -20,6 +20,9 @@ export default class ProductApiService {
 
     searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${searchQuery.search_term}`);
+
+    updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> =>
+        await this.dapiHttpClient.patch<Product>(`/products/${productToUpdate.product_id}`, productToUpdate);
 }
 
 export type SearchByTermQuery = {
@@ -30,13 +33,23 @@ export type SearchByTermQuery = {
 export type CreateProductCommand = {
     brand: string | null
     image: string //TODO: Check if img is good before saving it, prob in use case
+    is_active: boolean
     is_available: boolean
     merchant_name: string
     merchant_stockcode: string
     name: string
     price_now: number
     price_was: number
+    size: string
     size_unit: string
     size_value: number
     web_url: string
+}
+
+export type UpdateProductCommand = {
+    is_active?: boolean
+    is_available?: boolean
+    price_now?: number
+    price_was?: number
+    product_id: string
 }

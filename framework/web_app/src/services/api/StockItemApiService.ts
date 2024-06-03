@@ -1,6 +1,7 @@
 import type { StockItem } from "src/models/StockItem";
+import type { CreatedResponse } from "./AxiosHttpClient";
 import AxiosHttpClient from "./AxiosHttpClient";
-import type { CreatedResponse } from "./AxiosHttpClient"
+import { createQueryString, FilterOperator } from "./queryStringBuilder";
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
@@ -16,7 +17,7 @@ export default class StockItemApiService {
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
     getAsync = async (stockItemID: string): Promise<StockItem[]> =>
-        await this.httpClient.get<StockItem[]>(`/stock-items/filter=stock_item_id:eq:${stockItemID}`); // TODO: Construct string using methods
+        await this.httpClient.get<StockItem[]>(`/stock-items/${createQueryString([{ field: 'stock_item_id', operator: FilterOperator.EQUAL, value: stockItemID }])}`);
 
     getAllAsync = async (): Promise<StockItem[]> =>
         await this.httpClient.get<StockItem[]>('/stock-items');

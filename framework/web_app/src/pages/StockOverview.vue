@@ -87,7 +87,10 @@
         </q-card-section>
     </q-card>
 
-    <q-dialog v-model="shouldDisplayCreateStockItemModal">
+    <q-dialog
+        @hide="clearCreateStockItemForm"
+        v-model="shouldDisplayCreateStockItemModal"
+    >
         <q-card
             class="q-pa-md"
             style="width: 700px; max-width: 80vw"
@@ -95,11 +98,7 @@
             <p class="text-h4">Add a new stock item</p>
             <q-form
                 class="q-gutter-md"
-                @submit="
-                    createStockItemAsync(createStockItemForm).then(
-                        clearCreateStockItemForm
-                    )
-                "
+                @submit="createStockItemAsync(createStockItemForm)"
             >
                 <q-input
                     :rules="nameInputRules"
@@ -119,7 +118,7 @@
 
                 <q-select
                     :option-label="getStockLevelName"
-                    :option-value="getStockLevelId"
+                    :option-value="getStockLevelID"
                     :options="stockLevelStore.stockLevels"
                     :rules="stockLevelSelectRules"
                     emit-value
@@ -250,7 +249,7 @@
     }
 
     const onCreateStockItemButtonClick = () =>
-        shouldDisplayCreateStockItemModal.value = true;
+        (shouldDisplayCreateStockItemModal.value = true);
 
     //#endregion Create Stock Item
 
@@ -271,16 +270,16 @@
     const shouldDisplayAddToShoppingCartModal = ref(false);
 
     const onShoppingListButtonClick = () =>
-        shouldDisplayAddToShoppingCartModal.value = true;
+        (shouldDisplayAddToShoppingCartModal.value = true);
 
     //#endregion Shopping List
 
     //#region Stock Level
 
-    const getStockLevelId = (stockLevel: StockLevel) => stockLevel.stock_level_id;
+    const getStockLevelID = (stockLevel: StockLevel) =>
+        stockLevel.stock_level_id;
 
     const getStockLevelName = (stockLevel: StockLevel) => stockLevel.name;
 
     //#endregion Stock Level
-
 </script>

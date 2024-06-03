@@ -1,5 +1,4 @@
 import axios, { Axios, AxiosError } from 'axios';
-import { Notify } from 'quasar';
 
 class ApiErrorResponse extends Error {
     detail!: string;
@@ -51,16 +50,11 @@ export default class AxiosHttpClient implements HttpClient {
 
     private handleError(error: AxiosError): Promise<never> {
         const apiError = error.response?.data as ApiErrorResponse;
-        Notify.create({ type: 'oopsie' })
         if (apiError) {
-            const errorMessage = `API ERROR :: STATUS CODE ${apiError.status} :: ${apiError.title} :: ${apiError.detail} :: ${Object.values(apiError.errors).join(', ')}`
-            console.error(errorMessage)
-            return Promise.reject(new Error(errorMessage))
+            return Promise.reject(new Error(`API ERROR :: STATUS CODE ${apiError.status} :: ${apiError.title} :: ${apiError.detail} :: ${Object.values(apiError.errors).join(', ')}`))
         }
         else {
-            const errorMessage = `API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`
-            console.error(errorMessage)
-            return Promise.reject(new Error(errorMessage))
+            return Promise.reject(new Error(`API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`))
         }
     }
 

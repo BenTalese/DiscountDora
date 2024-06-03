@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type { StockItem } from 'src/models/StockItem';
 import StockItemApiService, { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
+import { registerRollback } from 'src/services/errorHandling/rollbackRegistry';
 import { readonly, Ref, ref } from 'vue';
 
 const stockItemApiService = new StockItemApiService();
@@ -33,12 +34,13 @@ export const useStockItemStore = defineStore('stockItem', () => {
         const originalStockLevel = stockItems.value[stockItemIndex].stock_level_id
         stockItems.value[stockItemIndex].stock_level_id = stockLevelID
 
+        registerRollback(() => {
+            stockItems.value[stockItemIndex].stock_level_id = originalStockLevel;
+        });
+
         await stockItemApiService
             .updateAsync(stockItemID, { stock_level_id: stockLevelID })
             .then(async () => stockItems.value[stockItemIndex] = (await getStockItemAsync(stockItemID))[0])
-            .catch(() => {
-                stockItems.value[stockItemIndex].stock_level_id = originalStockLevel
-            })
     }
 
     //#endregion Stock Items
@@ -50,4 +52,3 @@ export const useStockItemStore = defineStore('stockItem', () => {
         updateStockLevelAsync
     }
 });
-

@@ -10,8 +10,8 @@ export default class StockItemApiService {
         this.httpClient = new AxiosHttpClient(5170);
     }
 
-    createAsync = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>
-        await this.httpClient.post<CreatedResponse>("/stock-items", stockItem);
+    createAsync = async (stockItemToCreate: CreateStockItemCommand): Promise<CreatedResponse> =>
+        await this.httpClient.post<CreatedResponse>("/stock-items", stockItemToCreate);
 
     deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
@@ -27,8 +27,8 @@ export default class StockItemApiService {
     //         `/stock-items?page=${page}&page-size=${pageSize}`
     //     );
 
-    updateAsync = async (stockItemID: string, stockItem: Partial<UpdateStockItemCommand>): Promise<void> =>
-        await this.httpClient.patch<void>(`/stock-items/${stockItemID}`, stockItem);
+    updateAsync = async (stockItemToUpdate: UpdateStockItemCommand): Promise<void> =>
+        await this.httpClient.patch<void>(`/stock-items/${stockItemToUpdate.stock_item_id}`, stockItemToUpdate);
 }
 
 export type CreateStockItemCommand = {
@@ -40,7 +40,8 @@ export type CreateStockItemCommand = {
 }
 
 export type UpdateStockItemCommand = {
-    name: string | null;
-    stock_level_id: string | null;
-    stock_location_id: string | null;
+    name?: string;
+    stock_item_id: string;
+    stock_level_id?: string;
+    stock_location_id?: string | null;
 }

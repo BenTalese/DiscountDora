@@ -37,10 +37,10 @@
                     <q-item
                         :key="level.sequence"
                         @click="
-                            updateStockLevelAsync(
-                                item.stock_item_id,
-                                level.stock_level_id
-                            )
+                            updateStockLevelAsync({
+                                stock_item_id: item.stock_item_id,
+                                stock_level_id: level.stock_level_id
+                            })
                         "
                         clickable
                         v-close-popup

@@ -61,7 +61,8 @@ export default configure((/* ctx */) => {
 
             vueRouterMode: 'hash', // available values: 'hash', 'history'
             // vueRouterBase,
-            // vueDevtools,
+            vueDevtools: true,
+            devtool: 'source-map',
             // vueOptionsAPI: false,
 
             // rebuildCache: true, // rebuilds Vite/linter/etc cache on startup
@@ -102,8 +103,8 @@ export default configure((/* ctx */) => {
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework
         framework: {
-            // iconSet: 'material-icons', // Quasar icon set
-            // lang: 'en-US', // Quasar language pack
+            iconSet: 'material-icons', // Quasar icon set
+            lang: 'en-US', // Quasar language pack
 
             // For special cases outside of where the auto-import strategy can have an impact
             // (like functional components as one of the examples),

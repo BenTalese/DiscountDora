@@ -76,6 +76,5 @@ export function createQueryString(
         _Parts.push(createPaginationString(pagination));
     }
 
-    throw new Error("AAAA");
-    // return _Parts.join('&');
+    return _Parts.join('&');
 }

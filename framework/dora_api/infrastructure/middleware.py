@@ -1,7 +1,8 @@
 import json
 from base64 import b64decode
+from dataclasses import asdict
 from http.client import BAD_REQUEST, NOT_FOUND
-from typing import get_origin, get_type_hints
+from typing import Any, Dict, List, get_origin, get_type_hints
 
 from clapy import AttributeChangeTracker
 from flask import Blueprint, Response, jsonify, request
@@ -89,53 +90,96 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
 
         return AttributeChangeTracker(request_data[attribute_name])
 
-#stock/id eq 1&other_property ne sometext
-#GET /api/stock_items/filter=stock_item_id:eq:12345&sort=age_or_something:asc&page=1&limit=10
+
 @MIDDLEWARE.after_app_request
-async def apply_query_filter(response: Response):
-    _Data: dict = response.get_json()
+async def apply_query_operations(response: Response):
+    def bad_query_request(message: str):
+        _ProblemDetails = ProblemDetails(
+            detail = message,
+            status = BAD_REQUEST,
+            errors = {},
+            title = "Unsupported query operation.",
+            type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")
+
+        response.set_data(json.dumps(asdict(_ProblemDetails)))
+        response.status_code = 400
+        return response
 
     if "query" in request.view_args and (_QueryString:= request.view_args["query"]):
-        # TODO: Check property exists on request body, if not fail
-        # TODO: Check if operator supported
-        # TODO: Validate query string format is correct
-        _QueryString: str
+        _ResponseData: List[Dict[str, Any]] = response.get_json()
         _RequestEndpoint = request.endpoint.split(".")[-1]
-
-        if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
-            x = 0 # TODO: DEV ERROR!
-
+        _QueryString = str(_QueryString).lower()
+        _QueryOperations: List[str] = _QueryString.split("&")
         _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
 
-        _QueryOperations = _QueryString.split("&")
+        if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
+            bad_query_request(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
 
+        # FILTER OPERATION
         _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
-
+        if _NonExistentFields := [
+                _Operation.split(':')[0]
+                for _Operation
+                in _FilterOperations
+                if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
+            ]:
+            bad_query_request(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
 
         for _Filter in _FilterOperations:
             _Field, _Operator, _Value = _Filter.split(':')
 
-            if _Operator == 'eq':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) == _Value]
-            elif _Operator == 'lt':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) < _Value]
-            elif _Operator == 'gt':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) > _Value]
-            elif _Operator == 'le':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) <= _Value]
-            elif _Operator == 'ge':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) >= _Value]
-            elif _Operator == 'ne':
-                _Data = [_Resource for _Resource in _Data if _Resource.get(_Field) != _Value]
-            else:
-                return jsonify(ProblemDetails(
-                    detail = f"The filter operator {_Operator} is not supported. Supported operators"+\
-                    " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.",
-                    status = BAD_REQUEST,
-                    errors = {},
-                    title = "Filter operator not supported.",
-                    type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")), 400
+            match _Operator:
+                case 'eq':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) == _Value]
+                case 'lt':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) < _Value]
+                case 'gt':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) > _Value]
+                case 'le':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) <= _Value]
+                case 'ge':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) >= _Value]
+                case 'ne':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) != _Value]
 
-        response.set_data(json.dumps(_Data))
+                case _:
+                    bad_query_request(f"The filter operator {_Operator} is not supported. Supported operators"+\
+                    " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.")
+
+       # SORT OPERATION
+        if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("sort=")), None):
+            _SortField, _SortOrder = _SortOperation[5:].split(':')
+
+            if _SortField not in get_type_hints(_ViewModel):
+                bad_query_request(f'Sort field {_SortField} does not exist in the view model.')
+
+            _ResponseData.sort(lambda resource: resource.get(_SortField), _SortOrder == 'desc')
+
+        # PAGINATION OPERATION
+        _Page: int = None
+        _Limit: int = None
+
+        if _PageOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("page=")), None):
+            try:
+                _Page = int(_PageOperation[5:])
+            except ValueError:
+                bad_query_request("The page parameter must be an integer.")
+
+        if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None):
+            try:
+                _Limit = int(_LimitOperation[6:])
+            except ValueError:
+                bad_query_request("The limit parameter must be an integer.")
+
+        if (_PageOperation is None) != (_LimitOperation is None):
+            bad_query_request("You must use page and limit operations together.")
+
+        if _PageOperation and _LimitOperation:
+            _Start = (_Page - 1) * _Limit
+            _End = _Start + _Limit
+            _ResponseData = _ResponseData[_Start:_End]
+
+        # SET RESPONSE
+        response.set_data(json.dumps(_ResponseData))
 
     return response

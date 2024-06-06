@@ -4,6 +4,7 @@ from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port import \
     IDeleteStockLocationOutputPort
 from domain.entities.base_entity import EntityID
+from domain.entities.stock_location import StockLocation
 from framework.dora_api.infrastructure.base_presenter import BasePresenter
 
 
@@ -17,4 +18,4 @@ class DeleteStockLocationPresenter(BasePresenter, IDeleteStockLocationOutputPort
         await self.no_content_async()
 
     async def present_stock_location_not_found_async(self, stock_location_id : EntityID):
-        await self.entity_existence_failure_async(nameof(stock_location_id), stock_location_id.value)
+        await self.entity_existence_failure_async(nameof(StockLocation), nameof(stock_location_id), stock_location_id.value)

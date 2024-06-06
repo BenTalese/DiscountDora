@@ -1,6 +1,7 @@
 import type { Merchant } from "src/models/Merchant";
 import AxiosHttpClient from "./AxiosHttpClient";
 
+
 export default class MerchantApiService {
     private mapiHttpClient: AxiosHttpClient;
 

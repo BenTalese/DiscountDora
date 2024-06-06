@@ -1,6 +1,7 @@
-import type { CreateStockItemCommand, StockItem } from "src/models/StockItem";
+import type { StockItem } from "src/models/StockItem";
+import type { CreatedResponse } from "./AxiosHttpClient";
 import AxiosHttpClient from "./AxiosHttpClient";
-import type { CreatedResponse } from "./AxiosHttpClient"
+import { createQueryString, FilterOperator } from "./queryStringBuilder";
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
@@ -9,23 +10,38 @@ export default class StockItemApiService {
         this.httpClient = new AxiosHttpClient(5170);
     }
 
-    create = async (stockItem: CreateStockItemCommand): Promise<CreatedResponse> =>
-        await this.httpClient.post<CreatedResponse>("/stock-items", stockItem);
+    createAsync = async (stockItemToCreate: CreateStockItemCommand): Promise<CreatedResponse> =>
+        await this.httpClient.post<CreatedResponse>("/stock-items", stockItemToCreate);
 
-    delete = async (stockItemID: string): Promise<void> =>
+    deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    get = async (stockItemID: string): Promise<StockItem> =>
-        await this.httpClient.get<StockItem>(`/stock-items/${stockItemID}`);
+    getAsync = async (stockItemID: string): Promise<StockItem[]> =>
+        await this.httpClient.get<StockItem[]>(`/stock-items/${createQueryString([{ field: 'stock_item_id', operator: FilterOperator.EQUAL, value: stockItemID }])}`);
 
-    getAll = async (): Promise<StockItem[]> =>
+    getAllAsync = async (): Promise<StockItem[]> =>
         await this.httpClient.get<StockItem[]>('/stock-items');
 
-    paginate = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
-        await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
-            `/stock-items?page=${page}&page-size=${pageSize}`
-        );
+    // paginateAsync = async (page: number, pageSize: number): Promise<{ page: number; count: number; stockItems: StockItem[] }> =>
+    //     await this.httpClient.get<{ page: number; count: number; stockItems: StockItem[] }>(
+    //         `/stock-items?page=${page}&page-size=${pageSize}`
+    //     );
 
-    update = async (stockItemId: string, stockItem: Partial<StockItem>): Promise<StockItem> =>
-        await this.httpClient.patch<StockItem>(`/stock-items/${stockItemId}`, stockItem);
+    updateAsync = async (stockItemToUpdate: UpdateStockItemCommand): Promise<void> =>
+        await this.httpClient.patch<void>(`/stock-items/${stockItemToUpdate.stock_item_id}`, stockItemToUpdate);
+}
+
+export type CreateStockItemCommand = {
+    days_until_stocktake_alert: number;
+    name: string;
+    stock_group_id: string | null;
+    stock_level_id: string;
+    stock_location_id: string | null;
+}
+
+export type UpdateStockItemCommand = {
+    name?: string;
+    stock_item_id: string;
+    stock_level_id?: string;
+    stock_location_id?: string | null;
 }

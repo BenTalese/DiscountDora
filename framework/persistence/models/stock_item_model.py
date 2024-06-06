@@ -1,13 +1,15 @@
 from uuid import uuid4
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
+from domain.entities.stock_group import StockGroup
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from framework.persistence.infrastructure.persistence_context import db
+from framework.persistence.models.stock_group_model import StockGroupModel
 from framework.persistence.models.stock_level_model import StockLevelModel
 from framework.persistence.models.stock_location_model import \
     StockLocationModel
@@ -22,22 +24,28 @@ class StockItemModel(db.Model):
         primary_key=True,
         default=uuid4)
 
-    stock_location = relationship(
-        StockLocationModel.__name__,
-        lazy="noload")
+    days_until_stocktake_alert = Column(Integer)
 
-    stock_location_id = Column(
-        UUIDType,
-        ForeignKey(StockLocation.__name__ + ".id"),
-        nullable = True)
+    image = Column(LargeBinary)
 
     name = Column(String(255))
+
+    notes = Column(String(255))
 
     shopping_lists = relationship(
         'ShoppingListModel',
         secondary = 'ShoppingListStockItem',
         back_populates = 'items',
         lazy = "noload")
+
+    stock_group = relationship(
+        StockGroupModel.__name__,
+        lazy="noload")
+
+    stock_group_id = Column(
+        UUIDType,
+        ForeignKey(StockGroup.__name__ + ".id"),
+        nullable = True)
 
     stock_level = relationship(
         StockLevelModel.__name__,
@@ -48,6 +56,17 @@ class StockItemModel(db.Model):
         ForeignKey(StockLevel.__name__ + ".id"))
 
     stock_level_last_updated = Column(DateTime(timezone = True))
+
+    stock_location = relationship(
+        StockLocationModel.__name__,
+        lazy="noload")
+
+    stock_location_id = Column(
+        UUIDType,
+        ForeignKey(StockLocation.__name__ + ".id"),
+        nullable = True)
+
+    stocktake_alerts_are_enabled = Column(Boolean)
 
     def to_entity(self) -> StockItem:
         return StockItem(

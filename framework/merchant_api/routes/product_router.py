@@ -42,6 +42,7 @@ async def search_for_product_async(search_term: str, start_page: int = 1, result
 
 @PRODUCT_ROUTER.route("/offers")
 async def get_product_offers_async():
+    # TODO: Should MAPI be getting dora products and saving to them, or should the calling code of MAPI be responsible for this?
     _SavedProducts = [
         DoraProduct(**_Product)
         for _Product

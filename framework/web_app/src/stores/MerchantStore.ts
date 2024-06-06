@@ -8,30 +8,30 @@ const merchantApiService = new MerchantApiService();
 
 export const useMerchantStore = defineStore('merchant', () => {
 
-const productStore = useProductStore();
+    const productStore = useProductStore();
 
-//#region Merchants
+    //#region Merchants
 
-const merchants = ref<Merchant[]>([]);
+    const merchants = ref<Merchant[]>([]);
 
-async function getMerchantsAsync(){
-    merchantApiService
-        .getAllAsync()
-        .then((merchantsData) => {
-            const collator = new Intl.Collator('en', {'sensitivity': 'base'});
+    async function getMerchantsAsync() {
+        merchantApiService
+            .getAllAsync()
+            .then((merchantsData) => {
+                const collator = new Intl.Collator('en', { 'sensitivity': 'base' });
 
-            merchants.value = merchantsData.sort((merchant1, merchant2) =>
-                collator.compare(merchant1.name, merchant2.name));
+                merchants.value = merchantsData.sort((merchant1, merchant2) =>
+                    collator.compare(merchant1.name, merchant2.name));
 
-            productStore.addStoresToProductSearchFilter(merchants.value);
-        });
-};
+                productStore.addStoresToProductSearchFilter(merchants.value);
+            });
+    };
 
-//#endregion Merchants
+    //#endregion Merchants
 
-return {
-    merchants: readonly(merchants),
-    getMerchantsAsync
-};
+    return {
+        merchants: readonly(merchants),
+        getMerchantsAsync
+    };
 
 });

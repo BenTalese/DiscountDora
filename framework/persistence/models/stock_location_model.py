@@ -16,13 +16,13 @@ class StockLocationModel(db.Model):
         primary_key=True,
         default=uuid4)
 
-    description = Column(
+    name = Column(
         String(255))
 
     def to_entity(self) -> StockLocation:
         return StockLocation(
             id = EntityID(self.id),
-            description = self.description)
+            name = self.name)
 
     def get_key(self):
         return self.id

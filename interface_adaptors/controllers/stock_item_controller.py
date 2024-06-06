@@ -10,6 +10,8 @@ from application.use_cases.stock_items.get_stock_items.get_stock_items_input_por
     GetStockItemsInputPort
 from application.use_cases.stock_items.get_stock_items.iget_stock_items_output_port import \
     IGetStockItemsOutputPort
+from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_output_port import IUpdateStockItemOutputPort
+from application.use_cases.stock_items.update_stock_item.update_stock_item_input_port import UpdateStockItemInputPort
 
 from .base_controller import DEFAULT_PIPELINE, BaseController
 
@@ -35,3 +37,10 @@ class StockItemController(BaseController):
             output_port: IGetStockItemsOutputPort,
             pipeline_configuration: List[PipeConfiguration] = DEFAULT_PIPELINE):
         await self._use_case_invoker.invoke_usecase_async(GetStockItemsInputPort(), output_port, pipeline_configuration)
+
+    async def update_stock_item_async(
+            self,
+            input_port: UpdateStockItemInputPort,
+            output_port: IUpdateStockItemOutputPort,
+            pipeline_configuration: List[PipeConfiguration] = DEFAULT_PIPELINE):
+        await self._use_case_invoker.invoke_usecase_async(input_port, output_port, pipeline_configuration)

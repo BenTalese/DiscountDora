@@ -1,4 +1,3 @@
-
 from flask import Blueprint, jsonify
 
 from framework.merchant_api.domain.enumerations.supported_merchant import \

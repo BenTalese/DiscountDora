@@ -12,17 +12,17 @@ export default class ProductApiService {
         this.mapiHttpClient = new AxiosHttpClient(5172);
     }
 
-    createAsync = async (command: CreateProductCommand): Promise<CreatedResponse> =>
-        await this.dapiHttpClient.post<CreatedResponse>('/products', command);
+    createAsync = async (productToCreate: CreateProductCommand): Promise<CreatedResponse> =>
+        await this.dapiHttpClient.post<CreatedResponse>('/products', productToCreate);
 
     getAllAsync = async (): Promise<Product[]> =>
         await this.dapiHttpClient.get<Product[]>('/products');
 
-    searchByTermAsync = async (query: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
-        await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${query.search_term}`);
+    searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
+        await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${searchQuery.search_term}`);
 
-    updateAsync = async (command: UpdateProductCommand): Promise<Product> =>
-        await this.dapiHttpClient.patch<Product>(`/products/${command.product_id}`, command);
+    updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> =>
+        await this.dapiHttpClient.patch<Product>(`/products/${productToUpdate.product_id}`, productToUpdate);
 }
 
 export type SearchByTermQuery = {

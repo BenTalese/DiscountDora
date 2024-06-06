@@ -10,3 +10,7 @@ export function executeRollbacks() {
         if (fn) fn();
     }
 }
+
+export function clearRollbacks() {
+    rollbackRegistry.splice(0, rollbackRegistry.length)
+}

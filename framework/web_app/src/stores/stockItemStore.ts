@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import type { StockItem } from 'src/models/StockItem';
 import StockItemApiService, { CreateStockItemCommand, UpdateStockItemCommand } from 'src/services/api/StockItemApiService';
-import { registerRollback } from 'src/services/errorHandling/rollbackRegistry';
+import { clearRollbacks, registerRollback } from 'src/services/errorHandling/rollbackRegistry';
 import { readonly, Ref, ref } from 'vue';
 
 const stockItemApiService = new StockItemApiService();
@@ -40,6 +40,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
         await stockItemApiService
             .updateAsync(stockItemToUpdate)
             .then(async () => stockItems.value[stockItemIndex] = (await getStockItemAsync(stockItemToUpdate.stock_item_id))[0])
+            .then(clearRollbacks)
     }
 
     //#endregion Stock Items

@@ -37,7 +37,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[stockItemIndex].stock_level_id = originalStockLevel;
         });
 
-        await stockItemApiService
+        stockItemApiService
             .updateAsync(stockItemToUpdate)
             .then(async () => stockItems.value[stockItemIndex] = (await getStockItemAsync(stockItemToUpdate.stock_item_id))[0])
             .then(clearRollbacks)

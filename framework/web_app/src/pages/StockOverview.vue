@@ -25,7 +25,14 @@
             <q-card-actions class="col">
                 <q-btn-dropdown
                     class="q-mx-sm"
-                    :color="getStockLevelColour(item.stock_level_id)"
+                    :color="
+                        getStockLevelColour(
+                            stockLevels.find(
+                                (sl) =>
+                                    sl.stock_level_id === item.stock_level_id
+                            )!.name
+                        )
+                    "
                     :items="stockLevelStore.stockLevels"
                     dense
                     dropdown-icon="none"
@@ -48,9 +55,7 @@
                     >
                         <q-item-section avatar>
                             <q-avatar
-                                :color="
-                                    getStockLevelColour(level.stock_level_id)
-                                "
+                                :color="getStockLevelColour(level.name)"
                                 size="25px"
                             />
                         </q-item-section>
@@ -209,6 +214,7 @@
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
     import { ValidationRule } from 'quasar';
+    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import { StockLevel } from 'src/models/StockLevel';
     import { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -224,7 +230,6 @@
     const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
 
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { getStockLevelColour } = stockLevelStore;
 
     //#endregion Common
 

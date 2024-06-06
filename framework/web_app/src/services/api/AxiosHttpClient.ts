@@ -49,14 +49,24 @@ export default class AxiosHttpClient implements HttpClient {
     }
 
     private handleError(error: AxiosError): Promise<never> {
-        const apiError = error.response?.data as ApiErrorResponse;
-        if (apiError) {
+        const errorData = error.response?.data;
+        if (this.isCustomApiErrorResponse(errorData)) {
+            const apiError = errorData as ApiErrorResponse;
             return Promise.reject(new Error(`API ERROR :: STATUS CODE ${apiError.status} :: ${apiError.title} :: ${apiError.detail} :: ${Object.values(apiError.errors).join(', ')}`))
         }
         else {
             return Promise.reject(new Error(`API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`))
         }
     }
+
+    isCustomApiErrorResponse = (error: any): error is ApiErrorResponse =>
+        error &&
+        typeof error !== 'string' &&
+        'detail' in error &&
+        'status' in error &&
+        'errors' in error &&
+        'title' in error &&
+        'type' in error;
 
     async patch<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<HttpClientResponse<TResponse>> {
         try {

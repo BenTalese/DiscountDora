@@ -44,12 +44,12 @@
             "preLaunchTask": "quasar:dev",
             "pathMappings": [
                 {
-                    "url": "http://localhost:5174/src/*",
-                    "path": "${workspaceFolder}/framework/web_app/src/*"
+                    "url": "http://localhost:5174/src",
+                    "path": "${workspaceFolder}/framework/web_app/src"
                 },
                 {
-                  "url": "webpack:///src/*",
-                  "path": "${workspaceFolder}/framework/web_app/src/*"
+                    "url": "webpack:///src/*",
+                    "path": "${workspaceFolder}/framework/web_app/src/*"
                 }
             ]
         },

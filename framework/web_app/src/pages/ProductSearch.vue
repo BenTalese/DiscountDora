@@ -110,15 +110,15 @@
 import { Loading } from 'quasar';
 import CardComponent from 'src/components/CardComponent.vue';
 import SelectComponent from 'src/components/SelectComponent.vue';
-import MerchantLogoOptions from 'src/helpers/MerchantLogoOptions';
-import nameof from 'src/helpers/Nameof';
-import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferOnSpecial } from 'src/helpers/ScrapedProductOfferLogic';
-import { Merchant } from 'src/models/Merchant';
-import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import ImageService from 'src/services/files/ImageService';
-import { useMerchantStore } from 'src/stores/MerchantStore';
-import { IProductSearchFilters, useProductStore } from 'src/stores/ProductStore';
+import MerchantLogoOptions from 'src/helpers/merchantLogoOptions';
+import nameof from 'src/helpers/nameOf';
+import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/offerSortByOptions';
+import { isOfferOnSpecial } from 'src/helpers/scrapedProductOfferLogic';
+import { Merchant } from 'src/models/merchant';
+import { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+import ImageService from 'src/services/files/imageService';
+import { useMerchantStore } from 'src/stores/merchantStore';
+import { IProductSearchFilters, useProductStore } from 'src/stores/productStore';
 import { ref } from 'vue';
 
 const merchantStore = useMerchantStore();

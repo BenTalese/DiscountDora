@@ -1,6 +1,6 @@
-import type { StockItem } from "src/models/StockItem";
-import type { CreatedResponse } from "./AxiosHttpClient";
-import AxiosHttpClient from "./AxiosHttpClient";
+import type { StockItem } from "src/models/stockItem";
+import type { CreatedResponse } from "./axiosHttpClient";
+import AxiosHttpClient from "./axiosHttpClient";
 import { createQueryString, FilterOperator } from "./queryStringBuilder";
 
 export default class StockItemApiService {

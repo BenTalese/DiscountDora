@@ -1,5 +1,5 @@
-import type { StockLevel } from "src/models/StockLevel";
-import AxiosHttpClient from "./AxiosHttpClient";
+import type { StockLevel } from "src/models/stockLevel";
+import AxiosHttpClient from "./axiosHttpClient";
 
 export default class StockLevelApiService {
     private httpClient: AxiosHttpClient;

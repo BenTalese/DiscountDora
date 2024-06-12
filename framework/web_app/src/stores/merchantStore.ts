@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
-import { Merchant } from 'src/models/Merchant';
-import MerchantApiService from 'src/services/api/MerchantApiService';
+import { Merchant } from 'src/models/merchant';
+import MerchantApiService from 'src/services/api/merchantApiService';
 import { readonly, ref } from 'vue';
-import { useProductStore } from './ProductStore';
+import { useProductStore } from './productStore';
 
 const merchantApiService = new MerchantApiService();
 

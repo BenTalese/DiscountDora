@@ -1,4 +1,4 @@
-import { StockLevelName } from "src/models/StockLevel";
+import { StockLevelName } from "src/models/stockLevel";
 
 export function getStockLevelColour(stockLevelName: StockLevelName) {
     const stockLevelColourByName: Record<StockLevelName, string> = {

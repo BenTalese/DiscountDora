@@ -1,5 +1,5 @@
-import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import { sortOffersByFullNameAsc, sortOffersByFullNameDesc, sortOffersByPriceHighToLow, sortOffersByPriceLowToHigh, sortOffersBySpecialBestToWorst } from './ScrapedProductOfferLogic';
+import { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+import { sortOffersByFullNameAsc, sortOffersByFullNameDesc, sortOffersByPriceHighToLow, sortOffersByPriceLowToHigh, sortOffersBySpecialBestToWorst } from './scrapedProductOfferLogic';
 
 export interface IOfferSortByOption {
     description: string;

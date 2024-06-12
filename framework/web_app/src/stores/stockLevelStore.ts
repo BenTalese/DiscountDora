@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
-import { StockLevel } from 'src/models/StockLevel';
-import StockLevelApiService from 'src/services/api/StockLevelApiService';
+import { StockLevel } from 'src/models/stockLevel';
+import StockLevelApiService from 'src/services/api/stockLevelApiService';
 import { readonly, Ref, ref } from 'vue';
 
 const stockLevelApiService = new StockLevelApiService();

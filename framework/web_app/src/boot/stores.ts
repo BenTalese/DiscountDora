@@ -1,7 +1,7 @@
 import { Notify } from 'quasar'
 import HealthApiService from 'src/services/api/healthApiService'
-import { useMerchantStore } from '../stores/MerchantStore'
-import { useProductStore } from '../stores/ProductStore'
+import { useMerchantStore } from '../stores/merchantStore'
+import { useProductStore } from '../stores/productStore'
 import { useStockItemStore } from '../stores/stockItemStore'
 import { useStockLevelStore } from '../stores/stockLevelStore'
 

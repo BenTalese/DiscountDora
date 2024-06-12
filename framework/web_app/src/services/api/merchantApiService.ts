@@ -1,5 +1,5 @@
-import type { Merchant } from "src/models/Merchant";
-import AxiosHttpClient from "./AxiosHttpClient";
+import type { Merchant } from "src/models/merchant";
+import AxiosHttpClient from "./axiosHttpClient";
 
 
 export default class MerchantApiService {

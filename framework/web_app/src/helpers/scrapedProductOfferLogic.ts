@@ -1,5 +1,5 @@
-import { Product } from 'src/models/Product';
-import { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
+import { Product } from 'src/models/product';
+import { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
 
 /**
  * Finds the saved product matching the merchant name & merchant stockcode of the product offer.

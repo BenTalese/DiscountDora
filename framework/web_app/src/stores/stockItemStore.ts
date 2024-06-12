@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
-import type { StockItem } from 'src/models/StockItem';
-import StockItemApiService, { CreateStockItemCommand, UpdateStockItemCommand } from 'src/services/api/StockItemApiService';
+import type { StockItem } from 'src/models/stockItem';
+import StockItemApiService, { CreateStockItemCommand, UpdateStockItemCommand } from 'src/services/api/stockItemApiService';
 import { clearRollbacks, registerRollback } from 'src/services/errorHandling/rollbackRegistry';
 import { readonly, Ref, ref } from 'vue';
 

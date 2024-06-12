@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia';
 import { Loading } from 'quasar';
-import NotSupportedError from 'src/exceptions/NotSupportedError';
-import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/OfferSortByOptions';
-import { isOfferOnSpecial, findSavedProduct } from 'src/helpers/ScrapedProductOfferLogic';
-import { Merchant } from 'src/models/Merchant';
-import type { Product } from 'src/models/Product';
-import type { ScrapedProductOffer } from 'src/models/ScrapedProductOffer';
-import ProductApiService, { CreateProductCommand, SearchByTermQuery, UpdateProductCommand } from 'src/services/api/ProductApiService';
+import NotSupportedError from 'src/exceptions/notSupportedError';
+import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/offerSortByOptions';
+import { isOfferOnSpecial, findSavedProduct } from 'src/helpers/scrapedProductOfferLogic';
+import { Merchant } from 'src/models/merchant';
+import type { Product } from 'src/models/product';
+import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+import ProductApiService, { CreateProductCommand, SearchByTermQuery, UpdateProductCommand } from 'src/services/api/productApiService';
 import { computed, reactive, readonly, ref } from 'vue';
 
 const productApiService = new ProductApiService();

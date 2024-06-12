@@ -215,8 +215,8 @@
     import { storeToRefs } from 'pinia';
     import { ValidationRule } from 'quasar';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import { StockLevel } from 'src/models/StockLevel';
-    import { CreateStockItemCommand } from 'src/services/api/StockItemApiService';
+    import { StockLevel } from 'src/models/stockLevel';
+    import { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { reactive, ref } from 'vue';

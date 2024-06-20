@@ -1,97 +1,126 @@
 <template>
-    <q-card bordered flat class="column full-height no-wrap rounded-borders row text-black">
-        <q-img :src="img" loading="lazy" spinner-color="info" spinner-size="2rem" img-class="q-pa-lg" class="bg-white">
-            <div v-if="imgCaption" class="absolute-top text-center">
-                <span class="ltr-sp-3 text-subtitle2 text-weight-regular">{{ imgCaption }}</span>
-            </div>
+  <q-card
+    bordered
+    flat
+    class="column full-height no-wrap rounded-borders row text-black"
+  >
+    <q-img
+      :src="img"
+      loading="lazy"
+      spinner-color="info"
+      spinner-size="2rem"
+      img-class="q-pa-lg"
+      class="bg-white"
+    >
+      <div v-if="imgCaption" class="absolute-top text-center">
+        <span class="ltr-sp-3 text-subtitle2 text-weight-regular">{{
+          imgCaption
+        }}</span>
+      </div>
 
-            <template v-slot:error>
-                <div class="absolute-full flex flex-center">
-                    Error encountered
-                </div>
-            </template>
-        </q-img>
+      <template v-slot:error>
+        <div class="absolute-full flex flex-center">Error encountered</div>
+      </template>
+    </q-img>
 
-        <div class="bg-off-white column flex-1 row">
-            <q-card-section>
-                <q-btn :icon="icon" fab @click="emit('icon-click')" :class="iconClass" color="white"
-                    class="absolute top-right-offset" />
-            </q-card-section>
+    <div class="bg-off-white column flex-1 row">
+      <q-card-section @click="emit('icon-container-click', $event)">
+        <q-btn
+          :icon="icon"
+          fab
+          @click="onIconClick"
+          :class="iconClass"
+          color="white"
+          class="absolute top-right-offset"
+        />
+      </q-card-section>
 
-            <slot name="body">
-                <q-card-section class="flex-1">
-                    {{ body }}
-                </q-card-section>
-            </slot>
+      <slot name="body">
+        <q-card-section class="flex-1" @click="emit('body-click')">
+          {{ body }}
+        </q-card-section>
+      </slot>
 
-            <slot name="footer"></slot>
-
-        </div>
-    </q-card>
+      <slot name="footer"></slot>
+    </div>
+  </q-card>
 </template>
 
 <script setup lang="ts">
-
 //#region Props & Emits
 
 interface ICardComponentProps {
+  /**
+   * The text displayed in the body of the card;
+   * Utilise the body slot to customise the body section as a whole;
+   * Recommended component for slot: QCardSection;
+   */
+  body?: string;
 
-    /**
-     * The text displayed in the body of the card;
-     * Utilise the body slot to customise the body section as a whole;
-     * Recommended component for slot: QCardSection;
-     */
-    body?: string
+  /**
+   * Icon name following Quasar convention; Make sure you have the icon library installed unless you are using 'img:' prefix; If 'none' (String) is used as value then no icon is rendered (but screen real estate will still be used for it);
+   */
+  icon?: string | undefined;
 
-    /**
-     * Icon name following Quasar convention; Make sure you have the icon library installed unless you are using 'img:' prefix; If 'none' (String) is used as value then no icon is rendered (but screen real estate will still be used for it);
-     */
-    icon?: string | undefined
+  /**
+   * The CSS classes applied to card component's icon;
+   */
+  iconClass?: string | undefined;
 
-    /**
-     * The CSS classes applied to card component's icon;
-     */
-    iconClass?: string | undefined
+  /**
+   * Path to image;
+   * Default: '../../src/assets/dora-logo.png';
+   */
+  img?: string | undefined;
 
-    /**
-     * Path to image;
-     * Default: '../../src/assets/dora-logo.png';
-     */
-    img?: string | undefined
-
-    /**
-     * A caption for the img; Only renders when a value is provided.
-     */
-    imgCaption?: string | undefined
-
+  /**
+   * A caption for the img; Only renders when a value is provided.
+   */
+  imgCaption?: string | undefined;
 }
 
 withDefaults(defineProps<ICardComponentProps>(), {
-    chipColour: 'grey',
-    img: '../../src/assets/dora-logo.png'
-})
+  chipColour: "grey",
+  img: "../../src/assets/dora-logo.png",
+});
 
 const emit = defineEmits<{
+  /**
+   * Emitted when the click event is triggered on the card component's icon;
+   */
+  (e: "icon-click", event?: Event): void;
 
-    /**
-     * Emitted when the click event is triggered on the card component's icon;
-     */
-    (e: 'icon-click'): void
+  /**
+   * Emitted when the click event is triggered on the container card component's icon;
+   */
+  (e: "icon-container-click", event?: Event): void;
 
-}>()
+  /**
+   * Emitted when the click event is triggered on the card component's body;
+   */
+  (e: "body-click"): void;
+}>();
 
 //#endregion Props & Emits
 
+//#region Event Handlers
+
+const onIconClick = (event: Event) => {
+  event.stopPropagation();
+  emit("icon-click", event);
+};
+
+//#endregion Event Handlers
 </script>
 
 <style scoped>
 .ltr-sp-3 {
-    letter-spacing: 3px;
+  letter-spacing: 3px;
 }
 
 .top-right-offset {
-    right: 12px;
-    top: 0;
-    transform: translateY(-50%);
+  right: 12px;
+  top: 0;
+  transform: translateY(-50%);
 }
 </style>

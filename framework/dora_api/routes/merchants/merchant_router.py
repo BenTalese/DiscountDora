@@ -1,8 +1,10 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app
+from framework.dora_api.infrastructure.view_model_decorator import has_view_model
 
 from framework.dora_api.routes.merchants.get_merchants_presenter import \
     GetMerchantsPresenter
+from framework.dora_api.view_models.merchant_view_model import MerchantViewModel
 from interface_adaptors.controllers.merchant_controller import \
     MerchantController
 
@@ -10,6 +12,7 @@ MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/mercha
 
 @MERCHANT_ROUTER.route("")
 @MERCHANT_ROUTER.route("<query>")
+@has_view_model('get_merchants_async', MerchantViewModel)
 async def get_merchants_async(query = None):
     service_provider: IServiceProvider = current_app.service_provider
     merchant_controller: MerchantController = service_provider.get_service(MerchantController)

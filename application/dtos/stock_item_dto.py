@@ -10,6 +10,7 @@ from domain.entities.stock_item import StockItem
 class StockItemDto:
     name: str
     product_ids: List[EntityID]
+    stock_group_id: EntityID
     stock_item_id: EntityID
     stock_level_id: EntityID
     stock_location_id: EntityID
@@ -19,6 +20,7 @@ def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
     return StockItemDto(
         name = stock_item.name,
         product_ids = [p.id for p in stock_item.products],
+        stock_group_id = stock_item.stock_group.id if stock_item.stock_group else None,
         stock_item_id = stock_item.id,
         stock_level_id = stock_item.stock_level.id if stock_item.stock_level else None,
         stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,

@@ -1,8 +1,8 @@
-from datetime import datetime
 import inspect
 import os
 import re
 from collections import deque
+from datetime import datetime
 from typing import Any, Generic, List, Type, get_origin, get_type_hints
 from uuid import uuid4
 
@@ -27,6 +27,7 @@ from domain.entities.product import Product
 from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
+from domain.exceptions.persistence_error import PersistenceError
 from domain.generics import TEntity
 from framework.dora_api.view_models.stock_item_view_model import \
     get_stock_item_view_model
@@ -88,6 +89,14 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         return model
 
     def add(self, entity: TEntity):
+        ''' TODO: Create "excluded/ignored" class so you can do
+            some_attribute = Ignore() in the model which acts like
+            EF Core .Ignore(). Would have to pop/remove that attribute
+            off the instance being saved, probably here in this method.
+        '''
+        if _UnconfiguredAttributes:= self._get_entity_unconfigured_attributes(entity):
+            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
+
         if not entity.id:
             entity.id = EntityID(uuid4())
 
@@ -119,6 +128,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
     def update(self, entity: TEntity):
+        if _UnconfiguredAttributes:= self._get_entity_unconfigured_attributes(entity):
+            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
+
         db.session.add(self._convert_to_model(entity))
         # db.session.merge(model_to_update) # TODO: The model is detached which I think makes this not work
 
@@ -149,11 +161,17 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
                 db.create_all() #TODO: This doesn't handle migrations on existing tables
                 Migrate().init_app(app, db) # TODO: Create, mirate, or both?
 
+    def _get_entity_unconfigured_attributes(self, entity: TEntity):
+        _ModelAttributes = self._get_model_type(type(entity)).__dict__.keys()
+        _EntityAttributes = entity.__dict__.keys()
+
+        return list(set(_EntityAttributes) - set(_ModelAttributes))
+
     def _get_model_type(self, entity_type):
         if entity_type in self._model_classes:
             return self._model_classes[entity_type]
 
-        raise Exception(f"Model not found for: {entity_type.__name__}")
+        raise PersistenceError(f"Model not found for: {entity_type.__name__}")
 
     @staticmethod
     def _verify_all_models_imported():
@@ -165,7 +183,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         _Imports = inspect.getsource(models_module)
         for _Name in _ModuleNames:
             if _Name not in _Imports:
-                raise Exception(f"Not all models have been imported. Missing module: {_Name}.")
+                raise PersistenceError(f"Not all models have been imported. Missing module: {_Name}.")
 
     @staticmethod
     async def test(app):
@@ -324,13 +342,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if result:= self.execute():
             return result[0]
 
-        raise Exception("Result set was empty.")
+        raise PersistenceError("Result set was empty.")
 
     def first_by_id(self, entity_id: EntityID) -> TEntity:
         if result:= self.first_or_none(Equal(entity_id, (self.model.__entity__, "id"))):
             return result
 
-        raise Exception("No entity matching the provided ID.")
+        raise PersistenceError("No entity matching the provided ID.")
 
     def first_by_id_or_none(self, entity_id: EntityID) -> TEntity | None:
         return self.first_or_none(Equal(entity_id, (self.model.__entity__, "id")))
@@ -346,10 +364,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
     def include(self, attribute_name: str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not hasattr(self.model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
+            raise PersistenceError(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
         if not is_model_attribute(self.model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' is not valid for include operation.")
+            raise PersistenceError(f"Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.model, attribute_name)
         if nameof(attribute_to_join) not in self.join_paths.keys():
@@ -390,13 +408,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
     def then_include(self, attribute_name: str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not self.included_model:
-            raise Exception("No relationship included.")
+            raise PersistenceError("No relationship included.")
 
         if not hasattr(self.included_model, attribute_name):
-            raise Exception(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
+            raise PersistenceError(f"Attribute '{attribute_name}' not present on model '{self.model}'.")
 
         if not is_model_attribute(self.included_model, attribute_name):
-            raise Exception("Attribute '{attribute_name}' is not valid for include operation.")
+            raise PersistenceError("Attribute '{attribute_name}' is not valid for include operation.")
 
         attribute_to_join = getattr(self.included_model, attribute_name)
         attribute_path = self.included_attribute_path + "." + nameof(attribute_to_join)
@@ -409,7 +427,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
     def where(self, condition: BoolOperation | str) -> Type['SqlAlchemyQueryBuilder[TEntity]']:
         if not isinstance(condition, BoolOperation) and not isinstance(condition, str):
-            raise Exception(f"Only '{nameof(BoolOperation)}' and 'str' types are supported for this operation.")
+            raise PersistenceError(f"Only '{nameof(BoolOperation)}' and 'str' types are supported for this operation.")
 
         condition = str(condition)
 

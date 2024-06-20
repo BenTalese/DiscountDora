@@ -1,9 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-
-    // program was "${file}" but changed so it will always start debugging from main.py
     "version": "0.2.0",
     "configurations": [
         {
@@ -31,22 +26,30 @@
             "justMyCode": true
         },
         {
-            "type": "node",
+            "type": "chrome",
             "request": "launch",
-            "name": "Web App",
-            "preLaunchTask": "quasar:dev",
+            "name": "Chrome",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/src",
+            "sourceMapPathOverrides": {
+                "webpack:///src/*": "${webRoot}/*"
+            }
         },
         {
             "type": "firefox",
             "request": "launch",
-            "name": "Web App (Old)",
+            "name": "Firefox",
             "url": "http://localhost:5174",
-            "preLaunchTask": "npm: dev",
-            "webRoot": "${workspaceFolder}/framework/web_app_old/app",
+            "webRoot": "${workspaceFolder}/framework/web_app/src",
+            "preLaunchTask": "quasar:dev",
             "pathMappings": [
                 {
-                    "url": "http://localhost:5174/app",
-                    "path": "${workspaceFolder}/framework/web_app_old/app"
+                    "url": "http://localhost:5174/src",
+                    "path": "${workspaceFolder}/framework/web_app/src"
+                },
+                {
+                    "url": "webpack:///src/*",
+                    "path": "${workspaceFolder}/framework/web_app/src/*"
                 }
             ]
         },
@@ -61,24 +64,45 @@
                 "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
                 "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
             }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "TypeScript: Current File",
+            "program": "${workspaceFolder}/framework/web_app/node_modules/ts-node/dist/bin.js",
+            "args": ["${file}"],
+            "runtimeArgs": ["--loader", "ts-node/esm"],
+            "sourceMaps": true,
+            "cwd": "${workspaceFolder}/framework/web_app",
+            "console": "integratedTerminal",
+            "outFiles": ["${workspaceFolder}/framework/web_app/dist/**/*.js"],
+            "skipFiles": ["<node_internals>/**"]
         }
     ],
     "compounds": [
         {
-            "name": "Run All",
-            "configurations": ["DAPI", "MAPI", "Web App", "Emailer"]
+            "name": "Firefox: All",
+            "configurations": ["DAPI", "MAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + DAPI",
-            "configurations": ["DAPI", "Web App"]
+            "name": "Firefox: WebApp + DAPI",
+            "configurations": ["DAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + MAPI",
-            "configurations": ["MAPI", "Web App"]
+            "name": "Firefox: WebApp + MAPI",
+            "configurations": ["MAPI", "Firefox"]
         },
         {
-            "name": "Run Web App + DAPI + MAPI",
-            "configurations": ["DAPI", "MAPI", "Web App"]
+            "name": "Chrome: All",
+            "configurations": ["DAPI", "MAPI", "Chrome"]
+        },
+        {
+            "name": "Chrome: WebApp + DAPI",
+            "configurations": ["DAPI", "Chrome"]
+        },
+        {
+            "name": "Chrome: WebApp + MAPI",
+            "configurations": ["MAPI", "Chrome"]
         }
     ]
 }

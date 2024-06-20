@@ -5,4 +5,4 @@ from domain.entities.base_entity import BaseEntity
 
 @dataclass
 class StockLocation(BaseEntity):
-    description: str = None
+    name: str = None

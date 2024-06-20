@@ -22,16 +22,11 @@ class StockItemModel(db.Model):
         primary_key=True,
         default=uuid4)
 
-    stock_location = relationship(
-        StockLocationModel.__name__,
-        lazy="noload")
-
-    stock_location_id = Column(
-        UUIDType,
-        ForeignKey(StockLocation.__name__ + ".id"),
-        nullable = True)
-
     name = Column(String(255))
+
+    products = relationship(
+        'ProductModel',
+        lazy = "noload")
 
     shopping_lists = relationship(
         'ShoppingListModel',
@@ -47,15 +42,25 @@ class StockItemModel(db.Model):
         UUIDType,
         ForeignKey(StockLevel.__name__ + ".id"))
 
+    stock_location = relationship(
+        StockLocationModel.__name__,
+        lazy="noload")
+
+    stock_location_id = Column(
+        UUIDType,
+        ForeignKey(StockLocation.__name__ + ".id"),
+        nullable = True)
+
     stock_level_last_updated = Column(DateTime(timezone = True))
 
     def to_entity(self) -> StockItem:
         return StockItem(
             id = EntityID(self.id),
-            stock_location = self.stock_location.to_entity() if self.stock_location else None,
             name = self.name,
+            products = [p.to_entity() for p in self.products],
             stock_level = self.stock_level.to_entity() if self.stock_level else None,
-            stock_level_last_updated = self.stock_level_last_updated)
+            stock_level_last_updated = self.stock_level_last_updated,
+            stock_location = self.stock_location.to_entity() if self.stock_location else None)
 
     def get_key(self):
         return self.id

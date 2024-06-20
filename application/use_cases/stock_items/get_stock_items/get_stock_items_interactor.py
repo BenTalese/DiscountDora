@@ -1,5 +1,5 @@
 from clapy import Interactor
-
+from varname import nameof
 from application.dtos.stock_item_dto import get_stock_item_dto
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_item import StockItem
@@ -17,4 +17,5 @@ class GetStockItemsInteractor(Interactor):
         await output_port \
             .present_stock_items_async(self.persistence_context
                                        .get_entities(StockItem)
+                                       .include(nameof(StockItem.products))
                                        .project(get_stock_item_dto))

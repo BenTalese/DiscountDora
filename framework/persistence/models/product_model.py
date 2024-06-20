@@ -1,4 +1,5 @@
 from uuid import uuid4
+
 from sqlalchemy import Boolean, Column, Float, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
@@ -6,7 +7,7 @@ from sqlalchemy_utils import UUIDType
 from domain.entities.base_entity import EntityID
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
-from domain.entities.product_offer import ProductOffer
+from domain.entities.stock_item import StockItem
 from framework.persistence.infrastructure.persistence_context import db
 from framework.persistence.models.merchant_model import MerchantModel
 from framework.persistence.models.product_offer_model import ProductOfferModel
@@ -61,6 +62,17 @@ class ProductModel(db.Model):
     size_unit = Column(String(255))
 
     size_value = Column(Float)
+
+    # todo how does back populates work & do i need to define the relationship on both sides?
+    stock_item_id = Column(
+        UUIDType,
+        ForeignKey(StockItem.__name__ + ".id"),
+        nullable = True)
+
+    stock_item = relationship(
+        "StockItemModel",
+        back_populates = "products",
+        lazy = "noload")
 
     web_url = Column(String(255))
 

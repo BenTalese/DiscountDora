@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List
 
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
@@ -8,6 +9,7 @@ from domain.entities.stock_item import StockItem
 @dataclass
 class StockItemDto:
     name: str
+    product_ids: List[EntityID]
     stock_item_id: EntityID
     stock_level_id: EntityID
     stock_location_id: EntityID
@@ -16,6 +18,7 @@ class StockItemDto:
 def get_stock_item_dto(stock_item: StockItem) -> StockItemDto:
     return StockItemDto(
         name = stock_item.name,
+        product_ids = [p.id for p in stock_item.products],
         stock_item_id = stock_item.id,
         stock_level_id = stock_item.stock_level.id if stock_item.stock_level else None,
         stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,

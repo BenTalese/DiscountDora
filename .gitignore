@@ -39,10 +39,16 @@ coverage
 
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+framework/web_app/.vscode/*
+framework/web_app_old/.vscode/*
 .idea
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+*.json
 *.sw?
+*.cjs
+*.prettierrc

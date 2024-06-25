@@ -4,6 +4,7 @@ from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_locations.update_stock_location.iupdate_stock_location_output_port import \
     IUpdateStockLocationOutputPort
 from domain.entities.base_entity import EntityID
+from domain.entities.stock_location import StockLocation
 from framework.dora_api.infrastructure.base_presenter import BasePresenter
 
 
@@ -13,7 +14,7 @@ class UpdateStockLocationPresenter(BasePresenter, IUpdateStockLocationOutputPort
         self.persistence_context = persistence_context
 
     async def present_stock_location_not_found_async(self, stock_location_id: EntityID):
-        await self.entity_existence_failure_async(nameof(stock_location_id), stock_location_id.value)
+        await self.entity_existence_failure_async(nameof(StockLocation), nameof(stock_location_id), stock_location_id.value)
 
     async def present_stock_location_updated_async(self):
         await self.persistence_context.save_changes_async()

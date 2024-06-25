@@ -15,7 +15,7 @@ class CreateStockLocationInteractor(Interactor):
 
     async def execute_async(self, input_port: CreateStockLocationInputPort, output_port: ICreateStockLocationOutputPort):
         _StockLocation = StockLocation(
-            description = input_port.description
+            name = input_port.name
         )
 
         self.persistence_context.add(_StockLocation)

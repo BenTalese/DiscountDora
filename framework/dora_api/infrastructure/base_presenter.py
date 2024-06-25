@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from http.client import (BAD_REQUEST, CREATED, FORBIDDEN,
                          INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK,
                          UNAUTHORIZED, UNPROCESSABLE_ENTITY)
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 from uuid import UUID
 
 from clapy import (IAuthenticationOutputPort, IAuthorisationOutputPort,
@@ -59,18 +59,18 @@ class BasePresenter(
             response.headers['location'] = url_for(self.get_route, query = result.id, _external=True)
         self.result = response
 
-    async def entity_existence_failure_async(self, property_in_error: str, id: UUID):
+    async def entity_existence_failure_async(self, entity_name: str, property_in_error: str, id: UUID):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"A {property_in_error} with the ID '{id}' was not found."] },
+            errors = { property_in_error: [f"A {entity_name} with the ID '{id}' was not found."] },
             status = UNPROCESSABLE_ENTITY,
             title = "Entity was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
-    async def entity_existence_failures_async(self, property_in_error: str, *ids: Tuple[UUID]):
+    async def entity_existence_failures_async(self, entity_name: str, property_in_error: str, *ids: Tuple[UUID]):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"{property_in_error}(s) with the ID(s) '{', '.join(*ids)}' were not found."] },
+            errors = { property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."] },
             status = UNPROCESSABLE_ENTITY,
             title = "Entity(s) were not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))

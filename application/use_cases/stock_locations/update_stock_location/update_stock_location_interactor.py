@@ -17,8 +17,8 @@ class UpdateStockLocationInteractor(Interactor):
             .get_entities(StockLocation) \
             .first_by_id(input_port.stock_location_id)
 
-        if input_port.description.has_been_set:
-            _StockLocation.description = input_port.description.value
+        if input_port.name.has_been_set:
+            _StockLocation.name = input_port.name.value
 
         self.persistence_context.update(_StockLocation)
 

@@ -1,7 +1,7 @@
 # TODO: Learn https://docs.pydantic.dev/2.3/usage/models/
 # TODO: Learn https://docs.pydantic.dev/2.3/errors/errors/
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from framework.merchant_api.domain.entities.coles_product_offer import \
     ColesProductOffer
@@ -19,14 +19,22 @@ class ScrapedProductOffer:
     image: bytes
     image_uri: str
     is_available: bool
-    merchant: str # TODO: hmm...str? or id of merchant? would have to use GetMerchants or create if not found
+    merchant_name: str
     merchant_stockcode: str
     name: str
+    price_difference: float = field(init=False)
     price_now: float
+    price_per_cup: str | None
     price_was: float
+    size : str
     size_unit: str
     size_value: float
     web_url: str
+
+    def __post_init__(self):
+        self.price_difference = "{:.2f}".format(self.price_was - self.price_now)
+        self.price_now = "{:.2f}".format(self.price_now)
+        self.price_was = "{:.2f}".format(self.price_was)
 
     def get_size(size: str):
         # TODO: Instead make the unit the PK for the unit entity...ooooorrr...just don't worry about it and keep it as str
@@ -42,7 +50,7 @@ class ScrapedProductOffer:
 
         if _Match:
             value = float(_Match.group(1))
-            unit = str(_Match.group(3)).lower()
+            unit = str(_Match.group(3)).upper()
 
             # try:
             #     size_unit = SizeUnit[unit.lower()]
@@ -66,12 +74,15 @@ class ScrapedProductOffer:
             image = None,
             image_uri = offer.LargeImageFile,
             is_available = offer.IsAvailable or offer.InstoreIsAvailable,
-            merchant = SupportedMerchant.WOOLWORTHS.value,
-            merchant_stockcode = offer.Stockcode,
+            merchant_name = SupportedMerchant.WOOLWORTHS.value,
+            merchant_stockcode = str(offer.Stockcode),
             name = offer.Name,
-            price_now = offer.Price or offer.InstorePrice,
-            price_was = offer.WasPrice or offer.InstoreWasPrice,
-            size_unit = _Unit or offer.PackageSize,
+            price_now = offer.Price or offer.InstorePrice or 0,
+            price_per_cup = (offer.CupString.upper() if offer.CupString else None)
+                or (offer.InstoreCupString.upper() if offer.InstoreCupString else None),
+            price_was = offer.WasPrice or offer.InstoreWasPrice or 0,
+            size = offer.PackageSize.upper(),
+            size_unit = _Unit or offer.PackageSize.upper(),
             size_value = _Value,
             web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
         )
@@ -84,12 +95,14 @@ class ScrapedProductOffer:
             image = None,
             image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
             is_available = offer.availability,
-            merchant = SupportedMerchant.COLES.value,
-            merchant_stockcode = offer.id,
-            name = offer.name,
-            price_now = offer.pricing.now if offer.pricing else None,
-            price_was = offer.pricing.was if offer.pricing else None,
-            size_unit = _Unit or offer.size,
+            merchant_name = SupportedMerchant.COLES.value,
+            merchant_stockcode = str(offer.id),
+            name = offer.name if offer.brand in offer.name else f"{offer.brand} {offer.name}",
+            price_now = offer.pricing.now if offer.pricing else 0,
+            price_per_cup = offer.pricing.comparable.upper() if offer.pricing else None,
+            price_was = offer.pricing.was if offer.pricing else 0,
+            size = offer.size.upper(),
+            size_unit = _Unit or offer.size.upper(),
             size_value = _Value,
             web_url = f"https://www.coles.com.au/product/{offer.id}"
         )

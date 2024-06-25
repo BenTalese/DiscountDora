@@ -1,6 +1,7 @@
 import importlib
 import inspect
 import os
+from uuid import UUID
 
 from clapy import Common
 
@@ -44,3 +45,10 @@ def get_attributes_ending_with(term: str, path_to_search: str):
                     _Attributes.append((_AttributeValue))
 
     return _Attributes
+
+
+def try_parse_uuid(uuid_string: str):
+    try:
+        return UUID(f"urn:uuid:{uuid_string}")
+    except ValueError:
+        return None

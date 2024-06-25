@@ -6,6 +6,7 @@ from uuid import UUID
 class DoraProduct:
     brand: str
     image: bytes
+    is_active: bool
     is_available: bool
     merchant_id: UUID
     merchant_name: str
@@ -14,6 +15,7 @@ class DoraProduct:
     price_now: float
     price_was: float
     product_id: UUID
+    size: str
     size_unit: str
     size_value: float
     web_url: str

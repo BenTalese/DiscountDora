@@ -23,8 +23,8 @@ class ConfigurationProvider(IConfigurationProvider):
     _configuration: Config
 
     def __init__(self):
-        basedir = Path(__file__).parent.parent
-        with open(os.path.join(basedir, 'appsettings.json'), 'r') as _AppSettings:
+        _Path = Path(__file__).parent.parent / 'appsettings.json'
+        with open(_Path, 'r') as _AppSettings:
             self._configuration = Config(**json.load(_AppSettings))
 
     def get_api_host(self) -> str:

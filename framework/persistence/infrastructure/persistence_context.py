@@ -29,8 +29,7 @@ from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.exceptions.persistence_error import PersistenceError
 from domain.generics import TEntity
-from framework.dora_api.view_models.stock_item_view_model import \
-    get_stock_item_view_model
+from framework.dora_api.services.iconfiguration_provider import IConfigurationProvider
 from framework.persistence.infrastructure.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,
@@ -139,9 +138,15 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     # TODO: Use class for options instead of .get("some string")
     # TODO: Test on start that all entity properties have been configured (do name match)
     @classmethod # TODO: Class method?? cls for what? maybe make static instead
-    async def initialise(cls, app: Flask):
+    async def initialise(cls, app: Flask, configuration_provider: IConfigurationProvider):
         SqlAlchemyPersistenceContext._verify_all_models_imported()
         import framework.persistence.models  # Makes models visible to db.init_app()
+        # app.config.update(
+        #     SQLALCHEMY_DATABASE_URI = configuration_provider.get_db_connection_string(),
+        #     SQLALCHEMY_TRACK_MODIFICATIONS = configuration_provider.is_modification_tracking_enabled()
+        # )
+        app.config["SQLALCHEMY_DATABASE_URI"] = configuration_provider.get_db_connection_string()
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = configuration_provider.is_modification_tracking_enabled()
         db.init_app(app)
         app.db = db # TODO: This seems like very bad practice
         SqlAlchemyPersistenceContext._flask_app = app

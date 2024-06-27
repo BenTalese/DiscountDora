@@ -1,45 +1,52 @@
+import asyncio
 import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.getcwd())
-
-import asyncio
-import json
-
-from clapy import DependencyInjectorServiceProvider
+from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask import Flask
 from flask_cors import CORS
+
+sys.path.append(os.getcwd())
 
 from application.infrastructure.utils import get_attributes_ending_with
 from framework.dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from framework.dora_api.infrastructure.middleware import MIDDLEWARE
-from framework.dora_api.service_collection_builder import \
+from framework.dora_api.infrastructure.service_collection_builder import \
     ServiceCollectionBuilder
+from framework.dora_api.services.iconfiguration_provider import \
+    IConfigurationProvider
 from framework.persistence.infrastructure.persistence_context import \
     SqlAlchemyPersistenceContext
 
 
 async def startup():
-    app = Flask(__name__)
+    _App = Flask(__name__)
 
-    CORS(app, resources={r'/api/*': {'origins': 'http://localhost:5174', "allow_headers": ["*", "Content-Type"]}})
+    _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
+    _App.service_provider = _ServiceProvider
+    _ConfigurationProvider: IConfigurationProvider = _ServiceProvider.get_service(IConfigurationProvider)
 
-    app.service_provider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
+    await SqlAlchemyPersistenceContext.initialise(_App, _ConfigurationProvider)
 
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    with open(os.path.join(basedir,'appsettings.json'), 'r') as _Configuration:
-        app.config.update(json.load(_Configuration))
+    WEB_APP_HOST = _ConfigurationProvider.get_web_app_host()
+    WEB_APP_PORT = _ConfigurationProvider.get_web_app_port()
 
-    await SqlAlchemyPersistenceContext.initialise(app)
-    await SqlAlchemyPersistenceContext.test(app)
+    CORS(_App, resources={r'/api/*': {'origins': f'http://{WEB_APP_HOST}:{WEB_APP_PORT}', "allow_headers": ["*", "Content-Type"]}})
 
-    register_routers(app)
-    register_api_infrastructure(app)
-    app.run('localhost', 5170, app.config.get('DEBUG'), use_reloader=False) # TODO: appsettings
+    register_routers(_App)
+    register_api_infrastructure(_App)
+
+    _App.run(
+        _ConfigurationProvider.get_api_host(),
+        _ConfigurationProvider.get_api_port(),
+        _ConfigurationProvider.is_debug_mode_enabled(),
+        use_reloader = _ConfigurationProvider.is_reloader_enabled()
+    )
 
 
 def register_routers(app: Flask):
-    for _Router in get_attributes_ending_with('router', os.path.normpath('framework/dora_api/routes')):
+    for _Router in get_attributes_ending_with('router', Path() / 'framework' / 'dora_api' / 'routes'):
         app.register_blueprint(_Router)
 
 
@@ -50,17 +57,3 @@ def register_api_infrastructure(app: Flask):
 
 if __name__ == '__main__':
     asyncio.run(startup())
-
-
-
-# bcrypt = Bcrypt().init_app(app) # TODO: Look into this
-
-# def create_app():
-#     app = Flask(__name__, static_url_path='', static_folder='./../react/public')
-#     app.config.from_object(os.getenv("APP_SETTINGS", "config.Development"))
-#     db.init_app(app)
-#     migrate.init_app(app, db)
-#     bcrypt
-
-    # migrate = Migrate(app, db).??? #TODO: Learn https://flask-migrate.readthedocs.io/en/latest/index.html
-    #debug_mode = app.config.get('DEBUG')

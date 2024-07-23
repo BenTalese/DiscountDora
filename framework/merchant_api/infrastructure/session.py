@@ -13,7 +13,7 @@ class DefaultTimeoutAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 
-def create_session(
+def get_cached_session(
         user_agent: str = "DiscountDora",
         max_retries: int = 3,
         timeout: int = 10) -> requests_cache.CachedSession:

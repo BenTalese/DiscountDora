@@ -69,7 +69,7 @@ class ColesProvider(IMerchantDataProvider):
             _PageSearchResult = _Session.get(_Url, _Params).json()['pageProps']['searchResults']
             for _ProductSearchResult in _PageSearchResult['results']:
                 if _ProductSearchResult['_type'] == "PRODUCT" and str(_ProductSearchResult["id"]) == product.merchant_stockcode:
-                    return ColesProductOffer.model_validate(_ProductSearchResult)
+                    return ScrapedProductOffer.translate_coles_offer(ColesProductOffer.model_validate(_ProductSearchResult))
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:

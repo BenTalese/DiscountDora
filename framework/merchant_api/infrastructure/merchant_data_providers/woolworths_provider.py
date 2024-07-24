@@ -64,7 +64,10 @@ class WoolworthsProvider(IMerchantDataProvider):
             }
 
             _PageSearchResult = _Session.post(_Url, json=_Body).json()
-            return WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
+
+            return ScrapedProductOffer.translate_woolworths_offer(
+                WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
+            )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:

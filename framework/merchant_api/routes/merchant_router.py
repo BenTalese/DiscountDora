@@ -1,10 +1,13 @@
-from flask import Blueprint, jsonify
+from clapy import IServiceProvider
+from flask import Blueprint, current_app, jsonify
 
-from framework.merchant_api.domain.enumerations.supported_merchant import \
-    SupportedMerchant
+from framework.merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 
+
 @MERCHANT_ROUTER.route("")
 async def get_merchants_async():
-    return jsonify([{"name": merchant.value } for merchant in SupportedMerchant])
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
+    return jsonify([{"name": merchant.name.name} for merchant in _ConfigurationManager.get_enabled_merchants()])

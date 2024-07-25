@@ -8,16 +8,6 @@ from dependency_injector import providers
 from application.infrastructure.utils import get_classes_ending_with
 from framework.merchant_api.infrastructure.configuration_manager import \
     ConfigurationManager
-from framework.merchant_api.infrastructure.merchant_data_providers.coles_provider import \
-    ColesProvider
-from framework.merchant_api.infrastructure.merchant_data_providers.grocerize_provider import \
-    GrocerizeProvider
-from framework.merchant_api.infrastructure.merchant_data_providers.iga_provider import \
-    IGAProvider
-from framework.merchant_api.infrastructure.merchant_data_providers.save_on_groceries_provider import \
-    SaveOnGroceriesProvider
-from framework.merchant_api.infrastructure.merchant_data_providers.woolworths_provider import \
-    WoolworthsProvider
 from framework.merchant_api.services.iconfiguration_manager import \
     IConfigurationManager
 
@@ -44,11 +34,8 @@ class ServiceCollectionBuilder:
         return self
 
     def register_merchant_data_providers(self):
-        self.service_provider.register_service(providers.Singleton, ColesProvider)
-        self.service_provider.register_service(providers.Singleton, IGAProvider)
-        self.service_provider.register_service(providers.Singleton, GrocerizeProvider)
-        self.service_provider.register_service(providers.Singleton, SaveOnGroceriesProvider)
-        self.service_provider.register_service(providers.Singleton, WoolworthsProvider)
+        for _Provider in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers'):
+            self.service_provider.register_service(providers.Singleton, _Provider)
         return self
 
     def register_logger(self):
@@ -65,8 +52,8 @@ class ServiceCollectionBuilder:
         logger.setLevel(_ConfigurationManager.get_log_level())
         logger.addHandler(file_handler)
 
-        self.service_provider.register_service(providers.Object, logger)
         # FIXME: Clapy needs update to allow overriding the name of the service
+        # self.service_provider.register_service(providers.Object, logger)
         setattr(self.service_provider._container, "logging_Logger", providers.Object(logger))
 
         return self

@@ -52,8 +52,6 @@ async def startup():
     scheduler.add_job(data_provider_health_check, IntervalTrigger(days = 1), args = [_ServiceProvider])
     scheduler.start()
 
-    data_provider_health_check(_ServiceProvider)
-
     _App.run(
         _ConfigurationManager.get_api_host(),
         _ConfigurationManager.get_api_port(),

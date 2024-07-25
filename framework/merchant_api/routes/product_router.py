@@ -45,6 +45,7 @@ On navigation to product search, if nothing is configured open a modal to config
 
 SEPARATE SETTINGS PAGE (Atif idea)
 '''
+# TODO: Need to more closely inspect items such as fruit and veg for pricing information, see IGA uses whole price, also sometimes it's an "each" pricing
 
 
 @PRODUCT_ROUTER.route("/search/<search_term>")
@@ -74,7 +75,7 @@ async def search_for_product_async(search_term: str, result_limit: int = 10) -> 
             if not _MerchantDataProvider.is_merchant_supported(_Merchant):
                 continue
 
-            time.sleep(random(0, 2))
+            time.sleep(random.uniform(0, 2))
             try:
                 if _Offers := _MerchantDataProvider.search_by_term(search_term, _Merchant, result_limit):
                     _ScrapedOffers.extend(_Offers)
@@ -128,7 +129,7 @@ async def get_product_offers_async():
                 if not _MerchantDataProvider.is_merchant_supported(_Merchant):
                     continue
 
-                time.sleep(random(0, 0.3))
+                time.sleep(random.uniform(0, 0.3))
                 try:
                     if _Offer := _MerchantDataProvider.get_product(_Product):
                         _OffersByProductID[_Product.product_id] = _Offer

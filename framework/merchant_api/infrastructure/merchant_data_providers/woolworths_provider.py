@@ -65,7 +65,7 @@ class WoolworthsProvider(IMerchantDataProvider):
 
             _PageSearchResult = _Session.post(_Url, json=_Body).json()
 
-            return ScrapedProductOffer.translate_woolworths_offer(
+            return self._translate_offer(
                 WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
             )
 
@@ -92,7 +92,7 @@ class WoolworthsProvider(IMerchantDataProvider):
 
                 for _ProductSearchResult in _PageSearchResult['Products']:
                     _ScrapedProductOffers.append(
-                        ScrapedProductOffer.translate_woolworths_offer(
+                        self._translate_offer(
                             WoolworthsProductOffer.model_construct(**_ProductSearchResult['Products'][0])
                         )
                     )
@@ -101,6 +101,27 @@ class WoolworthsProvider(IMerchantDataProvider):
                     return _ScrapedProductOffers
 
                 _Body['PageNumber'] += 1
-                time.sleep(random(0, 2))
+                time.sleep(random.uniform(0, 2))
+
+    def _translate_offer(self, offer: WoolworthsProductOffer) -> ScrapedProductOffer:
+        _Value, _Unit = ScrapedProductOffer.get_size(offer.PackageSize)
+
+        return ScrapedProductOffer(
+            brand = offer.Brand,
+            image = None,
+            image_uri = offer.LargeImageFile,
+            is_available = offer.IsAvailable or offer.InstoreIsAvailable,
+            merchant_name = SupportedMerchant.WOOLWORTHS.value,
+            merchant_stockcode = str(offer.Stockcode),
+            name = offer.Name,
+            price_now = offer.Price or offer.InstorePrice or 0,
+            price_per_cup = (offer.CupString.upper() if offer.CupString else None)
+                or (offer.InstoreCupString.upper() if offer.InstoreCupString else None),
+            price_was = offer.WasPrice or offer.InstoreWasPrice or 0,
+            size = offer.PackageSize.upper(),
+            size_unit = _Unit or offer.PackageSize.upper(),
+            size_value = _Value,
+            web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
+        )
 
     #endregion Methods

@@ -69,7 +69,7 @@ class ColesProvider(IMerchantDataProvider):
             _PageSearchResult = _Session.get(_Url, _Params).json()['pageProps']['searchResults']
             for _ProductSearchResult in _PageSearchResult['results']:
                 if _ProductSearchResult['_type'] == "PRODUCT" and str(_ProductSearchResult["id"]) == product.merchant_stockcode:
-                    return ScrapedProductOffer.translate_coles_offer(ColesProductOffer.model_validate(_ProductSearchResult))
+                    return self._translate_offer(ColesProductOffer.model_validate(_ProductSearchResult))
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:
@@ -93,7 +93,7 @@ class ColesProvider(IMerchantDataProvider):
                 for _ProductSearchResult in _PageSearchResult['results']:
                     if _ProductSearchResult['_type'] == "PRODUCT":
                         _ScrapedProductOffers.append(
-                            ScrapedProductOffer.translate_coles_offer(
+                            self._translate_offer(
                                 ColesProductOffer.model_validate(_ProductSearchResult)
                             )
                         )
@@ -102,6 +102,26 @@ class ColesProvider(IMerchantDataProvider):
                         return _ScrapedProductOffers
 
                 _Params['page'] += 1
-                time.sleep(random(0, 2))
+                time.sleep(random.uniform(0, 2))
+
+    def _translate_offer(self, offer: ColesProductOffer) -> ScrapedProductOffer:
+        _Value, _Unit = ScrapedProductOffer.get_size(offer.size)
+
+        return ScrapedProductOffer(
+            brand = offer.brand,
+            image = None,
+            image_uri = f"https://productimages.coles.com.au/productimages{offer.imageUris[0].uri}",
+            is_available = offer.availability,
+            merchant_name = SupportedMerchant.COLES.value,
+            merchant_stockcode = str(offer.id),
+            name = offer.name if offer.brand in offer.name else f"{offer.brand} {offer.name}",
+            price_now = offer.pricing.now if offer.pricing else 0,
+            price_per_cup = offer.pricing.comparable.upper() if offer.pricing else None,
+            price_was = offer.pricing.was if offer.pricing else 0,
+            size = offer.size.upper(),
+            size_unit = _Unit or offer.size.upper(),
+            size_value = _Value,
+            web_url = f"https://www.coles.com.au/product/{offer.id}"
+        )
 
     #endregion Methods

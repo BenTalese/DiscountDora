@@ -23,6 +23,10 @@ class IConfigurationManager(ABC):
         pass
 
     @abstractmethod
+    def get_iga_store_id(self) -> int:
+        pass
+
+    @abstractmethod
     def get_log_level(self) -> int:
         pass
 

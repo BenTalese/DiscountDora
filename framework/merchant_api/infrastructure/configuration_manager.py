@@ -44,6 +44,10 @@ class ConfigurationManager(IConfigurationManager):
     def get_enabled_merchants(self) -> List[Merchant]:
         return [_Merchant for _Merchant in self._config.MERCHANTS if _Merchant.is_enabled]
 
+    # TODO: Want to be able to set in settings page
+    def get_iga_store_id(self) -> int:
+        return self._config.IGA_STORE_ID
+
     def get_log_level(self) -> int:
         _LogLevel = self._config.LOG_LEVEL
 

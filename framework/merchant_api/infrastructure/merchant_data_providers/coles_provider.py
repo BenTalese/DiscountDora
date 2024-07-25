@@ -22,7 +22,7 @@ class ColesProvider(IMerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
-    _is_healthy = False
+    _is_healthy = True
 
     #endregion Fields
 

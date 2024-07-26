@@ -129,14 +129,14 @@ const productStore = useProductStore();
 const searchTerm = ref('');
 const previousSearchTerm = ref<undefined | string>();
 
-let currentPage = 1;
+let currentPage = 1; // TODO: What to do with this now?
 
 const search = (): Promise<string> =>
     productStore.searchByTermAsync({
         search_term: searchTerm.value,
-        start_page: currentPage
+        merchants_to_search: productStore.productSearchOfferFilters.stores.map(merchant => merchant.name)
     })
-        .then(() => previousSearchTerm.value = searchTerm.value);
+    .then(() => previousSearchTerm.value = searchTerm.value);
 
 //#endregion Search
 

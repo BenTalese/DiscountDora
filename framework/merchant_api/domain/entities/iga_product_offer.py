@@ -6,7 +6,7 @@ class IGAProductOffer(BaseModel, extra='allow'):
     class Size(BaseModel, extra='allow'):
         abbreviation: str  # "ml"
         label: str  # "Millilitre"
-        size: int  # 500
+        size: float  # 500
         type: str  # "millilitre"
 
     # attributes: ...

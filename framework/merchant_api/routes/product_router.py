@@ -48,9 +48,15 @@ SEPARATE SETTINGS PAGE (Atif idea)
 # TODO: Need to more closely inspect items such as fruit and veg for pricing information, see IGA uses whole price, also sometimes it's an "each" pricing
 
 
-@PRODUCT_ROUTER.route("/search/<search_term>")
-@PRODUCT_ROUTER.route("/search/<search_term>/<result_limit>")
-async def search_for_product_async(search_term: str, result_limit: int = 10) -> List[ScrapedProductOffer]:
+@PRODUCT_ROUTER.route("/search", methods = ["POST"])
+async def search_for_product_async() -> List[ScrapedProductOffer]:
+    class SearchForProductQuery(BaseModel):
+        merchants_to_search: List[str]
+        result_limit: int = 20
+        search_term: str
+
+    _RequestBody = SearchForProductQuery.model_validate(request.get_json())
+
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
     _Logger: logging.Logger = _ServiceProvider.get_service(logging.Logger)
@@ -77,14 +83,14 @@ async def search_for_product_async(search_term: str, result_limit: int = 10) -> 
 
             time.sleep(random.uniform(0, 2))
             try:
-                if _Offers := _MerchantDataProvider.search_by_term(search_term, _Merchant, result_limit):
+                if _Offers := _MerchantDataProvider.search_by_term(_RequestBody.search_term, _Merchant, _RequestBody.result_limit):
                     _ScrapedOffers.extend(_Offers)
                     break
 
             except Exception as e:
                 _MerchantDataProvider.is_healthy = False
                 _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
-                                  f" Search term: {search_term}. Merchant: {_Merchant.name.value}", e)
+                                  f" Search term: {_RequestBody.search_term}. Merchant: {_Merchant.name.value}", e)
 
     with get_cached_session() as _Session:
         for _Offer in _ScrapedOffers:

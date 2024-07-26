@@ -85,12 +85,14 @@ class IGAProvider(IMerchantDataProvider):
                     return _ScrapedProductOffers
 
                 for _ProductSearchResult in _PageSearchResult['items']:
-                    self._translate_offer(
-                        IGAProductOffer.model_validate(_ProductSearchResult)
+                    _ScrapedProductOffers.append(
+                        self._translate_offer(
+                            IGAProductOffer.model_validate(_ProductSearchResult)
+                        )
                     )
 
-                if len(_ScrapedProductOffers) >= result_limit:
-                    return _ScrapedProductOffers
+                    if len(_ScrapedProductOffers) >= result_limit:
+                        return _ScrapedProductOffers
 
                 _Params['skip'] += _Params['take']
                 time.sleep(random.uniform(0, 2))
@@ -101,11 +103,13 @@ class IGAProvider(IMerchantDataProvider):
             image = None,
             image_uri = offer.image['default'],
             is_available = offer.available,
-            merchant = SupportedMerchant.IGA.value,
+            merchant_name = SupportedMerchant.IGA.value,
             merchant_stockcode = offer.productId,
             name = offer.name,
-            price_now = offer.priceNumeric,
-            price_was = offer.wasPriceNumeric,
+            price_now = offer.priceNumeric or 0,
+            price_per_cup = offer.pricePerUnit,
+            price_was = offer.wasPriceNumeric or 0,
+            size = str(offer.unitOfSize.size) + offer.unitOfSize.abbreviation,
             size_unit = offer.unitOfSize.abbreviation,
             size_value = float(offer.unitOfSize.size),
             web_url = f"https://www.igashop.com.au/product/{'-'.join(offer.name.lower().split()) + '-' + offer.productId}"

@@ -98,7 +98,7 @@ class ColesProvider(IMerchantDataProvider):
                             )
                         )
 
-                    if len(_ScrapedProductOffers) == result_limit:
+                    if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
                 _Params['page'] += 1

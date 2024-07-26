@@ -97,8 +97,8 @@ class WoolworthsProvider(IMerchantDataProvider):
                         )
                     )
 
-                if len(_ScrapedProductOffers) >= result_limit:
-                    return _ScrapedProductOffers
+                    if len(_ScrapedProductOffers) >= result_limit:
+                        return _ScrapedProductOffers
 
                 _Body['PageNumber'] += 1
                 time.sleep(random.uniform(0, 2))

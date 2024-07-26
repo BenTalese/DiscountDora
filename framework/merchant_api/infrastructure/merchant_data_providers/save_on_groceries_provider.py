@@ -92,8 +92,8 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
                         )
                     )
 
-                if len(_ScrapedProductOffers) >= result_limit:
-                    return _ScrapedProductOffers
+                    if len(_ScrapedProductOffers) >= result_limit:
+                        return _ScrapedProductOffers
 
                 _Page += 1
                 _Url[:-1] + ''
@@ -107,7 +107,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             image = None,
             image_uri = offer.product_image_url,
             is_available = True,
-            merchant_name = merchant_name,
+            merchant_name = merchant_name.value,
             merchant_stockcode = self._get_merchant_stockcode_func_mapping.get(merchant_name)(offer.product_url),
             name = offer.name,
             price_now = offer.price,

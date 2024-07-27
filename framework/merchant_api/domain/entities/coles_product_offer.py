@@ -7,7 +7,7 @@ class ColesProductOffer(BaseModel, extra='allow'):
         uri: str
 
     class Pricing(BaseModel, extra='allow'):
-        comparable: str # '$0.54 per 1ea'
+        comparable: str  # '$0.54 per 1ea'
         now: float
         was: float
 
@@ -16,5 +16,5 @@ class ColesProductOffer(BaseModel, extra='allow'):
     id: int
     imageUris: List[ImageInfo]
     name: str
-    pricing: Optional[Pricing] # None if `availability=False`
-    size: str # "352g"
+    pricing: Optional[Pricing]  # None if `availability=False`
+    size: str  # "352g"

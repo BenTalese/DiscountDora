@@ -17,7 +17,7 @@ class StockItemViewModel:
 def get_stock_item_view_model(stock_item: StockItemDto) -> StockItemViewModel:
     return StockItemViewModel(
         name = stock_item.name,
-        product_ids = stock_item.product_ids,
+        product_ids = [p.product_id.value for p in stock_item.products],
         stock_item_id = stock_item.stock_item_id.value,
         stock_level_id = stock_item.stock_level_id.value if stock_item.stock_level_id else None,
         stock_location_id = stock_item.stock_location_id.value if stock_item.stock_location_id else None,

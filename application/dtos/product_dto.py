@@ -27,7 +27,9 @@ class ProductDto:
 def get_product_dto(product: Product) -> ProductDto:
     return ProductDto(
         brand = product.brand,
-        current_offer = get_product_offer_dto(product.current_offer),
+        # HACK: Added if condition for current_offer, due to issues with
+        # .ThenInclude not loading the current_offer in the get stock items interactor
+        current_offer = get_product_offer_dto(product.current_offer) if product.current_offer else None,
         historical_offers = [get_product_offer_dto(offer) for offer in product.historical_offers],
         image = product.image,
         is_active = product.is_active,

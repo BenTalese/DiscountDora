@@ -1,0 +1,74 @@
+import logging
+from base64 import b64encode
+from pathlib import Path, PurePath
+from typing import Dict
+
+from framework.merchant_api.infrastructure.session import get_cached_session
+from framework.merchant_api.services.iproduct_image_provider import \
+    IProductImageProvider
+
+
+# TODO: Careful of "no image" products
+class ProductImageProvider(IProductImageProvider):
+
+    #region ---------------- Fields ----------------
+
+    _cache_folder: PurePath = Path() / ".image_cache"
+    _image_cache: Dict[str, bytes] = {}
+    _logger: logging.Logger
+
+    #endregion Fields
+
+    #region ---------------- Constructors ----------------
+
+    def __init__(self, logger: logging.Logger):
+        self._logger = logger
+
+        if not Path.exists(self._cache_folder):
+            Path.mkdir(self._cache_folder)
+
+        for _Filename in Path.iterdir(self._cache_folder):
+            _Filepath = self._cache_folder / _Filename
+            if Path.is_file(_Filepath):
+                _ImageUri = self._get_image_uri_from_filename(_Filename)
+                with open(_Filename, "rb") as _File:
+                    self._image_cache[_ImageUri] = b64encode(_File.read()).decode('utf-8')
+
+    #endregion Constructors
+
+    #region ---------------- Methods ----------------
+
+    def get_image(self, image_uri: str):
+        if image_uri in self._image_cache:
+            return self._image_cache[image_uri]
+
+        try:
+            with get_cached_session() as _Session:
+                _Response = _Session.get(image_uri)
+
+            if _Response.status_code == 200:
+                _RawImageData = _Response.content
+                _ImageData = b64encode(_Response.content).decode('utf-8')
+                self._image_cache[image_uri] = _ImageData
+                self._save_image_to_cache(image_uri, _RawImageData)
+                return _ImageData
+
+            else:
+                _Response.raise_for_status()
+
+        except Exception as e:
+            self._logger.exception(f"Encountered a problem grabbing image for product with image URI: {image_uri}", e)
+
+    def _get_image_uri_from_filename(self, filename: str):
+        return filename.replace("_", "/")
+
+    def _get_filename_from_image_uri(self, image_uri: str):
+        return image_uri.replace("/", "_")
+
+    def _save_image_to_cache(self, image_uri, image_data):
+        _Filename = self._get_filename_from_image_uri(image_uri)
+        _Filepath = Path(self._cache_folder) / _Filename
+        with open(_Filepath, "wb") as file:
+            file.write(image_data)
+
+    #endregion Methods

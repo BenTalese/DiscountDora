@@ -8,8 +8,12 @@ from dependency_injector import providers
 from application.infrastructure.utils import get_classes_ending_with
 from framework.merchant_api.infrastructure.configuration_manager import \
     ConfigurationManager
+from framework.merchant_api.infrastructure.product_image_provider import \
+    ProductImageProvider
 from framework.merchant_api.services.iconfiguration_manager import \
     IConfigurationManager
+from framework.merchant_api.services.iproduct_image_provider import \
+    IProductImageProvider
 
 
 class ServiceCollectionBuilder:
@@ -18,10 +22,9 @@ class ServiceCollectionBuilder:
 
     def build_service_provider(self):
         return self \
-            .register_configuration_provider() \
-            .register_api_presenters() \
-            .register_merchant_data_providers() \
             .register_logger() \
+            .register_api_presenters() \
+            .register_framework_service() \
             .service_provider
 
     def register_api_presenters(self):
@@ -29,13 +32,13 @@ class ServiceCollectionBuilder:
             self.service_provider.register_service(providers.Factory, _Presenter)
         return self
 
-    def register_configuration_provider(self):
+    def register_framework_service(self):
         self.service_provider.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
-        return self
+        self.service_provider.register_service(providers.Singleton, ProductImageProvider, IProductImageProvider)
 
-    def register_merchant_data_providers(self):
         for _Provider in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers'):
             self.service_provider.register_service(providers.Singleton, _Provider)
+
         return self
 
     def register_logger(self):

@@ -1,14 +1,13 @@
 import logging
 import random
 import time
-from base64 import b64encode
 from typing import Dict, List
 from uuid import UUID
-from pydantic import BaseModel
 
 import requests
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify, request
+from pydantic import BaseModel
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
 from framework.merchant_api.domain.entities.scraped_product_offer import \
@@ -17,9 +16,9 @@ from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.merchant_data_providers import \
     get_healthy_merchant_data_providers
-from framework.merchant_api.infrastructure.session import get_cached_session
 from framework.merchant_api.services.iconfiguration_manager import \
     IConfigurationManager
+from framework.merchant_api.services.iproduct_image_provider import IProductImageProvider
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
@@ -80,15 +79,9 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
                 _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
                                   f" Search term: {_RequestBody.search_term}. Merchant: {_Merchant.name.value}", e)
 
-    with get_cached_session() as _Session:
-        try:
-            for _Offer in _ScrapedOffers:
-                if _Offer.image_uri:
-                    _Offer.image = b64encode(_Session.get(_Offer.image_uri).content).decode('utf-8')
-
-        except Exception as e:
-            _Logger.exception(f"Encountered a problem grabbing image for product '{_Offer.name}' for merchant"
-                              f" '{_Offer.merchant_name}' with image URI: {_Offer.image_uri}", e)
+    _ProductImageProvider: IProductImageProvider = _ServiceProvider.get_service(IProductImageProvider)
+    for _Offer in _Offers:
+        _Offer.image = _ProductImageProvider.get_image(_Offer.image_uri)
 
     return jsonify(_ScrapedOffers)
 
@@ -105,6 +98,8 @@ async def get_product_offers_async():
         for _Product
         in requests.get("http://127.0.0.1:5170/api/products").json()
     ]
+
+    # TODO: Can any of this be cached? If product offer grabbed in the last week?
 
     _OffersByProductID: Dict[UUID, ScrapedProductOffer] = {}
 

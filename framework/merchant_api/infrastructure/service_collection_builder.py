@@ -22,7 +22,6 @@ class ServiceCollectionBuilder:
 
     def build_service_provider(self):
         return self \
-            .register_logger() \
             .register_api_presenters() \
             .register_framework_service() \
             .service_provider
@@ -34,14 +33,6 @@ class ServiceCollectionBuilder:
 
     def register_framework_service(self):
         self.service_provider.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
-        self.service_provider.register_service(providers.Singleton, ProductImageProvider, IProductImageProvider)
-
-        for _Provider in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers'):
-            self.service_provider.register_service(providers.Singleton, _Provider)
-
-        return self
-
-    def register_logger(self):
         _ConfigurationManager: IConfigurationManager = self.service_provider.get_service(IConfigurationManager)
 
         log_folder = Path() / 'logs'
@@ -58,5 +49,9 @@ class ServiceCollectionBuilder:
         # FIXME: Clapy needs update to allow overriding the name of the service
         # self.service_provider.register_service(providers.Object, logger)
         setattr(self.service_provider._container, "logging_Logger", providers.Object(logger))
+
+        self.service_provider.register_service(providers.Singleton, ProductImageProvider, IProductImageProvider)
+        for _Provider in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers'):
+            self.service_provider.register_service(providers.Singleton, _Provider)
 
         return self

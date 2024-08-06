@@ -61,7 +61,6 @@ class ConfigurationManager(IConfigurationManager):
             if _IsEnabled
         ]
 
-    # TODO: Want to be able to set in settings page
     def get_iga_store_id(self) -> int:
         return self._config.IGA_STORE_ID
 
@@ -99,11 +98,6 @@ class ConfigurationManager(IConfigurationManager):
 
     def is_reloader_enabled(self) -> bool:
         return self._config.USE_RELOADER
-
-    def set_settings_to_defaults(self) -> None:
-        # TODO: IF EXISTS, DELETE
-        # TODO: CREATE NEW
-        pass
 
     def toggle_merchant_enabled_state(self, merchant: Merchant) -> None:
         self._config.MERCHANTS[merchant.name.value] = not self._config.MERCHANTS[merchant.name.value]

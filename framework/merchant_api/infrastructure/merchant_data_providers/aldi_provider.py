@@ -194,9 +194,6 @@ class AldiProvider(IMerchantDataProvider):
         )
 
     def _update_category_cache(self, category: str) -> None:
-        # Should cached products be saved as json file as well? seems beneficial... so it doesn't
-        # need to rebuild cache from scratch, will need to save last time updated, maybe in file name
-        # Atif idea: use NOSQL database to store offers
         _Response = requests.get(f"https://www.aldi.com.au/groceries/{category}/")
         _Soup = BeautifulSoup(_Response.content, features="html.parser")
         _PageSearchResult = _Soup.find_all('a', class_='box--wrapper')
@@ -232,16 +229,3 @@ class AldiProvider(IMerchantDataProvider):
 
     #endregion Methods
 
-
-if __name__ == "__main__":
-    x = AldiProvider(ConfigurationManager())
-    t1 = time.time()
-    g = x.search_by_term("Fruit Snack Cereal Bars", {}, 1)
-    t2 = time.time()
-    dif1 = t2 - t1
-
-    t3 = time.time()
-    h = x.search_by_term("Fruit Snack Cereal Bars", {}, 1)
-    t4 = time.time()
-    dif2 = t4 - t3
-    y = 0

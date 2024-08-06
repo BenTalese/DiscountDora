@@ -7,10 +7,6 @@ from framework.merchant_api.domain.entities.merchant import Merchant
 class IConfigurationManager(ABC):
 
     @abstractmethod
-    def get_all_aldi_categories(self) -> List[str]:
-        pass
-
-    @abstractmethod
     def get_all_merchants(self) -> List[Merchant]:
         pass
 
@@ -20,10 +16,6 @@ class IConfigurationManager(ABC):
 
     @abstractmethod
     def get_api_port(self) -> int:
-        pass
-
-    @abstractmethod
-    def get_enabled_aldi_categories(self) -> List[str]:
         pass
 
     @abstractmethod
@@ -56,10 +48,6 @@ class IConfigurationManager(ABC):
 
     @abstractmethod
     def set_settings_to_defaults(self) -> None:
-        pass
-
-    @abstractmethod
-    def toggle_aldi_category_enabled_state(self, category: str) -> None:
         pass
 
     @abstractmethod

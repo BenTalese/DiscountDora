@@ -33,9 +33,6 @@ class ConfigurationManager(IConfigurationManager):
         with open(self._config_path, 'r') as _AppSettings:
             self._config = Config(**json.load(_AppSettings))
 
-    def get_all_aldi_categories(self) -> List[str]:  # TODO: Double check actually a list
-        return self._config.ALDI_CATEGORIES.keys()
-
     def get_all_merchants(self) -> List[Merchant]:
         return [_Merchant for _Merchant in self._config.MERCHANTS]
 
@@ -44,9 +41,6 @@ class ConfigurationManager(IConfigurationManager):
 
     def get_api_port(self) -> int:
         return self._config.API_PORT
-
-    def get_enabled_aldi_categories(self) -> List[str]:
-        return [_Category for _Category, _IsEnabled in self._config.ALDI_CATEGORIES.items() if _IsEnabled]
 
     def get_enabled_merchants(self) -> List[Merchant]:
         return [_Merchant for _Merchant in self._config.MERCHANTS if _Merchant.is_enabled]
@@ -94,11 +88,6 @@ class ConfigurationManager(IConfigurationManager):
         # TODO: IF EXISTS, DELETE
         # TODO: CREATE NEW
         pass
-
-    def toggle_aldi_category_enabled_state(self, category: str) -> None:
-        # TODO: This is a lot simpler than the list of merchants approach
-        self._config.ALDI_CATEGORIES[category] = not self._config.ALDI_CATEGORIES[category]
-        self._save_configuration()
 
     def toggle_merchant_enabled_state(self, merchant: Merchant) -> None:
         _IndexToUpdate = self._config.MERCHANTS.index(merchant)

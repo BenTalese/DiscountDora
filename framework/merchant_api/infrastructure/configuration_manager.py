@@ -35,7 +35,7 @@ class ConfigurationManager(IConfigurationManager):
     def __init__(self):
         if not Path.exists(self._config_path):
             with open(self._config_path, 'w') as _AppSettings:
-                json.dump(self._config.model_dump_json(), _AppSettings, indent = 4)
+                _AppSettings.write(Config().model_dump_json(indent = 4))
 
         with open(self._config_path, 'r') as _AppSettings:
             self._config = Config(**json.load(_AppSettings))

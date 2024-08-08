@@ -1,21 +1,34 @@
+import logging
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify
 
-from framework.merchant_api.services.iconfiguration_manager import IConfigurationManager
+from framework.merchant_api.services.iconfiguration_manager import \
+    IConfigurationManager
 
 MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 
 
 @MERCHANT_ROUTER.route("")
-async def get_merchants_async():
+async def get_all_merchants_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-    # TODO: This should just get all merchants, and the api service can send a query to
-    # filter down the result, or filter it in memory if not bothered to implement filtering middleware here
-    return jsonify([{"name": merchant.name.value} for merchant in _ConfigurationManager.get_enabled_merchants()])
+    x: logging.Logger = _ServiceProvider.get_service(logging.Logger)
+    x.exception("aaaa")
+    y = logging.getLogger()
+    y.exception("eee")
+    return jsonify([
+        {
+            "is_enabled": _Merchant.is_enabled,
+            "name": _Merchant.name.value
+        }
+        for _Merchant
+        in _ConfigurationManager.get_all_merchants()
+    ])
 
 
-@MERCHANT_ROUTER.route("", methods = ["PATCH"])
-async def update_merchant_async():
-    # TODO: Implement enabling/disabling merchants
-    pass
+@MERCHANT_ROUTER.route("<merchant_name>", methods = ["PATCH"])
+async def update_merchant_async(merchant_name: str):
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
+    _ConfigurationManager.toggle_merchant_enabled_state(merchant_name)
+    return '', 204

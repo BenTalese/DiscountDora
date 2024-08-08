@@ -1,15 +1,11 @@
-# TODO: Learn https://docs.pydantic.dev/2.3/usage/models/
-# TODO: Learn https://docs.pydantic.dev/2.3/errors/errors/
 import re
 from dataclasses import dataclass, field
 
 
-# TODO: Possibly want price_was to be nullable (appears as 0 sometimes...)
-# TODO: Remove image from here, and put image on dto instead of image_uri
 @dataclass
 class ScrapedProductOffer:
     brand: str
-    image: bytes
+    image: str | None
     image_uri: str
     is_available: bool
     merchant_name: str
@@ -29,15 +25,7 @@ class ScrapedProductOffer:
         self.price_now = "{:.2f}".format(self.price_now)
         self.price_was = "{:.2f}".format(self.price_was)
 
-    def get_size(size: str):
-        # TODO: Instead make the unit the PK for the unit entity...ooooorrr...just don't worry about it and keep it as str
-        # class SizeUnit(Enum):
-        #     GRAM = 'g'
-        #     KILOGRAM = 'kg'
-        #     MILLILITER = 'ml'
-        #     LITER = 'l'
-        #     MILLIGRAM = 'mg'
-
+    def _extract_value_and_unit_from_size(size: str):
         _SizePattern = r'(\d+(\.\d+)?)(\s*[a-zA-Z]+)'
         _Match = re.match(_SizePattern, size)
 
@@ -46,14 +34,5 @@ class ScrapedProductOffer:
             _Unit = str(_Match.group(3)).strip().upper()
             return _Value, _Unit
 
-            # try:
-            #     size_unit = SizeUnit[unit.lower()]
-            # except KeyError:
-            #     print(f"Invalid unit: {unit}")
-            #     #TODO: LOG
-            #     return None, None
-
         else:
-            print(f"Unable to extract size from: {size}")
-            #TODO: LOG
             return None, None

@@ -14,31 +14,17 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 
 
-class ColesProvider(IMerchantDataProvider):
-
-    #region ---------------- Fields ----------------
-
-    _is_healthy = True
-
-    #endregion Fields
+class ColesProvider(MerchantDataProvider):
 
     #region ---------------- Properties ----------------
 
     @property
     def base_url(self) -> str:
         return 'https://www.coles.com.au'
-
-    @property
-    def is_healthy(self) -> bool:
-        return self._is_healthy
-
-    @is_healthy.setter
-    def is_healthy(self, val: bool) -> None:
-        self._is_healthy = val
 
     @property
     def priority(self) -> int:
@@ -56,11 +42,11 @@ class ColesProvider(IMerchantDataProvider):
 
     def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
         with get_cached_session() as _Session:
-            _Response = _Session.get('https://www.coles.com.au/')
+            _Response = _Session.get(self.base_url)
             _Soup = BeautifulSoup(_Response.text, features="html.parser")
             _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']
 
-            _Url = f'https://www.coles.com.au/_next/data/{_BuildID}/en/search.json'
+            _Url = f'{self.base_url}/_next/data/{_BuildID}/en/search.json'
             _Params = {
                 'q': product.name,
                 'page': 1
@@ -73,18 +59,21 @@ class ColesProvider(IMerchantDataProvider):
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:
-            _Response = _Session.get('https://www.coles.com.au/')
+            _Response = _Session.get(self.base_url)
             _Soup = BeautifulSoup(_Response.text, features="html.parser")
             _BuildID = json.loads(_Soup.find(id='__NEXT_DATA__').contents[0])['buildId']
 
-            _Url = f'https://www.coles.com.au/_next/data/{_BuildID}/en/search.json'
+            _Url = f'{self.base_url}/_next/data/{_BuildID}/en/search.json'
             _Params = {
                 'q': search_term,
                 'page': 1
             }
 
-            _ScrapedProductOffers = []
-            while True:
+            _ScrapedProductOffers: List[ScrapedProductOffer] = []
+            _StartTime = time.time()
+            _MaxAttemptTime = 15  # seconds
+
+            while time.time() - _StartTime < _MaxAttemptTime:
                 _PageSearchResult = _Session.get(_Url, _Params).json()['pageProps']['searchResults']
 
                 if not _PageSearchResult['results']:
@@ -105,7 +94,7 @@ class ColesProvider(IMerchantDataProvider):
                 time.sleep(random.uniform(0, 2))
 
     def _translate_offer(self, offer: ColesProductOffer) -> ScrapedProductOffer:
-        _Value, _Unit = ScrapedProductOffer.get_size(offer.size)
+        _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.size)
 
         return ScrapedProductOffer(
             brand = offer.brand,
@@ -121,7 +110,7 @@ class ColesProvider(IMerchantDataProvider):
             size = offer.size.upper(),
             size_unit = _Unit or offer.size.upper(),
             size_value = _Value,
-            web_url = f"https://www.coles.com.au/product/{offer.id}"
+            web_url = f"{self.base_url}/product/{offer.id}"
         )
 
     #endregion Methods

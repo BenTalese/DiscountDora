@@ -129,8 +129,6 @@ const productStore = useProductStore();
 const searchTerm = ref('');
 const previousSearchTerm = ref<undefined | string>();
 
-let currentPage = 1; // TODO: What to do with this now?
-
 const search = (): Promise<string> =>
     productStore.searchByTermAsync({
         search_term: searchTerm.value,

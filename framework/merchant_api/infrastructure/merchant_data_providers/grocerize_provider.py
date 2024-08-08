@@ -6,31 +6,17 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 
 
-class GrocerizeProvider(IMerchantDataProvider):
-
-    #region ---------------- Fields ----------------
-
-    _is_healthy = True
-
-    #endregion Fields
+class GrocerizeProvider(MerchantDataProvider):
 
     #region ---------------- Properties ----------------
 
     @property
     def base_url(self) -> str:
         return 'https://grocerize.com.au'
-
-    @property
-    def is_healthy(self) -> bool:
-        return self._is_healthy
-
-    @is_healthy.setter
-    def is_healthy(self, val: bool) -> None:
-        self._is_healthy = val
 
     @property
     def priority(self) -> int:

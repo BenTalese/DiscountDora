@@ -19,10 +19,6 @@ class IConfigurationManager(ABC):
         pass
 
     @abstractmethod
-    def get_enabled_merchants(self) -> List[Merchant]:
-        pass
-
-    @abstractmethod
     def get_iga_store_id(self) -> int:
         pass
 
@@ -47,9 +43,5 @@ class IConfigurationManager(ABC):
         pass
 
     @abstractmethod
-    def set_settings_to_defaults(self) -> None:
-        pass
-
-    @abstractmethod
-    def toggle_merchant_enabled_state(self, merchant: Merchant) -> None:
+    def toggle_merchant_enabled_state(self, merchant_name: str) -> None:
         pass

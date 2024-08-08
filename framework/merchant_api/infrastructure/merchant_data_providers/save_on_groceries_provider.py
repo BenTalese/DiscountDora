@@ -11,15 +11,13 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 
 
-class SaveOnGroceriesProvider(IMerchantDataProvider):
+class SaveOnGroceriesProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
-
-    _is_healthy = True
 
     _merchant_id_mapping = {
         SupportedMerchant.ALDI: 1,
@@ -42,14 +40,6 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
     @property
     def base_url(self) -> str:
         return 'https://www.saveongroceries.com.au'
-
-    @property
-    def is_healthy(self) -> bool:
-        return self._is_healthy
-
-    @is_healthy.setter
-    def is_healthy(self, val: bool) -> None:
-        self._is_healthy = val
 
     @property
     def priority(self) -> int:
@@ -75,10 +65,13 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
         with get_cached_session() as _Session:
             _Page = 1
             _ShopID = self._merchant_id_mapping.get(merchant.name)
-            _Url = f'https://www.saveongroceries.com.au/search-in-store?query={search_term}&shop_id={_ShopID}&page={_Page}'
+            _Url = f'{self.base_url}/search-in-store?query={search_term}&shop_id={_ShopID}&page={_Page}'
 
             _ScrapedProductOffers = []
-            while True:
+            _StartTime = time.time()
+            _MaxAttemptTime = 15  # seconds
+
+            while time.time() - _StartTime < _MaxAttemptTime:
                 _PageSearchResult = _Session.get(_Url).json()['products']['data']
 
                 if not _PageSearchResult:
@@ -100,7 +93,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
                 time.sleep(random.uniform(0, 2))
 
     def _translate_offer(self, offer: SaveOnGroceriesProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer:
-        _Value, _Unit = ScrapedProductOffer.get_size(offer.product_package_size)
+        _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.product_package_size)
 
         return ScrapedProductOffer(
             brand = None,

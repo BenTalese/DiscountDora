@@ -14,31 +14,17 @@ from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
 from framework.merchant_api.services.iconfiguration_manager import IConfigurationManager
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 
 
-class IGAProvider(IMerchantDataProvider):
-
-    #region ---------------- Fields ----------------
-
-    _is_healthy = True
-
-    #endregion Fields
+class IGAProvider(MerchantDataProvider):
 
     #region ---------------- Properties ----------------
 
     @property
     def base_url(self) -> str:
-        return 'https://www.iga.com.au'
-
-    @property
-    def is_healthy(self) -> bool:
-        return self._is_healthy
-
-    @is_healthy.setter
-    def is_healthy(self, val: bool) -> None:
-        self._is_healthy = val
+        return 'https://www.igashop.com.au'
 
     @property
     def priority(self) -> int:
@@ -60,7 +46,7 @@ class IGAProvider(IMerchantDataProvider):
         _StoreID = _ConfigurationManager.get_iga_store_id()
 
         with get_cached_session() as _Session:
-            _Url = f"https://www.igashop.com.au/api/storefront/stores/{_StoreID}/products/{product.merchant_stockcode}"
+            _Url = f"{self.base_url}/api/storefront/stores/{_StoreID}/products/{product.merchant_stockcode}"
             _Response = _Session.get(_Url)
         return self._translate_offer(IGAProductOffer.model_validate(_Response.json()))
 
@@ -70,7 +56,7 @@ class IGAProvider(IMerchantDataProvider):
         _StoreID = _ConfigurationManager.get_iga_store_id()
 
         with get_cached_session() as _Session:
-            _Url = f'https://www.igashop.com.au/api/storefront/stores/{_StoreID}/search'
+            _Url = f'{self.base_url}/api/storefront/stores/{_StoreID}/search'
             _Params = {
                 'q': search_term[:50],  # no results if query > 50
                 'skip': 0,
@@ -78,7 +64,10 @@ class IGAProvider(IMerchantDataProvider):
             }
 
             _ScrapedProductOffers = []
-            while True:
+            _StartTime = time.time()
+            _MaxAttemptTime = 15  # seconds
+
+            while time.time() - _StartTime < _MaxAttemptTime:
                 _PageSearchResult = _Session.get(_Url, _Params).json()
 
                 if not _PageSearchResult['items']:
@@ -112,7 +101,7 @@ class IGAProvider(IMerchantDataProvider):
             size = str(offer.unitOfSize.size) + offer.unitOfSize.abbreviation,
             size_unit = offer.unitOfSize.abbreviation,
             size_value = float(offer.unitOfSize.size),
-            web_url = f"https://www.igashop.com.au/product/{'-'.join(offer.name.lower().split()) + '-' + offer.productId}"
+            web_url = f"{self.base_url}/product/{'-'.join(offer.name.lower().split()) + '-' + offer.productId}"
         )
 
     #endregion Methods

@@ -14,15 +14,15 @@ from framework.merchant_api.services.iconfiguration_manager import \
 class Config(BaseModel):
     API_HOST: str = "localhost"
     API_PORT: int = 5172
-    DEBUG: bool = True
-    IGA_STORE_ID: int = 52511  # TODO: Should this be set by default?
-    LOG_LEVEL: str = "INFO"
+    IGA_STORE_ID: int = 52511
+    LOG_LEVEL: str = "ERROR"
     MERCHANTS: Dict[str, bool] = {
         SupportedMerchant.ALDI.value: True,
         SupportedMerchant.COLES.value: True,
         SupportedMerchant.IGA.value: True,
         SupportedMerchant.WOOLWORTHS.value: True
     }
+    USE_DEBUG_MODE: bool = True
     USE_RELOADER: bool = False
     WEB_APP_HOST: str = "localhost"
     WEB_APP_PORT: int = 5174
@@ -42,7 +42,7 @@ class ConfigurationManager(IConfigurationManager):
 
     def get_all_merchants(self) -> List[Merchant]:
         return [
-            Merchant(_IsEnabled, SupportedMerchant(_MerchantName))
+            Merchant(is_enabled = _IsEnabled, name = SupportedMerchant(_MerchantName))
             for _MerchantName, _IsEnabled
             in self._config.MERCHANTS.items()
         ]
@@ -52,14 +52,6 @@ class ConfigurationManager(IConfigurationManager):
 
     def get_api_port(self) -> int:
         return self._config.API_PORT
-
-    def get_enabled_merchants(self) -> List[Merchant]:
-        return [
-            Merchant(_IsEnabled, SupportedMerchant(_MerchantName))
-            for _MerchantName, _IsEnabled
-            in self._config.MERCHANTS.items()
-            if _IsEnabled
-        ]
 
     def get_iga_store_id(self) -> int:
         return self._config.IGA_STORE_ID
@@ -94,13 +86,13 @@ class ConfigurationManager(IConfigurationManager):
         return self._config.WEB_APP_PORT
 
     def is_debug_mode_enabled(self) -> bool:
-        return self._config.DEBUG
+        return self._config.USE_DEBUG_MODE
 
     def is_reloader_enabled(self) -> bool:
         return self._config.USE_RELOADER
 
-    def toggle_merchant_enabled_state(self, merchant: Merchant) -> None:
-        self._config.MERCHANTS[merchant.name.value] = not self._config.MERCHANTS[merchant.name.value]
+    def toggle_merchant_enabled_state(self, merchant_name: str) -> None:
+        self._config.MERCHANTS[merchant_name] = not self._config.MERCHANTS[merchant_name]
         self._save_configuration()
 
     def _save_configuration(self) -> None:

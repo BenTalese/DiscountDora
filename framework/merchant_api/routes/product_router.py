@@ -22,20 +22,6 @@ from framework.merchant_api.services.iproduct_image_provider import IProductImag
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
-'''
-REQUIREMENTS:
-    - Can check which sources are healthy/working in the UI
-    - Can turn sources on/off
-    - Periodically check health of sources (also on startup) and skip unhealthy sources when scraping
-
-On navigation to product search, if nothing is configured open a modal to configure settings, or
-    give them a link to the config page (config is part of product search page not its own page maybe?)
-    - If all merchants are disabled -> send user to choose their merchants
-    - This requires us to change the merchant endpoint to grab the enabled merchants, not the supported merchants
-        - May want to have 2 endpoints, one for each option
-
-SEPARATE SETTINGS PAGE (Atif idea)
-'''
 # TODO: Need to more closely inspect items such as fruit and veg for pricing information,
 # see IGA uses whole price, also sometimes it's an "each" pricing
 
@@ -51,15 +37,16 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-    _Logger: logging.Logger = _ServiceProvider.get_service(logging.Logger)
+    _Logger = logging.getLogger(__name__)
     _DataProviders = get_healthy_merchant_data_providers()
     _ScrapedOffers: List[ScrapedProductOffer] = []
 
     _MerchantsToSearch = [
         _Merchant
         for _Merchant
-        in _ConfigurationManager.get_enabled_merchants()
-        if _Merchant.name.value in _RequestBody.merchants_to_search
+        in _ConfigurationManager.get_all_merchants()
+        if _Merchant.is_enabled
+        and _Merchant.name.value in _RequestBody.merchants_to_search
     ]
 
     for _Merchant in _MerchantsToSearch:
@@ -88,8 +75,7 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
 @PRODUCT_ROUTER.route("/offers")
 async def get_product_offers_async():
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _Logger: logging.Logger = _ServiceProvider.get_service(logging.Logger)
+    _Logger = logging.getLogger(__name__)
     _DataProviders = get_healthy_merchant_data_providers()
 
     # TODO: Should MAPI be getting dora products and saving to them, or should the calling code of MAPI be responsible for this?
@@ -120,6 +106,7 @@ async def get_product_offers_async():
                 continue
 
             try:
+                raise Exception("aaaa")
                 if _Offer := _MerchantDataProvider.get_product(_Product):
                     _OffersByProductID[_Product.product_id] = _Offer
                     break

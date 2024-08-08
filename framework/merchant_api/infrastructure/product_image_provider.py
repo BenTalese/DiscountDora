@@ -8,21 +8,20 @@ from framework.merchant_api.services.iproduct_image_provider import \
     IProductImageProvider
 
 
-# TODO: Careful of "no image" products
 class ProductImageProvider(IProductImageProvider):
 
     #region ---------------- Fields ----------------
 
     _cache_folder: PurePath = Path() / ".image_cache"
-    _image_cache: Dict[str, bytes] = {}
+    _image_cache: Dict[str, str] = {}
     _logger: logging.Logger
 
     #endregion Fields
 
     #region ---------------- Constructors ----------------
 
-    def __init__(self, logger: logging.Logger):
-        self._logger = logger
+    def __init__(self):
+        self._logger = logging.getLogger(__name__)
 
         if not Path.exists(self._cache_folder):
             Path.mkdir(self._cache_folder)
@@ -38,7 +37,10 @@ class ProductImageProvider(IProductImageProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_image(self, image_uri: str):
+    def get_image(self, image_uri: str) -> str | None:
+        if not image_uri:
+            return
+
         if image_uri in self._image_cache:
             return self._image_cache[image_uri]
 

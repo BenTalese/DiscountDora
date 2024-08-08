@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 import sys
 from pathlib import Path
@@ -34,11 +35,12 @@ async def startup():
 
     CORS(_App, resources={r'/api/*': {'origins': f'http://{WEB_APP_HOST}:{WEB_APP_PORT}', "allow_headers": ["*", "Content-Type"]}})
 
+    configure_logger(_ConfigurationManager.get_log_level())
     register_routers(_App)
     register_api_infrastructure(_App)
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(data_provider_health_check, IntervalTrigger(days = 1), args = [_ServiceProvider])
+    scheduler.add_job(data_provider_cron_health_check, IntervalTrigger(days = 1), args = [_ServiceProvider])
     scheduler.start()
 
     _App.run(
@@ -47,6 +49,19 @@ async def startup():
         _ConfigurationManager.is_debug_mode_enabled(),
         use_reloader = _ConfigurationManager.is_reloader_enabled()
     )
+
+
+def configure_logger(log_level: int):
+    _LogFolder = Path() / 'logs' / 'merchant_api'
+    if not Path.exists(_LogFolder):
+        Path.mkdir(_LogFolder)
+
+    _Logger = logging.getLogger()
+    _LogFilename = _LogFolder / 'log.txt'
+    _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)
+    _FileHandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
+    _Logger.setLevel(log_level)
+    _Logger.addHandler(_FileHandler)
 
 
 def register_routers(app: Flask):
@@ -58,9 +73,9 @@ def register_api_infrastructure(app: Flask):
     app.register_blueprint(MIDDLEWARE)
 
 
-def data_provider_health_check(service_provider: IServiceProvider):
+def data_provider_cron_health_check(service_provider: IServiceProvider):
     _ConfigurationManager: IConfigurationManager = service_provider.get_service(IConfigurationManager)
-    _Logger: logging.Logger = service_provider.get_service(logging.Logger)
+    _Logger = logging.getLogger(__name__)
     _DataProviders = get_merchant_data_providers()
     _Merchants = _ConfigurationManager.get_all_merchants()
 

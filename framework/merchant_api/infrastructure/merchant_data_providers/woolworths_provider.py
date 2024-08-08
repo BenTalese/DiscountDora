@@ -12,31 +12,17 @@ from framework.merchant_api.domain.entities.woolworths_product_offer import \
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 
 
-class WoolworthsProvider(IMerchantDataProvider):
-
-    #region ---------------- Fields ----------------
-
-    _is_healthy = True
-
-    #endregion Fields
+class WoolworthsProvider(MerchantDataProvider):
 
     #region ---------------- Properties ----------------
 
     @property
     def base_url(self) -> str:
-        return 'https://www.woolworths.com.au/'
-
-    @property
-    def is_healthy(self) -> bool:
-        return self._is_healthy
-
-    @is_healthy.setter
-    def is_healthy(self, val: bool) -> None:
-        self._is_healthy = val
+        return 'https://www.woolworths.com.au'
 
     @property
     def priority(self) -> int:
@@ -54,7 +40,7 @@ class WoolworthsProvider(IMerchantDataProvider):
 
     def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
         with get_cached_session() as _Session:
-            _Url = 'https://www.woolworths.com.au/apis/ui/Search/products'
+            _Url = f'{self.base_url}/apis/ui/Search/products'
             _Body = {
                 'Location': f'/shop/search/products?{urllib.parse.urlencode({"searchTerm": product.merchant_stockcode})}',
                 'PageNumber': 1,
@@ -71,8 +57,8 @@ class WoolworthsProvider(IMerchantDataProvider):
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:
-            _Session.get('https://www.woolworths.com.au')
-            _Url = 'https://www.woolworths.com.au/apis/ui/Search/products'
+            _Session.get(self.base_url)
+            _Url = f'{self.base_url}/apis/ui/Search/products'
             _Body = {
                 'Filters': [],
                 'IsSpecial': False,
@@ -84,7 +70,10 @@ class WoolworthsProvider(IMerchantDataProvider):
             }
 
             _ScrapedProductOffers = []
-            while True:
+            _StartTime = time.time()
+            _MaxAttemptTime = 15  # seconds
+
+            while time.time() - _StartTime < _MaxAttemptTime:
                 _PageSearchResult = _Session.post(_Url, json=_Body).json()
 
                 if not _PageSearchResult['Products']:
@@ -104,7 +93,7 @@ class WoolworthsProvider(IMerchantDataProvider):
                 time.sleep(random.uniform(0, 2))
 
     def _translate_offer(self, offer: WoolworthsProductOffer) -> ScrapedProductOffer:
-        _Value, _Unit = ScrapedProductOffer.get_size(offer.PackageSize)
+        _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.PackageSize)
 
         return ScrapedProductOffer(
             brand = offer.Brand,
@@ -121,7 +110,7 @@ class WoolworthsProvider(IMerchantDataProvider):
             size = offer.PackageSize.upper(),
             size_unit = _Unit or offer.PackageSize.upper(),
             size_value = _Value,
-            web_url = f"https://www.woolworths.com.au/shop/productdetails/{offer.Stockcode}"
+            web_url = f"{self.base_url}/shop/productdetails/{offer.Stockcode}"
         )
 
     #endregion Methods

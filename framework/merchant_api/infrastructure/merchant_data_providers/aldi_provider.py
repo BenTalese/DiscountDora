@@ -72,7 +72,7 @@ class AldiProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         _ProductCategory = next(
             _Category
             for _Category, _ProductNames

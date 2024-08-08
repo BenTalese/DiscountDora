@@ -19,18 +19,18 @@ class SaveOnGroceriesProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
-    _merchant_id_mapping = {
-        SupportedMerchant.ALDI: 1,
-        SupportedMerchant.COLES: 4,
-        SupportedMerchant.IGA: 3,
-        SupportedMerchant.WOOLWORTHS: 2
-    }
-
     _get_merchant_stockcode_func_mapping = {
         SupportedMerchant.ALDI: lambda url: None,
         SupportedMerchant.COLES: lambda url: url.rsplit('/', 1)[-1],
         SupportedMerchant.IGA: lambda url: url.rsplit('-', 1)[-1],
         SupportedMerchant.WOOLWORTHS: lambda url: url.rsplit('/', 2)[-2]
+    }
+
+    _merchant_id_mapping = {
+        SupportedMerchant.ALDI: 1,
+        SupportedMerchant.COLES: 4,
+        SupportedMerchant.IGA: 3,
+        SupportedMerchant.WOOLWORTHS: 2
     }
 
     #endregion Fields
@@ -58,8 +58,19 @@ class SaveOnGroceriesProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
-        pass
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
+        with get_cached_session() as _Session:
+            _ShopID = self._merchant_id_mapping.get(product.merchant_name)
+            _Url = f'{self.base_url}/search-in-store?query={product.name}&shop_id={_ShopID}&page={1}'
+            _PageSearchResult = _Session.get(_Url).json()['products']['data']
+
+            if not _PageSearchResult:
+                return None
+
+            return self._translate_offer(
+                SaveOnGroceriesProductOffer.model_validate(_PageSearchResult[0]),
+                product.merchant_name
+            )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:

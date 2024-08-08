@@ -1,4 +1,3 @@
-import logging
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify
 
@@ -12,10 +11,6 @@ MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/mercha
 async def get_all_merchants_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-    x: logging.Logger = _ServiceProvider.get_service(logging.Logger)
-    x.exception("aaaa")
-    y = logging.getLogger()
-    y.exception("eee")
     return jsonify([
         {
             "is_enabled": _Merchant.is_enabled,

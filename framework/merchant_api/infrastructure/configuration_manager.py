@@ -30,7 +30,7 @@ class Config(BaseModel):
 
 class ConfigurationManager(IConfigurationManager):
     _config: Config
-    _config_path: str = Path(__file__).parent.parent / 'appsettings.json'
+    _config_path: Path = Path(__file__).parent.parent / 'appsettings.json'
 
     def __init__(self):
         if not Path.exists(self._config_path):

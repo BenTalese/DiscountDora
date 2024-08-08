@@ -38,7 +38,7 @@ class WoolworthsProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         with get_cached_session() as _Session:
             _Url = f'{self.base_url}/apis/ui/Search/products'
             _Body = {
@@ -50,6 +50,9 @@ class WoolworthsProvider(MerchantDataProvider):
             }
 
             _PageSearchResult = _Session.post(_Url, json=_Body).json()
+
+            if not _PageSearchResult['Products']:
+                return None
 
             return self._translate_offer(
                 WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])

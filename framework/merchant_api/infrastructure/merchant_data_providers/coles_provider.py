@@ -40,7 +40,7 @@ class ColesProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         with get_cached_session() as _Session:
             _Response = _Session.get(self.base_url)
             _Soup = BeautifulSoup(_Response.text, features="html.parser")

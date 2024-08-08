@@ -33,7 +33,7 @@ class GrocerizeProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         pass
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:

@@ -48,7 +48,7 @@ class MerchantDataProvider(ABC):
     #region ---------------- Methods ----------------
 
     @abstractmethod
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         pass
 
     @abstractmethod

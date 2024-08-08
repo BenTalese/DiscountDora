@@ -40,15 +40,19 @@ class IGAProvider(MerchantDataProvider):
 
     #region ---------------- Methods ----------------
 
-    def get_product(self, product: DoraProduct) -> ScrapedProductOffer:
+    def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         _ServiceProvider: IServiceProvider = current_app.service_provider
         _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
         _StoreID = _ConfigurationManager.get_iga_store_id()
 
         with get_cached_session() as _Session:
             _Url = f"{self.base_url}/api/storefront/stores/{_StoreID}/products/{product.merchant_stockcode}"
-            _Response = _Session.get(_Url)
-        return self._translate_offer(IGAProductOffer.model_validate(_Response.json()))
+            _Response = _Session.get(_Url).json()
+
+            if not _Response:
+                return None
+
+            return self._translate_offer(IGAProductOffer.model_validate(_Response))
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         _ServiceProvider: IServiceProvider = current_app.service_provider

@@ -6,19 +6,21 @@ from clapy import IServiceProvider
 from flask import current_app
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.iga_product_offer import IGAProductOffer
+from framework.merchant_api.domain.entities.iga_product_offer import \
+    IGAProductOffer
 from framework.merchant_api.domain.entities.merchant import Merchant
 from framework.merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.iconfiguration_manager import IConfigurationManager
-from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
-    MerchantDataProvider
+from framework.merchant_api.services.iconfiguration_manager import \
+    IConfigurationManager
+from framework.merchant_api.services.imerchant_data_provider import \
+    IMerchantDataProvider
 
 
-class IGAProvider(MerchantDataProvider):
+class IGAProvider(IMerchantDataProvider):
 
     #region ---------------- Properties ----------------
 

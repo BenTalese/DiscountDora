@@ -7,7 +7,7 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 
 
-class MerchantDataProvider(ABC):
+class IMerchantDataProvider(ABC):
 
     #region ---------------- Fields ----------------
 

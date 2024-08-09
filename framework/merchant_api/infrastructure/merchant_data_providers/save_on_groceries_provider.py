@@ -11,11 +11,11 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
-    MerchantDataProvider
+from framework.merchant_api.services.imerchant_data_provider import \
+    IMerchantDataProvider
 
 
-class SaveOnGroceriesProvider(MerchantDataProvider):
+class SaveOnGroceriesProvider(IMerchantDataProvider):
 
     #region ---------------- Fields ----------------
 

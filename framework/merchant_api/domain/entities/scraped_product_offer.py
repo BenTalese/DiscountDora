@@ -1,3 +1,4 @@
+import logging
 import re
 from dataclasses import dataclass, field
 
@@ -35,4 +36,5 @@ class ScrapedProductOffer:
             return _Value, _Unit
 
         else:
+            logging.getLogger(__name__).warning(f"Unable to extract value and unit from size {size}.")
             return None, None

@@ -107,19 +107,21 @@ class AldiProvider(IMerchantDataProvider):
 
         return _ScrapedProductOffers
 
-    def _is_similar_string(self, string1: str, string2: str) -> int:
+    def _is_similar_string(self, comparison_string: str, string_to_match: str) -> bool:
         _MinimumSimilarity = 70
-        _String1Words = string2.lower().split()
-        _String2Words = string1.lower().split()
+        _String1Words = comparison_string.lower().split()
+        _String2Words = string_to_match.lower().split()
         _Score = 0
+        _MatchedWords = set()
 
-        for _String2Word in _String2Words:
-            for _String1Word in _String1Words:
-                _Similarity = fuzz.ratio(_String2Word, _String1Word)
-                if _Similarity >= _MinimumSimilarity:
+        for _Word1 in _String1Words:
+            for _Word2 in _String2Words:
+                _Similarity = fuzz.ratio(_Word1, _Word2)
+                if _Similarity >= _MinimumSimilarity and _Word2 not in _MatchedWords:
                     _Score += _Similarity
+                    _MatchedWords.add(_Word2)
 
-        _MinimumScore = len(string2.split()) * _MinimumSimilarity
+        _MinimumScore = len(_String2Words) * _MinimumSimilarity
 
         if _Score >= _MinimumScore:
             return True
@@ -208,4 +210,3 @@ class AldiProvider(IMerchantDataProvider):
         self._cached_offers_last_updated_by_category[category] = datetime.now()
 
     #endregion Methods
-

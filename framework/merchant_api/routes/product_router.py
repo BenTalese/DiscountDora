@@ -49,6 +49,7 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
         and _Merchant.name.value in _RequestBody.merchants_to_search
     ]
 
+    _Offers: List[ScrapedProductOffer] = []
     for _Merchant in _MerchantsToSearch:
 
         for _MerchantDataProvider in _DataProviders:

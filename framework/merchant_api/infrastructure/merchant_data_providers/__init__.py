@@ -15,7 +15,6 @@ def get_merchant_data_providers() -> List[IMerchantDataProvider]:
         _ServiceProvider.get_service(_Provider)
         for _Provider
         in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers')
-        if type(_Provider) is not IMerchantDataProvider
     ]
 
     _DataProviders.sort(key = lambda mdp: mdp.priority)

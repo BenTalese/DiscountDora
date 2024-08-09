@@ -23,15 +23,12 @@ class IMerchantDataProvider(ABC):
         pass
 
     @property
-    @abstractmethod
     def is_healthy(self) -> bool:
         return self._is_healthy
 
     @is_healthy.setter
-    @abstractmethod
     def is_healthy(self, val: bool) -> None:
         self._is_healthy = val
-        pass
 
     @property
     @abstractmethod
@@ -51,7 +48,6 @@ class IMerchantDataProvider(ABC):
     def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         pass
 
-    @abstractmethod
     def is_merchant_supported(self, merchant: Merchant) -> bool:
         return merchant.name in self.supported_merchants
 

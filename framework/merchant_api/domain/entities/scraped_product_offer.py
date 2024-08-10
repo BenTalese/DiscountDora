@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 @dataclass
 class ScrapedProductOffer:
     brand: str
-    image: str | None
     image_uri: str
+    image: str | None
     is_available: bool
     merchant_name: str
     merchant_stockcode: str
@@ -16,9 +16,9 @@ class ScrapedProductOffer:
     price_now: float
     price_per_cup: str | None
     price_was: float
-    size: str
     size_unit: str | None
     size_value: float | None
+    size: str
     web_url: str
 
     def __post_init__(self):

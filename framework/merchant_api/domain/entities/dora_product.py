@@ -15,7 +15,7 @@ class DoraProduct:
     price_now: float
     price_was: float
     product_id: UUID
-    size: str
     size_unit: str
     size_value: float
+    size: str
     web_url: str

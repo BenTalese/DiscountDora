@@ -11,7 +11,7 @@
 
     <div v-show="showFiltersContainer" class="no-wrap row q-pa-sm scroll scrollbar-none">
 
-        <select-component label="Stores" :multiple="true" :options="merchantStore.merchants"
+        <select-component label="Stores" :multiple="true" :options="merchantStore.merchants.filter(m => m.is_enabled)"
             :option-label="getStoresOptionLabel" :model-value="productStore.productSearchOfferFilters.stores"
             @update:model-value="productStore.setProductSearchStoresFilter" :optionIconName="getStoresOptionIcon" />
 

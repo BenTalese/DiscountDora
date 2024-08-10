@@ -1,13 +1,15 @@
 import json
+import logging
 import random
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, ResultSet
 from fuzzywuzzy import fuzz
+from pydantic import ValidationError
 
 from domain.entities.merchant import Merchant
 from framework.merchant_api.domain.entities.aldi_product_offer import \
@@ -30,6 +32,8 @@ class AldiProvider(IMerchantDataProvider):
     _cached_offers_by_category: Dict[str, List[ScrapedProductOffer]] = {}
 
     _cached_offers_last_updated_by_category: Dict[str, datetime] = {}
+
+    _logger = logging.getLogger(__name__)
 
     #endregion Fields
 
@@ -107,6 +111,12 @@ class AldiProvider(IMerchantDataProvider):
 
         return _ScrapedProductOffers
 
+    def _extract_from_html(self, html: ResultSet[Any], element: str, cls: str, default_value: Any):
+        if _Value := html.find(element, class_=cls):
+            return _Value.text.strip()
+        else:
+            return default_value
+
     def _is_similar_string(self, comparison_string: str, string_to_match: str) -> bool:
         _MinimumSimilarity = 70
         _String1Words = comparison_string.lower().split()
@@ -183,30 +193,31 @@ class AldiProvider(IMerchantDataProvider):
         self._cached_offers_by_category[category].clear()
 
         for _ProductSearchResult in _PageSearchResult:
-            self._cached_offers_by_category[category].append(
-                self._translate_offer(
-                    AldiProductOffer(
-                        amount = _ProductSearchResult.find('span', class_='box--amount').text.strip()
-                            if _ProductSearchResult.find('span', class_='box--amount') else "",
-                        current_price_decimal = _ProductSearchResult.find('span', class_='box--decimal').text.strip()
-                            if _ProductSearchResult.find('span', class_='box--decimal') else "0",
-                        current_price_value = _ProductSearchResult.find('span', class_='box--value').text.strip()
-                            if _ProductSearchResult.find('span', class_='box--value') else "0",
-                        description = _ProductSearchResult.find('div', class_='box--description--header').text.strip()
-                            if _ProductSearchResult.find('div', class_='box--description--header') else "",
-                        former_price = _ProductSearchResult.find('span', class_='box--former-price').text.strip()
-                            if _ProductSearchResult.find('span', class_='box--former-price') else "0",
-                        image_uri = _ProductSearchResult.find('img')['src'].strip()
-                            if _ProductSearchResult.find('img') else None,
-                        product_url = _ProductSearchResult['href'].strip()
-                            if _ProductSearchResult['href'] else None,
-                        unit_price = _ProductSearchResult.find('span', class_='box--baseprice').text.strip()
-                            if _ProductSearchResult.find('span', class_='box--baseprice') else "",
+            try:
+                self._cached_offers_by_category[category].append(
+                    self._translate_offer(
+                        AldiProductOffer(
+                            amount = self._extract_from_html(_ProductSearchResult, 'span', 'box--amount', ""),
+                            current_price_decimal = self._extract_from_html(_ProductSearchResult, 'span', 'box--decimal', "0"),
+                            current_price_value = self._extract_from_html(_ProductSearchResult, 'span', 'box--value', "0"),
+                            description = self._extract_from_html(_ProductSearchResult, 'div', 'box--description--header', ""),
+                            former_price = self._extract_from_html(_ProductSearchResult, 'span', 'box--former-price', "0"),
+                            image_uri = _ProductSearchResult.find('img')['src'].strip()
+                                if _ProductSearchResult.find('img') else None,
+                            product_url = _ProductSearchResult['href'].strip()
+                                if _ProductSearchResult['href'] else None,
+                            unit_price = self._extract_from_html(_ProductSearchResult, 'span', 'box--baseprice', "")
+                        )
                     )
                 )
-            )
 
-        time.sleep(random.uniform(0, 2))
+            except ValidationError as e:
+                for _Error in e.errors():
+                    self._logger.exception(
+                        f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                    )
+
+        time.sleep(random.uniform(0, self._max_backoff_time_seconds))
         self._cached_offers_last_updated_by_category[category] = datetime.now()
 
     #endregion Methods

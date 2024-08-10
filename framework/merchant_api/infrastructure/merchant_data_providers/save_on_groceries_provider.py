@@ -1,6 +1,9 @@
+import logging
 import random
 import time
 from typing import List
+
+from pydantic import ValidationError
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
 from framework.merchant_api.domain.entities.merchant import Merchant
@@ -26,6 +29,8 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
         SupportedMerchant.WOOLWORTHS: lambda url: url.rsplit('/', 2)[-2]
     }
 
+    _logger = logging.getLogger(__name__)
+
     _merchant_id_mapping = {
         SupportedMerchant.ALDI: 1,
         SupportedMerchant.COLES: 4,
@@ -43,7 +48,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
 
     @property
     def priority(self) -> int:
-        return 5
+        return 10
 
     @property
     def supported_merchants(self) -> List[str]:
@@ -67,41 +72,54 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             if not _PageSearchResult:
                 return None
 
-            return self._translate_offer(
-                SaveOnGroceriesProductOffer.model_validate(_PageSearchResult[0]),
-                product.merchant_name
-            )
+            try:
+                return self._translate_offer(
+                    SaveOnGroceriesProductOffer.model_validate(_PageSearchResult[0]),
+                    product.merchant_name
+                )
+
+            except ValidationError as e:
+                for _Error in e.errors():
+                    self._logger.exception(
+                        f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                    )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
+        _Page = 1
+        _ShopID = self._merchant_id_mapping.get(merchant.name)
+        _Url = f'{self.base_url}/search-in-store?query={search_term}&shop_id={_ShopID}&page={_Page}'
+
+        _ScrapedProductOffers: List[ScrapedProductOffer] = []
+        _StartTime = time.time()
+
         with get_cached_session() as _Session:
-            _Page = 1
-            _ShopID = self._merchant_id_mapping.get(merchant.name)
-            _Url = f'{self.base_url}/search-in-store?query={search_term}&shop_id={_ShopID}&page={_Page}'
-
-            _ScrapedProductOffers = []
-            _StartTime = time.time()
-            _MaxAttemptTime = 15  # seconds
-
-            while time.time() - _StartTime < _MaxAttemptTime:
+            while time.time() - _StartTime < self._max_attempt_time_seconds:
                 _PageSearchResult = _Session.get(_Url).json()['products']['data']
 
                 if not _PageSearchResult:
                     return _ScrapedProductOffers
 
                 for _ProductSearchResult in _PageSearchResult:
-                    _ScrapedProductOffers.append(
-                        self._translate_offer(
-                            SaveOnGroceriesProductOffer.model_validate(_ProductSearchResult),
-                            merchant.name
+                    try:
+                        _ScrapedProductOffers.append(
+                            self._translate_offer(
+                                SaveOnGroceriesProductOffer.model_validate(_ProductSearchResult),
+                                merchant.name
+                            )
                         )
-                    )
+
+                    except ValidationError as e:
+                        for _Error in e.errors():
+                            self._logger.exception(
+                                f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                            )
 
                     if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
                 _Page += 1
-                _Url[:-1] + ''
-                time.sleep(random.uniform(0, 2))
+                _Url[:-1] + str(_Page)
+                time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
     def _translate_offer(self, offer: SaveOnGroceriesProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.product_package_size)
@@ -116,7 +134,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             name = offer.name,
             price_now = offer.price,
             price_per_cup = offer.product_price_per_amount,
-            price_was = offer.price - offer.product_price_saving,
+            price_was = offer.price + offer.product_price_saving,
             size = offer.product_package_size.upper(),
             size_unit = _Unit or offer.product_package_size.upper(),
             size_value = _Value,

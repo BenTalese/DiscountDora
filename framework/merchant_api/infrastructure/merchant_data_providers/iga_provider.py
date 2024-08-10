@@ -1,9 +1,11 @@
+import logging
 import random
 import time
 from typing import List
 
 from clapy import IServiceProvider
 from flask import current_app
+from pydantic import ValidationError
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
 from framework.merchant_api.domain.entities.iga_product_offer import \
@@ -21,6 +23,12 @@ from framework.merchant_api.services.imerchant_data_provider import \
 
 
 class IGAProvider(IMerchantDataProvider):
+
+    #region ---------------- Fields ----------------
+
+    _logger = logging.getLogger(__name__)
+
+    #endregion Fields
 
     #region ---------------- Properties ----------------
 
@@ -54,43 +62,56 @@ class IGAProvider(IMerchantDataProvider):
             if not _Response:
                 return None
 
-            return self._translate_offer(IGAProductOffer.model_validate(_Response))
+            try:
+                return self._translate_offer(IGAProductOffer.model_validate(_Response))
+
+            except ValidationError as e:
+                for _Error in e.errors():
+                    self._logger.exception(
+                        f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                    )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         _ServiceProvider: IServiceProvider = current_app.service_provider
         _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
         _StoreID = _ConfigurationManager.get_iga_store_id()
 
+        _Url = f'{self.base_url}/api/storefront/stores/{_StoreID}/search'
+        _Params = {
+            'q': search_term[:50],  # no results if query > 50
+            'skip': 0,
+            'take': result_limit
+        }
+
+        _ScrapedProductOffers: List[ScrapedProductOffer] = []
+        _StartTime = time.time()
+
         with get_cached_session() as _Session:
-            _Url = f'{self.base_url}/api/storefront/stores/{_StoreID}/search'
-            _Params = {
-                'q': search_term[:50],  # no results if query > 50
-                'skip': 0,
-                'take': result_limit
-            }
-
-            _ScrapedProductOffers = []
-            _StartTime = time.time()
-            _MaxAttemptTime = 15  # seconds
-
-            while time.time() - _StartTime < _MaxAttemptTime:
+            while time.time() - _StartTime < self._max_attempt_time_seconds:
                 _PageSearchResult = _Session.get(_Url, _Params).json()
 
                 if not _PageSearchResult['items']:
                     return _ScrapedProductOffers
 
                 for _ProductSearchResult in _PageSearchResult['items']:
-                    _ScrapedProductOffers.append(
-                        self._translate_offer(
-                            IGAProductOffer.model_validate(_ProductSearchResult)
+                    try:
+                        _ScrapedProductOffers.append(
+                            self._translate_offer(
+                                IGAProductOffer.model_validate(_ProductSearchResult)
+                            )
                         )
-                    )
+
+                    except ValidationError as e:
+                        for _Error in e.errors():
+                            self._logger.exception(
+                                f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                            )
 
                     if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
                 _Params['skip'] += _Params['take']
-                time.sleep(random.uniform(0, 2))
+                time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
     def _translate_offer(self, offer: IGAProductOffer) -> ScrapedProductOffer:
         return ScrapedProductOffer(

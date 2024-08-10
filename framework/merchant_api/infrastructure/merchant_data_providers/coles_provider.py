@@ -1,9 +1,11 @@
 import json
+import logging
 import random
 import time
 from typing import List
 
 from bs4 import BeautifulSoup
+from pydantic import ValidationError
 
 from domain.entities.merchant import Merchant
 from framework.merchant_api.domain.entities.coles_product_offer import \
@@ -19,6 +21,12 @@ from framework.merchant_api.services.imerchant_data_provider import \
 
 
 class ColesProvider(IMerchantDataProvider):
+
+    #region ---------------- Fields ----------------
+
+    _logger = logging.getLogger(__name__)
+
+    #endregion Fields
 
     #region ---------------- Properties ----------------
 
@@ -55,7 +63,14 @@ class ColesProvider(IMerchantDataProvider):
             _PageSearchResult = _Session.get(_Url, _Params).json()['pageProps']['searchResults']
             for _ProductSearchResult in _PageSearchResult['results']:
                 if _ProductSearchResult['_type'] == "PRODUCT" and str(_ProductSearchResult["id"]) == product.merchant_stockcode:
-                    return self._translate_offer(ColesProductOffer.model_validate(_ProductSearchResult))
+                    try:
+                        return self._translate_offer(ColesProductOffer.model_validate(_ProductSearchResult))
+
+                    except ValidationError as e:
+                        for _Error in e.errors():
+                            self._logger.exception(
+                                f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                            )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:
@@ -71,9 +86,8 @@ class ColesProvider(IMerchantDataProvider):
 
             _ScrapedProductOffers: List[ScrapedProductOffer] = []
             _StartTime = time.time()
-            _MaxAttemptTime = 15  # seconds
 
-            while time.time() - _StartTime < _MaxAttemptTime:
+            while time.time() - _StartTime < self._max_attempt_time_seconds:
                 _PageSearchResult = _Session.get(_Url, _Params).json()['pageProps']['searchResults']
 
                 if not _PageSearchResult['results']:
@@ -81,17 +95,24 @@ class ColesProvider(IMerchantDataProvider):
 
                 for _ProductSearchResult in _PageSearchResult['results']:
                     if _ProductSearchResult['_type'] == "PRODUCT":
-                        _ScrapedProductOffers.append(
-                            self._translate_offer(
-                                ColesProductOffer.model_validate(_ProductSearchResult)
+                        try:
+                            _ScrapedProductOffers.append(
+                                self._translate_offer(
+                                    ColesProductOffer.model_validate(_ProductSearchResult)
+                                )
                             )
-                        )
+
+                        except ValidationError as e:
+                            for _Error in e.errors():
+                                self._logger.exception(
+                                    f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                                )
 
                     if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
                 _Params['page'] += 1
-                time.sleep(random.uniform(0, 2))
+                time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
     def _translate_offer(self, offer: ColesProductOffer) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.size)

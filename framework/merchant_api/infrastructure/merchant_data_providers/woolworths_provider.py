@@ -1,7 +1,10 @@
+import logging
 import random
 import time
 import urllib.parse
 from typing import List
+
+from pydantic import ValidationError
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
 from framework.merchant_api.domain.entities.merchant import Merchant
@@ -17,6 +20,12 @@ from framework.merchant_api.services.imerchant_data_provider import \
 
 
 class WoolworthsProvider(IMerchantDataProvider):
+
+    #region ---------------- Fields ----------------
+
+    _logger = logging.getLogger(__name__)
+
+    #endregion Fields
 
     #region ---------------- Properties ----------------
 
@@ -54,9 +63,16 @@ class WoolworthsProvider(IMerchantDataProvider):
             if not _PageSearchResult['Products']:
                 return None
 
-            return self._translate_offer(
-                WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
-            )
+            try:
+                return self._translate_offer(
+                    WoolworthsProductOffer.model_construct(**_PageSearchResult['Products'][0]['Products'][0])
+                )
+
+            except ValidationError as e:
+                for _Error in e.errors():
+                    self._logger.exception(
+                        f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                    )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         with get_cached_session() as _Session:
@@ -72,28 +88,34 @@ class WoolworthsProvider(IMerchantDataProvider):
                 'SortType': "TraderRelevance"
             }
 
-            _ScrapedProductOffers = []
+            _ScrapedProductOffers: List[ScrapedProductOffer] = []
             _StartTime = time.time()
-            _MaxAttemptTime = 15  # seconds
 
-            while time.time() - _StartTime < _MaxAttemptTime:
+            while time.time() - _StartTime < self._max_attempt_time_seconds:
                 _PageSearchResult = _Session.post(_Url, json=_Body).json()
 
                 if not _PageSearchResult['Products']:
                     return _ScrapedProductOffers
 
                 for _ProductSearchResult in _PageSearchResult['Products']:
-                    _ScrapedProductOffers.append(
-                        self._translate_offer(
-                            WoolworthsProductOffer.model_construct(**_ProductSearchResult['Products'][0])
+                    try:
+                        _ScrapedProductOffers.append(
+                            self._translate_offer(
+                                WoolworthsProductOffer.model_construct(**_ProductSearchResult['Products'][0])
+                            )
                         )
-                    )
+
+                    except ValidationError as e:
+                        for _Error in e.errors():
+                            self._logger.exception(
+                                f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
+                            )
 
                     if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
                 _Body['PageNumber'] += 1
-                time.sleep(random.uniform(0, 2))
+                time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
     def _translate_offer(self, offer: WoolworthsProductOffer) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.PackageSize)

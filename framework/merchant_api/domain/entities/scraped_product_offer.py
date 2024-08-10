@@ -17,8 +17,8 @@ class ScrapedProductOffer:
     price_per_cup: str | None
     price_was: float
     size: str
-    size_unit: str
-    size_value: float
+    size_unit: str | None
+    size_value: float | None
     web_url: str
 
     def __post_init__(self):

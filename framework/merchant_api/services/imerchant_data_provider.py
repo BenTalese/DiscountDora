@@ -11,7 +11,11 @@ class IMerchantDataProvider(ABC):
 
     #region ---------------- Fields ----------------
 
-    _is_healthy = True
+    _is_healthy: bool = True
+
+    _max_backoff_time_seconds: int = 2
+
+    _max_attempt_time_seconds: int = 15
 
     #endregion Fields
 

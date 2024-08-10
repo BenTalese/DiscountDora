@@ -22,9 +22,6 @@ from framework.merchant_api.services.iproduct_image_provider import IProductImag
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
-# TODO: Need to more closely inspect items such as fruit and veg for pricing information,
-# see IGA uses whole price, also sometimes it's an "each" pricing
-
 
 @PRODUCT_ROUTER.route("/search", methods = ["POST"])
 async def search_for_product_async() -> List[ScrapedProductOffer]:
@@ -79,14 +76,11 @@ async def get_product_offers_async():
     _Logger = logging.getLogger(__name__)
     _DataProviders = get_healthy_merchant_data_providers()
 
-    # TODO: Should MAPI be getting dora products and saving to them, or should the calling code of MAPI be responsible for this?
     _SavedProducts = [
         DoraProduct(**_Product)
         for _Product
         in requests.get("http://127.0.0.1:5170/api/products").json()
     ]
-
-    # TODO: Can any of this be cached? If product offer grabbed in the last week?
 
     _OffersByProductID: Dict[UUID, ScrapedProductOffer] = {}
 
@@ -107,12 +101,11 @@ async def get_product_offers_async():
                 continue
 
             try:
-                raise Exception("aaaa")
                 if _Offer := _MerchantDataProvider.get_product(_Product):
                     _OffersByProductID[_Product.product_id] = _Offer
                     break
 
-            except Exception as e:  # TODO: Double check logger is actually logging, saw it not working
+            except Exception as e:
                 _MerchantDataProvider.is_healthy = False
                 _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
                                   f" Product: {_Product.name}. Merchant: {_Merchant}", e)

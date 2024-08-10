@@ -78,6 +78,7 @@ def data_provider_cron_health_check(service_provider: IServiceProvider):
     _Logger = logging.getLogger(__name__)
     _DataProviders = get_merchant_data_providers()
     _Merchants = _ConfigurationManager.get_all_merchants()
+    _Logger.info("Running health check for merchant data providers.")
 
     for _MerchantDataProvider in _DataProviders:
 
@@ -88,6 +89,9 @@ def data_provider_cron_health_check(service_provider: IServiceProvider):
                 1)
 
             _MerchantDataProvider.is_healthy = bool(_Offers)
+            _Logger.info(
+                f"Merchant Data Provider '{_MerchantDataProvider.base_url}' is {'HEALTHY' if _MerchantDataProvider.is_healthy else 'NOT HEALTHY'}."
+            )
 
         except Exception as e:
             _MerchantDataProvider.is_healthy = False

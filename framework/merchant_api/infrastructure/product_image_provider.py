@@ -47,19 +47,14 @@ class ProductImageProvider(IProductImageProvider):
         try:
             with get_cached_session() as _Session:
                 _Response = _Session.get(image_uri)
-
-            if _Response.status_code == 200:
                 _RawImageData = _Response.content
                 _ImageData = b64encode(_Response.content).decode('utf-8')
                 self._image_cache[image_uri] = _ImageData
                 self._save_image_to_cache(image_uri, _RawImageData)
                 return _ImageData
 
-            else:
-                _Response.raise_for_status()
-
-        except Exception as e:
-            self._logger.exception(f"Encountered a problem grabbing image for product with image URI: {image_uri}", e)
+        except Exception:
+            self._logger.exception(f"Encountered a problem grabbing image for product with image URI: {image_uri}")
 
     def _get_image_uri_from_filename(self, filename: str):
         return filename.replace("_", "/")

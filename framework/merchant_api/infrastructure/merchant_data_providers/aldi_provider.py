@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup, ResultSet
-from fuzzywuzzy import fuzz
 from pydantic import ValidationError
 
 from domain.entities.merchant import Merchant
@@ -19,6 +18,7 @@ from framework.merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
+from framework.merchant_api.infrastructure.similarity import is_similar_phrase
 from framework.merchant_api.services.imerchant_data_provider import \
     IMerchantDataProvider
 
@@ -33,7 +33,9 @@ class AldiProvider(IMerchantDataProvider):
 
     _cached_offers_last_updated_by_category: Dict[str, datetime] = {}
 
-    _logger = logging.getLogger(__name__)
+    _logger: logging.Logger = logging.getLogger(__name__)
+
+    _similarity_threshold: int = 70
 
     #endregion Fields
 
@@ -103,7 +105,7 @@ class AldiProvider(IMerchantDataProvider):
                 self._update_category_cache(_Category)
 
             for _Offer in self._cached_offers_by_category[_Category]:
-                if self._is_similar_string(_Offer.name, search_term):
+                if is_similar_phrase(search_term, _Offer.name, self._similarity_threshold):
                     _ScrapedProductOffers.append(_Offer)
 
                 if len(_ScrapedProductOffers) >= result_limit:
@@ -117,27 +119,6 @@ class AldiProvider(IMerchantDataProvider):
         else:
             return default_value
 
-    def _is_similar_string(self, comparison_string: str, string_to_match: str) -> bool:
-        _MinimumSimilarity = 70
-        _String1Words = comparison_string.lower().split()
-        _String2Words = string_to_match.lower().split()
-        _Score = 0
-        _MatchedWords = set()
-
-        for _Word1 in _String1Words:
-            for _Word2 in _String2Words:
-                _Similarity = fuzz.ratio(_Word1, _Word2)
-                if _Similarity >= _MinimumSimilarity and _Word2 not in _MatchedWords:
-                    _Score += _Similarity
-                    _MatchedWords.add(_Word2)
-
-        _MinimumScore = len(_String2Words) * _MinimumSimilarity
-
-        if _Score >= _MinimumScore:
-            return True
-
-        return False
-
     def _get_relevant_categories_to_search(self, search_term: str) -> List[str]:
         _CategoriesWithRelevancyScore: List[Tuple[str, int]] = []
         for _Category in self._aldi_product_names_by_category.keys():
@@ -145,7 +126,7 @@ class AldiProvider(IMerchantDataProvider):
             _RelevancyScore = 0
 
             for _ProductName in _ProductsInCategory:
-                if self._is_similar_string(_ProductName, search_term):
+                if is_similar_phrase(search_term, _ProductName, self._similarity_threshold):
                     _RelevancyScore += 1
 
             if _RelevancyScore > 0:

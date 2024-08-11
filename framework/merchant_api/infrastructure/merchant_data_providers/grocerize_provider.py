@@ -90,7 +90,7 @@ class GrocerizeProvider(IMerchantDataProvider):
             while time.time() - _StartTime < self._max_attempt_time_seconds:
                 _PageSearchResult = _Session.get(_Url).json()
 
-                if not _PageSearchResult:
+                if not _PageSearchResult or not _PageSearchResult['items']:
                     return _ScrapedProductOffers
 
                 for _ProductSearchResult in _PageSearchResult['items']:
@@ -117,6 +117,9 @@ class GrocerizeProvider(IMerchantDataProvider):
 
                 _Page += 1
                 time.sleep(random.uniform(0, self._max_backoff_time_seconds))
+
+            self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
+            return _ScrapedProductOffers
 
     def _translate_offers(self, offer_grouping: GrocerizeProductOffer) -> List[ScrapedProductOffer]:
         _VendorOffers: List[ScrapedProductOffer] = []

@@ -121,6 +121,9 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
                 _Url[:-1] + str(_Page)
                 time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
+            self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
+            return _ScrapedProductOffers
+
     def _translate_offer(self, offer: SaveOnGroceriesProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.product_package_size)
 

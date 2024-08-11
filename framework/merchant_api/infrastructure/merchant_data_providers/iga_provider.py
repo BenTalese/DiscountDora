@@ -113,6 +113,9 @@ class IGAProvider(IMerchantDataProvider):
                 _Params['skip'] += _Params['take']
                 time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
+            self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
+            return _ScrapedProductOffers
+
     def _translate_offer(self, offer: IGAProductOffer) -> ScrapedProductOffer:
         return ScrapedProductOffer(
             brand = offer.brand,

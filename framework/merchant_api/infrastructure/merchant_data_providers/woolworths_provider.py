@@ -117,6 +117,9 @@ class WoolworthsProvider(IMerchantDataProvider):
                 _Body['PageNumber'] += 1
                 time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
+            self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
+            return _ScrapedProductOffers
+
     def _translate_offer(self, offer: WoolworthsProductOffer) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.PackageSize)
 

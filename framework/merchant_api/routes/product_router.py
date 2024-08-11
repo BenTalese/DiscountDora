@@ -16,9 +16,12 @@ from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from framework.merchant_api.infrastructure.merchant_data_providers import \
     get_healthy_merchant_data_providers
+from framework.merchant_api.infrastructure.similarity import \
+    get_similarity_score
 from framework.merchant_api.services.iconfiguration_manager import \
     IConfigurationManager
-from framework.merchant_api.services.iproduct_image_provider import IProductImageProvider
+from framework.merchant_api.services.iproduct_image_provider import \
+    IProductImageProvider
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
@@ -46,7 +49,14 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
         and _Merchant.name.value in _RequestBody.merchants_to_search
     ]
 
-    _Offers: List[ScrapedProductOffer] = []
+    '''
+        - Duplicates:
+            - May need to not add if 100% match on name and merchant already scraped, or
+            - Limit grocerize so it only scrapes one or the other
+        - UI: Have yellow info thing at top to explain search is slower the more stores you select
+            - Show if nothing searched yet (no scraped products)
+    '''
+
     for _Merchant in _MerchantsToSearch:
 
         for _MerchantDataProvider in _DataProviders:
@@ -59,13 +69,20 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
                     _ScrapedOffers.extend(_Offers)
                     break
 
-            except Exception as e:
+            except Exception:
                 _MerchantDataProvider.is_healthy = False
-                _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
-                                  f" Search term: {_RequestBody.search_term}. Merchant: {_Merchant.name.value}", e)
+                _Logger.exception(f"Merchant data provider '{_MerchantDataProvider.base_url}' encountered a problem,"
+                                  f" search term: '{_RequestBody.search_term}', merchant: '{_Merchant.name.value}'.")
+
+    _ScrapedOffers = sorted(
+        _ScrapedOffers,
+        key=lambda _Offer: get_similarity_score(_Offer.name, _RequestBody.search_term, 70),
+        reverse=True
+    )
 
     _ProductImageProvider: IProductImageProvider = _ServiceProvider.get_service(IProductImageProvider)
-    for _Offer in _Offers:
+    for _Offer in _ScrapedOffers:
+        print(_Offer.name)
         _Offer.image = _ProductImageProvider.get_image(_Offer.image_uri)
 
     return jsonify(_ScrapedOffers)
@@ -105,10 +122,10 @@ async def get_product_offers_async():
                     _OffersByProductID[_Product.product_id] = _Offer
                     break
 
-            except Exception as e:
+            except Exception:
                 _MerchantDataProvider.is_healthy = False
                 _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
-                                  f" Product: {_Product.name}. Merchant: {_Merchant}", e)
+                                  f" Product: {_Product.name}. Merchant: {_Merchant}")
 
     for _ProductID, _Offer in _OffersByProductID.items():
         requests.patch('http://127.0.0.1:5170/api/products', {

@@ -93,9 +93,9 @@ def data_provider_cron_health_check(service_provider: IServiceProvider):
                 f"Merchant Data Provider '{_MerchantDataProvider.base_url}' is {'HEALTHY' if _MerchantDataProvider.is_healthy else 'NOT HEALTHY'}."
             )
 
-        except Exception as e:
+        except Exception:
             _MerchantDataProvider.is_healthy = False
-            _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem.", e)
+            _Logger.exception(f"Merchant data provider '{_MerchantDataProvider.base_url}' encountered a problem.")
 
 
 if __name__ == '__main__':

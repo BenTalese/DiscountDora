@@ -81,28 +81,12 @@
     ],
     "compounds": [
         {
-            "name": "Firefox: All",
+            "name": "Launch All (Firefox)",
             "configurations": ["DAPI", "MAPI", "Firefox"]
         },
         {
-            "name": "Firefox: WebApp + DAPI",
-            "configurations": ["DAPI", "Firefox"]
-        },
-        {
-            "name": "Firefox: WebApp + MAPI",
-            "configurations": ["MAPI", "Firefox"]
-        },
-        {
-            "name": "Chrome: All",
+            "name": "Launch All (Chrome)",
             "configurations": ["DAPI", "MAPI", "Chrome"]
-        },
-        {
-            "name": "Chrome: WebApp + DAPI",
-            "configurations": ["DAPI", "Chrome"]
-        },
-        {
-            "name": "Chrome: WebApp + MAPI",
-            "configurations": ["MAPI", "Chrome"]
         }
     ]
 }

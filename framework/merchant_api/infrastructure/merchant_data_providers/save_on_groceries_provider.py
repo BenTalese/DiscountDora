@@ -137,7 +137,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             name = offer.name,
             price_now = offer.price,
             price_per_cup = offer.product_price_per_amount,
-            price_was = offer.price + offer.product_price_saving,
+            price_was = (offer.price + offer.product_price_saving) if offer.product_price_saving > 0 else 0,
             size = offer.product_package_size.upper(),
             size_unit = _Unit or offer.product_package_size.upper(),
             size_value = _Value,

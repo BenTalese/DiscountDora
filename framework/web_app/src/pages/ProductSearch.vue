@@ -103,6 +103,7 @@
         </span>
 
     </div>
+    <!-- TODO: Add v-if for all merchants filtered to have -->
 </template>
 
 <script setup lang="ts">
@@ -132,6 +133,7 @@ const previousSearchTerm = ref<undefined | string>();
 const search = (): Promise<string> =>
     productStore.searchByTermAsync({
         search_term: searchTerm.value,
+        result_limit: 5, // TODO: NEEDS TO BE AN INPUT
         merchants_to_search: productStore.productSearchOfferFilters.stores.map(merchant => merchant.name)
     })
     .then(() => previousSearchTerm.value = searchTerm.value);

@@ -30,7 +30,7 @@ PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products
 async def search_for_product_async() -> List[ScrapedProductOffer]:
     class SearchForProductQuery(BaseModel):
         merchants_to_search: List[str]
-        result_limit: int = 20
+        result_limit: int
         search_term: str
 
     _RequestBody = SearchForProductQuery.model_validate(request.get_json())
@@ -48,15 +48,6 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
         if _Merchant.is_enabled
         and _Merchant.name.value in _RequestBody.merchants_to_search
     ]
-
-    '''
-        - Duplicates:
-            - Only scrape coles or woolworths from grocerize one at a time
-        - Sizing in names? ALDI, Coles
-        - UI: Have yellow info thing at top to explain search is slower the more stores you select
-            - Show if nothing searched yet (no scraped products)
-            - Ran into issue where Coles would not be filtered for some reason when changing filters
-    '''
 
     for _Merchant in _MerchantsToSearch:
 

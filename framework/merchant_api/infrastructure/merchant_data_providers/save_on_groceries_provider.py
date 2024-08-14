@@ -94,12 +94,12 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
 
         with get_cached_session() as _Session:
             while time.time() - _StartTime < self._max_attempt_time_seconds:
-                _PageSearchResult = _Session.get(_Url).json()['products']['data']
+                _PageSearchResult = _Session.get(_Url).json()['products']
 
-                if not _PageSearchResult:
+                if not _PageSearchResult['data']:
                     return _ScrapedProductOffers
 
-                for _ProductSearchResult in _PageSearchResult:
+                for _ProductSearchResult in _PageSearchResult['data']:
                     try:
                         _ScrapedProductOffers.append(
                             self._translate_offer(
@@ -117,8 +117,10 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
                     if len(_ScrapedProductOffers) >= result_limit:
                         return _ScrapedProductOffers
 
-                _Page += 1
-                _Url[:-1] + str(_Page)
+                if _PageSearchResult['next_page_url'] is None:
+                    return _ScrapedProductOffers
+
+                _Url = _PageSearchResult['next_page_url']
                 time.sleep(random.uniform(0, self._max_backoff_time_seconds))
 
             self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
@@ -134,7 +136,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             is_available = True,
             merchant_name = merchant_name.value,
             merchant_stockcode = self._get_merchant_stockcode_func_mapping.get(merchant_name)(offer.product_url),
-            name = offer.name,
+            name = offer.name.rstrip(offer.product_package_size),
             price_now = offer.price,
             price_per_cup = offer.product_price_per_amount,
             price_was = (offer.price + offer.product_price_saving) if offer.product_price_saving > 0 else 0,

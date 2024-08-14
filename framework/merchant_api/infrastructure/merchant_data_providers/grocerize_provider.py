@@ -95,11 +95,13 @@ class GrocerizeProvider(IMerchantDataProvider):
 
                 for _ProductSearchResult in _PageSearchResult['items']:
                     try:
-                        _ScrapedProductOffers.extend(
-                            self._translate_offers(
-                                GrocerizeProductOffer.model_validate(_ProductSearchResult)
-                            )
+                        _Offer = self._translate_offer(
+                            GrocerizeProductOffer.model_validate(_ProductSearchResult),
+                            merchant.name
                         )
+
+                        if _Offer:
+                            _ScrapedProductOffers.append(_Offer)
 
                     except ValidationError as e:
                         for _Error in e.errors():
@@ -121,23 +123,21 @@ class GrocerizeProvider(IMerchantDataProvider):
             self._logger.info(f"Merchant data provider '{self.base_url}' timed out searching for '{search_term}'.")
             return _ScrapedProductOffers
 
-    def _translate_offers(self, offer_grouping: GrocerizeProductOffer) -> List[ScrapedProductOffer]:
-        _VendorOffers: List[ScrapedProductOffer] = []
-
+    def _translate_offer(self, offer_grouping: GrocerizeProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer | None:
         for _Offer in offer_grouping.item_pricing:
-            _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(_Offer.volume)
+            if self._merchant_id_mapping.get(_Offer.vendor_id) == merchant_name.value:
+                _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(_Offer.volume)
 
-            _VendorOffers.append(
-                ScrapedProductOffer(
+                return ScrapedProductOffer(
                     brand = None,
                     image = None,
                     image_uri = offer_grouping.image_url,
                     is_available = _Offer.available,
                     merchant_name = self._merchant_id_mapping.get(_Offer.vendor_id),
                     merchant_stockcode = _Offer.vendor_product_code,
-                    name = offer_grouping.name,
+                    name = offer_grouping.name.rstrip(_Offer.volume),
                     price_now = _Offer.price,
-                    price_per_cup = f'{_Offer.cup_price}/{_Offer.cup_volume}'
+                    price_per_cup = f'${_Offer.cup_price} / {_Offer.cup_volume.upper()}'
                         if _Offer.cup_price and _Offer.cup_volume else None,
                     price_was = _Offer.special_original_price or 0,
                     size = _Offer.volume.upper(),
@@ -145,8 +145,5 @@ class GrocerizeProvider(IMerchantDataProvider):
                     size_value = _Value,
                     web_url = self._get_product_url_func_mapping.get(_Offer.vendor_id)(_Offer.vendor_product_code)
                 )
-            )
-
-        return _VendorOffers
 
     #endregion Methods

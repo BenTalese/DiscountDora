@@ -126,10 +126,10 @@ class IGAProvider(IMerchantDataProvider):
             merchant_stockcode = offer.productId,
             name = offer.name,
             price_now = offer.priceNumeric or offer.wholePrice or 0,
-            price_per_cup = offer.pricePerUnit,
+            price_per_cup = offer.pricePerUnit.upper(),
             price_was = offer.wasPriceNumeric or offer.wasWholePrice or 0,
-            size = str(offer.unitOfSize.size) + offer.unitOfSize.abbreviation,
-            size_unit = offer.unitOfSize.abbreviation,
+            size = str(offer.unitOfSize.size) + offer.unitOfSize.abbreviation.upper(),
+            size_unit = offer.unitOfSize.abbreviation.upper(),
             size_value = float(offer.unitOfSize.size),
             web_url = f"{self.base_url}/product/{'-'.join(offer.name.lower().split()) + '-' + offer.productId}"
         )

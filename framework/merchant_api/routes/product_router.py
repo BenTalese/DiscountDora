@@ -51,10 +51,11 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
     '''
         - Duplicates:
-            - May need to not add if 100% match on name and merchant already scraped, or
-            - Limit grocerize so it only scrapes one or the other
+            - Only scrape coles or woolworths from grocerize one at a time
+        - Sizing in names? ALDI, Coles
         - UI: Have yellow info thing at top to explain search is slower the more stores you select
             - Show if nothing searched yet (no scraped products)
+            - Ran into issue where Coles would not be filtered for some reason when changing filters
     '''
 
     for _Merchant in _MerchantsToSearch:
@@ -66,7 +67,18 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
             try:
                 if _Offers := _MerchantDataProvider.search_by_term(_RequestBody.search_term, _Merchant, _RequestBody.result_limit):
-                    _ScrapedOffers.extend(_Offers)
+
+                    _ScrapedOffers.extend([
+                        _Offer
+                        for _Offer
+                        in _Offers
+                        if not any(
+                            _Offer.name.lower().strip() == _ExistingOffer.name.lower().strip()
+                            and _Offer.merchant_name == _ExistingOffer.merchant_name
+                            for _ExistingOffer
+                            in _ScrapedOffers)
+                    ])
+
                     break
 
             except Exception:
@@ -82,7 +94,6 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
     _ProductImageProvider: IProductImageProvider = _ServiceProvider.get_service(IProductImageProvider)
     for _Offer in _ScrapedOffers:
-        print(_Offer.name)
         _Offer.image = _ProductImageProvider.get_image(_Offer.image_uri)
 
     return jsonify(_ScrapedOffers)

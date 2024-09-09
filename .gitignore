@@ -16,7 +16,7 @@ venv
 
 **/bin
 
-**/database.db
+**/*.db
 
 **/appsettings.json
 

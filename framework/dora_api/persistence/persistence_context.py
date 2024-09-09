@@ -3,6 +3,7 @@ import os
 import re
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Generic, List, Type, get_origin, get_type_hints
 from uuid import uuid4
 
@@ -29,12 +30,13 @@ from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.exceptions.persistence_error import PersistenceError
 from domain.generics import TEntity
-from framework.dora_api.services.iconfiguration_provider import IConfigurationProvider
-from framework.persistence.infrastructure.persistence_helper_methods import (
+from framework.dora_api.persistence.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,
     is_model_attribute, is_model_list, translate_projection_source)
-from framework.persistence.infrastructure.seed import seed_initial_data_async
+from framework.dora_api.persistence.seed import seed_initial_data_async
+from framework.dora_api.services.iconfiguration_provider import \
+    IConfigurationProvider
 
 db = SQLAlchemy()
 
@@ -140,15 +142,23 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     @classmethod # TODO: Class method?? cls for what? maybe make static instead
     async def initialise(cls, app: Flask, configuration_provider: IConfigurationProvider):
         SqlAlchemyPersistenceContext._verify_all_models_imported()
-        import framework.persistence.models  # Makes models visible to db.init_app()
+        import framework.dora_api.persistence.models  # Makes models visible to db.init_app()
+
         # app.config.update(
         #     SQLALCHEMY_DATABASE_URI = configuration_provider.get_db_connection_string(),
         #     SQLALCHEMY_TRACK_MODIFICATIONS = configuration_provider.is_modification_tracking_enabled()
         # )
         app.config["SQLALCHEMY_DATABASE_URI"] = configuration_provider.get_db_connection_string()
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = configuration_provider.is_modification_tracking_enabled()
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = configuration_provider.is_modification_tracking_enabled()  # TODO: should not be able to change this
+        db_path = Path(__file__).resolve().parent.parent / 'data.db'
+
+        # Ensure the directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Configure SQLAlchemy with the database URI
+        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
         db.init_app(app)
-        app.db = db # TODO: This seems like very bad practice
+        app.db = db  # TODO: This seems like very bad practice
         SqlAlchemyPersistenceContext._flask_app = app
         SqlAlchemyPersistenceContext._model_classes = {
             mapper.class_.__entity__ : mapper.class_
@@ -180,7 +190,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     @staticmethod
     def _verify_all_models_imported():
-        import framework.persistence.models as models_module
+        import framework.dora_api.persistence.models as models_module
         _Files = os.listdir(os.path.dirname(models_module.__file__))
         _Files.remove('__pycache__')
         _Files.remove('__init__.py')

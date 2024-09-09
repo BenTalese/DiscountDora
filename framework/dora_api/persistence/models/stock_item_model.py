@@ -1,5 +1,7 @@
 from uuid import uuid4
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, LargeBinary, String
+
+from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer,
+                        LargeBinary, String)
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
 
@@ -8,11 +10,14 @@ from domain.entities.stock_group import StockGroup
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
-from framework.persistence.infrastructure.persistence_context import db
-from framework.persistence.models.stock_group_model import StockGroupModel
-from framework.persistence.models.stock_level_model import StockLevelModel
-from framework.persistence.models.stock_location_model import \
+from framework.dora_api.persistence.models.stock_group_model import \
+    StockGroupModel
+from framework.dora_api.persistence.models.stock_level_model import \
+    StockLevelModel
+from framework.dora_api.persistence.models.stock_location_model import \
     StockLocationModel
+from framework.dora_api.persistence.persistence_context import db
+
 
 # TODO: for all models figure out "required", "min value", "relationship existence constraint" etc...
 class StockItemModel(db.Model):

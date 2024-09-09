@@ -1,11 +1,12 @@
 from uuid import uuid4
+
 from sqlalchemy import Column, DateTime, Float, ForeignKey
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
 from domain.entities.product import Product
 from domain.entities.product_offer import ProductOffer
-from framework.persistence.infrastructure.persistence_context import db
+from framework.dora_api.persistence.persistence_context import db
 
 
 class ProductOfferModel(db.Model):

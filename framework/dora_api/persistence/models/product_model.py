@@ -1,4 +1,5 @@
 from uuid import uuid4
+
 from sqlalchemy import Boolean, Column, Float, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import UUIDType
@@ -7,9 +8,10 @@ from domain.entities.base_entity import EntityID
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
 from domain.entities.product_offer import ProductOffer
-from framework.persistence.infrastructure.persistence_context import db
-from framework.persistence.models.merchant_model import MerchantModel
-from framework.persistence.models.product_offer_model import ProductOfferModel
+from framework.dora_api.persistence.models.merchant_model import MerchantModel
+from framework.dora_api.persistence.models.product_offer_model import \
+    ProductOfferModel
+from framework.dora_api.persistence.persistence_context import db
 
 
 class ProductModel(db.Model):

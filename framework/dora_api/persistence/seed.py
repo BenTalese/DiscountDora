@@ -10,7 +10,7 @@ from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.persistence.infrastructure.persistence_helper_methods import (
+from framework.dora_api.persistence.persistence_helper_methods import (
     is_entity, is_list)
 
 

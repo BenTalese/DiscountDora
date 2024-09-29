@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
+from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
@@ -22,7 +23,15 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     persistence.add(merchant_one)
     persistence.add(merchant_two)
 
-    product_one = generate_entity(Product, True)
+    product_offer_one = generate_entity(ProductOffer)
+    product_offer_one.price_now = 15.00
+    product_offer_one.price_per_cup = '$1.00 / 100ML'
+    product_offer_one.price_was = 15.00
+    product_offer_one.price_difference = product_offer_one.price_was - product_offer_one.price_now
+
+    product_one = generate_entity(Product)
+    product_one.brand = 'Cadbury'
+    product_one.current_offer = product_offer_one
     product_one.is_active = True
     product_one.is_available = True
     product_one.merchant = merchant_one
@@ -33,7 +42,15 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
     product_one.size_value = 1.0
     product_one.web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
 
-    product_two = generate_entity(Product, True)
+    product_offer_two = generate_entity(ProductOffer)
+    product_offer_two.price_now = 8.00
+    product_offer_two.price_per_cup = '$1.74 / 100G'
+    product_offer_two.price_was = 8.50
+    product_offer_two.price_difference = product_offer_two.price_was - product_offer_two.price_now
+
+    product_two = generate_entity(Product)
+    product_two.brand = 'Betty Crocker'
+    product_two.current_offer = product_offer_two
     product_two.is_active = True
     product_two.is_available = True
     product_two.merchant = merchant_two

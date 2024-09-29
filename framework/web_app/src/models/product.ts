@@ -6,7 +6,9 @@ export type Product = {
     merchant_name: string
     merchant_stockcode: string
     name: string
+    price_difference: number
     price_now: number
+    price_per_cup: string
     price_was: number
     product_id: string
     size: string

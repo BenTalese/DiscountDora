@@ -15,7 +15,9 @@ class ProductViewModel:
     merchant_name: str
     merchant_stockcode: str
     name: str
+    price_difference: float
     price_now: float
+    price_per_cup: str
     price_was: float
     product_id: UUID
     size: str
@@ -34,7 +36,9 @@ def get_product_view_model(product: ProductDto) -> ProductViewModel:
         merchant_name = product.merchant.name if product.merchant else None,
         merchant_stockcode = product.merchant_stockcode,
         name = product.name,
+        price_difference = product.current_offer.price_difference if product.current_offer else None,
         price_now = product.current_offer.price_now if product.current_offer else None,
+        price_per_cup = product.current_offer.price_per_cup if product.current_offer else None,
         price_was = product.current_offer.price_was if product.current_offer else None,
         product_id = product.product_id.value,
         size = product.size,

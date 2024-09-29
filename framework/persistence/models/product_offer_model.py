@@ -1,5 +1,6 @@
 from uuid import uuid4
-from sqlalchemy import Column, DateTime, Float, ForeignKey
+
+from sqlalchemy import Column, DateTime, Float, ForeignKey, String
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
@@ -19,7 +20,11 @@ class ProductOfferModel(db.Model):
 
     offered_on = Column(DateTime(timezone = True))
 
+    price_difference = Column(Float)
+
     price_now = Column(Float)
+
+    price_per_cup = Column(String)
 
     price_was = Column(Float)
 
@@ -32,7 +37,9 @@ class ProductOfferModel(db.Model):
         return ProductOffer(
             id = EntityID(self.id),
             offered_on = self.offered_on,
+            price_difference = self.price_difference,
             price_now = self.price_now,
+            price_per_cup = self.price_per_cup,
             price_was = self.price_was)
 
     def get_key(self):

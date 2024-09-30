@@ -52,14 +52,14 @@
                                 {{ `${offer.name} | ${offer.size}` }}
                             </div>
                             <div>
-                                <div class="items-center no-wrap row text-body2 text-weight-medium">
+                                <div class="items-center no-wrap row text-body2 fw-600">
 
-                                    <template v-if="offer.price_now > 0">
+                                    <template v-if="offer.price_now">
                                         <span>
                                             {{ `$${offer.price_now}` }}
                                         </span>
 
-                                        <q-badge v-if="offer.price_difference > 0" class="q-mx-sm" color="yellow-6"
+                                        <q-badge v-if="isOfferOnSpecial(offer)" class="fw-500 pa-xs q-mx-sm" color="yellow-6"
                                             text-color="black">
                                             SAVE ${{ offer.price_difference }}
                                         </q-badge>
@@ -74,7 +74,7 @@
                                         <s>{{ `$${offer.price_was}` }}</s>
                                         &nbsp;
                                     </span>
-                                    <span>
+                                    <span v-if="offer.price_now">
                                         {{ offer.price_per_cup }}
                                     </span>
                                 </div>

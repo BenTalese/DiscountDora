@@ -7,9 +7,9 @@
     >
         <q-img
             class="flex-1 bg-white"
-            fit="contain"
             :src="img"
             :style="imgStyle"
+            fit="contain"
             img-class="q-pa-sm"
             loading="lazy"
             spinner-color="info"
@@ -32,7 +32,10 @@
         </q-img>
 
         <div class="bg-off-white column flex-1 row">
-            <q-card-section v-if="icon" @click="emit('icon-container-click', $event)">
+            <q-card-section
+                @click="emit('icon-container-click', $event)"
+                v-if="icon"
+            >
                 <q-btn
                     class="absolute top-right-offset"
                     :class="iconClass"
@@ -58,7 +61,6 @@
 </template>
 
 <script lang="ts" setup>
-
     //#region Props & Emits
 
     interface ICardComponentProps {
@@ -99,7 +101,7 @@
         /**
          *
          */
-         imgStyle?: string | undefined;
+        imgStyle?: string | undefined;
     }
 
     withDefaults(defineProps<ICardComponentProps>(), {

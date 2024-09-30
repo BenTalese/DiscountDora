@@ -38,7 +38,9 @@ export type CreateProductCommand = {
     merchant_name: string
     merchant_stockcode: string
     name: string
+    price_difference: number
     price_now: number
+    price_per_cup: string | null
     price_was: number
     size: string
     size_unit: string

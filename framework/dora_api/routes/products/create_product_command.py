@@ -10,7 +10,9 @@ class CreateProductCommand:
     merchant_name: str
     merchant_stockcode: str
     name: str
+    price_difference: float
     price_now: float
+    price_per_cup: str
     price_was: float
     size: str
     size_unit: str

@@ -30,7 +30,9 @@ class CreateProductInteractor(Interactor):
             brand = input_port.brand,
             current_offer = ProductOffer(
                 offered_on = datetime.utcnow(),
+                price_difference = input_port.price_difference,
                 price_now = input_port.price_now,
+                price_per_cup = input_port.price_per_cup,
                 price_was = input_port.price_was
             ),
             historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?

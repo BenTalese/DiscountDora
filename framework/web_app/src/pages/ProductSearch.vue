@@ -184,7 +184,7 @@
         "
     >
         <img
-            class="q-pa-sm round-img"
+            class="q-pa-sm round-img-230"
             src="../../src/assets/banana-peel.jpg"
         />
 
@@ -215,8 +215,12 @@
     } from 'src/stores/productStore';
     import { ref } from 'vue';
 
+    //#region Common
+
     const merchantStore = useMerchantStore();
     const productStore = useProductStore();
+
+    //#endregion Common
 
     //#region Search
 
@@ -310,39 +314,3 @@
 
     //#endregion Offers
 </script>
-
-<style scoped>
-    .card-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    }
-
-    .h-px-20 {
-        height: 20px;
-    }
-
-    .h-px-32 {
-        height: 32px;
-    }
-
-    .w-px-32 {
-        width: 32px;
-    }
-
-    .w-px-48 {
-        width: 48px;
-    }
-
-    .round-img {
-        border-radius: 50%;
-        width: 230px;
-    }
-
-    .min-width-100 {
-        min-width: 100px;
-    }
-
-    .scrollbar-none {
-        scrollbar-width: none;
-    }
-</style>

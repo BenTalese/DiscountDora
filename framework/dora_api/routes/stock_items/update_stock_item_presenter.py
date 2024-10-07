@@ -1,3 +1,5 @@
+from typing import List
+
 from varname import nameof
 
 from application.dtos.stock_item_dto import StockItemDto
@@ -7,6 +9,7 @@ from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_outp
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
+from domain.entities.product import Product
 from domain.entities.stock_location import StockLocation
 from framework.dora_api.infrastructure.base_presenter import BasePresenter
 
@@ -15,6 +18,12 @@ class UpdateStockItemPresenter(BasePresenter, IUpdateStockItemOutputPort):
 
     def __init__(self, persistence: IPersistenceContext):
         self.persistence = persistence
+
+    async def present_products_to_add_not_found_async(self, product_ids: List[EntityID]):
+        await self.entity_existence_failures_async(nameof(Product), nameof(product_ids), product_ids.value)
+
+    async def present_products_to_remove_not_found_async(self, product_ids: List[EntityID]):
+        await self.entity_existence_failures_async(nameof(Product), nameof(product_ids), product_ids.value)
 
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID):
         await self.entity_existence_failure_async(nameof(StockItem), nameof(stock_item_id), stock_item_id.value)

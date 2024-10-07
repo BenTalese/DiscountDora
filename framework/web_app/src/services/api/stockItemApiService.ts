@@ -41,6 +41,8 @@ export type CreateStockItemCommand = {
 
 export type UpdateStockItemCommand = {
     name?: string;
+    product_ids_to_add?: string[];
+    product_ids_to_remove?: string[];
     stock_item_id: string;
     stock_level_id?: string;
     stock_location_id?: string | null;

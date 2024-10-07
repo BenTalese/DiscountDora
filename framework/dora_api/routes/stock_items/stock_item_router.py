@@ -1,7 +1,9 @@
+from typing import List
+
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, request
 from varname import nameof
-
+from clapy import AttributeChangeTracker
 from application.use_cases.stock_items.create_stock_item.create_stock_item_input_port import \
     CreateStockItemInputPort
 from application.use_cases.stock_items.delete_stock_item.delete_stock_item_input_port import \
@@ -79,6 +81,13 @@ async def update_stock_item_async(stock_item_id):
 
     _Command: UpdateStockItemCommand = request.request_body
     _InputPort = UpdateStockItemInputPort()
+
+    if _Command.product_ids_to_add.value:
+        _InputPort.product_ids_to_add = AttributeChangeTracker([EntityID(product_id) for product_id in _Command.product_ids_to_add.value])
+
+    if _Command.product_ids_to_remove.value:
+        _InputPort.product_ids_to_remove = AttributeChangeTracker([EntityID(product_id) for product_id in _Command.product_ids_to_remove.value])
+
     _InputPort.stock_item_id = EntityID(stock_item_id)
     _InputPort.stock_level_id = _Command.stock_level_id
     _InputPort.stock_location_id = _Command.stock_location_id

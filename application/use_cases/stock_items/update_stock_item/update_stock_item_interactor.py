@@ -1,4 +1,7 @@
+from typing import List
+
 from clapy import Interactor
+from varname import nameof
 
 from application.dtos.stock_item_dto import get_stock_item_dto
 from application.services.ipersistence_context import IPersistenceContext
@@ -6,6 +9,7 @@ from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_outp
     IUpdateStockItemOutputPort
 from application.use_cases.stock_items.update_stock_item.update_stock_item_input_port import \
     UpdateStockItemInputPort
+from domain.entities.product import Product
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
@@ -19,10 +23,11 @@ class UpdateStockItemInteractor(Interactor):
     async def execute_async(self, input_port: UpdateStockItemInputPort, output_port: IUpdateStockItemOutputPort):
         _StockItem: StockItem = self.persistence_context \
             .get_entities(StockItem) \
+            .include(nameof(StockItem.products)) \
             .first_by_id(input_port.stock_item_id)
 
         if input_port.name.has_been_set:
-            _StockItem.name = input_port.name.value
+            _StockItem.name = input_port.name.valueD
 
         if input_port.stock_level_id.has_been_set:
             _StockItem.stock_level = self.persistence_context \
@@ -33,6 +38,26 @@ class UpdateStockItemInteractor(Interactor):
             _StockItem.stock_location = self.persistence_context \
                 .get_entities(StockLocation) \
                 .first_by_id(input_port.stock_location_id.value)
+
+        if input_port.product_ids_to_add.has_been_set:
+
+            for pid in input_port.product_ids_to_add.value:
+                _Product = self.persistence_context \
+                    .get_entities(Product) \
+                    .first_by_id(pid)
+
+                if _Product not in _StockItem.products:
+                    _StockItem.products.append(_Product)
+
+        if input_port.product_ids_to_remove.has_been_set:
+
+            for pid in input_port.product_ids_to_remove.value:
+                _Product = self.persistence_context \
+                    .get_entities(Product) \
+                    .first_by_id(pid)
+
+                if _Product in _StockItem.products:
+                    _StockItem.products.remove(_Product)
 
         self.persistence_context.update(_StockItem)
         await output_port.present_stock_item_updated_async(get_stock_item_dto(_StockItem))

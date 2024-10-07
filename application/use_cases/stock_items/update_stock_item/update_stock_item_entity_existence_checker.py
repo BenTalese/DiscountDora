@@ -9,6 +9,7 @@ from application.use_cases.stock_items.update_stock_item.update_stock_item_input
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
+from domain.entities.product import Product
 
 
 class UpdateStockItemEntityExistenceChecker(EntityExistenceChecker):
@@ -30,3 +31,13 @@ class UpdateStockItemEntityExistenceChecker(EntityExistenceChecker):
             not self.existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id.value)):
             self.has_failures = True
             await output_port.present_stock_location_not_found_async(input_port.stock_location_id.value)
+
+        if (input_port.product_ids_to_add.has_been_set and
+                not self.existence_checker.do_entities_exist(Product, input_port.product_ids_to_add.value)):
+                self.has_failures = True
+                await output_port.present_products_to_add_not_found_async(input_port.product_ids_to_add.value)
+
+        if (input_port.product_ids_to_remove.has_been_set and
+                not self.existence_checker.do_entities_exist(Product, input_port.product_ids_to_remove.value)):
+                self.has_failures = True
+                await output_port.present_products_to_remove_not_found_async(input_port.product_ids_to_remove.value)

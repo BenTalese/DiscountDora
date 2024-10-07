@@ -1,3 +1,5 @@
+@import '../../node_modules/quasar/src/css/index.sass';
+
 // app global css in SCSS form
 
 $off-white: whitesmoke;
@@ -6,10 +8,78 @@ $off-white: whitesmoke;
     background-color: $off-white;
 }
 
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
 .flex-1 {
     flex: 1;
 }
 
-.font-weight-400 {
+.fw-400 {
     font-weight: 400;
+}
+
+.fw-500 {
+    font-weight: 500;
+}
+
+.fw-600 {
+    font-weight: 600;
+}
+
+.h-px-20 {
+    height: 20px;
+}
+
+.h-px-32 {
+    height: 32px;
+}
+
+.min-width-100 {
+    min-width: 100px;
+}
+
+.min-width-200 {
+    min-width: 200px;
+}
+
+.pa-xs {
+    padding: 4px 4px;
+}
+
+.product-header-item-label {
+    // width: 110px !important;
+    width: 120px !important;
+    // @extend .col-sm-5;
+    // @extend .col-12;
+}
+
+.product-item-label {
+    @extend .col-sm-7;
+    @extend .col-12;
+}
+
+.q-card {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.round-img-230 {
+    border-radius: 50%;
+    width: 230px;
+}
+
+.scrollbar-none {
+    scrollbar-width: none;
+}
+
+.w-px-32 {
+    width: 32px;
+}
+
+.w-px-48 {
+    width: 48px;
 }

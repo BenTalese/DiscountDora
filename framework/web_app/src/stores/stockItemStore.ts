@@ -7,8 +7,8 @@ import { Product } from 'src/models/product';
 import { useProductStore } from './productStore';
 
 export type ProductStockItem = {
-    Product: Product
-    StockItem?: StockItem
+    product: Product
+    stockItem: StockItem
 };
 
 const stockItemApiService = new StockItemApiService();
@@ -25,20 +25,35 @@ export const useStockItemStore = defineStore('stockItem', () => {
 
     const productStockItems: Ref<ProductStockItem[]> = ref([])
 
-    const createProductStockItem = (stockItem: StockItem): void => {
-        const products = productStore.products?.filter(p =>
-            stockItem.product_ids.some(pid => pid == p.product_id));
+    //HACK:
+    const createProductStockItems = (products: readonly Product[], stockItems: readonly StockItem[]): void => {
 
-        // Possible UI binding downside. Products without stock items are not in the collection.
-        products?.forEach(p => productStockItems.value.push({
-            Product: p,
-            StockItem: stockItem
-        }))
+        stockItems.forEach(si => {
+
+            const productsLinkedToStockItem = products.filter(p =>
+                si.product_ids.some(pid => pid == p.product_id));
+
+            // Possible UI binding downside. Products without stock items are not in the collection.
+            productsLinkedToStockItem?.forEach(p =>
+
+                productStockItems.value.push({
+                    product: p,
+                    stockItem: si
+                })
+
+            );
+
+        });
+
     };
 
-    //TODO: Compare with async performance
+    // TODO: Compare with async performance
     const getProductStockItems = computed((): ProductStockItem[] => {
-        stockItems.value.forEach(si => createProductStockItem(si));
+
+        if(!productStore.products)
+            return productStockItems.value
+
+        createProductStockItems(productStore.products, stockItems.value);
         return productStockItems.value;
     });
 
@@ -64,6 +79,18 @@ export const useStockItemStore = defineStore('stockItem', () => {
     const getStockItemAsync = (stockItemID: string) => stockItemApiService
         .getAsync(stockItemID)
 
+    async function updateStockItemAsync(stockItemToUpdate: UpdateStockItemCommand) {
+        const stockItemIndex = stockItems.value.findIndex(si => si.stock_item_id == stockItemToUpdate.stock_item_id);
+
+
+        //TODO: get stockItemToUpdate has empty [] products
+        stockItemApiService
+            .updateAsync(stockItemToUpdate)
+            .then(async () => {
+                stockItems.value[stockItemIndex] = (await getStockItemAsync(stockItemToUpdate.stock_item_id))[0]
+            })
+    }
+
     async function updateStockLevelAsync(stockItemToUpdate: UpdateStockItemCommand) {
         const stockItemIndex = stockItems.value.findIndex(si => si.stock_item_id == stockItemToUpdate.stock_item_id);
         const originalStockLevel = stockItems.value[stockItemIndex].stock_level_id
@@ -82,12 +109,12 @@ export const useStockItemStore = defineStore('stockItem', () => {
     //#endregion Stock Items
 
     return {
-        productStockItems: readonly(productStockItems),
-        getProductStockItems,
+        productStockItems: readonly(getProductStockItems),
 
         stockItems: readonly(stockItems),
         getStockItemsAsync,
         createStockItemAsync,
+        updateStockItemAsync,
         updateStockLevelAsync
     }
 });

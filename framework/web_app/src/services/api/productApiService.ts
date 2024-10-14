@@ -48,10 +48,13 @@ export type CreateProductCommand = {
     web_url: string
 }
 
+//TODO: Update new fields or make them calculated
 export type UpdateProductCommand = {
     is_active?: boolean
     is_available?: boolean
+    // price_difference?: number
     price_now?: number
+    // price_per_cup?: string
     price_was?: number
     product_id: string
 }

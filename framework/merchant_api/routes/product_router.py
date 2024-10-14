@@ -28,12 +28,13 @@ async def search_for_product_async(search_term: str, start_page: int = 1, result
                                     for _ProductOffer
                                     in woolworths_scraper.search(_Session, search_term, start_page, start_page + 1, result_limit)]
 
-        _Session.get('https://www.coles.com.au/')
-        _ColesProductOffers = [ScrapedProductOffer.translate_coles_offer(_ProductOffer)
-                               for _ProductOffer
-                               in coles_scraper.search(_Session, search_term, start_page, start_page + 1, result_limit)]
+        # _Session.get('https://www.coles.com.au/')
+        # _ColesProductOffers = [ScrapedProductOffer.translate_coles_offer(_ProductOffer)
+        #                        for _ProductOffer
+        #                        in coles_scraper.search(_Session, search_term, start_page, start_page + 1, result_limit)]
 
-        _ScrapedOffers = _WoolworthsProductOffers + _ColesProductOffers
+        # _ScrapedOffers = _WoolworthsProductOffers + _ColesProductOffers
+        _ScrapedOffers = _WoolworthsProductOffers
         for _Offer in _ScrapedOffers:
             _Offer.image = b64encode(_Session.get(_Offer.image_uri).content).decode('utf-8')
 

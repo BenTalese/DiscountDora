@@ -27,7 +27,7 @@ class UpdateStockItemInteractor(Interactor):
             .first_by_id(input_port.stock_item_id)
 
         if input_port.name.has_been_set:
-            _StockItem.name = input_port.name.valueD
+            _StockItem.name = input_port.name.value
 
         if input_port.stock_level_id.has_been_set:
             _StockItem.stock_level = self.persistence_context \

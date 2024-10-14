@@ -14,10 +14,10 @@ from framework.dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from framework.dora_api.infrastructure.middleware import MIDDLEWARE
 from framework.dora_api.infrastructure.service_collection_builder import \
     ServiceCollectionBuilder
+from framework.dora_api.persistence.persistence_context import \
+    SqlAlchemyPersistenceContext
 from framework.dora_api.services.iconfiguration_provider import \
     IConfigurationProvider
-from framework.persistence.infrastructure.persistence_context import \
-    SqlAlchemyPersistenceContext
 
 
 async def startup():

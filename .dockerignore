@@ -1,0 +1,27 @@
+__pycache__
+_misc
+.dockerignore
+.env
+.git
+.gitignore
+.image_cache
+.vscode
+*.log
+*.prettierrc
+**/__pycache__
+# **/.buildozer
+**/*.db
+# **/appsettings.json
+# **/bin
+**/logs
+**/node_modules
+# !aldi_products_by_category.json
+# dist
+docker-compose.yml
+Dockerfile
+env
+instance
+logs
+p2ptest
+pytest_cache
+venv

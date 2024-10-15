@@ -1,0 +1,11 @@
+version: '3'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dora.dockerfile
+    container_name: discount_dora
+    ports:
+      - "5170:5170"
+      - "5172:5172"
+      - "5174:5174"

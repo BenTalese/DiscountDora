@@ -106,7 +106,7 @@ async def apply_query_operations(response: Response):
         response.status_code = 400
         return response
 
-    if "query" in request.view_args and (_QueryString:= request.view_args["query"]):
+    if request.view_args and "query" in request.view_args.keys() and (_QueryString:= request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()
         _RequestEndpoint = request.endpoint.split(".")[-1]
         _QueryString = str(_QueryString).lower()

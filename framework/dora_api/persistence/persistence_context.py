@@ -35,8 +35,10 @@ from framework.dora_api.persistence.persistence_helper_methods import (
     get_source_attribute_path, is_entity, is_list, is_model,
     is_model_attribute, is_model_list, translate_projection_source)
 from framework.dora_api.persistence.seed import seed_initial_data_async
-from framework.dora_api.services.iconfiguration_provider import \
-    IConfigurationProvider
+from framework.dora_api.services.iconfiguration_manager import \
+    IConfigurationManager
+from framework.dora_api.view_models.stock_item_view_model import \
+    get_stock_item_view_model
 
 db = SQLAlchemy()
 
@@ -140,7 +142,7 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
     # TODO: Use class for options instead of .get("some string")
     # TODO: Test on start that all entity properties have been configured (do name match)
     @classmethod # TODO: Class method?? cls for what? maybe make static instead
-    async def initialise(cls, app: Flask, configuration_provider: IConfigurationProvider):
+    async def initialise(cls, app: Flask, configuration_provider: IConfigurationManager):
         SqlAlchemyPersistenceContext._verify_all_models_imported()
         import framework.dora_api.persistence.models  # Makes models visible to db.init_app()
 

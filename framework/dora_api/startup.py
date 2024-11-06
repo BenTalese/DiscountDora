@@ -16,8 +16,8 @@ from framework.dora_api.infrastructure.service_collection_builder import \
     ServiceCollectionBuilder
 from framework.dora_api.persistence.persistence_context import \
     SqlAlchemyPersistenceContext
-from framework.dora_api.services.iconfiguration_provider import \
-    IConfigurationProvider
+from framework.dora_api.services.iconfiguration_manager import \
+    IConfigurationManager
 
 
 async def startup():

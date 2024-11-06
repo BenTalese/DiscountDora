@@ -33,7 +33,15 @@ async def startup():
     WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
     WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
 
-    CORS(_App, resources={r'/api/*': {'origins': f'http://{WEB_APP_HOST}:{WEB_APP_PORT}', "allow_headers": ["*", "Content-Type"]}})
+    CORS(_App, resources={r'/api/*': {
+        'origins': [
+            f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
+            f'http://127.0.0.1:{WEB_APP_PORT}',
+            f'http://localhost:{WEB_APP_PORT}',
+            f'http://172.17.0.1:{WEB_APP_PORT}'
+        ],
+        'allow_headers': ['*', 'Content-Type']
+    }})
 
     configure_logger(_ConfigurationManager.get_log_level())
     register_routers(_App)
@@ -54,7 +62,7 @@ async def startup():
 def configure_logger(log_level: int):
     _LogFolder = Path() / 'logs' / 'merchant_api'
     if not Path.exists(_LogFolder):
-        Path.mkdir(_LogFolder)
+        Path.mkdir(_LogFolder, parents=True, exist_ok=True)
 
     _Logger = logging.getLogger()
     _LogFilename = _LogFolder / 'log.txt'

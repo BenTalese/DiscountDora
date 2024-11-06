@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 import sys
 from pathlib import Path
@@ -25,24 +27,46 @@ async def startup():
 
     _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
     _App.service_provider = _ServiceProvider
-    _ConfigurationProvider: IConfigurationProvider = _ServiceProvider.get_service(IConfigurationProvider)
+    _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
 
-    await SqlAlchemyPersistenceContext.initialise(_App, _ConfigurationProvider)
+    await SqlAlchemyPersistenceContext.initialise(_App, _ConfigurationManager)
 
-    WEB_APP_HOST = _ConfigurationProvider.get_web_app_host()
-    WEB_APP_PORT = _ConfigurationProvider.get_web_app_port()
+    WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
+    WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
 
-    CORS(_App, resources={r'/api/*': {'origins': f'http://{WEB_APP_HOST}:{WEB_APP_PORT}', "allow_headers": ["*", "Content-Type"]}})
+    CORS(_App, resources={r'/api/*': {
+        'origins': [
+            f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
+            f'http://127.0.0.1:{WEB_APP_PORT}',
+            f'http://localhost:{WEB_APP_PORT}',
+            f'http://172.17.0.1:{WEB_APP_PORT}'
+        ],
+        'allow_headers': ['*', 'Content-Type']
+    }})
 
+    configure_logger(_ConfigurationManager.get_log_level())
     register_routers(_App)
     register_api_infrastructure(_App)
 
     _App.run(
-        _ConfigurationProvider.get_api_host(),
-        _ConfigurationProvider.get_api_port(),
-        _ConfigurationProvider.is_debug_mode_enabled(),
-        use_reloader = _ConfigurationProvider.is_reloader_enabled()
+        _ConfigurationManager.get_api_host(),
+        _ConfigurationManager.get_api_port(),
+        _ConfigurationManager.is_debug_mode_enabled(),
+        use_reloader = _ConfigurationManager.is_reloader_enabled()
     )
+
+
+def configure_logger(log_level: int):
+    _LogFolder = Path() / 'logs' / 'dora_api'
+    if not Path.exists(_LogFolder):
+        Path.mkdir(_LogFolder, parents=True, exist_ok=True)
+
+    _Logger = logging.getLogger()
+    _LogFilename = _LogFolder / 'log.txt'
+    _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)
+    _FileHandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
+    _Logger.setLevel(log_level)
+    _Logger.addHandler(_FileHandler)
 
 
 def register_routers(app: Flask):

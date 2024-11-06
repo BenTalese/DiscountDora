@@ -12,7 +12,7 @@ from framework.merchant_api.services.iconfiguration_manager import \
 
 
 class Config(BaseModel):
-    API_HOST: str = "localhost"
+    API_HOST: str = "0.0.0.0"
     API_PORT: int = 5172
     IGA_STORE_ID: int = 52511
     LOG_LEVEL: str = "ERROR"
@@ -22,9 +22,9 @@ class Config(BaseModel):
         SupportedMerchant.IGA.value: True,
         SupportedMerchant.WOOLWORTHS.value: True
     }
-    USE_DEBUG_MODE: bool = True
+    USE_DEBUG_MODE: bool = False
     USE_RELOADER: bool = False
-    WEB_APP_HOST: str = "localhost"
+    WEB_APP_HOST: str = "0.0.0.0"
     WEB_APP_PORT: int = 5174
 
 

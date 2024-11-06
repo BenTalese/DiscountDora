@@ -1,3 +1,13 @@
+Docker:
+docker build .
+docker run -p 5170:5170 -p 5172:5172 -p 5174:5174 <CONTAINER_ID>
+docker ps
+dockerstop <CONTAINER_ID>
+
+
+===============================================================================
+
+
 Test an API endpoint via terminal:
 
 GET

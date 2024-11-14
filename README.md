@@ -1,5 +1,5 @@
 <h1 align="center">Discount Dora</h1>
-<h3 align="center">Your Grocery Deal Explorer!</h3>
+<h3 align="center">Your Grocery Explorer!</h3>
 
 <p align="center">
     <img alt="logo" src="_misc/logo.png" width="300px" />

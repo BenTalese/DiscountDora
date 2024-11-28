@@ -14,7 +14,21 @@ from framework.dora_api.persistence.persistence_helper_methods import (
     is_entity, is_list)
 
 
-async def seed_initial_data_async(persistence: IPersistenceContext):
+async def seed_system_data_async(persistence: IPersistenceContext):
+    stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
+    stock_level_two = StockLevel(name = "Sufficient Stock", sequence = 1)
+    stock_level_three = StockLevel(name = "Low Stock", sequence = 2)
+    stock_level_four = StockLevel(name = "Out of Stock", sequence = 3)
+
+    persistence.add(stock_level_one)
+    persistence.add(stock_level_two)
+    persistence.add(stock_level_three)
+    persistence.add(stock_level_four)
+
+    await persistence.save_changes_async()
+
+
+async def seed_dev_data_async(persistence: IPersistenceContext):
     merchant_one = generate_entity(Merchant)
     merchant_one.name = "Woolworths"
     merchant_two = generate_entity(Merchant)
@@ -88,6 +102,7 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
+
 def generate_entity(entity_type, should_generate_navigations: bool = False):
     data = {}
     for attribute_name, attribute_type in entity_type.__annotations__.items():
@@ -98,6 +113,7 @@ def generate_entity(entity_type, should_generate_navigations: bool = False):
             data[attribute_name] = []
 
     return entity_type(**data)
+
 
 def get_value_for_type(entity_type, attr_name, type, should_generate_navigations):
     if is_list(type):

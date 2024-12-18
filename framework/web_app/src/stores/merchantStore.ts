@@ -23,7 +23,7 @@ export const useMerchantStore = defineStore('merchant', () => {
                 merchants.value = merchantsData.sort((merchant1, merchant2) =>
                     collator.compare(merchant1.name, merchant2.name));
 
-                productStore.addStoresToProductSearchFilter(merchants.value);
+                productStore.addStoresToProductSearchFilter(merchants.value.filter(m => m.is_enabled));
             });
     };
 

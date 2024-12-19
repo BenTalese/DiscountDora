@@ -11,7 +11,7 @@
 
     <div v-show="showFiltersContainer" class="no-wrap row q-pa-sm scroll scrollbar-none">
 
-        <select-component label="Stores" :multiple="true" :options="merchantStore.merchants"
+        <select-component label="Stores" :multiple="true" :options="merchantStore.getEnabledMerchants"
             :option-label="getStoresOptionLabel" :model-value="productStore.productSearchOfferFilters.stores"
             @update:model-value="productStore.setProductSearchStoresFilter" :optionIconName="getStoresOptionIcon" />
 
@@ -103,6 +103,7 @@
         </span>
 
     </div>
+    <!-- TODO: Add v-if for all merchants filtered to have -->
 </template>
 
 <script setup lang="ts">
@@ -129,14 +130,13 @@ const productStore = useProductStore();
 const searchTerm = ref('');
 const previousSearchTerm = ref<undefined | string>();
 
-let currentPage = 1;
-
 const search = (): Promise<string> =>
     productStore.searchByTermAsync({
         search_term: searchTerm.value,
-        start_page: currentPage
+        result_limit: 5, // TODO: NEEDS TO BE AN INPUT
+        merchants_to_search: productStore.productSearchOfferFilters.stores.map(merchant => merchant.name)
     })
-        .then(() => previousSearchTerm.value = searchTerm.value);
+    .then(() => previousSearchTerm.value = searchTerm.value);
 
 //#endregion Search
 

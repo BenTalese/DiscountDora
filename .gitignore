@@ -2,6 +2,8 @@
 
 .vscode
 
+.image_cache
+
 __pycache__
 
 venv
@@ -52,3 +54,4 @@ framework/web_app_old/.vscode/*
 *.sw?
 *.cjs
 *.prettierrc
+!aldi_products_by_category.json

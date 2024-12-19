@@ -1,7 +1,7 @@
-import type { ScrapedProductOffer } from "src/models/scrapedProductOffer";
-import type { CreatedResponse } from "./axiosHttpClient";
-import AxiosHttpClient from "./axiosHttpClient";
-import { Product } from "src/models/product";
+import { Product } from 'src/models/product';
+import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+import type { CreatedResponse } from './axiosHttpClient';
+import AxiosHttpClient from './axiosHttpClient';
 
 export default class ProductApiService {
     private dapiHttpClient: AxiosHttpClient;
@@ -19,15 +19,16 @@ export default class ProductApiService {
         await this.dapiHttpClient.get<Product[]>('/products');
 
     searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
-        await this.mapiHttpClient.get<ScrapedProductOffer[]>(`/products/search/${searchQuery.search_term}`);
+        await this.mapiHttpClient.post<ScrapedProductOffer[]>('/products/search', searchQuery);
 
     updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> =>
         await this.dapiHttpClient.patch<Product>(`/products/${productToUpdate.product_id}`, productToUpdate);
 }
 
 export type SearchByTermQuery = {
+    merchants_to_search: Array<string>
+    result_limit: number
     search_term: string
-    start_page: number
 }
 
 export type CreateProductCommand = {

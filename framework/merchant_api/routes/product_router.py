@@ -1,48 +1,100 @@
-from base64 import b64encode
+import logging
+import random
+import time
 from typing import Dict, List
 from uuid import UUID
 
 import requests
-from flask import Blueprint, jsonify
+from clapy import IServiceProvider
+from flask import Blueprint, current_app, jsonify, request
+from pydantic import BaseModel
 
 from framework.merchant_api.domain.entities.dora_product import DoraProduct
 from framework.merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from framework.merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.infrastructure.session import create_session
-from framework.merchant_api.scrapers import coles_scraper, woolworths_scraper
-
-# TODO: Logging --- would be useful to know what the search term was that caused the error, and which merchant, etc
+from framework.merchant_api.infrastructure.merchant_data_providers import \
+    get_healthy_merchant_data_providers
+from framework.merchant_api.infrastructure.similarity import \
+    get_similarity_score
+from framework.merchant_api.services.iconfiguration_manager import \
+    IConfigurationManager
+from framework.merchant_api.services.iproduct_image_provider import \
+    IProductImageProvider
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 
-@PRODUCT_ROUTER.route("/search/<search_term>")
-@PRODUCT_ROUTER.route("/search/<search_term>/<start_page>")
-@PRODUCT_ROUTER.route("/search/<search_term>/<start_page>/<result_limit>")
-async def search_for_product_async(search_term: str, start_page: int = 1, result_limit: int = 10) -> List[ScrapedProductOffer]:
-    with create_session() as _Session:
-        _Session.get('https://www.woolworths.com.au')
-        _WoolworthsProductOffers = [ScrapedProductOffer.translate_woolworths_offer(_ProductOffer)
-                                    for _ProductOffer
-                                    in woolworths_scraper.search(_Session, search_term, start_page, start_page + 1, result_limit)]
+@PRODUCT_ROUTER.route("/search", methods = ["POST"])
+async def search_for_product_async() -> List[ScrapedProductOffer]:
+    class SearchForProductQuery(BaseModel):
+        merchants_to_search: List[str]
+        result_limit: int
+        search_term: str
 
-        _Session.get('https://www.coles.com.au/')
-        _ColesProductOffers = [ScrapedProductOffer.translate_coles_offer(_ProductOffer)
-                               for _ProductOffer
-                               in coles_scraper.search(_Session, search_term, start_page, start_page + 1, result_limit)]
+    _RequestBody = SearchForProductQuery.model_validate(request.get_json())
 
-        _ScrapedOffers = _WoolworthsProductOffers + _ColesProductOffers
-        for _Offer in _ScrapedOffers:
-            _Offer.image = b64encode(_Session.get(_Offer.image_uri).content).decode('utf-8')
+    _ServiceProvider: IServiceProvider = current_app.service_provider
+    _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
+    _Logger = logging.getLogger(__name__)
+    _DataProviders = get_healthy_merchant_data_providers()
+    _ScrapedOffers: List[ScrapedProductOffer] = []
 
-        return jsonify(_ScrapedOffers)
+    _MerchantsToSearch = [
+        _Merchant
+        for _Merchant
+        in _ConfigurationManager.get_all_merchants()
+        if _Merchant.is_enabled
+        and _Merchant.name.value in _RequestBody.merchants_to_search
+    ]
+
+    for _Merchant in _MerchantsToSearch:
+
+        for _MerchantDataProvider in _DataProviders:
+
+            if not _MerchantDataProvider.is_merchant_supported(_Merchant):
+                continue
+
+            try:
+                if _Offers := _MerchantDataProvider.search_by_term(_RequestBody.search_term, _Merchant, _RequestBody.result_limit):
+
+                    _ScrapedOffers.extend([
+                        _Offer
+                        for _Offer
+                        in _Offers
+                        if not any(
+                            _Offer.name.lower().strip() == _ExistingOffer.name.lower().strip()
+                            and _Offer.merchant_name == _ExistingOffer.merchant_name
+                            for _ExistingOffer
+                            in _ScrapedOffers)
+                    ])
+
+                    break
+
+            except Exception:
+                _MerchantDataProvider.is_healthy = False
+                _Logger.exception(f"Merchant data provider '{_MerchantDataProvider.base_url}' encountered a problem,"
+                                  f" search term: '{_RequestBody.search_term}', merchant: '{_Merchant.name.value}'.")
+
+    _ScrapedOffers = sorted(
+        _ScrapedOffers,
+        key=lambda _Offer: get_similarity_score(_Offer.name, _RequestBody.search_term, 70),
+        reverse=True
+    )
+
+    _ProductImageProvider: IProductImageProvider = _ServiceProvider.get_service(IProductImageProvider)
+    for _Offer in _ScrapedOffers:
+        _Offer.image = _ProductImageProvider.get_image(_Offer.image_uri)
+
+    return jsonify(_ScrapedOffers)
 
 
 @PRODUCT_ROUTER.route("/offers")
 async def get_product_offers_async():
-    # TODO: Should MAPI be getting dora products and saving to them, or should the calling code of MAPI be responsible for this?
+    _Logger = logging.getLogger(__name__)
+    _DataProviders = get_healthy_merchant_data_providers()
+
     _SavedProducts = [
         DoraProduct(**_Product)
         for _Product
@@ -50,18 +102,32 @@ async def get_product_offers_async():
     ]
 
     _OffersByProductID: Dict[UUID, ScrapedProductOffer] = {}
-    with create_session() as _Session:
-        _Session.get('https://www.woolworths.com.au')
-        for _Product in _SavedProducts:
-            if _Product.merchant_name == SupportedMerchant.WOOLWORTHS:
-                _OffersByProductID[_Product.product_id] = ScrapedProductOffer.translate_woolworths_offer(
-                    woolworths_scraper.get_by_stockcode(_Session, _Product.merchant_stockcode))
 
-        _Session.get('https://www.coles.com.au/')
-        for _Product in _SavedProducts:
-            if _Product.merchant_name == SupportedMerchant.COLES:
-                _OffersByProductID[_Product.product_id] = ScrapedProductOffer.translate_coles_offer(
-                    coles_scraper.get_by_stockcode(_Session, _Product.merchant_stockcode, _Product.name))
+    _MerchantMapping = {
+        SupportedMerchant.ALDI.value: SupportedMerchant.ALDI,
+        SupportedMerchant.COLES.value: SupportedMerchant.COLES,
+        SupportedMerchant.IGA.value: SupportedMerchant.IGA,
+        SupportedMerchant.WOOLWORTHS.value: SupportedMerchant.WOOLWORTHS
+    }
+
+    for _Product in _SavedProducts:
+        _Merchant = _MerchantMapping.get(_Product.merchant_name)
+        time.sleep(random.uniform(0, 0.5))
+
+        for _MerchantDataProvider in _DataProviders:
+
+            if not _MerchantDataProvider.is_merchant_supported(_Merchant):
+                continue
+
+            try:
+                if _Offer := _MerchantDataProvider.get_product(_Product):
+                    _OffersByProductID[_Product.product_id] = _Offer
+                    break
+
+            except Exception:
+                _MerchantDataProvider.is_healthy = False
+                _Logger.exception(f"Merchant Data Provider '{_MerchantDataProvider.base_url}' encountered a problem."
+                                  f" Product: {_Product.name}. Merchant: {_Merchant}")
 
     for _ProductID, _Offer in _OffersByProductID.items():
         requests.patch('http://127.0.0.1:5170/api/products', {
@@ -71,6 +137,7 @@ async def get_product_offers_async():
             'price_was': _Offer.price_was,
         })
 
+        # Instead of regetting the image from its web source, copy it from the saved product.
         _Offer.image = next(_Product.image for _Product in _SavedProducts if _Product.product_id == _ProductID)
 
     return jsonify(_OffersByProductID.values())

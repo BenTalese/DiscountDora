@@ -13,24 +13,24 @@ class DefaultTimeoutAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 
-def create_session(
+def get_cached_session(
         user_agent: str = "DiscountDora",
         max_retries: int = 3,
         timeout: int = 10) -> requests_cache.CachedSession:
-    session = requests_cache.CachedSession(backend='memory')
+    _Session = requests_cache.CachedSession(backend='memory')
 
-    retry_strategy = Retry(
-        total=max_retries,
+    _RetryStrategy = Retry(
+        total = max_retries,
         backoff_factor = 2,
-        status_forcelist=[429, 500, 502, 503, 504]
+        status_forcelist = [429, 500, 502, 503, 504]
     )
 
-    session.mount('http://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
-    session.mount('https://', DefaultTimeoutAdapter(timeout=timeout, max_retries=retry_strategy))
+    _Session.mount('http://', DefaultTimeoutAdapter(timeout=timeout, max_retries=_RetryStrategy))
+    _Session.mount('https://', DefaultTimeoutAdapter(timeout=timeout, max_retries=_RetryStrategy))
 
-    session.hooks = {
+    _Session.hooks = {
         'response': lambda r, *args, **kwargs: r.raise_for_status()
     }
-    session.headers.update({'User-Agent': user_agent})
+    _Session.headers.update({'User-Agent': user_agent})
 
-    return session
+    return _Session

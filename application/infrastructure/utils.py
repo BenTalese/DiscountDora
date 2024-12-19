@@ -27,6 +27,7 @@ def get_classes_ending_with(term: str, path_to_search: str):
 
     return _Classes
 
+
 def get_attributes_ending_with(term: str, path_to_search: str):
     _Attributes = []
 

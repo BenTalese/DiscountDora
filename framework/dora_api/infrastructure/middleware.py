@@ -18,6 +18,7 @@ from framework.dora_api.infrastructure.view_model_decorator import \
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
 # TODO: 400 bad request validation for required inputs
+# TODO: data = request.form.to_dict() (DESERIALISE FORM DATA, maybe not needed)
 
 @MIDDLEWARE.before_app_request
 async def handle_cors_preflight_request():

@@ -30,7 +30,7 @@ def get_product_view_model(product: ProductDto) -> ProductViewModel:
         # HACK: The Get Products use case decode fails.
         # 'ignore' is a hack solution to remporarily ignore the decoding errors.
         # The My Products/Favorites page will need to address this issue.
-        image = product.image.decode('utf-8', 'ignore'),
+        image = product.image.decode('utf-8', 'ignore') if product.image else None,
         is_active = product.is_active,
         is_available = product.is_available,
         merchant_id = product.merchant.merchant_id.value if product.merchant else None,

@@ -1,7 +1,14 @@
 from abc import ABC, abstractmethod
+from typing import List
+
+from framework.merchant_api.domain.entities.merchant import Merchant
 
 
-class IConfigurationProvider(ABC):
+class IConfigurationManager(ABC):
+
+    @abstractmethod
+    def get_all_merchants(self) -> List[Merchant]:
+        pass
 
     @abstractmethod
     def get_api_host(self) -> str:
@@ -9,6 +16,14 @@ class IConfigurationProvider(ABC):
 
     @abstractmethod
     def get_api_port(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_iga_store_id(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_log_level(self) -> int:
         pass
 
     @abstractmethod
@@ -25,4 +40,8 @@ class IConfigurationProvider(ABC):
 
     @abstractmethod
     def is_reloader_enabled(self) -> bool:
+        pass
+
+    @abstractmethod
+    def toggle_merchant_enabled_state(self, merchant_name: str) -> None:
         pass

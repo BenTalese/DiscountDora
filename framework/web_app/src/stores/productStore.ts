@@ -42,9 +42,7 @@ export const useProductStore = defineStore('product', () => {
      * @returns The new length of the stores array after adding the new merchants.
      */
     const addStoresToProductSearchFilter = (merchantsData: Merchant[]): number =>
-        productSearchOfferFilters.stores.push(
-            ...merchantsData.filter(merchant => merchant.is_enabled)
-        );
+        productSearchOfferFilters.stores.push(...merchantsData);
 
     /**
      * Replaces the product search filter for stores with the provided data.

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { Merchant } from 'src/models/merchant';
 import MerchantApiService from 'src/services/api/merchantApiService';
-import { readonly, ref } from 'vue';
+import { computed, readonly, ref } from 'vue';
 import { useProductStore } from './productStore';
 
 const merchantApiService = new MerchantApiService();
@@ -23,15 +23,18 @@ export const useMerchantStore = defineStore('merchant', () => {
                 merchants.value = merchantsData.sort((merchant1, merchant2) =>
                     collator.compare(merchant1.name, merchant2.name));
 
-                productStore.addStoresToProductSearchFilter(merchants.value);
+                productStore.addStoresToProductSearchFilter(getEnabledMerchants.value);
             });
     };
+
+    const getEnabledMerchants = computed(() => merchants.value.filter(m => m.is_enabled));
 
     //#endregion Merchants
 
     return {
         merchants: readonly(merchants),
-        getMerchantsAsync
+        getMerchantsAsync,
+        getEnabledMerchants
     };
 
 });

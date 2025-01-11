@@ -1,27 +1,25 @@
-__pycache__
 _misc
 .dockerignore
 .env
 .git
 .gitignore
-.image_cache
+.pytest_cache
 .vscode
-*.log
-*.prettierrc
 **/__pycache__
-# **/.buildozer
+**/__pycache__
+**/.buildozer
+**/.image_cache
 **/*.db
-# **/appsettings.json
-# **/bin
+**/*.log
+**/*.prettierrc
+**/appsettings.json
+**/dist
+**/instance
+**/logs
 **/logs
 **/node_modules
-# !aldi_products_by_category.json
-# dist
+**/p2ptest
 docker-compose.yml
 Dockerfile
 env
-instance
-logs
-p2ptest
-pytest_cache
 venv

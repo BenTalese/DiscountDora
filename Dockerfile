@@ -1,3 +1,5 @@
+# TODO: Make the image use the production tools (gunicorn and nginx)
+
 # Step 1. Use base image with python
 FROM python:3.11-slim as develop-stage
 

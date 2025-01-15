@@ -5,7 +5,7 @@ from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
 from domain.entities.merchant import Merchant
-from framework.dora_api.persistence.persistence_context import db
+from framework.dora_api.app import db
 
 
 class MerchantModel(db.Model):

@@ -6,7 +6,7 @@ from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
 from domain.entities.shopping_list import ShoppingList
-from framework.dora_api.persistence.persistence_context import db
+from framework.dora_api.app import db
 
 
 class ShoppingListModel(db.Model):

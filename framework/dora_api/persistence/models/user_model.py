@@ -6,7 +6,7 @@ from sqlalchemy_utils import UUIDType
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.dora_api.persistence.persistence_context import db
+from framework.dora_api.app import db
 
 
 class UserModel(db.Model):

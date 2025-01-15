@@ -1,9 +1,24 @@
+import inspect
+import os
 import re
 from typing import List, get_origin, get_type_hints
 
 import sqlalchemy
 
 from domain.entities.base_entity import EntityID
+from domain.exceptions.persistence_error import PersistenceError
+
+
+def verify_all_models_imported():
+    import framework.dora_api.persistence.models as models_module
+    _Files = os.listdir(os.path.dirname(models_module.__file__))
+    _Files.remove('__pycache__')
+    _Files.remove('__init__.py')
+    _ModuleNames = [_File.rstrip(".py") for _File in _Files]
+    _Imports = inspect.getsource(models_module)
+    for _Name in _ModuleNames:
+        if _Name not in _Imports:
+            raise PersistenceError(f"Not all models have been imported. Missing module: {_Name}.")
 
 
 def is_entity(attribute_type):
@@ -11,24 +26,30 @@ def is_entity(attribute_type):
         attribute_type = attribute_type.__args__[0]
     return hasattr(attribute_type, "__module__") and "entities" in attribute_type.__module__ and attribute_type != EntityID
 
+
 def is_list(attribute_type):
     return get_origin(attribute_type) == list
+
 
 def is_model_attribute(model_type, attribute_name):
     return hasattr(getattr(getattr(model_type, attribute_name), "comparator"), "entity")
 
+
 def is_model_list(value):
     return type(value) == sqlalchemy.orm.collections.InstrumentedList
+
 
 def is_model(value):
     if is_model_list(value) and value:
         value = value[0]
     return hasattr(type(value), "__module__") and "models" in type(value).__module__
 
+
 def get_model_type_from_attribute(model_type, attribute_name: str):
     if is_model_attribute(model_type, attribute_name):
         return getattr(model_type, attribute_name).comparator.entity.entity
     return None
+
 
 # FIXME: This method works in a very strange way, needs refactoring
 def translate_projection_source(projection_tree: dict, attributes: List[str], entity):
@@ -49,7 +70,7 @@ def translate_projection_source(projection_tree: dict, attributes: List[str], en
         attribute_type = attribute_type.__args__[0]
 
     if len(attributes) == 1 and attribute_name in get_type_hints(entity).keys() and is_entity(attribute_type):
-        entity_attributes = { attribute: {} for attribute in get_type_hints(attribute_type).keys() }
+        entity_attributes = {attribute: {} for attribute in get_type_hints(attribute_type).keys()}
         if attribute_name not in projection_tree:
             projection_tree[attribute_name] = entity_attributes
         else:
@@ -65,6 +86,7 @@ def translate_projection_source(projection_tree: dict, attributes: List[str], en
 
     return projection_tree
 
+
 def get_source_attribute_path(source_type, assignment_path_to_search: str):
     if is_list(source_type):
         source_type = source_type.__args__[0]
@@ -74,13 +96,14 @@ def get_source_attribute_path(source_type, assignment_path_to_search: str):
         # If entity attribute in assignment, and no other attribute precedes this attribute (avoid 'other_entity.id' bug)
         pattern = r'(' + '|'.join(name for name, _ in source_attributes if name != attribute_name) + r')\.' + attribute_name
         potential_attributes = []
-        for attribute in assignment_path_to_search.split("."): #TODO: There's gotta be regex for this...
+        for attribute in assignment_path_to_search.split("."):  # TODO: There's gotta be regex for this...
             potential_attributes.extend(attribute.split())
         if attribute_name in potential_attributes and not re.search(pattern, assignment_path_to_search):
             if is_entity(attribute_type) and (child_attribute := get_source_attribute_path(attribute_type, assignment_path_to_search)):
                 return attribute_name + "." + child_attribute
             return attribute_name
     return ""
+
 
 def cast_to_new_model(model_from_row_result, projection_structure: dict, cast_destination_model):
     for attribute_name, child_attributes in projection_structure.items():

@@ -1,14 +1,10 @@
 import inspect
-import os
 import re
 from collections import deque
-from pathlib import Path
 from typing import Any, Generic, List, Type, get_type_hints
 from uuid import uuid4
 
 from flask import Flask
-from flask_migrate import Migrate, upgrade
-from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.session import Session
 from sqlalchemy import Select, select
@@ -21,16 +17,11 @@ from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.base_entity import EntityID
 from domain.exceptions.persistence_error import PersistenceError
 from domain.generics import TEntity
+from framework.dora_api.app import db
 from framework.dora_api.persistence.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,
     is_model_attribute, is_model_list, translate_projection_source)
-from framework.dora_api.persistence.seed import (seed_dev_data_async,
-                                                 seed_system_data_async)
-from framework.dora_api.services.iconfiguration_manager import \
-    IConfigurationManager
-
-db = SQLAlchemy()
 
 
 class SqlAlchemyPersistenceContext(IPersistenceContext):
@@ -134,42 +125,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     # TODO: Use class for options instead of .get("some string")
     # TODO: Test on start that all entity properties have been configured (do name match)
-    @classmethod  # TODO: Class method?? cls for what? maybe make static instead
-    async def initialise(cls, app: Flask, configuration_provider: IConfigurationManager):
-        SqlAlchemyPersistenceContext._verify_all_models_imported()
-        import framework.dora_api.persistence.models  # Makes models visible to db.init_app()  # noqa: F401
-
-        # app.config.update(
-        #     SQLALCHEMY_DATABASE_URI = configuration_provider.get_db_connection_string(),
-        #     SQLALCHEMY_TRACK_MODIFICATIONS = configuration_provider.is_modification_tracking_enabled()
-        # )
-        app.config["SQLALCHEMY_DATABASE_URI"] = configuration_provider.get_db_connection_string()
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
-        db_path = Path(__file__).resolve().parent.parent / 'data.db'
-
-        # Ensure the directory exists
-        db_path.parent.mkdir(parents=True, exist_ok=True)  # TODO: DELETE
-
-        # Configure SQLAlchemy with the database URI
-        app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"  # TODO: DELETE
-        db.init_app(app)  # TODO: DELETE
-        app.db = db  # TODO: This seems like very bad practice  # TODO: DELETE
-        SqlAlchemyPersistenceContext._flask_app = app
-        SqlAlchemyPersistenceContext._model_classes = {
-            mapper.class_.__entity__: mapper.class_
-            for mapper in db.Model.registry.mappers
-        }
-        # SqlAlchemyPersistenceContext.identity_map = {}
-        with app.app_context():
-            if app.config.get('DEBUG'):
-                db.drop_all()
-                db.create_all()
-                await seed_dev_data_async(SqlAlchemyPersistenceContext())
-                await seed_system_data_async(SqlAlchemyPersistenceContext())
-            else:
-                Migrate().init_app(app, db)
-                upgrade()
-                await seed_system_data_async(SqlAlchemyPersistenceContext())
 
     def _get_entity_unconfigured_attributes(self, entity: TEntity):
         _ModelAttributes = self._get_model_type(type(entity)).__dict__.keys()
@@ -182,18 +137,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             return self._model_classes[entity_type]
 
         raise PersistenceError(f"Model not found for: {entity_type.__name__}")
-
-    @staticmethod
-    def _verify_all_models_imported():
-        import framework.dora_api.persistence.models as models_module
-        _Files = os.listdir(os.path.dirname(models_module.__file__))
-        _Files.remove('__pycache__')
-        _Files.remove('__init__.py')
-        _ModuleNames = [_File.rstrip(".py") for _File in _Files]
-        _Imports = inspect.getsource(models_module)
-        for _Name in _ModuleNames:
-            if _Name not in _Imports:
-                raise PersistenceError(f"Not all models have been imported. Missing module: {_Name}.")
 
 
 #TODO: Put other regex up top if possible

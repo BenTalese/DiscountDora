@@ -2,7 +2,7 @@ from sqlalchemy_utils import UUIDType
 
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
-from framework.dora_api.persistence.persistence_context import db
+from framework.dora_api.app import db
 
 ShoppingListStockItemAssociation = db.Table(
     ShoppingList.__name__ + StockItem.__name__,

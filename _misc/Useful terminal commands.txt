@@ -8,6 +8,17 @@ docker stop <CONTAINER_ID>
 ===============================================================================
 
 
+Initialising and migrating DB:
+
+cd framework/dora_api
+flask db init
+flask db migrate
+flask db upgrade
+
+
+===============================================================================
+
+
 Test an API endpoint via terminal:
 
 GET

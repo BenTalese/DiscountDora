@@ -1,11 +1,20 @@
-version: '3'
 services:
-  app:
+  discount_dora:
+    container_name: discount_dora
+    environment:
+      - PUID=1000  # TODO: Make this actually do something
+      - PGID=1000  # TODO: Make this actually do something
+      - TZ=Australia/Sydney  # TODO: Make this actually do something
+    # image: <IMAGE HOSTING SERVICE>/calibre-web:latest # TODO: Once the image is uploaded to somewhere, use this instead of "build"
     build:
       context: .
-      dockerfile: dora.dockerfile
-    container_name: discount_dora
+      dockerfile: Dockerfile
+    restart: always
     ports:
-      - "5170:5170"
-      - "5172:5172"
-      - "5174:5174"
+      - 5170:5170
+      - 5172:5172
+      - 5174:5174
+    volumes:
+      - /path/to/cache:/cache
+      - /path/to/data:/data
+      - /path/to/config:/config

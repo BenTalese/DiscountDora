@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from clapy import DependencyInjectorServiceProvider
@@ -24,7 +23,7 @@ class ServiceCollectionBuilder:
 
     def build_service_provider(self):
         return self \
-            .register_configuration_provider() \
+            .register_configuration_manager() \
             .configure_persistence_services() \
             .configure_core_services() \
             .register_api_presenters() \
@@ -46,6 +45,6 @@ class ServiceCollectionBuilder:
             self.service_provider.register_service(providers.Factory, _Presenter)
         return self
 
-    def register_configuration_provider(self):
+    def register_configuration_manager(self):
         self.service_provider.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
         return self

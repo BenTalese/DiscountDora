@@ -22,15 +22,13 @@ class Config(BaseModel):
         SupportedMerchant.IGA.value: True,
         SupportedMerchant.WOOLWORTHS.value: True
     }
-    USE_DEBUG_MODE: bool = False
-    USE_RELOADER: bool = False
     WEB_APP_HOST: str = "0.0.0.0"
     WEB_APP_PORT: int = 5174
 
 
 class ConfigurationManager(IConfigurationManager):
     _config: Config
-    _config_path: Path = Path(__file__).parent.parent / 'appsettings.json'
+    _config_path: Path = Path() / 'config' / 'mapi.appsettings.json'
 
     def __init__(self):
         if not Path.exists(self._config_path):
@@ -86,10 +84,10 @@ class ConfigurationManager(IConfigurationManager):
         return self._config.WEB_APP_PORT
 
     def is_debug_mode_enabled(self) -> bool:
-        return self._config.USE_DEBUG_MODE
+        return False
 
     def is_reloader_enabled(self) -> bool:
-        return self._config.USE_RELOADER
+        return False
 
     def toggle_merchant_enabled_state(self, merchant_name: str) -> None:
         self._config.MERCHANTS[merchant_name] = not self._config.MERCHANTS[merchant_name]

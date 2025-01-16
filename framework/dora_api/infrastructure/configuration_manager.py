@@ -12,17 +12,14 @@ class Config(BaseModel):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 5170
     LOG_LEVEL: str = "ERROR"
-    SQLALCHEMY_DATABASE_URI: str = Path(__file__).resolve().parent.parent / 'data.db'
-    SQLALCHEMY_TRACK_MODIFICATIONS: bool = True
-    USE_DEBUG_MODE: bool = False
-    USE_RELOADER: bool = False
+    SQLALCHEMY_DATABASE_URI: str = f"sqlite:///{Path().resolve() / 'data' / 'dora.data.db'}"
     WEB_APP_HOST: str = "0.0.0.0"
     WEB_APP_PORT: int = 5174
 
 
 class ConfigurationManager(IConfigurationManager):
     _config: Config
-    _config_path: Path = Path(__file__).parent.parent / 'appsettings.json'
+    _config_path: Path = Path() / 'config' / 'dapi.appsettings.json'
 
     def __init__(self):
         if not Path.exists(self._config_path):
@@ -71,13 +68,13 @@ class ConfigurationManager(IConfigurationManager):
         return self._config.WEB_APP_PORT
 
     def is_debug_mode_enabled(self) -> bool:
-        return self._config.USE_DEBUG_MODE
+        return False
 
     def is_modification_tracking_enabled(self) -> bool:
-        return self._config.SQLALCHEMY_TRACK_MODIFICATIONS
+        return True
 
     def is_reloader_enabled(self) -> bool:
-        return self._config.USE_RELOADER
+        return False
 
     def _save_configuration(self) -> None:
         with open(self._config_path, 'w') as _AppSettings:

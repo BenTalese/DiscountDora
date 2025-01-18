@@ -75,9 +75,8 @@ async def init_db():
 
 
 def configure_logger(log_level: int):
-    _LogFolder = Path() / 'logs' / 'dora_api'
-    if not Path.exists(_LogFolder):
-        Path.mkdir(_LogFolder, parents=True, exist_ok=True)
+    _LogFolder = Path().resolve() / 'data' / 'logs' / 'dapi'
+    Path.mkdir(_LogFolder, parents=True, exist_ok=True)
 
     _Logger = logging.getLogger()
     _LogFilename = _LogFolder / 'log.txt'

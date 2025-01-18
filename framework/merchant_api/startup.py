@@ -56,9 +56,8 @@ async def startup():
 
 
 def configure_logger(log_level: int):
-    _LogFolder = Path() / 'logs' / 'merchant_api'
-    if not Path.exists(_LogFolder):
-        Path.mkdir(_LogFolder, parents=True, exist_ok=True)
+    _LogFolder = Path() / 'data' / 'logs' / 'mapi'
+    Path.mkdir(_LogFolder, parents=True, exist_ok=True)
 
     _Logger = logging.getLogger()
     _LogFilename = _LogFolder / 'log.txt'

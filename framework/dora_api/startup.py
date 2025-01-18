@@ -19,8 +19,7 @@ from framework.dora_api.persistence.persistence_context import \
     SqlAlchemyPersistenceContext
 from framework.dora_api.persistence.persistence_helper_methods import \
     verify_all_models_imported
-from framework.dora_api.persistence.seed import (seed_dev_data_async,
-                                                 seed_system_data_async)
+from framework.dora_api.persistence.seed import seed_dev_data_async
 from framework.dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
@@ -71,11 +70,8 @@ async def init_db():
             db.drop_all()
             db.create_all()
             await seed_dev_data_async(SqlAlchemyPersistenceContext())
-            await seed_system_data_async(SqlAlchemyPersistenceContext())
         else:
             upgrade()
-            # TODO: Move to migration script
-            await seed_system_data_async(SqlAlchemyPersistenceContext())
 
 
 def configure_logger(log_level: int):

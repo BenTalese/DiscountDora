@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "DAPI",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "framework/dora_api/startup.py",
             "console": "integratedTerminal",
@@ -11,7 +11,7 @@
         },
         {
             "name": "MAPI",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "framework/merchant_api/startup.py",
             "console": "integratedTerminal",
@@ -19,7 +19,7 @@
         },
         {
             "name": "Emailer",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "framework/emailer/startup.py",
             "console": "integratedTerminal",
@@ -55,7 +55,7 @@
         },
         {
             "name": "Python: Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",

@@ -5,7 +5,7 @@ services:
       - PUID=1000  # TODO: Make this actually do something
       - PGID=1000  # TODO: Make this actually do something
       - TZ=Australia/Sydney  # TODO: Make this actually do something
-    # image: <IMAGE HOSTING SERVICE>/calibre-web:latest # TODO: Once the image is uploaded to somewhere, use this instead of "build"
+    # image: <IMAGE HOSTING SERVICE>/discountdora:latest # TODO: Once the image is uploaded to somewhere, use this instead of "build"
     build:
       context: .
       dockerfile: Dockerfile

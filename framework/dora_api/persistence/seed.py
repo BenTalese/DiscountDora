@@ -10,11 +10,11 @@ from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.persistence.infrastructure.persistence_helper_methods import (
+from framework.dora_api.persistence.persistence_helper_methods import (
     is_entity, is_list)
 
 
-async def seed_initial_data_async(persistence: IPersistenceContext):
+async def seed_dev_data_async(persistence: IPersistenceContext):
     merchant_one = generate_entity(Merchant)
     merchant_one.name = "Woolworths"
     merchant_two = generate_entity(Merchant)
@@ -88,6 +88,7 @@ async def seed_initial_data_async(persistence: IPersistenceContext):
 
     await persistence.save_changes_async()
 
+
 def generate_entity(entity_type, should_generate_navigations: bool = False):
     data = {}
     for attribute_name, attribute_type in entity_type.__annotations__.items():
@@ -98,6 +99,7 @@ def generate_entity(entity_type, should_generate_navigations: bool = False):
             data[attribute_name] = []
 
     return entity_type(**data)
+
 
 def get_value_for_type(entity_type, attr_name, type, should_generate_navigations):
     if is_list(type):

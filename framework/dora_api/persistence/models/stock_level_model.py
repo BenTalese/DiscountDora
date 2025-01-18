@@ -1,10 +1,11 @@
 from uuid import uuid4
+
 from sqlalchemy import Column, Integer, String
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
 from domain.entities.stock_level import StockLevel
-from framework.persistence.infrastructure.persistence_context import db
+from framework.dora_api.app import db
 
 
 class StockLevelModel(db.Model):

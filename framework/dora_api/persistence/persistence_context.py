@@ -1,42 +1,28 @@
 import inspect
-import os
 import re
 from collections import deque
-from datetime import datetime
-from typing import Any, Generic, List, Type, get_origin, get_type_hints
+from typing import Any, Generic, List, Type, get_type_hints
 from uuid import uuid4
 
-import sqlalchemy
 from flask import Flask
-from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.extension import sa_orm
 from flask_sqlalchemy.session import Session
-from sqlalchemy import (Column, ForeignKey, Integer, Select, String, Table,
-                        select)
-from sqlalchemy.orm import joinedload, load_only, relationship
+from sqlalchemy import Select, select
+from sqlalchemy.orm import joinedload
 from varname import nameof
 
-from application.dtos.stock_item_dto import get_stock_item_dto
-from application.infrastructure.bool_operation import BoolOperation, Equal, Not
+from application.infrastructure.bool_operation import BoolOperation, Equal
 from application.services.ipersistence_context import IPersistenceContext
 from application.services.iquerybuilder import IQueryBuilder
 from domain.entities.base_entity import EntityID
-from domain.entities.merchant import Merchant
-from domain.entities.product import Product
-from domain.entities.product_offer import ProductOffer
-from domain.entities.shopping_list import ShoppingList
-from domain.entities.stock_item import StockItem
 from domain.exceptions.persistence_error import PersistenceError
 from domain.generics import TEntity
-from framework.dora_api.services.iconfiguration_provider import IConfigurationProvider
-from framework.persistence.infrastructure.persistence_helper_methods import (
+from framework.dora_api.app import db
+from framework.dora_api.persistence.persistence_helper_methods import (
     cast_to_new_model, get_model_type_from_attribute,
     get_source_attribute_path, is_entity, is_list, is_model,
     is_model_attribute, is_model_list, translate_projection_source)
-from framework.persistence.infrastructure.seed import seed_initial_data_async
 
-db = SQLAlchemy()
 
 class SqlAlchemyPersistenceContext(IPersistenceContext):
     _added_models = {}
@@ -93,8 +79,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             EF Core .Ignore(). Would have to pop/remove that attribute
             off the instance being saved, probably here in this method.
         '''
-        if _UnconfiguredAttributes:= self._get_entity_unconfigured_attributes(entity):
-            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
+        if _UnconfiguredAttributes := self._get_entity_unconfigured_attributes(entity):
+            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. '
+                                   + f'Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
 
         if not entity.id:
             entity.id = EntityID(uuid4())
@@ -127,8 +114,9 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         # asyncio.get_event_loop().run_in_executor(None, db.session.commit())
 
     def update(self, entity: TEntity):
-        if _UnconfiguredAttributes:= self._get_entity_unconfigured_attributes(entity):
-            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
+        if _UnconfiguredAttributes := self._get_entity_unconfigured_attributes(entity):
+            raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. '
+                                   + f'Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
 
         db.session.add(self._convert_to_model(entity))
         # db.session.merge(model_to_update) # TODO: The model is detached which I think makes this not work
@@ -137,34 +125,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
 
     # TODO: Use class for options instead of .get("some string")
     # TODO: Test on start that all entity properties have been configured (do name match)
-    @classmethod # TODO: Class method?? cls for what? maybe make static instead
-    async def initialise(cls, app: Flask, configuration_provider: IConfigurationProvider):
-        SqlAlchemyPersistenceContext._verify_all_models_imported()
-        import framework.persistence.models  # Makes models visible to db.init_app()
-        # app.config.update(
-        #     SQLALCHEMY_DATABASE_URI = configuration_provider.get_db_connection_string(),
-        #     SQLALCHEMY_TRACK_MODIFICATIONS = configuration_provider.is_modification_tracking_enabled()
-        # )
-        app.config["SQLALCHEMY_DATABASE_URI"] = configuration_provider.get_db_connection_string()
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = configuration_provider.is_modification_tracking_enabled()
-        db.init_app(app)
-        app.db = db # TODO: This seems like very bad practice
-        SqlAlchemyPersistenceContext._flask_app = app
-        SqlAlchemyPersistenceContext._model_classes = {
-            mapper.class_.__entity__ : mapper.class_
-            for mapper in db.Model.registry.mappers
-        }
-        # SqlAlchemyPersistenceContext.identity_map = {}
-        with app.app_context():
-            if app.config.get('DEBUG'): # TODO Options interface, abstract away how settings are stored (nah, should be in config file)
-                db.drop_all()
-                db.create_all()
-                db.session.commit()
-                Migrate().init_app(app, db) # TODO: Do i need a migrate here?...
-                await seed_initial_data_async(SqlAlchemyPersistenceContext())
-            else:
-                db.create_all() #TODO: This doesn't handle migrations on existing tables
-                Migrate().init_app(app, db) # TODO: Create, mirate, or both?
 
     def _get_entity_unconfigured_attributes(self, entity: TEntity):
         _ModelAttributes = self._get_model_type(type(entity)).__dict__.keys()
@@ -177,95 +137,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
             return self._model_classes[entity_type]
 
         raise PersistenceError(f"Model not found for: {entity_type.__name__}")
-
-    @staticmethod
-    def _verify_all_models_imported():
-        import framework.persistence.models as models_module
-        _Files = os.listdir(os.path.dirname(models_module.__file__))
-        _Files.remove('__pycache__')
-        _Files.remove('__init__.py')
-        _ModuleNames = [_File.rstrip(".py") for _File in _Files]
-        _Imports = inspect.getsource(models_module)
-        for _Name in _ModuleNames:
-            if _Name not in _Imports:
-                raise PersistenceError(f"Not all models have been imported. Missing module: {_Name}.")
-
-    @staticmethod
-    async def test(app):
-        with app.app_context():
-            # persistence = SqlAlchemyPersistenceContext()
-            # to_remove: StockItem = SqlAlchemyPersistenceContext().get_entities(StockItem).first()
-            # # might not work bc different instances of persistence
-            # to_remove.name = "AHHHHH IT WORKS!"
-            # SqlAlchemyPersistenceContext().update(to_remove)
-            # things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute() # FIXME: Look into why execute is not recognised here
-
-            # x: Merchant = SqlAlchemyPersistenceContext().get_entities(Merchant).first()
-
-            # y = SqlAlchemyPersistenceContext().get_entities(Merchant).first_or_none(Equal(x.id, (Merchant, nameof(Merchant.id))))
-            # z = SqlAlchemyPersistenceContext().get_entities(Merchant).first_by_id_or_none(x.id)
-            # v = SqlAlchemyPersistenceContext().get_entities(Merchant).first(f"'{x.id.value}' == MerchantModel.id")
-
-            # to_update: ShoppingList = SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
-            # lx = SqlAlchemyPersistenceContext().get_entities(StockItem).execute()[2]
-            # to_update.items.append(lx)
-
-            # await SqlAlchemyPersistenceContext().save_changes_async()
-            # new_list = ShoppingList(items = [lx])
-            # SqlAlchemyPersistenceContext().add(new_list)
-
-            # await SqlAlchemyPersistenceContext().save_changes_async()
-
-            # persist = SqlAlchemyPersistenceContext()
-
-            # merch = persist.get_entities(Merchant).first()
-
-            # persist.get_entities(Merchant).first_by_id(uuid.uuid4()) != None
-
-            # merch = persist.get_entities(Merchant).first(Equal(merch.id, (Merchant, nameof(Merchant.id))))
-
-            # product = Product(
-            #     brand = "A",
-            #     current_offer = ProductOffer(
-            #         offered_on = datetime.utcnow(),
-            #         price_now = 5,
-            #         price_was = 5
-            #     ),
-            #     historical_offers = [],
-            #     image = None,
-            #     is_available = False,
-            #     merchant = merch,
-            #     merchant_stockcode = "A",
-            #     name = "A",
-            #     size_unit = "A",
-            #     size_value = 5,
-            #     web_url = "A"
-            # )
-
-            # persist.add(product)
-
-            # await SqlAlchemyPersistenceContext().save_changes_async()
-
-            # SqlAlchemyPersistenceContext().get_entities(ShoppingList).include('items').first()
-            # SqlAlchemyPersistenceContext().update(to_update)
-            # things = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).execute()
-            # await SqlAlchemyPersistenceContext().save_changes_async()
-            # result = app.db.session.query(ListingModel).all()
-            # g = result[0].bids[0].listing
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Equal(nameof(StockItem.name), "Testee")).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).any()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).first_by_id(2, "1")
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).first(Equal(nameof(StockItem.id), uuid.uuid4()))
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).where(Not(Equal((StockItem, nameof(StockItem.name)), "Test"))).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).project(get_stock_item_next_thing).execute()
-            # g = SqlAlchemyPersistenceContext().get_entities(StockItem).project(get_stock_item_dto).project(get_stock_item_view_model).execute()
-            # x = SqlAlchemyPersistenceContext().get_entities(StockItem).include(nameof(StockItem.location)).project(get_stock_item_dto).execute()
-            v = 0
-            await SqlAlchemyPersistenceContext().save_changes_async()
 
 
 #TODO: Put other regex up top if possible
@@ -315,7 +186,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             #     self.query = self.query.options(load_only(model_attr))
 
             print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
-            if self.projections: print('\033[32m' + f'PROJECTION: {self.projection_tree}' + '\033[0m')
+            if self.projections:
+                print('\033[32m' + f'PROJECTION: {self.projection_tree}' + '\033[0m')
 
             models_from_query_result = [row_result[0] for row_result in self.session.execute(self.query).unique().all()]
 
@@ -344,13 +216,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if condition:
             return self.where(condition).first()
 
-        if result:= self.execute():
+        if result := self.execute():
             return result[0]
 
         raise PersistenceError("Result set was empty.")
 
     def first_by_id(self, entity_id: EntityID) -> TEntity:
-        if result:= self.first_or_none(Equal(entity_id, (self.model.__entity__, "id"))):
+        if result := self.first_or_none(Equal(entity_id, (self.model.__entity__, "id"))):
             return result
 
         raise PersistenceError("No entity matching the provided ID.")
@@ -362,7 +234,7 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if condition:
             return self.where(condition).first_or_none()
 
-        if result:= self.execute():
+        if result := self.execute():
             return result[0]
 
         return None
@@ -440,11 +312,11 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         entities_in_condition = find_pattern.findall(condition)
         for entity_name in entities_in_condition:
             model_name = [model.__name__ for entity, model in self.persistence_context._model_classes.items()
-                        if entity.__name__ == entity_name][0]
+                          if entity.__name__ == entity_name][0]
             replace_pattern = re.compile(rf'\[\[{re.escape(entity_name)}\]\]')
             condition = re.sub(replace_pattern, model_name, condition)
 
-        context = { model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
+        context = {model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
 
         print('\033[35m' + f"TRANSLATED CONDITION: {condition}" + '\033[0m')
         self.query = self.query.where(eval(condition, context))

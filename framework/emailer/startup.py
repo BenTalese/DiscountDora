@@ -1,8 +1,5 @@
-import os
-import sys
+from pathlib import Path
 from uuid import uuid4
-
-sys.path.append(os.getcwd())
 
 import asyncio
 import json
@@ -32,23 +29,9 @@ TODO:
         - Send email with current offers to all recipients
 '''
 
-def configure_logger() -> logging.Logger:
-    log_folder = os.path.join(os.path.dirname(__file__), "logs")
-    if not os.path.exists(log_folder):
-        os.makedirs(log_folder)
-
-    logger = logging.getLogger(__name__)
-    log_filename = os.path.join(log_folder, "emailer_logs.txt")
-    file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=30)
-    file_handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
-    logger.setLevel(logging.INFO) # TODO: appsettings
-    logger.addHandler(file_handler)
-
-    return logger
-
-logger: logging.Logger = configure_logger()
 
 def startup():
+    configure_logger(logging.INFO)  # TODO: Use config manager
     asyncio.run(process())
     # logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)
     # scheduler = AsyncIOScheduler()
@@ -59,6 +42,7 @@ def startup():
     # loop = asyncio.new_event_loop()
     # asyncio.set_event_loop(loop)
     # loop.run_forever()
+
 
 async def process():
     # print("Emailing")
@@ -101,8 +85,20 @@ async def process():
         SECRETS["SENDER_EMAIL"], SECRETS["SENDER_PASSWORD"], ["ben.talese@gmail.com"])
 
     except Exception as e:
-        logger.exception("An exception occurred:")
+        logging.getLogger(__name__).exception("An exception occurred:")
         raise e
+
+
+def configure_logger(log_level: int):
+    _LogFolder = Path().resolve() / 'data' / 'logs' / 'emailer'
+    Path.mkdir(_LogFolder, parents=True, exist_ok=True)
+
+    _Logger = logging.getLogger()
+    _LogFilename = _LogFolder / 'log.txt'
+    _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)
+    _FileHandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
+    _Logger.setLevel(log_level)
+    _Logger.addHandler(_FileHandler)
 
 
 if __name__ == "__main__":

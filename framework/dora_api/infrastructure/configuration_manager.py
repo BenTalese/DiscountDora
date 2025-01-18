@@ -1,34 +1,24 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List
 
 from pydantic import BaseModel
 
-from framework.merchant_api.domain.entities.merchant import Merchant
-from framework.merchant_api.domain.enumerations.supported_merchant import SupportedMerchant
-from framework.merchant_api.services.iconfiguration_manager import \
+from framework.dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
 
 class Config(BaseModel):
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 5172
-    IGA_STORE_ID: int = 52511
+    API_PORT: int = 5170
     LOG_LEVEL: str = "ERROR"
-    MERCHANTS: Dict[str, bool] = {
-        SupportedMerchant.ALDI.value: True,
-        SupportedMerchant.COLES.value: True,
-        SupportedMerchant.IGA.value: True,
-        SupportedMerchant.WOOLWORTHS.value: True
-    }
     WEB_APP_HOST: str = "0.0.0.0"
     WEB_APP_PORT: int = 5174
 
 
 class ConfigurationManager(IConfigurationManager):
     _config: Config
-    _config_path: Path = Path().resolve() / 'config' / 'mapi.appsettings.json'
+    _config_path: Path = Path().resolve() / 'config' / 'dapi.appsettings.json'
 
     def __init__(self):
         if not Path.exists(self._config_path):
@@ -39,21 +29,14 @@ class ConfigurationManager(IConfigurationManager):
         with open(self._config_path, 'r') as _AppSettings:
             self._config = Config(**json.load(_AppSettings))
 
-    def get_all_merchants(self) -> List[Merchant]:
-        return [
-            Merchant(is_enabled = _IsEnabled, name = SupportedMerchant(_MerchantName))
-            for _MerchantName, _IsEnabled
-            in self._config.MERCHANTS.items()
-        ]
-
     def get_api_host(self) -> str:
         return self._config.API_HOST
 
     def get_api_port(self) -> int:
         return self._config.API_PORT
 
-    def get_iga_store_id(self) -> int:
-        return self._config.IGA_STORE_ID
+    def get_db_connection_string(self) -> str:
+        return f"sqlite:///{Path().resolve() / 'data' / 'dora.data.db'}"
 
     def get_log_level(self) -> int:
         _LogLevel = self._config.LOG_LEVEL
@@ -87,12 +70,11 @@ class ConfigurationManager(IConfigurationManager):
     def is_debug_mode_enabled(self) -> bool:
         return False
 
+    def is_modification_tracking_enabled(self) -> bool:
+        return True
+
     def is_reloader_enabled(self) -> bool:
         return False
-
-    def toggle_merchant_enabled_state(self, merchant_name: str) -> None:
-        self._config.MERCHANTS[merchant_name] = not self._config.MERCHANTS[merchant_name]
-        self._save_configuration()
 
     def _save_configuration(self) -> None:
         with open(self._config_path, 'w') as _AppSettings:

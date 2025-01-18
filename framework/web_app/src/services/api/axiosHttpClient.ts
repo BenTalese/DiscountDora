@@ -27,7 +27,7 @@ export default class AxiosHttpClient implements HttpClient {
 
     constructor(port: number) {
         this.axios = axios.create({
-            baseURL: `http://127.0.0.1:${port}/api`,
+            baseURL: `http://0.0.0.0:${port}/api`,
             headers: { 'Content-Type': 'application/json' }
         })
     }

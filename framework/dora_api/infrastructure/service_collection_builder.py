@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from clapy import DependencyInjectorServiceProvider
@@ -8,12 +7,12 @@ from application.infrastructure.configure_services import \
     configure_application_services
 from application.infrastructure.utils import get_classes_ending_with
 from domain.infrastructure.configure_services import configure_domain_services
-from framework.dora_api.infrastructure.configuration_provider import \
-    ConfigurationProvider
-from framework.dora_api.services.iconfiguration_provider import \
-    IConfigurationProvider
-from framework.persistence.infrastructure.configure_services import \
+from framework.dora_api.infrastructure.configuration_manager import \
+    ConfigurationManager
+from framework.dora_api.persistence.configure_services import \
     configure_persistence_services
+from framework.dora_api.services.iconfiguration_manager import \
+    IConfigurationManager
 from interface_adaptors.infrastructure.configure_services import \
     configure_interface_adaptors_services
 
@@ -24,7 +23,7 @@ class ServiceCollectionBuilder:
 
     def build_service_provider(self):
         return self \
-            .register_configuration_provider() \
+            .register_configuration_manager() \
             .configure_persistence_services() \
             .configure_core_services() \
             .register_api_presenters() \
@@ -46,6 +45,6 @@ class ServiceCollectionBuilder:
             self.service_provider.register_service(providers.Factory, _Presenter)
         return self
 
-    def register_configuration_provider(self):
-        self.service_provider.register_service(providers.Singleton, ConfigurationProvider, IConfigurationProvider)
+    def register_configuration_manager(self):
+        self.service_provider.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
         return self

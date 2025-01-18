@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class IConfigurationProvider(ABC):
+class IConfigurationManager(ABC):
 
     @abstractmethod
     def get_api_host(self) -> str:
@@ -13,6 +13,10 @@ class IConfigurationProvider(ABC):
 
     @abstractmethod
     def get_db_connection_string(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_log_level(self) -> int:
         pass
 
     @abstractmethod

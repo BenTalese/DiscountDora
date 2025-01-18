@@ -1,25 +1,27 @@
 from uuid import uuid4
+
 from sqlalchemy import Column, String
 from sqlalchemy_utils import UUIDType
 
 from domain.entities.base_entity import EntityID
-from domain.entities.merchant import Merchant
-from framework.persistence.infrastructure.persistence_context import db
+from domain.entities.stock_location import StockLocation
+from framework.dora_api.app import db
 
 
-class MerchantModel(db.Model):
-    __entity__ = Merchant
-    __tablename__ = Merchant.__name__
+class StockLocationModel(db.Model):
+    __entity__ = StockLocation
+    __tablename__ = StockLocation.__name__
 
     id = Column(
         UUIDType,
         primary_key=True,
         default=uuid4)
 
-    name = Column(String(255))
+    name = Column(
+        String(255))
 
-    def to_entity(self) -> Merchant:
-        return Merchant(
+    def to_entity(self) -> StockLocation:
+        return StockLocation(
             id = EntityID(self.id),
             name = self.name)
 

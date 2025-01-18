@@ -1,18 +1,16 @@
 import asyncio
 import logging
-import os
-import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask_cors import CORS
-from flask_migrate import Migrate, upgrade
-
-# sys.path.append(os.getcwd())
+from flask_migrate import upgrade
 
 from application.infrastructure.utils import get_attributes_ending_with
 from framework.dora_api.app import app, db
+from framework.dora_api.infrastructure.configuration_manager import \
+    ConfigurationManager
 from framework.dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from framework.dora_api.infrastructure.middleware import MIDDLEWARE
 from framework.dora_api.infrastructure.service_collection_builder import \
@@ -61,9 +59,6 @@ async def startup():
 
 async def init_db():
     verify_all_models_imported()
-    import framework.dora_api.persistence.models  # Makes models visible to db instance  # noqa: F401
-    db.init_app(app)
-    Migrate(app, db, Path(__file__).parent / 'persistence' / 'migrations')
 
     SqlAlchemyPersistenceContext._flask_app = app
     SqlAlchemyPersistenceContext._model_classes = {
@@ -72,7 +67,7 @@ async def init_db():
     }
 
     with app.app_context():
-        if app.config.get('DEBUG'):
+        if ConfigurationManager().is_debug_mode_enabled():
             db.drop_all()
             db.create_all()
             await seed_dev_data_async(SqlAlchemyPersistenceContext())

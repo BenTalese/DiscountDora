@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # DEV
-python framework/dora_api/startup.py &
-python framework/merchant_api/startup.py &
+python -m framework.dora_api.startup &
+python -m framework.merchant_api.startup &
 quasar serve /app/framework/web_app/dist/spa -H 0.0.0.0 -p 5174 &
 
 # quasar serve /app/framework/web_app &

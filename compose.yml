@@ -15,6 +15,6 @@ services:
       - 5172:5172
       - 5174:5174
     volumes:
-      - /path/to/cache:/cache
-      - /path/to/data:/data
-      - /path/to/config:/config
+      - /path/to/cache:/app/cache
+      - /path/to/data:/app/data
+      - /path/to/config:/app/config

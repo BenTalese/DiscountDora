@@ -14,20 +14,6 @@ from framework.dora_api.persistence.persistence_helper_methods import (
     is_entity, is_list)
 
 
-async def seed_system_data_async(persistence: IPersistenceContext):
-    stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
-    stock_level_two = StockLevel(name = "Sufficient Stock", sequence = 1)
-    stock_level_three = StockLevel(name = "Low Stock", sequence = 2)
-    stock_level_four = StockLevel(name = "Out of Stock", sequence = 3)
-
-    persistence.add(stock_level_one)
-    persistence.add(stock_level_two)
-    persistence.add(stock_level_three)
-    persistence.add(stock_level_four)
-
-    await persistence.save_changes_async()
-
-
 async def seed_dev_data_async(persistence: IPersistenceContext):
     merchant_one = generate_entity(Merchant)
     merchant_one.name = "Woolworths"

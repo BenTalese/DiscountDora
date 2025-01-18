@@ -27,9 +27,9 @@ def add_stock_levels():
     )
 
     stock_levels = [
-        {"id": str(uuid.uuid4()), "name": "Well-Stocked", "sequence": 0},
-        {"id": str(uuid.uuid4()), "name": "Sufficient Stock", "sequence": 1},
-        {"id": str(uuid.uuid4()), "name": "Low Stock", "sequence": 2},
+        {'id': str(uuid.uuid4()), 'name': 'Well-Stocked', 'sequence': 0},
+        {'id': str(uuid.uuid4()), 'name': 'Sufficient Stock', 'sequence': 1},
+        {'id': str(uuid.uuid4()), 'name': 'Low Stock', 'sequence': 2},
         {"id": str(uuid.uuid4()), "name": "Out of Stock", "sequence": 3}
     ]
 

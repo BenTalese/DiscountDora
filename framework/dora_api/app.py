@@ -11,7 +11,7 @@ config_manager = ConfigurationManager()
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = config_manager.get_db_connection_string()
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
 db = SQLAlchemy()
 Path('data').mkdir(exist_ok=True)

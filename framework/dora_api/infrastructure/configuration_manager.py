@@ -12,7 +12,6 @@ class Config(BaseModel):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 5170
     LOG_LEVEL: str = "ERROR"
-    SQLALCHEMY_DATABASE_URI: str = f"sqlite:///{Path().resolve() / 'data' / 'dora.data.db'}"
     WEB_APP_HOST: str = "0.0.0.0"
     WEB_APP_PORT: int = 5174
 
@@ -37,7 +36,7 @@ class ConfigurationManager(IConfigurationManager):
         return self._config.API_PORT
 
     def get_db_connection_string(self) -> str:
-        return self._config.SQLALCHEMY_DATABASE_URI
+        return f"sqlite:///{Path().resolve() / 'data' / 'dora.data.db'}"
 
     def get_log_level(self) -> int:
         _LogLevel = self._config.LOG_LEVEL

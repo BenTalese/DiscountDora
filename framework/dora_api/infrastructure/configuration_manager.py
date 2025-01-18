@@ -19,10 +19,11 @@ class Config(BaseModel):
 
 class ConfigurationManager(IConfigurationManager):
     _config: Config
-    _config_path: Path = Path() / 'config' / 'dapi.appsettings.json'
+    _config_path: Path = Path().resolve() / 'config' / 'dapi.appsettings.json'
 
     def __init__(self):
         if not Path.exists(self._config_path):
+            Path('config').mkdir(exist_ok=True)
             with open(self._config_path, 'w') as _AppSettings:
                 _AppSettings.write(Config().model_dump_json(indent = 4))
 

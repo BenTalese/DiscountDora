@@ -1,8 +1,6 @@
 import asyncio
 import logging
 from logging.handlers import TimedRotatingFileHandler
-import os
-import sys
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -10,8 +8,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask import Flask
 from flask_cors import CORS
-
-sys.path.append(os.getcwd())
 
 from application.infrastructure.utils import get_attributes_ending_with
 from framework.merchant_api.infrastructure.merchant_data_providers import \

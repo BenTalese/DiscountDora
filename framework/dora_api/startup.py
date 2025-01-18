@@ -9,7 +9,7 @@ from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask_cors import CORS
 from flask_migrate import Migrate, upgrade
 
-sys.path.append(os.getcwd())
+# sys.path.append(os.getcwd())
 
 from application.infrastructure.utils import get_attributes_ending_with
 from framework.dora_api.app import app, db

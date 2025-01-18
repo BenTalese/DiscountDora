@@ -1,8 +1,4 @@
-import os
-import sys
 from uuid import uuid4
-
-sys.path.append(os.getcwd())
 
 import asyncio
 import json

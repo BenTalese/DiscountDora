@@ -1,0 +1,38 @@
+Docker:
+docker build .
+docker run -p 5170:5170 -p 5172:5172 -p 5174:5174 <CONTAINER_ID>
+docker ps
+docker stop <CONTAINER_ID>
+
+
+===============================================================================
+
+
+Initialising and migrating DB:
+
+cd framework/dora_api
+flask db init
+flask db migrate -m "_2024_12_01__add_user_table"
+flask db upgrade
+
+
+===============================================================================
+
+
+Test an API endpoint via terminal:
+
+GET
+curl http://localhost:5170/api/get_endpoint
+
+POST
+curl -X POST -H "Content-Type: application/json" -d '{"<key>": "<value>"}' http://localhost:5170/api/<endpoint>
+curl -X POST -H "Content-Type: application/json" -d '{"name": "TEST NAME", "stock_level_id": "ec1e748e-20a6-48f1-a262-b1689fc86749", "stock_location_id": "ec1e748e-20a6-48f1-a262-b1689fc86749"}' http://localhost:5170/api/stockItems
+
+DELETE
+curl -X DELETE http://localhost:5170/api/delete_endpoint
+
+PATCH
+curl -X PATCH -H "Content-Type: application/json" -d '{"key1": "new_value1"}' http://localhost:5170/api/patch_endpoint
+
+PUT
+curl -X PUT -H "Content-Type: application/json" -d '{"key1": "updated_value1"}' http://localhost:5170/api/put_endpoint

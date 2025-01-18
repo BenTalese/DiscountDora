@@ -1,0 +1,22 @@
+{
+    "arrowParens": "always",
+    "bracketSameLine": false,
+    "bracketSpacing": true,
+    "htmlWhitespaceSensitivity": "ignore",
+    "jsxSingleQuote": true,
+    "printWidth": 80,
+    "semi": true,
+    "singleAttributePerLine": true,
+    "singleQuote": true,
+    "tabWidth": 4,
+    "trailingComma": "none",
+    "vueIndentScriptAndStyle": true,
+    "plugins": [
+        "prettier-plugin-organize-attributes"
+    ],
+    "attributeGroups": [
+        "$CODE_GUIDE"
+    ],
+    "attributeSort": "ASC",
+    "attributeIgnoreCase": false
+}

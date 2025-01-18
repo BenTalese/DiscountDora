@@ -1,6 +1,8 @@
 from datetime import datetime
 from clapy import Interactor
+from varname import nameof
 from application.dtos.product_dto import get_product_dto
+from application.infrastructure.bool_operation import Equal
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.create_product.create_product_input_port import CreateProductInputPort
 
@@ -16,7 +18,13 @@ class CreateProductInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: CreateProductInputPort, output_port: ICreateProductOutputPort):
-        merchant = self.persistence_context.get_entities(Merchant).first_by_id(input_port.merchant_id)
+        merchant = self.persistence_context \
+            .get_entities(Merchant) \
+            .first_or_none(Equal((Merchant, nameof(Merchant.name)), input_port.merchant_name))
+
+        if not merchant:
+            merchant = Merchant(name = input_port.merchant_name)
+            self.persistence_context.add(merchant)
 
         product = Product(
             brand = input_port.brand,
@@ -27,10 +35,12 @@ class CreateProductInteractor(Interactor):
             ),
             historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
             image = input_port.image,
+            is_active = input_port.is_active,
             is_available = input_port.is_available,
             merchant = merchant,
             merchant_stockcode = input_port.merchant_stockcode,
             name = input_port.name,
+            size = input_port.size,
             size_unit = input_port.size_unit,
             size_value = input_port.size_value,
             web_url = input_port.web_url

@@ -16,13 +16,13 @@ class CreateStockItemInteractor(Interactor):
         self.persistence_context = persistence_context
 
     async def execute_async(self, input_port: CreateStockItemInputPort, output_port: ICreateStockItemOutputPort):
-        stock_item = StockItem(
+        _StockItem = StockItem(
             name = input_port.name,
             stock_level = self.persistence_context.get_entities(StockLevel).first_by_id(input_port.stock_level_id),
             stock_location = self.persistence_context.get_entities(StockLocation).first_by_id(input_port.stock_location_id)
                 if input_port.stock_location_id else None
         )
 
-        self.persistence_context.add(stock_item)
+        self.persistence_context.add(_StockItem)
 
-        await output_port.present_stock_item_created_async(get_stock_item_dto(stock_item))
+        await output_port.present_stock_item_created_async(get_stock_item_dto(_StockItem))

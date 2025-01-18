@@ -1,0 +1,92 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "DAPI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "framework.dora_api.startup",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "MAPI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "framework.merchant_api.startup",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Emailer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "framework.emailer.startup",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Chrome",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/src",
+            "sourceMapPathOverrides": {
+                "webpack:///src/*": "${webRoot}/*"
+            }
+        },
+        {
+            "type": "firefox",
+            "request": "launch",
+            "name": "Firefox",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/framework/web_app/src",
+            "preLaunchTask": "quasar:dev",
+            "pathMappings": [
+                {
+                    "url": "http://localhost:5174/src",
+                    "path": "${workspaceFolder}/framework/web_app/src"
+                },
+                {
+                    "url": "webpack:///src/*",
+                    "path": "${workspaceFolder}/framework/web_app/src/*"
+                }
+            ]
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
+                "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "TypeScript: Current File",
+            "program": "${workspaceFolder}/framework/web_app/node_modules/ts-node/dist/bin.js",
+            "args": ["${file}"],
+            "runtimeArgs": ["--loader", "ts-node/esm"],
+            "sourceMaps": true,
+            "cwd": "${workspaceFolder}/framework/web_app",
+            "console": "integratedTerminal",
+            "outFiles": ["${workspaceFolder}/framework/web_app/dist/**/*.js"],
+            "skipFiles": ["<node_internals>/**"]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Launch All (Firefox)",
+            "configurations": ["DAPI", "MAPI", "Firefox"]
+        },
+        {
+            "name": "Launch All (Chrome)",
+            "configurations": ["DAPI", "MAPI", "Chrome"]
+        }
+    ]
+}

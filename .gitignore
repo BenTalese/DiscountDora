@@ -2,6 +2,8 @@
 
 .vscode
 
+.image_cache
+
 __pycache__
 
 venv
@@ -12,7 +14,9 @@ venv
 
 **/.buildozer
 
-**/database.db
+**/bin
+
+**/*.db
 
 **/appsettings.json
 
@@ -37,11 +41,17 @@ coverage
 
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+framework/web_app/.vscode/*
+framework/web_app_old/.vscode/*
 .idea
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+*.json
 *.sw?
-*.apk
+*.cjs
+*.prettierrc
+!aldi_products_by_category.json

@@ -12,10 +12,12 @@ class Product(BaseEntity):
     current_offer: ProductOffer = None
     historical_offers: List[ProductOffer] = None
     image: bytes = None
+    is_active: bool = None
     is_available: bool = None
     merchant: Merchant = None
     merchant_stockcode: str = None
     name: str = None
+    size: str = None
     size_unit: str = None
     size_value: float = None
     web_url: str = None

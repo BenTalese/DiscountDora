@@ -12,7 +12,7 @@ Initialising and migrating DB:
 
 cd framework/dora_api
 flask db init
-flask db migrate
+flask db migrate -m "_2024_12_01__add_user_table"
 flask db upgrade
 
 

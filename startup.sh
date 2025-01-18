@@ -3,10 +3,10 @@
 # DEV
 python -m framework.dora_api.startup &
 python -m framework.merchant_api.startup &
+# python -m framework.emailer.startup &
 quasar serve /app/framework/web_app/dist/spa -H 0.0.0.0 -p 5174 &
 
 # quasar serve /app/framework/web_app &
-# python framework/emailer/startup.py &
 
 # PROD
 # gunicorn -w 4 -b 0.0.0.0:5170 framework.dora_api.startup:app &

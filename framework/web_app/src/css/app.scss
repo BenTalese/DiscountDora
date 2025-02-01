@@ -13,3 +13,88 @@ $off-white: whitesmoke;
 .font-weight-400 {
     font-weight: 400;
 }
+
+// /* ========== COLOR PALETTE ========== */
+// $primary-color: #0077CC; /* Blue */
+// $secondary-color: #2CA58D; /* Green */
+// $background-light: #F4F7F9;
+// $text-light: #1A1A1A;
+// $border-light: #D1D5DB;
+// $card-bg-light: #FFFFFF;
+// $shadow-light: rgba(0, 0, 0, 0.1);
+
+// $background-dark: #121212;
+// $text-dark: #EAEAEA;
+// $border-dark: #444;
+// $card-bg-dark: #1E1E1E;
+// $shadow-dark: rgba(255, 255, 255, 0.1);
+
+// /* ========== TYPOGRAPHY ========== */
+// body {
+//   font-family: "Segoe UI", sans-serif;
+// }
+
+// h1, h2, h3, h4, h5, h6 {
+//   font-weight: 600;
+// }
+
+// p, span, label {
+//   font-weight: 400;
+// }
+
+// /* ========== COMPONENT STYLING ========== */
+// /* Buttons */
+// .q-btn {
+//   background-color: $primary-color;
+//   color: white;
+//   border-radius: 8px;
+//   font-weight: 500;
+//   transition: all 0.3s ease-in-out;
+
+//   &:hover {
+//     background-color: darken($primary-color, 10%);
+//   }
+// }
+
+// /* Inputs */
+// .q-input {
+//   border: 1px solid $border-light;
+//   background-color: $card-bg-light;
+//   color: $text-light;
+//   border-radius: 6px;
+//   padding: 10px;
+
+//   &:focus {
+//     border-color: $primary-color;
+//   }
+// }
+
+// /* Cards */
+// .q-card {
+//   background-color: $card-bg-light;
+//   border-radius: 12px;
+//   box-shadow: 0px 4px 10px $shadow-light;
+// }
+
+// /* Modals */
+// .q-dialog {
+//   background: $card-bg-light;
+//   border-radius: 12px;
+//   padding: 20px;
+// }
+
+// /* Dark Mode Support */
+// [data-theme="dark"] {
+//   background-color: $background-dark;
+//   color: $text-dark;
+
+//   .q-btn {
+//     background-color: $secondary-color;
+//   }
+
+//   .q-card,
+//   .q-dialog {
+//     background-color: $card-bg-dark;
+//     box-shadow: 0px 4px 10px $shadow-dark;
+//   }
+// }

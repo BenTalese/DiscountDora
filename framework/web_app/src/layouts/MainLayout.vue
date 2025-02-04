@@ -32,13 +32,11 @@ import { ref } from 'vue';
 const essentialLinks: EssentialLinkProps[] = [
     {
         title: 'Product Search',
-        caption: 'Product Search',
         icon: 'search',
         link: 'http://localhost:5174/#/product-search'
     },
     {
         title: 'Stock',
-        caption: 'Stock',
         icon: 'stock',
         link: 'http://localhost:5174/#'
     }

@@ -122,7 +122,7 @@ export default configure((/* ctx */) => {
                 'Notify'
             ],
             config: {
-                dark: 'false', // TODO: Implement dark mode...
+                dark: false, // TODO: Implement dark mode...
                 loading: {
                     group: 'default-group-name',
                     message: 'Loading...',

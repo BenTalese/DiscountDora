@@ -23,6 +23,7 @@ from framework.dora_api.persistence.seed import seed_dev_data_async
 from framework.dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
+test
 
 async def startup():
     _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()

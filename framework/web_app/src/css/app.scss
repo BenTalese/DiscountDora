@@ -1,17 +1,16 @@
-// app global css in SCSS form
+/*
+STYLE GUIDE:
+    1. Strictly only style using css classes
+    2. Style with quasar's built in classes first and fill in the gaps with custom classes
+    3. Prefix custom global styles with "dora-" and put them in app.scss (or a category e.g. sizes.scss)
+    4. Prefix scoped styles with "dorascoped-" and keep usage of scoped styles within the component they were defined in
+    5. Keep classes in categories of CSS in their own files, e.g. sizes.scss, padding.scss, etc
+    6. Classes are named as "dora-property-value", e.g. "dora-fontWeight-400" for "font-weight: 400;" (abbreviate if too long, e.g. "background-colour" is "bgc")
+*/
 
-$off-white: whitesmoke;
-
-.bg-off-white {
-    background-color: $off-white;
-}
-
-.flex-1 {
-    flex: 1;
-}
-
-.font-weight-400 {
-    font-weight: 400;
+body {
+    background-color: #b9cfdd;  // Default applied with light mode theme
+    font-family: "Segoe UI", sans-serif;
 }
 
 // /* ========== COLOR PALETTE ========== */
@@ -30,9 +29,6 @@ $off-white: whitesmoke;
 // $shadow-dark: rgba(255, 255, 255, 0.1);
 
 // /* ========== TYPOGRAPHY ========== */
-// body {
-//   font-family: "Segoe UI", sans-serif;
-// }
 
 // h1, h2, h3, h4, h5, h6 {
 //   font-weight: 600;

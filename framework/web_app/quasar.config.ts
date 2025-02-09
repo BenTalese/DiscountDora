@@ -34,7 +34,11 @@ export default configure((/* ctx */) => {
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css
         css: [
-            'app.scss'
+            'app.scss',
+            'colours.scss',
+            'layout.scss',
+            'sizes.scss',
+            'typography.scss'
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras
@@ -118,13 +122,14 @@ export default configure((/* ctx */) => {
                 'Notify'
             ],
             config: {
+                dark: 'false', // TODO: Implement dark mode...
                 loading: {
                     group: 'default-group-name',
                     message: 'Loading...',
                     messageColor: 'info',
                     spinnerColor: 'info',
                     spinner: 'QSpinnerTail'
-                } /* look at QuasarConfOptions from the API card */
+                }
             }
         },
 

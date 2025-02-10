@@ -24,7 +24,7 @@ from framework.dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
 
-async def startup():
+async def startup(is_test_env: bool = False):
     _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
     app.service_provider = _ServiceProvider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
@@ -48,12 +48,13 @@ async def startup():
     register_routers()
     register_api_infrastructure()
 
-    app.run(
-        _ConfigurationManager.get_api_host(),
-        _ConfigurationManager.get_api_port(),
-        _ConfigurationManager.is_debug_mode_enabled(),
-        use_reloader = _ConfigurationManager.is_reloader_enabled()
-    )
+    if not is_test_env:
+        app.run(
+            _ConfigurationManager.get_api_host(),
+            _ConfigurationManager.get_api_port(),
+            _ConfigurationManager.is_debug_mode_enabled(),
+            use_reloader = _ConfigurationManager.is_reloader_enabled()
+        )
 
 
 async def init_db():

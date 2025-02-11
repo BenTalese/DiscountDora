@@ -29,7 +29,7 @@ async def startup(is_test_env: bool = False):
     app.service_provider = _ServiceProvider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
 
-    await init_db()
+    await init_db(is_test_env)
 
     WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
     WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
@@ -57,7 +57,7 @@ async def startup(is_test_env: bool = False):
         )
 
 
-async def init_db():
+async def init_db(is_test_env: bool = False):
     verify_all_models_imported()
 
     SqlAlchemyPersistenceContext._flask_app = app
@@ -67,7 +67,7 @@ async def init_db():
     }
 
     with app.app_context():
-        if ConfigurationManager().is_debug_mode_enabled():
+        if ConfigurationManager().is_debug_mode_enabled() or is_test_env:
             db.drop_all()
             db.create_all()
             await seed_dev_data_async(SqlAlchemyPersistenceContext())

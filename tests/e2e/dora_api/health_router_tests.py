@@ -1,11 +1,10 @@
-# flake8: noqa: E302
+# flake8: noqa
 
 import sys
 from multiprocessing import Process
 from pathlib import Path
 from time import sleep
 
-import pytest
 import pytest_asyncio
 import requests
 
@@ -26,27 +25,24 @@ def run_api():
 @pytest_asyncio.fixture
 async def api():
     await startup(is_test_env = True)
-    process = Process(target=run_api)
-    process.start()
+    _Process = Process(target=run_api)
+    _Process.start()
     sleep(3)
 
     yield
 
-    process.terminate()
-    process.join()
+    _Process.terminate()
+    _Process.join()
 
 #endregion setup
 
 #region ---------------- health_check_async tests ----------------
 
-@pytest.mark.asyncio
-async def test_GetHealth(api):
-    # Arrange
+def test__health_check_async__ApiIsHealthy__GetsOkayResponse(api):
+    _Response = requests.get(base_route)
 
-    # Act
-    _Actual = requests.get(base_route)
-
-    # Assert
-    assert _Actual == 200
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json() == True
 
 #endregion health_check_async tests

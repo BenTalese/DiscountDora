@@ -114,9 +114,8 @@ async def apply_query_operations(response: Response):
 
         response.set_data(json.dumps(asdict(_ProblemDetails)))
         response.status_code = 400
-        return response
 
-    if request.view_args and "query" in request.view_args.keys() and (_QueryString:= request.view_args["query"]):
+    if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()
         _RequestEndpoint = request.endpoint.split(".")[-1]
         _QueryString = str(_QueryString).lower()
@@ -125,6 +124,7 @@ async def apply_query_operations(response: Response):
 
         if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
             bad_query_request(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
+            return response
 
         # FILTER OPERATION
         _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
@@ -135,6 +135,7 @@ async def apply_query_operations(response: Response):
                 if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
             ]:
             bad_query_request(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
+            return response
 
         for _Filter in _FilterOperations:
             _Field, _Operator, _Value = _Filter.split(':')
@@ -154,8 +155,9 @@ async def apply_query_operations(response: Response):
                     _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) != _Value]
 
                 case _:
-                    bad_query_request(f"The filter operator {_Operator} is not supported. Supported operators"+\
-                    " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.")
+                    bad_query_request(f"The filter operator {_Operator} is not supported. Supported operators"
+                                      + " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.")
+                    return response
 
        # SORT OPERATION
         if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("sort=")), None):
@@ -163,6 +165,7 @@ async def apply_query_operations(response: Response):
 
             if _SortField not in get_type_hints(_ViewModel):
                 bad_query_request(f'Sort field {_SortField} does not exist in the view model.')
+                return response
 
             _ResponseData.sort(lambda resource: resource.get(_SortField), _SortOrder == 'desc')
 
@@ -175,15 +178,18 @@ async def apply_query_operations(response: Response):
                 _Page = int(_PageOperation[5:])
             except ValueError:
                 bad_query_request("The page parameter must be an integer.")
+                return response
 
         if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None):
             try:
                 _Limit = int(_LimitOperation[6:])
             except ValueError:
                 bad_query_request("The limit parameter must be an integer.")
+                return response
 
         if (_PageOperation is None) != (_LimitOperation is None):
             bad_query_request("You must use page and limit operations together.")
+            return response
 
         if _PageOperation and _LimitOperation:
             _Start = (_Page - 1) * _Limit

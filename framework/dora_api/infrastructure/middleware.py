@@ -20,6 +20,7 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 # TODO: 400 bad request validation for required inputs
 # TODO: data = request.form.to_dict() (DESERIALISE FORM DATA, maybe not needed)
 
+
 @MIDDLEWARE.before_app_request
 async def handle_cors_preflight_request():
     if request.method.upper() == 'OPTIONS':
@@ -46,12 +47,13 @@ async def deserialise_web_request():
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
-        _DeserialisedRequestData : dict = {}
+        _DeserialisedRequestData: dict = {}
+        _RequestBodySchema = get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items()
 
-        for _AttributeName, _AttributeType in get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items():
+        for _AttributeName, _AttributeType in _RequestBodySchema:
             _Data = _RequestData.get(_AttributeName)
 
-            if _AttributeTypeOrigin:= get_origin(_AttributeType):
+            if _AttributeTypeOrigin := get_origin(_AttributeType):
                 if _AttributeTypeOrigin is AttributeChangeTracker:
                     _DeserialisedRequestData[_AttributeName] = __get_deserialised_attribute_change_tracker(_AttributeName, _RequestData)
 
@@ -65,6 +67,14 @@ async def deserialise_web_request():
                 _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
+
+        '''Remove attributes not present in request data to allow RequiredInputValidator pipe to work.
+            Will leave AttributeChangeTrackers, unintentionally avoiding null exceptions, e.g. "price.has_been_set".
+            This may cause several bugs in the future if 'delattr' changes its behaviour.'''
+        for _AttributeName, _ in _RequestBodySchema:
+            if _AttributeName not in _RequestData:
+                delattr(_DeserialisedRequest, _AttributeName)
+
         setattr(request, "request_body", _DeserialisedRequest)
 
 

@@ -120,11 +120,12 @@ async def apply_query_operations(response: Response):
         _RequestEndpoint = request.endpoint.split(".")[-1]
         _QueryString = str(_QueryString).lower()
         _QueryOperations: List[str] = _QueryString.split("&")
-        _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
 
         if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
             bad_query_request(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
             return response
+
+        _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
 
         # FILTER OPERATION
         _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]

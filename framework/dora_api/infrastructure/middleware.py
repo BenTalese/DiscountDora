@@ -118,7 +118,6 @@ async def apply_query_operations(response: Response):
     if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()
         _RequestEndpoint = request.endpoint.split(".")[-1]
-        _QueryString = str(_QueryString).lower()
         _QueryOperations: List[str] = _QueryString.split("&")
 
         if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
@@ -128,13 +127,13 @@ async def apply_query_operations(response: Response):
         _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
 
         # FILTER OPERATION
-        _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
+        _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.lower().startswith("filter=")]
         if _NonExistentFields := [
-                _Operation.split(':')[0]
-                for _Operation
-                in _FilterOperations
-                if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
-            ]:
+            _Operation.split(':')[0]
+            for _Operation
+            in _FilterOperations
+            if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
+        ]:
             bad_query_request(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
             return response
 
@@ -160,8 +159,8 @@ async def apply_query_operations(response: Response):
                                       + " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.")
                     return response
 
-       # SORT OPERATION
-        if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("sort=")), None):
+        # SORT OPERATION
+        if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.lower().startswith("sort=")), None):
             _SortField, _SortOrder = _SortOperation[5:].split(':')
 
             if _SortField not in get_type_hints(_ViewModel):
@@ -174,14 +173,14 @@ async def apply_query_operations(response: Response):
         _Page: int = None
         _Limit: int = None
 
-        if _PageOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("page=")), None):
+        if _PageOperation := next((_Operation for _Operation in _QueryOperations if _Operation.lower().startswith("page=")), None):
             try:
                 _Page = int(_PageOperation[5:])
             except ValueError:
                 bad_query_request("The page parameter must be an integer.")
                 return response
 
-        if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None):
+        if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.lower().startswith("limit=")), None):
             try:
                 _Limit = int(_LimitOperation[6:])
             except ValueError:

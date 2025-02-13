@@ -28,31 +28,18 @@ from interface_adaptors.controllers.product_controller import ProductController
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 
-
 @PRODUCT_ROUTER.route("", methods=["POST"])
 @has_request_body('create_product_async', CreateProductCommand)
 async def create_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
+
     _Presenter: CreateProductPresenter = _ServiceProvider.get_service(CreateProductPresenter)
+    _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
 
     _Command: CreateProductCommand = request.request_body
-    _Presenter.request_body: CreateProductCommand = _Command
-    _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
-    _InputPort = CreateProductInputPort(
-        brand = _Command.brand,
-        image = _Command.image,
-        is_active = _Command.is_active,
-        is_available = _Command.is_available,
-        merchant_name = _Command.merchant_name,
-        merchant_stockcode = _Command.merchant_stockcode,
-        name = _Command.name,
-        price_now = _Command.price_now,
-        price_was = _Command.price_was,
-        size = _Command.size,
-        size_unit = _Command.size_unit,
-        size_value = _Command.size_value,
-        web_url = _Command.web_url)
+    _Presenter.request_body = _Command
+    _InputPort = get_input_port_from_command(_Command, CreateProductInputPort)
 
     await _ProductController.create_product_async(_InputPort, _Presenter)
     return _Presenter.result
@@ -78,12 +65,8 @@ async def update_product_async(product_id):
     _Presenter: UpdateProductPresenter = _ServiceProvider.get_service(UpdateProductPresenter)
 
     _Command: UpdateProductCommand = request.request_body
-    _InputPort: UpdateProductInputPort = UpdateProductInputPort(
-        is_active = _Command.is_active,
-        is_available = _Command.is_available,
-        price_now = _Command.price_now,
-        price_was = _Command.price_was,
-        product_id = EntityID(product_id))
+    _InputPort: UpdateProductInputPort = get_input_port_from_command(_Command, UpdateProductInputPort)
+    _InputPort.product_id = EntityID(product_id)
 
     await _ProductController.update_product_async(_InputPort, _Presenter)
     return _Presenter.result

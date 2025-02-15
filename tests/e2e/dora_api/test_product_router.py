@@ -192,7 +192,7 @@ def test__get_products_async__FilteringOnNonExistentAttribute__IsBadRequest(api)
     _Response = requests.get(f'{base_route}/filter=stockcode:eq:50332BA')
 
     assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
         'detail': 'Queried attribute(s) do not exist on response: stockcode.',
         'errors': {},
@@ -214,7 +214,7 @@ def test__get_products_async__FilteringWithUnsupportedOperator__IsBadRequest(api
     _Response = requests.get(f'{base_route}/filter=product_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
         'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.",
         'errors': {},
@@ -228,7 +228,7 @@ def test__get_products_async__SortingByNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/sort=stockcode:desc')
 
     assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
         "detail": "Sort field 'stockcode' does not exist in the view model.",
         "status": 400,
@@ -237,9 +237,6 @@ def test__get_products_async__SortingByNonExistentAttribute__IsBadRequest(api):
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
 
-# TODO: Test invalid query syntax
-# TODO: Test sorting works
-# TODO: Test pagination works
 
 #endregion get_products_async tests
 

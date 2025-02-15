@@ -22,11 +22,8 @@ class ProblemDetails:
     title: str
     type: str
 
-class BasePresenter(
-    IAuthenticationOutputPort,
-    IAuthorisationOutputPort,
-    IValidationOutputPort,
-    ABC):
+
+class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValidationOutputPort, ABC):
     get_route: str = None
     request_body: Any = None
     result: Response = None
@@ -35,7 +32,7 @@ class BasePresenter(
     async def business_rule_violation_async(self, error_message: str) -> None:
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { "": [error_message] },
+            errors = {"": [error_message]},
             status = UNPROCESSABLE_ENTITY,
             title = "Business rule violation.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -62,7 +59,7 @@ class BasePresenter(
     async def entity_existence_failure_async(self, entity_name: str, property_in_error: str, id: UUID):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"A {entity_name} with the ID '{id}' was not found."] },
+            errors = {property_in_error: [f"{entity_name} with the ID '{id}' was not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -70,7 +67,7 @@ class BasePresenter(
     async def entity_existence_failures_async(self, entity_name: str, property_in_error: str, *ids: Tuple[UUID]):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."] },
+            errors = {property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity(s) were not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -139,7 +136,7 @@ class BasePresenter(
             title = "Validation failure.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
-    async def unprocessable_entity_async(self, problem_details: ProblemDetails): # TODO: THIS NEEDS TESTING, I DOUBT IT WORKS
+    async def unprocessable_entity_async(self, problem_details: ProblemDetails):  # TODO: THIS NEEDS TESTING, I DOUBT IT WORKS
         if self.result is None:
             response = jsonify(problem_details)
             response.content_type = 'application/problem+json'

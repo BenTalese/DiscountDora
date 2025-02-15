@@ -13,5 +13,5 @@ class CreateProductInputPort(InputPort):
     price_was: float
     size: str
     size_unit: str
-    size_value: float = 0  # TODO: Can be nothing?
+    size_value: float = float(0)  # TODO: Can be nothing?
     web_url: str

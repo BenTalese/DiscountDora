@@ -2,8 +2,8 @@ from datetime import datetime
 
 from clapy import Interactor
 from varname import nameof
-from application.dtos.product_dto import get_product_dto
 
+from application.dtos.product_dto import get_product_dto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.update_product.iupdate_product_output_port import \
     IUpdateProductOutputPort
@@ -32,15 +32,22 @@ class UpdateProductInteractor(Interactor):
             _Product.is_available = input_port.is_available.value
 
         if input_port.price_now.has_been_set and input_port.price_was.has_been_set:
-            _Product.historical_offers.append(ProductOffer(
+            _HistoricalOffer = ProductOffer(
                 offered_on = _Product.current_offer.offered_on,
                 price_now = _Product.current_offer.price_now,
-                price_was = _Product.current_offer.price_was))
+                price_was = _Product.current_offer.price_was)
+
+            _Product.historical_offers.append(_HistoricalOffer)
+
+            self.persistence_context.remove(_Product.current_offer)
 
             _Product.current_offer = ProductOffer(
                 offered_on = datetime.utcnow(),
                 price_now = input_port.price_now.value,
                 price_was = input_port.price_was.value)
+
+            self.persistence_context.add(_Product.current_offer)
+            self.persistence_context.add(_HistoricalOffer)
 
         self.persistence_context.update(_Product)
 

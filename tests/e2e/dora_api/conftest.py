@@ -21,3 +21,9 @@ async def api():
 
     process.terminate()
     process.join()
+
+# Saved for later...
+# @pytest.fixture(autouse=True)
+# def slow_down_tests():
+#     yield
+#     sleep(0.3)

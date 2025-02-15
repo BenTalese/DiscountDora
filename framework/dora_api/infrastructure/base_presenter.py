@@ -91,14 +91,18 @@ class BasePresenter(
         response.status_code = NO_CONTENT
         self.result = response
 
-    async def not_found_async(self, error_message: str, route_segment: int):
+    async def not_found_async(self, entity_name: str, id: UUID, route_segment: int):
         if self._not_found_current_route_segment is None or route_segment < self._not_found_current_route_segment:
             self._not_found_current_route_segment = route_segment
-            self.result = jsonify(ProblemDetails(
-                detail = error_message,
+            response = jsonify(ProblemDetails(
+                detail = f"{entity_name} with the ID '{id}' was not found.",
+                errors = {},
                 status = NOT_FOUND,
                 title = "Entity was not found.",
                 type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"))
+            response.content_type = 'application/problem+json'
+            response.status_code = NOT_FOUND
+            self.result = response
 
     async def ok_async(self, result: Any):
         response = jsonify(result)

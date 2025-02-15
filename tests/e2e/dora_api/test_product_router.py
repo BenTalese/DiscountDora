@@ -1,16 +1,13 @@
-# flake8: noqa
-
-import sys
+import uuid
 from dataclasses import asdict
-from pathlib import Path
 from unittest.mock import ANY
 
 import requests
 
-sys.path.append(str(Path(__file__).resolve().parents[3]))
-
 from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
+from framework.dora_api.routes.products.update_product_command import \
+    UpdateProductCommand
 
 #region ---------------- setup ----------------
 
@@ -19,6 +16,7 @@ base_route = 'http://localhost:5170/api/products'
 #endregion setup
 
 #region ---------------- create_product_async tests ----------------
+
 
 def test__create_product_async__CreatingProductWithAllAttributes__ProductCreated(api):
     _ProductRequest = asdict(CreateProductCommand(
@@ -41,10 +39,11 @@ def test__create_product_async__CreatingProductWithAllAttributes__ProductCreated
 
     assert _Response.status_code == 201
     assert _Response.headers['Content-Type'] == 'application/json'
+    assert 'http://localhost:5170/api/products/filter=product_id:eq:' in _Response.headers['location']
     assert _Response.json()['id'] == ANY
 
 
-def test__create_product_async__CreatingProductWithIncorrectDataTypes__ProductCreated(api):
+def test__create_product_async__CreatingProductWithIncorrectDataTypes__CannotBeDeserialised(api):
     _ProductRequest = asdict(CreateProductCommand(
         brand = 555,
         image = 234,
@@ -62,10 +61,20 @@ def test__create_product_async__CreatingProductWithIncorrectDataTypes__ProductCr
     ))
 
     _Response = requests.post(base_route, json = _ProductRequest)
-
-    assert _Response.status_code == 422
+    assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json() == {}
+    assert _Response.json() == {
+        'detail': 'See errors property for more details.',
+        'errors': {
+            "image": "argument should be a bytes-like object or ASCII string, not 'int'",
+            "price_now": "could not convert string to float: 'CCC'",
+            "price_was": "could not convert string to float: 'DDD'",
+            "size_value": "could not convert string to float: 'EEE'"
+        },
+       'status': 400,
+       'title': 'Malformed request. One or more request properties could not be deserialised.',
+       'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
+    }
 
 
 def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__ProductCreated(api):
@@ -75,8 +84,8 @@ def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__Produ
         is_active = True,
         is_available = True,
         merchant_name = "Woolworths",
-        merchant_stockcode = "50332BA",
-        name = "Banana Mangoes",
+        merchant_stockcode = "2252ZD",
+        name = "Milo Chocolate Powder",
         price_now = 4.5,
         price_was = 10.5,
         size = "500g",
@@ -91,7 +100,6 @@ def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__Produ
 
     _Response = requests.post(base_route, json = _ProductRequest.__dict__)
 
-    assert _Response.json() == {}
     assert _Response.status_code == 201
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json()['id'] == ANY
@@ -118,11 +126,11 @@ def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(ap
 
     assert _Response.status_code == 422
     assert _Response.json() == {
-       'detail': 'See errors property for more details.',
-       'errors': {
-           '': [
-               "A product with the stockcode '50332BA' from the merchant "
-               "'Woolworths' already exists.",
+        'detail': 'See errors property for more details.',
+        'errors': {
+            '': [
+                "A product with the stockcode '50332BA' from the merchant "
+                "'Woolworths' already exists.",
             ],
         },
        'status': 422,
@@ -139,34 +147,36 @@ def test__create_product_async__EmptyRequest__IsRequiredInputsValidationFailure(
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-       'detail': 'Required inputs are missing values.',
-       'errors': {
-           'is_active': [ "'is_active' must have a value." ],
-            'is_available': [ "'is_available' must have a value." ],
-            'merchant_name': [ "'merchant_name' must have a value." ],
-            'merchant_stockcode': [ "'merchant_stockcode' must have a value." ],
-            'name': [ "'name' must have a value." ],
-            'price_now': [ "'price_now' must have a value." ],
-            'price_was': [ "'price_was' must have a value." ],
-            'size': [ "'size' must have a value." ],
-            'size_unit': [ "'size_unit' must have a value." ],
-            'web_url': [ "'web_url' must have a value." ]
+        'detail': 'Required inputs are missing values.',
+        'errors': {
+            'is_active': ["'is_active' must have a value."],
+                'is_available': ["'is_available' must have a value."],
+                'merchant_name': ["'merchant_name' must have a value."],
+                'merchant_stockcode': ["'merchant_stockcode' must have a value."],
+                'name': ["'name' must have a value."],
+                'price_now': ["'price_now' must have a value."],
+                'price_was': ["'price_was' must have a value."],
+                'size': ["'size' must have a value."],
+                'size_unit': ["'size_unit' must have a value."],
+                'web_url': ["'web_url' must have a value."]
         },
        'status': 422,
        'title': 'Validation failure.',
        'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
     }
 
+
 #endregion create_product_async tests
 
 #region ---------------- get_products_async tests ----------------
+
 
 def test__get_products_async__GettingAllProducts__GetsAllProducts(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()) == 3
+    assert len(_Response.json()) == 4
 
 
 def test__get_products_async__FilteringByStockcode__GetsSingleMatchingProduct(api):
@@ -191,10 +201,168 @@ def test__get_products_async__FilteringOnNonExistentAttribute__IsBadRequest(api)
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
-# TODO: Also test invalid query syntax, also test not found on e.g. update but also with the get
-# TODO: Queried attribute(s) do not exist on response
-# TODO: The endpoint "{_RequestEndpoint}" does not support filtering
-# TODO: The filter operator {_Operator} is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'
-# TODO: Sort field {_SortField} does not exist in the view model
+
+def test__get_products_async__FilteringForProductThatDoesNotExist__EmptyResult(api):
+    _Response = requests.get(f'{base_route}/filter=product_id:eq:{uuid.uuid4()}')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json() == []
+
+
+def test__get_products_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/filter=product_id:xx:{uuid.uuid4()}')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json() == {
+        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.",
+        'errors': {},
+        'status': 400,
+        'title': 'Unsupported query operation.',
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
+    }
+
+
+def test__get_products_async__SortingByNonExistentAttribute__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/sort=stockcode:desc')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json() == {
+        "detail": "Sort field 'stockcode' does not exist in the view model.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+# TODO: Test invalid query syntax
+# TODO: Test sorting works
+# TODO: Test pagination works
 
 #endregion get_products_async tests
+
+#region ---------------- update_product_async tests ----------------
+
+
+def test__update_product_async__EmptyUpdate__ProductUnaffected(api):
+    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = {})
+    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _ProductToUpdate == _ProductAfterPatchOperation
+
+
+def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api):
+    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    _ProductRequest = asdict(UpdateProductCommand(
+        is_active = False,
+        is_available = False,
+        price_now = 1.0,
+        price_was = 12.8
+    ))
+
+    _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)
+
+    # sleep(1)  # wait for the async save operation to complete
+
+    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _ProductToUpdate == {
+        'brand': 'Test',
+        'image': None,
+        'is_active': True,
+        'is_available': True,
+        'merchant_name': 'Woolworths',
+        'merchant_id': _ProductToUpdate['merchant_id'],
+        'merchant_stockcode': '50332BA',
+        'name': 'Banana Mangoes',
+        'price_now': 4.5,
+        'price_was': 10.5,
+        'size': '500g',
+        'size_unit': 'g',
+        'size_value': 5.0,
+        'web_url': 'www',
+        'product_id': _ProductToUpdate['product_id']
+    }
+    assert _ProductAfterPatchOperation == {
+        'brand': 'Test',
+        'image': None,
+        'is_active': False,
+        'is_available': False,
+        'merchant_name': 'Woolworths',
+        'merchant_id': _ProductToUpdate['merchant_id'],
+        'merchant_stockcode': '50332BA',
+        'name': 'Banana Mangoes',
+        'price_now': 1.0,
+        'price_was': 12.8,
+        'size': '500g',
+        'size_unit': 'g',
+        'size_value': 5.0,
+        'web_url': 'www',
+        'product_id': _ProductToUpdate['product_id']
+    }
+
+
+def test__update_product_async__ProductDoesNotExist__ProductNotFound(api):
+    _RandomID = uuid.uuid4()
+    _Response = requests.patch(f"{base_route}/{_RandomID}", json = {})
+
+    assert _Response.status_code == 404
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": f"Product with the ID '{_RandomID}' was not found.",
+        "errors": {},
+        "status": 404,
+        "title": "Entity was not found.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
+    }
+
+
+def test__update_product_async__UpdatingPriceNowWithoutPriceWas__IsValidationFailure(api):
+    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = {"price_now": 1.0})
+    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    assert _ProductToUpdate == _ProductAfterPatchOperation
+    assert _PatchResponse.status_code == 422
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _PatchResponse.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            "price_now": ["price_now and price_was must both be set."]
+        },
+        "status": 422,
+        "title": "Validation failure.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+    }
+
+
+def test__update_product_async__UpdatingPriceWasWithoutPriceNow__IsValidationFailure(api):
+    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = {"price_was": 1.0})
+    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    assert _ProductToUpdate == _ProductAfterPatchOperation
+    assert _PatchResponse.status_code == 422
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _PatchResponse.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            "price_was": ["price_now and price_was must both be set."]
+        },
+        "status": 422,
+        "title": "Validation failure.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+    }
+
+
+#endregion update_product_async tests

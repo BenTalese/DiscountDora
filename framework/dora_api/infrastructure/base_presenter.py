@@ -133,7 +133,7 @@ class BasePresenter(
 
     async def present_validation_failure_async(self, validation_failure: ValidationResult):
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = validation_failure.summary,
+            detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
             status = UNPROCESSABLE_ENTITY,
             errors = validation_failure.errors,
             title = "Validation failure.",

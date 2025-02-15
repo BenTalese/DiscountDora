@@ -134,6 +134,7 @@ async def apply_query_operations(response: Response):
 
         response.set_data(json.dumps(asdict(_ProblemDetails)))
         response.status_code = 400
+        response.headers["Content-Type"] = "application/problem+json"
 
     if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()
@@ -187,7 +188,7 @@ async def apply_query_operations(response: Response):
                 bad_query_request(f"Sort field '{_SortField}' does not exist in the view model.")
                 return response
 
-            _ResponseData.sort(lambda resource: resource.get(_SortField), _SortOrder == 'desc')
+            _ResponseData.sort(key = lambda resource: resource.get(_SortField), reverse = _SortOrder == 'desc')
 
         # PAGINATION OPERATION
         _Page: int = None

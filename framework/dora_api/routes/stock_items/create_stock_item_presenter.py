@@ -19,7 +19,7 @@ class CreateStockItemPresenter(BasePresenter, ICreateStockItemOutputPort):
 
     async def present_stock_item_created_async(self, stock_item: StockItemDto):
         await self.persistence.save_changes_async()
-        await self.created_async(CreatedViewModel(stock_item.stock_item_id.value))
+        await self.created_async(CreatedViewModel(stock_item.stock_item_id.value), nameof(stock_item.stock_item_id))
 
     async def present_stock_level_not_found_async(self, stock_level_id: EntityID):
         await self.entity_existence_failure_async(nameof(StockLevel), nameof(stock_level_id), stock_level_id.value)

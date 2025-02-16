@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 
-from clapy import IOutputPort
+from clapy import IOutputPort, IValidationOutputPort
 
 from application.dtos.stock_item_dto import StockItemDto
 from domain.entities.base_entity import EntityID
 
 
-class IUpdateStockItemOutputPort(IOutputPort, ABC):
+class IUpdateStockItemOutputPort(IOutputPort, IValidationOutputPort, ABC):
 
     @abstractmethod
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID) -> None:

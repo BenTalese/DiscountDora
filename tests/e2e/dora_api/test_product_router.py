@@ -252,6 +252,7 @@ def test__update_product_async__EmptyUpdate__ProductUnaffected(api):
     assert _ProductToUpdate == _ProductAfterPatchOperation
 
 
+# FIXME: This one seems to have a race condition... sometimes it fails, sometimes it passes
 def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api):
     _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
 
@@ -263,9 +264,6 @@ def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api)
     ))
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)
-
-    # sleep(1)  # wait for the async save operation to complete
-
     _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
 
     assert _PatchResponse.status_code == 204

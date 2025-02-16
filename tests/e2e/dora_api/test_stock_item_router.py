@@ -68,7 +68,7 @@ def test__create_stock_item_async__CreatingStockItemWithIncorrectDataTypes__Cann
 
 def test__create_stock_item_async__CreatingStockItemWithOnlyRequiredAttributes__StockItemCreated(api, stock_level_id):
     _StockItemRequest = CreateStockItemCommand(
-        name = "Freddo Brownies",
+        name = "Freddo Brownie Ice Cream",
         stock_level_id = stock_level_id,
         stock_location_id = None)
 
@@ -146,6 +146,183 @@ def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure
 #endregion create_stock_item_async tests
 
 #region ---------------- get_stock_items_async tests ----------------
+
+
+def test__get_stock_items_async__GettingAllStockItems__GetsAllStockItems(api):
+    _Response = requests.get(base_route)
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert len(_Response.json()) == 5
+
+
+def test__get_stock_items_async__FilteringByName__GetsSingleMatchingStockItem(api):
+    _Response = requests.get(f'{base_route}/filter=name:eq:Peters Neopolitan Ice Cream')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[0]['name'] == 'Peters Neopolitan Ice Cream'
+    assert len(_Response.json()) == 1
+
+
+def test__get_stock_items_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/filter=stock_item_name:eq:Peters Neopolitan Ice Cream')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        'detail': 'Queried attribute(s) do not exist on response: stock_item_name.',
+        'errors': {},
+        'status': 400,
+        'title': 'Unsupported query operation.',
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
+    }
+
+
+def test__get_stock_items_async__FilteringForStockItemThatDoesNotExist__EmptyResult(api):
+    _Response = requests.get(f'{base_route}/filter=stock_item_id:eq:{uuid.uuid4()}')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json() == []
+
+
+def test__get_stock_items_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/filter=stock_item_id:xx:{uuid.uuid4()}')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
+        'errors': {},
+        'status': 400,
+        'title': 'Unsupported query operation.',
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
+    }
+
+
+def test__get_stock_items_async__SortingByNonExistentAttribute__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/sort=stockcode:desc')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "Sort field 'stockcode' does not exist in the view model.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__get_stock_items_async__SortingByNameAscending__StockItemsSortedByNameAscending(api):
+    _Response = requests.get(f'{base_route}/sort=name:asc')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[0]['name'] == 'Freddo Brownie Ice Cream'
+    assert _Response.json()[1]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[2]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[3]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[4]['name'] == 'Super Awesome Pizza'
+
+
+def test__get_stock_items_async__SortingByNameDescending__StockItemsSortedByNameDescending(api):
+    _Response = requests.get(f'{base_route}/sort=name:desc')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[0]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[1]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[2]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[3]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[4]['name'] == 'Freddo Brownie Ice Cream'
+
+
+def test__get_stock_items_async__GettingTwoStockItemsPerPage__GetsPageOfTwoStockItems(api):
+    _Response = requests.get(f'{base_route}/page=1&limit=2')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[0]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[1]['name'] == 'Super Awesome Pizza'
+    assert len(_Response.json()) == 2
+
+
+def test__get_stock_items_async__GettingSecondPage__GetsSecondPageOfStockItems(api):
+    _Response = requests.get(f'{base_route}/page=2&limit=2')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[1]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[0]['name'] == 'Hot Crispy Chippies'
+    assert len(_Response.json()) == 2
+
+
+def test__get_stock_items_async__PageValueIsNotInteger__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/page=true&limit=2')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "The page parameter must be an integer.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__get_stock_items_async__LimitValueIsNotInteger__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/page=1&limit=true')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "The limit parameter must be an integer.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__get_stock_items_async__PagingWithoutLimit__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/page=1')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "You must use page and limit operations together.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__get_stock_items_async__LimitingWithoutPage__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/page=1')
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "You must use page and limit operations together.",
+        "status": 400,
+        "errors": {},
+        "title": "Unsupported query operation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__get_stock_items_async__FilteringSortingAndPagingStockItems__GetsMatchingStockItems(api):
+    _Response = requests.get(f'{base_route}/filter=name:ct:iCe CrEam&sort=name:asc&page=2&limit=1')
+
+    assert _Response.status_code == 200
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.json()[0]['name'] == 'Peters Neopolitan Ice Cream'
+    assert len(_Response.json()) == 1
+
 
 #endregion get_stock_items_async tests
 

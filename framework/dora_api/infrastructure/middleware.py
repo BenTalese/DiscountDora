@@ -161,6 +161,7 @@ async def apply_query_operations(response: Response):
 
         for _Filter in _FilterOperations:
             _Field, _Operator, _Value = _Filter.split(':')
+            _Value = _Value.replace("_", " ").lower()
 
             match _Operator:
                 case 'eq':

@@ -136,16 +136,26 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
             title = "Validation failure.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
-    async def unprocessable_entity_async(self, problem_details: ProblemDetails):  # TODO: THIS NEEDS TESTING, I DOUBT IT WORKS
+    async def unprocessable_entity_async(self, problem_details: ProblemDetails):
         if self.result is None:
             response = jsonify(problem_details)
             response.content_type = 'application/problem+json'
             response.status_code = UNPROCESSABLE_ENTITY
             self.result = response
+
         elif self.result.json['status'] == UNPROCESSABLE_ENTITY:
-            self.result.json['title'] = "Various errors."
-            for property, error in problem_details.errors.items():
-                if property in self.result.json['errors']:
-                    self.result.json['errors'][property] = self.result.json['errors'][property] + error
+            problem_details.title = "Various errors."
+
+            _Errors = self.result.json['errors']
+
+            for property, errors in _Errors.items():
+                if property in problem_details.errors:
+                    for error in errors:
+                        problem_details.errors[property].append(error)
                 else:
-                    self.result.json["errors"][property] = error
+                    problem_details.errors[property] = errors
+
+            response = jsonify(problem_details)
+            response.content_type = 'application/problem+json'
+            response.status_code = UNPROCESSABLE_ENTITY
+            self.result = response

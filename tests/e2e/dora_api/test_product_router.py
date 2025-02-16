@@ -3,6 +3,7 @@ from dataclasses import asdict
 from unittest.mock import ANY
 
 import requests
+from varname import nameof
 
 from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
@@ -66,10 +67,10 @@ def test__create_product_async__CreatingProductWithIncorrectDataTypes__CannotBeD
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            "image": "argument should be a bytes-like object or ASCII string, not 'int'",
-            "price_now": "could not convert string to float: 'CCC'",
-            "price_was": "could not convert string to float: 'DDD'",
-            "size_value": "could not convert string to float: 'EEE'"
+            "image": "Expected type '<class 'bytes'>'. argument should be a bytes-like object or ASCII string, not 'int'",
+            "price_now": "Expected type '<class 'float'>'. could not convert string to float: 'CCC'",
+            "price_was": "Expected type '<class 'float'>'. could not convert string to float: 'DDD'",
+            "size_value": "Expected type '<class 'float'>'. could not convert string to float: 'EEE'"
         },
        'status': 400,
        'title': 'Malformed request. One or more request properties could not be deserialised.',
@@ -94,9 +95,9 @@ def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__Produ
         web_url = "www"
     )
 
-    delattr(_ProductRequest, "brand")
-    delattr(_ProductRequest, "image")
-    delattr(_ProductRequest, "size_value")
+    delattr(_ProductRequest, nameof(_ProductRequest.brand))
+    delattr(_ProductRequest, nameof(_ProductRequest.image))
+    delattr(_ProductRequest, nameof(_ProductRequest.size_value))
 
     _Response = requests.post(base_route, json = _ProductRequest.__dict__)
 
@@ -140,9 +141,7 @@ def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(ap
 
 
 def test__create_product_async__EmptyRequest__IsRequiredInputsValidationFailure(api):
-    _ProductRequest = {}
-
-    _Response = requests.post(base_route, json = _ProductRequest)
+    _Response = requests.post(base_route, json = {})
 
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
@@ -150,15 +149,15 @@ def test__create_product_async__EmptyRequest__IsRequiredInputsValidationFailure(
         'detail': 'Required inputs are missing values.',
         'errors': {
             'is_active': ["'is_active' must have a value."],
-                'is_available': ["'is_available' must have a value."],
-                'merchant_name': ["'merchant_name' must have a value."],
-                'merchant_stockcode': ["'merchant_stockcode' must have a value."],
-                'name': ["'name' must have a value."],
-                'price_now': ["'price_now' must have a value."],
-                'price_was': ["'price_was' must have a value."],
-                'size': ["'size' must have a value."],
-                'size_unit': ["'size_unit' must have a value."],
-                'web_url': ["'web_url' must have a value."]
+            'is_available': ["'is_available' must have a value."],
+            'merchant_name': ["'merchant_name' must have a value."],
+            'merchant_stockcode': ["'merchant_stockcode' must have a value."],
+            'name': ["'name' must have a value."],
+            'price_now': ["'price_now' must have a value."],
+            'price_was': ["'price_was' must have a value."],
+            'size': ["'size' must have a value."],
+            'size_unit': ["'size_unit' must have a value."],
+            'web_url': ["'web_url' must have a value."]
         },
        'status': 422,
        'title': 'Validation failure.',

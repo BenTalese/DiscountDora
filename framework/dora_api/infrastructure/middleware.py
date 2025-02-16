@@ -174,10 +174,12 @@ async def apply_query_operations(response: Response):
                     _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) >= _Value]
                 case 'ne':
                     _ResponseData = [_Resource for _Resource in _ResponseData if _Resource.get(_Field) != _Value]
+                case 'ct':
+                    _ResponseData = [_Resource for _Resource in _ResponseData if _Value.lower() in _Resource.get(_Field).lower()]
 
                 case _:
                     bad_query_request(f"The filter operator {_Operator} is not supported. Supported operators"
-                                      + " include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.")
+                                      + " include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.")
                     return response
 
         # SORT OPERATION

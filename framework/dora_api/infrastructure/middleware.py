@@ -79,8 +79,8 @@ async def deserialise_web_request():
                 else:
                     _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
-            except (ValueError, TypeError) as e:
-                _Errors[_AttributeName] = str(e)
+            except (ValueError, TypeError, AttributeError) as e:
+                _Errors[_AttributeName] = f"Expected type '{_AttributeType}'. " + str(e)
                 logging.getLogger(__name__).exception(e)
 
         if _Errors:

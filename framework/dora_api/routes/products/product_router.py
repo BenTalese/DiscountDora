@@ -65,7 +65,7 @@ async def update_product_async(product_id):
     _Presenter: UpdateProductPresenter = _ServiceProvider.get_service(UpdateProductPresenter)
 
     _Command: UpdateProductCommand = request.request_body
-    _InputPort: UpdateProductInputPort = get_input_port_from_command(_Command, UpdateProductInputPort)
+    _InputPort = get_input_port_from_command(_Command, UpdateProductInputPort)
     _InputPort.product_id = EntityID(product_id)
 
     await _ProductController.update_product_async(_InputPort, _Presenter)

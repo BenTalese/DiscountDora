@@ -16,7 +16,7 @@ class CreateStockItemPersistenceRuleValidator(PersistenceRuleValidator):
         _StockItem: StockItem = self.persistence_context \
             .get_entities(StockItem) \
             .first_or_none(
-                Equal((StockItem, nameof(StockItem.name)), input_port.name)
+                Equal((StockItem, nameof(StockItem.name)), input_port.name, True)
             )
 
         if _StockItem:

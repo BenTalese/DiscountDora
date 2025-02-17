@@ -9,6 +9,10 @@ from domain.entities.base_entity import EntityID
 class IUpdateStockItemOutputPort(IOutputPort, IValidationOutputPort, ABC):
 
     @abstractmethod
+    async def present_stock_item_already_exists_async(self, stock_item_name: str) -> None:
+        pass
+
+    @abstractmethod
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID) -> None:
         pass
 

@@ -16,6 +16,9 @@ class UpdateStockItemPresenter(BasePresenter, IUpdateStockItemOutputPort):
     def __init__(self, persistence: IPersistenceContext):
         self.persistence = persistence
 
+    async def present_stock_item_already_exists_async(self, stock_item_name: str):
+        await self.business_rule_violation_async(f"A stock item with the name '{stock_item_name}' already exists.")
+
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID):
         await self.not_found_async(nameof(StockItem), stock_item_id.value, 0)
 

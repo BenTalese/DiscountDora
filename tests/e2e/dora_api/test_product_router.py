@@ -112,8 +112,8 @@ def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(ap
         image = None,
         is_active = True,
         is_available = True,
-        merchant_name = "Woolworths",
-        merchant_stockcode = "50332BA",
+        merchant_name = "WoolWorThS",
+        merchant_stockcode = "50332ba",
         name = "Banana Mangoes",
         price_now = 4.5,
         price_was = 10.5,
@@ -129,10 +129,7 @@ def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(ap
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            '': [
-                "A product with the stockcode '50332BA' from the merchant "
-                "'Woolworths' already exists.",
-            ],
+            '': ["A product with the stockcode '50332ba' from the merchant 'WoolWorThS' already exists."],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -215,7 +212,7 @@ def test__get_products_async__FilteringWithUnsupportedOperator__IsBadRequest(api
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge' and 'ne'.",
+        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
         'errors': {},
         'status': 400,
         'title': 'Unsupported query operation.',

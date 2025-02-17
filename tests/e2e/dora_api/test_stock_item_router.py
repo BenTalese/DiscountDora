@@ -408,4 +408,29 @@ def test__update_stock_item_async__OtherStockItemHasSameName__CannotUpdateToDupl
 
 #region ---------------- delete_stock_item_async tests ----------------
 
+
+def test__delete_stock_item_async__DeletingStockItem__StockItemDeleted(api):
+    _StockItemID = requests.get(f'{base_route}/filter=name:eq:super AWESOME pizza').json()[0]['stock_item_id']
+    _Response = requests.delete(f"{base_route}/{_StockItemID}")
+
+    assert _Response.status_code == 204
+    assert _Response.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemID}').json() == []
+
+
+def test__delete_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api):
+    _RandomID = uuid.uuid4()
+    _Response = requests.delete(f"{base_route}/{_RandomID}")
+
+    assert _Response.status_code == 404
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": f"StockItem with the ID '{_RandomID}' was not found.",
+        "errors": {},
+        "status": 404,
+        "title": "Entity was not found.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
+    }
+
+
 #endregion delete_stock_item_async tests

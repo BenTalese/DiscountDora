@@ -4,20 +4,21 @@ from domain.generics import TEntity
 
 
 class BoolOperation:
-    def __init__(self, expression_one, expression_two):
+    def __init__(self, expression_one, expression_two, is_case_insensitive: bool = False):
         self.expression_one: BoolOperation = expression_one
         self.expression_two: BoolOperation = expression_two
+        self.is_case_insensitive: bool = is_case_insensitive
 
     def _sanitise_expressions(self):
         def sanitise_expression(exp):
-                return f"[[{exp[0].__name__}]].{exp[1]}"
             if type(exp) is tuple:
+                return f"func.lower([[{exp[0].__name__}]].{exp[1]})" if self.is_case_insensitive else f"[[{exp[0].__name__}]].{exp[1]}"
 
             if type(exp) is TEntity:
                 return f"[[{exp[0].__name__}]]"
 
             if type(exp) is str:
-                return f"'{exp}'"
+                return f"'{exp.lower()}'" if self.is_case_insensitive else f"'{exp}'"
 
             if type(exp) is EntityID:
                 return f"'{exp.value}'"

@@ -318,6 +318,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
         context = {model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
 
+        # Required for case insensitive comparisons
+        from sqlalchemy import func
+        context['func'] = func
+
         print('\033[35m' + f"TRANSLATED CONDITION: {condition}" + '\033[0m')
         self.query = self.query.where(eval(condition, context))
         return self

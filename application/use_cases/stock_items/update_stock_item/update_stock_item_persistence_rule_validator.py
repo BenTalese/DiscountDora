@@ -22,4 +22,4 @@ class UpdateStockItemPersistenceRuleValidator(PersistenceRuleValidator):
 
             if _StockItem:
                 self.has_failures = True
-                await output_port.present_stock_item_already_exists_async(input_port.name)
+                await output_port.present_stock_item_already_exists_async(input_port.name.value)

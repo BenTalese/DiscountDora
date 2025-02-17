@@ -8,6 +8,8 @@ from varname import nameof
 
 from framework.dora_api.routes.stock_items.create_stock_item_command import \
     CreateStockItemCommand
+from framework.dora_api.routes.stock_items.update_stock_item_command import \
+    UpdateStockItemCommand
 
 #region ---------------- setup ----------------
 
@@ -83,7 +85,7 @@ def test__create_stock_item_async__CreatingStockItemWithOnlyRequiredAttributes__
 
 def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolation(api, stock_level_id, stock_location_id):
     _StockItemRequest = asdict(CreateStockItemCommand(
-        name = 'Peters Neopolitan Ice Cream',
+        name = 'PeTers NeoPOLitan IcE CrEam',
         stock_level_id = stock_level_id,
         stock_location_id = stock_location_id
     ))
@@ -94,7 +96,7 @@ def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolati
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A stock item with the name 'Peters Neopolitan Ice Cream' already exists."],
+            '': ["A stock item with the name 'PeTers NeoPOLitan IcE CrEam' already exists."],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -327,6 +329,80 @@ def test__get_stock_items_async__FilteringSortingAndPagingStockItems__GetsMatchi
 #endregion get_stock_items_async tests
 
 #region ---------------- update_stock_item_async tests ----------------
+
+
+def test__update_stock_item_async__EmptyUpdate__StockItemUnaffected(api):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = {})
+    _StockItemAfterPatchOperation = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _StockItemToUpdate == _StockItemAfterPatchOperation
+
+
+def test__update_stock_item_async__UpdatingAllAttributes__AllAttributesUpdated(api, stock_level_id, stock_location_id):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
+
+    _ProductRequest = asdict(UpdateStockItemCommand(
+        name = "Old Soggy Chips",
+        stock_location_id = stock_location_id,
+        stock_level_id = stock_level_id
+    ))
+
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = _ProductRequest)
+    _StockItemAfterPatchOperation = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemToUpdate["stock_item_id"]}').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _StockItemToUpdate == {
+        'name': 'Hot Crispy Chippies',
+        'stock_item_id': _StockItemToUpdate['stock_item_id'],
+        'stock_level_id': _StockItemToUpdate['stock_level_id'],
+        'stock_level_last_updated': _StockItemToUpdate['stock_level_last_updated'],
+        'stock_location_id': _StockItemToUpdate['stock_location_id']
+    }
+    assert _StockItemAfterPatchOperation == {
+        'name': 'Old Soggy Chips',
+        'stock_item_id': _StockItemToUpdate['stock_item_id'],
+        'stock_level_id': stock_level_id,
+        'stock_level_last_updated': ANY,
+        'stock_location_id': stock_location_id
+    }
+    assert _StockItemToUpdate['stock_level_last_updated'] != _StockItemAfterPatchOperation['stock_level_last_updated']
+
+
+def test__update_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api):
+    _RandomID = uuid.uuid4()
+    _Response = requests.patch(f"{base_route}/{_RandomID}", json = {})
+
+    assert _Response.status_code == 404
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": f"StockItem with the ID '{_RandomID}' was not found.",
+        "errors": {},
+        "status": 404,
+        "title": "Entity was not found.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
+    }
+
+
+def test__update_stock_item_async__OtherStockItemHasSameName__CannotUpdateToDuplicateName(api):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:kensingTOn_PrIdE_ManGOes').json()[0]
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = {'name': 'super AWESOME pizza'})
+
+    assert _PatchResponse.status_code == 422
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _PatchResponse.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            '': ["A stock item with the name 'super AWESOME pizza' already exists."]
+        },
+        "status": 422,
+        "title": "Business rule violation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+    }
+
 
 #endregion update_stock_item_async tests
 

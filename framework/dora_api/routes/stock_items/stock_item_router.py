@@ -9,6 +9,7 @@ from application.use_cases.stock_items.delete_stock_item.delete_stock_item_input
 from application.use_cases.stock_items.update_stock_item.update_stock_item_input_port import \
     UpdateStockItemInputPort
 from domain.entities.base_entity import EntityID
+from framework.dora_api.infrastructure.command_mapper import get_input_port_from_command
 from framework.dora_api.infrastructure.request_body_decorator import \
     has_request_body
 from framework.dora_api.infrastructure.view_model_decorator import \
@@ -38,11 +39,13 @@ STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/st
 async def create_stock_item_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
-    _Presenter: CreateStockItemPresenter = _ServiceProvider.get_service(CreateStockItemPresenter)
 
+    _Presenter: CreateStockItemPresenter = _ServiceProvider.get_service(CreateStockItemPresenter)
     _Presenter.get_route = f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items_async)}"
+
     _Command: CreateStockItemCommand = request.request_body
-    _InputPort = CreateStockItemInputPort(**_Command.__dict__)
+    _Presenter.request_body = _Command
+    _InputPort = get_input_port_from_command(_Command, CreateStockItemInputPort)
 
     await _StockItemController.create_stock_item_async(_InputPort, _Presenter)
     return _Presenter.result
@@ -81,10 +84,8 @@ async def update_stock_item_async(stock_item_id):
     _Presenter: UpdateStockItemPresenter = _ServiceProvider.get_service(UpdateStockItemPresenter)
 
     _Command: UpdateStockItemCommand = request.request_body
-    _InputPort = UpdateStockItemInputPort()
+    _InputPort = get_input_port_from_command(_Command, UpdateStockItemInputPort)
     _InputPort.stock_item_id = EntityID(stock_item_id)
-    _InputPort.stock_level_id = _Command.stock_level_id
-    _InputPort.stock_location_id = _Command.stock_location_id
 
     await _StockItemController.update_stock_item_async(_InputPort, _Presenter)
     return _Presenter.result

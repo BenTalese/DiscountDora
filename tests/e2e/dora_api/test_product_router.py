@@ -287,9 +287,8 @@ def test__update_product_async__EmptyUpdate__ProductUnaffected(api):
     assert _ProductToUpdate == _ProductAfterPatchOperation
 
 
-# FIXME: This one seems to have a race condition... sometimes it fails, sometimes it passes
 def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:51741').json()[0]
 
     _ProductRequest = asdict(UpdateProductCommand(
         is_active = False,
@@ -299,42 +298,42 @@ def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api)
     ))
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)
-    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:51741').json()[0]
 
     assert _PatchResponse.status_code == 204
     assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
     assert _ProductToUpdate == {
-        'brand': 'Test',
+        'brand': 'Cadbury',
         'image': None,
         'is_active': True,
         'is_available': True,
         'merchant_name': 'Woolworths',
         'merchant_id': _ProductToUpdate['merchant_id'],
-        'merchant_stockcode': '50332BA',
-        'name': 'Banana Mangoes',
-        'price_now': 4.5,
-        'price_was': 10.5,
-        'size': '500g',
-        'size_unit': 'g',
-        'size_value': 5.0,
-        'web_url': 'www',
+        'merchant_stockcode': '51741',
+        'name': 'Cadbury Freddo Cake',
+        'price_now': 2.82,
+        'price_was': 3.52,
+        'size': '1.5L',
+        'size_unit': 'L',
+        'size_value': 1.0,
+        'web_url': 'https://www.woolworths.com.au/shop/productdetails/51741',
         'product_id': _ProductToUpdate['product_id']
     }
     assert _ProductAfterPatchOperation == {
-        'brand': 'Test',
+        'brand': 'Cadbury',
         'image': None,
         'is_active': False,
         'is_available': False,
         'merchant_name': 'Woolworths',
         'merchant_id': _ProductToUpdate['merchant_id'],
-        'merchant_stockcode': '50332BA',
-        'name': 'Banana Mangoes',
+        'merchant_stockcode': '51741',
+        'name': 'Cadbury Freddo Cake',
         'price_now': 1.0,
         'price_was': 12.8,
-        'size': '500g',
-        'size_unit': 'g',
-        'size_value': 5.0,
-        'web_url': 'www',
+        'size': '1.5L',
+        'size_unit': 'L',
+        'size_value': 1.0,
+        'web_url': 'https://www.woolworths.com.au/shop/productdetails/51741',
         'product_id': _ProductToUpdate['product_id']
     }
 

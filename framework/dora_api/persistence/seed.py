@@ -24,6 +24,7 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     persistence.add(merchant_two)
 
     product_one = generate_entity(Product)
+    product_one.brand = "Cadbury"
     product_one.is_active = True
     product_one.is_available = True
     product_one.merchant = merchant_one

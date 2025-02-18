@@ -9,6 +9,7 @@ from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.dora_api.routes.products.update_product_command import \
     UpdateProductCommand
+from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
 
@@ -165,6 +166,43 @@ def test__create_product_async__EmptyRequest__IsRequiredInputsValidationFailure(
 #endregion create_product_async tests
 
 #region ---------------- get_products_async tests ----------------
+
+
+def test__get_products_async__GettingProduct__GetsAllExpectedAttributes(api):
+    _Product = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+
+    assert _Product['brand'] == 'Test'
+    assert _Product['image'] is None
+    assert _Product['is_active'] is True
+    assert _Product['is_available'] is True
+    assert is_valid_uuid(_Product['merchant_id'])
+    assert _Product['merchant_name'] == 'Woolworths'
+    assert _Product['merchant_stockcode'] == '50332BA'
+    assert _Product['name'] == 'Banana Mangoes'
+    assert _Product['price_now'] == 4.5
+    assert _Product['price_was'] == 10.5
+    assert is_valid_uuid(_Product['product_id'])
+    assert _Product['size'] == '500g'
+    assert _Product['size_unit'] == 'g'
+    assert _Product['size_value'] == 5.0
+    assert _Product['web_url'] == 'www'
+    assert _Product.keys() == {
+        'brand',
+        'image',
+        'is_active',
+        'is_available',
+        'merchant_id',
+        'merchant_name',
+        'merchant_stockcode',
+        'name',
+        'price_now',
+        'price_was',
+        'product_id',
+        'size',
+        'size_unit',
+        'size_value',
+        'web_url'
+    }
 
 
 def test__get_products_async__GettingAllProducts__GetsAllProducts(api):

@@ -10,6 +10,7 @@ from framework.dora_api.routes.stock_items.create_stock_item_command import \
     CreateStockItemCommand
 from framework.dora_api.routes.stock_items.update_stock_item_command import \
     UpdateStockItemCommand
+from tests.support import is_valid_datetime, is_valid_uuid
 
 #region ---------------- setup ----------------
 
@@ -148,6 +149,23 @@ def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure
 #endregion create_stock_item_async tests
 
 #region ---------------- get_stock_items_async tests ----------------
+
+
+def test__get_stock_items_async__GettingStockItem__GetsAllExpectedAttributes(api):
+    _StockItem = requests.get(base_route).json()[0]
+
+    assert _StockItem['name'] == 'Kensington Pride Mangoes'
+    assert is_valid_uuid(_StockItem['stock_item_id']) is True
+    assert is_valid_uuid(_StockItem['stock_level_id']) is True
+    assert is_valid_datetime(_StockItem['stock_level_last_updated'], '%a, %d %b %Y %H:%M:%S %Z') is True
+    assert is_valid_uuid(_StockItem['stock_location_id']) is True
+    assert _StockItem.keys() == {
+        'name',
+        'stock_item_id',
+        'stock_level_id',
+        'stock_level_last_updated',
+        'stock_location_id'
+    }
 
 
 def test__get_stock_items_async__GettingAllStockItems__GetsAllStockItems(api):

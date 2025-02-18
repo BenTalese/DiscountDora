@@ -70,6 +70,7 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     persistence.add(user)
 
     stock_location_one = generate_entity(StockLocation)
+    stock_location_one.name = "Pantry"
     persistence.add(stock_location_one)
 
     stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)

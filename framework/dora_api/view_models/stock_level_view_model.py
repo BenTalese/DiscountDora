@@ -10,6 +10,7 @@ class StockLevelViewModel:
     sequence: int
     stock_level_id: UUID
 
+
 def get_stock_level_view_model(stock_level: StockLevelDto) -> StockLevelViewModel:
     return StockLevelViewModel(
         name = stock_level.name,

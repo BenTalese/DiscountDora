@@ -170,7 +170,7 @@ def test__get_merchants_async__PagingWithoutLimit__IsBadRequest(api):
 
 
 def test__get_merchants_async__LimitingWithoutPage__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=1')
+    _Response = requests.get(f'{base_route}/limit=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'

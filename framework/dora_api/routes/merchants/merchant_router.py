@@ -10,6 +10,7 @@ from interface_adaptors.controllers.merchant_controller import \
 
 MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 
+
 @MERCHANT_ROUTER.route("")
 @MERCHANT_ROUTER.route("<query>")
 @has_view_model('get_merchants_async', MerchantViewModel)

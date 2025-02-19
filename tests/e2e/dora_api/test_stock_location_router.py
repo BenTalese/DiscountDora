@@ -1,6 +1,11 @@
 import uuid
+from dataclasses import asdict
+from unittest.mock import ANY
+
 import requests
 
+from framework.dora_api.routes.stock_locations.create_stock_location_command import \
+    CreateStockLocationCommand
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -10,6 +15,51 @@ base_route = 'http://localhost:5170/api/stock-locations'
 #endregion setup
 
 #region ---------------- create_stock_location_async tests ----------------
+
+
+def test__create_stock_location_async__CreatingStockLocationWithAllAttributes__StockLocationCreated(api):
+    _Request = asdict(CreateStockLocationCommand(name = 'Freezer'))
+
+    _Response = requests.post(base_route, json = _Request)
+
+    assert _Response.status_code == 201
+    assert _Response.headers['Content-Type'] == 'application/json'
+    assert 'http://localhost:5170/api/stock-locations/filter=stock_location_id:eq:' in _Response.headers['location']
+    assert _Response.json()['id'] == ANY
+
+
+def test__create_stock_location_async__StockLocationAlreadyExists__IsBusinessRuleViolation(api):
+    _Request = asdict(CreateStockLocationCommand(name = 'frEEzer'))
+
+    _Response = requests.post(base_route, json = _Request)
+
+    assert _Response.status_code == 422
+    assert _Response.json() == {
+        'detail': 'See errors property for more details.',
+        'errors': {
+            '': ["A stock location with the name 'frEEzer' already exists."],
+        },
+       'status': 422,
+       'title': 'Business rule violation.',
+       'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
+    }
+
+
+def test__create_stock_location_async__EmptyRequest__IsRequiredInputsValidationFailure(api):
+    _Response = requests.post(base_route, json = {})
+
+    assert _Response.status_code == 422
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        'detail': 'Required inputs are missing values.',
+        'errors': {
+            'name': ["'name' must have a value."]
+        },
+       'status': 422,
+       'title': 'Validation failure.',
+       'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
+    }
+
 
 #endregion create_stock_location_async tests
 

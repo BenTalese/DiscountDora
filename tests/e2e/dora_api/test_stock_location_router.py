@@ -6,6 +6,7 @@ import requests
 
 from framework.dora_api.routes.stock_locations.create_stock_location_command import \
     CreateStockLocationCommand
+from framework.dora_api.routes.stock_locations.update_stock_location_command import UpdateStockLocationCommand
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -249,13 +250,78 @@ def test__get_stock_locations_async__FilteringSortingAndPagingStockLocations__Ge
 
 #region ---------------- update_stock_location_async tests ----------------
 
+
+def test__update_stock_location_async__EmptyUpdate__StockLocationUnaffected(api):
+    _StockLocationToUpdate = requests.get(f'{base_route}/filter=name:eq:panTry').json()[0]
+    _PatchResponse = requests.patch(f"{base_route}/{_StockLocationToUpdate['stock_location_id']}", json = {})
+    _StockLocationAfterPatchOperation = requests.get(f'{base_route}/filter=name:eq:panTry').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _StockLocationToUpdate == _StockLocationAfterPatchOperation
+
+
+def test__update_stock_location_async__UpdatingAllAttributes__AllAttributesUpdated(api):
+    _StockLocationToUpdate = requests.get(f'{base_route}/filter=name:eq:pantry').json()[0]
+
+    _ProductRequest = asdict(UpdateStockLocationCommand(name = "Fridge"))
+
+    _PatchResponse = requests.patch(f"{base_route}/{_StockLocationToUpdate['stock_location_id']}", json = _ProductRequest)
+    _StockLocationAfterPatchOperation = requests \
+        .get(f'{base_route}/filter=stock_location_id:eq:{_StockLocationToUpdate["stock_location_id"]}') \
+        .json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
+    assert _StockLocationToUpdate == {
+        'name': 'Pantry',
+        'stock_location_id': _StockLocationToUpdate['stock_location_id']
+    }
+    assert _StockLocationAfterPatchOperation == {
+        'name': 'Fridge',
+        'stock_location_id': _StockLocationToUpdate['stock_location_id']
+    }
+
+
+def test__update_stock_location_async__StockLocationDoesNotExist__StockLocationNotFound(api):
+    _RandomID = uuid.uuid4()
+    _Response = requests.patch(f"{base_route}/{_RandomID}", json = {})
+
+    assert _Response.status_code == 404
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": f"StockLocation with the ID '{_RandomID}' was not found.",
+        "errors": {},
+        "status": 404,
+        "title": "Entity was not found.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
+    }
+
+
+def test__update_stock_location_async__OtherStockLocationHasSameName__CannotUpdateToDuplicateName(api):
+    _StockLocationToUpdate = requests.get(f'{base_route}/filter=name:eq:fridge').json()[0]
+    _PatchResponse = requests.patch(f"{base_route}/{_StockLocationToUpdate['stock_location_id']}", json = {'name': 'freeZER'})
+
+    assert _PatchResponse.status_code == 422
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _PatchResponse.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            '': ["A stock location with the name 'freeZER' already exists."]
+        },
+        "status": 422,
+        "title": "Business rule violation.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+    }
+
+
 #endregion update_stock_location_async tests
 
 #region ---------------- delete_stock_location_async tests ----------------
 
 
 def test__delete_stock_location_async__DeletingStockLocation__StockLocationDeleted(api):
-    _StockLocationID = requests.get(f'{base_route}/filter=name:eq:pantry').json()[0]['stock_location_id']
+    _StockLocationID = requests.get(f'{base_route}/filter=name:eq:fridge').json()[0]['stock_location_id']
     _Response = requests.delete(f"{base_route}/{_StockLocationID}")
 
     assert _Response.status_code == 204

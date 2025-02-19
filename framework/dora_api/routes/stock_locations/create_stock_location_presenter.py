@@ -13,6 +13,9 @@ class CreateStockLocationPresenter(BasePresenter, ICreateStockLocationOutputPort
     def __init__(self, persistence_context: IPersistenceContext):
         self.persistence_context = persistence_context
 
+    async def present_stock_location_already_exists_async(self, stock_location_name: str):
+        await self.business_rule_violation_async(f"A stock location with the name '{stock_location_name}' already exists.")
+
     async def present_stock_location_created_async(self, stock_location: StockLocationDto):
         await self.persistence_context.save_changes_async()
         await self.created_async(CreatedViewModel(stock_location.stock_location_id.value), nameof(stock_location.stock_location_id))

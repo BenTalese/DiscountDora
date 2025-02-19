@@ -33,7 +33,6 @@ PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products
 async def create_product_async():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
-
     _Presenter: CreateProductPresenter = _ServiceProvider.get_service(CreateProductPresenter)
     _Presenter.get_route = f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products_async)}"
 

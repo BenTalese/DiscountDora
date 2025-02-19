@@ -9,6 +9,7 @@ from application.use_cases.stock_locations.delete_stock_location.delete_stock_lo
 from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import \
     UpdateStockLocationInputPort
 from domain.entities.base_entity import EntityID
+from framework.dora_api.infrastructure.command_mapper import get_input_port_from_command
 from framework.dora_api.infrastructure.request_body_decorator import \
     has_request_body
 from framework.dora_api.infrastructure.view_model_decorator import has_view_model
@@ -40,7 +41,8 @@ async def create_stock_location_async():
     _Presenter.get_route = f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations_async)}"
 
     _Command: CreateStockLocationCommand = request.request_body
-    _InputPort = CreateStockLocationInputPort(**_Command.__dict__)
+    _Presenter.request_body = _Command
+    _InputPort = get_input_port_from_command(_Command, CreateStockLocationInputPort)
 
     await _StockLocationController.create_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result
@@ -52,7 +54,7 @@ async def delete_stock_location_async(stock_location_id):
     _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
     _Presenter: DeleteStockLocationPresenter = _ServiceProvider.get_service(DeleteStockLocationPresenter)
 
-    _InputPort: DeleteStockLocationInputPort = DeleteStockLocationInputPort()
+    _InputPort = DeleteStockLocationInputPort()
     _InputPort.stock_location_id = EntityID(stock_location_id)
 
     await _StockLocationController.delete_stock_location_async(_InputPort, _Presenter)
@@ -79,9 +81,8 @@ async def update_stock_location_async(stock_location_id):
     _Presenter: UpdateStockLocationPresenter = _ServiceProvider.get_service(UpdateStockLocationPresenter)
 
     _Command: UpdateStockLocationCommand = request.request_body
-    _InputPort: UpdateStockLocationInputPort = UpdateStockLocationInputPort(
-        name = _Command.name,
-        stock_location_id = EntityID(stock_location_id))
+    _InputPort = get_input_port_from_command(_Command, UpdateStockLocationInputPort)
+    _InputPort.stock_location_id = EntityID(stock_location_id)
 
     await _StockLocationController.update_stock_location_async(_InputPort, _Presenter)
     return _Presenter.result

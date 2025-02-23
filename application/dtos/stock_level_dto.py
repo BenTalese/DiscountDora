@@ -10,6 +10,7 @@ class StockLevelDto:
     sequence: int
     stock_level_id: EntityID
 
+
 def get_stock_level_dto(stock_level: StockLevel) -> StockLevelDto:
     return StockLevelDto(
         name = stock_level.name,

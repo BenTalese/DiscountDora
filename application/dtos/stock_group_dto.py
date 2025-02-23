@@ -9,6 +9,7 @@ class StockGroupDto:
     name: str
     stock_group_id: EntityID
 
+
 def get_stock_group_dto(stock_group: StockGroup) -> StockGroupDto:
     return StockGroupDto(
         name = stock_group.name,

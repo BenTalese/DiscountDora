@@ -29,6 +29,11 @@ flask db init
 flask db migrate -m "_2024_12_01__add_user_table"
 flask db upgrade
 
+Notes:
+    - Import sqlalchemy_utils manually if required
+    - Delete any alterations of UUID columns where there has been no change
+
+
 
 ===============================================================================
 

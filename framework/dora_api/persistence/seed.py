@@ -67,6 +67,7 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     user = generate_entity(User)
     user.send_deals_on_day = datetime.now().weekday()
     user.email = "ben.talese@gmail.com"
+    user.username = "The Coolest Guy"
     persistence.add(user)
 
     stock_location_one = generate_entity(StockLocation)

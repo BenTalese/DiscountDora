@@ -2,6 +2,7 @@ from .association_tables import ShoppingListStockItemAssociation
 from .merchant_model import MerchantModel
 from .product_model import ProductModel
 from .product_offer_model import ProductOfferModel
+from .product_historic_offer_model import ProductHistoricOfferModel
 from .shopping_list_model import ShoppingListModel
 from .stock_group_model import StockGroupModel
 from .stock_item_model import StockItemModel

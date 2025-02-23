@@ -11,7 +11,8 @@ from framework.dora_api.infrastructure.command_mapper import \
     get_input_port_from_command
 from framework.dora_api.infrastructure.request_body_decorator import \
     has_request_body
-from framework.dora_api.infrastructure.view_model_decorator import has_view_model
+from framework.dora_api.infrastructure.view_model_decorator import \
+    has_view_model
 from framework.dora_api.routes.products.create_product_command import \
     CreateProductCommand
 from framework.dora_api.routes.products.create_product_presenter import \

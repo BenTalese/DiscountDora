@@ -33,7 +33,7 @@ class CreateProductInteractor(Interactor):
                 price_now = input_port.price_now,
                 price_was = input_port.price_was
             ),
-            historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
+            historic_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
             image = input_port.image,
             is_active = input_port.is_active,
             is_available = input_port.is_available,

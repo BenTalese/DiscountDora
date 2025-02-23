@@ -10,7 +10,7 @@ from application.use_cases.products.update_product.iupdate_product_output_port i
 from application.use_cases.products.update_product.update_product_input_port import \
     UpdateProductInputPort
 from domain.entities.product import Product
-from domain.entities.product_offer import ProductOffer
+from domain.entities.product_historic_offer import ProductHistoricOffer
 
 
 class UpdateProductInteractor(Interactor):
@@ -22,7 +22,7 @@ class UpdateProductInteractor(Interactor):
         _Product: Product = self.persistence_context \
             .get_entities(Product) \
             .include(nameof(Product.current_offer)) \
-            .include(nameof(Product.historical_offers)) \
+            .include(nameof(Product.historic_offers)) \
             .first_by_id(input_port.product_id)
 
         if input_port.is_active.has_been_set:
@@ -32,22 +32,18 @@ class UpdateProductInteractor(Interactor):
             _Product.is_available = input_port.is_available.value
 
         if input_port.price_now.has_been_set and input_port.price_was.has_been_set:
-            _HistoricalOffer = ProductOffer(
+            _HistoricOffer = ProductHistoricOffer(
                 offered_on = _Product.current_offer.offered_on,
                 price_now = _Product.current_offer.price_now,
                 price_was = _Product.current_offer.price_was)
 
-            _Product.historical_offers.append(_HistoricalOffer)
+            _Product.historic_offers.append(_HistoricOffer)
 
-            self.persistence_context.remove(_Product.current_offer)
+            _Product.current_offer.offered_on = datetime.utcnow()
+            _Product.current_offer.price_now = input_port.price_now.value
+            _Product.current_offer.price_was = input_port.price_was.value
 
-            _Product.current_offer = ProductOffer(
-                offered_on = datetime.utcnow(),
-                price_now = input_port.price_now.value,
-                price_was = input_port.price_was.value)
-
-            self.persistence_context.add(_Product.current_offer)
-            self.persistence_context.add(_HistoricalOffer)
+            self.persistence_context.update(_Product.current_offer)
 
         self.persistence_context.update(_Product)
 

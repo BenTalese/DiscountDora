@@ -6,7 +6,6 @@ from clapy import AttributeChangeTracker
 
 @dataclass
 class UpdateStockItemCommand:
-    name: str
-    stock_item_id: UUID
+    name: AttributeChangeTracker[str]
     stock_level_id: AttributeChangeTracker[UUID]
     stock_location_id: AttributeChangeTracker[UUID]

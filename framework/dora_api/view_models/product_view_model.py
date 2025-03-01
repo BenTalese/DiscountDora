@@ -23,6 +23,7 @@ class ProductViewModel:
     size_value: float
     web_url: str
 
+
 # FIXME This is horrible to manage, if any mapping reaches more than one level i need to null check
 def get_product_view_model(product: ProductDto) -> ProductViewModel:
     return ProductViewModel(

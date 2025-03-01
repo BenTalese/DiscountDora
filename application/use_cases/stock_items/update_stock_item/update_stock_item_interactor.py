@@ -1,3 +1,4 @@
+from datetime import datetime
 from clapy import Interactor
 
 from application.dtos.stock_item_dto import get_stock_item_dto
@@ -28,6 +29,8 @@ class UpdateStockItemInteractor(Interactor):
             _StockItem.stock_level = self.persistence_context \
                 .get_entities(StockLevel) \
                 .first_by_id(input_port.stock_level_id.value)
+
+            _StockItem.stock_level_last_updated = datetime.utcnow()
 
         if input_port.stock_location_id.has_been_set:
             _StockItem.stock_location = self.persistence_context \

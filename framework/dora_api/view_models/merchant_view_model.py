@@ -8,6 +8,7 @@ class MerchantViewModel:
     merchant_id: UUID
     name: str
 
+
 def get_merchant_view_model(merchant: MerchantDto) -> MerchantViewModel:
     return MerchantViewModel(
         merchant_id = merchant.merchant_id.value,

@@ -11,6 +11,7 @@ class UserDto:
     username: str = None
     user_id: EntityID = None
 
+
 def get_user_dto(user: User) -> UserDto:
     return UserDto(
         email = user.email,

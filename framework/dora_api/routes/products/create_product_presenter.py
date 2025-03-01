@@ -17,12 +17,12 @@ class CreateProductPresenter(BasePresenter, ICreateProductOutputPort):
 
     async def present_product_created_async(self, product: ProductDto):
         await self.persistence.save_changes_async()
-        await self.created_async(CreatedViewModel(product.product_id.value))
+        await self.created_async(CreatedViewModel(product.product_id.value), nameof(product.product_id))
 
     async def present_product_already_exists_async(self):
         self.request_body: CreateProductCommand
         await self.business_rule_violation_async(f"A product with the stockcode '{self.request_body.merchant_stockcode}' "
-        f"from the merchant '{self.request_body.merchant_name}' already exists.")
+                                                 f"from the merchant '{self.request_body.merchant_name}' already exists.")
 
     async def present_merchant_not_found_async(self, merchant_id: EntityID):
         await self.entity_existence_failure_async(nameof(Merchant), nameof(merchant_id), merchant_id.value)

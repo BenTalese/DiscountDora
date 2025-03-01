@@ -16,4 +16,4 @@ class DeleteStockItemPresenter(BasePresenter, IDeleteStockItemOutputPort):
         await self.no_content_async()
 
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID):
-        await self.entity_existence_failure_async(nameof(StockItem), nameof(stock_item_id), stock_item_id.value)
+        await self.not_found_async(nameof(StockItem), stock_item_id.value, 0)

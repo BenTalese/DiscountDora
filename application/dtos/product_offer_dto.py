@@ -12,6 +12,7 @@ class ProductOfferDto:
     price_was: float
     product_offer_id: EntityID
 
+
 def get_product_offer_dto(product_offer: ProductOffer) -> ProductOfferDto:
     return ProductOfferDto(
         offered_on = product_offer.offered_on,

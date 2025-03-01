@@ -9,6 +9,7 @@ class MerchantDto:
     merchant_id: EntityID
     name: str
 
+
 def get_merchant_dto(merchant: Merchant) -> MerchantDto:
     return MerchantDto(
         merchant_id = merchant.id,

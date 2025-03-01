@@ -11,6 +11,7 @@ class UserViewModel:
     username: str
     user_id: UUID
 
+
 def get_user_view_model(user: UserDto) -> UserViewModel:
     return UserViewModel(
         email = user.email,

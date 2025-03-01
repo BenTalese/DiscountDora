@@ -103,8 +103,6 @@ class SqlAlchemyPersistenceContext(IPersistenceContext):
         db.session.delete(self._convert_to_model(entity))
 
     # FIXME: dunno what to do about the async-ness of this
-    # FIXME: technically it would be best if save_changes was separate to the
-    # context, persisting is a framework concern, not an application concern
     # TODO: Find out if _queried_models should also be cleared here...me thinks maybe not
     async def save_changes_async(self):
         # for x in db.session.new:
@@ -317,6 +315,10 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
             condition = re.sub(replace_pattern, model_name, condition)
 
         context = {model_type.__name__: model_type for model_type in self.persistence_context._model_classes.values()}
+
+        # Required for case insensitive comparisons
+        from sqlalchemy import func
+        context['func'] = func
 
         print('\033[35m' + f"TRANSLATED CONDITION: {condition}" + '\033[0m')
         self.query = self.query.where(eval(condition, context))

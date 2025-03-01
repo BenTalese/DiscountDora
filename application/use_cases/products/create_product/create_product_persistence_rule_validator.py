@@ -19,8 +19,8 @@ class CreateProductPersistenceRuleValidator(PersistenceRuleValidator):
             .get_entities(Product) \
             .include(nameof(Product.merchant)) \
             .first_or_none(And(
-                Equal((Product, nameof(Product.merchant_stockcode)), input_port.merchant_stockcode),
-                Equal((Merchant, nameof(Merchant.name)), input_port.merchant_name)
+                Equal((Product, nameof(Product.merchant_stockcode)), input_port.merchant_stockcode, True),
+                Equal((Merchant, nameof(Merchant.name)), input_port.merchant_name, True)
             ))
 
         if _Product:

@@ -9,6 +9,7 @@ from interface_adaptors.controllers.user_controller import UserController
 
 USER_ROUTER = Blueprint("USER_ROUTER", __name__, url_prefix="/api/users")
 
+
 @USER_ROUTER.route("")
 @USER_ROUTER.route("<query>")
 @has_view_model('get_users_async', UserViewModel)

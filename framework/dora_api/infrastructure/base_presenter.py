@@ -49,11 +49,11 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
         self.result = response
 
     # FIXME: query parameter needs to update once querying is solved (currently "= result.id" will be incorrect)
-    async def created_async(self, result: CreatedViewModel, id_property_name: str):
+    async def created_async(self, result: CreatedViewModel, id_attribute_name: str):
         response = jsonify(result)
         response.status_code = CREATED
         if self.get_route is not None:
-            response.headers['location'] = url_for(self.get_route, query = f'filter={id_property_name}:eq:{result.id}', _external=True)
+            response.headers['location'] = url_for(self.get_route, query = f'filter={id_attribute_name}:eq:{result.id}', _external=True)
         self.result = response
 
     async def entity_existence_failure_async(self, entity_name: str, property_in_error: str, id: UUID):

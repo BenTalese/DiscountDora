@@ -48,7 +48,7 @@ async def startup(is_test_env: bool = False):
     register_routers()
     register_api_infrastructure()
 
-    if not is_test_env:
+    if not is_test_env:  # app.run blocks the thread where tests are ran from
         app.run(
             _ConfigurationManager.get_api_host(),
             _ConfigurationManager.get_api_port(),

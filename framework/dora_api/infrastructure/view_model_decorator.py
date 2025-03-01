@@ -1,5 +1,6 @@
 VIEW_MODELS_BY_ENDPOINT = {}
 
+
 def has_view_model(endpoint_name, view_model_class):
     """
     `has_view_model` is a decorator that registers an endpoint name against a view model class,

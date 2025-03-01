@@ -45,7 +45,7 @@ async def verify_endpoint_exists():
 
 @MIDDLEWARE.before_app_request
 async def deserialise_web_request():
-    def malformed_request(errors: Dict[str, str]):
+    def get_malformed_request_response(errors: Dict[str, str]):
         _ProblemDetails = ProblemDetails(
             detail = "See errors property for more details.",
             status = BAD_REQUEST,
@@ -84,7 +84,7 @@ async def deserialise_web_request():
                 logging.getLogger(__name__).exception(e)
 
         if _Errors:
-            return jsonify(malformed_request(_Errors)), 400
+            return jsonify(get_malformed_request_response(_Errors)), 400
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
 
@@ -124,7 +124,7 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
 
 @MIDDLEWARE.after_app_request
 async def apply_query_operations(response: Response):
-    def bad_query_request(message: str):
+    def set_bad_query_request_response(message: str):
         _ProblemDetails = ProblemDetails(
             detail = message,
             status = BAD_REQUEST,
@@ -143,7 +143,7 @@ async def apply_query_operations(response: Response):
         _QueryOperations: List[str] = _QueryString.split("&")
 
         if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
-            bad_query_request(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
+            set_bad_query_request_response(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
             return response
 
         _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
@@ -156,7 +156,7 @@ async def apply_query_operations(response: Response):
             in _FilterOperations
             if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
         ]:
-            bad_query_request(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
+            set_bad_query_request_response(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
             return response
 
         for _Filter in _FilterOperations:
@@ -180,8 +180,8 @@ async def apply_query_operations(response: Response):
                     _ResponseData = [_Resource for _Resource in _ResponseData if _Value in str(_Resource.get(_Field)).lower()]
 
                 case _:
-                    bad_query_request(f"The filter operator {_Operator} is not supported. Supported operators"
-                                      + " include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.")
+                    set_bad_query_request_response(f"The filter operator {_Operator} is not supported. Supported operators"
+                                                   + " include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.")
                     return response
 
         # SORT OPERATION
@@ -189,7 +189,7 @@ async def apply_query_operations(response: Response):
             _SortField, _SortOrder = _SortOperation[5:].split(':')
 
             if _SortField not in get_type_hints(_ViewModel):
-                bad_query_request(f"Sort field '{_SortField}' does not exist in the view model.")
+                set_bad_query_request_response(f"Sort field '{_SortField}' does not exist in the view model.")
                 return response
 
             _ResponseData.sort(key = lambda resource: resource.get(_SortField), reverse = _SortOrder == 'desc')
@@ -202,18 +202,18 @@ async def apply_query_operations(response: Response):
             try:
                 _Page = int(_PageOperation[5:])
             except ValueError:
-                bad_query_request("The page parameter must be an integer.")
+                set_bad_query_request_response("The page parameter must be an integer.")
                 return response
 
         if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None):
             try:
                 _Limit = int(_LimitOperation[6:])
             except ValueError:
-                bad_query_request("The limit parameter must be an integer.")
+                set_bad_query_request_response("The limit parameter must be an integer.")
                 return response
 
         if (_PageOperation is None) != (_LimitOperation is None):
-            bad_query_request("You must use page and limit operations together.")
+            set_bad_query_request_response("You must use page and limit operations together.")
             return response
 
         if _PageOperation and _LimitOperation:

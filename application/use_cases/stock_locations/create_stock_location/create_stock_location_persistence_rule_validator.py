@@ -16,7 +16,7 @@ class CreateStockLocationPersistenceRuleValidator(PersistenceRuleValidator):
         _StockLocation: StockLocation = self.persistence_context \
             .get_entities(StockLocation) \
             .first_or_none(
-                Equal((StockLocation, nameof(StockLocation.name)), input_port.name, True)
+                Equal((StockLocation, nameof(StockLocation.name)), input_port.name, is_case_insensitive = True)
             )
 
         if _StockLocation:

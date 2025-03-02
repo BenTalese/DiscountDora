@@ -21,12 +21,12 @@ class UpdateStockItemEntityExistenceChecker(EntityExistenceChecker):
             self.has_failures = True
             await output_port.present_stock_item_not_found_async(input_port.stock_item_id)
 
-        if (input_port.stock_level_id.has_been_set and
-            not self.existence_checker.does_entity_exist(StockLevel, input_port.stock_level_id.value)):
+        if (input_port.stock_level_id.has_been_set
+                and not self.existence_checker.does_entity_exist(StockLevel, input_port.stock_level_id.value)):
             self.has_failures = True
             await output_port.present_stock_level_not_found_async(input_port.stock_level_id.value)
 
-        if (input_port.stock_location_id.has_been_set and
-            not self.existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id.value)):
+        if (input_port.stock_location_id.has_been_set
+                and not self.existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id.value)):
             self.has_failures = True
             await output_port.present_stock_location_not_found_async(input_port.stock_location_id.value)

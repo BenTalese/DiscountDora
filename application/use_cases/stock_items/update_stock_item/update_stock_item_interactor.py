@@ -1,6 +1,6 @@
+from datetime import datetime
 from clapy import Interactor
 
-from application.dtos.stock_item_dto import get_stock_item_dto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_output_port import \
     IUpdateStockItemOutputPort
@@ -29,10 +29,12 @@ class UpdateStockItemInteractor(Interactor):
                 .get_entities(StockLevel) \
                 .first_by_id(input_port.stock_level_id.value)
 
+            _StockItem.stock_level_last_updated = datetime.utcnow()
+
         if input_port.stock_location_id.has_been_set:
             _StockItem.stock_location = self.persistence_context \
                 .get_entities(StockLocation) \
                 .first_by_id(input_port.stock_location_id.value)
 
         self.persistence_context.update(_StockItem)
-        await output_port.present_stock_item_updated_async(get_stock_item_dto(_StockItem))
+        await output_port.present_stock_item_updated_async(_StockItem)

@@ -22,11 +22,8 @@ class ProblemDetails:
     title: str
     type: str
 
-class BasePresenter(
-    IAuthenticationOutputPort,
-    IAuthorisationOutputPort,
-    IValidationOutputPort,
-    ABC):
+
+class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValidationOutputPort, ABC):
     get_route: str = None
     request_body: Any = None
     result: Response = None
@@ -35,7 +32,7 @@ class BasePresenter(
     async def business_rule_violation_async(self, error_message: str) -> None:
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { "": [error_message] },
+            errors = {"": [error_message]},
             status = UNPROCESSABLE_ENTITY,
             title = "Business rule violation.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -52,17 +49,17 @@ class BasePresenter(
         self.result = response
 
     # FIXME: query parameter needs to update once querying is solved (currently "= result.id" will be incorrect)
-    async def created_async(self, result: CreatedViewModel):
+    async def created_async(self, result: CreatedViewModel, id_attribute_name: str):
         response = jsonify(result)
         response.status_code = CREATED
         if self.get_route is not None:
-            response.headers['location'] = url_for(self.get_route, query = result.id, _external=True)
+            response.headers['location'] = url_for(self.get_route, query = f'filter={id_attribute_name}:eq:{result.id}', _external=True)
         self.result = response
 
     async def entity_existence_failure_async(self, entity_name: str, property_in_error: str, id: UUID):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"A {entity_name} with the ID '{id}' was not found."] },
+            errors = {property_in_error: [f"{entity_name} with the ID '{id}' was not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -70,7 +67,7 @@ class BasePresenter(
     async def entity_existence_failures_async(self, entity_name: str, property_in_error: str, *ids: Tuple[UUID]):
         await self.unprocessable_entity_async(ProblemDetails(
             detail = "See errors property for more details.",
-            errors = { property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."] },
+            errors = {property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity(s) were not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
@@ -91,14 +88,18 @@ class BasePresenter(
         response.status_code = NO_CONTENT
         self.result = response
 
-    async def not_found_async(self, error_message: str, route_segment: int):
+    async def not_found_async(self, entity_name: str, id: UUID, route_segment: int):
         if self._not_found_current_route_segment is None or route_segment < self._not_found_current_route_segment:
             self._not_found_current_route_segment = route_segment
-            self.result = jsonify(ProblemDetails(
-                detail = error_message,
+            response = jsonify(ProblemDetails(
+                detail = f"{entity_name} with the ID '{id}' was not found.",
+                errors = {},
                 status = NOT_FOUND,
                 title = "Entity was not found.",
                 type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"))
+            response.content_type = 'application/problem+json'
+            response.status_code = NOT_FOUND
+            self.result = response
 
     async def ok_async(self, result: Any):
         response = jsonify(result)
@@ -129,22 +130,32 @@ class BasePresenter(
 
     async def present_validation_failure_async(self, validation_failure: ValidationResult):
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = validation_failure.summary,
+            detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
             status = UNPROCESSABLE_ENTITY,
             errors = validation_failure.errors,
             title = "Validation failure.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
-    async def unprocessable_entity_async(self, problem_details: ProblemDetails): # TODO: THIS NEEDS TESTING, I DOUBT IT WORKS
+    async def unprocessable_entity_async(self, problem_details: ProblemDetails):
         if self.result is None:
             response = jsonify(problem_details)
             response.content_type = 'application/problem+json'
             response.status_code = UNPROCESSABLE_ENTITY
             self.result = response
+
         elif self.result.json['status'] == UNPROCESSABLE_ENTITY:
-            self.result.json['title'] = "Various errors."
-            for property, error in problem_details.errors.items():
-                if property in self.result.json['errors']:
-                    self.result.json['errors'][property] = self.result.json['errors'][property] + error
+            problem_details.title = "Various errors."
+
+            _Errors = self.result.json['errors']
+
+            for property, errors in _Errors.items():
+                if property in problem_details.errors:
+                    for error in errors:
+                        problem_details.errors[property].append(error)
                 else:
-                    self.result.json["errors"][property] = error
+                    problem_details.errors[property] = errors
+
+            response = jsonify(problem_details)
+            response.content_type = 'application/problem+json'
+            response.status_code = UNPROCESSABLE_ENTITY
+            self.result = response

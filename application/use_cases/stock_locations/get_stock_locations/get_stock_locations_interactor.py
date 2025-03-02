@@ -1,6 +1,5 @@
 from clapy import Interactor
 
-from application.dtos.stock_location_dto import get_stock_location_dto
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_location import StockLocation
 
@@ -15,6 +14,4 @@ class GetStockLocationsInteractor(Interactor):
 
     async def execute_async(self, input_port: GetStockLocationsInputPort, output_port: IGetStockLocationsOutputPort) -> None:
         await output_port \
-            .present_stock_locations_async(self.persistence_context
-                                           .get_entities(StockLocation)
-                                           .project(get_stock_location_dto))
+            .present_stock_locations_async(self.persistence_context.get_entities(StockLocation))

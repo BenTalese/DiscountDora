@@ -24,12 +24,12 @@ from framework.dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
 
-async def startup():
+async def startup(is_test_env: bool = False):
     _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
     app.service_provider = _ServiceProvider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
 
-    await init_db()
+    await init_db(is_test_env)
 
     WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
     WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
@@ -48,15 +48,16 @@ async def startup():
     register_routers()
     register_api_infrastructure()
 
-    app.run(
-        _ConfigurationManager.get_api_host(),
-        _ConfigurationManager.get_api_port(),
-        _ConfigurationManager.is_debug_mode_enabled(),
-        use_reloader = _ConfigurationManager.is_reloader_enabled()
-    )
+    if not is_test_env:  # app.run blocks the thread where tests are ran from
+        app.run(
+            _ConfigurationManager.get_api_host(),
+            _ConfigurationManager.get_api_port(),
+            _ConfigurationManager.is_debug_mode_enabled(),
+            use_reloader = _ConfigurationManager.is_reloader_enabled()
+        )
 
 
-async def init_db():
+async def init_db(is_test_env: bool = False):
     verify_all_models_imported()
 
     SqlAlchemyPersistenceContext._flask_app = app
@@ -66,7 +67,7 @@ async def init_db():
     }
 
     with app.app_context():
-        if ConfigurationManager().is_debug_mode_enabled():
+        if ConfigurationManager().is_debug_mode_enabled() or is_test_env:
             db.drop_all()
             db.create_all()
             await seed_dev_data_async(SqlAlchemyPersistenceContext())

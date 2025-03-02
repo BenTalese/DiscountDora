@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
+from domain.entities.product_offer import ProductOffer
 from domain.entities.shopping_list import ShoppingList
 from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
@@ -22,7 +23,8 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     persistence.add(merchant_one)
     persistence.add(merchant_two)
 
-    product_one = generate_entity(Product, True)
+    product_one = generate_entity(Product)
+    product_one.brand = "Cadbury"
     product_one.is_active = True
     product_one.is_available = True
     product_one.merchant = merchant_one
@@ -33,7 +35,7 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     product_one.size_value = 1.0
     product_one.web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
 
-    product_two = generate_entity(Product, True)
+    product_two = generate_entity(Product)
     product_two.is_active = True
     product_two.is_available = True
     product_two.merchant = merchant_two
@@ -44,15 +46,32 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     product_two.size_value = 460.0
     product_two.web_url = "https://www.coles.com.au/product/3056737"
 
+    product_one.current_offer = ProductOffer(
+        offered_on=datetime.utcnow(),
+        price_now = 2.82,
+        price_was = 3.52
+    )
+
+    product_two.current_offer = ProductOffer(
+        offered_on=datetime.utcnow(),
+        price_now = 22.15,
+        price_was = 32.16
+    )
+
     persistence.add(product_one)
     persistence.add(product_two)
 
+    persistence.add(product_one.current_offer)
+    persistence.add(product_two.current_offer)
+
     user = generate_entity(User)
-    user.send_deals_on_day = datetime.now().weekday()
+    user.send_deals_on_day = 6
     user.email = "ben.talese@gmail.com"
+    user.username = "The Coolest Guy"
     persistence.add(user)
 
     stock_location_one = generate_entity(StockLocation)
+    stock_location_one.name = "Pantry"
     persistence.add(stock_location_one)
 
     stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
@@ -66,17 +85,20 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     persistence.add(stock_level_four)
 
     stock_item_one = generate_entity(StockItem)
+    stock_item_one.name = "Kensington Pride Mangoes"
     stock_item_one.stock_location = stock_location_one
     stock_item_one.stock_level = stock_level_one
     persistence.add(stock_item_one)
 
     stock_item_two = generate_entity(StockItem)
+    stock_item_two.name = "Super Awesome Pizza"
     stock_item_two.stock_location = stock_location_one
     stock_item_two.stock_level = stock_level_two
     persistence.add(stock_item_two)
     persistence.add(stock_item_one)
 
     stock_item_three = generate_entity(StockItem)
+    stock_item_three.name = "Hot Crispy Chippies"
     stock_item_three.stock_location = stock_location_one
     stock_item_three.stock_level = stock_level_three
     persistence.add(stock_item_three)

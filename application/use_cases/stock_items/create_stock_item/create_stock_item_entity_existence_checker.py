@@ -17,7 +17,7 @@ class CreateStockItemEntityExistenceChecker(EntityExistenceChecker):
             self.has_failures = True
             await output_port.present_stock_level_not_found_async(input_port.stock_level_id)
 
-        if (input_port.stock_location_id and
-            not self.existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id)):
+        if (input_port.stock_location_id
+                and not self.existence_checker.does_entity_exist(StockLocation, input_port.stock_location_id)):
             self.has_failures = True
             await output_port.present_stock_location_not_found_async(input_port.stock_location_id)

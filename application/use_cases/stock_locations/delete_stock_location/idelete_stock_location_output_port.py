@@ -12,5 +12,5 @@ class IDeleteStockLocationOutputPort(IOutputPort, ABC):
         pass
 
     @abstractmethod
-    async def present_stock_location_not_found_async(self, stock_location_id : EntityID) -> None:
+    async def present_stock_location_not_found_async(self, stock_location_id: EntityID) -> None:
         pass

@@ -1,7 +1,6 @@
 from datetime import datetime
 from clapy import Interactor
 from varname import nameof
-from application.dtos.product_dto import get_product_dto
 from application.infrastructure.bool_operation import Equal
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.create_product.create_product_input_port import CreateProductInputPort
@@ -33,7 +32,7 @@ class CreateProductInteractor(Interactor):
                 price_now = input_port.price_now,
                 price_was = input_port.price_was
             ),
-            historical_offers = [], # TODO: Investigate at some point, init for collection feels like persistence problem maybe?
+            historic_offers = [],
             image = input_port.image,
             is_active = input_port.is_active,
             is_available = input_port.is_available,
@@ -48,4 +47,4 @@ class CreateProductInteractor(Interactor):
 
         self.persistence_context.add(product)
 
-        await output_port.present_product_created_async(get_product_dto(product))
+        await output_port.present_product_created_async(product)

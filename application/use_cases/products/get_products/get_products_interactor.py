@@ -1,5 +1,4 @@
 from clapy import Interactor
-from application.dtos.product_dto import get_product_dto
 
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.get_products.get_products_input_port import GetProductsInputPort
@@ -14,6 +13,4 @@ class GetProductsInteractor(Interactor):
 
     async def execute_async(self, input_port: GetProductsInputPort, output_port: IGetProductsOutputPort):
         await output_port \
-            .present_products_async(self.persistence_context
-                                       .get_entities(Product)
-                                       .project(get_product_dto))
+            .present_products_async(self.persistence_context.get_entities(Product))

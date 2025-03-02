@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
 
-from clapy import IOutputPort
+from clapy import IOutputPort, IValidationOutputPort
 
-from application.dtos.stock_item_dto import StockItemDto
 from domain.entities.base_entity import EntityID
+from domain.entities.stock_item import StockItem
 
 
-class ICreateStockItemOutputPort(IOutputPort, ABC):
+class ICreateStockItemOutputPort(IOutputPort, IValidationOutputPort, ABC):
 
     @abstractmethod
-    async def present_stock_item_created_async(self, stock_item: StockItemDto) -> None:
+    async def present_stock_item_already_exists_async(self, stock_item_name: str) -> None:
+        pass
+
+    @abstractmethod
+    async def present_stock_item_created_async(self, stock_item: StockItem) -> None:
         pass
 
     @abstractmethod

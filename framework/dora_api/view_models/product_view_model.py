@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
-from application.dtos.product_dto import ProductDto
+from domain.entities.product import Product
 
 
 @dataclass
@@ -23,8 +22,9 @@ class ProductViewModel:
     size_value: float
     web_url: str
 
+
 # FIXME This is horrible to manage, if any mapping reaches more than one level i need to null check
-def get_product_view_model(product: ProductDto) -> ProductViewModel:
+def get_product_view_model(product: Product) -> ProductViewModel:
     return ProductViewModel(
         brand = product.brand,
         # HACK: The Get Products use case decode fails.
@@ -33,13 +33,13 @@ def get_product_view_model(product: ProductDto) -> ProductViewModel:
         image = product.image.decode('utf-8', 'ignore') if product.image else None,
         is_active = product.is_active,
         is_available = product.is_available,
-        merchant_id = product.merchant.merchant_id.value if product.merchant else None,
+        merchant_id = product.merchant.id.value if product.merchant else None,
         merchant_name = product.merchant.name if product.merchant else None,
         merchant_stockcode = product.merchant_stockcode,
         name = product.name,
         price_now = product.current_offer.price_now if product.current_offer else None,
         price_was = product.current_offer.price_was if product.current_offer else None,
-        product_id = product.product_id.value,
+        product_id = product.id.value,
         size = product.size,
         size_unit = product.size_unit,
         size_value = product.size_value,

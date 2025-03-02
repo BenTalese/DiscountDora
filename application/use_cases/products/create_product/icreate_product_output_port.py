@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 
-from clapy import IOutputPort
+from clapy import IOutputPort, IValidationOutputPort
 
-from application.dtos.product_dto import ProductDto
 from domain.entities.base_entity import EntityID
+from domain.entities.product import Product
 
 
-class ICreateProductOutputPort(IOutputPort, ABC):
+class ICreateProductOutputPort(IOutputPort, IValidationOutputPort, ABC):
 
     @abstractmethod
     async def present_merchant_not_found_async(self, merchant_id: EntityID) -> None:
@@ -17,5 +17,5 @@ class ICreateProductOutputPort(IOutputPort, ABC):
         pass
 
     @abstractmethod
-    async def present_product_created_async(self, product: ProductDto) -> None:
+    async def present_product_created_async(self, product: Product) -> None:
         pass

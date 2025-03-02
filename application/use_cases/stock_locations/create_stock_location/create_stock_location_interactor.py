@@ -1,6 +1,5 @@
 from clapy import Interactor
 
-from application.dtos.stock_location_dto import get_stock_location_dto
 from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.stock_location import StockLocation
 
@@ -20,4 +19,4 @@ class CreateStockLocationInteractor(Interactor):
 
         self.persistence_context.add(_StockLocation)
 
-        await output_port.present_stock_location_created_async(get_stock_location_dto(_StockLocation))
+        await output_port.present_stock_location_created_async(_StockLocation)

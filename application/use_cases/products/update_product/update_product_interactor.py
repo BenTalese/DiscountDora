@@ -3,7 +3,6 @@ from datetime import datetime
 from clapy import Interactor
 from varname import nameof
 
-from application.dtos.product_dto import get_product_dto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.products.update_product.iupdate_product_output_port import \
     IUpdateProductOutputPort
@@ -47,4 +46,4 @@ class UpdateProductInteractor(Interactor):
 
         self.persistence_context.update(_Product)
 
-        await output_port.present_product_updated_async(get_product_dto(_Product))
+        await output_port.present_product_updated_async(_Product)

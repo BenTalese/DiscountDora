@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from application.dtos.user_dto import UserDto
+from domain.entities.user import User
 
 
 @dataclass
@@ -12,10 +12,10 @@ class UserViewModel:
     user_id: UUID
 
 
-def get_user_view_model(user: UserDto) -> UserViewModel:
+def get_user_view_model(user: User) -> UserViewModel:
     return UserViewModel(
         email = user.email,
         send_deals_on_day = user.send_deals_on_day,
         username = user.username,
-        user_id = user.user_id.value
+        user_id = user.id.value
     )

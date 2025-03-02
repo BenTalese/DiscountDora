@@ -1,6 +1,5 @@
 from clapy import Interactor
 
-from application.dtos.stock_level_dto import get_stock_level_dto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_levels.get_stock_levels.get_stock_levels_input_port import \
     GetStockLevelsInputPort
@@ -16,6 +15,4 @@ class GetStockLevelsInteractor(Interactor):
 
     async def execute_async(self, input_port: GetStockLevelsInputPort, output_port: IGetStockLevelsOutputPort):
         await output_port \
-            .present_stock_levels_async(self.persistence_context
-                                       .get_entities(StockLevel)
-                                       .project(get_stock_level_dto))
+            .present_stock_levels_async(self.persistence_context.get_entities(StockLevel))

@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 
 from clapy import IOutputPort, IValidationOutputPort
 
-from application.dtos.product_dto import ProductDto
 from domain.entities.base_entity import EntityID
+from domain.entities.product import Product
 
 
 class ICreateProductOutputPort(IOutputPort, IValidationOutputPort, ABC):
@@ -17,5 +17,5 @@ class ICreateProductOutputPort(IOutputPort, IValidationOutputPort, ABC):
         pass
 
     @abstractmethod
-    async def present_product_created_async(self, product: ProductDto) -> None:
+    async def present_product_created_async(self, product: Product) -> None:
         pass

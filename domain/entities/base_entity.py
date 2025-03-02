@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 EntityID = namedtuple("id", "value")
 
+
 @dataclass
 class BaseEntity(ABC):
     id: EntityID = None

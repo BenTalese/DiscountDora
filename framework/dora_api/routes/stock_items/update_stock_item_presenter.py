@@ -1,6 +1,5 @@
 from varname import nameof
 
-from application.dtos.stock_item_dto import StockItemDto
 from application.services.ipersistence_context import IPersistenceContext
 from application.use_cases.stock_items.update_stock_item.iupdate_stock_item_output_port import \
     IUpdateStockItemOutputPort
@@ -28,6 +27,6 @@ class UpdateStockItemPresenter(BasePresenter, IUpdateStockItemOutputPort):
     async def present_stock_location_not_found_async(self, stock_location_id: EntityID):
         await self.entity_existence_failure_async(nameof(StockLocation), nameof(stock_location_id), stock_location_id.value)
 
-    async def present_stock_item_updated_async(self, stock_item: StockItemDto):
+    async def present_stock_item_updated_async(self, stock_item: StockItem):
         await self.persistence.save_changes_async()
         await self.no_content_async()

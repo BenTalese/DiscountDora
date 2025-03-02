@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
-from application.dtos.merchant_dto import MerchantDto
+
+from domain.entities.merchant import Merchant
 
 
 @dataclass
@@ -9,8 +10,8 @@ class MerchantViewModel:
     name: str
 
 
-def get_merchant_view_model(merchant: MerchantDto) -> MerchantViewModel:
+def get_merchant_view_model(merchant: Merchant) -> MerchantViewModel:
     return MerchantViewModel(
-        merchant_id = merchant.merchant_id.value,
+        merchant_id = merchant.id.value,
         name = merchant.name,
     )

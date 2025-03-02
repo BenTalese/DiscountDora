@@ -65,7 +65,7 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
     persistence.add(product_two.current_offer)
 
     user = generate_entity(User)
-    user.send_deals_on_day = datetime.now().weekday()
+    user.send_deals_on_day = 6
     user.email = "ben.talese@gmail.com"
     user.username = "The Coolest Guy"
     persistence.add(user)

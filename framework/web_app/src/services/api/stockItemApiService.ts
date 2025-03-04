@@ -1,7 +1,7 @@
-import type { StockItem } from "src/models/stockItem";
-import type { CreatedResponse } from "./axiosHttpClient";
-import AxiosHttpClient from "./axiosHttpClient";
-import { createQueryString, FilterOperator } from "./queryStringBuilder";
+import type { StockItem } from 'src/models/stockItem';
+import type { CreatedResponse } from './axiosHttpClient';
+import AxiosHttpClient from './axiosHttpClient';
+import { createQueryString, FilterOperator } from './queryStringBuilder';
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
@@ -11,7 +11,7 @@ export default class StockItemApiService {
     }
 
     createAsync = async (stockItemToCreate: CreateStockItemCommand): Promise<CreatedResponse> =>
-        await this.httpClient.post<CreatedResponse>("/stock-items", stockItemToCreate);
+        await this.httpClient.post<CreatedResponse>('/stock-items', stockItemToCreate);
 
     deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);

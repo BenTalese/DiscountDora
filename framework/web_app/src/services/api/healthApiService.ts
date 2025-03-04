@@ -1,4 +1,4 @@
-import AxiosHttpClient from "./axiosHttpClient";
+import AxiosHttpClient from './axiosHttpClient';
 
 export default class HealthApiService {
     private dapiHttpClient: AxiosHttpClient;

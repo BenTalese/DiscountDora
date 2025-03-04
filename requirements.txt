@@ -9,7 +9,7 @@ Flask[Async]==3.0.2
 fuzzywuzzy==0.18.0
 Jinja2==3.1.2
 pydantic==2.6.0
-pytest-asyncio-0.24.0
+pytest-asyncio==0.25.3
 pytest==8.3.4
 requests_cache==1.1.1
 Requests==2.31.0

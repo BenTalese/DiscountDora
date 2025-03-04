@@ -9,7 +9,7 @@
 <p align="center">
     <img alt="MIT Licence" src="https://img.shields.io/github/license/BenTalese/DiscountDora?style=flat"/>
     <img alt="Current Release" src="https://img.shields.io/github/v/release/BenTalese/DiscountDora"/>
-    <img alt="Repo Size" src="https://img.shields.io/github/repo-size/BenTalese/clapy?color=red"/>
+    <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/BenTalese/DiscountDora/build-and-test.yml" />
     <img alt="Awesomeness" src="https://img.shields.io/badge/Awesomeness-100%25-brightgreen" />
     <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/bentalese/discountdora">
     <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/bentalese/discountdora/latest">

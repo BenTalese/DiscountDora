@@ -1,6 +1,0 @@
-1. Install python3.11 (required version)
-2. Create venv
-3. Install requirements.txt (for python back end)
-4. Install quasar cli (for front end)
-5. Run npm install
-6. Test if everything runs

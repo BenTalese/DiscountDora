@@ -1,4 +1,4 @@
-"""_2025_02_23__split_historic_offer
+"""20250223_split_historic_offer
 
 Revision ID: d9eba05a2f1b
 Revises: 6e127e3cfa54

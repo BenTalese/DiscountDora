@@ -8,16 +8,11 @@
 
 <p align="center">
     <img alt="MIT Licence" src="https://img.shields.io/github/license/BenTalese/DiscountDora?style=flat"/>
-    <img alt="Current Release" src="https://img.shields.io/github/v/release/BenTalese/DiscountDora"/>
-    <img alt="Repo Size" src="https://img.shields.io/github/repo-size/BenTalese/clapy?color=red"/>
     <img alt="Awesomeness" src="https://img.shields.io/badge/Awesomeness-100%25-brightgreen" />
-    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/bentalese/discountdora">
+    <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/BenTalese/DiscountDora/build-and-test.yml" />
+    <img alt="Current Release" src="https://img.shields.io/github/v/release/BenTalese/DiscountDora"/>
     <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/bentalese/discountdora/latest">
-    <img alt="GitHub language count" src="https://img.shields.io/github/languages/count/bentalese/discountdora">
-    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/bentalese/discountdora">
-    <!-- <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/bentalese/discountdora/total">
-    <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/bentalese/discountdora">
-    <img alt="Docker Stars" src="https://img.shields.io/docker/stars/bentalese/discountdora"> -->
+    <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/bentalese/discountdora">
 </p>
 <hr style="background-color: cyan;border:2px solid blue;border-radius:5px;">
 <br>

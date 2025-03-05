@@ -1,4 +1,4 @@
-"""initial_migration
+"""20250118_initial_migration
 
 Revision ID: 6e127e3cfa54
 Revises:

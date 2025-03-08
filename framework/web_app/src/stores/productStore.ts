@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, acceptHMRUpdate } from 'pinia';
 import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/notSupportedError';
 import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/offerSortByOptions';
@@ -168,3 +168,8 @@ export const useProductStore = defineStore('product', () => {
     };
 
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useProductStore, import.meta.hot));
+}
+

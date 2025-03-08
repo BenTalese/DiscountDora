@@ -1,45 +1,48 @@
 {
-  "name": "dora-web-app",
-  "version": "0.0.1",
-  "description": "A grocery management system.",
-  "productName": "Discount Dora",
-  "author": "Ben <ben.talese@gmail.com>",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "lint": "eslint --ext .js,.ts,.vue ./",
-    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
-    "test": "echo \"No test specified\" && exit 0",
-    "dev": "quasar dev",
-    "build": "quasar build"
-  },
-  "dependencies": {
-    "@quasar/extras": "^1.16.4",
-    "axios": "^1.2.1",
-    "pinia": "^2.0.11",
-    "prettier-plugin-organize-attributes": "^1.0.0",
-    "quasar": "^2.18.1",
-    "vue": "^3.4.18",
-    "vue-i18n": "^9.2.2",
-    "vue-router": "^4.0.12"
-  },
-  "devDependencies": {
-    "@intlify/unplugin-vue-i18n": "^2.0.0",
-    "@quasar/app-vite": "^2.0.0-beta.1",
-    "@types/node": "^20.5.9",
-    "@typescript-eslint/eslint-plugin": "^6.6.0",
-    "@typescript-eslint/parser": "^6.6.0",
-    "autoprefixer": "^10.4.2",
-    "eslint": "^8.11.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-vue": "^9.0.0",
-    "prettier": "^3.0.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.2.2"
-  },
-  "engines": {
-    "node": "^24 || ^22 || ^20 || ^18",
-    "npm": ">= 6.13.4",
-    "yarn": ">= 1.21.1"
-  }
+    "name": "discount-dora",
+    "version": "1.0.0",
+    "description": "Your grocery explorer!",
+    "productName": "Discount Dora",
+    "author": "BenTalese <ben.talese@gmail.com>",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "lint": "eslint -c ./eslint.config.js \"./src*/**/*.{ts,js,cjs,mjs,vue}\"",
+        "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
+        "test": "echo \"No test specified\" && exit 0",
+        "dev": "quasar dev",
+        "build": "quasar build",
+        "postinstall": "quasar prepare"
+    },
+    "dependencies": {
+        "@quasar/extras": "^1.16.4",
+        "axios": "^1.2.1",
+        "pinia": "^3.0.1",
+        "prettier-plugin-organize-attributes": "^1.0.0",
+        "quasar": "^2.16.0",
+        "vue": "^3.4.18",
+        "vue-i18n": "^11.0.0",
+        "vue-router": "^4.0.12"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.14.0",
+        "@intlify/unplugin-vue-i18n": "^4.0.0",
+        "@quasar/app-vite": "^2.1.0",
+        "@types/node": "^20.5.9",
+        "@vue/eslint-config-prettier": "^10.1.0",
+        "@vue/eslint-config-typescript": "^14.4.0",
+        "autoprefixer": "^10.4.2",
+        "eslint": "^9.22.0",
+        "eslint-plugin-vue": "^9.30.0",
+        "globals": "^15.12.0",
+        "prettier": "^3.5.3",
+        "typescript": "~5.5.3",
+        "vite-plugin-checker": "^0.9.0",
+        "vue-tsc": "^2.0.29"
+    },
+    "engines": {
+        "node": "^28 || ^26 || ^24 || ^22 || ^20 || ^18",
+        "npm": ">= 6.13.4",
+        "yarn": ">= 1.21.1"
+    }
 }

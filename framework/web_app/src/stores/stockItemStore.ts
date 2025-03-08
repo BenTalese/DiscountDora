@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, acceptHMRUpdate } from 'pinia';
 import type { StockItem } from 'src/models/stockItem';
 import StockItemApiService, { CreateStockItemCommand, UpdateStockItemCommand } from 'src/services/api/stockItemApiService';
 import { clearRollbacks, registerRollback } from 'src/services/errorHandling/rollbackRegistry';
@@ -52,3 +52,8 @@ export const useStockItemStore = defineStore('stockItem', () => {
         updateStockLevelAsync
     }
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useStockItemStore, import.meta.hot));
+}
+

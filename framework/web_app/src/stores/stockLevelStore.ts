@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, acceptHMRUpdate } from 'pinia';
 import { StockLevel } from 'src/models/stockLevel';
 import StockLevelApiService from 'src/services/api/stockLevelApiService';
 import { readonly, Ref, ref } from 'vue';
@@ -22,3 +22,8 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
         getStockLevelsAsync
     }
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useStockLevelStore, import.meta.hot));
+}
+

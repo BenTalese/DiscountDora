@@ -5,16 +5,13 @@
     "bracketSpacing": true,
     "htmlWhitespaceSensitivity": "ignore",
     "jsxSingleQuote": true,
-    "printWidth": 100,
+    "printWidth": 120,
     "semi": true,
     "singleAttributePerLine": true,
     "singleQuote": true,
     "tabWidth": 4,
     "trailingComma": "none",
     "vueIndentScriptAndStyle": true,
-    "plugins": [
-        "prettier-plugin-organize-attributes"
-    ],
     "attributeGroups": [
         "$CODE_GUIDE"
     ],

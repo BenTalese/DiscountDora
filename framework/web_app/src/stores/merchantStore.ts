@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, acceptHMRUpdate } from 'pinia';
 import { Merchant } from 'src/models/merchant';
 import MerchantApiService from 'src/services/api/merchantApiService';
 import { computed, readonly, ref } from 'vue';
@@ -38,3 +38,7 @@ export const useMerchantStore = defineStore('merchant', () => {
     };
 
 });
+
+if (import.meta.hot) {
+    import.meta.hot.accept(acceptHMRUpdate(useMerchantStore, import.meta.hot));
+  }

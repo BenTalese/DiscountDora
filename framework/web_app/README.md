@@ -1,6 +1,6 @@
-# Discount Dora (dora-web-app)
+# Discount Dora (discount-dora)
 
-A grocery management system.
+Your grocery explorer!
 
 ## Install the dependencies
 ```bash
@@ -29,7 +29,6 @@ yarn format
 # or
 npm run format
 ```
-
 
 
 ### Build the app for production

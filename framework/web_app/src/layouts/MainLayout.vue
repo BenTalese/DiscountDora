@@ -4,11 +4,17 @@
             <q-toolbar>
                 <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
 
-                <q-toolbar-title>
+                <q-toolbar-title
+                    class="dora-fontFamily-cuteDino dora-fontSize-30"
+                >
                     <q-avatar square>
-                        <img src="../../src/assets/dora-logo.png">
+                        <img src="../../src/assets/dora-logo.png" />
                     </q-avatar>
-                    Discount Dora
+                    <p
+                        class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock"
+                    >
+                        Discount Dora
+                    </p>
                 </q-toolbar-title>
             </q-toolbar>
         </q-header>
@@ -26,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import EssentialLink, { EssentialLinkProps } from 'components/EssentialLink.vue';
+import EssentialLink, { EssentialLinkProps } from 'src/components/EssentialLink.vue';
 import { ref } from 'vue';
 
 const essentialLinks: EssentialLinkProps[] = [

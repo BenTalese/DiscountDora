@@ -6,6 +6,7 @@ STYLE GUIDE:
     4. Prefix scoped styles with "dorascoped-" and keep usage of scoped styles within the component they were defined in
     5. Keep classes in categories of CSS in their own files, e.g. sizes.scss, padding.scss, etc
     6. Classes are named as "dora-property-value", e.g. "dora-fontWeight-400" for "font-weight: 400;" (abbreviate if too long, e.g. "background-colour" is "bgc")
+    7. If a css class only has one property, make it inline
 */
 
 @font-face {

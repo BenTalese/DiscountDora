@@ -9,6 +9,7 @@
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>">
 
+    <!-- Load favicons -->
     <link rel="icon" type="image/png" sizes="192x192" href="icons/android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="icons/android-chrome-512x512.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/web-app-manifest-192x192.png">
@@ -18,6 +19,11 @@
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="icons/favicon-96x96.png">
     <link rel="icon" type="image/ico" href="favicon.ico">
+
+    <!-- Embed Nunito and Urbanist fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
+    </style>
   </head>
   <body>
     <!-- quasar:entry-point -->

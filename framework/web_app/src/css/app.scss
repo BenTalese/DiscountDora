@@ -8,9 +8,16 @@ STYLE GUIDE:
     6. Classes are named as "dora-property-value", e.g. "dora-fontWeight-400" for "font-weight: 400;" (abbreviate if too long, e.g. "background-colour" is "bgc")
 */
 
+@font-face {
+    font-family: 'Cute Dino';
+    src: url('/fonts/Cute Dino.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
 body {
     background-color: #b9cfdd;  // Default applied with light mode theme
-    font-family: "Segoe UI", sans-serif;
+    font-family: "Nunito", "Urbanist", "Segoe UI", sans-serif;
 }
 
 // /* ========== COLOR PALETTE ========== */

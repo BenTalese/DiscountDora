@@ -18,7 +18,7 @@
     "axios": "^1.2.1",
     "pinia": "^2.0.11",
     "prettier-plugin-organize-attributes": "^1.0.0",
-    "quasar": "^2.6.0",
+    "quasar": "^2.18.1",
     "vue": "^3.4.18",
     "vue-i18n": "^9.2.2",
     "vue-router": "^4.0.12"
@@ -34,7 +34,6 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-vue": "^9.0.0",
     "prettier": "^3.0.3",
-    "prettier-plugin-tailwindcss": "^0.6.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.2.2"
   },

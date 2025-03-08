@@ -1,4 +1,4 @@
-import { StockLevelName } from "src/models/stockLevel";
+import type { StockLevelName } from 'src/models/stockLevel';
 
 export function getStockLevelColour(stockLevelName: StockLevelName) {
     const stockLevelColourByName: Record<StockLevelName, string> = {
@@ -8,11 +8,11 @@ export function getStockLevelColour(stockLevelName: StockLevelName) {
         'Out of Stock': 'grey'
     };
 
-    const stockLevelColour = stockLevelColourByName[stockLevelName]
+    const stockLevelColour = stockLevelColourByName[stockLevelName];
 
     if (!stockLevelColour) {
-        console.error(`Colour not configured for stock level '${stockLevelName}'.`)
+        console.error(`Colour not configured for stock level '${stockLevelName}'.`);
     }
 
-    return stockLevelColour
+    return stockLevelColour;
 }

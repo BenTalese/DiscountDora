@@ -29,7 +29,7 @@ interface PaginationOperation {
 }
 
 function createFilterString(filters: FilterOperation[]): string {
-    return filters.map(filter => `filter=${filter.field}:${filter.operator}:${filter.value}`).join('&');
+    return filters.map((filter) => `filter=${filter.field}:${filter.operator}:${filter.value}`).join('&');
 }
 
 function createSortString(sort: SortOperation): string {

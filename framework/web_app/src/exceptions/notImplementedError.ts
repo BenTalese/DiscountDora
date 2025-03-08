@@ -1,9 +1,7 @@
 export default class NotImplementedError extends Error {
-
     constructor(message: string = '') {
         super(message);
-    };
-
+    }
 }
 
 // For memory efficiency, an object prototype,

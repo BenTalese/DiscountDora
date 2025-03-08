@@ -12,5 +12,5 @@ export function executeRollbacks() {
 }
 
 export function clearRollbacks() {
-    rollbackRegistry.splice(0, rollbackRegistry.length)
+    rollbackRegistry.splice(0, rollbackRegistry.length);
 }

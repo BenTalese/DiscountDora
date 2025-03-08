@@ -1,7 +1,6 @@
 import type { Merchant } from 'src/models/merchant';
 import AxiosHttpClient from './axiosHttpClient';
 
-
 export default class MerchantApiService {
     private mapiHttpClient: AxiosHttpClient;
 
@@ -9,7 +8,5 @@ export default class MerchantApiService {
         this.mapiHttpClient = new AxiosHttpClient(5172);
     }
 
-    getAllAsync = async (): Promise<Merchant[]> =>
-        await this.mapiHttpClient.get<Merchant[]>('/merchants');
-
+    getAllAsync = async (): Promise<Merchant[]> => await this.mapiHttpClient.get<Merchant[]>('/merchants');
 }

@@ -13,6 +13,6 @@ export default class HealthApiService {
         const dapiOkay = await this.dapiHttpClient.get<boolean>('/health').catch(() => false);
         const mapiOkay = await this.mapiHttpClient.get<boolean>('/health').catch(() => false);
 
-        return dapiOkay && mapiOkay
-    }
+        return dapiOkay && mapiOkay;
+    };
 }

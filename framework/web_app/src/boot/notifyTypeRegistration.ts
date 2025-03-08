@@ -1,10 +1,8 @@
-import { Notify } from 'quasar'
+import { Notify } from 'quasar';
 
 // See possible options: https://quasar.dev/quasar-plugins/notify/
 
-Notify.setDefaults({
-
-})
+Notify.setDefaults({});
 
 Notify.registerType('info', {
     color: 'blue',
@@ -16,7 +14,7 @@ Notify.registerType('info', {
     iconSize: '30px',
     progress: true,
     classes: 'flat'
-})
+});
 
 Notify.registerType('oopsie', {
     color: 'red-5',
@@ -26,4 +24,4 @@ Notify.registerType('oopsie', {
     iconSize: '30px',
     progress: true,
     timeout: 3000
-})
+});

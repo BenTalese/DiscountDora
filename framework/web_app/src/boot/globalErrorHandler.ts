@@ -14,7 +14,7 @@ window.onerror = function (msg, url, line, col, error) {
     console.error('Javascript Error:', msg, url, line, col, error);
     executeRollbacks();
     Notify.create({ type: 'oopsie' });
-}
+};
 
 window.addEventListener('unhandledrejection', function (event) {
     executeRollbacks();

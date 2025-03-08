@@ -55,17 +55,9 @@
         <q-btn
             class="q-ma-sm"
             type="button"
-            :class="
-                getFilterBttnClass(
-                    productStore.productSearchOfferFilters.showOnlyAvailable
-                )
-            "
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlyAvailable)"
             :stretch="false"
-            @click="
-                toggleFilterFlag(
-                    nameof<IProductSearchFilters>('showOnlyAvailable')
-                )
-            "
+            @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlyAvailable'))"
             no-caps
             no-wrap
             size="md"
@@ -79,17 +71,9 @@
         <q-btn
             class="q-ma-sm"
             type="button"
-            :class="
-                getFilterBttnClass(
-                    productStore.productSearchOfferFilters.showOnlySpecials
-                )
-            "
+            :class="getFilterBttnClass(productStore.productSearchOfferFilters.showOnlySpecials)"
             :stretch="false"
-            @click="
-                toggleFilterFlag(
-                    nameof<IProductSearchFilters>('showOnlySpecials')
-                )
-            "
+            @click="toggleFilterFlag(nameof<IProductSearchFilters>('showOnlySpecials'))"
             no-caps
             no-wrap
             size="md"
@@ -109,11 +93,7 @@
             v-for="offer in productStore.filteredProductOffers"
         >
             <card-component
-                :icon-class="
-                    offer.is_saved && offer.is_saved_product_active
-                        ? 'text-red-12'
-                        : 'text-grey'
-                "
+                :icon-class="offer.is_saved && offer.is_saved_product_active ? 'text-red-12' : 'text-grey'"
                 :img="imageService.decodeBase64Image(offer.image)"
                 :img-caption="offer.is_available ? undefined : 'OUT OF STOCK'"
                 @icon-click="onIconClick(offer)"
@@ -126,9 +106,7 @@
                                 {{ `${offer.name} | ${offer.size}` }}
                             </div>
                             <div>
-                                <div
-                                    class="items-center no-wrap row text-body2 text-weight-medium"
-                                >
+                                <div class="items-center no-wrap row text-body2 text-weight-medium">
                                     <template v-if="offer.price_now > 0">
                                         <span>
                                             {{ `$${offer.price_now}` }}
@@ -146,9 +124,7 @@
                                     <span v-else>Price Unavailable</span>
                                 </div>
 
-                                <div
-                                    class="dora-height-20 text-caption text-weight-regular"
-                                >
+                                <div class="dora-height-20 text-caption text-weight-regular">
                                     <span v-if="isOfferOnSpecial(offer)">
                                         <s>{{ `$${offer.price_was}` }}</s>
                                         &nbsp;
@@ -167,9 +143,7 @@
                         class="dora-bgc-offWhite"
                         align="right"
                     >
-                        <component
-                            :is="MerchantLogoOptions[offer.merchant_name]"
-                        />
+                        <component :is="MerchantLogoOptions[offer.merchant_name]" />
                     </q-card-actions>
                 </template>
             </card-component>
@@ -177,20 +151,14 @@
     </div>
     <div
         class="row text-h3 q-ma-sm items-center"
-        v-if="
-            !Loading.isActive &&
-            previousSearchTerm &&
-            !productStore.productOffers?.length
-        "
+        v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
     >
         <img
             class="q-pa-sm dorascoped-round-img"
             src="../../src/assets/banana-peel.jpg"
         />
 
-        <span class="text-h5 q-pa-sm">
-            No products found for '{{ previousSearchTerm }}'.
-        </span>
+        <span class="text-h5 q-pa-sm">No products found for '{{ previousSearchTerm }}'.</span>
     </div>
     <!-- TODO: Add v-if for all merchants filtered to have -->
 </template>
@@ -201,26 +169,22 @@
     import SelectComponent from 'src/components/SelectComponent.vue';
     import MerchantLogoOptions from 'src/helpers/merchantLogoOptions';
     import nameof from 'src/helpers/nameOf';
-    import {
-        IOfferSortByOption,
-        OfferSortByOptions
-    } from 'src/helpers/offerSortByOptions';
+    import type { IOfferSortByOption } from 'src/helpers/offerSortByOptions';
+    import { OfferSortByOptions } from 'src/helpers/offerSortByOptions';
     import { isOfferOnSpecial } from 'src/helpers/scrapedProductOfferLogic';
-    import { Merchant } from 'src/models/merchant';
-    import { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+    import type { Merchant } from 'src/models/merchant';
+    import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
     import ImageService from 'src/services/files/imageService';
     import { useMerchantStore } from 'src/stores/merchantStore';
-    import {
-        IProductSearchFilters,
-        useProductStore
-    } from 'src/stores/productStore';
+    import type { IProductSearchFilters } from 'src/stores/productStore';
+    import { useProductStore } from 'src/stores/productStore';
     import { ref } from 'vue';
 
-    import { colors } from 'quasar'
+    import { colors } from 'quasar';
 
-    const { getPaletteColor } = colors
+    const { getPaletteColor } = colors;
 
-    setCssVar('primary', getPaletteColor('test'))
+    setCssVar('primary', getPaletteColor('test'));
 
     const merchantStore = useMerchantStore();
     const productStore = useProductStore();
@@ -235,10 +199,7 @@
             .searchByTermAsync({
                 search_term: searchTerm.value,
                 result_limit: 5, // TODO: NEEDS TO BE AN INPUT
-                merchants_to_search:
-                    productStore.productSearchOfferFilters.stores.map(
-                        (merchant) => merchant.name
-                    )
+                merchants_to_search: productStore.productSearchOfferFilters.stores.map((merchant) => merchant.name)
             })
             .then(() => (previousSearchTerm.value = searchTerm.value));
 
@@ -248,24 +209,18 @@
 
     const showFiltersContainer = ref(true);
 
-    const toggleShowFiltersContainer = (): boolean =>
-        (showFiltersContainer.value = !showFiltersContainer.value);
+    const toggleShowFiltersContainer = (): boolean => (showFiltersContainer.value = !showFiltersContainer.value);
 
     const toggleFilterFlag = (filterName: string): void =>
-        productStore.toggleProductSearchFilter(
-            filterName as keyof IProductSearchFilters
-        );
+        productStore.toggleProductSearchFilter(filterName as keyof IProductSearchFilters);
 
-    const getFilterBttnClass = (isSelected: boolean) =>
-        isSelected ? 'bg-blue' : 'bg-white';
+    const getFilterBttnClass = (isSelected: boolean) => (isSelected ? 'bg-blue' : 'bg-white');
 
-    const getSortByOptionLabel = (option: IOfferSortByOption): string =>
-        option.description;
+    const getSortByOptionLabel = (option: IOfferSortByOption): string => option.description;
 
     const getStoresOptionLabel = (merchant: Merchant) => merchant.name;
 
-    const getStoresOptionIcon = (isSelected: boolean): string =>
-        isSelected ? 'check_box' : 'check_box_outline_blank';
+    const getStoresOptionIcon = (isSelected: boolean): string => (isSelected ? 'check_box' : 'check_box_outline_blank');
 
     //#endregion Filters
 
@@ -279,13 +234,10 @@
      * @param offer the product offer
      */
     const onIconClick = (offer: ScrapedProductOffer): void => {
-        const { is_saved_product_active, merchant_name, merchant_stockcode } =
-            offer;
+        const { is_saved_product_active, merchant_name, merchant_stockcode } = offer;
 
         const product = productStore.products?.find(
-            (p) =>
-                p.merchant_name === offer.merchant_name &&
-                p.merchant_stockcode === offer.merchant_stockcode
+            (p) => p.merchant_name === offer.merchant_name && p.merchant_stockcode === offer.merchant_stockcode
         );
 
         if (product)
@@ -318,7 +270,6 @@
     };
 
     //#endregion Offers
-
 </script>
 
 <style scoped>

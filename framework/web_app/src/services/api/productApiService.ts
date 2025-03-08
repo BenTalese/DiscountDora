@@ -1,4 +1,4 @@
-import { Product } from 'src/models/product';
+import type { Product } from 'src/models/product';
 import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
@@ -15,8 +15,7 @@ export default class ProductApiService {
     createAsync = async (productToCreate: CreateProductCommand): Promise<CreatedResponse> =>
         await this.dapiHttpClient.post<CreatedResponse>('/products', productToCreate);
 
-    getAllAsync = async (): Promise<Product[]> =>
-        await this.dapiHttpClient.get<Product[]>('/products');
+    getAllAsync = async (): Promise<Product[]> => await this.dapiHttpClient.get<Product[]>('/products');
 
     searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.post<ScrapedProductOffer[]>('/products/search', searchQuery);
@@ -26,31 +25,31 @@ export default class ProductApiService {
 }
 
 export type SearchByTermQuery = {
-    merchants_to_search: Array<string>
-    result_limit: number
-    search_term: string
-}
+    merchants_to_search: Array<string>;
+    result_limit: number;
+    search_term: string;
+};
 
 export type CreateProductCommand = {
-    brand: string | null
-    image: string //TODO: Check if img is good before saving it, prob in use case
-    is_active: boolean
-    is_available: boolean
-    merchant_name: string
-    merchant_stockcode: string
-    name: string
-    price_now: number
-    price_was: number
-    size: string
-    size_unit: string
-    size_value: number
-    web_url: string
-}
+    brand: string | null;
+    image: string; //TODO: Check if img is good before saving it, prob in use case
+    is_active: boolean;
+    is_available: boolean;
+    merchant_name: string;
+    merchant_stockcode: string;
+    name: string;
+    price_now: number;
+    price_was: number;
+    size: string;
+    size_unit: string;
+    size_value: number;
+    web_url: string;
+};
 
 export type UpdateProductCommand = {
-    is_active?: boolean
-    is_available?: boolean
-    price_now?: number
-    price_was?: number
-    product_id: string
-}
+    is_active?: boolean;
+    is_available?: boolean;
+    price_now?: number;
+    price_was?: number;
+    product_id: string;
+};

@@ -1,4 +1,4 @@
 export type Merchant = {
-    is_enabled: boolean
-    name: string
-}
+    is_enabled: boolean;
+    name: string;
+};

@@ -19,9 +19,7 @@
     >
         <template v-slot:no-option>
             <q-item>
-                <q-item-section class="text-italic text-grey">
-                    No options
-                </q-item-section>
+                <q-item-section class="text-italic text-grey">No options</q-item-section>
             </q-item>
         </template>
 
@@ -91,10 +89,7 @@
          * @param isOptionSelected The selected state of the current option being processed
          * @returns Name of the icon
          */
-        optionIconName?:
-            | ((isOptionSelected: boolean) => string)
-            | string
-            | undefined;
+        optionIconName?: ((isOptionSelected: boolean) => string) | string | undefined;
 
         /**
          * Property of option which holds the 'label';
@@ -105,10 +100,7 @@
          * @param option The current option being processed
          * @returns Label of the current option
          */
-        optionLabel?:
-            | ((option: string | unknown) => string)
-            | string
-            | undefined;
+        optionLabel?: ((option: string | unknown) => string) | string | undefined;
     }
 
     const props = withDefaults(defineProps<ISelectComponentProps>(), {
@@ -133,8 +125,7 @@
 
     const internalModelValue = props.modelValue;
 
-    const onUpdateModelValue = (value: string | null): void =>
-        emit('update:model-value', value);
+    const onUpdateModelValue = (value: string | null): void => emit('update:model-value', value);
 
     //#endregion Model Value
 
@@ -164,8 +155,7 @@
         if (props.optionLabel instanceof String) {
             const opt = scope.opt as { [key: string]: string };
             return opt[props.optionLabel as string];
-        } else if (props.optionLabel instanceof Function)
-            return props.optionLabel(scope.opt);
+        } else if (props.optionLabel instanceof Function) return props.optionLabel(scope.opt);
         else return scope.opt as string;
     }
 

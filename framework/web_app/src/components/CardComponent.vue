@@ -16,17 +16,13 @@
                 class="absolute-top text-center"
                 v-if="imgCaption"
             >
-                <span
-                    class="dora-letterSpacing-3 text-subtitle2 text-weight-regular"
-                >
+                <span class="dora-letterSpacing-3 text-subtitle2 text-weight-regular">
                     {{ imgCaption }}
                 </span>
             </div>
 
             <template v-slot:error>
-                <div class="absolute-full flex flex-center">
-                    Error encountered
-                </div>
+                <div class="absolute-full flex flex-center">Error encountered</div>
             </template>
         </q-img>
 

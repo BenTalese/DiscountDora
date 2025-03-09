@@ -1,6 +1,6 @@
-const rollbackRegistry: Function[] = [];
+const rollbackRegistry: (() => void)[] = [];
 
-export function registerRollback(fn: Function) {
+export function registerRollback(fn: (() => void)) {
     rollbackRegistry.push(fn);
 }
 

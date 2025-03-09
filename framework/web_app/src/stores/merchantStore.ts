@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import { Merchant } from 'src/models/merchant';
+import type { Merchant } from 'src/models/merchant';
 import MerchantApiService from 'src/services/api/merchantApiService';
 import { computed, readonly, ref } from 'vue';
 import { useProductStore } from './productStore';
@@ -13,7 +13,7 @@ export const useMerchantStore = defineStore('merchant', () => {
 
     const merchants = ref<Merchant[]>([]);
 
-    async function getMerchantsAsync() {
+    const getMerchantsAsync = () =>
         merchantApiService.getAllAsync().then((merchantsData) => {
             const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
@@ -23,7 +23,6 @@ export const useMerchantStore = defineStore('merchant', () => {
 
             productStore.addStoresToProductSearchFilter(getEnabledMerchants.value);
         });
-    }
 
     const getEnabledMerchants = computed(() => merchants.value.filter((m) => m.is_enabled));
 

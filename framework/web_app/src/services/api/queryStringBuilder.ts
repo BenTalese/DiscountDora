@@ -15,7 +15,7 @@ export enum SortOrder {
 interface FilterOperation {
     field: string;
     operator: FilterOperator;
-    value: any;
+    value: string | number | boolean;
 }
 
 interface SortOperation {

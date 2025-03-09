@@ -230,7 +230,7 @@
         days_until_stocktake_alert: 0,
         name: '',
         stock_group_id: null,
-        stock_level_id: stockLevels.value[0]?.stock_level_id,
+        stock_level_id: stockLevels.value[0]!.stock_level_id,
         stock_location_id: null
     };
 

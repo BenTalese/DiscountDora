@@ -16,10 +16,10 @@ export default class StockItemApiService {
     deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    getAsync = async (stockItemID: string): Promise<StockItem[]> =>
-        await this.httpClient.get<StockItem[]>(
+    getAsync = async (stockItemID: string): Promise<StockItem> =>
+        (await this.httpClient.get<StockItem[]>(
             `/stock-items/${createQueryString([{ field: 'stock_item_id', operator: FilterOperator.EQUAL, value: stockItemID }])}`
-        );
+        ))[0]!;
 
     getAllAsync = async (): Promise<StockItem[]> => await this.httpClient.get<StockItem[]>('/stock-items');
 

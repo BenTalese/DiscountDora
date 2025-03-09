@@ -29,13 +29,13 @@
          * The height of the logo in pixels;
          * Default: 32
          */
-        height?: number | undefined;
+        height: number;
 
         /**
          * The width of the logo in pixels;
          * Default: 48
          */
-        width?: number | undefined;
+        width: number;
     }
 
     withDefaults(defineProps<IColesLogoProps>(), {

@@ -63,9 +63,9 @@ export default class AxiosHttpClient implements HttpClient {
         }
     }
 
-    isCustomApiErrorResponse = (error: any): error is ApiErrorResponse =>
-        error &&
-        typeof error !== 'string' &&
+    isCustomApiErrorResponse = (error: unknown): error is ApiErrorResponse =>
+        error !== null &&
+        typeof error === 'object' &&
         'detail' in error &&
         'status' in error &&
         'errors' in error &&

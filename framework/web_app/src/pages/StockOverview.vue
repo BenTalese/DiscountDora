@@ -2,11 +2,22 @@
     <q-btn
         class="q-ma-sm"
         @click="onCreateStockItemButtonClick"
-        color="green"
+        color="positive"
     >
         <q-icon
             name="add"
-            color="dark-green"
+            color="blue-grey-10"
+            size="30px"
+        />
+    </q-btn>
+    <q-btn
+        class="q-ma-sm"
+        @click="onCreateStockItemButtonClick"
+        color="secondary"
+    >
+        <q-icon
+            name="add"
+            color="green"
             size="30px"
         />
     </q-btn>
@@ -159,14 +170,14 @@
                     <q-btn
                         type="submit"
                         align="right"
-                        color="cyan"
+                        color="info"
                         label="Save & Continue"
                         size="lg"
                     />
                     <q-btn
                         type="submit"
                         align="right"
-                        color="green"
+                        color="positive"
                         label="Save & Close"
                         size="lg"
                         v-close-popup

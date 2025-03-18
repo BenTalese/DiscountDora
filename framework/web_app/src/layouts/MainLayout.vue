@@ -19,10 +19,13 @@
                     <q-avatar
                         square
                         size="50px"
+                        class="q-ma-xs"
                     >
-                        <img src="../../src/assets/dora-logo.png" />
+                        <img src="../../src/assets/logo-mascot.png" />
                     </q-avatar>
-                    <p class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock">
+                    <p
+                        class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock text-accent"
+                    >
                         Discount Dora
                     </p>
                 </q-toolbar-title>

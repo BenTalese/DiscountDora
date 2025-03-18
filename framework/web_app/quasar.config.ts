@@ -16,7 +16,8 @@ export default defineConfig((ctx) => {
             'globalErrorHandler',
             'i18n',
             'notifyTypeRegistration',
-            'stores'
+            'stores',
+            'theme'
         ],
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css

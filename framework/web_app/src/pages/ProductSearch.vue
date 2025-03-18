@@ -164,7 +164,7 @@
 </template>
 
 <script lang="ts" setup>
-    import { Loading, setCssVar } from 'quasar';
+    import { Loading } from 'quasar';
     import CardComponent from 'src/components/CardComponent.vue';
     import SelectComponent from 'src/components/SelectComponent.vue';
     import MerchantLogoOptions from 'src/helpers/merchantLogoOptions';
@@ -179,12 +179,6 @@
     import type { IProductSearchFilters } from 'src/stores/productStore';
     import { useProductStore } from 'src/stores/productStore';
     import { ref } from 'vue';
-
-    import { colors } from 'quasar';
-
-    const { getPaletteColor } = colors;
-
-    setCssVar('primary', getPaletteColor('test'));
 
     const merchantStore = useMerchantStore();
     const productStore = useProductStore();

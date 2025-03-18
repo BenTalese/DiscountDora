@@ -17,24 +17,9 @@ STYLE GUIDE:
 }
 
 body {
-    background-color: #b9cfdd; // Default applied with light mode theme
+    background-color: var(--q-page-background);
     font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
 }
-
-// /* ========== COLOR PALETTE ========== */
-// $primary-color: #0077CC; /* Blue */
-// $secondary-color: #2CA58D; /* Green */
-// $background-light: #F4F7F9;
-// $text-light: #1A1A1A;
-// $border-light: #D1D5DB;
-// $card-bg-light: #FFFFFF;
-// $shadow-light: rgba(0, 0, 0, 0.1);
-
-// $background-dark: #121212;
-// $text-dark: #EAEAEA;
-// $border-dark: #444;
-// $card-bg-dark: #1E1E1E;
-// $shadow-dark: rgba(255, 255, 255, 0.1);
 
 // /* ========== TYPOGRAPHY ========== */
 

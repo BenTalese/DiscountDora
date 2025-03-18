@@ -40,7 +40,7 @@
             :option-label="getStoresOptionLabel"
             :optionIconName="getStoresOptionIcon"
             :options="merchantStore.getEnabledMerchants"
-            @update:model-value="productStore.setProductSearchStoresFilter"
+            @update:model-value="(value) => productStore.setProductSearchStoresFilter(value as Merchant[])"
             label="Stores"
         />
 
@@ -48,7 +48,7 @@
             :model-value="productStore.productSearchOfferFilters.sortBy"
             :option-label="getSortByOptionLabel"
             :options="OfferSortByOptions"
-            @update:model-value="productStore.setProductSearchSortByFilter"
+            @update:model-value="(value) => productStore.setProductSearchSortByFilter(value as IOfferSortByOption)"
             label="Sort By"
         />
 
@@ -233,7 +233,7 @@
      * Creates the saved product if it does not exist.
      * @param offer the product offer
      */
-    const onIconClick = (offer: ScrapedProductOffer): void => {
+    const onIconClick = async (offer: ScrapedProductOffer): Promise<void> => {
         const { is_saved_product_active, merchant_name, merchant_stockcode } = offer;
 
         const product = productStore.products?.find(
@@ -241,7 +241,7 @@
         );
 
         if (product)
-            productStore
+            await productStore
                 .updateProductAsync({
                     is_active: !is_saved_product_active,
                     product_id: product.product_id
@@ -254,7 +254,7 @@
                     })
                 );
         else
-            productStore
+            await productStore
                 .createProductAsync({
                     ...offer,
                     is_active: true

@@ -16,16 +16,16 @@
                 />
 
                 <q-toolbar-title class="dora-fontFamily-cuteDino dora-fontSize-30">
-                    <q-avatar square size="50px">
+                    <q-avatar
+                        square
+                        size="50px"
+                    >
                         <img src="../../src/assets/dora-logo.png" />
                     </q-avatar>
                     <p class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock">
                         Discount Dora
                     </p>
                 </q-toolbar-title>
-
-                <!-- <div>Quasar v{{ $q.version }}</div> -->
-                <!-- TODO: App version??? -->
             </q-toolbar>
         </q-header>
 

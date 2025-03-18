@@ -7,7 +7,7 @@ export function getStockLevelColour(stockLevelName: StockLevelName) {
         'Well-Stocked': nameOf<Theme>('positive'),
         'Sufficient Stock': nameOf<Theme>('warning'),
         'Low Stock': nameOf<Theme>('negative'),
-        'Out of Stock': 'grey'
+        'Out of Stock': 'grey' // TODO: Define and use theme colour
     };
 
     const stockLevelColour = stockLevelColourByName[stockLevelName];

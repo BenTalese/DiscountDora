@@ -100,7 +100,7 @@
          * @param option The current option being processed
          * @returns Label of the current option
          */
-        optionLabel?: ((option: string | unknown) => string) | string | undefined;
+        optionLabel?: ((option: string) => string) | string | undefined;
     }
 
     const props = withDefaults(defineProps<ISelectComponentProps>(), {
@@ -154,7 +154,9 @@
     function getOptionLabel(scope: IScope): string {
         if (props.optionLabel instanceof String) {
             const opt = scope.opt as { [key: string]: string };
+            // @ts-expect-error: TODO Fix properly
             return opt[props.optionLabel as string];
+            // @ts-expect-error: TODO Fix properly (optionLabel?: ((option: string | unknown) => string) | string | undefined;)
         } else if (props.optionLabel instanceof Function) return props.optionLabel(scope.opt);
         else return scope.opt as string;
     }

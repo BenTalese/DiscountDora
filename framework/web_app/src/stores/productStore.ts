@@ -1,16 +1,14 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/notSupportedError';
-import { IOfferSortByOption, OfferSortByOptions } from 'src/helpers/offerSortByOptions';
+import type { IOfferSortByOption } from 'src/helpers/offerSortByOptions';
+import { OfferSortByOptions } from 'src/helpers/offerSortByOptions';
 import { findSavedProduct, isOfferOnSpecial } from 'src/helpers/scrapedProductOfferLogic';
-import { Merchant } from 'src/models/merchant';
+import type { Merchant } from 'src/models/merchant';
 import type { Product } from 'src/models/product';
 import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
-import ProductApiService, {
-    CreateProductCommand,
-    SearchByTermQuery,
-    UpdateProductCommand
-} from 'src/services/api/productApiService';
+import type { CreateProductCommand, SearchByTermQuery, UpdateProductCommand } from 'src/services/api/productApiService';
+import ProductApiService from 'src/services/api/productApiService';
 import { computed, reactive, readonly, ref } from 'vue';
 
 const productApiService = new ProductApiService();
@@ -66,11 +64,11 @@ export const useProductStore = defineStore('product', () => {
     /**
      * Toggles the specified boolean property of the product search filter.
      * @param propertyName The name of the property to toggle within the product search filters.
-     * @throws {NotSupportedError} If the property type is not boolean.
      */
     function toggleProductSearchFilter(propertyName: keyof IProductSearchFilters): void {
         if (typeof productSearchOfferFilters[propertyName] === 'boolean')
-            (productSearchOfferFilters[propertyName] as boolean) = !productSearchOfferFilters[propertyName];
+            // @ts-expect-error: TODO Fix properly
+            productSearchOfferFilters[propertyName] = !productSearchOfferFilters[propertyName];
         else throw new NotSupportedError('Filter to toggle is not of type boolean.');
     }
 
@@ -107,7 +105,7 @@ export const useProductStore = defineStore('product', () => {
             ) ?? -1;
 
         if (index > -1 && productOffers.value)
-            productOffers.value[index] = { ...productOffers.value[index], ...command };
+            productOffers.value[index] = { ...productOffers.value[index]!, ...command };
     };
 
     const filteredProductOffers = computed(() => {
@@ -132,13 +130,13 @@ export const useProductStore = defineStore('product', () => {
 
         Loading.show();
 
-        productApiService
+        await productApiService
             .searchByTermAsync(query)
             .then((offers) => {
                 productOffers.value = offers.map((off) => {
                     const savedProduct = findSavedProduct(off, products.value);
                     off.is_saved = !!savedProduct;
-                    off.is_saved_product_active = savedProduct?.is_active;
+                    off.is_saved_product_active = savedProduct?.is_active ?? false;
                     return off;
                 });
             })

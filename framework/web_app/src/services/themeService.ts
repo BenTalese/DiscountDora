@@ -1,6 +1,6 @@
 import { setCssVar } from 'quasar';
 
-interface Theme {
+export interface Theme {
     // Brand Colours
     primary: string;
     secondary: string;

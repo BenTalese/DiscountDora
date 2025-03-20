@@ -1,24 +1,11 @@
-/* eslint-env node */
-
 // Configuration for your app
-// https://v2.quasar.dev/quasar-cli-vite/quasar-config-js
+// https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
-
+import { defineConfig } from '#q-app/wrappers';
 import { fileURLToPath } from 'node:url';
-import { configure } from 'quasar/wrappers';
 
-export default configure((/* ctx */) => {
+export default defineConfig((ctx) => {
     return {
-        eslint: {
-            // fix: true,
-            // include: [],
-            // exclude: [],
-            // cache: false,
-            // rawOptions: {},
-            warnings: true,
-            errors: true
-        },
-
         // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
         // preFetch: true,
 
@@ -29,12 +16,17 @@ export default configure((/* ctx */) => {
             'globalErrorHandler',
             'i18n',
             'notifyTypeRegistration',
-            'stores'
+            'stores',
+            'theme'
         ],
 
-        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css
+        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
         css: [
-            'app.scss'
+            'app.scss',
+            'colours.scss',
+            'layout.scss',
+            'sizes.scss',
+            'typography.scss'
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras
@@ -48,20 +40,26 @@ export default configure((/* ctx */) => {
             // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
 
             'roboto-font', // optional, you are not bound to it
-            'material-icons', // optional, you are not bound to it
+            'material-icons' // optional, you are not bound to it
         ],
 
-        // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#build
+        // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
         build: {
             target: {
                 browser: ['esnext'],
                 node: 'node20'
             },
 
+            typescript: {
+                strict: true,
+                vueShim: true
+                // extendTsConfig (tsConfig) {}
+            },
+
             vueRouterMode: 'hash', // available values: 'hash', 'history'
             // vueRouterBase,
             vueDevtools: true,
-            devtool: 'source-map',
+            devtool: "source-map",
             // vueOptionsAPI: false,
 
             // rebuildCache: true, // rebuilds Vite/linter/etc cache on startup
@@ -79,29 +77,57 @@ export default configure((/* ctx */) => {
             // viteVuePluginOptions: {},
 
             vitePlugins: [
-                ['@intlify/unplugin-vue-i18n/vite', {
-                    // if you want to use Vue I18n Legacy API, you need to set `compositionOnly: false`
-                    // compositionOnly: false,
+                [
+                    '@intlify/unplugin-vue-i18n/vite',
+                    {
+                        // if you want to use Vue I18n Legacy API, you need to set `compositionOnly: false`
+                        // compositionOnly: false,
 
-                    // if you want to use named tokens in your Vue I18n messages, such as 'Hello {name}',
-                    // you need to set `runtimeOnly: false`
-                    // runtimeOnly: false,
+                        // if you want to use named tokens in your Vue I18n messages, such as 'Hello {name}',
+                        // you need to set `runtimeOnly: false`
+                        // runtimeOnly: false,
 
-                    // you need to set i18n resource including paths !
-                    include: [fileURLToPath(new URL('./src/i18n', import.meta.url))],
-                }]
+                        ssr: ctx.modeName === 'ssr',
+
+                        // you need to set i18n resource including paths !
+                        include: [fileURLToPath(new URL('./src/i18n', import.meta.url))]
+                    }
+                ],
+
+                [
+                    'vite-plugin-checker',
+                    {
+                        vueTsc: true,
+                        eslint: {
+                            lintCommand: 'eslint -c ./eslint.config.js "./src*/**/*.{ts,js,mjs,cjs,vue}"',
+                            useFlatConfig: true
+                        }
+                    },
+                    { server: false }
+                ]
             ]
         },
 
-        // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#devServer
+        // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
         devServer: {
-            // https: true
+            // https: true,
             port: 5174,
             open: false // opens browser window automatically
         },
 
-        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework
+        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
         framework: {
+            config: {
+                dark: false, // TODO: Implement dark mode...
+                loading: {
+                    group: "default-group-name",
+                    message: "Loading...",
+                    messageColor: "info",
+                    spinnerColor: "info",
+                    spinner: "QSpinnerTail",
+                },
+            },
+
             iconSet: 'material-icons', // Quasar icon set
             lang: 'en-US', // Quasar language pack
 
@@ -114,25 +140,16 @@ export default configure((/* ctx */) => {
 
             // Quasar plugins
             plugins: [
-                'Loading',
-                'Notify'
-            ],
-            config: {
-                loading: {
-                    group: 'default-group-name',
-                    message: 'Loading...',
-                    messageColor: 'info',
-                    spinnerColor: 'info',
-                    spinner: 'QSpinnerTail'
-                } /* look at QuasarConfOptions from the API card */
-            }
+                "Loading",
+                "Notify"
+            ]
         },
 
         // animations: 'all', // --- includes all animations
         // https://v2.quasar.dev/options/animations
         animations: [],
 
-        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#sourcefiles
+        // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#sourcefiles
         // sourceFiles: {
         //   rootComponent: 'src/App.vue',
         //   router: 'src/router/index',
@@ -163,9 +180,7 @@ export default configure((/* ctx */) => {
             // manualPostHydrationTrigger: true,
 
             pwa: false
-
             // pwaOfflineHtmlFilename: 'offline.html', // do NOT use index.html as name!
-            // will mess up SSR
 
             // pwaExtendGenerateSWOptions (cfg) {},
             // pwaExtendInjectManifestOptions (cfg) {}
@@ -175,7 +190,7 @@ export default configure((/* ctx */) => {
         pwa: {
             workboxMode: 'GenerateSW' // 'GenerateSW' or 'InjectManifest'
             // swFilename: 'sw.js',
-            // manifestFilename: 'manifest.json'
+            // manifestFilename: 'manifest.json',
             // extendManifestJson (json) {},
             // useCredentialsForManifestTag: true,
             // injectPwaMetaTags: false,
@@ -211,13 +226,11 @@ export default configure((/* ctx */) => {
 
             packager: {
                 // https://github.com/electron-userland/electron-packager/blob/master/docs/api.md#options
-
                 // OS X / Mac App Store
                 // appBundleId: '',
                 // appCategoryType: '',
                 // osxSign: '',
                 // protocol: 'myapp://path',
-
                 // Windows only
                 // win32metadata: { ... }
             },
@@ -225,7 +238,7 @@ export default configure((/* ctx */) => {
             builder: {
                 // https://www.electron.build/configuration/configuration
 
-                appId: 'dora-web-app'
+                appId: 'discount-dora'
             }
         },
 
@@ -234,9 +247,15 @@ export default configure((/* ctx */) => {
             // extendBexScriptsConf (esbuildConf) {},
             // extendBexManifestJson (json) {},
 
-            contentScripts: [
-                'my-content-script'
-            ]
+            /**
+             * The list of extra scripts (js/ts) not in your bex manifest that you want to
+             * compile and use in your browser extension. Maybe dynamic use them?
+             *
+             * Each entry in the list should be a relative filename to /src-bex/
+             *
+             * @example [ 'my-script.ts', 'sub-folder/my-other-script.js' ]
+             */
+            extraScripts: []
         }
-    }
+    };
 });

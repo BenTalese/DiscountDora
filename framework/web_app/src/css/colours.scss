@@ -1,0 +1,24 @@
+// Colour variables defined here and set via themeService.ts
+// These colours are outside the predefined Quasar colours (primary, accent, etc...)
+:root {
+    --q-page: #000000;
+    --q-component: #000000;
+    --q-text: #000000;
+    --q-disabled: #000000;
+    --q-border: #000000;
+    --q-divider: #000000;
+    --q-focus: #000000;
+}
+
+// Define text + bg classes for usage on Quasar components via color prop
+.text-component {
+    color: var(--q-component) !important;
+}
+.bg-component {
+    background: var(--q-component) !important;
+}
+
+// Define additional classes for usage on non-Quasar elements, e.g. div
+.dora-colour-component {
+    background-color: var(--q-component);
+}

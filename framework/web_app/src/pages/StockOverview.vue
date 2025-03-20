@@ -2,11 +2,22 @@
     <q-btn
         class="q-ma-sm"
         @click="onCreateStockItemButtonClick"
-        color="green"
+        color="positive"
     >
         <q-icon
             name="add"
-            color="dark-green"
+            color="blue-grey-10"
+            size="30px"
+        />
+    </q-btn>
+    <q-btn
+        class="q-ma-sm"
+        @click="onCreateStockItemButtonClick"
+        color="secondary"
+    >
+        <q-icon
+            name="add"
+            color="green"
             size="30px"
         />
     </q-btn>
@@ -26,12 +37,7 @@
                 <q-btn-dropdown
                     class="q-mx-sm"
                     :color="
-                        getStockLevelColour(
-                            stockLevels.find(
-                                (sl) =>
-                                    sl.stock_level_id === item.stock_level_id
-                            )!.name
-                        )
+                        getStockLevelColour(stockLevels.find((sl) => sl.stock_level_id === item.stock_level_id)!.name)
                     "
                     :items="stockLevelStore.stockLevels"
                     dense
@@ -135,11 +141,7 @@
                         <q-item v-bind="scope.itemProps">
                             <q-item-section avatar>
                                 <q-avatar
-                                    :color="
-                                        getStockLevelColour(
-                                            scope.opt.stock_level_id
-                                        )
-                                    "
+                                    :color="getStockLevelColour(scope.opt.stock_level_id)"
                                     size="25px"
                                 />
                             </q-item-section>
@@ -168,14 +170,14 @@
                     <q-btn
                         type="submit"
                         align="right"
-                        color="cyan"
+                        color="info"
                         label="Save & Continue"
                         size="lg"
                     />
                     <q-btn
                         type="submit"
                         align="right"
-                        color="green"
+                        color="positive"
                         label="Save & Close"
                         size="lg"
                         v-close-popup
@@ -188,9 +190,7 @@
     <q-dialog v-model="shouldDisplayAddToShoppingCartModal">
         <q-card style="width: 700px; max-width: 80vw">
             <q-card-section class="row items-center">
-                <span class="q-ml-sm">
-                    Add {{ 'stock item' }} to a shopping list.
-                </span>
+                <span class="q-ml-sm">Add {{ 'stock item' }} to a shopping list.</span>
             </q-card-section>
 
             <q-card-actions align="right">
@@ -213,10 +213,10 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import { ValidationRule } from 'quasar';
+    import type { ValidationRule } from 'quasar';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import { StockLevel } from 'src/models/stockLevel';
-    import { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
+    import type { StockLevel } from 'src/models/stockLevel';
+    import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { reactive, ref } from 'vue';
@@ -241,7 +241,7 @@
         days_until_stocktake_alert: 0,
         name: '',
         stock_group_id: null,
-        stock_level_id: stockLevels.value[0]?.stock_level_id,
+        stock_level_id: stockLevels.value[0]!.stock_level_id,
         stock_location_id: null
     };
 
@@ -253,20 +253,15 @@
         Object.assign(createStockItemForm, defaultCreateStockItemForm);
     }
 
-    const onCreateStockItemButtonClick = () =>
-        (shouldDisplayCreateStockItemModal.value = true);
+    const onCreateStockItemButtonClick = () => (shouldDisplayCreateStockItemModal.value = true);
 
     //#endregion Create Stock Item
 
     //#region Create Stock Item Rules
 
-    const nameInputRules: ValidationRule[] = [
-        (val: string) => (val && val.length > 0) || 'Please type something'
-    ];
+    const nameInputRules: ValidationRule[] = [(val: string) => (val && val.length > 0) || 'Please type something'];
 
-    const stockLevelSelectRules: ValidationRule[] = [
-        (val: string) => !!val || 'Please select a stock level'
-    ];
+    const stockLevelSelectRules: ValidationRule[] = [(val: string) => !!val || 'Please select a stock level'];
 
     //#endregion Create Stock Item Rules
 
@@ -274,15 +269,13 @@
 
     const shouldDisplayAddToShoppingCartModal = ref(false);
 
-    const onShoppingListButtonClick = () =>
-        (shouldDisplayAddToShoppingCartModal.value = true);
+    const onShoppingListButtonClick = () => (shouldDisplayAddToShoppingCartModal.value = true);
 
     //#endregion Shopping List
 
     //#region Stock Level
 
-    const getStockLevelID = (stockLevel: StockLevel) =>
-        stockLevel.stock_level_id;
+    const getStockLevelID = (stockLevel: StockLevel) => stockLevel.stock_level_id;
 
     const getStockLevelName = (stockLevel: StockLevel) => stockLevel.name;
 

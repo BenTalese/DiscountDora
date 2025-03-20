@@ -1,19 +1,17 @@
 {
+    "$schema": "https://json.schemastore.org/prettierrc",
     "arrowParens": "always",
     "bracketSameLine": false,
     "bracketSpacing": true,
     "htmlWhitespaceSensitivity": "ignore",
     "jsxSingleQuote": true,
-    "printWidth": 80,
+    "printWidth": 120,
     "semi": true,
     "singleAttributePerLine": true,
     "singleQuote": true,
     "tabWidth": 4,
     "trailingComma": "none",
     "vueIndentScriptAndStyle": true,
-    "plugins": [
-        "prettier-plugin-organize-attributes"
-    ],
     "attributeGroups": [
         "$CODE_GUIDE"
     ],

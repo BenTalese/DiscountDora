@@ -15,7 +15,7 @@ export enum SortOrder {
 interface FilterOperation {
     field: string;
     operator: FilterOperator;
-    value: any;
+    value: string | number | boolean;
 }
 
 interface SortOperation {
@@ -29,7 +29,7 @@ interface PaginationOperation {
 }
 
 function createFilterString(filters: FilterOperation[]): string {
-    return filters.map(filter => `filter=${filter.field}:${filter.operator}:${filter.value}`).join('&');
+    return filters.map((filter) => `filter=${filter.field}:${filter.operator}:${filter.value}`).join('&');
 }
 
 function createSortString(sort: SortOperation): string {

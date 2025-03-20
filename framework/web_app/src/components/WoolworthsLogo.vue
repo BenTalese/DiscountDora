@@ -1,20 +1,20 @@
 <template>
-    <q-img class="w-px-32" src="../../src/assets/woolworths-logo.webp" :style="`width: ${width}px;`" />
+    <q-img
+        class="dora-width-32"
+        src="../../src/assets/woolworths-logo.webp"
+        :style="`width: ${width}px;`"
+    />
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
+    interface IWoolworthsLogoProps {
+        /**
+         * Sets the width of the logo in pixels.
+         */
+        width?: number | undefined;
+    }
 
-interface IWoolworthsLogoProps {
-
-    /**
-     * Sets the width of the logo in pixels.
-     */
-    width?: number | undefined
-
-}
-
-withDefaults(defineProps<IWoolworthsLogoProps>(), {
-    width: 32
-})
-
+    withDefaults(defineProps<IWoolworthsLogoProps>(), {
+        width: 32
+    });
 </script>

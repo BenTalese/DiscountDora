@@ -4,4 +4,4 @@ export type StockLevel = {
     name: StockLevelName;
     sequence: number;
     stock_level_id: string;
-}
+};

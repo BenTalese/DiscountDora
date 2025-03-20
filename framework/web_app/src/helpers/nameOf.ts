@@ -1,4 +1,3 @@
-const nameof = <T>(key: keyof T): string =>
-    key.toString();
+const nameOf = <T>(key: keyof T): string => key.toString();
 
-export default nameof;
+export default nameOf;

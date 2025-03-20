@@ -1,9 +1,9 @@
-import { Notify } from 'quasar'
-import HealthApiService from 'src/services/api/healthApiService'
-import { useMerchantStore } from '../stores/merchantStore'
-import { useProductStore } from '../stores/productStore'
-import { useStockItemStore } from '../stores/stockItemStore'
-import { useStockLevelStore } from '../stores/stockLevelStore'
+import { Notify } from 'quasar';
+import HealthApiService from 'src/services/api/healthApiService';
+import { useMerchantStore } from '../stores/merchantStore';
+import { useProductStore } from '../stores/productStore';
+import { useStockItemStore } from '../stores/stockItemStore';
+import { useStockLevelStore } from '../stores/stockLevelStore';
 
 async function waitForApiStartupAsync() {
     const healthApiService = new HealthApiService();
@@ -12,16 +12,16 @@ async function waitForApiStartupAsync() {
         if (await healthApiService.healthCheckAsync()) {
             break;
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         retryCount++;
     }
 
     if (retryCount == 5) {
-        Notify.create({ type: 'oopsie' })
+        Notify.create({ type: 'oopsie' });
     }
 }
 
-await waitForApiStartupAsync()
+await waitForApiStartupAsync();
 await Promise.all([
     useMerchantStore().getMerchantsAsync(),
     useProductStore().getProductsAsync(),

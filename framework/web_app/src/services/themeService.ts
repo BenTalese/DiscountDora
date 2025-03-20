@@ -1,5 +1,6 @@
 import { setCssVar } from 'quasar';
 
+// Custom colours defined via colours.scss
 export interface Theme {
     // Brand Colours
     primary: string;
@@ -7,8 +8,8 @@ export interface Theme {
     accent: string;
 
     // Background Colours
-    'page-background': string;
-    componentBackground: string;
+    page: string;
+    component: string;
 
     // Status Colours
     positive: string;
@@ -29,8 +30,8 @@ const themes: { [key: string]: Theme } = {
         primary: '#17B073',
         secondary: '#006A80',
         accent: '#FED224',
-        'page-background': '#E8F6F3',
-        componentBackground: '#FFFFFF',
+        page: '#E8F6F3',
+        component: 'whitesmoke',
         positive: '#8CF596',
         negative: '#FF9966',
         info: '#93C2C2',

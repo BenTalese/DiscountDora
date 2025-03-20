@@ -26,7 +26,7 @@
             </template>
         </q-img>
 
-        <div class="dora-component column dora-flex-1 row">
+        <div class="dora-colour-component column dora-flex-1 row">
             <q-card-section>
                 <q-btn
                     class="absolute dorascoped-top-right-offset"

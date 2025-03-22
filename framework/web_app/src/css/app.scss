@@ -16,6 +16,34 @@ STYLE GUIDE:
     font-style: normal;
 }
 
+@font-face {
+    font-family: 'Nunito';
+    src: url('/fonts/Nunito.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nunito Italic';
+    src: url('/fonts/Nunito-Italic.ttf') format('truetype');
+    font-weight:normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Urbanist';
+    src: url('/fonts/Urbanist.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Urbanist Italic';
+    src: url('/fonts/Urbanist-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+}
+
 body {
     background-color: var(--q-page);
     font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;

@@ -51,8 +51,7 @@ def test__get_users_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: poopus_goopus.',
-        'errors': {},
+        'errors': {'': 'Queried attribute(s) do not exist on response: poopus_goopus.'},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -73,8 +72,7 @@ def test__get_users_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
-        'errors': {},
+        'errors': {'': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'."},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -87,9 +85,8 @@ def test__get_users_async__SortingByNonExistentAttribute__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'dingo' does not exist in the view model.",
+        "errors": {'': "Sort field 'dingo' does not exist in the view model."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -101,9 +98,8 @@ def test__get_users_async__PageValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "errors": {'': "The page parameter must be an integer."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -115,9 +111,8 @@ def test__get_users_async__LimitValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "errors": {'': "The limit parameter must be an integer."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -129,9 +124,8 @@ def test__get_users_async__PagingWithoutLimit__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -143,9 +137,8 @@ def test__get_users_async__LimitingWithoutPage__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }

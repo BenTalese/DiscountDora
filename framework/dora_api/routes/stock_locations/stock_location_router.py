@@ -81,6 +81,7 @@ async def update_stock_location_async(stock_location_id):
     _Presenter: UpdateStockLocationPresenter = _ServiceProvider.get_service(UpdateStockLocationPresenter)
 
     _Command: UpdateStockLocationCommand = request.request_body
+    _Presenter.request_body = _Command
     _InputPort = get_input_port_from_command(_Command, UpdateStockLocationInputPort)
     _InputPort.stock_location_id = EntityID(stock_location_id)
 

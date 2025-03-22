@@ -84,6 +84,7 @@ async def update_stock_item_async(stock_item_id):
     _Presenter: UpdateStockItemPresenter = _ServiceProvider.get_service(UpdateStockItemPresenter)
 
     _Command: UpdateStockItemCommand = request.request_body
+    _Presenter.request_body = _Command
     _InputPort = get_input_port_from_command(_Command, UpdateStockItemInputPort)
     _InputPort.stock_item_id = EntityID(stock_item_id)
 

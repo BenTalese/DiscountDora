@@ -7,7 +7,6 @@ def test__GetEndpointDoesNotExist__EndpointNotFoundResponse(api):
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        'detail': 'Endpoint was not found.',
         'errors': {},
         'status': 404,
         'title': 'Endpoint was not found.',
@@ -21,7 +20,6 @@ def test__PostEndpointDoesNotExist__EndpointNotFoundResponse(api):
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        'detail': 'Endpoint was not found.',
         'errors': {},
         'status': 404,
         'title': 'Endpoint was not found.',
@@ -35,7 +33,6 @@ def test__PatchEndpointDoesNotExist__EndpointNotFoundResponse(api):
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        'detail': 'Endpoint was not found.',
         'errors': {},
         'status': 404,
         'title': 'Endpoint was not found.',
@@ -43,13 +40,12 @@ def test__PatchEndpointDoesNotExist__EndpointNotFoundResponse(api):
     }
 
 
-def test__DeletendpointDoesNotExist__EndpointNotFoundResponse(api):
+def test__DeleteEndpointDoesNotExist__EndpointNotFoundResponse(api):
     _Response = requests.delete("http://localhost:5170/api/1/2")
 
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        'detail': 'Endpoint was not found.',
         'errors': {},
         'status': 404,
         'title': 'Endpoint was not found.',

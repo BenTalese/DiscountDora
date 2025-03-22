@@ -58,7 +58,6 @@ def test__create_stock_item_async__CreatingStockItemWithIncorrectDataTypes__Cann
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        "detail": "See errors property for more details.",
         "errors": {
             "stock_level_id": "Expected type '<class 'uuid.UUID'>'. 'int' object has no attribute 'replace'",
             "stock_location_id": "Expected type '<class 'uuid.UUID'>'. badly formed hexadecimal UUID string"
@@ -95,9 +94,8 @@ def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolati
 
     assert _Response.status_code == 422
     assert _Response.json() == {
-        'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A stock item with the name 'PeTers NeoPOLitan IcE CrEam' already exists."],
+            'name': ["A stock item with the name 'PeTers NeoPOLitan IcE CrEam' already exists."],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -111,7 +109,6 @@ def test__create_stock_item_async__EmptyRequest__IsRequiredInputsValidationFailu
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Required inputs are missing values.',
         'errors': {
             'name': ["'name' must have a value."],
             'stock_level_id': ["'stock_level_id' must have a value."]
@@ -135,7 +132,6 @@ def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'See errors property for more details.',
         'errors': {
             'stock_level_id': [f"StockLevel with the ID '{_FakeID}' was not found."],
             'stock_location_id': [f"StockLocation with the ID '{_FakeID}' was not found."]
@@ -191,8 +187,7 @@ def test__get_stock_items_async__FilteringOnNonExistentAttribute__IsBadRequest(a
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: stock_item_name.',
-        'errors': {},
+        'errors': {'': 'Queried attribute(s) do not exist on response: stock_item_name.'},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -213,8 +208,7 @@ def test__get_stock_items_async__FilteringWithUnsupportedOperator__IsBadRequest(
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
-        'errors': {},
+        'errors': {'': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'."},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -227,9 +221,8 @@ def test__get_stock_items_async__SortingByNonExistentAttribute__IsBadRequest(api
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'stockcode' does not exist in the view model.",
+        "errors": {'': "Sort field 'stockcode' does not exist in the view model."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -285,9 +278,8 @@ def test__get_stock_items_async__PageValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "errors": {'': "The page parameter must be an integer."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -299,9 +291,8 @@ def test__get_stock_items_async__LimitValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "errors": {'': "The limit parameter must be an integer."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -313,9 +304,8 @@ def test__get_stock_items_async__PagingWithoutLimit__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -327,9 +317,8 @@ def test__get_stock_items_async__LimitingWithoutPage__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -397,8 +386,7 @@ def test__update_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api)
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": f"StockItem with the ID '{_RandomID}' was not found.",
-        "errors": {},
+        "errors": {'': f"StockItem with the ID '{_RandomID}' was not found."},
         "status": 404,
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
@@ -412,9 +400,8 @@ def test__update_stock_item_async__OtherStockItemHasSameName__CannotUpdateToDupl
     assert _PatchResponse.status_code == 422
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
     assert _PatchResponse.json() == {
-        "detail": "See errors property for more details.",
         "errors": {
-            '': ["A stock item with the name 'super AWESOME pizza' already exists."]
+            'name': ["A stock item with the name 'super AWESOME pizza' already exists."]
         },
         "status": 422,
         "title": "Business rule violation.",
@@ -443,8 +430,7 @@ def test__delete_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api)
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": f"StockItem with the ID '{_RandomID}' was not found.",
-        "errors": {},
+        "errors": {'': f"StockItem with the ID '{_RandomID}' was not found."},
         "status": 404,
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"

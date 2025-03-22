@@ -66,7 +66,6 @@ def test__create_product_async__CreatingProductWithIncorrectDataTypes__CannotBeD
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == {
-        'detail': 'See errors property for more details.',
         'errors': {
             "image": "Expected type '<class 'bytes'>'. argument should be a bytes-like object or ASCII string, not 'int'",
             "price_now": "Expected type '<class 'float'>'. could not convert string to float: 'CCC'",
@@ -128,9 +127,8 @@ def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(ap
 
     assert _Response.status_code == 422
     assert _Response.json() == {
-        'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A product with the stockcode '50332ba' from the merchant 'WoolWorThS' already exists."],
+            'merchant_stockcode': ["A product with the stockcode '50332ba' from the merchant 'WoolWorThS' already exists."],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -144,7 +142,6 @@ def test__create_product_async__EmptyRequest__IsRequiredInputsValidationFailure(
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Required inputs are missing values.',
         'errors': {
             'is_active': ["'is_active' must have a value."],
             'is_available': ["'is_available' must have a value."],
@@ -228,8 +225,7 @@ def test__get_products_async__FilteringOnNonExistentAttribute__IsBadRequest(api)
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: stockcode.',
-        'errors': {},
+        'errors': {'': 'Queried attribute(s) do not exist on response: stockcode.'},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -250,8 +246,7 @@ def test__get_products_async__FilteringWithUnsupportedOperator__IsBadRequest(api
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
-        'errors': {},
+        'errors': {"": "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'."},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -264,9 +259,8 @@ def test__get_products_async__SortingByNonExistentAttribute__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'stockcode' does not exist in the view model.",
+        "errors": {"": "Sort field 'stockcode' does not exist in the view model."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -345,8 +339,7 @@ def test__update_product_async__ProductDoesNotExist__ProductNotFound(api):
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": f"Product with the ID '{_RandomID}' was not found.",
-        "errors": {},
+        "errors": {"": f"Product with the ID '{_RandomID}' was not found."},
         "status": 404,
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
@@ -363,7 +356,6 @@ def test__update_product_async__UpdatingPriceNowWithoutPriceWas__IsValidationFai
     assert _PatchResponse.status_code == 422
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
     assert _PatchResponse.json() == {
-        "detail": "See errors property for more details.",
         "errors": {
             "price_now": ["price_now and price_was must both be set."]
         },
@@ -383,7 +375,6 @@ def test__update_product_async__UpdatingPriceWasWithoutPriceNow__IsValidationFai
     assert _PatchResponse.status_code == 422
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
     assert _PatchResponse.json() == {
-        "detail": "See errors property for more details.",
         "errors": {
             "price_was": ["price_now and price_was must both be set."]
         },

@@ -16,7 +16,6 @@ from framework.dora_api.view_models.created_view_model import CreatedViewModel
 
 @dataclass
 class ProblemDetails:
-    detail: str
     status: int
     errors: dict
     title: str
@@ -29,26 +28,23 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
     result: Response = None
     _not_found_current_route_segment: int = None
 
-    async def business_rule_violation_async(self, error_message: str) -> None:
+    async def business_rule_violation_async(self, property_in_error: str, error_message: str) -> None:
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = "See errors property for more details.",
-            errors = {"": [error_message]},
+            errors = {property_in_error: [error_message]},
             status = UNPROCESSABLE_ENTITY,
             title = "Business rule violation.",
             type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
     async def bad_request_async(self, error_message: str):
         response = jsonify(ProblemDetails(
-            detail = error_message,
-            errors = {},
+            errors = {"": [error_message]},
             status = BAD_REQUEST,
-            title = error_message,
+            title = "Bad request.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"))
         response.content_type = 'application/problem+json'
         response.status_code = BAD_REQUEST
         self.result = response
 
-    # FIXME: query parameter needs to update once querying is solved (currently "= result.id" will be incorrect)
     async def created_async(self, result: CreatedViewModel, id_attribute_name: str):
         response = jsonify(result)
         response.status_code = CREATED
@@ -58,7 +54,6 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def entity_existence_failure_async(self, entity_name: str, property_in_error: str, id: UUID):
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = "See errors property for more details.",
             errors = {property_in_error: [f"{entity_name} with the ID '{id}' was not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity was not found.",
@@ -66,7 +61,6 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def entity_existence_failures_async(self, entity_name: str, property_in_error: str, *ids: Tuple[UUID]):
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = "See errors property for more details.",
             errors = {property_in_error: [f"{entity_name}(s) with the ID(s) '{', '.join(*ids)}' were not found."]},
             status = UNPROCESSABLE_ENTITY,
             title = "Entity(s) were not found.",
@@ -74,8 +68,7 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def internal_server_error_async(self, error_message: str):
         response = jsonify(ProblemDetails(
-            detail = error_message,
-            errors = {},
+            errors = {"": [error_message]},
             status = INTERNAL_SERVER_ERROR,
             title = "Internal server error.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1"))
@@ -92,8 +85,7 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
         if self._not_found_current_route_segment is None or route_segment < self._not_found_current_route_segment:
             self._not_found_current_route_segment = route_segment
             response = jsonify(ProblemDetails(
-                detail = f"{entity_name} with the ID '{id}' was not found.",
-                errors = {},
+                errors = {"": f"{entity_name} with the ID '{id}' was not found."},
                 status = NOT_FOUND,
                 title = "Entity was not found.",
                 type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"))
@@ -108,7 +100,6 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def present_unauthenticated_async(self):
         response = jsonify(ProblemDetails(
-            detail = "Unauthenticated client.",
             errors = {},
             status = UNAUTHORIZED,
             title = "Unauthenticated client.",
@@ -119,8 +110,7 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def present_unauthorised_async(self, authorisation_failure: AuthorisationResult):
         response = jsonify(ProblemDetails(
-            detail = authorisation_failure.reason,
-            errors = {},
+            errors = {"": [authorisation_failure.reason]},
             status = FORBIDDEN,
             title = "Forbidden.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3"))
@@ -130,7 +120,6 @@ class BasePresenter(IAuthenticationOutputPort, IAuthorisationOutputPort, IValida
 
     async def present_validation_failure_async(self, validation_failure: ValidationResult):
         await self.unprocessable_entity_async(ProblemDetails(
-            detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
             status = UNPROCESSABLE_ENTITY,
             errors = validation_failure.errors,
             title = "Validation failure.",

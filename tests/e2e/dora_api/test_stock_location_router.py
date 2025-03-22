@@ -36,9 +36,8 @@ def test__create_stock_location_async__StockLocationAlreadyExists__IsBusinessRul
 
     assert _Response.status_code == 422
     assert _Response.json() == {
-        'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A stock location with the name 'frEEzer' already exists."],
+            'name': ["A stock location with the name 'frEEzer' already exists."],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -52,7 +51,6 @@ def test__create_stock_location_async__EmptyRequest__IsRequiredInputsValidationF
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Required inputs are missing values.',
         'errors': {
             'name': ["'name' must have a value."]
         },
@@ -101,8 +99,7 @@ def test__get_stock_locations_async__FilteringOnNonExistentAttribute__IsBadReque
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: poopus_goopus.',
-        'errors': {},
+        'errors': {'': 'Queried attribute(s) do not exist on response: poopus_goopus.'},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -123,8 +120,7 @@ def test__get_stock_locations_async__FilteringWithUnsupportedOperator__IsBadRequ
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
-        'errors': {},
+        'errors': {'': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'."},
         'status': 400,
         'title': 'Unsupported query operation.',
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
@@ -137,9 +133,8 @@ def test__get_stock_locations_async__SortingByNonExistentAttribute__IsBadRequest
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'dingo' does not exist in the view model.",
+        "errors": {'': "Sort field 'dingo' does not exist in the view model."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -187,9 +182,8 @@ def test__get_stock_locations_async__PageValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
         "status": 400,
-        "errors": {},
+        "errors": {'': "The page parameter must be an integer."},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -201,9 +195,8 @@ def test__get_stock_locations_async__LimitValueIsNotInteger__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "errors": {'': "The limit parameter must be an integer."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -215,9 +208,8 @@ def test__get_stock_locations_async__PagingWithoutLimit__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -229,9 +221,8 @@ def test__get_stock_locations_async__LimitingWithoutPage__IsBadRequest(api):
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "errors": {'': "You must use page and limit operations together."},
         "status": 400,
-        "errors": {},
         "title": "Unsupported query operation.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
@@ -290,8 +281,7 @@ def test__update_stock_location_async__StockLocationDoesNotExist__StockLocationN
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": f"StockLocation with the ID '{_RandomID}' was not found.",
-        "errors": {},
+        "errors": {'': f"StockLocation with the ID '{_RandomID}' was not found."},
         "status": 404,
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
@@ -305,9 +295,8 @@ def test__update_stock_location_async__OtherStockLocationHasSameName__CannotUpda
     assert _PatchResponse.status_code == 422
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
     assert _PatchResponse.json() == {
-        "detail": "See errors property for more details.",
         "errors": {
-            '': ["A stock location with the name 'freeZER' already exists."]
+            'name': ["A stock location with the name 'freeZER' already exists."]
         },
         "status": 422,
         "title": "Business rule violation.",
@@ -336,8 +325,7 @@ def test__delete_stock_location_async__StockLocationDoesNotExist__StockLocationN
     assert _Response.status_code == 404
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": f"StockLocation with the ID '{_RandomID}' was not found.",
-        "errors": {},
+        "errors": {'': f"StockLocation with the ID '{_RandomID}' was not found."},
         "status": 404,
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"

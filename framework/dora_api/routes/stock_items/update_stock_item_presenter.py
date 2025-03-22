@@ -8,6 +8,8 @@ from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from framework.dora_api.infrastructure.base_presenter import BasePresenter
+from framework.dora_api.routes.stock_items.update_stock_item_command import \
+    UpdateStockItemCommand
 
 
 class UpdateStockItemPresenter(BasePresenter, IUpdateStockItemOutputPort):
@@ -16,7 +18,10 @@ class UpdateStockItemPresenter(BasePresenter, IUpdateStockItemOutputPort):
         self.persistence = persistence
 
     async def present_stock_item_already_exists_async(self, stock_item_name: str):
-        await self.business_rule_violation_async(f"A stock item with the name '{stock_item_name}' already exists.")
+        self.request_body: UpdateStockItemCommand
+        await self.business_rule_violation_async(
+            nameof(self.request_body.name),
+            f"A stock item with the name '{stock_item_name}' already exists.")
 
     async def present_stock_item_not_found_async(self, stock_item_id: EntityID):
         await self.not_found_async(nameof(StockItem), stock_item_id.value, 0)

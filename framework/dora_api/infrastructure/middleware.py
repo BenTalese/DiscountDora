@@ -36,7 +36,6 @@ async def handle_cors_preflight_request():
 async def verify_endpoint_exists():
     if not request.endpoint:
         return jsonify(ProblemDetails(
-            detail = "Endpoint was not found.",
             status = NOT_FOUND,
             errors = {},
             title = "Endpoint was not found.",
@@ -47,7 +46,6 @@ async def verify_endpoint_exists():
 async def deserialise_web_request():
     def get_malformed_request_response(errors: Dict[str, str]):
         _ProblemDetails = ProblemDetails(
-            detail = "See errors property for more details.",
             status = BAD_REQUEST,
             errors = errors,
             title = "Malformed request. One or more request properties could not be deserialised.",
@@ -126,9 +124,8 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
 async def apply_query_operations(response: Response):
     def set_bad_query_request_response(message: str):
         _ProblemDetails = ProblemDetails(
-            detail = message,
             status = BAD_REQUEST,
-            errors = {},
+            errors = {"": message},
             title = "Unsupported query operation.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")
 

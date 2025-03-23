@@ -129,7 +129,7 @@
     const { stockLevels } = storeToRefs(stockLevelStore);
     //#endregion Store Initialization
 
-    //#region Form State
+    //#region State
     const defaultFormState = {
         days_until_stocktake_alert: 0,
         name: '',
@@ -150,9 +150,9 @@
         stock_level_id: '',
         stock_location_id: ''
     });
-    //#endregion Form State
+    //#endregion State
 
-    //#region Form Methods
+    //#region Methods
     function clearForm() {
         Object.assign(formData, defaultFormState);
         Object.keys(serverErrors.value).forEach((key) => (serverErrors.value[key] = ''));
@@ -175,14 +175,14 @@
                 mapApiErrorsToForm(error, serverErrors);
             });
     };
-    //#endregion Form Methods
+    //#endregion Methods
 
-    //#region Form Validation
+    //#region Validation
     const nameInputRules: ValidationRule[] = [(val: string) => (val && val.length > 0) || 'Please type something'];
     const stockLevelSelectRules: ValidationRule[] = [(val: string) => !!val || 'Please select a stock level'];
-    //#endregion Form Validation
+    //#endregion Validation
 
-    //#region Props and Event Handling
+    //#region Props and Events
     const props = defineProps({
         modelValue: {
             type: Boolean,
@@ -204,5 +204,5 @@
     watch(shouldDisplayModal, (val) => {
         emit('update:modelValue', val);
     });
-    //#endregion Props and Event Handling
+    //#endregion Props and Events
 </script>

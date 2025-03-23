@@ -81,7 +81,7 @@
                     v-model="formData.stock_location_id"
                 ></q-select>
 
-                <FormErrorSummary :error-message="serverErrors.noKey"/>
+                <FormErrorSummary :error-message="serverErrors.noKey" />
 
                 <q-card-actions align="right">
                     <q-btn
@@ -112,13 +112,13 @@
     import { storeToRefs } from 'pinia';
     import type { ValidationRule } from 'quasar';
     import { QInput } from 'quasar';
+    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { mapApiErrorsToForm } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { reactive, ref, watch } from 'vue';
     //#endregion Imports
 
@@ -152,6 +152,30 @@
     });
     //#endregion State
 
+    //#region Props and Events
+    const props = defineProps({
+        modelValue: {
+            type: Boolean,
+            required: true
+        }
+    });
+
+    const emit = defineEmits(['update:modelValue']);
+
+    const shouldDisplayModal = ref(props.modelValue);
+
+    watch(
+        () => props.modelValue,
+        (newVal) => {
+            shouldDisplayModal.value = newVal;
+        }
+    );
+
+    watch(shouldDisplayModal, (val) => {
+        emit('update:modelValue', val);
+    });
+    //#endregion Props and Events
+
     //#region Methods
     function clearForm() {
         Object.assign(formData, defaultFormState);
@@ -181,28 +205,4 @@
     const nameInputRules: ValidationRule[] = [(val: string) => (val && val.length > 0) || 'Please type something'];
     const stockLevelSelectRules: ValidationRule[] = [(val: string) => !!val || 'Please select a stock level'];
     //#endregion Validation
-
-    //#region Props and Events
-    const props = defineProps({
-        modelValue: {
-            type: Boolean,
-            required: true
-        }
-    });
-
-    const emit = defineEmits(['update:modelValue']);
-
-    const shouldDisplayModal = ref(props.modelValue);
-
-    watch(
-        () => props.modelValue,
-        (newVal) => {
-            shouldDisplayModal.value = newVal;
-        }
-    );
-
-    watch(shouldDisplayModal, (val) => {
-        emit('update:modelValue', val);
-    });
-    //#endregion Props and Events
 </script>

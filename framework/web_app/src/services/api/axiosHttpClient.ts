@@ -1,13 +1,5 @@
-import type { Axios, AxiosError } from 'axios';
+import type { Axios } from 'axios';
 import axios from 'axios';
-
-class ApiErrorResponse extends Error {
-    detail!: string;
-    status!: number;
-    errors!: Map<string, string>;
-    title!: string;
-    type!: string;
-}
 
 export type CreatedResponse = {
     id: string;
@@ -34,71 +26,28 @@ export default class AxiosHttpClient implements HttpClient {
     }
 
     async delete<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>> {
-        try {
-            return (await this.axios.delete<TResponse>(path)).data;
-        } catch (error) {
-            return this.handleError(error as AxiosError);
-        }
+        return (await this.axios.delete<TResponse>(path)).data;
     }
 
     async get<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>> {
-        try {
-            return (await this.axios.get<TResponse>(path)).data;
-        } catch (error) {
-            return this.handleError(error as AxiosError);
-        }
+        return (await this.axios.get<TResponse>(path)).data;
     }
-
-    private handleError(error: AxiosError): Promise<never> {
-        const errorData = error.response?.data;
-        if (this.isCustomApiErrorResponse(errorData)) {
-            const apiError = errorData;
-            return Promise.reject(
-                new Error(
-                    `API ERROR :: STATUS CODE ${apiError.status} :: ${apiError.title} :: ${apiError.detail} :: ${Object.values(apiError.errors).join(', ')}`
-                )
-            );
-        } else {
-            return Promise.reject(new Error(`API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`));
-        }
-    }
-
-    isCustomApiErrorResponse = (error: unknown): error is ApiErrorResponse =>
-        error !== null &&
-        typeof error === 'object' &&
-        'detail' in error &&
-        'status' in error &&
-        'errors' in error &&
-        'title' in error &&
-        'type' in error;
 
     async patch<TResponse = unknown, TBody = unknown>(
         path: string,
         body: TBody
     ): Promise<HttpClientResponse<TResponse>> {
-        try {
-            return (await this.axios.patch<TResponse>(path, body)).data;
-        } catch (error) {
-            return this.handleError(error as AxiosError);
-        }
+        return (await this.axios.patch<TResponse>(path, body)).data;
     }
 
     async post<TResponse = unknown, TBody = unknown>(
         path: string,
         body: TBody
     ): Promise<HttpClientResponse<TResponse>> {
-        try {
-            return (await this.axios.post<TResponse>(path, body)).data;
-        } catch (error) {
-            return this.handleError(error as AxiosError);
-        }
+        return (await this.axios.post<TResponse>(path, body)).data;
     }
 
     async put<TResponse = unknown, TBody = unknown>(path: string, body: TBody): Promise<HttpClientResponse<TResponse>> {
-        try {
-            return (await this.axios.put<TResponse>(path, body)).data;
-        } catch (error) {
-            return this.handleError(error as AxiosError);
-        }
+        return (await this.axios.put<TResponse>(path, body)).data;
     }
 }

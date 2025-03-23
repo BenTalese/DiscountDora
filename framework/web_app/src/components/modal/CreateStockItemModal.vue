@@ -129,29 +129,6 @@
     const { stockLevels } = storeToRefs(stockLevelStore);
     //#endregion Store Initialization
 
-    //#region State
-    const defaultFormState = {
-        days_until_stocktake_alert: 0,
-        name: '',
-        stock_group_id: null,
-        stock_level_id: stockLevels.value[0]!.stock_level_id,
-        stock_location_id: null
-    };
-
-    const formData: CreateStockItemCommand = reactive({
-        ...defaultFormState
-    });
-
-    const serverErrors = ref<Record<string, string>>({
-        days_until_stocktake_alert: '',
-        name: '',
-        noKey: '',
-        stock_group_id: '',
-        stock_level_id: '',
-        stock_location_id: ''
-    });
-    //#endregion State
-
     //#region Props and Events
     const props = defineProps({
         modelValue: {
@@ -175,6 +152,29 @@
         emit('update:modelValue', val);
     });
     //#endregion Props and Events
+
+    //#region State
+    const defaultFormState = {
+        days_until_stocktake_alert: 0,
+        name: '',
+        stock_group_id: null,
+        stock_level_id: stockLevels.value[0]!.stock_level_id,
+        stock_location_id: null
+    };
+
+    const formData: CreateStockItemCommand = reactive({
+        ...defaultFormState
+    });
+
+    const serverErrors = ref<Record<string, string>>({
+        days_until_stocktake_alert: '',
+        name: '',
+        noKey: '',
+        stock_group_id: '',
+        stock_level_id: '',
+        stock_location_id: ''
+    });
+    //#endregion State
 
     //#region Methods
     function clearForm() {

@@ -1,5 +1,5 @@
 <template>
-    <DoraToobarButton
+    <ToobarButton
         back-colour="positive"
         icon="add"
         icon-colour="blue-grey-10"
@@ -17,7 +17,7 @@
 
 <script lang="ts" setup>
     //#region Imports
-    import DoraToobarButton from './DoraToolbarButton.vue';
+    import ToobarButton from './ToolbarButton.vue';
     //#endregion Imports
 
     //#region Props and Events

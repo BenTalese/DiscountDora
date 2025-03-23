@@ -12,7 +12,9 @@
 </template>
 
 <script setup lang="ts">
+    //#region Props and Events
     defineProps<{
         errorMessage?: string | undefined;
     }>();
+    //#endregion Props and Events
 </script>

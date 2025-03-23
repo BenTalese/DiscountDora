@@ -81,17 +81,7 @@
                     v-model="formData.stock_location_id"
                 ></q-select>
 
-                <!-- TODO: Componentise form error area? -->
-                <p
-                    v-if="serverErrors.noKey"
-                    class="text-negative q-pa-sm bg-red-1 rounded-borders shadow-2"
-                >
-                    <q-icon
-                        name="error"
-                        class="q-mr-sm"
-                    />
-                    {{ serverErrors.noKey }}
-                </p>
+                <FormErrorSummary :error-message="serverErrors.noKey"/>
 
                 <q-card-actions align="right">
                     <q-btn
@@ -128,6 +118,7 @@
     import { mapApiErrorsToForm } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { reactive, ref, watch } from 'vue';
     //#endregion Imports
 

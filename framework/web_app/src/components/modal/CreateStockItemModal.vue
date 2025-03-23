@@ -180,7 +180,7 @@
     function clearForm() {
         Object.assign(formData, defaultFormState);
         Object.keys(serverErrors.value).forEach((key) => (serverErrors.value[key] = ''));
-        document.getElementById('nameInput')!.focus();
+        document.getElementById('nameInput')?.focus();
     }
 
     const getStockLevelID = (stockLevel: StockLevel) => stockLevel.stock_level_id;

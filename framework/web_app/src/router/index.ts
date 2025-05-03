@@ -20,7 +20,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
           ? createWebHistory
           : createWebHashHistory;
 
-    const Router = createRouter({
+    const ROUTER = createRouter({
         scrollBehavior: () => ({ left: 0, top: 0 }),
         routes,
 
@@ -30,10 +30,15 @@ export default defineRouter(function (/* { store, ssrContext } */) {
         history: createHistory(process.env.VUE_ROUTER_BASE)
     });
 
-    Router.onError((err) => {
+    ROUTER.beforeEach((to, from, next) => {
+        document.title = to.meta.title as string + ' | Discount Dora';
+        next();
+    });
+
+    ROUTER.onError((err) => {
         console.error('Vue Router Error: ' + err.message);
         Notify.create({ type: 'oopsie' });
     });
 
-    return Router;
+    return ROUTER;
 });

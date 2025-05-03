@@ -1,4 +1,14 @@
+import 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
+
+declare module 'vue-router' {
+    interface RouteMeta {
+        // is optional
+        isAdmin?: boolean;
+        // must be declared by every route
+        title: string;
+    }
+}
 
 const routes: RouteRecordRaw[] = [
     {

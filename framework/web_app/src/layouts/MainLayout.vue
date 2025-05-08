@@ -29,7 +29,7 @@
                     <p
                         class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock text-accent"
                     >
-                        Discount Dora
+                        {{ route.meta.title }}
                     </p>
                 </q-toolbar-title>
             </q-toolbar>

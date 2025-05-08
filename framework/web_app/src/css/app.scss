@@ -3,12 +3,63 @@ STYLE GUIDE:
     1. Strictly only style using css classes
     2. Style with quasar's built in classes first and fill in the gaps with custom classes
     3. Prefix custom global styles with "dora-" and put them in app.scss (or a category e.g. sizes.scss)
-    4. Prefix scoped styles with "dorascoped-" and keep usage of scoped styles within the component they were defined in
+    4. Prefix scoped styles with "doraScoped-" and keep usage of scoped styles within the component they were defined in
     5. Keep classes in categories of CSS in their own files, e.g. sizes.scss, padding.scss, etc
     6. Classes are named as "dora-property-value", e.g. "dora-fontWeight-400" for "font-weight: 400;" (abbreviate if too long, e.g. "background-colour" is "bgc")
     7. If a css class only has one property, make it inline
 */
 
+body {
+    background-color: var(--q-page);
+    font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
+}
+
+/* =================== Scrollbar =================== */
+.scrollable {
+    overflow: auto;
+    height: 100px; // Doesn't feel necessary but without it the custom scrollbar doesn't work, seems it can be any value
+    scrollbar-color: var(--q-secondary) var(--q-page); /* thumb, track */ // Works with Firefox, overwrites all other settings
+}
+
+// BELOW NOT COMPATIBLE WITH FIREFOX BROWSER
+
+// /* Full scrollbar container */
+// .scrollable::-webkit-scrollbar {
+//     width: 10px; /* vertical scrollbar width */
+//     height: 10px; /* horizontal scrollbar height */
+// }
+
+// /* Track (background) */
+// .scrollable::-webkit-scrollbar-track {
+//     background: var(--q-page);
+//     // border-radius: 15px;
+//     // box-shadow: inset 5px 5px 5px rgba(0, 0, 0, 0.2);
+// }
+
+// /* Thumb (draggable handle) */
+// .scrollable::-webkit-scrollbar-thumb {
+//     background: var(--q-secondary); /* your secondary color */
+//     border-radius: 4px;
+//     // border: 1px solid #c42424;
+// }
+
+// /* Thumb on hover */
+// .scrollable::-webkit-scrollbar-thumb:hover {
+//     background: #ffa8a8;
+// }
+
+// /* Bottom-right corner (when both scrollbars are visible) */
+// .scrollable::-webkit-scrollbar-corner {
+//     background: var(--q-page);
+// }
+
+// /* Resize dragger (if resizable element) */
+// .scrollable::-webkit-resizer {
+//     background: #85a70b;
+// }
+/* =================== Scrollbar =================== */
+
+/* =================== Font Imports =================== */
 @font-face {
     font-family: 'Cute Dino';
     src: url('/fonts/Cute Dino.ttf') format('truetype');
@@ -26,7 +77,7 @@ STYLE GUIDE:
 @font-face {
     font-family: 'Nunito Italic';
     src: url('/fonts/Nunito-Italic.ttf') format('truetype');
-    font-weight:normal;
+    font-weight: normal;
     font-style: italic;
 }
 
@@ -43,8 +94,4 @@ STYLE GUIDE:
     font-weight: normal;
     font-style: italic;
 }
-
-body {
-    background-color: var(--q-page);
-    font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
-}
+/* =================== Font Imports =================== */

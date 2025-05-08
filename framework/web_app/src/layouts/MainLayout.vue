@@ -1,5 +1,8 @@
 <template>
-    <q-layout view="hHh LpR lFf">
+    <q-layout
+        view="hHh LpR lFf"
+        class="scrollable"
+    >
         <q-header
             bordered
             class="bg-primary text-white"

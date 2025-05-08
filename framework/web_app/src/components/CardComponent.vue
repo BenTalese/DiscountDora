@@ -29,7 +29,7 @@
         <div class="dora-colour-component column dora-flex-1 row">
             <q-card-section>
                 <q-btn
-                    class="absolute dorascoped-top-right-offset"
+                    class="absolute doraScoped-top-right-offset"
                     :class="iconClass"
                     :icon="icon"
                     @click="emit('icon-click')"
@@ -98,7 +98,7 @@
 </script>
 
 <style scoped>
-    .dorascoped-top-right-offset {
+    .doraScoped-top-right-offset {
         right: 12px;
         top: 0;
         transform: translateY(-50%);

@@ -31,7 +31,7 @@
     </div>
 
     <div
-        class="no-wrap row q-pa-sm scroll dorascoped-scrollbar-none"
+        class="no-wrap row q-pa-sm scroll doraScoped-scrollbar-none"
         v-show="showFiltersContainer"
     >
         <select-component
@@ -86,7 +86,7 @@
         </q-btn>
     </div>
 
-    <div class="dorascoped-card-grid">
+    <div class="doraScoped-card-grid">
         <div
             class="q-pa-md"
             :key="offer.merchant_stockcode"
@@ -154,7 +154,7 @@
         v-if="!Loading.isActive && previousSearchTerm && !productStore.productOffers?.length"
     >
         <img
-            class="q-pa-sm dorascoped-round-img"
+            class="q-pa-sm doraScoped-round-img"
             src="../../src/assets/banana-peel.jpg"
         />
 
@@ -267,17 +267,17 @@
 </script>
 
 <style scoped>
-    .dorascoped-card-grid {
+    .doraScoped-card-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 
-    .dorascoped-round-img {
+    .doraScoped-round-img {
         border-radius: 50%;
         width: 230px;
     }
 
-    .dorascoped-scrollbar-none {
+    .doraScoped-scrollbar-none {
         scrollbar-width: none;
     }
 </style>

@@ -7,8 +7,7 @@
             bordered
             class="bg-primary text-white"
         >
-            <!-- TODO: may or may not want "reveal" option for header, it's for hide on scroll (i think) -->
-            <q-toolbar>
+            <q-toolbar style="height: 60px">
                 <q-btn
                     flat
                     dense

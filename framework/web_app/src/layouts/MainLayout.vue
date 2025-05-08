@@ -9,12 +9,13 @@
         >
             <q-toolbar style="height: 60px">
                 <q-btn
-                    flat
-                    dense
-                    round
-                    icon="menu"
-                    aria-label="Menu"
                     @click="toggleLeftDrawer"
+                    aria-label="Menu"
+                    dense
+                    flat
+                    icon="menu"
+                    round
+                    v-if="$q.screen.lt.md"
                 />
 
                 <q-toolbar-title class="dora-fontFamily-cuteDino dora-fontSize-30">

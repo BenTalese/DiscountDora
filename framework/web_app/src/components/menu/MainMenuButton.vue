@@ -1,63 +1,67 @@
 <template>
-    <q-btn
+    <q-item
         :class="{ isHovering }"
         :to="link"
-        class="nav-btn q-mx-xs"
+        active-class="dora-mainMenuButton-active"
+        class="dora-mainMenuButton-container q-mx-xs"
         flat
         no-caps
         stack
     >
         <q-icon
             :name="icon"
-            class="nav-icon"
+            class="dora-mainMenuButton-icon"
             size="45px"
         />
-        <div class="nav-label">
+        <div class="dora-mainMenuButton-label">
             {{ label }}
         </div>
-    </q-btn>
+    </q-item>
 </template>
 
 <script setup lang="ts">
-    //#region Props and Events
-    export interface MainMenuButtonProps {
-        isHovering: boolean;
-        icon: string;
-        label: string;
-        link: string;
-    }
+    //#region Imports
+    import type { MenuButtonProps } from './menuButtonProps';
+    //#endregion Imports
 
-    defineProps({
-        isHovering: { type: Boolean, required: true },
-        icon: { type: String, required: true },
-        label: { type: String, required: true },
-        link: { type: String, required: true }
-    });
+    //#region Props and Events
+    defineProps<MenuButtonProps>();
     //#endregion Props and Events
 </script>
 
 <style scoped>
-    .nav-btn {
-        width: 130px;
-        /* transition: background-color 0.3s ease; */
+    /* TODO: Colour this properly */
+    .dora-mainMenuButton-active {
+        background-color: #f2c037;
+        color: rgb(133, 27, 27);
     }
 
-    .nav-icon {
+    .dora-mainMenuButton-container {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        transition:
+            background-color 0.5s ease,
+            color 0.5s ease;
+        width: 130px;
+    }
+
+    .dora-mainMenuButton-icon {
         transition:
             transform 0.5s ease,
             margin 0.5s ease;
     }
 
-    .nav-btn.isHovering .nav-icon {
+    .isHovering .dora-mainMenuButton-icon {
         margin-bottom: 4px;
         transform: scale(0.7);
     }
 
-    .nav-label {
+    .dora-mainMenuButton-label {
         font-size: 0.65rem;
         font-weight: bold;
-        max-height: 0;
         line-height: 1;
+        max-height: 0;
         opacity: 0;
         overflow: hidden;
         transform: translateY(10px);
@@ -69,7 +73,7 @@
         white-space: nowrap;
     }
 
-    .nav-btn.isHovering .nav-label {
+    .isHovering .dora-mainMenuButton-label {
         font-size: 0.9rem;
         max-height: 30px;
         opacity: 1;

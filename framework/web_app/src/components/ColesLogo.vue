@@ -1,6 +1,6 @@
 <template>
     <svg
-        class="dora-height-32 dora-width-48"
+        class="dora-colesLogo"
         data-di-rand="1713606983167"
         role="img"
         aria-labelledby="colesTitle"
@@ -45,3 +45,10 @@
 
     //#endregion Props
 </script>
+
+<style scoped>
+    .dora-colesLogo {
+        width: 48px;
+        height: 32px;
+    }
+</style>

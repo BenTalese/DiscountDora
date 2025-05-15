@@ -163,3 +163,13 @@
 
     //#endregion Multiple
 </script>
+
+<style scoped>
+    .dora-minWidth-200 {
+        min-width: 200px;
+    }
+
+    .dora-fontWeight-400 {
+        font-weight: 400;
+    }
+</style>

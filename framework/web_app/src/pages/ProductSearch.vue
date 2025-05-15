@@ -280,4 +280,16 @@
     .doraScoped-scrollbar-none {
         scrollbar-width: none;
     }
+
+    .dora-height-20 {
+        height: 20px;
+    }
+
+    .dora-minWidth-100 {
+        min-width: 100px;
+    }
+
+    .dora-fontWeight-400 {
+        font-weight: 400;
+    }
 </style>

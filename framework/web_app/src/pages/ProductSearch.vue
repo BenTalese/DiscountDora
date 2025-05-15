@@ -292,4 +292,8 @@
     .dora-fontWeight-400 {
         font-weight: 400;
     }
+
+    .dora-flex-1 {
+        flex: 1;
+    }
 </style>

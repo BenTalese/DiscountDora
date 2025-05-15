@@ -107,4 +107,8 @@
     .dora-letterSpacing-3 {
         letter-spacing: 3px;
     }
+
+    .dora-flex-1 {
+        flex: 1;
+    }
 </style>

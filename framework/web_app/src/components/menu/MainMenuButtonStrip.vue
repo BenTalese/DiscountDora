@@ -2,7 +2,7 @@
     <div
         @mouseenter="isHovering = true"
         @mouseleave="isHovering = false"
-        class="row justify-evenly flex no-wrap scroll-x dora-mainMenuButtonStrip"
+        class="row justify-evenly no-wrap scroll-x dora-mainMenuButtonStrip"
         v-if="isVisible"
     >
         <MainMenuButton
@@ -36,7 +36,6 @@
 <style scoped>
     .dora-mainMenuButtonStrip {
         flex: 1;
-        overflow-x: auto;
         scrollbar-width: none; /* Hide scrollbar on Firefox */
         -ms-overflow-style: none; /* Hide scrollbar on IE/Edge */
     }

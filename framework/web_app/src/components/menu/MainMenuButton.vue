@@ -11,7 +11,7 @@
         <q-icon
             :name="icon"
             class="dora-mainMenuButton-icon"
-            size="45px"
+            :size="getIconSize()"
         />
         <div class="dora-mainMenuButton-label">
             {{ label }}
@@ -21,15 +21,25 @@
 
 <script setup lang="ts">
     //#region Imports
+    import { useQuasar } from 'quasar';
     import type { MenuButtonProps } from './menuButtonProps';
+    const $q = useQuasar();
     //#endregion Imports
+
+    //#region Methods
+    function getIconSize() {
+        if ($q.screen.width > 1500) return '45px';
+        else if ($q.screen.width > 1200) return '35px';
+        else return '30px';
+    }
+    //#endregion Methods
 
     //#region Props and Events
     defineProps<MenuButtonProps>();
     //#endregion Props and Events
 </script>
 
-<style scoped>
+<style scoped lang="scss">
     /* TODO: Colour this properly */
     .dora-mainMenuButton-active {
         background-color: #f2c037;
@@ -43,7 +53,18 @@
         transition:
             background-color 0.5s ease,
             color 0.5s ease;
-        width: 130px;
+        width: 12%;
+        min-height: 60px;
+
+        @media (max-width: 1500px) {
+            padding-top: 12px;
+            width: 11%;
+        }
+
+        @media (max-width: 1200px) {
+            padding-top: 15px;
+            width: 10%;
+        }
     }
 
     .dora-mainMenuButton-icon {
@@ -70,13 +91,25 @@
             max-height 0.5s ease,
             font-size 0.5s ease,
             transform 0.5s ease;
-        white-space: nowrap;
+        text-align: center;
+
+        @media (min-width: 1350px) {
+            white-space: nowrap;
+        }
     }
 
     .isHovering .dora-mainMenuButton-label {
-        font-size: 0.9rem;
+        font-size: 1.3rem;
         max-height: 30px;
         opacity: 1;
         transform: translateY(-8px);
+
+        @media (max-width: 1500px) {
+            font-size: 1rem;
+        }
+
+        @media (max-width: 1200px) {
+            font-size: 0.9rem;
+        }
     }
 </style>

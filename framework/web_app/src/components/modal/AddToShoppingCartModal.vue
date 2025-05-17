@@ -34,6 +34,6 @@
     //#region Props and Events
     const props = defineProps<{ modelValue: boolean }>();
     const emit = defineEmits(['update:modelValue']);
-    const { isModalVisible } = useModalState(props.modelValue, emit);
+    const { isModalVisible } = useModalState(props, emit);
     //#endregion Props and Events
 </script>

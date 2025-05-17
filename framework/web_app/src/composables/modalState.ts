@@ -1,9 +1,9 @@
 import { ref, watch } from "vue";
 
-export function useModalState(modelValue: boolean, emit: (name: 'update:modelValue', value: boolean) => void) {
-    const isModalVisible = ref(modelValue);
+export function useModalState(props: { modelValue: boolean }, emit: (name: 'update:modelValue', value: boolean) => void) {
+    const isModalVisible = ref(props.modelValue);
 
-    watch(() => modelValue, (val) => {
+    watch(() => props.modelValue, (val) => {
         isModalVisible.value = val;
     });
 

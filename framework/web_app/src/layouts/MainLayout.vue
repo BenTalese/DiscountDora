@@ -15,7 +15,7 @@
 
                 <ApplicationLogo />
 
-                <ApplicationTitle
+                <PageTitle
                     :label="route.meta.title"
                     shouldShrink
                 />
@@ -73,10 +73,10 @@
 <script setup lang="ts">
     //#region Imports
     import ApplicationLogo from 'src/components/menu/ApplicationLogo.vue';
-    import ApplicationTitle from 'src/components/menu/ApplicationTitle.vue';
     import HamburgerButton from 'src/components/menu/HamburgerButton.vue';
     import MainMenuButtonStrip from 'src/components/menu/MainMenuButtonStrip.vue';
     import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
+    import PageTitle from 'src/components/menu/PageTitle.vue';
     import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
     import { ref } from 'vue';
     import { useRoute } from 'vue-router';

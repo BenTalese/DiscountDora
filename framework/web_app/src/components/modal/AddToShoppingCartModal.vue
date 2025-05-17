@@ -1,5 +1,5 @@
 <template>
-    <q-dialog v-model="shouldDisplayModal">
+    <q-dialog v-model="isModalVisible">
         <q-card style="width: 700px; max-width: 80vw">
             <q-card-section class="row items-center">
                 <span class="q-ml-sm">Add {{ 'stock item' }} to a shopping list.</span>
@@ -25,33 +25,15 @@
 
 <script setup lang="ts">
     //#region Imports
-    import { ref, watch } from 'vue';
+    import { useModalState } from 'src/composables/modalState';
     //#endregion Imports
 
     //#region Store Initialization
     //#endregion Store Initialization
 
     //#region Props and Events
-    const props = defineProps({
-        modelValue: {
-            type: Boolean,
-            required: true
-        }
-    });
-
+    const props = defineProps<{ modelValue: boolean }>();
     const emit = defineEmits(['update:modelValue']);
-
-    const shouldDisplayModal = ref(props.modelValue);
-
-    watch(
-        () => props.modelValue,
-        (newVal) => {
-            shouldDisplayModal.value = newVal;
-        }
-    );
-
-    watch(shouldDisplayModal, (val) => {
-        emit('update:modelValue', val);
-    });
+    const { isModalVisible } = useModalState(props.modelValue, emit);
     //#endregion Props and Events
 </script>

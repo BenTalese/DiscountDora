@@ -1,7 +1,7 @@
 <template>
     <q-dialog
         @hide="clearForm"
-        v-model="shouldDisplayModal"
+        v-model="isModalVisible"
     >
         <!-- TODO: Size of modal should be consistent? -->
         <!-- TODO: The default form looks a bit boring, maybe add a border? Modal background colour? -->
@@ -113,13 +113,14 @@
     import type { ValidationRule } from 'quasar';
     import { QInput } from 'quasar';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
+    import { useModalState } from 'src/composables/modalState';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { mapApiErrorsToForm } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { reactive, ref, watch } from 'vue';
+    import { reactive, ref } from 'vue';
     //#endregion Imports
 
     //#region Store Initialization
@@ -130,27 +131,9 @@
     //#endregion Store Initialization
 
     //#region Props and Events
-    const props = defineProps({
-        modelValue: {
-            type: Boolean,
-            required: true
-        }
-    });
-
+    const props = defineProps<{ modelValue: boolean }>();
     const emit = defineEmits(['update:modelValue']);
-
-    const shouldDisplayModal = ref(props.modelValue);
-
-    watch(
-        () => props.modelValue,
-        (newVal) => {
-            shouldDisplayModal.value = newVal;
-        }
-    );
-
-    watch(shouldDisplayModal, (val) => {
-        emit('update:modelValue', val);
-    });
+    const { isModalVisible } = useModalState(props.modelValue, emit);
     //#endregion Props and Events
 
     //#region State
@@ -192,7 +175,7 @@
             .then(() => {
                 clearForm();
                 if (shouldCloseForm) {
-                    shouldDisplayModal.value = false;
+                    isModalVisible.value = false;
                 }
             })
             .catch((error: AxiosError) => {

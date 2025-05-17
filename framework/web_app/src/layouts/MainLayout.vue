@@ -88,11 +88,11 @@
     // const miniState = ref(true);
 
     const linksList: MenuButtonProps[] = [
-        {
-            icon: 'mdi-view-dashboard',
-            label: 'Dashboard',
-            link: '/dashboard'
-        },
+        // {
+        //     icon: 'mdi-view-dashboard',
+        //     label: 'Dashboard',
+        //     link: '/dashboard'
+        // },
         {
             // icon: 'stock',
             // icon: 'inventory',
@@ -107,32 +107,32 @@
             icon: 'search',
             label: 'Product Search',
             link: '/product-search'
-        },
-        {
-            icon: 'shopping_cart',
-            label: 'My Shopping',
-            link: '/shopping'
-        },
-        {
-            icon: 'circle',
-            label: 'My Products',
-            link: '/products'
-        },
-        {
-            icon: 'water',
-            label: 'Meal Planner',
-            link: '/meals'
-        },
-        {
-            icon: 'book',
-            label: 'Recipe Book',
-            link: '/recipes'
-        },
-        {
-            icon: 'settings',
-            label: 'Settings',
-            link: '/settings'
         }
+        // {
+        //     icon: 'shopping_cart',
+        //     label: 'My Shopping',
+        //     link: '/shopping'
+        // },
+        // {
+        //     icon: 'circle',
+        //     label: 'My Products',
+        //     link: '/products'
+        // },
+        // {
+        //     icon: 'water',
+        //     label: 'Meal Planner',
+        //     link: '/meals'
+        // },
+        // {
+        //     icon: 'book',
+        //     label: 'Recipe Book',
+        //     link: '/recipes'
+        // },
+        // {
+        //     icon: 'settings',
+        //     label: 'Settings',
+        //     link: '/settings'
+        // }
     ];
 
     const leftDrawerOpen = ref(false);

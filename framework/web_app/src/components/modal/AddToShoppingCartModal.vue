@@ -2,7 +2,7 @@
     <q-dialog v-model="isModalVisible">
         <q-card style="width: 700px; max-width: 80vw">
             <q-card-section class="row items-center">
-                <span class="q-ml-sm">Add {{ 'stock item' }} to a shopping list.</span>
+                <span class="q-ml-sm">Add <b>{{ itemToAdd.name }}</b> to a shopping list.</span>
             </q-card-section>
 
             <q-card-actions align="right">
@@ -26,13 +26,18 @@
 <script setup lang="ts">
     //#region Imports
     import { useModalState } from 'src/composables/modalState';
+    import type { StockItem } from 'src/models/stockItem';
     //#endregion Imports
 
     //#region Store Initialization
     //#endregion Store Initialization
 
     //#region Props and Events
-    const props = defineProps<{ modelValue: boolean }>();
+    const props = defineProps<{
+        itemToAdd: StockItem;
+        modelValue: boolean;
+    }>();
+
     const emit = defineEmits(['update:modelValue']);
     const { isModalVisible } = useModalState(props, emit);
     //#endregion Props and Events

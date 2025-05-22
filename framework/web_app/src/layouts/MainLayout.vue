@@ -1,8 +1,5 @@
 <template>
-    <q-layout
-        view="hHh LpR lFf"
-        class="dora-scrollbarOverride"
-    >
+    <q-layout view="hHh LpR lFf">
         <q-header
             bordered
             class="bg-primary text-white"
@@ -151,48 +148,4 @@
         height: 60px;
         overflow: hidden;
     }
-    /* =================== Scrollbar =================== */
-    .dora-scrollbarOverride {
-        overflow: auto;
-        height: 100px; // Doesn't feel necessary but without it the custom scrollbar doesn't work, seems it can be any value
-        scrollbar-color: var(--q-secondary) var(--q-page); /* thumb, track */ // Works with Firefox, overwrites all other settings
-    }
-
-    // BELOW NOT COMPATIBLE WITH FIREFOX BROWSER
-
-    // /* Full scrollbar container */
-    // .dora-scrollbarOverride::-webkit-scrollbar {
-    //     width: 10px; /* vertical scrollbar width */
-    //     height: 10px; /* horizontal scrollbar height */
-    // }
-
-    // /* Track (background) */
-    // .dora-scrollbarOverride::-webkit-scrollbar-track {
-    //     background: var(--q-page);
-    //     // border-radius: 15px;
-    //     // box-shadow: inset 5px 5px 5px rgba(0, 0, 0, 0.2);
-    // }
-
-    // /* Thumb (draggable handle) */
-    // .dora-scrollbarOverride::-webkit-scrollbar-thumb {
-    //     background: var(--q-secondary); /* your secondary color */
-    //     border-radius: 4px;
-    //     // border: 1px solid #c42424;
-    // }
-
-    // /* Thumb on hover */
-    // .dora-scrollbarOverride::-webkit-scrollbar-thumb:hover {
-    //     background: #ffa8a8;
-    // }
-
-    // /* Bottom-right corner (when both scrollbars are visible) */
-    // .dora-scrollbarOverride::-webkit-scrollbar-corner {
-    //     background: var(--q-page);
-    // }
-
-    // /* Resize dragger (if resizable element) */
-    // .dora-scrollbarOverride::-webkit-resizer {
-    //     background: #85a70b;
-    // }
-    /* =================== Scrollbar =================== */
 </style>

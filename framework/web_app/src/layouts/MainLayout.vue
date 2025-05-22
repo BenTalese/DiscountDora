@@ -6,6 +6,7 @@
         <q-header
             bordered
             class="bg-primary text-white"
+            :reveal="$q.screen.lt.md"
         >
             <q-toolbar class="dora-titlebar">
                 <HamburgerButton

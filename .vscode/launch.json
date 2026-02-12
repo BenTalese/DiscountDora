@@ -40,16 +40,16 @@
             "request": "launch",
             "name": "Firefox",
             "url": "http://localhost:5174",
-            "webRoot": "${workspaceFolder}/framework/web_app/src",
+            "webRoot": "${workspaceFolder}/web_app/src",
             "preLaunchTask": "quasar:dev",
             "pathMappings": [
                 {
                     "url": "http://localhost:5174/src",
-                    "path": "${workspaceFolder}/framework/web_app/src"
+                    "path": "${workspaceFolder}/web_app/src"
                 },
                 {
                     "url": "webpack:///src/*",
-                    "path": "${workspaceFolder}/framework/web_app/src/*"
+                    "path": "${workspaceFolder}/web_app/src/*"
                 }
             ]
         },
@@ -69,13 +69,13 @@
             "type": "node",
             "request": "launch",
             "name": "TypeScript: Current File",
-            "program": "${workspaceFolder}/framework/web_app/node_modules/ts-node/dist/bin.js",
+            "program": "${workspaceFolder}/web_app/node_modules/ts-node/dist/bin.js",
             "args": ["${file}"],
             "runtimeArgs": ["--loader", "ts-node/esm"],
             "sourceMaps": true,
-            "cwd": "${workspaceFolder}/framework/web_app",
+            "cwd": "${workspaceFolder}/web_app",
             "console": "integratedTerminal",
-            "outFiles": ["${workspaceFolder}/framework/web_app/dist/**/*.js"],
+            "outFiles": ["${workspaceFolder}/web_app/dist/**/*.js"],
             "skipFiles": ["<node_internals>/**"]
         }
     ],

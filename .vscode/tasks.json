@@ -4,7 +4,7 @@
         {
             "type": "npm",
             "script": "dev",
-            "path": "framework/web_app_old",
+            "path": "web_app_old",
             "problemMatcher": [],
             "label": "npm: dev",
             "detail": "vite",
@@ -17,7 +17,7 @@
         {
             "type": "npm",
             "script": "dev",
-            "path": "framework/web_app",
+            "path": "web_app",
             "problemMatcher": [],
             "label": "quasar:dev",
             "isBackground": true,

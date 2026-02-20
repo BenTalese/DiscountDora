@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
+from typing import Generic
 
 from application.services.iquerybuilder import IQueryBuilder
-from domain.generics import TEntity
+from dora_api.domain.generics import TEntity
 
 
-class IPersistenceContext(ABC):
+class IRepository(ABC, Generic[TEntity]):
     @abstractmethod
     def add(self, entity: TEntity) -> None:
         pass
 
     @abstractmethod
-    def get_entities(self, entity_type: TEntity) -> IQueryBuilder[TEntity]:
+    def get(self, entity_type: type[TEntity]) -> IQueryBuilder[TEntity]:
         pass
 
     @abstractmethod
@@ -18,7 +19,7 @@ class IPersistenceContext(ABC):
         pass
 
     @abstractmethod
-    async def save_changes_async(self) -> None:
+    def save_changes(self) -> None:
         pass
 
     @abstractmethod

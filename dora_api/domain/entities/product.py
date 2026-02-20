@@ -7,18 +7,18 @@ from domain.entities.product_historic_offer import ProductHistoricOffer
 from domain.entities.product_offer import ProductOffer
 
 
-@dataclass
+@dataclass(slots=True)
 class Product(BaseEntity):
-    brand: str = None
-    current_offer: ProductOffer = None
-    historic_offers: List[ProductHistoricOffer] = None
-    image: bytes = None
-    is_active: bool = None
-    is_available: bool = None
-    merchant: Merchant = None
-    merchant_stockcode: str = None
-    name: str = None
-    size: str = None
-    size_unit: str = None
-    size_value: float = None
-    web_url: str = None
+    brand: str | None
+    current_offer: ProductOffer
+    historic_offers: List[ProductHistoricOffer]
+    image: bytes | None
+    is_active: bool
+    is_available: bool
+    merchant: Merchant
+    merchant_stockcode: str | None
+    name: str
+    size: str
+    size_unit: str
+    size_value: float
+    web_url: str | None

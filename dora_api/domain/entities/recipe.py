@@ -5,12 +5,12 @@ from domain.entities.base_entity import BaseEntity
 from domain.entities.stock_item import StockItem
 
 
-@dataclass
+@dataclass(slots=True)
 class Recipe(BaseEntity):
-    image: bytes = None
-    ingredients: List[StockItem] = None
-    instructions: str = None
-    name: str = None
+    image: bytes | None
+    ingredients: List[StockItem]
+    instructions: str | None
+    name: str
 
 
 # from typing import List, Optional

@@ -5,6 +5,6 @@ from domain.entities.base_entity import BaseEntity
 from domain.entities.stock_item import StockItem
 
 
-@dataclass
+@dataclass(slots=True)
 class ShoppingList(BaseEntity):
-    items: List[StockItem] = None
+    items: List[StockItem]

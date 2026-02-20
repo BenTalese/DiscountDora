@@ -3,6 +3,6 @@ from dataclasses import dataclass
 from domain.entities.base_entity import BaseEntity
 
 
-@dataclass
+@dataclass(slots=True)
 class StockGroup(BaseEntity):
-    name: str = None
+    name: str

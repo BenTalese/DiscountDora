@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from domain.entities.base_entity import BaseEntity
 
 
-@dataclass
+@dataclass(slots=True)
 class Merchant(BaseEntity):
     name: str
     # url: str = None # hmm...does this belong in this domain?

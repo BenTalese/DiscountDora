@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from domain.entities.base_entity import BaseEntity
 
 
-@dataclass
+@dataclass(slots=True)
 class StockLevel(BaseEntity):
-    name: str = None
-    sequence: int = None
+    name: str
+    sequence: int

@@ -7,15 +7,15 @@ from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 
 
-@dataclass
+@dataclass(slots=True)
 class StockItem(BaseEntity):
-    days_until_stocktake_alert: int = None
-    image: bytes = None
-    name: str = None
-    notes: str = None
-    # products: List[Product] = None
-    stock_group: StockGroup = None
-    stock_level_last_updated: datetime = None
-    stock_level: StockLevel = None
-    stock_location: StockLocation = None
-    stocktake_alerts_are_enabled: bool = None
+    days_until_stocktake_alert: int
+    image: bytes | None
+    name: str
+    notes: str | None
+    # products: List[Product]
+    stock_group: StockGroup | None
+    stock_level_last_updated: datetime
+    stock_level: StockLevel
+    stock_location: StockLocation | None
+    stocktake_alerts_are_enabled: bool

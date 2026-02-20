@@ -5,5 +5,5 @@ from domain.entities.base_entity import BaseEntity
 
 @dataclass
 class Merchant(BaseEntity):
-    name: str = None
+    name: str
     # url: str = None # hmm...does this belong in this domain?

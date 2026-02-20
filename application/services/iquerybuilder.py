@@ -16,6 +16,10 @@ class IQueryBuilder(ABC, Generic[TEntity]):
         pass
 
     @abstractmethod
+    def exists(self, entity_id: EntityID) -> bool:
+        pass
+
+    @abstractmethod
     def first(self, condition: BoolOperation | str | None = None) -> TEntity:
         '''
         `HINT/USAGE`

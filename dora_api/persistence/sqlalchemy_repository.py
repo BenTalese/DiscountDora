@@ -22,16 +22,8 @@ class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
     _flask_app: Flask
     _model_classes: dict
 
-    '''
-    # TODO: Instead of _model_classes, do this:
-    def __init__(self, model_class: type[Model]):
+    def __init__(self, model_class: type):
         self.model_class = model_class
-
-    Then in dependency container:
-    container.register(IRepository[Merchant], lambda: SqlAlchemyRepository(MerchantModel))
-
-    This may affect .include() and .then_include()
-    '''
 
     # ---------------- Interface Methods ----------------
 
@@ -46,8 +38,8 @@ class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
         entity.id = EntityID(uuid4())
         db.session.add(self._convert_to_model(entity))
 
-    def get(self, entity_type: type[TEntity]):
-        return SqlAlchemyQueryBuilder(self._get_model_type(entity_type))
+    def get(self):
+        return SqlAlchemyQueryBuilder(self.model_class)
 
     def remove(self, entity: TEntity):
         db.session.delete(self._convert_to_model(entity))
@@ -120,6 +112,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
             entities = [model.to_entity() for model in models_from_query_result]
             return entities
+
+    def exists(self, entity_id: EntityID) -> bool:
+        return len(self.where(Equal(entity_id, (self.model_class.__entity__, "id"))).execute()) > 0
 
     def first(self, condition: BoolOperation | str | None = None) -> TEntity:
         if condition:

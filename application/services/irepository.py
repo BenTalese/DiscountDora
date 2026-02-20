@@ -11,7 +11,7 @@ class IRepository(ABC, Generic[TEntity]):
         pass
 
     @abstractmethod
-    def get(self, entity_type: type[TEntity]) -> IQueryBuilder[TEntity]:
+    def get(self) -> IQueryBuilder[TEntity]:
         pass
 
     @abstractmethod

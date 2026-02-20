@@ -1,0 +1,50 @@
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List
+from uuid import UUID
+
+from flask import current_app
+
+from application.services.irepository import IRepository
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.routers import STOCK_ITEM_ROUTER
+from dora_api.infrastructure.api_response import ok
+from dora_api.infrastructure.dependency_container import DependencyContainer
+from dora_api.infrastructure.decorators import has_response
+
+
+@dataclass(frozen=True, slots=True)
+class StockItemDto:
+    name: str
+    stock_item_id: UUID
+    stock_level_id: UUID
+    stock_location_id: UUID | None
+    stock_level_last_updated: datetime
+
+    @classmethod
+    def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
+        return StockItemDto(
+            name = stock_item.name,
+            stock_item_id = stock_item.id.value,
+            stock_level_id = stock_item.stock_level.id.value,
+            stock_location_id = stock_item.stock_location.id.value if stock_item.stock_location else None,
+            stock_level_last_updated = stock_item.stock_level_last_updated
+        )
+
+
+class GetStockItemsHandler:
+    def __init__(self, repository: IRepository[StockItem]):
+        self.repository = repository
+
+    def handle(self) -> List[StockItemDto]:
+        return self.repository.get().project(StockItemDto.from_entity)
+
+
+@STOCK_ITEM_ROUTER.route("")
+@STOCK_ITEM_ROUTER.route("<query>")
+@has_response(StockItemDto)
+def get_stock_items(query: str | None = None):
+    _Container: DependencyContainer = current_app.container  # type: ignore
+    _Handler: GetStockItemsHandler = _Container.inject(GetStockItemsHandler)
+    _Result = _Handler.handle()
+    return ok(_Result)

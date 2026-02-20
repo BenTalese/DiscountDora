@@ -12,7 +12,7 @@ from dora_api.infrastructure.dependency_container import DependencyContainer
 from dora_api.infrastructure.decorators import has_response
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class MerchantDto:
     merchant_id: UUID
     name: str

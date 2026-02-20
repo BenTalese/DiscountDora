@@ -47,18 +47,6 @@ async def delete_stock_item_async(stock_item_id):
     return _Presenter.result
 
 
-@STOCK_ITEM_ROUTER.route("")
-@STOCK_ITEM_ROUTER.route("<query>")
-@has_view_model("get_stock_items_async", StockItemViewModel)
-async def get_stock_items_async(query = None):
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
-    _Presenter = GetStockItemsPresenter()
-
-    await _StockItemController.get_stock_items_async(_Presenter)
-    return _Presenter.result
-
-
 @STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["PATCH"])
 @has_request_body('update_stock_item_async', UpdateStockItemCommand)
 async def update_stock_item_async(stock_item_id):

@@ -13,28 +13,10 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_ITEM_ROUTER
+from dora_api.features.stock_items.get_stock_items import StockItemDto, get_stock_items
 from dora_api.infrastructure.api_response import business_rule_violation, created, entity_existence_failure, internal_server_error
 from dora_api.infrastructure.dependency_container import DependencyContainer
 from dora_api.infrastructure.decorators import has_request_body
-
-
-@dataclass
-class StockItemDto:
-    name: str
-    stock_item_id: UUID
-    stock_level_id: UUID
-    stock_location_id: UUID | None
-    stock_level_last_updated: datetime
-
-
-def to_dto(stock_item: StockItem) -> StockItemDto:
-    return StockItemDto(
-        name = stock_item.name,
-        stock_item_id = stock_item.id.value,
-        stock_level_id = stock_item.stock_level.id.value,
-        stock_location_id = stock_item.stock_location.id.value if stock_item.stock_location else None,
-        stock_level_last_updated = stock_item.stock_level_last_updated
-    )
 
 
 @dataclass(init=False, slots=True)

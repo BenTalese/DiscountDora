@@ -9,7 +9,7 @@ from application.services.irepository import IRepository
 from dora_api.features.routers import MERCHANT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.dependency_container import DependencyContainer
-from dora_api.infrastructure.response_decorator import has_response
+from dora_api.infrastructure.decorators import has_response
 
 
 @dataclass
@@ -30,7 +30,7 @@ class GetMerchantsHandler:
         self.repository = repository
 
     def handle(self) -> List[MerchantDto]:
-        return self.repository.get(Merchant).project(MerchantDto.from_entity)
+        return self.repository.get().project(MerchantDto.from_entity)
 
 
 @MERCHANT_ROUTER.route("")

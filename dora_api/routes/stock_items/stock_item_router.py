@@ -31,24 +31,7 @@ from framework.dora_api.view_models.stock_item_view_model import \
 from interface_adaptors.controllers.stock_item_controller import \
     StockItemController
 
-STOCK_ITEM_ROUTER = Blueprint("STOCK_ITEM_ROUTER", __name__, url_prefix="/api/stock-items")
 
-
-@STOCK_ITEM_ROUTER.route("", methods=["POST"])
-@has_request_body('create_stock_item_async', CreateStockItemCommand)
-async def create_stock_item_async():
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _StockItemController: StockItemController = _ServiceProvider.get_service(StockItemController)
-
-    _Presenter: CreateStockItemPresenter = _ServiceProvider.get_service(CreateStockItemPresenter)
-    _Presenter.get_route = f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items_async)}"
-
-    _Command: CreateStockItemCommand = request.request_body
-    _Presenter.request_body = _Command
-    _InputPort = get_input_port_from_command(_Command, CreateStockItemInputPort)
-
-    await _StockItemController.create_stock_item_async(_InputPort, _Presenter)
-    return _Presenter.result
 
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["DELETE"])

@@ -11,11 +11,11 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import joinedload
 from varname import nameof
 
-from application.infrastructure.bool_operation import BoolOperation, Equal
-from application.services.iquerybuilder import IQueryBuilder
-from application.services.irepository import IRepository
 from dora_api.app import db
 from dora_api.domain.exceptions import PersistenceError
+from dora_api.infrastructure.bool_operation import BoolOperation, Equal
+from dora_api.services.iquerybuilder import IQueryBuilder
+from dora_api.services.irepository import IRepository
 
 
 class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
@@ -86,62 +86,16 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         self.included_model = None
         self.join_paths = {}
 
-    def any(self, condition: BoolOperation | str | None = None) -> bool:
+    def all(self, condition: BoolOperation | str | None = None) -> List[TEntity]:
         if condition:
-            return self.where(condition).any()
-        return db.session.execute(self.query.limit(1)).first() is not None
+            return self.where(condition).all()
+        return self._execute()
 
-    def execute(self) -> List[Any]:
-        with self._context:
-            self.query = self.query.options(
-                *(joinedload(join_path) for join_path in self.join_paths.values())
-            )
-
-            print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
-            models_from_query_result = [row_result[0] for row_result in db.session.execute(self.query).unique().all()]
-
-            # TODO: Verify whatever the fuck this was talking about.....
-            # if self.projections:
-            #     # WHY: This must be done to prevent model attributes emitting another query to the database upon access
-            #     casted_models = []
-            #     for model in models_from_query_result:
-            #         casted_model = self.model()
-            #         cast_to_new_model(model, self.projection_tree, casted_model)
-            #         casted_models.append(casted_model)
-            #     models_from_query_result = casted_models
-
-            entities = [model.to_entity() for model in models_from_query_result]
-            return entities
+    def by_id(self, entity_id: EntityID) -> TEntity | None:
+        return self.one(Equal(entity_id, (self.model_class.__entity__, "id")))
 
     def exists(self, entity_id: EntityID) -> bool:
-        return len(self.where(Equal(entity_id, (self.model_class.__entity__, "id"))).execute()) > 0
-
-    def first(self, condition: BoolOperation | str | None = None) -> TEntity:
-        if condition:
-            return self.where(condition).first()
-
-        if result := self.execute():
-            return result[0]
-
-        raise PersistenceError("Result set was empty.")
-
-    def first_by_id(self, entity_id: EntityID) -> TEntity:
-        if result := self.first_or_none(Equal(entity_id, (self.model_class.__entity__, "id"))):
-            return result
-
-        raise PersistenceError("No entity matching the provided ID.")
-
-    def first_by_id_or_none(self, entity_id: EntityID) -> TEntity | None:
-        return self.first_or_none(Equal(entity_id, (self.model_class.__entity__, "id")))
-
-    def first_or_none(self, condition: BoolOperation | str | None = None) -> TEntity | None:
-        if condition:
-            return self.where(condition).first_or_none()
-
-        if result := self.execute():
-            return result[0]
-
-        return None
+        return self.by_id(entity_id) is not None
 
     def include(self, attribute_name: str) -> 'SqlAlchemyQueryBuilder[TEntity]':
         if not hasattr(self.model_class, attribute_name):
@@ -158,8 +112,13 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         self.included_model = self._get_model_type_from_attribute(self.model_class, attribute_name)
         return self
 
+    def one(self, condition: BoolOperation | str | None = None) -> TEntity | None:
+        _Query = self.where(condition) if condition else self
+        _Result = _Query._execute()
+        return _Result[0] if _Result else None
+
     def project(self, projection_method: Callable) -> List[Any]:
-        return [projection_method(entity) for entity in self.execute()]
+        return [projection_method(entity) for entity in self._execute()]
 
     # TODO: Maybe this'd be useful some day?
     # def select(self, *columns: ColumnElement[Any]) -> 'IQueryBuilder[TEntity]':
@@ -208,6 +167,28 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         print('\033[35m' + f"TRANSLATED CONDITION: {condition}" + '\033[0m')
         self.query = self.query.where(eval(condition, context))
         return self
+
+    def _execute(self) -> List[TEntity]:
+        with self._context:
+            self.query = self.query.options(
+                *(joinedload(join_path) for join_path in self.join_paths.values())
+            )
+
+            print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
+            models_from_query_result = [row_result[0] for row_result in db.session.execute(self.query).unique().all()]
+
+            # TODO: Verify whatever the fuck this was talking about.....
+            # if self.projections:
+            #     # WHY: This must be done to prevent model attributes emitting another query to the database upon access
+            #     casted_models = []
+            #     for model in models_from_query_result:
+            #         casted_model = self.model()
+            #         cast_to_new_model(model, self.projection_tree, casted_model)
+            #         casted_models.append(casted_model)
+            #     models_from_query_result = casted_models
+
+            entities = [model.to_entity() for model in models_from_query_result]
+            return entities
 
     def _is_model_attribute(self, model_type, attribute_name):
         return hasattr(getattr(getattr(model_type, attribute_name), "comparator"), "entity")

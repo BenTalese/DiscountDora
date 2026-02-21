@@ -1,12 +1,16 @@
 import importlib
 import inspect
 import os
+from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from clapy import Common
 
+from dora_api.infrastructure.dependency_container import DependencyContainer
 
-def get_classes_ending_with(term: str, path_to_search: str):
+
+def get_classes_ending_with(term: str, path_to_search: Path | str):
     _Classes = []
 
     for _Root, _Directories, _Files in os.walk(path_to_search):
@@ -28,7 +32,7 @@ def get_classes_ending_with(term: str, path_to_search: str):
     return _Classes
 
 
-def get_attributes_ending_with(term: str, path_to_search: str):
+def get_attributes_ending_with(term: str, path_to_search: Path | str):
     _Attributes = []
 
     for _Root, _Directories, _Files in os.walk(path_to_search):
@@ -48,8 +52,30 @@ def get_attributes_ending_with(term: str, path_to_search: str):
     return _Attributes
 
 
-def try_parse_uuid(uuid_string: str):
+def try_parse_uuid(uuid_string: Any) -> UUID | None:
     try:
         return UUID(f"urn:uuid:{uuid_string}")
     except ValueError:
         return None
+
+
+def get_request_body() -> Any:
+    '''
+    Retrieves the request body from the current Flask request context.
+
+    Returns:
+        The deserialized request body, or None if no request body is present.
+    '''
+    from flask import request
+    return getattr(request, 'request_body', None)
+
+
+def get_container() -> DependencyContainer:
+    '''
+    Retrieves the dependency container from the current Flask application context.
+
+    Returns:
+        The dependency container instance, or None if not found.
+    '''
+    from flask import current_app
+    return getattr(current_app, 'container')

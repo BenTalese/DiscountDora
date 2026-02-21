@@ -1,14 +1,17 @@
 from datetime import datetime
-from clapy import Interactor
-from varname import nameof
-from application.infrastructure.bool_operation import Equal
-from application.services.ipersistence_context import IPersistenceContext
-from application.use_cases.products.create_product.create_product_input_port import CreateProductInputPort
 
-from application.use_cases.products.create_product.icreate_product_output_port import ICreateProductOutputPort
+from clapy import Interactor
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
 from domain.entities.product_offer import ProductOffer
+from varname import nameof
+
+from application.services.irepository import IPersistenceContext
+from application.use_cases.products.create_product.create_product_input_port import \
+    CreateProductInputPort
+from application.use_cases.products.create_product.icreate_product_output_port import \
+    ICreateProductOutputPort
+from dora_api.infrastructure.bool_operation import Equal
 
 
 class CreateProductInteractor(Interactor):

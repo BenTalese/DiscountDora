@@ -1,6 +1,6 @@
 from clapy import Interactor
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.products.get_products.get_products_input_port import GetProductsInputPort
 from application.use_cases.products.get_products.iget_products_output_port import IGetProductsOutputPort
 from domain.entities.product import Product

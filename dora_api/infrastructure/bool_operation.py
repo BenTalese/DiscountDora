@@ -1,6 +1,6 @@
-from domain.entities.base_entity import EntityID
+from dora_api.domain.entities.base_entity import EntityID
 
-from domain.generics import TEntity
+from dora_api.domain.generics import TEntity
 
 
 class BoolOperation:

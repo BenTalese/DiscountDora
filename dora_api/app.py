@@ -4,7 +4,7 @@ from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
-from framework.dora_api.infrastructure.configuration_manager import \
+from dora_api.infrastructure.configuration_manager import \
     ConfigurationManager
 
 config_manager = ConfigurationManager()
@@ -16,7 +16,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 db = SQLAlchemy()
 Path('data').mkdir(exist_ok=True)
 db.init_app(app)
-import framework.dora_api.persistence.models  # Makes models visible to db instance  # noqa: F401
+import dora_api.persistence.models  # Makes models visible to db instance  # noqa: F401
 
 migrate = Migrate()
-migrate.init_app(app, db, Path(__file__).parent / 'persistence' / 'migrations')
+migrate.init_app(app, db, str(Path(__file__).parent / 'persistence' / 'migrations'))

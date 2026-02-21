@@ -73,7 +73,8 @@ class DependencyContainer(containers.DeclarativeContainer):
             provider_method: type,
             concrete_type: type,
             interface_type: Optional[Type] = None,  # type: ignore
-            *args) -> None:
+            *args,
+            **kwargs) -> None:
         '''
         Summary
         -------
@@ -108,14 +109,14 @@ class DependencyContainer(containers.DeclarativeContainer):
                                     and self._has_service(_Param.annotation)]
 
         if not _ConstructorDependencies:
-            setattr(self, _DependencyName, provider_method(concrete_type, *args))
+            setattr(self, _DependencyName, provider_method(concrete_type, *args, **kwargs))
         else:
             _SubDependencies = []
             for _Dependency in _ConstructorDependencies:
                 _SubDependencyName, _ = self._try_generate_service_name(_Dependency.annotation)
                 _SubDependencies.append(getattr(self, _SubDependencyName))
 
-            setattr(self, _DependencyName, provider_method(concrete_type, *_SubDependencies, *args))
+            setattr(self, _DependencyName, provider_method(concrete_type, *_SubDependencies, *args, **kwargs))
 
     # TODO: Get inspiration from this AI generated version
     # def register_service2(

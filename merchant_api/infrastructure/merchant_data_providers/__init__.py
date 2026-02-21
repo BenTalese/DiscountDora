@@ -3,10 +3,10 @@ from typing import List
 
 from clapy import IServiceProvider
 from flask import current_app
-
-from application.infrastructure.utils import get_classes_ending_with
 from framework.merchant_api.services.imerchant_data_provider import \
     IMerchantDataProvider
+
+from dora_api.infrastructure.utils import get_classes_ending_with
 
 
 def get_merchant_data_providers() -> List[IMerchantDataProvider]:

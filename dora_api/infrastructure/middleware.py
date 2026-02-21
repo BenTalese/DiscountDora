@@ -1,20 +1,19 @@
 import json
+import logging
 from base64 import b64decode
 from dataclasses import asdict
 from http.client import BAD_REQUEST, NOT_FOUND
-import logging
 from typing import Any, Dict, List, get_origin, get_type_hints
 
 from clapy import AttributeChangeTracker
+from domain.entities.base_entity import EntityID
 from flask import Blueprint, Response, jsonify, request
 
-from application.infrastructure.utils import try_parse_uuid
-from domain.entities.base_entity import EntityID
-from framework.dora_api.infrastructure.base_presenter import ProblemDetails
-from framework.dora_api.infrastructure.request_body_decorator import \
-    REQUEST_BODYS_BY_ENDPOINT
-from framework.dora_api.infrastructure.view_model_decorator import \
-    VIEW_MODELS_BY_ENDPOINT
+from dora_api.infrastructure.api_response import ProblemDetails
+from dora_api.infrastructure.decorators import (REQUEST_BODYS_BY_ENDPOINT,
+                                                RESPONSES_BY_ENDPOINT)
+from dora_api.infrastructure.utils import try_parse_uuid
+from dora_api.infrastructure.validators import validate_inputs
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
@@ -23,7 +22,7 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
 
 @MIDDLEWARE.before_app_request
-async def handle_cors_preflight_request():
+def handle_cors_preflight_request():
     if request.method.upper() == 'OPTIONS':
         return jsonify({
             'Access-Control-Allow-Origin': 'http://localhost:5174',
@@ -33,7 +32,7 @@ async def handle_cors_preflight_request():
 
 
 @MIDDLEWARE.before_app_request
-async def verify_endpoint_exists():
+def verify_endpoint_exists():
     if not request.endpoint:
         return jsonify(ProblemDetails(
             detail = "Endpoint was not found.",
@@ -44,7 +43,8 @@ async def verify_endpoint_exists():
 
 
 @MIDDLEWARE.before_app_request
-async def deserialise_web_request():
+def deserialise_web_request():
+    # TODO: Just call method from api_response.py....
     def get_malformed_request_response(errors: Dict[str, str]):
         _ProblemDetails = ProblemDetails(
             detail = "See errors property for more details.",
@@ -55,12 +55,20 @@ async def deserialise_web_request():
 
         return _ProblemDetails
 
+    if request.endpoint is None:
+        # TODO: 500 server error from api_response.py
+        raise RuntimeError("Request endpoint not set.")
+
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
         _DeserialisedRequestData: dict = {}
         _RequestBodySchema = get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items()
         _Errors: Dict[str, str] = {}
+
+        for _Key, _ in _RequestData.items():
+            if _Key not in get_type_hints(_RequestBodySchema).keys():
+                _Errors[_Key] = f"Unexpected value '{_Key}' not found in schema '{REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]}'."
 
         for _AttributeName, _AttributeType in _RequestBodySchema:
             try:
@@ -88,12 +96,18 @@ async def deserialise_web_request():
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
 
-        '''Remove attributes not present in request data to allow RequiredInputValidator pipe to work.
+        '''Remove attributes not present in request data to allow validate_inputs to work.
             Will leave AttributeChangeTrackers, unintentionally avoiding null exceptions, e.g. "price.has_been_set".
             This may cause several bugs in the future if 'delattr' changes its behaviour.'''
         for _AttributeName, _ in _RequestBodySchema:
             if _AttributeName not in _RequestData:
                 delattr(_DeserialisedRequest, _AttributeName)
+
+        _ValidationResult = validate_inputs(_DeserialisedRequest)
+
+        if _ValidationResult is not None:
+            # TODO: Use api_response.py
+            return jsonify(_ValidationResult), 400
 
         setattr(request, "request_body", _DeserialisedRequest)
 
@@ -123,7 +137,7 @@ def __get_deserialised_attribute_change_tracker(attribute_name: str, request_dat
 
 
 @MIDDLEWARE.after_app_request
-async def apply_query_operations(response: Response):
+def apply_query_operations(response: Response):
     def set_bad_query_request_response(message: str):
         _ProblemDetails = ProblemDetails(
             detail = message,
@@ -136,17 +150,21 @@ async def apply_query_operations(response: Response):
         response.status_code = 400
         response.headers["Content-Type"] = "application/problem+json"
 
+    if request.endpoint is None:
+        # TODO: 500 server error from api_response.py
+        raise RuntimeError("Request endpoint not set.")
+
     if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()
         _RequestEndpoint = request.endpoint.split(".")[-1]
         _QueryString: str = _QueryString.lower()
         _QueryOperations: List[str] = _QueryString.split("&")
 
-        if _RequestEndpoint not in VIEW_MODELS_BY_ENDPOINT:
+        if _RequestEndpoint not in RESPONSES_BY_ENDPOINT:
             set_bad_query_request_response(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
             return response
 
-        _ViewModel = VIEW_MODELS_BY_ENDPOINT[_RequestEndpoint]
+        _ViewModel = RESPONSES_BY_ENDPOINT[_RequestEndpoint]
 
         # FILTER OPERATION
         _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
@@ -192,11 +210,14 @@ async def apply_query_operations(response: Response):
                 set_bad_query_request_response(f"Sort field '{_SortField}' does not exist in the view model.")
                 return response
 
-            _ResponseData.sort(key = lambda resource: resource.get(_SortField), reverse = _SortOrder == 'desc')
+            _ResponseData.sort(
+                key=lambda resource: resource.get(_SortField, ""),
+                reverse=_SortOrder == "desc"
+            )
 
         # PAGINATION OPERATION
-        _Page: int = None
-        _Limit: int = None
+        _Page: int = 0
+        _Limit: int = 0
 
         if _PageOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("page=")), None):
             try:

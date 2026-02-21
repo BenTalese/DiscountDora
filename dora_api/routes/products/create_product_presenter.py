@@ -1,5 +1,5 @@
 from varname import nameof
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.products.create_product.icreate_product_output_port import \
     ICreateProductOutputPort
 from domain.entities.base_entity import EntityID

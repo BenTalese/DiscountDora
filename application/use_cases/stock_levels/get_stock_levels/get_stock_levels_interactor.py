@@ -1,6 +1,6 @@
 from clapy import Interactor
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.stock_levels.get_stock_levels.get_stock_levels_input_port import \
     GetStockLevelsInputPort
 from application.use_cases.stock_levels.get_stock_levels.iget_stock_levels_output_port import \

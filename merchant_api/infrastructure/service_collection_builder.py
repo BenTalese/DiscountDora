@@ -2,8 +2,6 @@ from pathlib import Path
 
 from clapy import DependencyInjectorServiceProvider
 from dependency_injector import providers
-
-from application.infrastructure.utils import get_classes_ending_with
 from framework.merchant_api.infrastructure.configuration_manager import \
     ConfigurationManager
 from framework.merchant_api.infrastructure.product_image_provider import \
@@ -12,6 +10,8 @@ from framework.merchant_api.services.iconfiguration_manager import \
     IConfigurationManager
 from framework.merchant_api.services.iproduct_image_provider import \
     IProductImageProvider
+
+from dora_api.infrastructure.utils import get_classes_ending_with
 
 
 class ServiceCollectionBuilder:

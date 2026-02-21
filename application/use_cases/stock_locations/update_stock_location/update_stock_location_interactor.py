@@ -1,6 +1,6 @@
 from clapy import Interactor
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from domain.entities.stock_location import StockLocation
 
 from .iupdate_stock_location_output_port import IUpdateStockLocationOutputPort

@@ -1,10 +1,13 @@
 from clapy import PersistenceRuleValidator
-from varname import nameof
-from application.infrastructure.bool_operation import Equal
-from application.services.ipersistence_context import IPersistenceContext
-from application.use_cases.stock_locations.update_stock_location.iupdate_stock_location_output_port import IUpdateStockLocationOutputPort
-from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import UpdateStockLocationInputPort
 from domain.entities.stock_location import StockLocation
+from varname import nameof
+
+from application.services.irepository import IPersistenceContext
+from application.use_cases.stock_locations.update_stock_location.iupdate_stock_location_output_port import \
+    IUpdateStockLocationOutputPort
+from application.use_cases.stock_locations.update_stock_location.update_stock_location_input_port import \
+    UpdateStockLocationInputPort
+from dora_api.infrastructure.bool_operation import Equal
 
 
 class UpdateStockLocationPersistenceRuleValidator(PersistenceRuleValidator):

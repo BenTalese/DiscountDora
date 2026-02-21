@@ -2,24 +2,26 @@ from pathlib import Path
 
 from dependency_injector import providers
 
-from application.infrastructure.entity_existence_checker import \
-    EntityExistenceChecker
-from application.infrastructure.utils import get_classes_ending_with
-from application.services.ientity_existence_checker import \
-    IEntityExistenceChecker
-from application.services.irepository import IRepository
 from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.infrastructure.configuration_manager import ConfigurationManager
 from dora_api.infrastructure.dependency_container import DependencyContainer
+from dora_api.infrastructure.utils import get_classes_ending_with
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.services.iconfiguration_manager import IConfigurationManager
+from dora_api.services.irepository import IRepository
 
 
 def build_dependency_container() -> DependencyContainer:
     container = DependencyContainer()
 
-    container.register_service(providers.Factory, SqlAlchemyRepository[Merchant], IRepository[Merchant])
-    container.register_service(providers.Factory, EntityExistenceChecker, IEntityExistenceChecker)
+    container.register_service(providers.Factory, SqlAlchemyRepository[Merchant], IRepository[Merchant], model_class=Merchant)
+    container.register_service(providers.Factory, SqlAlchemyRepository[StockItem], IRepository[StockItem], model_class=StockItem)
+    container.register_service(providers.Factory, SqlAlchemyRepository[StockLevel], IRepository[StockLevel], model_class=StockLevel)
+    container.register_service(providers.Factory, SqlAlchemyRepository[StockLocation], IRepository[StockLocation], model_class=StockLocation)
+
     container.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
 
     for _Handler in get_classes_ending_with('handler', Path() / 'dora_api' / 'features'):

@@ -1,4 +1,4 @@
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.stock_locations.create_stock_location.icreate_stock_location_output_port import \
     ICreateStockLocationOutputPort
 from domain.entities.stock_location import StockLocation

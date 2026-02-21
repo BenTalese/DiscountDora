@@ -2,7 +2,6 @@ import random
 import string
 from datetime import datetime, timedelta
 
-from application.services.ipersistence_context import IPersistenceContext
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
 from domain.entities.product_offer import ProductOffer
@@ -11,17 +10,17 @@ from domain.entities.stock_item import StockItem
 from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
-from framework.dora_api.persistence.persistence_helper_methods import (
-    is_entity, is_list)
+
+from dora_api.services.irepository import IRepository
 
 
-async def seed_dev_data_async(persistence: IPersistenceContext):
+def seed_dev_data(repository: IRepository):
     merchant_one = generate_entity(Merchant)
     merchant_one.name = "Woolworths"
     merchant_two = generate_entity(Merchant)
     merchant_two.name = "Coles"
-    persistence.add(merchant_one)
-    persistence.add(merchant_two)
+    repository.add(merchant_one)
+    repository.add(merchant_two)
 
     product_one = generate_entity(Product)
     product_one.brand = "Cadbury"
@@ -58,57 +57,57 @@ async def seed_dev_data_async(persistence: IPersistenceContext):
         price_was = 32.16
     )
 
-    persistence.add(product_one)
-    persistence.add(product_two)
+    repository.add(product_one)
+    repository.add(product_two)
 
-    persistence.add(product_one.current_offer)
-    persistence.add(product_two.current_offer)
+    repository.add(product_one.current_offer)
+    repository.add(product_two.current_offer)
 
     user = generate_entity(User)
     user.send_deals_on_day = 6
     user.email = "ben.talese@gmail.com"
     user.username = "The Coolest Guy"
-    persistence.add(user)
+    repository.add(user)
 
     stock_location_one = generate_entity(StockLocation)
     stock_location_one.name = "Pantry"
-    persistence.add(stock_location_one)
+    repository.add(stock_location_one)
 
     stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
     stock_level_two = StockLevel(name = "Sufficient Stock", sequence = 1)
     stock_level_three = StockLevel(name = "Low Stock", sequence = 2)
     stock_level_four = StockLevel(name = "Out of Stock", sequence = 3)
 
-    persistence.add(stock_level_one)
-    persistence.add(stock_level_two)
-    persistence.add(stock_level_three)
-    persistence.add(stock_level_four)
+    repository.add(stock_level_one)
+    repository.add(stock_level_two)
+    repository.add(stock_level_three)
+    repository.add(stock_level_four)
 
     stock_item_one = generate_entity(StockItem)
     stock_item_one.name = "Kensington Pride Mangoes"
     stock_item_one.stock_location = stock_location_one
     stock_item_one.stock_level = stock_level_one
-    persistence.add(stock_item_one)
+    repository.add(stock_item_one)
 
     stock_item_two = generate_entity(StockItem)
     stock_item_two.name = "Super Awesome Pizza"
     stock_item_two.stock_location = stock_location_one
     stock_item_two.stock_level = stock_level_two
-    persistence.add(stock_item_two)
-    persistence.add(stock_item_one)
+    repository.add(stock_item_two)
+    repository.add(stock_item_one)
 
     stock_item_three = generate_entity(StockItem)
     stock_item_three.name = "Hot Crispy Chippies"
     stock_item_three.stock_location = stock_location_one
     stock_item_three.stock_level = stock_level_three
-    persistence.add(stock_item_three)
+    repository.add(stock_item_three)
 
     shopping_list_one = generate_entity(ShoppingList)
     shopping_list_one.items.append(stock_item_one)
     shopping_list_one.items.append(stock_item_two)
-    persistence.add(shopping_list_one)
+    repository.add(shopping_list_one)
 
-    await persistence.save_changes_async()
+    repository.save_changes()
 
 
 def generate_entity(entity_type, should_generate_navigations: bool = False):

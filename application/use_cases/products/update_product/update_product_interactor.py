@@ -3,7 +3,7 @@ from datetime import datetime
 from clapy import Interactor
 from varname import nameof
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.products.update_product.iupdate_product_output_port import \
     IUpdateProductOutputPort
 from application.use_cases.products.update_product.update_product_input_port import \

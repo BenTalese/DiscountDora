@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic
 
-from application.services.iquerybuilder import IQueryBuilder
+from dora_api.services.iquerybuilder import IQueryBuilder
 from dora_api.domain.generics import TEntity
 
 

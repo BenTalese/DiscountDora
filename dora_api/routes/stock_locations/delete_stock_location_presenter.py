@@ -1,6 +1,6 @@
 from varname import nameof
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.stock_locations.delete_stock_location.idelete_stock_location_output_port import \
     IDeleteStockLocationOutputPort
 from domain.entities.base_entity import EntityID

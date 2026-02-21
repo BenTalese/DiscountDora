@@ -1,6 +1,6 @@
 from clapy import Interactor
 
-from application.services.ipersistence_context import IPersistenceContext
+from application.services.irepository import IPersistenceContext
 from application.use_cases.users.get_users.get_users_input_port import \
     GetUsersInputPort
 from application.use_cases.users.get_users.iget_users_output_port import \

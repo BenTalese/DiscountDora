@@ -1,14 +1,14 @@
 from dataclasses import dataclass
+import logging
 from typing import List
 from uuid import UUID
 
 from domain.entities.merchant import Merchant
-from flask import current_app
 
 from dora_api.features.routers import MERCHANT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response
-from dora_api.infrastructure.dependency_container import DependencyContainer
+from dora_api.infrastructure.utils import get_container
 from dora_api.services.irepository import IRepository
 
 
@@ -37,7 +37,9 @@ class GetMerchantsHandler:
 @MERCHANT_ROUTER.route("<query>")
 @has_response(MerchantDto)
 def get_merchants(query: str | None = None):
-    _Container: DependencyContainer = current_app.container  # type: ignore
-    _Handler: GetMerchantsHandler = _Container.inject(GetMerchantsHandler)
+    _Logger = logging.getLogger(__name__)
+    _Logger.info("Received request to get merchants.")
+    _Handler = get_container().inject(GetMerchantsHandler)
     _Result = _Handler.handle()
+    _Logger.info(f"Successfully retrieved {len(_Result)} merchants.")
     return ok(_Result)

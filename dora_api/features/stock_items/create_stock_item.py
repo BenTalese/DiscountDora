@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 
 from varname import nameof
 
@@ -88,25 +89,27 @@ class CreateStockItemHandler:
 @STOCK_ITEM_ROUTER.route("", methods=["POST"])
 @has_request_body(CreateStockItemRequest)
 def create_stock_item():
+    _Logger = logging.getLogger(__name__)
+    _Logger.info("Received request to create stock item.")
     _Handler = get_container().inject(CreateStockItemHandler)
     _Request: CreateStockItemRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
     if _Response.stock_level_not_found:
-        # TODO: Log
+        _Logger.warning(f"Stock level not found: {_Request.stock_level_id.value}")
         return entity_existence_failure(nameof(StockLevel), nameof(CreateStockItemRequest.stock_level_id), _Request.stock_level_id.value)
 
     if _Response.stock_location_not_found and _Request.stock_location_id:
-        # TODO: Log
+        _Logger.warning(f"Stock location not found: {_Request.stock_location_id.value}")
         return entity_existence_failure(nameof(StockLocation), nameof(CreateStockItemRequest.stock_location_id), _Request.stock_location_id.value)
 
     if _Response.stock_item_already_exists:
-        # TODO: Log
+        _Logger.warning(f"Stock item already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock item with the name '{_Request.name}' already exists.")
 
     if _Response.new_stock_item_id is None:
-        # TODO: Log
+        _Logger.error("An unknown error occurred while creating the stock item.")
         return internal_server_error("An unknown error occurred while creating the stock item.")
 
-    # TODO: Log
+    _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id.value}")
     return created(_Response.new_stock_item_id.value, f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items)}", nameof(StockItemDto.stock_item_id))

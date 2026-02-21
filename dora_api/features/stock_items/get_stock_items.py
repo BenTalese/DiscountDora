@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 from typing import List
 from uuid import UUID
 
@@ -42,6 +43,9 @@ class GetStockItemsHandler:
 @STOCK_ITEM_ROUTER.route("<query>")
 @has_response(StockItemDto)
 def get_stock_items(query: str | None = None):
+    _Logger = logging.getLogger(__name__)
+    _Logger.info("Received request to get stock items.")
     _Handler = get_container().inject(GetStockItemsHandler)
     _Result = _Handler.handle()
+    _Logger.info(f"Successfully retrieved {len(_Result)} stock items.")
     return ok(_Result)

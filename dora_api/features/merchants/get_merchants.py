@@ -5,11 +5,11 @@ from uuid import UUID
 from domain.entities.merchant import Merchant
 from flask import current_app
 
-from application.services.irepository import IRepository
 from dora_api.features.routers import MERCHANT_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.dependency_container import DependencyContainer
 from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.dependency_container import DependencyContainer
+from dora_api.services.irepository import IRepository
 
 
 @dataclass(frozen=True, slots=True)

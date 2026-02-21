@@ -3,14 +3,12 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from flask import current_app
-
-from application.services.irepository import IRepository
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.dependency_container import DependencyContainer
 from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.utils import get_container
+from dora_api.services.irepository import IRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +42,6 @@ class GetStockItemsHandler:
 @STOCK_ITEM_ROUTER.route("<query>")
 @has_response(StockItemDto)
 def get_stock_items(query: str | None = None):
-    _Container: DependencyContainer = current_app.container  # type: ignore
-    _Handler: GetStockItemsHandler = _Container.inject(GetStockItemsHandler)
+    _Handler = get_container().inject(GetStockItemsHandler)
     _Result = _Handler.handle()
     return ok(_Result)

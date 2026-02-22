@@ -29,7 +29,6 @@ from framework.dora_api.view_models.stock_location_view_model import StockLocati
 from interface_adaptors.controllers.stock_location_controller import \
     StockLocationController
 
-STOCK_LOCATION_ROUTER = Blueprint("STOCK_LOCATION_ROUTER", __name__, url_prefix="/api/stock-locations")
 
 
 @STOCK_LOCATION_ROUTER.route("", methods=["POST"])
@@ -58,18 +57,6 @@ async def delete_stock_location_async(stock_location_id):
     _InputPort.stock_location_id = EntityID(stock_location_id)
 
     await _StockLocationController.delete_stock_location_async(_InputPort, _Presenter)
-    return _Presenter.result
-
-
-@STOCK_LOCATION_ROUTER.route("")
-@STOCK_LOCATION_ROUTER.route("<query>")
-@has_view_model('get_stock_locations_async', StockLocationViewModel)
-async def get_stock_locations_async(query = None):
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
-    _Presenter = GetStockLocationsPresenter()
-
-    await _StockLocationController.get_stock_locations_async(_Presenter)
     return _Presenter.result
 
 

@@ -20,5 +20,5 @@ class Product(BaseEntity):
     name: str
     size: str
     size_unit: str
-    size_value: float
+    size_value: float | None
     web_url: str | None

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from http.client import (BAD_REQUEST, CREATED, FORBIDDEN,
-                         INTERNAL_SERVER_ERROR, NO_CONTENT, NOT_FOUND, OK,
-                         UNAUTHORIZED, UNPROCESSABLE_ENTITY)
+from http.client import (BAD_REQUEST, CREATED, INTERNAL_SERVER_ERROR,
+                         NO_CONTENT, NOT_FOUND, OK, UNPROCESSABLE_ENTITY)
 from typing import Any
 from uuid import UUID
 
@@ -100,39 +99,6 @@ def ok(result: Any) -> Response:
     return response
 
 
-def present_unauthenticated() -> Response:
-    response = jsonify(ProblemDetails(
-        detail = "Unauthenticated client.",
-        errors = {},
-        status = UNAUTHORIZED,
-        title = "Unauthenticated client.",
-        type = "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1"))
-    response.content_type = 'application/problem+json'
-    response.status_code = UNAUTHORIZED
-    return response
-
-
-def present_unauthorised(authorisation_failure: AuthorisationResult) -> Response:
-    response = jsonify(ProblemDetails(
-        detail = authorisation_failure.reason,
-        errors = {},
-        status = FORBIDDEN,
-        title = "Forbidden.",
-        type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3"))
-    response.content_type = 'application/problem+json'
-    response.status_code = FORBIDDEN
-    return response
-
-
-def present_validation_failure(validation_failure: ValidationResult) -> Response:
-    return unprocessable_entity(ProblemDetails(
-        detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
-        status = UNPROCESSABLE_ENTITY,
-        errors = validation_failure.errors,
-        title = "Validation failure.",
-        type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
-
-
 def unprocessable_entity(problem_details: ProblemDetails) -> Response:
     response = jsonify(problem_details)
     response.content_type = 'application/problem+json'
@@ -156,3 +122,37 @@ def unprocessable_entity(problem_details: ProblemDetails) -> Response:
     #     response.content_type = 'application/problem+json'
     #     response.status_code = UNPROCESSABLE_ENTITY
     #     self.result = response
+
+# TODO: Deal with these old responses
+
+# def present_unauthenticated() -> Response:
+#     response = jsonify(ProblemDetails(
+#         detail = "Unauthenticated client.",
+#         errors = {},
+#         status = UNAUTHORIZED,
+#         title = "Unauthenticated client.",
+#         type = "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1"))
+#     response.content_type = 'application/problem+json'
+#     response.status_code = UNAUTHORIZED
+#     return response
+
+
+# def present_unauthorised(authorisation_failure: AuthorisationResult) -> Response:
+#     response = jsonify(ProblemDetails(
+#         detail = authorisation_failure.reason,
+#         errors = {},
+#         status = FORBIDDEN,
+#         title = "Forbidden.",
+#         type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3"))
+#     response.content_type = 'application/problem+json'
+#     response.status_code = FORBIDDEN
+#     return response
+
+
+# def present_validation_failure(validation_failure: ValidationResult) -> Response:
+#     return unprocessable_entity(ProblemDetails(
+#         detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
+#         status = UNPROCESSABLE_ENTITY,
+#         errors = validation_failure.errors,
+#         title = "Validation failure.",
+#         type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))

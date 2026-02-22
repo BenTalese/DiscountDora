@@ -112,4 +112,8 @@ def create_stock_item():
         return internal_server_error("An unknown error occurred while creating the stock item.")
 
     _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id.value}")
-    return created(_Response.new_stock_item_id.value, f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items)}", nameof(StockItemDto.stock_item_id))
+    return created(
+        _Response.new_stock_item_id.value,
+        f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items)}",
+        nameof(StockItemDto.stock_item_id)
+    )

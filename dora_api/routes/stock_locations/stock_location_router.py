@@ -31,20 +31,7 @@ from interface_adaptors.controllers.stock_location_controller import \
 
 
 
-@STOCK_LOCATION_ROUTER.route("", methods=["POST"])
-@has_request_body('create_stock_location_async', CreateStockLocationCommand)
-async def create_stock_location_async():
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _StockLocationController: StockLocationController = _ServiceProvider.get_service(StockLocationController)
-    _Presenter: CreateStockLocationPresenter = _ServiceProvider.get_service(CreateStockLocationPresenter)
-    _Presenter.get_route = f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations_async)}"
 
-    _Command: CreateStockLocationCommand = request.request_body
-    _Presenter.request_body = _Command
-    _InputPort = get_input_port_from_command(_Command, CreateStockLocationInputPort)
-
-    await _StockLocationController.create_stock_location_async(_InputPort, _Presenter)
-    return _Presenter.result
 
 
 @STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["DELETE"])

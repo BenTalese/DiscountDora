@@ -17,11 +17,10 @@ from dora_api.persistence.sqlalchemy_repository import (
 from dora_api.services.iconfiguration_manager import IConfigurationManager
 
 
-# TODO: Uninstall clapy
 def startup(is_test_env: bool = False):
     _Container = build_dependency_container()
     app.container = _Container  # type: ignore
-    _ConfigurationManager: IConfigurationManager = _Container.inject(IConfigurationManager)
+    _ConfigurationManager = _Container.inject(IConfigurationManager)
 
     init_db(is_test_env)
 
@@ -57,14 +56,14 @@ def init_db(is_test_env: bool = False):
     SqlAlchemyRepository._flask_app = app
     SqlAlchemyRepository._model_classes = {
         mapper.class_.__entity__: mapper.class_
-        for mapper in db.Model.registry.mappers
+        for mapper in db.Model.registry.mappers  # type: ignore
     }
 
     with app.app_context():
         if ConfigurationManager().is_debug_mode_enabled() or is_test_env:
             db.drop_all()
             db.create_all()
-            seed_dev_data(SqlAlchemyRepository())
+            seed_dev_data()
         else:
             upgrade()
 
@@ -82,7 +81,7 @@ def configure_logger(log_level: int):
 
 
 def register_routers():
-    for _Router in get_attributes_ending_with('router', Path() / 'framework' / 'dora_api' / 'routes'):
+    for _Router in get_attributes_ending_with('router', Path() / 'dora_api' / 'features' / 'routers'):
         app.register_blueprint(_Router)
 
 

@@ -75,14 +75,16 @@ class UpdateStockItemHandler:
             _SameNameStockItem: StockItem | None = (
                 self.stock_item_repository
                 .get()
-                .one(Equal((StockItem, nameof(StockItem.name)), request.name.value, is_case_insensitive = True))
+                .one(
+                    Equal((StockItem, nameof(StockItem.name)), request.name.value, is_case_insensitive = True)
+                )
             )
 
-            if _SameNameStockItem:
+            if _SameNameStockItem and _SameNameStockItem.id != stock_item_id:
                 return UpdateStockItemResponse(stock_item_already_exists=True)
 
-        if request.name.has_been_set and request.name.value is not None:
-            _StockItem.name = request.name.value
+            if request.name.value is not None:
+                _StockItem.name = request.name.value
 
         self.stock_item_repository.update(_StockItem)
         self.stock_item_repository.save_changes()

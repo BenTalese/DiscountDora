@@ -26,7 +26,6 @@ from framework.dora_api.routes.products.update_product_presenter import \
 from framework.dora_api.view_models.product_view_model import ProductViewModel
 from interface_adaptors.controllers.product_controller import ProductController
 
-PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 
 
 @PRODUCT_ROUTER.route("", methods=["POST"])
@@ -45,16 +44,6 @@ async def create_product_async():
     return _Presenter.result
 
 
-@PRODUCT_ROUTER.route("")
-@PRODUCT_ROUTER.route("<query>")
-@has_view_model('get_products_async', ProductViewModel)
-async def get_products_async(query = None):
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _ProductController: ProductController = _ServiceProvider.get_service(ProductController)
-    _Presenter: GetProductsPresenter = _ServiceProvider.get_service(GetProductsPresenter)
-
-    await _ProductController.get_products_async(_Presenter)
-    return _Presenter.result
 
 
 @PRODUCT_ROUTER.route("/<product_id>", methods=["PATCH"])

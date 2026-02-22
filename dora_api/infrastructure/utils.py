@@ -2,12 +2,37 @@ import importlib
 import inspect
 import os
 from pathlib import Path
-from typing import Any
+import re
+from typing import Any, List
 from uuid import UUID
 
-from clapy import Common
-
 from dora_api.infrastructure.dependency_container import DependencyContainer
+
+
+def apply_exclusion_filter(collection: List[str], exclusion_patterns: List[str]) -> None:
+    '''
+    Summary
+    -------
+    Applies RegEx exclusion patterns to a collection of strings and removes any
+    items that match those patterns.
+
+    Parameters
+    ----------
+    `collection` A list of strings that represents the collection of items that need
+    to be filtered.\n
+    `exclusion_patterns` A list of regular expression patterns that should be used to exclude
+    certain items from the collection.
+
+    Example
+    -------
+    my_collection = ["a", "b", "c", "d"]\n
+    exclusion_patterns = ["b", "d"]\n
+    MyClass.apply_exclusion_filter(my_collection, exclusion_patterns)\n
+    print(my_collection)  # Output: ["a", "c"]
+
+    '''
+    for _ExclusionPattern in exclusion_patterns:
+        collection[:] = [_Item for _Item in collection if not re.match(_ExclusionPattern, _Item)]
 
 
 def get_classes_ending_with(term: str, path_to_search: Path | str):
@@ -17,8 +42,8 @@ def get_classes_ending_with(term: str, path_to_search: Path | str):
 
         DIR_EXCLUSIONS = [r"__pycache__"]
         FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
-        Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
-        Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
+        apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
+        apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
 
         _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
         for _File in _Files:
@@ -39,8 +64,8 @@ def get_attributes_ending_with(term: str, path_to_search: Path | str):
 
         DIR_EXCLUSIONS = [r"__pycache__"]
         FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
-        Common.apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
-        Common.apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
+        apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
+        apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
 
         _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
         for _File in _Files:

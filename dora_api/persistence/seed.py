@@ -1,6 +1,4 @@
-import random
-import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 
 from domain.entities.merchant import Merchant
 from domain.entities.product import Product
@@ -11,130 +9,147 @@ from domain.entities.stock_level import StockLevel
 from domain.entities.stock_location import StockLocation
 from domain.entities.user import User
 
+from dora_api.infrastructure.utils import get_container
 from dora_api.services.irepository import IRepository
 
 
-def seed_dev_data(repository: IRepository):
-    merchant_one = generate_entity(Merchant)
-    merchant_one.name = "Woolworths"
-    merchant_two = generate_entity(Merchant)
-    merchant_two.name = "Coles"
-    repository.add(merchant_one)
-    repository.add(merchant_two)
+def seed_dev_data():
+    _Container = get_container()
+    _MerchantRepository = _Container.inject(IRepository[Merchant])
+    _ProductRepository = _Container.inject(IRepository[Product])
+    _ProductOfferRepository = _Container.inject(IRepository[ProductOffer])
+    _StockItemRepository = _Container.inject(IRepository[StockItem])
+    _StockLocationRepository = _Container.inject(IRepository[StockLocation])
+    _StockLevelRepository = _Container.inject(IRepository[StockLevel])
+    _ShoppingListRepository = _Container.inject(IRepository[ShoppingList])
+    _UserRepository = _Container.inject(IRepository[User])
 
-    product_one = generate_entity(Product)
-    product_one.brand = "Cadbury"
-    product_one.is_active = True
-    product_one.is_available = True
-    product_one.merchant = merchant_one
-    product_one.merchant_stockcode = "51741"
-    product_one.name = "Cadbury Freddo Cake"
-    product_one.size = "1.5L"
-    product_one.size_unit = "L"
-    product_one.size_value = 1.0
-    product_one.web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
+    # ---------------- MERCHANT ---------------- #
+    _MerchantOne = Merchant(name = "Woolworths")
+    _MerchantTwo = Merchant(name = "Coles")
+    _MerchantRepository.add(_MerchantOne)
+    _MerchantRepository.add(_MerchantTwo)
+    _MerchantRepository.save_changes()
 
-    product_two = generate_entity(Product)
-    product_two.is_active = True
-    product_two.is_available = True
-    product_two.merchant = merchant_two
-    product_two.merchant_stockcode = "3056737"
-    product_two.name = "Betty Crocker Gluten Free Vanilla Cupcake Mix"
-    product_two.size = "460G"
-    product_two.size_unit = "G"
-    product_two.size_value = 460.0
-    product_two.web_url = "https://www.coles.com.au/product/3056737"
-
-    product_one.current_offer = ProductOffer(
-        offered_on=datetime.utcnow(),
-        price_now = 2.82,
-        price_was = 3.52
+    # ---------------- PRODUCT ---------------- #
+    _ProductOne = Product(
+        brand = "Cadbury",
+        current_offer = ProductOffer(
+            offered_on=datetime.now(UTC),
+            price_now = 2.82,
+            price_was = 3.52
+        ),
+        historic_offers = [],
+        image = None,
+        is_active = True,
+        is_available = True,
+        merchant = _MerchantOne,
+        merchant_stockcode = "51741",
+        name = "Cadbury Freddo Cake",
+        size = "1.5L",
+        size_unit = "L",
+        size_value = 1.0,
+        web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
     )
 
-    product_two.current_offer = ProductOffer(
-        offered_on=datetime.utcnow(),
-        price_now = 22.15,
-        price_was = 32.16
+    _ProductTwo = Product(
+        brand = "Cadbury",
+        current_offer = ProductOffer(
+            offered_on=datetime.now(UTC),
+            price_now = 22.15,
+            price_was = 32.16
+        ),
+        historic_offers = [],
+        image = None,
+        is_active = True,
+        is_available = True,
+        merchant = _MerchantTwo,
+        merchant_stockcode = "3056737",
+        name = "Betty Crocker Gluten Free Vanilla Cupcake Mix",
+        size = "460G",
+        size_unit = "G",
+        size_value = 460.0,
+        web_url = "https://www.coles.com.au/product/3056737"
     )
 
-    repository.add(product_one)
-    repository.add(product_two)
+    _ProductRepository.add(_ProductOne)
+    _ProductRepository.add(_ProductTwo)
+    _ProductOfferRepository.add(_ProductOne.current_offer)
+    _ProductOfferRepository.add(_ProductTwo.current_offer)
+    _ProductRepository.save_changes()
+    _ProductOfferRepository.save_changes()
+    # TODO: Is this necessary? Can't it save the related data?...
 
-    repository.add(product_one.current_offer)
-    repository.add(product_two.current_offer)
+    # ---------------- USER ---------------- #
+    _UserOne = User(
+        email = "ben.talese@gmail.com",
+        send_deals_on_day = 6,
+        username = "The Coolest Guy",
+    )
+    _UserRepository.add(_UserOne)
+    _UserRepository.save_changes()
 
-    user = generate_entity(User)
-    user.send_deals_on_day = 6
-    user.email = "ben.talese@gmail.com"
-    user.username = "The Coolest Guy"
-    repository.add(user)
+    # ---------------- STOCK LOCATION ---------------- #
+    _StockLocationOne = StockLocation(name = "Pantry")
+    _StockLocationRepository.add(_StockLocationOne)
+    _StockLocationRepository.save_changes()
 
-    stock_location_one = generate_entity(StockLocation)
-    stock_location_one.name = "Pantry"
-    repository.add(stock_location_one)
+    # ---------------- STOCK LEVEL ---------------- #
+    _StockLevelOne = StockLevel(name = "Well-Stocked", sequence = 0)
+    _StockLevelTwo = StockLevel(name = "Sufficient Stock", sequence = 1)
+    _StockLevelThree = StockLevel(name = "Low Stock", sequence = 2)
+    _StockLevelFour = StockLevel(name = "Out of Stock", sequence = 3)
 
-    stock_level_one = StockLevel(name = "Well-Stocked", sequence = 0)
-    stock_level_two = StockLevel(name = "Sufficient Stock", sequence = 1)
-    stock_level_three = StockLevel(name = "Low Stock", sequence = 2)
-    stock_level_four = StockLevel(name = "Out of Stock", sequence = 3)
+    _StockLevelRepository.add(_StockLevelOne)
+    _StockLevelRepository.add(_StockLevelTwo)
+    _StockLevelRepository.add(_StockLevelThree)
+    _StockLevelRepository.add(_StockLevelFour)
+    _StockLevelRepository.save_changes()
 
-    repository.add(stock_level_one)
-    repository.add(stock_level_two)
-    repository.add(stock_level_three)
-    repository.add(stock_level_four)
+    # ---------------- STOCK ITEM ---------------- #
+    _StockItemOne = StockItem(
+        days_until_stocktake_alert=3,
+        image = None,
+        name = "Kensington Pride Mangoes",
+        notes = None,
+        stock_group = None,
+        stock_level_last_updated=datetime.now(UTC),
+        stock_level=_StockLevelOne,
+        stock_location = _StockLocationOne,
+        stocktake_alerts_are_enabled=False
+    )
 
-    stock_item_one = generate_entity(StockItem)
-    stock_item_one.name = "Kensington Pride Mangoes"
-    stock_item_one.stock_location = stock_location_one
-    stock_item_one.stock_level = stock_level_one
-    repository.add(stock_item_one)
+    _StockItemTwo = StockItem(
+        days_until_stocktake_alert=2,
+        image = None,
+        name = "Super Awesome Pizza",
+        notes = None,
+        stock_group = None,
+        stock_level_last_updated=datetime.now(UTC),
+        stock_level=_StockLevelTwo,
+        stock_location = _StockLocationOne,
+        stocktake_alerts_are_enabled=False
+    )
 
-    stock_item_two = generate_entity(StockItem)
-    stock_item_two.name = "Super Awesome Pizza"
-    stock_item_two.stock_location = stock_location_one
-    stock_item_two.stock_level = stock_level_two
-    repository.add(stock_item_two)
-    repository.add(stock_item_one)
+    _StockItemThree = StockItem(
+        days_until_stocktake_alert=5,
+        image = None,
+        name = "Hot Crispy Chippies",
+        notes = None,
+        stock_group = None,
+        stock_level_last_updated=datetime.now(UTC),
+        stock_level=_StockLevelThree,
+        stock_location = None,
+        stocktake_alerts_are_enabled=True
+    )
 
-    stock_item_three = generate_entity(StockItem)
-    stock_item_three.name = "Hot Crispy Chippies"
-    stock_item_three.stock_location = stock_location_one
-    stock_item_three.stock_level = stock_level_three
-    repository.add(stock_item_three)
+    _StockItemRepository.add(_StockItemOne)
+    _StockItemRepository.add(_StockItemTwo)
+    _StockItemRepository.add(_StockItemThree)
+    _StockItemRepository.save_changes()
 
-    shopping_list_one = generate_entity(ShoppingList)
-    shopping_list_one.items.append(stock_item_one)
-    shopping_list_one.items.append(stock_item_two)
-    repository.add(shopping_list_one)
+    # ---------------- SHOPPING LIST ---------------- #
+    _ShoppingListOne = ShoppingList(items = [_StockItemOne, _StockItemTwo])
 
-    repository.save_changes()
-
-
-def generate_entity(entity_type, should_generate_navigations: bool = False):
-    data = {}
-    for attribute_name, attribute_type in entity_type.__annotations__.items():
-        if is_entity(attribute_type) and should_generate_navigations or not is_entity(attribute_type):
-            data[attribute_name] = get_value_for_type(entity_type, attribute_name, attribute_type, should_generate_navigations)
-
-        if is_entity(attribute_type) and is_list(attribute_type) and not should_generate_navigations:
-            data[attribute_name] = []
-
-    return entity_type(**data)
-
-
-def get_value_for_type(entity_type, attr_name, type, should_generate_navigations):
-    if is_list(type):
-        return [get_value_for_type(entity_type, attr_name, type.__args__[0], should_generate_navigations)]
-
-    if is_entity(type) and should_generate_navigations:
-        return generate_entity(type, should_generate_navigations)
-
-    if type == str:
-        return ''.join([entity_type.__name__, "__", attr_name, '__'] + random.choices(string.ascii_letters, k=5))
-
-    if type == datetime:
-        start_date = datetime.now() - timedelta(days=2000)
-        end_date = datetime.now() + timedelta(days=2000)
-        return start_date + (end_date - start_date) * random.random()
-
-    return type()
+    _ShoppingListRepository.add(_ShoppingListOne)
+    _ShoppingListRepository.save_changes()

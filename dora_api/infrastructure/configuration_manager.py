@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from framework.dora_api.services.iconfiguration_manager import \
+from dora_api.services.iconfiguration_manager import \
     IConfigurationManager
 
 

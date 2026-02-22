@@ -5,10 +5,10 @@ from dataclasses import asdict
 from http.client import BAD_REQUEST, NOT_FOUND
 from typing import Any, Dict, List, get_origin, get_type_hints
 
-from clapy import AttributeChangeTracker
 from domain.entities.base_entity import EntityID
 from flask import Blueprint, Response, jsonify, request
 
+from dora_api.domain.types import AttributeChangeTracker
 from dora_api.infrastructure.api_response import ProblemDetails
 from dora_api.infrastructure.decorators import (REQUEST_BODYS_BY_ENDPOINT,
                                                 RESPONSES_BY_ENDPOINT)

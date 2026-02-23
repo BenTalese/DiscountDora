@@ -1,18 +1,17 @@
-from pathlib import Path
-from uuid import uuid4
-
 import asyncio
 import json
 import logging
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+from uuid import uuid4
 
 import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from framework.emailer.delivery import send_email
-from framework.emailer.product_model import ProductModel
-from framework.emailer.user_model import UserModel
+from emailer.delivery import send_email
+from emailer.product_model import ProductModel
+from emailer.user_model import UserModel
 
 '''
 TODO:

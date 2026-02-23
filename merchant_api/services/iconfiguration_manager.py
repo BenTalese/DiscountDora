@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from framework.merchant_api.domain.entities.merchant import Merchant
+from merchant_api.domain.entities.merchant import Merchant
 
 
 class IConfigurationManager(ABC):

@@ -5,10 +5,10 @@ from typing import Dict, List
 
 from pydantic import BaseModel
 
-from framework.merchant_api.domain.entities.merchant import Merchant
-from framework.merchant_api.domain.enumerations.supported_merchant import SupportedMerchant
-from framework.merchant_api.services.iconfiguration_manager import \
-    IConfigurationManager
+from merchant_api.domain.entities.merchant import Merchant
+from merchant_api.domain.enumerations.supported_merchant import \
+    SupportedMerchant
+from merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 
 class Config(BaseModel):

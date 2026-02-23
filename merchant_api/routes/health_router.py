@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 
-from framework.merchant_api.infrastructure.merchant_data_providers import get_merchant_data_providers
+from merchant_api.infrastructure.merchant_data_providers import \
+    get_merchant_data_providers
 
 HEALTH_ROUTER = Blueprint("HEALTH_ROUTER", __name__, url_prefix="/api/health")
 

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.merchant import Merchant
-from framework.merchant_api.domain.entities.scraped_product_offer import \
+from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.merchant import Merchant
+from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 
 

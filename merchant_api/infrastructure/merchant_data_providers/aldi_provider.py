@@ -8,19 +8,17 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 from bs4 import BeautifulSoup, ResultSet
+from domain.entities.merchant import Merchant
 from pydantic import ValidationError
 
-from domain.entities.merchant import Merchant
-from framework.merchant_api.domain.entities.aldi_product_offer import \
-    AldiProductOffer
-from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.scraped_product_offer import \
+from merchant_api.domain.entities.aldi_product_offer import AldiProductOffer
+from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
-from framework.merchant_api.domain.enumerations.supported_merchant import \
+from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.infrastructure.similarity import is_similar_phrase
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from merchant_api.infrastructure.similarity import is_similar_phrase
+from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
 
 
 class AldiProvider(IMerchantDataProvider):

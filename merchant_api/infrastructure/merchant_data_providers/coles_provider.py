@@ -5,19 +5,17 @@ import time
 from typing import List
 
 from bs4 import BeautifulSoup
+from domain.entities.merchant import Merchant
 from pydantic import ValidationError
 
-from domain.entities.merchant import Merchant
-from framework.merchant_api.domain.entities.coles_product_offer import \
-    ColesProductOffer
-from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.scraped_product_offer import \
+from merchant_api.domain.entities.coles_product_offer import ColesProductOffer
+from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
-from framework.merchant_api.domain.enumerations.supported_merchant import \
+from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from merchant_api.infrastructure.session import get_cached_session
+from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
 
 
 class ColesProvider(IMerchantDataProvider):

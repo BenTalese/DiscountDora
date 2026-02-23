@@ -8,15 +8,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask import Flask
 from flask_cors import CORS
-from framework.merchant_api.infrastructure.merchant_data_providers import \
-    get_merchant_data_providers
-from framework.merchant_api.infrastructure.middleware import MIDDLEWARE
-from framework.merchant_api.infrastructure.service_collection_builder import \
-    ServiceCollectionBuilder
-from framework.merchant_api.services.iconfiguration_manager import \
-    IConfigurationManager
 
 from dora_api.infrastructure.utils import get_attributes_ending_with
+from merchant_api.infrastructure.merchant_data_providers import \
+    get_merchant_data_providers
+from merchant_api.infrastructure.middleware import MIDDLEWARE
+from merchant_api.infrastructure.service_collection_builder import \
+    ServiceCollectionBuilder
+from merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 
 async def startup():

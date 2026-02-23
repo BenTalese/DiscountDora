@@ -5,9 +5,9 @@ from unittest.mock import ANY
 import requests
 from varname import nameof
 
-from framework.dora_api.routes.products.create_product_command import \
+from dora_api.routes.products.create_product_command import \
     CreateProductCommand
-from framework.dora_api.routes.products.update_product_command import \
+from dora_api.routes.products.update_product_command import \
     UpdateProductCommand
 from tests.support import is_valid_uuid
 

@@ -7,9 +7,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import List
 
-# from framework.web_scraper.types import ProductOffers
-
 from .generate import generate_email_body, generate_html, heml_test, mjml_test
+
+# from web_scraper.types import ProductOffers
+
 
 # TODO: Add requirements mjml or heml (npm install -g mjml)
 

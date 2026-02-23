@@ -6,9 +6,9 @@ import pytest
 import requests
 from varname import nameof
 
-from framework.dora_api.routes.stock_items.create_stock_item_command import \
+from dora_api.routes.stock_items.create_stock_item_command import \
     CreateStockItemCommand
-from framework.dora_api.routes.stock_items.update_stock_item_command import \
+from dora_api.routes.stock_items.update_stock_item_command import \
     UpdateStockItemCommand
 from tests.support import is_valid_datetime, is_valid_uuid
 

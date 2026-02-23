@@ -1,8 +1,7 @@
 from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify
 
-from framework.merchant_api.services.iconfiguration_manager import \
-    IConfigurationManager
+from merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 

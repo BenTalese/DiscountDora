@@ -9,19 +9,16 @@ from clapy import IServiceProvider
 from flask import Blueprint, current_app, jsonify, request
 from pydantic import BaseModel
 
-from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.scraped_product_offer import \
+from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
-from framework.merchant_api.domain.enumerations.supported_merchant import \
+from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.infrastructure.merchant_data_providers import \
+from merchant_api.infrastructure.merchant_data_providers import \
     get_healthy_merchant_data_providers
-from framework.merchant_api.infrastructure.similarity import \
-    get_similarity_score
-from framework.merchant_api.services.iconfiguration_manager import \
-    IConfigurationManager
-from framework.merchant_api.services.iproduct_image_provider import \
-    IProductImageProvider
+from merchant_api.infrastructure.similarity import get_similarity_score
+from merchant_api.services.iconfiguration_manager import IConfigurationManager
+from merchant_api.services.iproduct_image_provider import IProductImageProvider
 
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 

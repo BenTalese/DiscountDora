@@ -1,12 +1,12 @@
 import pathlib
-from datetime import datetime
 import tempfile
+from datetime import datetime
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 from rich.console import Console
 from rich.table import Table
 
-# from framework.web_scraper.types import ProductOffers
+# from web_scraper.types import ProductOffers
 
 _SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
 _TEMPLATE_DIR = _SCRIPT_DIR / 'templates'
@@ -99,7 +99,7 @@ def generate_html():
         },
     ]
     # env = Environment(
-    #     loader=PackageLoader('framework.emailer'),
+    #     loader=PackageLoader('emailer'),
     #     autoescape=select_autoescape(['html', 'xml'])
     # )
 
@@ -118,6 +118,7 @@ def generate_html():
 
 
 import subprocess
+
 
 def compile_mjml_from_file(file_path):
     try:
@@ -156,6 +157,7 @@ def compile_mjml_from_file(file_path):
 
 
 import subprocess
+
 
 def compile_heml_from_file(file_path):
     try:

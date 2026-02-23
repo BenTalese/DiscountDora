@@ -6,17 +6,16 @@ from typing import List
 
 from pydantic import ValidationError
 
-from framework.merchant_api.domain.entities.dora_product import DoraProduct
-from framework.merchant_api.domain.entities.merchant import Merchant
-from framework.merchant_api.domain.entities.scraped_product_offer import \
+from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.merchant import Merchant
+from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
-from framework.merchant_api.domain.entities.woolworths_product_offer import \
+from merchant_api.domain.entities.woolworths_product_offer import \
     WoolworthsProductOffer
-from framework.merchant_api.domain.enumerations.supported_merchant import \
+from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.imerchant_data_provider import \
-    IMerchantDataProvider
+from merchant_api.infrastructure.session import get_cached_session
+from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
 
 
 class WoolworthsProvider(IMerchantDataProvider):

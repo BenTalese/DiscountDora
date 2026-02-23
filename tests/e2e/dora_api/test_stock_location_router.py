@@ -4,9 +4,10 @@ from unittest.mock import ANY
 
 import requests
 
-from framework.dora_api.routes.stock_locations.create_stock_location_command import \
+from dora_api.routes.stock_locations.create_stock_location_command import \
     CreateStockLocationCommand
-from framework.dora_api.routes.stock_locations.update_stock_location_command import UpdateStockLocationCommand
+from dora_api.routes.stock_locations.update_stock_location_command import \
+    UpdateStockLocationCommand
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------

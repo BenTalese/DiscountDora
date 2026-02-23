@@ -3,9 +3,8 @@ from base64 import b64encode
 from pathlib import Path, PurePath
 from typing import Dict
 
-from framework.merchant_api.infrastructure.session import get_cached_session
-from framework.merchant_api.services.iproduct_image_provider import \
-    IProductImageProvider
+from merchant_api.infrastructure.session import get_cached_session
+from merchant_api.services.iproduct_image_provider import IProductImageProvider
 
 
 class ProductImageProvider(IProductImageProvider):

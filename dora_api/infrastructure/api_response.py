@@ -25,12 +25,12 @@ def business_rule_violation(error_message: str) -> Response:
         type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))
 
 
-def bad_request(error_message: str) -> Response:
+def bad_request(title: str, detail: str | None = None, errors: dict[str, list[str]] = {}) -> Response:
     response = jsonify(ProblemDetails(
-        detail = error_message,
-        errors = {},
+        detail = detail or "See errors property for more details.",
+        errors = errors,
         status = BAD_REQUEST,
-        title = error_message,
+        title = title,
         type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"))
     response.content_type = 'application/problem+json'
     response.status_code = BAD_REQUEST

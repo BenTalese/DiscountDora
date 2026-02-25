@@ -5,7 +5,7 @@ from dora_api.domain.types import AttributeChangeTracker
 
 class ValidationResult:
     errors: Dict[str, List[str]] = {}
-    summary: str | None = None
+    summary: str
 
     def add_error(self, property_name: str, error_message: str):
         self.errors.setdefault(property_name, []).append(error_message)

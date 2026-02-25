@@ -5,20 +5,17 @@ from dataclasses import asdict
 from http.client import BAD_REQUEST, NOT_FOUND
 from typing import Any, Dict, List, get_origin, get_type_hints
 
-from domain.entities.base_entity import EntityID
 from flask import Blueprint, Response, jsonify, request
 
+from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.types import AttributeChangeTracker
-from dora_api.infrastructure.api_response import ProblemDetails
+from dora_api.infrastructure.api_response import ProblemDetails, bad_request
 from dora_api.infrastructure.decorators import (REQUEST_BODYS_BY_ENDPOINT,
                                                 RESPONSES_BY_ENDPOINT)
 from dora_api.infrastructure.utils import try_parse_uuid
 from dora_api.infrastructure.validators import validate_inputs
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
-
-# TODO: 400 bad request validation for required inputs
-# TODO: data = request.form.to_dict() (DESERIALISE FORM DATA, maybe not needed)
 
 
 @MIDDLEWARE.before_app_request
@@ -44,31 +41,19 @@ def verify_endpoint_exists():
 
 @MIDDLEWARE.before_app_request
 def deserialise_web_request():
-    # TODO: Just call method from api_response.py....
-    def get_malformed_request_response(errors: Dict[str, str]):
-        _ProblemDetails = ProblemDetails(
-            detail = "See errors property for more details.",
-            status = BAD_REQUEST,
-            errors = errors,
-            title = "Malformed request. One or more request properties could not be deserialised.",
-            type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")
-
-        return _ProblemDetails
-
     if request.endpoint is None:
-        # TODO: 500 server error from api_response.py
-        raise RuntimeError("Request endpoint not set.")
+        return
 
     _RequestEndpoint = request.endpoint.split(".")[-1]
     if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
         _RequestData: dict = request.get_json()
         _DeserialisedRequestData: dict = {}
         _RequestBodySchema = get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items()
-        _Errors: Dict[str, str] = {}
+        _Errors: dict[str, list[str]] = {}
 
         for _Key, _ in _RequestData.items():
             if _Key not in get_type_hints(_RequestBodySchema).keys():
-                _Errors[_Key] = f"Unexpected value '{_Key}' not found in schema '{REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]}'."
+                _Errors[_Key] = [f"Unexpected value '{_Key}' not found in schema '{REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]}'."]
 
         for _AttributeName, _AttributeType in _RequestBodySchema:
             try:
@@ -88,11 +73,11 @@ def deserialise_web_request():
                     _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
 
             except (ValueError, TypeError, AttributeError) as e:
-                _Errors[_AttributeName] = f"Expected type '{_AttributeType}'. " + str(e)
+                _Errors[_AttributeName] = [f"Expected type '{_AttributeType}'. " + str(e)]
                 logging.getLogger(__name__).exception(e)
 
         if _Errors:
-            return jsonify(get_malformed_request_response(_Errors)), 400
+            return bad_request("Malformed request. One or more request properties could not be deserialised.", errors = _Errors)
 
         _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
 
@@ -106,8 +91,7 @@ def deserialise_web_request():
         _ValidationResult = validate_inputs(_DeserialisedRequest)
 
         if _ValidationResult is not None:
-            # TODO: Use api_response.py
-            return jsonify(_ValidationResult), 400
+            return bad_request(_ValidationResult.summary, errors = _ValidationResult.errors)
 
         setattr(request, "request_body", _DeserialisedRequest)
 
@@ -151,8 +135,7 @@ def apply_query_operations(response: Response):
         response.headers["Content-Type"] = "application/problem+json"
 
     if request.endpoint is None:
-        # TODO: 500 server error from api_response.py
-        raise RuntimeError("Request endpoint not set.")
+        return
 
     if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
         _ResponseData: List[Dict[str, Any]] = response.get_json()

@@ -48,11 +48,10 @@ def get_classes_ending_with(term: str, path_to_search: Path | str):
         _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
         for _File in _Files:
             _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
-            if _Module.__name__.lower().endswith(term.lower()):
-                [_Classes.append((_Class))
-                    for _, _Class
-                    in inspect.getmembers(_Module, inspect.isclass)
-                    if _Class.__module__ == _Module.__name__]
+            [_Classes.append((_Class))
+                for _, _Class
+                in inspect.getmembers(_Module, inspect.isclass)
+                if _Class.__name__.lower().endswith(term.lower())]
 
     return _Classes
 
@@ -71,7 +70,7 @@ def get_attributes_ending_with(term: str, path_to_search: Path | str):
         for _File in _Files:
             _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
             for _AttributeName, _AttributeValue in inspect.getmembers(_Module):
-                if _AttributeName.lower().endswith(term.lower()):
+                if _AttributeName.lower().endswith(term.lower()) and _AttributeValue not in _Attributes:
                     _Attributes.append((_AttributeValue))
 
     return _Attributes

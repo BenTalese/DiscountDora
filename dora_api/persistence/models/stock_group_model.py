@@ -1,28 +1,36 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import Column, String
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy_utils import UUIDType
 
-from domain.entities.base_entity import EntityID
-from domain.entities.stock_group import StockGroup
-from framework.dora_api.app import db
+from dora_api.app import db
+from dora_api.domain.entities.base_entity import EntityID
+from dora_api.domain.entities.stock_group import StockGroup
 
 
 class StockGroupModel(db.Model):
     __entity__ = StockGroup
     __tablename__ = StockGroup.__name__
 
-    id = Column(
+    id: Mapped[UUID] = mapped_column(
         UUIDType,
         primary_key=True,
-        default=uuid4)
+        default=uuid4
+    )
 
-    name = Column(String(255))
+    name: Mapped[str] = mapped_column(String(255))
 
     def to_entity(self) -> StockGroup:
-        return StockGroup(
-            id = EntityID(self.id),
-            name = self.name)
+        _Entity = StockGroup(
+            name = self.name
+        )
+        _Entity.id = EntityID(self.id)
+        return _Entity
 
-    def get_key(self):
-        return self.id
+    @classmethod
+    def from_entity(cls, stock_group: StockGroup) -> 'StockGroupModel':
+        _Model = cls()
+        _Model.id = stock_group.id.value
+        _Model.name = stock_group.name
+        return _Model

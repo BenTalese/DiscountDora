@@ -1,31 +1,40 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy_utils import UUIDType
 
-from domain.entities.base_entity import EntityID
-from domain.entities.stock_level import StockLevel
-from framework.dora_api.app import db
+from dora_api.app import db
+from dora_api.domain.entities.base_entity import EntityID
+from dora_api.domain.entities.stock_level import StockLevel
 
 
 class StockLevelModel(db.Model):
     __entity__ = StockLevel
     __tablename__ = StockLevel.__name__
 
-    id = Column(
+    id: Mapped[UUID] = mapped_column(
         UUIDType,
         primary_key=True,
-        default=uuid4)
+        default=uuid4
+    )
 
-    name = Column(String(255))
+    name: Mapped[str] = mapped_column(String(255))
 
-    sequence = Column(Integer)
+    sequence: Mapped[int] = mapped_column(Integer)
 
     def to_entity(self) -> StockLevel:
-        return StockLevel(
-            id = EntityID(self.id),
+        _Entity = StockLevel(
             name = self.name,
-            sequence = self.sequence)
+            sequence = self.sequence
+        )
+        _Entity.id = EntityID(self.id)
+        return _Entity
 
-    def get_key(self):
-        return self.id
+    @classmethod
+    def from_entity(cls, stock_level: StockLevel) -> 'StockLevelModel':
+        _Model = cls()
+        _Model.id = stock_level.id.value
+        _Model.name = stock_level.name
+        _Model.sequence = stock_level.sequence
+        return _Model

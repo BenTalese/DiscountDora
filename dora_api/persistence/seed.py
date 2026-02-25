@@ -1,14 +1,13 @@
 from datetime import UTC, datetime
 
-from domain.entities.merchant import Merchant
-from domain.entities.product import Product
-from domain.entities.product_offer import ProductOffer
-from domain.entities.shopping_list import ShoppingList
-from domain.entities.stock_item import StockItem
-from domain.entities.stock_level import StockLevel
-from domain.entities.stock_location import StockLocation
-from domain.entities.user import User
-
+from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.product import Product
+from dora_api.domain.entities.product_offer import ProductOffer
+from dora_api.domain.entities.shopping_list import ShoppingList
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.entities.user import User
 from dora_api.infrastructure.utils import get_container
 from dora_api.services.irepository import IRepository
 

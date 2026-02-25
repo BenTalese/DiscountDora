@@ -4,15 +4,15 @@ import re
 from typing import Any, Callable, Generic, List
 from uuid import uuid4
 
-from domain.entities.base_entity import EntityID
-from domain.generics import TEntity
 from flask import Flask
 from sqlalchemy import Select, select
 from sqlalchemy.orm import joinedload
 from varname import nameof
 
 from dora_api.app import db
+from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.exceptions import PersistenceError
+from dora_api.domain.generics import TEntity
 from dora_api.infrastructure.bool_operation import BoolOperation, Equal
 from dora_api.services.iquerybuilder import IQueryBuilder
 from dora_api.services.irepository import IRepository

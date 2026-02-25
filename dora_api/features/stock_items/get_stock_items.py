@@ -4,6 +4,8 @@ import logging
 from typing import List
 from uuid import UUID
 
+from varname import nameof
+
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -36,7 +38,7 @@ class GetStockItemsHandler:
         self.repository = repository
 
     def handle(self) -> List[StockItemDto]:
-        return self.repository.get().project(StockItemDto.from_entity)
+        return self.repository.get().include(nameof(StockItem.stock_level)).project(StockItemDto.from_entity)
 
 
 @STOCK_ITEM_ROUTER.route("")

@@ -29,6 +29,7 @@ class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
 
     def add(self, entity: TEntity):
         # TODO: Move this to startup and validate all models in one go
+        # TODO: Test on start that all entity properties have been configured (do name match)
         if _UnconfiguredAttributes := self._get_entity_unconfigured_attributes(entity):
             raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. '
                                    + f'Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
@@ -56,9 +57,6 @@ class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
         db.session.add(self._convert_to_model(entity))
 
     # end Interface Methods
-
-    # TODO: Use class for options instead of .get("some string")
-    # TODO: Test on start that all entity properties have been configured (do name match)
 
     def _convert_to_model(self, entity: TEntity):
         return self._get_model_type(type(entity)).from_entity(entity)
@@ -108,7 +106,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         if nameof(attribute_to_join) not in self.join_paths.keys():
             self.join_paths[str(attribute_to_join)] = [attribute_to_join]
 
+        # TODO: Idk what this is for, but also looks like it doesn't work. Output is "attribute_to_join"
         self.included_attribute_path = nameof(attribute_to_join)
+
         self.included_model = self._get_model_type_from_attribute(self.model_class, attribute_name)
         return self
 
@@ -118,7 +118,8 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
         return _Result[0] if _Result else None
 
     def project(self, projection_method: Callable) -> List[Any]:
-        return [projection_method(entity) for entity in self._execute()]
+        _Results = self._execute()
+        return [projection_method(entity) for entity in _Results]
 
     # TODO: Maybe this'd be useful some day?
     # def select(self, *columns: ColumnElement[Any]) -> 'IQueryBuilder[TEntity]':
@@ -170,9 +171,9 @@ class SqlAlchemyQueryBuilder(IQueryBuilder, Generic[TEntity]):
 
     def _execute(self) -> List[TEntity]:
         with self._context:
-            self.query = self.query.options(
-                *(joinedload(join_path) for join_path in self.join_paths.values())
-            )
+            # TODO: joinedload? Is this correct for every load? There's other methods available
+            for join_path in self.join_paths.values():
+                self.query = self.query.options(joinedload(*join_path))
 
             print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
             models_from_query_result = [row_result[0] for row_result in db.session.execute(self.query).unique().all()]

@@ -81,7 +81,7 @@ def configure_logger(log_level: int):
 
 
 def register_routers():
-    for _Router in get_attributes_ending_with('router', Path() / 'dora_api' / 'features' / 'routers'):
+    for _Router in get_attributes_ending_with('router', Path() / 'dora_api' / 'features'):
         app.register_blueprint(_Router)
 
 

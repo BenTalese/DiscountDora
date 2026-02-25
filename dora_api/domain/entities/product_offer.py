@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from domain.entities.base_entity import BaseEntity
+from dora_api.domain.entities.base_entity import BaseEntity
 
 
 @dataclass(slots=True)

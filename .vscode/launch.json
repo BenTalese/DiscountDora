@@ -5,7 +5,7 @@
             "name": "DAPI",
             "type": "debugpy",
             "request": "launch",
-            "module": "framework.dora_api.startup",
+            "module": "dora_api.startup",
             "console": "integratedTerminal",
             "justMyCode": true
         },
@@ -13,7 +13,7 @@
             "name": "MAPI",
             "type": "debugpy",
             "request": "launch",
-            "module": "framework.merchant_api.startup",
+            "module": "merchant_api.startup",
             "console": "integratedTerminal",
             "justMyCode": true
         },
@@ -21,7 +21,7 @@
             "name": "Emailer",
             "type": "debugpy",
             "request": "launch",
-            "program": "framework.emailer.startup",
+            "program": "emailer.startup",
             "console": "integratedTerminal",
             "justMyCode": true
         },

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from domain.entities.base_entity import BaseEntity
-from domain.entities.stock_group import StockGroup
-from domain.entities.stock_level import StockLevel
-from domain.entities.stock_location import StockLocation
+from dora_api.domain.entities.base_entity import BaseEntity
+from dora_api.domain.entities.stock_group import StockGroup
+from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_location import StockLocation
 
 
 @dataclass(slots=True)

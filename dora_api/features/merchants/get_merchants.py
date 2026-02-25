@@ -1,10 +1,9 @@
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
-from domain.entities.merchant import Merchant
-
+from dora_api.domain.entities.merchant import Merchant
 from dora_api.features.routers import MERCHANT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response

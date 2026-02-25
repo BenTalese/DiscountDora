@@ -1,205 +1,214 @@
 import inspect
 import re
-from typing import Optional, Tuple, Type
+from typing import Any, Dict, Optional, Type, get_args, get_origin
 
-from dependency_injector import containers
+from dependency_injector import containers, providers
 
 from dora_api.domain.exceptions import DependencyConstructionError, DuplicateServiceError
 from dora_api.domain.generics import TService
 
 
-class DependencyContainer(containers.DeclarativeContainer):
-    # TODO: This goes with the AI code below
-    # def __init__(self):
-    #     self._services: Dict[Type, providers.Provider] = {}
+class DependencyContainer:
+    """
+    A thin, correct wrapper around dependency_injector's DynamicContainer.
 
-    def inject(self, service: type[TService]) -> TService:
-        '''
-        Summary
-        -------
-        Retrieves the specified service from the dependency_injector container.
+    Design principles:
+    - dependency_injector's container is the sole source of truth for providers.
+    - Providers are wired to other providers, never to resolved instances.
+    - This class manages only the type → provider_name mapping.
+    - Generic aliases (e.g. IRepository[Merchant]) are fully supported and
+      produce unique, collision-free provider names.
+    """
 
-        Parameters
-        ----------
-        `service` The service to be retrieved.
+    def __init__(self) -> None:
+        self._container = containers.DynamicContainer()
+        # Maps registered type (interface or concrete, including generic aliases)
+        # to the attribute name used on the container. Contains no resolved objects.
+        self._type_to_name: Dict[Any, str] = {}
 
-        Exceptions
-        ----------
-        Raises a `LookupError` if the service could not be resolved.
-
-        Returns
-        -------
-        An instance of the requested service type with a lifetime as defined on the container.
-
-        '''
-        _ServiceName, _GenerationSuccess = self._try_generate_service_name(service)
-
-        if _GenerationSuccess:
-            _Service = self.providers.get(_ServiceName)
-
-            if _Service is not None:
-                try:
-                    return _Service()
-                except TypeError as ex:
-                    raise DependencyConstructionError(
-                        f"Unable to construct service '{service.__name__}'. "
-                        "Make sure all required services are registered in the DI "
-                        "container, and make sure all services implementing an "
-                        "interface are implemented correctly. "
-                        f"See inner exception: {ex}.")
-
-        raise LookupError(f"Unable to retrieve '{service.__name__}' from DI container.")
-
-    # TODO: Get inspiration from this AI generated version
-    # def inject2(self, service_type: Type[TService], **runtime_overrides) -> TService:
-    #     """
-    #     Retrieve a service from the container.
-
-    #     Optional runtime_overrides can override constructor parameters.
-    #     """
-    #     if service_type not in self._services:
-    #         raise LookupError(f"Service not registered: {service_type.__name__}")
-
-    #     provider_instance = self._services[service_type]
-
-    #     if runtime_overrides:
-    #         # Override parameters at runtime
-    #         return provider_instance(**runtime_overrides)
-    #     else:
-    #         return provider_instance()
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def register_service(
-            self,
-            provider_method: type,
-            concrete_type: type,
-            interface_type: Optional[Type] = None,  # type: ignore
-            *args,
-            **kwargs) -> None:
-        '''
-        Summary
-        -------
-        Registers a service in the dependency_injector container with its dependencies. If dependencies of the service
-        are detected to be registered in the container, they will be linked to the service automatically. Dependencies
-        are detected via the type hints of the service's constructor's parameters.
+        self,
+        provider_method: Type[providers.Provider],
+        concrete_type: Type,
+        interface_type: Optional[Any] = None,
+        **explicit_kwargs,
+    ) -> None:
+        """
+        Register a service with automatic constructor wiring.
 
         Parameters
         ----------
-        `provider_method` The lifetime of the service, defined using the providers module from dependency_injector.\n
-        `concrete_type` The concrete implementation of the service being registered. Can be registered on its own.\n
-        `interface_type` The optional interface that the concrete type implements.\n
-        `*args` Any required dependencies for this service to be constructed that are not registered in the
-        dependency_injector container.
+        provider_method:
+            A dependency_injector provider class — providers.Singleton,
+            providers.Factory, etc. Defines the service lifetime.
+        concrete_type:
+            The concrete class to instantiate. May be a generic alias
+            (e.g. SqlAlchemyRepository[Merchant]).
+        interface_type:
+            Optional. If supplied, the service is resolved under this type.
+            Supports generic aliases (e.g. IRepository[Merchant]).
+        **explicit_kwargs:
+            Constructor arguments that are not registered services and cannot
+            be auto-wired — config values, primitives, model classes, etc.
+            These are passed directly to the provider at construction time.
 
-        Exceptions
-        ----------
-        Raises `DuplicateServiceError` if the dependency_injector container already contains a service of the same type.\n
-        Raises `ValueError` if unable to generate a service name for the service.
+        Raises
+        ------
+        DuplicateServiceError
+            If a service is already registered under the same type.
+        """
+        registration_type = interface_type if interface_type is not None else concrete_type
 
-        '''
-        _DependencyName, _GenerationSuccess = self._try_generate_service_name(interface_type or concrete_type)
+        if registration_type in self._type_to_name:
+            raise DuplicateServiceError(
+                f"Service already registered: {self._format_type(registration_type)}"
+            )
 
-        if not _GenerationSuccess:
-            raise ValueError(f"Failed to generate service name for {interface_type or concrete_type}.")
+        provider_name = self._build_provider_name(registration_type)
 
-        if hasattr(self, _DependencyName):
-            raise DuplicateServiceError(f"An already registered service is conflicting with {interface_type or concrete_type}.")
+        # Resolve the raw class from a generic alias for instantiation.
+        # providers.Factory(SqlAlchemyRepository[Merchant]) won't work —
+        # dependency_injector needs the unparameterised class. The generic
+        # type argument is captured separately via explicit_kwargs if needed.
+        instantiation_class = get_origin(concrete_type) or concrete_type
 
-        _ConstructorDependencies = [_Param for _Param in inspect.signature(concrete_type.__init__).parameters.values()  # type: ignore
-                                    if _Param.annotation != inspect.Parameter.empty
-                                    and self._has_service(_Param.annotation)]
+        auto_wired_providers = self._resolve_constructor_providers(concrete_type)
 
-        if not _ConstructorDependencies:
-            setattr(self, _DependencyName, provider_method(concrete_type, *args, **kwargs))
-        else:
-            _SubDependencies = []
-            for _Dependency in _ConstructorDependencies:
-                _SubDependencyName, _ = self._try_generate_service_name(_Dependency.annotation)
-                _SubDependencies.append(getattr(self, _SubDependencyName))
+        # explicit_kwargs override auto-wired providers, giving the caller
+        # intentional control without fighting the framework.
+        wired_kwargs = {**auto_wired_providers, **explicit_kwargs}
 
-            setattr(self, _DependencyName, provider_method(concrete_type, *_SubDependencies, *args, **kwargs))
+        provider_instance = provider_method(instantiation_class, **wired_kwargs)  # type: ignore
+        setattr(self._container, provider_name, provider_instance)
+        self._type_to_name[registration_type] = provider_name
 
-    # TODO: Get inspiration from this AI generated version
-    # def register_service2(
-    #     self,
-    #     provider_method: type,
-    #     concrete_type: Type,
-    #     interface_type: Optional[Type] = None,
-    #     **runtime_kwargs
-    # ) -> None:
-    #     """
-    #     Register a service in the container.
-
-    #     Parameters
-    #     ----------
-    #     provider_method : providers.Factory, Singleton, etc.
-    #     concrete_type : The concrete implementation class
-    #     interface_type : Optional interface type for lookup
-    #     runtime_kwargs : Any constructor arguments not registered in container
-    #     """
-
-    #     service_type = interface_type or concrete_type
-
-    #     if service_type in self._services:
-    #         raise DuplicateServiceError(f"Service already registered: {service_type.__name__}")
-
-    #     constructor_params = inspect.signature(concrete_type.__init__).parameters
-    #     auto_wired_kwargs = {}
-    #     for param_name, param in constructor_params.items():
-    #         if param_name == "self":
-    #             continue
-    #         annotation = param.annotation
-    #         if annotation in self._services:
-    #             auto_wired_kwargs[param_name] = self._services[annotation]()
-
-    #     # Merge runtime overrides
-    #     auto_wired_kwargs.update(runtime_kwargs)
-
-    #     # Create provider
-    #     provider_instance = provider_method(concrete_type, **auto_wired_kwargs)
-    #     self._services[service_type] = provider_instance
-    #     setattr(self._container, service_type.__name__, provider_instance)
-
-    def _try_generate_service_name(self, service: type) -> Tuple[str, bool]:
-        '''
-        Summary
-        -------
-        Generates a service name from a given service type by extracting the fully qualified
-        name of the service, then replacing dots with underscores.
+    def inject(self, service_type: Any, **runtime_overrides) -> TService:  # type: ignore
+        """
+        Resolve a registered service from the container.
 
         Parameters
         ----------
-        `service` The service to generate a name for and true on success, otherwise empty string and false.
+        service_type:
+            The type to resolve — must match what was passed as interface_type
+            (or concrete_type) at registration. Supports generic aliases.
+        **runtime_overrides:
+            Per-call constructor overrides forwarded to the provider.
+            Useful with Factory providers. Singleton providers ignore overrides
+            after the first resolution — this is dependency_injector's behaviour.
 
-        Returns
-        -------
-        The generated name of the service.
+        Raises
+        ------
+        LookupError
+            If no service is registered under the given type.
+        DependencyConstructionError
+            If the provider fails to construct the service.
+        """
+        if service_type not in self._type_to_name:
+            raise LookupError(
+                f"No service registered for '{self._format_type(service_type)}'. "
+                "Ensure it has been registered before calling inject()."
+            )
 
-        '''
-        _TypeMatch = re.search(r"(?<=')[^']+(?=')", str(service))
+        provider_name = self._type_to_name[service_type]
+        provider_instance: providers.Provider = getattr(self._container, provider_name)
 
-        if not _TypeMatch:
-            return "", False
+        try:
+            return provider_instance(**runtime_overrides)
+        except TypeError as ex:
+            raise DependencyConstructionError(
+                f"Failed to construct '{self._format_type(service_type)}'. "
+                "Verify all non-injectable constructor parameters are supplied "
+                "via explicit_kwargs at registration or runtime_overrides at resolution. "
+                f"Inner exception: {ex}"
+            ) from ex
 
-        return _TypeMatch.group().replace('.', '_'), True
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-    def _has_service(self, service: type) -> bool:
-        '''
-        Summary
-        -------
-        Checks if a service exists in the dependency_injector container.
+    def _resolve_constructor_providers(
+        self, concrete_type: Any
+    ) -> Dict[str, providers.Provider]:
+        """
+        Inspect the __init__ of concrete_type and return a dict mapping
+        parameter names to their registered provider objects for any parameter
+        whose annotation is registered in this container.
 
-        Parameters
-        ----------
-        `service` The service that is being checked for existence in the container.
+        Handles both plain types and generic aliases in annotations.
+        Returns provider objects — never resolved instances. This is the
+        invariant that keeps dependency_injector's lifetime semantics intact.
+        """
+        auto_wired: Dict[str, providers.Provider] = {}
 
-        Returns
-        -------
-        True if the service could be found, false otherwise.
+        # Unwrap generic alias to get the inspectable class
+        inspectable = get_origin(concrete_type) or concrete_type
 
-        '''
-        _ServiceName, _GenerationSuccess = self._try_generate_service_name(service)
+        try:
+            sig = inspect.signature(inspectable.__init__)
+        except (ValueError, TypeError):
+            return auto_wired
 
-        if _GenerationSuccess:
-            return hasattr(self._container, _ServiceName)
+        for param_name, param in sig.parameters.items():
+            if param_name == "self":
+                continue
+            annotation = param.annotation
+            if annotation is inspect.Parameter.empty:
+                continue
+            if annotation in self._type_to_name:
+                provider_name = self._type_to_name[annotation]
+                # Fetch the Provider object itself — do NOT call it.
+                # dependency_injector recognises provider arguments and
+                # resolves them at construction time, preserving lifetimes.
+                auto_wired[param_name] = getattr(self._container, provider_name)
 
-        return False
+        return auto_wired
+
+    def _build_provider_name(self, service_type: Any) -> str:
+        """
+        Derive a unique, stable attribute name for a type, including full
+        support for generic aliases such as IRepository[Merchant].
+
+        For plain types:
+            dora_api.domain.foo.IFooService
+            → dora_api_domain_foo_IFooService
+
+        For generic aliases:
+            dora_api.domain.IRepository[dora_api.domain.Merchant]
+            → dora_api_domain_IRepository__dora_api_domain_Merchant_
+
+        The recursive approach means arbitrarily nested generics
+        (e.g. Dict[str, List[Merchant]]) also produce unique names,
+        though such cases are unlikely in a DI context.
+        """
+        origin = get_origin(service_type)
+
+        if origin is not None:
+            # Generic alias — combine origin name with stringified args
+            origin_name = self._build_provider_name(origin)
+            args = get_args(service_type)
+            args_name = "_".join(self._build_provider_name(a) for a in args)
+            return f"{origin_name}__{args_name}_"
+
+        # Plain type — use fully qualified name
+        qualified = getattr(service_type, "__qualname__", None) or getattr(service_type, "__name__", "unknown")
+        module = getattr(service_type, "__module__", "") or ""
+        full = f"{module}.{qualified}" if module else qualified
+        return re.sub(r"[^a-zA-Z0-9_]", "_", full)
+
+    @staticmethod
+    def _format_type(service_type: Any) -> str:
+        """Human-readable type name for error messages, including generic aliases."""
+        origin = get_origin(service_type)
+        if origin is not None:
+            args = get_args(service_type)
+            origin_name = getattr(origin, "__name__", str(origin))
+            args_str = ", ".join(getattr(a, "__name__", str(a)) for a in args)
+            return f"{origin_name}[{args_str}]"
+        return getattr(service_type, "__name__", str(service_type))
+
+    def _is_registered(self, service_type: Any) -> bool:
+        return service_type in self._type_to_name

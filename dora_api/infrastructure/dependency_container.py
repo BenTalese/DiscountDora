@@ -86,7 +86,7 @@ class DependencyContainer:
         setattr(self._container, provider_name, provider_instance)
         self._type_to_name[registration_type] = provider_name
 
-    def inject(self, service_type: Any, **runtime_overrides) -> TService:  # type: ignore
+    def inject(self, service_type: type[TService], **runtime_overrides) -> TService:  # type: ignore
         """
         Resolve a registered service from the container.
 

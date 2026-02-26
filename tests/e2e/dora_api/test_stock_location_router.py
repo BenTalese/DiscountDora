@@ -4,10 +4,9 @@ from unittest.mock import ANY
 
 import requests
 
-from dora_api.routes.stock_locations.create_stock_location_command import \
-    CreateStockLocationCommand
-from dora_api.routes.stock_locations.update_stock_location_command import \
-    UpdateStockLocationCommand
+from dora_api.domain.types import AttributeChangeTracker
+from dora_api.features.stock_locations.create_stock_location import CreateStockLocationRequest
+from dora_api.features.stock_locations.update_stock_location import UpdateStockLocationRequest
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -20,7 +19,7 @@ base_route = 'http://localhost:5170/api/stock-locations'
 
 
 def test__create_stock_location_async__CreatingStockLocationWithAllAttributes__StockLocationCreated(api):
-    _Request = asdict(CreateStockLocationCommand(name = 'Freezer'))
+    _Request = asdict(CreateStockLocationRequest(name = 'Freezer'))
 
     _Response = requests.post(base_route, json = _Request)
 
@@ -31,7 +30,7 @@ def test__create_stock_location_async__CreatingStockLocationWithAllAttributes__S
 
 
 def test__create_stock_location_async__StockLocationAlreadyExists__IsBusinessRuleViolation(api):
-    _Request = asdict(CreateStockLocationCommand(name = 'frEEzer'))
+    _Request = asdict(CreateStockLocationRequest(name = 'frEEzer'))
 
     _Response = requests.post(base_route, json = _Request)
 
@@ -265,7 +264,7 @@ def test__update_stock_location_async__EmptyUpdate__StockLocationUnaffected(api)
 def test__update_stock_location_async__UpdatingAllAttributes__AllAttributesUpdated(api):
     _StockLocationToUpdate = requests.get(f'{base_route}/filter=name:eq:pantry').json()[0]
 
-    _ProductRequest = asdict(UpdateStockLocationCommand(name = "Fridge"))
+    _ProductRequest = asdict(UpdateStockLocationRequest(name = AttributeChangeTracker("Fridge")))
 
     _PatchResponse = requests.patch(f"{base_route}/{_StockLocationToUpdate['stock_location_id']}", json = _ProductRequest)
     _StockLocationAfterPatchOperation = requests \

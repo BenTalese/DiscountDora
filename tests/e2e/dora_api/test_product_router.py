@@ -5,10 +5,9 @@ from unittest.mock import ANY
 import requests
 from varname import nameof
 
-from dora_api.routes.products.create_product_command import \
-    CreateProductCommand
-from dora_api.routes.products.update_product_command import \
-    UpdateProductCommand
+from dora_api.domain.types import AttributeChangeTracker
+from dora_api.features.products.create_product import CreateProductRequest
+from dora_api.features.products.update_product import UpdateProductRequest
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -21,7 +20,7 @@ base_route = 'http://localhost:5170/api/products'
 
 
 def test__create_product_async__CreatingProductWithAllAttributes__ProductCreated(api):
-    _ProductRequest = asdict(CreateProductCommand(
+    _ProductRequest = asdict(CreateProductRequest(
         brand = "Test",
         image = None,
         is_active = True,
@@ -46,20 +45,20 @@ def test__create_product_async__CreatingProductWithAllAttributes__ProductCreated
 
 
 def test__create_product_async__CreatingProductWithIncorrectDataTypes__CannotBeDeserialised(api):
-    _ProductRequest = asdict(CreateProductCommand(
-        brand = 555,
-        image = 234,
-        is_active = "AAA",
-        is_available = "BBB",
-        merchant_name = True,
-        merchant_stockcode = 2.3,
-        name = 2.4,
-        price_now = "CCC",
-        price_was = "DDD",
-        size = 555,
-        size_unit = 2.5,
-        size_value = "EEE",
-        web_url = False
+    _ProductRequest = asdict(CreateProductRequest(
+        brand = 555,  # type: ignore
+        image = 234,  # type: ignore
+        is_active = "AAA",  # type: ignore
+        is_available = "BBB",  # type: ignore
+        merchant_name = True,  # type: ignore
+        merchant_stockcode = 2.3,  # type: ignore
+        name = 2.4,  # type: ignore
+        price_now = "CCC",  # type: ignore
+        price_was = "DDD",  # type: ignore
+        size = 555,  # type: ignore
+        size_unit = 2.5,  # type: ignore
+        size_value = "EEE",  # type: ignore
+        web_url = False  # type: ignore
     ))
 
     _Response = requests.post(base_route, json = _ProductRequest)
@@ -80,7 +79,7 @@ def test__create_product_async__CreatingProductWithIncorrectDataTypes__CannotBeD
 
 
 def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__ProductCreated(api):
-    _ProductRequest = CreateProductCommand(
+    _ProductRequest = CreateProductRequest(
         brand = "Test",
         image = None,
         is_active = True,
@@ -108,7 +107,7 @@ def test__create_product_async__CreatingProductWithOnlyRequiredAttributes__Produ
 
 
 def test__create_product_async__ProductAlreadyExists__IsBusinessRuleViolation(api):
-    _ProductRequest = asdict(CreateProductCommand(
+    _ProductRequest = asdict(CreateProductRequest(
         brand = "Test",
         image = None,
         is_active = True,
@@ -290,11 +289,11 @@ def test__update_product_async__EmptyUpdate__ProductUnaffected(api):
 def test__update_product_async__UpdatingAllAttributes__AllAttributesUpdated(api):
     _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:51741').json()[0]
 
-    _ProductRequest = asdict(UpdateProductCommand(
-        is_active = False,
-        is_available = False,
-        price_now = 1.0,
-        price_was = 12.8
+    _ProductRequest = asdict(UpdateProductRequest(
+        is_active = AttributeChangeTracker(False),
+        is_available = AttributeChangeTracker(False),
+        price_now = AttributeChangeTracker(1.0),
+        price_was = AttributeChangeTracker(12.8)
     ))
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)

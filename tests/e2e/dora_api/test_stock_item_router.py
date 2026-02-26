@@ -6,10 +6,9 @@ import pytest
 import requests
 from varname import nameof
 
-from dora_api.routes.stock_items.create_stock_item_command import \
-    CreateStockItemCommand
-from dora_api.routes.stock_items.update_stock_item_command import \
-    UpdateStockItemCommand
+from dora_api.domain.types import AttributeChangeTracker
+from dora_api.features.stock_items.create_stock_item import CreateStockItemRequest
+from dora_api.features.stock_items.update_stock_item import UpdateStockItemRequest
 from tests.support import is_valid_datetime, is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -32,7 +31,7 @@ def stock_location_id():
 
 
 def test__create_stock_item_async__CreatingStockItemWithAllAttributes__StockItemCreated(api, stock_level_id, stock_location_id):
-    _StockItemRequest = asdict(CreateStockItemCommand(
+    _StockItemRequest = asdict(CreateStockItemRequest(
         name = 'Peters Neopolitan Ice Cream',
         stock_level_id = stock_level_id,
         stock_location_id = stock_location_id
@@ -47,10 +46,10 @@ def test__create_stock_item_async__CreatingStockItemWithAllAttributes__StockItem
 
 
 def test__create_stock_item_async__CreatingStockItemWithIncorrectDataTypes__CannotBeDeserialised(api):
-    _StockItemRequest = asdict(CreateStockItemCommand(
-        name = True,
-        stock_level_id = 5,
-        stock_location_id = "aaa"
+    _StockItemRequest = asdict(CreateStockItemRequest(
+        name = True,  # type: ignore
+        stock_level_id = 5,  # type: ignore
+        stock_location_id = "aaa"  # type: ignore
     ))
 
     _Response = requests.post(base_route, json = _StockItemRequest)
@@ -70,7 +69,7 @@ def test__create_stock_item_async__CreatingStockItemWithIncorrectDataTypes__Cann
 
 
 def test__create_stock_item_async__CreatingStockItemWithOnlyRequiredAttributes__StockItemCreated(api, stock_level_id):
-    _StockItemRequest = CreateStockItemCommand(
+    _StockItemRequest = CreateStockItemRequest(
         name = "Freddo Brownie Ice Cream",
         stock_level_id = stock_level_id,
         stock_location_id = None)
@@ -85,7 +84,7 @@ def test__create_stock_item_async__CreatingStockItemWithOnlyRequiredAttributes__
 
 
 def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolation(api, stock_level_id, stock_location_id):
-    _StockItemRequest = asdict(CreateStockItemCommand(
+    _StockItemRequest = asdict(CreateStockItemRequest(
         name = 'PeTers NeoPOLitan IcE CrEam',
         stock_level_id = stock_level_id,
         stock_location_id = stock_location_id
@@ -124,10 +123,10 @@ def test__create_stock_item_async__EmptyRequest__IsRequiredInputsValidationFailu
 
 def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure(api):
     _FakeID = str(uuid.uuid4())
-    _StockItemRequest = asdict(CreateStockItemCommand(
+    _StockItemRequest = asdict(CreateStockItemRequest(
         name = 'Halo Top Ice Cream',
-        stock_level_id = _FakeID,
-        stock_location_id = _FakeID
+        stock_level_id = _FakeID,  # type: ignore
+        stock_location_id = _FakeID  # type: ignore
     ))
 
     _Response = requests.post(base_route, json = _StockItemRequest)
@@ -362,8 +361,8 @@ def test__update_stock_item_async__EmptyUpdate__StockItemUnaffected(api):
 def test__update_stock_item_async__UpdatingAllAttributes__AllAttributesUpdated(api, stock_level_id, stock_location_id):
     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
 
-    _ProductRequest = asdict(UpdateStockItemCommand(
-        name = "Old Soggy Chips",
+    _ProductRequest = asdict(UpdateStockItemRequest(
+        name = AttributeChangeTracker("Old Soggy Chips"),
         stock_location_id = stock_location_id,
         stock_level_id = stock_level_id
     ))

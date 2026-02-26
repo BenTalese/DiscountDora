@@ -17,7 +17,7 @@ from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.services.irepository import IRepository
 
 
-@dataclass(init=False, slots=True)
+@dataclass(slots=True)
 class CreateProductRequest:
     brand: str | None
     image: bytes | None
@@ -30,7 +30,7 @@ class CreateProductRequest:
     price_was: float
     size: str
     size_unit: str
-    size_value: float | None
+    size_value: float
     web_url: str | None
 
 

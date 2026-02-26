@@ -14,7 +14,7 @@ from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.services.irepository import IRepository
 
 
-@dataclass(init=False, slots=True)
+@dataclass(slots=True)
 class CreateStockLocationRequest:
     name: str
 

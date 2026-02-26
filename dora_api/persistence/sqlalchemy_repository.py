@@ -2,7 +2,7 @@ import inspect
 import os
 import re
 from typing import Any, Callable, Generic, List
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from flask import Flask
 from sqlalchemy import Select, select
@@ -33,7 +33,8 @@ class SqlAlchemyRepository(IRepository[TEntity], Generic[TEntity]):
         if _UnconfiguredAttributes := self._get_entity_unconfigured_attributes(entity):
             raise PersistenceError(f'{type(entity).__name__} entity is not valid for saving. '
                                    + f'Attributes require configuration: {", ".join(_UnconfiguredAttributes)}.')
-        if entity.id.value:
+
+        if entity.id.value != UUID(int=0):
             raise PersistenceError("Entity already persisted.")
 
         entity.id = EntityID(uuid4())

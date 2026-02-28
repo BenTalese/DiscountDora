@@ -39,7 +39,7 @@ def bad_request(title: str, detail: str | None = None, errors: dict[str, list[st
 
 # FIXME: query parameter needs to update once querying is solved (currently "= result.id" will be incorrect)
 def created(resource_id: UUID, get_route: str, id_attribute_name: str) -> Response:
-    response = jsonify(resource_id)
+    response = jsonify({'id': resource_id})
     response.status_code = CREATED
     response.headers['location'] = url_for(get_route, query = f'filter={id_attribute_name}:eq:{resource_id}', _external=True)
     return response

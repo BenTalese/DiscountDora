@@ -12,7 +12,7 @@ from dora_api.domain.exceptions import PersistenceError
 from dora_api.domain.generics import TEntity
 from dora_api.persistence.bool_operation import BoolOperation, Equal
 from dora_api.persistence.field import Field
-from dora_api.persistence.mappings import _mapper_registry
+from dora_api.persistence.table_mappings import _mapper_registry
 
 
 class SqlAlchemyRepository:

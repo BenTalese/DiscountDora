@@ -11,14 +11,8 @@ from dora_api.services.iconfiguration_manager import IConfigurationManager
 def build_dependency_container() -> DependencyContainer:
     container = DependencyContainer()
 
+    # Example usage:
     # container.register_service(providers.Factory, SqlAlchemyGateway[Merchant], IRepository[Merchant], model_class=MerchantModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[Product], IRepository[Product], model_class=ProductModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[ProductOffer], IRepository[ProductOffer], model_class=ProductOfferModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[ShoppingList], IRepository[ShoppingList], model_class=ShoppingListModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[StockItem], IRepository[StockItem], model_class=StockItemModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[StockLevel], IRepository[StockLevel], model_class=StockLevelModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[StockLocation], IRepository[StockLocation], model_class=StockLocationModel)
-    # container.register_service(providers.Factory, SqlAlchemyGateway[User], IRepository[User], model_class=UserModel)
 
     container.register_service(providers.Singleton, ConfigurationManager, IConfigurationManager)
 

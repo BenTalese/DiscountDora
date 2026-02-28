@@ -10,7 +10,6 @@ from dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from dora_api.infrastructure.middleware import MIDDLEWARE
 from dora_api.infrastructure.service_wiring import build_dependency_container
 from dora_api.infrastructure.utils import get_attributes_ending_with
-from dora_api.persistence.mappings import configure_mappings
 from dora_api.persistence.seed import seed_dev_data
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.services.iconfiguration_manager import IConfigurationManager
@@ -25,16 +24,12 @@ def startup(is_test_env: bool = False):
 
     WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
     WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
-
-    CORS(app, resources={r'/api/*': {
-        'origins': [
-            f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
-            f'http://127.0.0.1:{WEB_APP_PORT}',
-            f'http://localhost:{WEB_APP_PORT}',
-            f'http://172.17.0.1:{WEB_APP_PORT}'
-        ],
-        'allow_headers': ['*', 'Content-Type']
-    }})
+    CORS(app, resources={r'/api/*': {'origins': [
+        f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
+        f'http://127.0.0.1:{WEB_APP_PORT}',
+        f'http://localhost:{WEB_APP_PORT}',
+        f'http://172.17.0.1:{WEB_APP_PORT}',
+    ], 'allow_headers': ['*', 'Content-Type']}})
 
     configure_logger(_ConfigurationManager.get_log_level())
     register_routers()
@@ -50,9 +45,7 @@ def startup(is_test_env: bool = False):
 
 
 def init_db(config: IConfigurationManager, is_test_env: bool):
-    configure_mappings()
     SqlAlchemyRepository._flask_app = app
-
     with app.app_context():
         if config.is_debug_mode_enabled() or is_test_env:
             db.drop_all()
@@ -65,7 +58,6 @@ def init_db(config: IConfigurationManager, is_test_env: bool):
 def configure_logger(log_level: int):
     _LogFolder = Path().resolve() / 'data' / 'logs' / 'dapi'
     Path.mkdir(_LogFolder, parents=True, exist_ok=True)
-
     _Logger = logging.getLogger()
     _LogFilename = _LogFolder / 'log.txt'
     _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)

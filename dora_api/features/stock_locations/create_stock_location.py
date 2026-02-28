@@ -16,7 +16,7 @@ from dora_api.persistence.field import Field
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CreateStockLocationRequest:
     name: str
 

@@ -14,24 +14,25 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.field import Field
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CreateProductRequest:
-    brand: str | None
-    image: bytes | None
+    brand: str | None = None
+    image: bytes | None = None
     is_active: bool
     is_available: bool
     merchant_name: str
-    merchant_stockcode: str | None
+    merchant_stockcode: str | None = None
     name: str
     price_now: float
     price_was: float
     size: str
     size_unit: str
     size_value: float
-    web_url: str | None
+    web_url: str | None = None
 
 
 @dataclass(slots=True)

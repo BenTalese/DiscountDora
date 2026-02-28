@@ -8,7 +8,7 @@ from dora_api.domain.entities.product_historic_offer import \
 from dora_api.domain.entities.product_offer import ProductOffer
 
 
-@dataclass(slots=True)
+@dataclass
 class Product(BaseEntity):
     brand: str | None
     current_offer: ProductOffer

@@ -8,13 +8,12 @@ from varname import nameof
 from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
-from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.types import AttributeChangeTracker
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, no_content, not_found
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -32,21 +31,18 @@ class UpdateProductResponse:
 
 
 class UpdateProductHandler:
-    def __init__(
-            self,
-            product_repository: IRepository[Product],
-            product_offer_repository: IRepository[ProductOffer]):
-        self.product_repository = product_repository
-        self.product_offer_repository = product_offer_repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: UpdateProductRequest, product_id: EntityID) -> UpdateProductResponse:
         # Get existing product
         _Product: Product | None = (
-            self.product_repository
-            .get()
+            self.repository
+            .get(Product)
             .include(nameof(Product.current_offer))
             .include(nameof(Product.historic_offers))
-            .by_id(product_id))
+            .by_id(product_id)
+        )
 
         if not _Product:
             return UpdateProductResponse(product_not_found=True)
@@ -79,11 +75,8 @@ class UpdateProductHandler:
             _Product.current_offer.offered_on = datetime.now(UTC)
             _Product.current_offer.price_now = request.price_now.value
             _Product.current_offer.price_was = request.price_was.value
-            self.product_offer_repository.update(_Product.current_offer)  # FIXME: Surely it doesn't need to be like this?
-            self.product_offer_repository.save_changes()
 
-        self.product_repository.update(_Product)
-        self.product_repository.save_changes()
+        self.repository.save_changes()
         return UpdateProductResponse()
 
 

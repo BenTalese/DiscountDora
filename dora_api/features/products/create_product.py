@@ -1,6 +1,6 @@
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import logging
 
 from varname import nameof
 
@@ -10,8 +10,8 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.features.products.get_products import ProductDto, get_products
 from dora_api.features.routers import PRODUCT_ROUTER
-from dora_api.infrastructure.api_response import created, internal_server_error
-from dora_api.infrastructure.bool_operation import And, Equal
+from dora_api.infrastructure.api_response import (business_rule_violation,
+                                                  created)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.services.irepository import IRepository
@@ -36,50 +36,45 @@ class CreateProductRequest:
 
 @dataclass(slots=True)
 class CreateProductResponse:
-    new_product_id: EntityID | None = None
+    new_product_id: EntityID = EntityID()
     product_already_exists: bool = False
 
 
 class CreateProductHandler:
-    def __init__(
-            self,
-            product_repository: IRepository[Product],
-            merchant_repository: IRepository[Merchant]):
-        self.product_repository = product_repository
-        self.merchant_repository = merchant_repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        # FIXME: This "existing" check won't work for custom products because
-        # the user may not care for the merchant code, therefore is blank,
-        # therefore easily multiple "blank" codes under same merchant...
-        # Fix...maybe include product name?
+        _MerchantName = Field(Merchant, nameof(Merchant.name))
+        _ProductName = Field(Product, nameof(Product.name))
+        _ProductStockcode = Field(Product, nameof(Product.merchant_stockcode))
+        _ProductStockcode = Field(Product, nameof(Product.merchant_stockcode))
+
         _ExistingProduct: Product | None = (
-            self.product_repository
-            .get()
+            self.repository
+            .get(Product)
             .include(nameof(Product.merchant))  # TODO: Is this line necessary?
-            .one(And(
-                # Equal((Product, nameof(Product.name)), request.name, is_case_insensitive = True),
-                Equal((Product, nameof(Product.merchant_stockcode)), request.merchant_stockcode, is_case_insensitive = True),
-                Equal((Merchant, nameof(Merchant.name)), request.merchant_name, is_case_insensitive = True)
-            ))  # TODO: Maybe make case_sensitive and default off
+            .one(_ProductStockcode.eq(request.merchant_stockcode)
+                 & _MerchantName.eq(request.merchant_name)
+                 & _ProductName.eq(request.name))
         )
 
         if _ExistingProduct:
             return CreateProductResponse(product_already_exists=True)
 
-        _Merchant = self.merchant_repository.get().one(Equal((Merchant, nameof(Merchant.name)), request.merchant_name))
+        _Merchant = self.repository.get(Merchant).one(_MerchantName.eq(request.merchant_name))
         if not _Merchant:
             _Merchant = Merchant(request.merchant_name)
-            self.merchant_repository.add(_Merchant)
-            self.merchant_repository.save_changes()  # TODO: Investigate if can delay save and just use one because it's the same context underneath??
+            self.repository.add(_Merchant)
 
+        _Offer = ProductOffer(
+            offered_on = datetime.now(UTC),
+            price_now = request.price_now,
+            price_was = request.price_was
+        )
         _NewProduct = Product(
             brand = request.brand,
-            current_offer = ProductOffer(
-                offered_on = datetime.now(UTC),
-                price_now = request.price_now,
-                price_was = request.price_was
-            ),
+            current_offer = _Offer,
             historic_offers = [],
             image = request.image,
             is_active = request.is_active,
@@ -93,8 +88,9 @@ class CreateProductHandler:
             web_url = request.web_url
         )
 
-        self.product_repository.add(_NewProduct)
-        self.product_repository.save_changes()
+        self.repository.add(_Offer)
+        self.repository.add(_NewProduct)
+        self.repository.save_changes()
 
         return CreateProductResponse(new_product_id = _NewProduct.id)
 
@@ -108,14 +104,17 @@ def create_product():
     _Request: CreateProductRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
-    # FIXME: Fix this check (see above)
-    # if _Response.product_already_exists:
-    #     _Logger.warning(f"Product already exists: {???}")
-    #     return business_rule_violation(f"???")
-
-    if _Response.new_product_id is None:
-        _Logger.error("An unknown error occurred while creating the product.")
-        return internal_server_error("An unknown error occurred while creating the product.")
+    if _Response.product_already_exists:
+        _Logger.warning(
+            f"Product already exists with name '{_Request.name}', "
+            f"merchant '{_Request.merchant_name}', and "
+            f"stockcode '{_Request.merchant_stockcode}'."
+        )
+        return business_rule_violation(
+            f"Product already exists with name '{_Request.name}', "
+            f"merchant '{_Request.merchant_name}', and "
+            f"stockcode '{_Request.merchant_stockcode}'."
+        )
 
     _Logger.info(f"Successfully created product with ID: {_Response.new_product_id.value}")
     return created(

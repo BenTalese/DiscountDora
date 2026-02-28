@@ -8,7 +8,7 @@ from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,11 +54,11 @@ class ProductDto:
 
 
 class GetProductsHandler:
-    def __init__(self, repository: IRepository[Product]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[ProductDto]:
-        return self.repository.get().project(ProductDto.from_entity)
+        return self.repository.get(Product).project(ProductDto.from_entity)
 
 
 @PRODUCT_ROUTER.route("")

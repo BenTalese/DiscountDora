@@ -9,7 +9,7 @@ from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -18,11 +18,11 @@ class DeleteStockLocationResponse:
 
 
 class DeleteStockLocationHandler:
-    def __init__(self, repository: IRepository[StockLocation]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, stock_location_id: EntityID) -> DeleteStockLocationResponse:
-        _StockLocation = self.repository.get().by_id(stock_location_id)
+        _StockLocation = self.repository.get(StockLocation).by_id(stock_location_id)
 
         if not _StockLocation:
             return DeleteStockLocationResponse(stock_location_not_found = True)

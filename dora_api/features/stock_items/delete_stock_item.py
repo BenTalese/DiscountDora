@@ -9,7 +9,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -18,17 +18,17 @@ class DeleteStockItemResponse:
 
 
 class DeleteStockItemHandler:
-    def __init__(self, stock_item_repository: IRepository[StockItem]):
-        self.stock_item_repository = stock_item_repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, stock_item_id: EntityID) -> DeleteStockItemResponse:
-        _StockItem = self.stock_item_repository.get().by_id(stock_item_id)
+        _StockItem = self.repository.get(StockItem).by_id(stock_item_id)
 
         if not _StockItem:
             return DeleteStockItemResponse(stock_item_not_found = True)
 
-        self.stock_item_repository.remove(_StockItem)
-        self.stock_item_repository.save_changes()
+        self.repository.remove(_StockItem)
+        self.repository.save_changes()
 
         return DeleteStockItemResponse()
 

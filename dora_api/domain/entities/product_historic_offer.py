@@ -4,7 +4,7 @@ from datetime import datetime
 from dora_api.domain.entities.base_entity import BaseEntity
 
 
-@dataclass(slots=True)
+@dataclass
 class ProductHistoricOffer(BaseEntity):
     offered_on: datetime
     price_now: float

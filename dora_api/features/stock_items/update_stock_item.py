@@ -13,10 +13,10 @@ from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import AttributeChangeTracker
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, entity_existence_failure, no_content, not_found
-from dora_api.infrastructure.bool_operation import Equal
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.field import Field
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -35,24 +35,18 @@ class UpdateStockItemResponse:
 
 
 class UpdateStockItemHandler:
-    def __init__(
-            self,
-            stock_item_repository: IRepository[StockItem],
-            stock_level_repository: IRepository[StockLevel],
-            stock_location_repository: IRepository[StockLocation]):
-        self.stock_item_repository = stock_item_repository
-        self.stock_level_repository = stock_level_repository
-        self.stock_location_repository = stock_location_repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: UpdateStockItemRequest, stock_item_id: EntityID) -> UpdateStockItemResponse:
         # Get existing stock item
-        _StockItem: StockItem | None = self.stock_item_repository.get().by_id(stock_item_id)
+        _StockItem: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
         if not _StockItem:
             return UpdateStockItemResponse(stock_item_not_found = True)
 
         # Update stock level
         if request.stock_level_id.has_been_set and request.stock_level_id.value is not None:
-            _StockLevel = self.stock_level_repository.get().by_id(request.stock_level_id.value)
+            _StockLevel = self.repository.get(StockLevel).by_id(request.stock_level_id.value)
 
             if not _StockLevel:
                 return UpdateStockItemResponse(stock_level_not_found=True)
@@ -62,7 +56,7 @@ class UpdateStockItemHandler:
         # Update stock location
         _StockLocation: StockLocation | None = None
         if request.stock_location_id.has_been_set and request.stock_location_id.value is not None:
-            _StockLocation = self.stock_location_repository.get().by_id(request.stock_location_id.value)
+            _StockLocation = self.repository.get(StockLocation).by_id(request.stock_location_id.value)
 
             if not _StockLocation:
                 return UpdateStockItemResponse(stock_location_not_found=True)
@@ -71,13 +65,12 @@ class UpdateStockItemHandler:
             _StockItem.stock_location = _StockLocation
 
         # Update name
+        _StockItemName = Field(StockItem, nameof(StockItem.name))
         if request.name.has_been_set:
             _SameNameStockItem: StockItem | None = (
-                self.stock_item_repository
-                .get()
-                .one(
-                    Equal((StockItem, nameof(StockItem.name)), request.name.value, is_case_insensitive = True)
-                )
+                self.repository
+                .get(StockItem)
+                .one(_StockItemName.eq(request.name.value))
             )
 
             if _SameNameStockItem and _SameNameStockItem.id != stock_item_id:
@@ -86,8 +79,7 @@ class UpdateStockItemHandler:
             if request.name.value is not None:
                 _StockItem.name = request.name.value
 
-        self.stock_item_repository.update(_StockItem)
-        self.stock_item_repository.save_changes()
+        self.repository.save_changes()
         return UpdateStockItemResponse()
 
 

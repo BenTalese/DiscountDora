@@ -11,7 +11,7 @@ from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,11 +34,11 @@ class StockItemDto:
 
 
 class GetStockItemsHandler:
-    def __init__(self, repository: IRepository[StockItem]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[StockItemDto]:
-        return self.repository.get().include(nameof(StockItem.stock_level)).project(StockItemDto.from_entity)
+        return self.repository.get(StockItem).include(nameof(StockItem.stock_level)).project(StockItemDto.from_entity)
 
 
 @STOCK_ITEM_ROUTER.route("")

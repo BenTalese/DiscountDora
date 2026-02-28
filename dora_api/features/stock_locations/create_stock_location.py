@@ -1,17 +1,19 @@
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 from varname import nameof
 
 from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
-from dora_api.features.stock_locations.get_stock_locations import StockLocationDto, get_stock_locations
-from dora_api.infrastructure.api_response import business_rule_violation, created, internal_server_error
-from dora_api.infrastructure.bool_operation import Equal
+from dora_api.features.stock_locations.get_stock_locations import (
+    StockLocationDto, get_stock_locations)
+from dora_api.infrastructure.api_response import (business_rule_violation,
+                                                  created)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.field import Field
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -21,21 +23,21 @@ class CreateStockLocationRequest:
 
 @dataclass(slots=True)
 class CreateStockLocationResponse:
-    new_stock_location_id: EntityID | None = None
+    new_stock_location_id: EntityID = EntityID()
     stock_location_already_exists: bool = False
 
 
 class CreateStockLocationHandler:
 
-    def __init__(self, repository: IRepository[StockLocation]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateStockLocationRequest) -> CreateStockLocationResponse:
+        _StockLocationName = Field(StockLocation, nameof(StockLocation.name))
         _ExistingStockLocation: StockLocation | None = (
             self.repository
-            .get()
-            .one(
-                Equal((StockLocation, nameof(StockLocation.name)), request.name, is_case_insensitive = True))
+            .get(StockLocation)
+            .one(_StockLocationName.eq(request.name))
         )
 
         if _ExistingStockLocation:
@@ -63,10 +65,6 @@ def create_stock_location():
     if _Response.stock_location_already_exists:
         _Logger.warning(f"Stock location already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock location with the name '{_Request.name}' already exists.")
-
-    if _Response.new_stock_location_id is None:
-        _Logger.error("An unknown error occurred while creating the stock location.")
-        return internal_server_error("An unknown error occurred while creating the stock location.")
 
     _Logger.info(f"Successfully created stock location with ID: {_Response.new_stock_location_id.value}")
     return created(

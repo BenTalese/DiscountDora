@@ -1,6 +1,6 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime
-import logging
 
 from varname import nameof
 
@@ -13,12 +13,11 @@ from dora_api.features.stock_items.get_stock_items import (StockItemDto,
                                                            get_stock_items)
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created,
-                                                  entity_existence_failure,
-                                                  internal_server_error)
-from dora_api.infrastructure.bool_operation import Equal
+                                                  entity_existence_failure)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.field import Field
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -30,39 +29,33 @@ class CreateStockItemRequest:
 
 @dataclass(slots=True)
 class CreateStockItemResponse:
-    new_stock_item_id: EntityID | None = None
+    new_stock_item_id: EntityID = EntityID()
     stock_level_not_found: bool = False
     stock_location_not_found: bool = False
     stock_item_already_exists: bool = False
 
 
 class CreateStockItemHandler:
-    def __init__(
-            self,
-            stock_item_repository: IRepository[StockItem],
-            stock_level_repository: IRepository[StockLevel],
-            stock_location_repository: IRepository[StockLocation]):
-        self.stock_item_repository = stock_item_repository
-        self.stock_level_repository = stock_level_repository
-        self.stock_location_repository = stock_location_repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateStockItemRequest) -> CreateStockItemResponse:
-        _StockLevel = self.stock_level_repository.get().by_id(request.stock_level_id)
+        _StockLevel = self.repository.get(StockLevel).by_id(request.stock_level_id)
         if not _StockLevel:
             return CreateStockItemResponse(stock_level_not_found = True)
 
         _StockLocation: StockLocation | None = None
         if request.stock_location_id:
-            _StockLocation = self.stock_location_repository.get().by_id(request.stock_location_id)
+            _StockLocation = self.repository.get(StockLocation).by_id(request.stock_location_id)
 
             if not _StockLocation:
                 return CreateStockItemResponse(stock_location_not_found=True)
 
+        _StockItemName = Field(StockItem, nameof(StockItem.name))
         _ExistingStockItem: StockItem | None = (
-            self.stock_item_repository
-            .get()
-            .one(
-                Equal((StockItem, nameof(StockItem.name)), request.name, is_case_insensitive = True))
+            self.repository
+            .get(StockItem)
+            .one(_StockItemName.eq(request.name))
         )
 
         if _ExistingStockItem:
@@ -80,8 +73,8 @@ class CreateStockItemHandler:
             stocktake_alerts_are_enabled = False
         )
 
-        self.stock_item_repository.add(_NewStockItem)
-        self.stock_item_repository.save_changes()
+        self.repository.add(_NewStockItem)
+        self.repository.save_changes()
 
         return CreateStockItemResponse(new_stock_item_id = _NewStockItem.id)
 
@@ -106,10 +99,6 @@ def create_stock_item():
     if _Response.stock_item_already_exists:
         _Logger.warning(f"Stock item already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock item with the name '{_Request.name}' already exists.")
-
-    if _Response.new_stock_item_id is None:
-        _Logger.error("An unknown error occurred while creating the stock item.")
-        return internal_server_error("An unknown error occurred while creating the stock item.")
 
     _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id.value}")
     return created(

@@ -7,7 +7,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 
 
-@dataclass(slots=True)
+@dataclass
 class StockItem(BaseEntity):
     days_until_stocktake_alert: int
     image: bytes | None

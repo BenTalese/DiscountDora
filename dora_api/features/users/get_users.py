@@ -8,7 +8,7 @@ from dora_api.features.routers import USER_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,11 +29,11 @@ class UserDto:
 
 
 class GetUsersHandler:
-    def __init__(self, repository: IRepository[User]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[UserDto]:
-        return self.repository.get().project(UserDto.from_entity)
+        return self.repository.get(User).project(UserDto.from_entity)
 
 
 @USER_ROUTER.route("")

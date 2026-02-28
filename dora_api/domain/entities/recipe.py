@@ -5,7 +5,7 @@ from dora_api.domain.entities.base_entity import BaseEntity
 from dora_api.domain.entities.stock_item import StockItem
 
 
-@dataclass(slots=True)
+@dataclass
 class Recipe(BaseEntity):
     image: bytes | None
     ingredients: List[StockItem]

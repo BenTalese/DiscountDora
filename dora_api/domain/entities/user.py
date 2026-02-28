@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from dora_api.domain.entities.base_entity import BaseEntity
 
 
-@dataclass(slots=True)
+@dataclass
 class User(BaseEntity):
     email: str | None
     send_deals_on_day: int

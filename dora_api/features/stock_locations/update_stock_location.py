@@ -7,12 +7,12 @@ from varname import nameof
 from dora_api.domain.entities.base_entity import EntityID
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import business_rule_violation, no_content, not_found
-from dora_api.infrastructure.bool_operation import Equal
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import AttributeChangeTracker
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.field import Field
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(slots=True)
@@ -27,23 +27,22 @@ class UpdateStockLocationResponse:
 
 
 class UpdateStockLocationHandler:
-    def __init__(self, repository: IRepository[StockLocation]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self, request: UpdateStockLocationRequest, stock_location_id: EntityID) -> UpdateStockLocationResponse:
         # Get existing stock location
-        _StockLocation: StockLocation | None = self.repository.get().by_id(stock_location_id)
+        _StockLocation: StockLocation | None = self.repository.get(StockLocation).by_id(stock_location_id)
         if not _StockLocation:
             return UpdateStockLocationResponse(stock_location_not_found=True)
 
         # Update name
         if request.name.has_been_set:
+            _StockLocationName = Field(StockLocation, nameof(StockLocation.name))
             _SameNameStockLocation: StockLocation | None = (
                 self.repository
-                .get()
-                .one(
-                    Equal((StockLocation, nameof(StockLocation.name)), request.name.value, is_case_insensitive=True)
-                )
+                .get(StockLocation)
+                .one(_StockLocationName.eq(request.name.value))
             )
 
             if _SameNameStockLocation and _SameNameStockLocation.id != stock_location_id:
@@ -52,7 +51,6 @@ class UpdateStockLocationHandler:
             if request.name.value is not None:
                 _StockLocation.name = request.name.value
 
-        self.repository.update(_StockLocation)
         self.repository.save_changes()
         return UpdateStockLocationResponse()
 

@@ -8,7 +8,7 @@ from dora_api.features.routers import MERCHANT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_response
 from dora_api.infrastructure.utils import get_container
-from dora_api.services.irepository import IRepository
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,11 +25,11 @@ class MerchantDto:
 
 
 class GetMerchantsHandler:
-    def __init__(self, repository: IRepository[Merchant]):
-        self.repository = repository
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[MerchantDto]:
-        return self.repository.get().project(MerchantDto.from_entity)
+        return self.repository.get(Merchant).project(MerchantDto.from_entity)
 
 
 @MERCHANT_ROUTER.route("")

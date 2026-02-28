@@ -6,14 +6,13 @@ from flask_cors import CORS
 from flask_migrate import upgrade
 
 from dora_api.app import app, db
-from dora_api.infrastructure.configuration_manager import ConfigurationManager
 from dora_api.infrastructure.error_handlers import ERROR_HANDLERS
 from dora_api.infrastructure.middleware import MIDDLEWARE
 from dora_api.infrastructure.service_wiring import build_dependency_container
 from dora_api.infrastructure.utils import get_attributes_ending_with
+from dora_api.persistence.mappings import configure_mappings
 from dora_api.persistence.seed import seed_dev_data
-from dora_api.persistence.sqlalchemy_repository import (
-    SqlAlchemyRepository, verify_all_models_imported)
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.services.iconfiguration_manager import IConfigurationManager
 
 
@@ -22,7 +21,7 @@ def startup(is_test_env: bool = False):
     app.container = _Container  # type: ignore
     _ConfigurationManager = _Container.inject(IConfigurationManager)
 
-    init_db(is_test_env)
+    init_db(_ConfigurationManager, is_test_env)
 
     WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
     WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
@@ -50,17 +49,12 @@ def startup(is_test_env: bool = False):
         )
 
 
-def init_db(is_test_env: bool = False):
-    verify_all_models_imported()
-
+def init_db(config: IConfigurationManager, is_test_env: bool):
+    configure_mappings()
     SqlAlchemyRepository._flask_app = app
-    SqlAlchemyRepository._model_classes = {
-        mapper.class_.__entity__: mapper.class_
-        for mapper in db.Model.registry.mappers  # type: ignore
-    }
 
     with app.app_context():
-        if ConfigurationManager().is_debug_mode_enabled() or is_test_env:
+        if config.is_debug_mode_enabled() or is_test_env:
             db.drop_all()
             db.create_all()
             seed_dev_data()

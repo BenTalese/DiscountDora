@@ -9,7 +9,7 @@ base_route = 'http://localhost:5170/api/health'
 #region ---------------- health_check_async tests ----------------
 
 
-def test__health_check_async__ApiIsHealthy__GetsOkayResponse(api):
+def test__health_check__ApiIsHealthy__GetsOkayResponse(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200

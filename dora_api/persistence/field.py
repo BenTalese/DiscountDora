@@ -7,17 +7,21 @@ class Field:
     Wraps an (EntityClass, attribute_name) reference so you can build
     conditions fluently rather than passing raw tuples everywhere.
 
-    Usage:
+    Can use "And", "Or", "Not", or their operator alternatives "&", "|", and "~"
+
     Simple:
+    ```python
         Field(Product, "name").eq("Milk")
         Field(Product, "is_active").eq(True)
         Field(Product, "score").gt(4.0)
-
+    ```
     Medium:
+    ```python
         Field(Product, "name").eq("Milk", case_sensitive=True)
         & Field(Product, "is_active").eq(True)
-
+    ```
     Complex:
+    ```python
         Or(
             And(
                 Field(Product, "name").contains("milk", case_sensitive=False),
@@ -29,14 +33,18 @@ class Field:
                 ~Field(Product, "web_url").is_null(),
             ),
         )
+    ```
     """
     def __init__(self, entity_class: type, attribute_name: str):
         self.entity_class = entity_class
         self.attribute_name = attribute_name
 
     def _col(self, case_sensitive: bool = False):
+        from sqlalchemy import String
         col = getattr(self.entity_class, self.attribute_name)
-        return func.lower(col) if case_sensitive else col
+        if not case_sensitive and isinstance(col.property.columns[0].type, String):
+            return func.lower(col)
+        return col
 
     def _coerce(self, value, case_sensitive: bool = False):
         if isinstance(value, EntityID):

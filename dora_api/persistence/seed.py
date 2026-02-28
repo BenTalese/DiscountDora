@@ -27,7 +27,7 @@ def seed_dev_data():
         price_was = 3.52
     )
 
-    _ProductOne = Product(
+    _FreddoCake = Product(
         brand = "Cadbury",
         current_offer = _OfferOne,
         historic_offers = [],
@@ -49,7 +49,7 @@ def seed_dev_data():
         price_was = 32.16
     )
 
-    _ProductTwo = Product(
+    _CupcakeMix = Product(
         brand = "Cadbury",
         current_offer = _OfferTwo,
         historic_offers = [],
@@ -66,9 +66,9 @@ def seed_dev_data():
     )
 
     _Repository.add(_OfferOne)
-    _Repository.add(_ProductOne)
+    _Repository.add(_FreddoCake)
     _Repository.add(_OfferTwo)
-    _Repository.add(_ProductTwo)
+    _Repository.add(_CupcakeMix)
 
     # ---------------- USER ---------------- #
     _UserOne = User(
@@ -79,63 +79,111 @@ def seed_dev_data():
     _Repository.add(_UserOne)
 
     # ---------------- STOCK LOCATION ---------------- #
-    _StockLocationOne = StockLocation(name = "Pantry")
-    _Repository.add(_StockLocationOne)
+    _Pantry = StockLocation(name = "Pantry")
+    _Freezer = StockLocation(name = "Freezer")
+    _Fridge = StockLocation(name = "Fridge")
+    _Repository.add(_Pantry)
+    _Repository.add(_Freezer)
+    _Repository.add(_Fridge)
 
     # ---------------- STOCK LEVEL ---------------- #
-    _StockLevelOne = StockLevel(name = "Well-Stocked", sequence = 0)
-    _StockLevelTwo = StockLevel(name = "Sufficient Stock", sequence = 1)
-    _StockLevelThree = StockLevel(name = "Low Stock", sequence = 2)
-    _StockLevelFour = StockLevel(name = "Out of Stock", sequence = 3)
+    _WellStocked = StockLevel(name = "Well-Stocked", sequence = 0)
+    _Sufficient = StockLevel(name = "Sufficient Stock", sequence = 1)
+    _Low = StockLevel(name = "Low Stock", sequence = 2)
+    _OutOfStock = StockLevel(name = "Out of Stock", sequence = 3)
 
-    _Repository.add(_StockLevelOne)
-    _Repository.add(_StockLevelTwo)
-    _Repository.add(_StockLevelThree)
-    _Repository.add(_StockLevelFour)
+    _Repository.add(_WellStocked)
+    _Repository.add(_Sufficient)
+    _Repository.add(_Low)
+    _Repository.add(_OutOfStock)
 
     # ---------------- STOCK ITEM ---------------- #
-    _StockItemOne = StockItem(
-        days_until_stocktake_alert=3,
+    _Mangoes = StockItem(
+        days_until_stocktake_alert = 3,
         image = None,
         name = "Kensington Pride Mangoes",
         notes = None,
         stock_group = None,
-        stock_level_last_updated=datetime.now(UTC),
-        stock_level=_StockLevelOne,
-        stock_location = _StockLocationOne,
-        stocktake_alerts_are_enabled=False
+        stock_level_last_updated = datetime.now(UTC),
+        stock_level = _WellStocked,
+        stock_location = _Pantry,
+        stocktake_alerts_are_enabled = False
     )
 
-    _StockItemTwo = StockItem(
+    _Pizza = StockItem(
         days_until_stocktake_alert=2,
         image = None,
         name = "Super Awesome Pizza",
         notes = None,
         stock_group = None,
         stock_level_last_updated=datetime.now(UTC),
-        stock_level=_StockLevelTwo,
-        stock_location = _StockLocationOne,
+        stock_level=_Sufficient,
+        stock_location = _Pantry,
         stocktake_alerts_are_enabled=False
     )
 
-    _StockItemThree = StockItem(
+    _Chips = StockItem(
         days_until_stocktake_alert=5,
         image = None,
         name = "Hot Crispy Chippies",
         notes = None,
         stock_group = None,
         stock_level_last_updated=datetime.now(UTC),
-        stock_level=_StockLevelThree,
+        stock_level=_Low,
         stock_location = None,
         stocktake_alerts_are_enabled=True
     )
 
-    _Repository.add(_StockItemOne)
-    _Repository.add(_StockItemTwo)
-    _Repository.add(_StockItemThree)
+    _BrazilNuts = StockItem(
+        days_until_stocktake_alert = 3,
+        image = None,
+        name = "Brazil Nuts",
+        notes = None,
+        stock_group = None,
+        stock_level =_Low,
+        stock_level_last_updated = datetime.now(UTC),
+        stock_location = _Pantry,
+        stocktake_alerts_are_enabled = True,
+    )
+
+    _IceCream = StockItem(
+        days_until_stocktake_alert = 7,
+        image = None,
+        name = "Vanilla Ice Cream",
+        notes = None,
+        stock_group = None,
+        stock_level = _Low,
+        stock_level_last_updated = datetime.now(UTC),
+        stock_location = _Freezer,
+        stocktake_alerts_are_enabled = True,
+    )
+
+    _Pasta = StockItem(
+        days_until_stocktake_alert = 14,
+        image = None,
+        name = "Barilla Pasta",
+        notes = None,
+        stock_group = None,
+        stock_level = _WellStocked,
+        stock_level_last_updated = datetime.now(UTC),
+        stock_location = _Pantry,
+        stocktake_alerts_are_enabled = False,
+    )
+
+    _Repository.add(_BrazilNuts)
+    _Repository.add(_Mangoes)
+    _Repository.add(_Pasta)
+    _Repository.add(_Pizza)
+    _Repository.add(_Chips)
+    _Repository.add(_IceCream)
 
     # ---------------- SHOPPING LIST ---------------- #
-    _ShoppingListOne = ShoppingList(items = [_StockItemOne, _StockItemTwo])
+    _ShoppingListOne = ShoppingList(items = [_BrazilNuts, _Pizza])
+    _ShoppingListTwo = ShoppingList(items = [_Chips, _IceCream])
+    _ShoppingListThree = ShoppingList(items = [_BrazilNuts, _Pasta])
+
     _Repository.add(_ShoppingListOne)
+    _Repository.add(_ShoppingListTwo)
+    _Repository.add(_ShoppingListThree)
 
     _Repository.save_changes()

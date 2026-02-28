@@ -3,6 +3,8 @@ import logging
 from typing import List
 from uuid import UUID
 
+from varname import nameof
+
 from dora_api.domain.entities.product import Product
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -58,7 +60,13 @@ class GetProductsHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[ProductDto]:
-        return self.repository.get(Product).project(ProductDto.from_entity)
+        return (
+            self.repository
+            .get(Product)
+            .include(nameof(Product.current_offer))
+            .include(nameof(Product.merchant))
+            .project(ProductDto.from_entity)
+        )
 
 
 @PRODUCT_ROUTER.route("")

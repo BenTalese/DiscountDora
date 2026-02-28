@@ -131,103 +131,130 @@ def apply_query_operations(response: Response):
             errors = {},
             title = "Unsupported query operation.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1")
-
         response.set_data(json.dumps(asdict(_ProblemDetails)))
         response.status_code = 400
         response.headers["Content-Type"] = "application/problem+json"
 
     if request.endpoint is None:
-        return
+        return response
 
-    if request.view_args and "query" in request.view_args.keys() and (_QueryString := request.view_args["query"]):
-        _ResponseData: List[Dict[str, Any]] = response.get_json()
-        _RequestEndpoint = request.endpoint.split(".")[-1]
-        _QueryString: str = _QueryString.lower()
-        _QueryOperations: List[str] = _QueryString.split("&")
+    if not (request.view_args and "query" in request.view_args and request.view_args["query"]):
+        return response
 
-        if _RequestEndpoint not in RESPONSES_BY_ENDPOINT:
-            set_bad_query_request_response(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
+    if response.status_code != 200:
+        return response
+
+    if not response.is_json:
+        return response
+
+    _ResponseData: List[Dict[str, Any]] = response.get_json()
+
+    if not isinstance(_ResponseData, list):
+        return response
+
+    _RequestEndpoint = request.endpoint.split(".")[-1]
+    _QueryString: str = request.view_args["query"].lower()
+    _QueryOperations: List[str] = _QueryString.split("&")
+
+    if _RequestEndpoint not in RESPONSES_BY_ENDPOINT:
+        set_bad_query_request_response(f'The endpoint "{_RequestEndpoint}" does not support filtering.')
+        return response
+
+    _ViewModel = RESPONSES_BY_ENDPOINT[_RequestEndpoint]
+    _ViewModelFields = get_type_hints(_ViewModel)
+
+    # ── FILTER OPERATION ──────────────────────────────────────────────────────
+
+    _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
+
+    if _NonExistentFields := [
+        _Operation.split(':')[0]
+        for _Operation in _FilterOperations
+        if _Operation.split(':')[0] not in _ViewModelFields
+    ]:
+        set_bad_query_request_response(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
+        return response
+
+    for _Filter in _FilterOperations:
+        _Parts = _Filter.split(':')
+        if len(_Parts) != 3:
+            set_bad_query_request_response(f"Malformed filter '{_Filter}'. Expected format: filter=field:operator:value.")
             return response
 
-        _ViewModel = RESPONSES_BY_ENDPOINT[_RequestEndpoint]
+        _Field, _Operator, _Value = _Parts
+        _Value = _Value.replace("_", " ").lower()
 
-        # FILTER OPERATION
-        _FilterOperations = [_Operation[7:] for _Operation in _QueryOperations if _Operation.startswith("filter=")]
-        if _NonExistentFields := [
-            _Operation.split(':')[0]
-            for _Operation
-            in _FilterOperations
-            if _Operation.split(':')[0] not in get_type_hints(_ViewModel)
-        ]:
-            set_bad_query_request_response(f'Queried attribute(s) do not exist on response: {", ".join(_NonExistentFields)}.')
+        def _get_field_value(resource: dict, field: str) -> str:
+            _Val = resource.get(field)
+            return "" if _Val is None else str(_Val).lower()
+
+        match _Operator:
+            case 'eq': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) == _Value]
+            case 'ne': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) != _Value]
+            case 'lt': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) < _Value]
+            case 'gt': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) > _Value]
+            case 'le': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) <= _Value]
+            case 'ge': _ResponseData = [r for r in _ResponseData if _get_field_value(r, _Field) >= _Value]
+            case 'ct': _ResponseData = [r for r in _ResponseData if _Value in _get_field_value(r, _Field)]
+            case _:
+                set_bad_query_request_response(
+                    f"The filter operator '{_Operator}' is not supported. "
+                    f"Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.")
+                return response
+
+    # ── SORT OPERATION ────────────────────────────────────────────────────────
+
+    if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("sort=")), None):
+        _SortParts = _SortOperation[5:].split(':')
+        if len(_SortParts) != 2:
+            set_bad_query_request_response(f"Malformed sort '{_SortOperation[5:]}'. Expected format: sort=field:asc|desc.")
             return response
 
-        for _Filter in _FilterOperations:
-            _Field, _Operator, _Value = _Filter.split(':')
-            _Value = _Value.replace("_", " ").lower()
+        _SortField, _SortOrder = _SortParts
 
-            match _Operator:
-                case 'eq':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() == _Value]
-                case 'lt':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() < _Value]
-                case 'gt':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() > _Value]
-                case 'le':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() <= _Value]
-                case 'ge':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() >= _Value]
-                case 'ne':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if str(_Resource.get(_Field)).lower() != _Value]
-                case 'ct':
-                    _ResponseData = [_Resource for _Resource in _ResponseData if _Value in str(_Resource.get(_Field)).lower()]
-
-                case _:
-                    set_bad_query_request_response(f"The filter operator {_Operator} is not supported. Supported operators"
-                                                   + " include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.")
-                    return response
-
-        # SORT OPERATION
-        if _SortOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("sort=")), None):
-            _SortField, _SortOrder = _SortOperation[5:].split(':')
-
-            if _SortField not in get_type_hints(_ViewModel):
-                set_bad_query_request_response(f"Sort field '{_SortField}' does not exist in the view model.")
-                return response
-
-            _ResponseData.sort(
-                key=lambda resource: resource.get(_SortField, ""),
-                reverse=_SortOrder == "desc"
-            )
-
-        # PAGINATION OPERATION
-        _Page: int = 0
-        _Limit: int = 0
-
-        if _PageOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("page=")), None):
-            try:
-                _Page = int(_PageOperation[5:])
-            except ValueError:
-                set_bad_query_request_response("The page parameter must be an integer.")
-                return response
-
-        if _LimitOperation := next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None):
-            try:
-                _Limit = int(_LimitOperation[6:])
-            except ValueError:
-                set_bad_query_request_response("The limit parameter must be an integer.")
-                return response
-
-        if (_PageOperation is None) != (_LimitOperation is None):
-            set_bad_query_request_response("You must use page and limit operations together.")
+        if _SortField not in _ViewModelFields:
+            set_bad_query_request_response(f"Sort field '{_SortField}' does not exist in the view model.")
             return response
 
-        if _PageOperation and _LimitOperation:
-            _Start = (_Page - 1) * _Limit
-            _End = _Start + _Limit
-            _ResponseData = _ResponseData[_Start:_End]
+        if _SortOrder not in ("asc", "desc"):
+            set_bad_query_request_response(f"Sort order '{_SortOrder}' is not supported. Use 'asc' or 'desc'.")
+            return response
 
-        # SET RESPONSE
-        response.set_data(json.dumps(_ResponseData))
+        _ResponseData.sort(
+            key=lambda resource: (resource.get(_SortField) is None, resource.get(_SortField, "")),
+            reverse=_SortOrder == "desc"
+        )
 
+    # ── PAGINATION OPERATION ──────────────────────────────────────────────────
+
+    _PageOperation = next((_Operation for _Operation in _QueryOperations if _Operation.startswith("page=")), None)
+    _LimitOperation = next((_Operation for _Operation in _QueryOperations if _Operation.startswith("limit=")), None)
+
+    if (_PageOperation is None) != (_LimitOperation is None):
+        set_bad_query_request_response("You must use page and limit together.")
+        return response
+
+    if _PageOperation and _LimitOperation:
+        try:
+            _Page = int(_PageOperation[5:])
+            _Limit = int(_LimitOperation[6:])
+        except ValueError:
+            set_bad_query_request_response("Page and limit must be integers.")
+            return response
+
+        if _Page < 1:
+            set_bad_query_request_response("Page must be 1 or greater.")
+            return response
+
+        if _Limit < 1:
+            set_bad_query_request_response("Limit must be 1 or greater.")
+            return response
+
+        _Start = (_Page - 1) * _Limit
+        _End = _Start + _Limit
+        _ResponseData = _ResponseData[_Start:_End]
+
+    # ── SET RESPONSE ──────────────────────────────────────────────────────────
+
+    response.set_data(json.dumps(_ResponseData))
     return response

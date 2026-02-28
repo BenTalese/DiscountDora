@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, get_args, get_origin, get_type_hints
 
 from dora_api.domain.types import AttributeChangeTracker
+from dora_api.infrastructure.utils import unwrap_optional
 
 
 class ValidationResult:
@@ -58,6 +59,7 @@ def validate_inputs(request: Any) -> ValidationResult | None:
 
 def _validate_type(name: str, value: Any, type_hint: Any) -> str | None:
     """Validate a single attribute against its type hint."""
+    type_hint = unwrap_optional(type_hint)
     origin = get_origin(type_hint)
     args = get_args(type_hint)
 

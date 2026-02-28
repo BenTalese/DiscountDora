@@ -12,7 +12,7 @@ from dora_api.domain.types import AttributeChangeTracker
 from dora_api.infrastructure.api_response import ProblemDetails, bad_request
 from dora_api.infrastructure.decorators import (REQUEST_BODYS_BY_ENDPOINT,
                                                 RESPONSES_BY_ENDPOINT)
-from dora_api.infrastructure.utils import try_parse_uuid
+from dora_api.infrastructure.utils import try_parse_uuid, unwrap_optional
 from dora_api.infrastructure.validators import validate_inputs
 
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
@@ -51,13 +51,15 @@ def deserialise_web_request():
         _RequestBodySchema = get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items()
         _Errors: dict[str, list[str]] = {}
 
-        for _Key, _ in _RequestData.items():
-            if _Key not in get_type_hints(_RequestBodySchema).keys():
+        _SchemaKeys = {key for key, _ in _RequestBodySchema}
+        for _Key in _RequestData.keys():
+            if _Key not in _SchemaKeys:
                 _Errors[_Key] = [f"Unexpected value '{_Key}' not found in schema '{REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]}'."]
 
         for _AttributeName, _AttributeType in _RequestBodySchema:
             try:
                 _Data = _RequestData.get(_AttributeName)
+                _AttributeType = unwrap_optional(_AttributeType)
 
                 if _AttributeTypeOrigin := get_origin(_AttributeType):
                     if _AttributeTypeOrigin is AttributeChangeTracker:

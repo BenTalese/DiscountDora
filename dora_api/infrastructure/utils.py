@@ -3,7 +3,8 @@ import inspect
 import os
 from pathlib import Path
 import re
-from typing import Any, List
+from types import UnionType
+from typing import Any, List, get_args, get_origin
 from uuid import UUID
 
 from dora_api.infrastructure.dependency_container import DependencyContainer
@@ -103,3 +104,10 @@ def get_container() -> DependencyContainer:
     '''
     from flask import current_app
     return getattr(current_app, 'container')
+
+
+def unwrap_optional(t):
+    """If type is X | None, return X. Otherwise return t unchanged."""
+    if get_origin(t) is UnionType and type(None) in get_args(t):
+        return next(a for a in get_args(t) if a is not type(None))
+    return t

@@ -4,7 +4,6 @@ from uuid import UUID
 
 from varname import nameof
 
-from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
@@ -21,7 +20,7 @@ class DeleteStockLocationHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, stock_location_id: EntityID) -> DeleteStockLocationResponse:
+    def handle(self, stock_location_id: UUID) -> DeleteStockLocationResponse:
         _StockLocation = self.repository.get(StockLocation).by_id(stock_location_id)
 
         if not _StockLocation:
@@ -38,7 +37,7 @@ def delete_stock_location(stock_location_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to delete stock location.")
     _Handler: DeleteStockLocationHandler = get_container().inject(DeleteStockLocationHandler)
-    _Response = _Handler.handle(EntityID(stock_location_id))
+    _Response = _Handler.handle(stock_location_id)
 
     if _Response.stock_location_not_found:
         _Logger.warning(f"Stock location not found with ID: {stock_location_id}")

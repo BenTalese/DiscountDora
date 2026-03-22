@@ -1,8 +1,7 @@
 from sqlalchemy import func
-from dora_api.domain.entities.base_entity import EntityID
 
 
-class Field:
+class EntityField:
     """
     Wraps an (EntityClass, attribute_name) reference so you can build
     conditions fluently rather than passing raw tuples everywhere.
@@ -47,11 +46,9 @@ class Field:
         return col
 
     def _coerce(self, value, case_sensitive: bool = False):
-        if isinstance(value, EntityID):
-            return str(value.value)
         if isinstance(value, str):
             return value.lower() if case_sensitive else value
-        if isinstance(value, Field):
+        if isinstance(value, EntityField):
             return value._col(case_sensitive)
         return value
 

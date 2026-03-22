@@ -2,7 +2,6 @@ from typing import Any
 
 from sqlalchemy import ColumnElement
 from sqlalchemy.orm import registry
-from dora_api.domain.entities.base_entity import EntityID
 
 
 class BoolOperation:
@@ -10,14 +9,12 @@ class BoolOperation:
         raise NotImplementedError
 
     def _resolve(self, expression, case_sensitive: bool = True) -> ColumnElement | Any:
-        from dora_api.persistence.field import Field
+        from dora_api.persistence.field import EntityField
 
-        if isinstance(expression, Field):
+        if isinstance(expression, EntityField):
             return expression.to_sqla(case_sensitive)
         if isinstance(expression, BoolOperation):
             raise ValueError("Nested BoolOperation passed where a value was expected — wrap with And/Or instead.")
-        if isinstance(expression, EntityID):
-            return str(expression.value)
         if isinstance(expression, str):
             return expression.lower() if not case_sensitive else expression
         return expression  # int, float, bool, datetime, etc.

@@ -104,7 +104,6 @@ def unprocessable_entity(problem_details: ProblemDetails) -> Response:
     response.content_type = 'application/problem+json'
     response.status_code = UNPROCESSABLE_ENTITY
     return response
-
     # TODO: Might want to reuse this (appending errors to same response)
     # elif self.result.json['status'] == UNPROCESSABLE_ENTITY:
     #     problem_details.title = "Various errors."
@@ -122,6 +121,7 @@ def unprocessable_entity(problem_details: ProblemDetails) -> Response:
     #     response.content_type = 'application/problem+json'
     #     response.status_code = UNPROCESSABLE_ENTITY
     #     self.result = response
+
 
 # TODO: Deal with these old responses
 
@@ -149,10 +149,10 @@ def unprocessable_entity(problem_details: ProblemDetails) -> Response:
 #     return response
 
 
-# def present_validation_failure(validation_failure: ValidationResult) -> Response:
+# def validation_failure(errors: dict[str, list[str]] = {}) -> Response:
 #     return unprocessable_entity(ProblemDetails(
-#         detail = validation_failure.summary if validation_failure.summary else "See errors property for more details.",
+#         detail = "See errors property for more details.",
 #         status = UNPROCESSABLE_ENTITY,
-#         errors = validation_failure.errors,
+#         errors = errors,
 #         title = "Validation failure.",
 #         type = "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"))

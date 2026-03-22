@@ -13,7 +13,7 @@ base_route = 'http://localhost:5170/api/stock-levels'
 #region ---------------- get_stock_levels_async tests ----------------
 
 
-def test__get_stock_levels_async__GettingStockLevel__GetsAllExpectedAttributes(api):
+def test__get_stock_levels__GettingStockLevel__GetsAllExpectedAttributes(api):
     _StockLevel = requests.get(base_route).json()[0]
 
     assert _StockLevel['name'] == 'Well-Stocked'
@@ -26,7 +26,7 @@ def test__get_stock_levels_async__GettingStockLevel__GetsAllExpectedAttributes(a
     }
 
 
-def test__get_stock_levels_async__GettingAllStockLevels__GetsAllStockLevels(api):
+def test__get_stock_levels__GettingAllStockLevels__GetsAllStockLevels(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
@@ -34,7 +34,7 @@ def test__get_stock_levels_async__GettingAllStockLevels__GetsAllStockLevels(api)
     assert len(_Response.json()) == 4
 
 
-def test__get_stock_levels_async__FilteringBySequence__GetsSingleMatchingStockLevel(api):
+def test__get_stock_levels__FilteringBySequence__GetsSingleMatchingStockLevel(api):
     _Response = requests.get(f'{base_route}/filter=sequence:gt:2')
 
     assert _Response.status_code == 200
@@ -43,7 +43,7 @@ def test__get_stock_levels_async__FilteringBySequence__GetsSingleMatchingStockLe
     assert len(_Response.json()) == 1
 
 
-def test__get_stock_levels_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
+def test__get_stock_levels__FilteringOnNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=thing:eq:1')
 
     assert _Response.status_code == 400
@@ -57,7 +57,7 @@ def test__get_stock_levels_async__FilteringOnNonExistentAttribute__IsBadRequest(
     }
 
 
-def test__get_stock_levels_async__FilteringForStockLevelThatDoesNotExist__EmptyResult(api):
+def test__get_stock_levels__FilteringForStockLevelThatDoesNotExist__EmptyResult(api):
     _Response = requests.get(f'{base_route}/filter=stock_level_id:eq:{uuid.uuid4()}')
 
     assert _Response.status_code == 200
@@ -65,13 +65,13 @@ def test__get_stock_levels_async__FilteringForStockLevelThatDoesNotExist__EmptyR
     assert _Response.json() == []
 
 
-def test__get_stock_levels_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
+def test__get_stock_levels__FilteringWithUnsupportedOperator__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=stock_level_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
+        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
         'errors': {},
         'status': 400,
         'title': 'Unsupported query operation.',
@@ -79,7 +79,7 @@ def test__get_stock_levels_async__FilteringWithUnsupportedOperator__IsBadRequest
     }
 
 
-def test__get_stock_levels_async__SortingByNonExistentAttribute__IsBadRequest(api):
+def test__get_stock_levels__SortingByNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/sort=thing:desc')
 
     assert _Response.status_code == 400
@@ -93,7 +93,7 @@ def test__get_stock_levels_async__SortingByNonExistentAttribute__IsBadRequest(ap
     }
 
 
-def test__get_stock_levels_async__SortingBySequenceAscending__StockLevelsSortedBySequenceAscending(api):
+def test__get_stock_levels__SortingBySequenceAscending__StockLevelsSortedBySequenceAscending(api):
     _Response = requests.get(f'{base_route}/sort=sequence:asc')
 
     assert _Response.status_code == 200
@@ -104,7 +104,7 @@ def test__get_stock_levels_async__SortingBySequenceAscending__StockLevelsSortedB
     assert _Response.json()[3]['name'] == 'Out of Stock'
 
 
-def test__get_stock_levels_async__SortingBySequenceDescending__StockLevelsSortedBySequenceDescending(api):
+def test__get_stock_levels__SortingBySequenceDescending__StockLevelsSortedBySequenceDescending(api):
     _Response = requests.get(f'{base_route}/sort=sequence:desc')
 
     assert _Response.status_code == 200
@@ -115,7 +115,7 @@ def test__get_stock_levels_async__SortingBySequenceDescending__StockLevelsSorted
     assert _Response.json()[3]['name'] == 'Well-Stocked'
 
 
-def test__get_stock_levels_async__GettingTwoStockLevelsPerPage__GetsPageOfTwoStockLevels(api):
+def test__get_stock_levels__GettingTwoStockLevelsPerPage__GetsPageOfTwoStockLevels(api):
     _Response = requests.get(f'{base_route}/page=1&limit=2')
 
     assert _Response.status_code == 200
@@ -125,7 +125,7 @@ def test__get_stock_levels_async__GettingTwoStockLevelsPerPage__GetsPageOfTwoSto
     assert len(_Response.json()) == 2
 
 
-def test__get_stock_levels_async__GettingSecondPage__GetsSecondPageOfStockLevels(api):
+def test__get_stock_levels__GettingSecondPage__GetsSecondPageOfStockLevels(api):
     _Response = requests.get(f'{base_route}/page=2&limit=2')
 
     assert _Response.status_code == 200
@@ -135,13 +135,13 @@ def test__get_stock_levels_async__GettingSecondPage__GetsSecondPageOfStockLevels
     assert len(_Response.json()) == 2
 
 
-def test__get_stock_levels_async__PageValueIsNotInteger__IsBadRequest(api):
+def test__get_stock_levels__PageValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=true&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -149,13 +149,13 @@ def test__get_stock_levels_async__PageValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_stock_levels_async__LimitValueIsNotInteger__IsBadRequest(api):
+def test__get_stock_levels__LimitValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1&limit=true')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -163,13 +163,13 @@ def test__get_stock_levels_async__LimitValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_stock_levels_async__PagingWithoutLimit__IsBadRequest(api):
+def test__get_stock_levels__PagingWithoutLimit__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -177,13 +177,13 @@ def test__get_stock_levels_async__PagingWithoutLimit__IsBadRequest(api):
     }
 
 
-def test__get_stock_levels_async__LimitingWithoutPage__IsBadRequest(api):
+def test__get_stock_levels__LimitingWithoutPage__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/limit=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -191,7 +191,7 @@ def test__get_stock_levels_async__LimitingWithoutPage__IsBadRequest(api):
     }
 
 
-def test__get_stock_levels_async__FilteringSortingAndPagingStockItems__GetsMatchingStockLevels(api):
+def test__get_stock_levels__FilteringSortingAndPagingStockItems__GetsMatchingStockLevels(api):
     _Response = requests.get(f'{base_route}/filter=sequence:gt:0&sort=sequence:desc&page=2&limit=2')
 
     assert _Response.status_code == 200

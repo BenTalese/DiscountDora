@@ -1,10 +1,11 @@
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import UUID
 
+from pydantic import Base64Bytes, BaseModel, ConfigDict, Field
 from varname import nameof
 
-from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
@@ -14,30 +15,31 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.persistence.field import Field
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-@dataclass(slots=True, kw_only=True)
-class CreateProductRequest:
-    brand: str | None = None
-    image: bytes | None = None
+class CreateProductRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand: str | None = Field(default = None, min_length = 1)
+    image: Base64Bytes | None = None
     is_active: bool
     is_available: bool
-    merchant_name: str
-    merchant_stockcode: str | None = None
-    name: str
-    price_now: float
-    price_was: float
-    size: str
-    size_unit: str
-    size_value: float
-    web_url: str | None = None
+    merchant_name: str = Field(min_length = 1)
+    merchant_stockcode: str | None = Field(default = None, min_length = 1)
+    name: str = Field(min_length = 1)
+    price_now: float = Field(gt = 0)
+    price_was: float = Field(gt = 0)
+    size: str = Field(min_length = 1)
+    size_unit: str = Field(min_length = 1)
+    size_value: float = Field(gt = 0)
+    web_url: str | None = Field(default = None, min_length = 1)
 
 
 @dataclass(slots=True)
 class CreateProductResponse:
-    new_product_id: EntityID = EntityID()
+    new_product_id: UUID = UUID(int=0)
     product_already_exists: bool = False
 
 
@@ -46,10 +48,10 @@ class CreateProductHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        _MerchantName = Field(Merchant, nameof(Merchant.name))
-        _ProductName = Field(Product, nameof(Product.name))
-        _ProductStockcode = Field(Product, nameof(Product.merchant_stockcode))
-        _ProductStockcode = Field(Product, nameof(Product.merchant_stockcode))
+        _MerchantName = EntityField(Merchant, nameof(Merchant.name))
+        _ProductName = EntityField(Product, nameof(Product.name))
+        _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
+        _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
 
         _ExistingProduct: Product | None = (
             self.repository
@@ -117,9 +119,9 @@ def create_product():
             f"stockcode '{_Request.merchant_stockcode}'."
         )
 
-    _Logger.info(f"Successfully created product with ID: {_Response.new_product_id.value}")
+    _Logger.info(f"Successfully created product with ID: {_Response.new_product_id}")
     return created(
-        _Response.new_product_id.value,
+        _Response.new_product_id,
         f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products)}",
         nameof(ProductDto.product_id)
     )

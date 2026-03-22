@@ -24,7 +24,7 @@ class UserDto:
             email = user.email,
             send_deals_on_day = user.send_deals_on_day,
             username = user.username,
-            user_id = user.id.value
+            user_id = user.id
         )
 
 

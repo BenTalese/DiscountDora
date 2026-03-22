@@ -7,11 +7,11 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import contains_eager, registry
 
 from dora_api.app import db
-from dora_api.domain.entities.base_entity import BaseEntity, EntityID
+from dora_api.domain.entities.base_entity import BaseEntity
 from dora_api.domain.exceptions import PersistenceError
 from dora_api.domain.generics import TEntity
-from dora_api.persistence.bool_operation import BoolOperation, Equal
-from dora_api.persistence.field import Field
+from dora_api.persistence.bool_operation import BoolOperation
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.table_mappings import _mapper_registry
 
 
@@ -24,19 +24,16 @@ class SqlAlchemyRepository:
         return db.session
 
     def add(self, entity: BaseEntity) -> None:
-        if entity.id.value != UUID(int=0):
-            raise PersistenceError("Entity already persisted.")
-
         # Catch inline-constructed related entities that were never added
         for f in fields(entity):
             value = getattr(entity, f.name)
-            if isinstance(value, BaseEntity) and value.id.value == UUID(int=0):
+            if isinstance(value, BaseEntity) and value.id == UUID(int=0):
                 raise PersistenceError(
                     f"{type(entity).__name__}.{f.name} has not been persisted. "
                     f"Call repo.add() on it before adding {type(entity).__name__}."
                 )
 
-        entity.id = EntityID(uuid4())
+        entity.id = uuid4()
         db.session.add(entity)
 
     def get(self, entity_type: type[TEntity]) -> 'SqlAlchemyQueryBuilder[TEntity]':
@@ -107,7 +104,6 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
     ```
     '''
     def __init__(self, entity_type: type[TEntity], mapper_registry: registry, flask_app: Flask):
-        self._context = flask_app.app_context()
         self._mapper_registry = mapper_registry
         self.entity_type = entity_type
         self.query: Select = select(entity_type)
@@ -124,10 +120,10 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
             return self.where(condition).all()
         return self._execute()
 
-    def by_id(self, entity_id: EntityID) -> TEntity | None:
-        return self.one(Equal(entity_id, (self.entity_type, "id")))
+    def by_id(self, entity_id: UUID) -> TEntity | None:
+        return self.one(EntityField(self.entity_type, "id").eq(entity_id))
 
-    def exists(self, entity_id: EntityID) -> bool:
+    def exists(self, entity_id: UUID) -> bool:
         return self.by_id(entity_id) is not None
 
     def include(self, attribute_name: str) -> 'SqlAlchemyQueryBuilder[TEntity]':
@@ -160,12 +156,11 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
             .project(lambda row: {"name": row["name"], "web_url": row["web_url"]})
         '''
         if self._is_partial:
-            with self._context:
-                results = db.session.execute(self.query).all()
-                return [projection_method(row._mapping) for row in results]
+            results = db.session.execute(self.query).all()
+            return [projection_method(row._mapping) for row in results]
         return [projection_method(entity) for entity in self._execute()]
 
-    def select(self, *fields: Field) -> 'SqlAlchemyQueryBuilder[TEntity]':
+    def select(self, *fields: EntityField) -> 'SqlAlchemyQueryBuilder[TEntity]':
         self.query = self.query.with_only_columns(*[f.to_sqla() for f in fields])
         self._is_partial = True
         return self
@@ -190,23 +185,22 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
         return self
 
     def _execute(self) -> List[Any]:
-        with self._context:
-            for chain in self.join_paths.values():
-                # Add the joins
-                for attr in chain:
-                    self.query = self.query.join(attr)
+        for chain in self.join_paths.values():
+            # Add the joins
+            for attr in chain:
+                self.query = self.query.outerjoin(attr)
 
-                # Build contains_eager chain
-                # contains_eager(A).contains_eager(B).contains_eager(C)
-                option = contains_eager(chain[0])
-                for attr in chain[1:]:
-                    option = option.contains_eager(attr)
+            # Build contains_eager chain
+            # contains_eager(A).contains_eager(B).contains_eager(C)
+            option = contains_eager(chain[0])
+            for attr in chain[1:]:
+                option = option.contains_eager(attr)
 
-                self.query = self.query.options(option)
+            self.query = self.query.options(option)
 
-            print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
-            results = db.session.execute(self.query).unique().all()
-            return [row[0] for row in results]
+        print('\033[34m' + '\n=== EXECUTING QUERY ===\n' + '\033[93m' + str(self.query) + '\033[0m')
+        results = db.session.execute(self.query).unique().all()
+        return [row[0] for row in results]
 
     def _resolve_attribute(self, entity_type: type, attribute_name: str):
         if not hasattr(entity_type, attribute_name):

@@ -26,9 +26,9 @@ class StockItemDto:
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
         return StockItemDto(
             name = stock_item.name,
-            stock_item_id = stock_item.id.value,
-            stock_level_id = stock_item.stock_level.id.value,
-            stock_location_id = stock_item.stock_location.id.value if stock_item.stock_location else None,
+            stock_item_id = stock_item.id,
+            stock_level_id = stock_item.stock_level.id,
+            stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,
             stock_level_last_updated = stock_item.stock_level_last_updated
         )
 
@@ -38,7 +38,13 @@ class GetStockItemsHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self) -> List[StockItemDto]:
-        return self.repository.get(StockItem).include(nameof(StockItem.stock_level)).project(StockItemDto.from_entity)
+        return (
+            self.repository
+            .get(StockItem)
+            .include(nameof(StockItem.stock_level))
+            .include(nameof(StockItem.stock_location))
+            .project(StockItemDto.from_entity)
+        )
 
 
 @STOCK_ITEM_ROUTER.route("")

@@ -1,10 +1,11 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 from varname import nameof
 
-from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
@@ -15,21 +16,23 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created,
                                                   entity_existence_failure)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.persistence.field import Field
+from dora_api.infrastructure.utils import (field_of, get_container,
+                                           get_request_body)
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-@dataclass(slots=True, kw_only=True)
-class CreateStockItemRequest:
-    name: str
-    stock_level_id: EntityID
-    stock_location_id: EntityID | None = None
+class CreateStockItemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length = 1)
+    stock_level_id: UUID
+    stock_location_id: UUID | None = None
 
 
 @dataclass(slots=True)
 class CreateStockItemResponse:
-    new_stock_item_id: EntityID = EntityID()
+    new_stock_item_id: UUID = UUID(int=0)
     stock_level_not_found: bool = False
     stock_location_not_found: bool = False
     stock_item_already_exists: bool = False
@@ -51,7 +54,7 @@ class CreateStockItemHandler:
             if not _StockLocation:
                 return CreateStockItemResponse(stock_location_not_found=True)
 
-        _StockItemName = Field(StockItem, nameof(StockItem.name))
+        _StockItemName = EntityField(StockItem, nameof(StockItem.name))
         _ExistingStockItem: StockItem | None = (
             self.repository
             .get(StockItem)
@@ -89,20 +92,20 @@ def create_stock_item():
     _Response = _Handler.handle(_Request)
 
     if _Response.stock_level_not_found:
-        _Logger.warning(f"Stock level not found: {_Request.stock_level_id.value}")
-        return entity_existence_failure(nameof(StockLevel), nameof(CreateStockItemRequest.stock_level_id), _Request.stock_level_id.value)
+        _Logger.warning(f"Stock level not found: {_Request.stock_level_id}")
+        return entity_existence_failure(nameof(StockLevel), field_of(CreateStockItemRequest, 'stock_level_id'), _Request.stock_level_id)
 
     if _Response.stock_location_not_found and _Request.stock_location_id:
-        _Logger.warning(f"Stock location not found: {_Request.stock_location_id.value}")
-        return entity_existence_failure(nameof(StockLocation), nameof(CreateStockItemRequest.stock_location_id), _Request.stock_location_id.value)
+        _Logger.warning(f"Stock location not found: {_Request.stock_location_id}")
+        return entity_existence_failure(nameof(StockLocation), field_of(CreateStockItemRequest, 'stock_location_id'), _Request.stock_location_id)
 
     if _Response.stock_item_already_exists:
         _Logger.warning(f"Stock item already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock item with the name '{_Request.name}' already exists.")
 
-    _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id.value}")
+    _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id}")
     return created(
-        _Response.new_stock_item_id.value,
+        _Response.new_stock_item_id,
         f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items)}",
         nameof(StockItemDto.stock_item_id)
     )

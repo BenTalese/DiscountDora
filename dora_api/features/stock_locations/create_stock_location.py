@@ -1,9 +1,10 @@
 import logging
 from dataclasses import dataclass
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 from varname import nameof
 
-from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.features.stock_locations.get_stock_locations import (
@@ -12,18 +13,19 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.persistence.field import Field
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-@dataclass(slots=True, kw_only=True)
-class CreateStockLocationRequest:
-    name: str
+class CreateStockLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length = 1)
 
 
 @dataclass(slots=True)
 class CreateStockLocationResponse:
-    new_stock_location_id: EntityID = EntityID()
+    new_stock_location_id: UUID = UUID(int=0)
     stock_location_already_exists: bool = False
 
 
@@ -33,7 +35,7 @@ class CreateStockLocationHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateStockLocationRequest) -> CreateStockLocationResponse:
-        _StockLocationName = Field(StockLocation, nameof(StockLocation.name))
+        _StockLocationName = EntityField(StockLocation, nameof(StockLocation.name))
         _ExistingStockLocation: StockLocation | None = (
             self.repository
             .get(StockLocation)
@@ -66,9 +68,9 @@ def create_stock_location():
         _Logger.warning(f"Stock location already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock location with the name '{_Request.name}' already exists.")
 
-    _Logger.info(f"Successfully created stock location with ID: {_Response.new_stock_location_id.value}")
+    _Logger.info(f"Successfully created stock location with ID: {_Response.new_stock_location_id}")
     return created(
-        _Response.new_stock_location_id.value,
+        _Response.new_stock_location_id,
         f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations)}",
         nameof(StockLocationDto.stock_location_id)
     )

@@ -18,7 +18,7 @@ def api():
     )
     thread.start()
 
-    sleep(3)
+    sleep(2)
 
     yield ApiClient("http://localhost:5170")
 

@@ -20,7 +20,7 @@ class StockLocationDto:
     def from_entity(cls, stock_location: StockLocation) -> 'StockLocationDto':
         return StockLocationDto(
             name = stock_location.name,
-            stock_location_id = stock_location.id.value
+            stock_location_id = stock_location.id
         )
 
 

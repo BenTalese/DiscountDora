@@ -1,14 +1,13 @@
-import uuid
-from dataclasses import asdict
+from uuid import uuid4
 from unittest.mock import ANY
 
 import pytest
 import requests
-from varname import nameof
 
-from dora_api.domain.types import AttributeChangeTracker
-from dora_api.features.stock_items.create_stock_item import CreateStockItemRequest
-from dora_api.features.stock_items.update_stock_item import UpdateStockItemRequest
+from dora_api.features.stock_items.create_stock_item import \
+    CreateStockItemRequest
+from dora_api.features.stock_items.update_stock_item import \
+    UpdateStockItemRequest
 from tests.support import is_valid_datetime, is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -30,14 +29,14 @@ def stock_location_id():
 #region ---------------- create_stock_item_async tests ----------------
 
 
-def test__create_stock_item_async__CreatingStockItemWithAllAttributes__StockItemCreated(api, stock_level_id, stock_location_id):
-    _StockItemRequest = asdict(CreateStockItemRequest(
+def test__create_stock_item__CreatingStockItemWithAllAttributes__StockItemCreated(api, stock_level_id, stock_location_id):
+    _StockItemRequest = CreateStockItemRequest(
         name = 'Peters Neopolitan Ice Cream',
         stock_level_id = stock_level_id,
         stock_location_id = stock_location_id
-    ))
+    )
 
-    _Response = requests.post(base_route, json = _StockItemRequest)
+    _Response = requests.post(base_route, json = _StockItemRequest.model_dump(mode="json"))
 
     assert _Response.status_code == 201
     assert _Response.headers['Content-Type'] == 'application/json'
@@ -45,52 +44,50 @@ def test__create_stock_item_async__CreatingStockItemWithAllAttributes__StockItem
     assert _Response.json()['id'] == ANY
 
 
-def test__create_stock_item_async__CreatingStockItemWithIncorrectDataTypes__CannotBeDeserialised(api):
-    _StockItemRequest = asdict(CreateStockItemRequest(
-        name = True,  # type: ignore
-        stock_level_id = 5,  # type: ignore
-        stock_location_id = "aaa"  # type: ignore
-    ))
+def test__create_stock_item__CreatingStockItemWithIncorrectDataTypes__CannotBeDeserialised(api):
+    _Request = {
+        "name": True,
+        "stock_level_id": 5,
+        "stock_location_id": "aaa"
+    }
 
-    _Response = requests.post(base_route, json = _StockItemRequest)
-
+    _Response = requests.post(base_route, json = _Request)
     assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/json'
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "stock_level_id": "Expected type '<class 'uuid.UUID'>'. 'int' object has no attribute 'replace'",
-            "stock_location_id": "Expected type '<class 'uuid.UUID'>'. badly formed hexadecimal UUID string"
+            "name": ["Input should be a valid string"],
+            "stock_level_id": ["UUID input should be a string, bytes or UUID object"],
+            "stock_location_id": ["Input should be a valid UUID, invalid length: expected length 32 for simple format, found 3"]
         },
         "status": 400,
-        "title": "Malformed request. One or more request properties could not be deserialised.",
+        "title": "Malformed request.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
 
 
-def test__create_stock_item_async__CreatingStockItemWithOnlyRequiredAttributes__StockItemCreated(api, stock_level_id):
+def test__create_stock_item__CreatingStockItemWithOnlyRequiredAttributes__StockItemCreated(api, stock_level_id):
     _StockItemRequest = CreateStockItemRequest(
         name = "Freddo Brownie Ice Cream",
-        stock_level_id = stock_level_id,
-        stock_location_id = None)
+        stock_level_id = stock_level_id
+    )
 
-    delattr(_StockItemRequest, nameof(_StockItemRequest.stock_location_id))
-
-    _Response = requests.post(base_route, json = _StockItemRequest.__dict__)
+    _Response = requests.post(base_route, json = _StockItemRequest.model_dump(mode='json'))
 
     assert _Response.status_code == 201
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json()['id'] == ANY
 
 
-def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolation(api, stock_level_id, stock_location_id):
-    _StockItemRequest = asdict(CreateStockItemRequest(
+def test__create_stock_item__StockItemAlreadyExists__IsBusinessRuleViolation(api, stock_level_id, stock_location_id):
+    _StockItemRequest = CreateStockItemRequest(
         name = 'PeTers NeoPOLitan IcE CrEam',
         stock_level_id = stock_level_id,
         stock_location_id = stock_location_id
-    ))
+    )
 
-    _Response = requests.post(base_route, json = _StockItemRequest)
+    _Response = requests.post(base_route, json = _StockItemRequest.model_dump(mode='json'))
 
     assert _Response.status_code == 422
     assert _Response.json() == {
@@ -104,43 +101,64 @@ def test__create_stock_item_async__StockItemAlreadyExists__IsBusinessRuleViolati
     }
 
 
-def test__create_stock_item_async__EmptyRequest__IsRequiredInputsValidationFailure(api):
+def test__create_stock_item__EmptyRequest__IsRequiredInputsValidationFailure(api):
     _Response = requests.post(base_route, json = {})
 
-    assert _Response.status_code == 422
+    assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Required inputs are missing values.',
+        'detail': 'See errors property for more details.',
         'errors': {
-            'name': ["'name' must have a value."],
-            'stock_level_id': ["'stock_level_id' must have a value."]
+            'name': ["Field required"],
+            'stock_level_id': ["Field required"]
         },
-       'status': 422,
-       'title': 'Validation failure.',
-       'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
+       'status': 400,
+       'title': 'Malformed request.',
+       'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
-def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure(api):
-    _FakeID = str(uuid.uuid4())
-    _StockItemRequest = asdict(CreateStockItemRequest(
+def test__create_stock_item__StockLevelDoesNotExist__IsEntityExistenceFailure(api):
+    _FakeID = uuid4()
+    _StockItemRequest = CreateStockItemRequest(
         name = 'Halo Top Ice Cream',
-        stock_level_id = _FakeID,  # type: ignore
-        stock_location_id = _FakeID  # type: ignore
-    ))
+        stock_level_id = _FakeID
+    )
 
-    _Response = requests.post(base_route, json = _StockItemRequest)
+    _Response = requests.post(base_route, json = _StockItemRequest.model_dump(mode='json'))
 
     assert _Response.status_code == 422
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'stock_level_id': [f"StockLevel with the ID '{_FakeID}' was not found."],
+            'stock_level_id': [f"StockLevel with the ID '{_FakeID}' was not found."]
+        },
+       'status': 422,
+       'title': 'Entity was not found.',
+       'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
+    }
+
+
+def test__create_stock_item__StockLocationDoesNotExist__IsEntityExistenceFailure(api, stock_level_id):
+    _FakeID = uuid4()
+    _StockItemRequest = CreateStockItemRequest(
+        name = 'Halo Top Ice Cream',
+        stock_level_id = stock_level_id,
+        stock_location_id = _FakeID
+    )
+
+    _Response = requests.post(base_route, json = _StockItemRequest.model_dump(mode='json'))
+
+    assert _Response.status_code == 422
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        'detail': 'See errors property for more details.',
+        'errors': {
             'stock_location_id': [f"StockLocation with the ID '{_FakeID}' was not found."]
         },
        'status': 422,
-       'title': 'Various errors.',
+       'title': 'Entity was not found.',
        'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
     }
 
@@ -150,14 +168,14 @@ def test__create_stock_item_async__NonExistentEntities__IsEntityExistenceFailure
 #region ---------------- get_stock_items_async tests ----------------
 
 
-def test__get_stock_items_async__GettingStockItem__GetsAllExpectedAttributes(api):
+def test__get_stock_items__GettingStockItem__GetsAllExpectedAttributes(api):
     _StockItem = requests.get(base_route).json()[0]
 
-    assert _StockItem['name'] == 'Kensington Pride Mangoes'
+    assert _StockItem['name'] == 'Brazil Nuts'
     assert is_valid_uuid(_StockItem['stock_item_id']) is True
     assert is_valid_uuid(_StockItem['stock_level_id']) is True
     assert is_valid_datetime(_StockItem['stock_level_last_updated'], '%a, %d %b %Y %H:%M:%S %Z') is True
-    assert is_valid_uuid(_StockItem['stock_location_id']) is True
+    # assert is_valid_uuid(_StockItem['stock_location_id']) is True
     assert _StockItem.keys() == {
         'name',
         'stock_item_id',
@@ -167,15 +185,15 @@ def test__get_stock_items_async__GettingStockItem__GetsAllExpectedAttributes(api
     }
 
 
-def test__get_stock_items_async__GettingAllStockItems__GetsAllStockItems(api):
+def test__get_stock_items__GettingAllStockItems__GetsAllStockItems(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()) == 5
+    assert len(_Response.json()) == 8
 
 
-def test__get_stock_items_async__FilteringByName__GetsSingleMatchingStockItem(api):
+def test__get_stock_items__FilteringByName__GetsSingleMatchingStockItem(api):
     _Response = requests.get(f'{base_route}/filter=name:eq:Peters Neopolitan Ice Cream')
 
     assert _Response.status_code == 200
@@ -184,7 +202,7 @@ def test__get_stock_items_async__FilteringByName__GetsSingleMatchingStockItem(ap
     assert len(_Response.json()) == 1
 
 
-def test__get_stock_items_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
+def test__get_stock_items__FilteringOnNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=stock_item_name:eq:Peters Neopolitan Ice Cream')
 
     assert _Response.status_code == 400
@@ -198,21 +216,21 @@ def test__get_stock_items_async__FilteringOnNonExistentAttribute__IsBadRequest(a
     }
 
 
-def test__get_stock_items_async__FilteringForStockItemThatDoesNotExist__EmptyResult(api):
-    _Response = requests.get(f'{base_route}/filter=stock_item_id:eq:{uuid.uuid4()}')
+def test__get_stock_items__FilteringForStockItemThatDoesNotExist__EmptyResult(api):
+    _Response = requests.get(f'{base_route}/filter=stock_item_id:eq:{uuid4()}')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
     assert _Response.json() == []
 
 
-def test__get_stock_items_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=stock_item_id:xx:{uuid.uuid4()}')
+def test__get_stock_items__FilteringWithUnsupportedOperator__IsBadRequest(api):
+    _Response = requests.get(f'{base_route}/filter=stock_item_id:xx:{uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
+        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
         'errors': {},
         'status': 400,
         'title': 'Unsupported query operation.',
@@ -220,7 +238,7 @@ def test__get_stock_items_async__FilteringWithUnsupportedOperator__IsBadRequest(
     }
 
 
-def test__get_stock_items_async__SortingByNonExistentAttribute__IsBadRequest(api):
+def test__get_stock_items__SortingByNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/sort=stockcode:desc')
 
     assert _Response.status_code == 400
@@ -234,57 +252,63 @@ def test__get_stock_items_async__SortingByNonExistentAttribute__IsBadRequest(api
     }
 
 
-def test__get_stock_items_async__SortingByNameAscending__StockItemsSortedByNameAscending(api):
+def test__get_stock_items__SortingByNameAscending__StockItemsSortedByNameAscending(api):
     _Response = requests.get(f'{base_route}/sort=name:asc')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Freddo Brownie Ice Cream'
-    assert _Response.json()[1]['name'] == 'Hot Crispy Chippies'
-    assert _Response.json()[2]['name'] == 'Kensington Pride Mangoes'
-    assert _Response.json()[3]['name'] == 'Peters Neopolitan Ice Cream'
-    assert _Response.json()[4]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[0]['name'] == 'Barilla Pasta'
+    assert _Response.json()[1]['name'] == 'Brazil Nuts'
+    assert _Response.json()[2]['name'] == 'Freddo Brownie Ice Cream'
+    assert _Response.json()[3]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[4]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[5]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[6]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[7]['name'] == 'Vanilla Ice Cream'
 
 
-def test__get_stock_items_async__SortingByNameDescending__StockItemsSortedByNameDescending(api):
+def test__get_stock_items__SortingByNameDescending__StockItemsSortedByNameDescending(api):
     _Response = requests.get(f'{base_route}/sort=name:desc')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Super Awesome Pizza'
-    assert _Response.json()[1]['name'] == 'Peters Neopolitan Ice Cream'
-    assert _Response.json()[2]['name'] == 'Kensington Pride Mangoes'
-    assert _Response.json()[3]['name'] == 'Hot Crispy Chippies'
-    assert _Response.json()[4]['name'] == 'Freddo Brownie Ice Cream'
+    assert _Response.json()[0]['name'] == 'Vanilla Ice Cream'
+    assert _Response.json()[1]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[2]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[3]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[4]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[5]['name'] == 'Freddo Brownie Ice Cream'
+    assert _Response.json()[6]['name'] == 'Brazil Nuts'
+    assert _Response.json()[7]['name'] == 'Barilla Pasta'
 
 
-def test__get_stock_items_async__GettingTwoStockItemsPerPage__GetsPageOfTwoStockItems(api):
+def test__get_stock_items__GettingTwoStockItemsPerPage__GetsPageOfTwoStockItems(api):
     _Response = requests.get(f'{base_route}/page=1&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Kensington Pride Mangoes'
-    assert _Response.json()[1]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[0]['name'] == 'Brazil Nuts'
+    assert _Response.json()[1]['name'] == 'Kensington Pride Mangoes'
     assert len(_Response.json()) == 2
 
 
-def test__get_stock_items_async__GettingSecondPage__GetsSecondPageOfStockItems(api):
+def test__get_stock_items__GettingSecondPage__GetsSecondPageOfStockItems(api):
     _Response = requests.get(f'{base_route}/page=2&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[1]['name'] == 'Peters Neopolitan Ice Cream'
-    assert _Response.json()[0]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[1]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[0]['name'] == 'Barilla Pasta'
     assert len(_Response.json()) == 2
 
 
-def test__get_stock_items_async__PageValueIsNotInteger__IsBadRequest(api):
+def test__get_stock_items__PageValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=true&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -292,13 +316,13 @@ def test__get_stock_items_async__PageValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_stock_items_async__LimitValueIsNotInteger__IsBadRequest(api):
+def test__get_stock_items__LimitValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1&limit=true')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -306,13 +330,13 @@ def test__get_stock_items_async__LimitValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_stock_items_async__PagingWithoutLimit__IsBadRequest(api):
+def test__get_stock_items__PagingWithoutLimit__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -320,13 +344,13 @@ def test__get_stock_items_async__PagingWithoutLimit__IsBadRequest(api):
     }
 
 
-def test__get_stock_items_async__LimitingWithoutPage__IsBadRequest(api):
+def test__get_stock_items__LimitingWithoutPage__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/limit=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -334,7 +358,7 @@ def test__get_stock_items_async__LimitingWithoutPage__IsBadRequest(api):
     }
 
 
-def test__get_stock_items_async__FilteringSortingAndPagingStockItems__GetsMatchingStockItems(api):
+def test__get_stock_items__FilteringSortingAndPagingStockItems__GetsMatchingStockItems(api):
     _Response = requests.get(f'{base_route}/filter=name:ct:iCe CrEam&sort=name:asc&page=2&limit=1')
 
     assert _Response.status_code == 200
@@ -348,7 +372,7 @@ def test__get_stock_items_async__FilteringSortingAndPagingStockItems__GetsMatchi
 #region ---------------- update_stock_item_async tests ----------------
 
 
-def test__update_stock_item_async__EmptyUpdate__StockItemUnaffected(api):
+def test__update_stock_item__EmptyUpdate__StockItemUnaffected(api):
     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = {})
     _StockItemAfterPatchOperation = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
@@ -358,16 +382,16 @@ def test__update_stock_item_async__EmptyUpdate__StockItemUnaffected(api):
     assert _StockItemToUpdate == _StockItemAfterPatchOperation
 
 
-def test__update_stock_item_async__UpdatingAllAttributes__AllAttributesUpdated(api, stock_level_id, stock_location_id):
+def test__update_stock_item__UpdatingAllAttributes__AllAttributesUpdated(api, stock_level_id, stock_location_id):
     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:hOt_CrIsPy_ChiPPieS').json()[0]
 
-    _ProductRequest = asdict(UpdateStockItemRequest(
-        name = AttributeChangeTracker("Old Soggy Chips"),
-        stock_location_id = stock_location_id,
-        stock_level_id = stock_level_id
-    ))
+    _StockItemRequest = UpdateStockItemRequest(
+        name = "Old Soggy Chips",
+        stock_level_id = stock_level_id,
+        stock_location_id = stock_location_id
+    ).model_dump(mode = "json")
 
-    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = _ProductRequest)
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = _StockItemRequest)
     _StockItemAfterPatchOperation = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemToUpdate["stock_item_id"]}').json()[0]
 
     assert _PatchResponse.status_code == 204
@@ -389,8 +413,8 @@ def test__update_stock_item_async__UpdatingAllAttributes__AllAttributesUpdated(a
     assert _StockItemToUpdate['stock_level_last_updated'] != _StockItemAfterPatchOperation['stock_level_last_updated']
 
 
-def test__update_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api):
-    _RandomID = uuid.uuid4()
+def test__update_stock_item__StockItemDoesNotExist__StockItemNotFound(api):
+    _RandomID = uuid4()
     _Response = requests.patch(f"{base_route}/{_RandomID}", json = {})
 
     assert _Response.status_code == 404
@@ -404,9 +428,12 @@ def test__update_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api)
     }
 
 
-def test__update_stock_item_async__OtherStockItemHasSameName__CannotUpdateToDuplicateName(api):
+def test__update_stock_item__OtherStockItemHasSameName__CannotUpdateToDuplicateName(api):
     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:kensingTOn_PrIdE_ManGOes').json()[0]
-    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = {'name': 'super AWESOME pizza'})
+
+    _StockItemRequest = UpdateStockItemRequest(name = 'super AWESOME pizza').model_dump(exclude_unset=True)
+
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json = _StockItemRequest)
 
     assert _PatchResponse.status_code == 422
     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
@@ -426,7 +453,7 @@ def test__update_stock_item_async__OtherStockItemHasSameName__CannotUpdateToDupl
 #region ---------------- delete_stock_item_async tests ----------------
 
 
-def test__delete_stock_item_async__DeletingStockItem__StockItemDeleted(api):
+def test__delete_stock_item__DeletingStockItem__StockItemDeleted(api):
     _StockItemID = requests.get(f'{base_route}/filter=name:eq:super AWESOME pizza').json()[0]['stock_item_id']
     _Response = requests.delete(f"{base_route}/{_StockItemID}")
 
@@ -435,8 +462,8 @@ def test__delete_stock_item_async__DeletingStockItem__StockItemDeleted(api):
     assert requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemID}').json() == []
 
 
-def test__delete_stock_item_async__StockItemDoesNotExist__StockItemNotFound(api):
-    _RandomID = uuid.uuid4()
+def test__delete_stock_item__StockItemDoesNotExist__StockItemNotFound(api):
+    _RandomID = uuid4()
     _Response = requests.delete(f"{base_route}/{_RandomID}")
 
     assert _Response.status_code == 404

@@ -19,7 +19,7 @@ class MerchantDto:
     @classmethod
     def from_entity(cls, merchant: Merchant) -> 'MerchantDto':
         return MerchantDto(
-            merchant_id = merchant.id.value,
+            merchant_id = merchant.id,
             name = merchant.name,
         )
 

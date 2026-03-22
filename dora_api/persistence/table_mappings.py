@@ -1,9 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table
-from sqlalchemy.orm import composite, registry as SARegistry, relationship
+from sqlalchemy.orm import registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
-from dora_api.domain.entities.base_entity import EntityID
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
@@ -124,45 +123,45 @@ def configure_mappings(db: SQLAlchemy):
 
     _mapper_registry.map_imperatively(Merchant, merchant_table, properties={
         "_id_col": merchant_table.c.id,
-        "id": composite(EntityID, merchant_table.c.id),
+        "id": merchant_table.c.id,
     })
 
     _mapper_registry.map_imperatively(StockGroup, stock_group_table, properties={
         "_id_col": stock_group_table.c.id,
-        "id": composite(EntityID, stock_group_table.c.id),
+        "id": stock_group_table.c.id,
     })
 
     _mapper_registry.map_imperatively(StockLevel, stock_level_table, properties={
         "_id_col": stock_level_table.c.id,
-        "id": composite(EntityID, stock_level_table.c.id),
+        "id": stock_level_table.c.id,
     })
 
     _mapper_registry.map_imperatively(StockLocation, stock_location_table, properties={
         "_id_col": stock_location_table.c.id,
-        "id": composite(EntityID, stock_location_table.c.id),
+        "id": stock_location_table.c.id,
     })
 
     _mapper_registry.map_imperatively(User, user_table, properties={
         "_id_col": user_table.c.id,
-        "id": composite(EntityID, user_table.c.id),
+        "id": user_table.c.id,
     })
 
     _mapper_registry.map_imperatively(ProductOffer, product_offer_table, properties={
         "_id_col": product_offer_table.c.id,
         "_product_id": product_offer_table.c.product_id,
-        "id": composite(EntityID, product_offer_table.c.id),
+        "id": product_offer_table.c.id,
     })
 
     _mapper_registry.map_imperatively(ProductHistoricOffer, product_historic_offer_table, properties={
         "_id_col": product_historic_offer_table.c.id,
         "_product_id": product_historic_offer_table.c.product_id,
-        "id": composite(EntityID, product_historic_offer_table.c.id),
+        "id": product_historic_offer_table.c.id,
     })
 
     _mapper_registry.map_imperatively(Product, product_table, properties={
         "_id_col": product_table.c.id,
         "_merchant_id": product_table.c.merchant_id,
-        "id": composite(EntityID, product_table.c.id),
+        "id": product_table.c.id,
         "merchant": relationship(Merchant, lazy="noload"),
         "current_offer": relationship(ProductOffer, lazy="noload", uselist=False),
         "historic_offers": relationship(ProductHistoricOffer, lazy="noload"),
@@ -173,7 +172,7 @@ def configure_mappings(db: SQLAlchemy):
         "_stock_group_id": stock_item_table.c.stock_group_id,
         "_stock_level_id": stock_item_table.c.stock_level_id,
         "_stock_location_id": stock_item_table.c.stock_location_id,
-        "id": composite(EntityID, stock_item_table.c.id),
+        "id": stock_item_table.c.id,
         "stock_group": relationship(StockGroup, lazy="noload"),
         "stock_level": relationship(StockLevel, lazy="noload"),
         "stock_location": relationship(StockLocation, lazy="noload"),
@@ -181,7 +180,7 @@ def configure_mappings(db: SQLAlchemy):
 
     _mapper_registry.map_imperatively(ShoppingList, shopping_list_table, properties={
         "_id_col": shopping_list_table.c.id,
-        "id": composite(EntityID, shopping_list_table.c.id),
+        "id": shopping_list_table.c.id,
         "items": relationship(StockItem, secondary=shopping_list_stock_item_table, lazy="noload"),
     })
 

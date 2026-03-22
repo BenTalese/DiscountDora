@@ -43,7 +43,7 @@ def test__PatchEndpointDoesNotExist__EndpointNotFoundResponse(api):
     }
 
 
-def test__DeletendpointDoesNotExist__EndpointNotFoundResponse(api):
+def test__DeleteEndpointDoesNotExist__EndpointNotFoundResponse(api):
     _Response = requests.delete("http://localhost:5170/api/1/2")
 
     assert _Response.status_code == 404

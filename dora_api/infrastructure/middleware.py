@@ -1,35 +1,30 @@
 import json
 import logging
-from base64 import b64decode
 from dataclasses import asdict
 from http.client import BAD_REQUEST, NOT_FOUND
-from typing import Any, Dict, List, get_origin, get_type_hints
+from typing import Any, get_type_hints
 
 from flask import Blueprint, Response, jsonify, request
+from pydantic import ValidationError
 
-from dora_api.domain.entities.base_entity import EntityID
-from dora_api.domain.types import AttributeChangeTracker
-from dora_api.infrastructure.api_response import ProblemDetails, bad_request
+from dora_api.infrastructure.api_response import (ProblemDetails, bad_request,
+                                                  internal_server_error)
 from dora_api.infrastructure.decorators import (REQUEST_BODYS_BY_ENDPOINT,
                                                 RESPONSES_BY_ENDPOINT)
-from dora_api.infrastructure.utils import try_parse_uuid, unwrap_optional
-from dora_api.infrastructure.validators import validate_inputs
 
+
+_Logger = logging.getLogger(__name__)
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 
 
 @MIDDLEWARE.before_app_request
-def handle_cors_preflight_request():
-    if request.method.upper() == 'OPTIONS':
-        return jsonify({
-            'Access-Control-Allow-Origin': 'http://localhost:5174',
-            'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-        })
+def handle_incoming_request():
+    if _Logger.isEnabledFor(logging.DEBUG):
+        audit_incoming_request()
 
+    if request.method.upper() == "OPTIONS":
+        return handle_cors_preflight_request()
 
-@MIDDLEWARE.before_app_request
-def verify_endpoint_exists():
     if not request.endpoint:
         return jsonify(ProblemDetails(
             detail = "Endpoint was not found.",
@@ -38,88 +33,49 @@ def verify_endpoint_exists():
             title = "Endpoint was not found.",
             type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")), 404
 
+    if request.method.upper() in ["POST", "PATCH", "PUT"]:
+        return deserialise_web_request(request.endpoint.split(".")[-1])
 
-@MIDDLEWARE.before_app_request
-def deserialise_web_request():
-    if request.endpoint is None:
-        return
-
-    _RequestEndpoint = request.endpoint.split(".")[-1]
-    if _RequestEndpoint in REQUEST_BODYS_BY_ENDPOINT:
-        _RequestData: dict = request.get_json()
-        _DeserialisedRequestData: dict = {}
-        _RequestBodySchema = get_type_hints(REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]).items()
-        _Errors: dict[str, list[str]] = {}
-
-        _SchemaKeys = {key for key, _ in _RequestBodySchema}
-        for _Key in _RequestData.keys():
-            if _Key not in _SchemaKeys:
-                _Errors[_Key] = [f"Unexpected value '{_Key}' not found in schema '{REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint]}'."]
-
-        for _AttributeName, _AttributeType in _RequestBodySchema:
-            try:
-                _Data = _RequestData.get(_AttributeName)
-                _AttributeType = unwrap_optional(_AttributeType)
-
-                if _AttributeTypeOrigin := get_origin(_AttributeType):
-                    if _AttributeTypeOrigin is AttributeChangeTracker:
-                        _DeserialisedRequestData[_AttributeName] = __get_deserialised_attribute_change_tracker(_AttributeName, _RequestData)
-
-                elif _ParsedUUID := try_parse_uuid(_Data):
-                    _DeserialisedRequestData[_AttributeName] = EntityID(_ParsedUUID)
-
-                elif _AttributeType is bytes and _Data:
-                    _DeserialisedRequestData[_AttributeName] = _AttributeType(b64decode(_Data))
-
-                else:
-                    _DeserialisedRequestData[_AttributeName] = _AttributeType(_Data) if _Data else None
-
-            except (ValueError, TypeError, AttributeError) as e:
-                _Errors[_AttributeName] = [f"Expected type '{_AttributeType}'. " + str(e)]
-                logging.getLogger(__name__).exception(e)
-
-        if _Errors:
-            return bad_request("Malformed request. One or more request properties could not be deserialised.", errors = _Errors)
-
-        _DeserialisedRequest = REQUEST_BODYS_BY_ENDPOINT[_RequestEndpoint](**_DeserialisedRequestData)
-
-        '''Remove attributes not present in request data to allow validate_inputs to work.
-            Will leave AttributeChangeTrackers, unintentionally avoiding null exceptions, e.g. "price.has_been_set".
-            This may cause several bugs in the future if 'delattr' changes its behaviour.'''
-        for _AttributeName, _ in _RequestBodySchema:
-            if _AttributeName not in _RequestData:
-                delattr(_DeserialisedRequest, _AttributeName)
-
-        _ValidationResult = validate_inputs(_DeserialisedRequest)
-
-        if _ValidationResult is not None:
-            return bad_request(_ValidationResult.summary, errors = _ValidationResult.errors)
-
-        setattr(request, "request_body", _DeserialisedRequest)
+    return
 
 
-def __get_deserialised_attribute_change_tracker(attribute_name: str, request_data: dict) -> AttributeChangeTracker:
-    '''
-        Args:
-            attribute_name (str): The name of the attribute which requires deserialisation.
-            request_data (dict): The data which may contain the attribute_name as a key.
+def audit_incoming_request():
+    _Logger.debug(
+        "Incoming request | method=%s path=%s endpoint=%s ip=%s",
+        request.method,
+        request.path,
+        request.endpoint,
+        request.remote_addr,
+    )
+    _Logger.debug(
+        f"body: {request.get_json(silent=True)}" if request.is_json else ""
+    )
+    print(f"body: {request.get_json(silent=True)}" if request.is_json else "")
 
-        Returns:
-            AttributeChangeTracker: The deserialised value if attribute_name exists on request_data,
-            otherwise the default AttributeChangeTracker.
-    '''
 
-    if attribute_name not in request_data.keys():
-        return AttributeChangeTracker()
+def handle_cors_preflight_request():
+    return jsonify({
+        'Access-Control-Allow-Origin': 'http://localhost:5174',
+        'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+    })
 
-    elif request_data[attribute_name] is None:
-        return AttributeChangeTracker(None, True)
 
-    else:
-        if _ParsedUUID := try_parse_uuid(request_data[attribute_name]):
-            return AttributeChangeTracker(EntityID(_ParsedUUID), True)
+def deserialise_web_request(request_endpoint: str):
+    if request_endpoint not in REQUEST_BODYS_BY_ENDPOINT:
+        return internal_server_error("Endpoint not found in registry.")
 
-        return AttributeChangeTracker(request_data[attribute_name])
+    _RequestBodySchema = REQUEST_BODYS_BY_ENDPOINT[request_endpoint]
+    try:
+        _Parsed = _RequestBodySchema.model_validate(request.get_json())
+    except ValidationError as e:
+        _Errors = {
+            ".".join(str(loc) for loc in err["loc"]): [err["msg"]]
+            for err in e.errors()
+        }
+        return bad_request("Malformed request.", errors = _Errors)
+
+    setattr(request, "request_body", _Parsed)
 
 
 @MIDDLEWARE.after_app_request
@@ -147,14 +103,14 @@ def apply_query_operations(response: Response):
     if not response.is_json:
         return response
 
-    _ResponseData: List[Dict[str, Any]] = response.get_json()
+    _ResponseData: list[dict[str, Any]] = response.get_json()
 
     if not isinstance(_ResponseData, list):
         return response
 
     _RequestEndpoint = request.endpoint.split(".")[-1]
     _QueryString: str = request.view_args["query"].lower()
-    _QueryOperations: List[str] = _QueryString.split("&")
+    _QueryOperations: list[str] = _QueryString.split("&")
 
     if _RequestEndpoint not in RESPONSES_BY_ENDPOINT:
         set_bad_query_request_response(f'The endpoint "{_RequestEndpoint}" does not support filtering.')

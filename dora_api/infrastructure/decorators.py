@@ -1,4 +1,9 @@
-RESPONSES_BY_ENDPOINT = {}
+from typing import Any
+
+from pydantic import BaseModel
+
+
+RESPONSES_BY_ENDPOINT: dict[str, type[Any]] = {}
 
 
 def has_response(response_class):
@@ -15,7 +20,7 @@ def has_response(response_class):
     return decorator
 
 
-REQUEST_BODYS_BY_ENDPOINT = {}
+REQUEST_BODYS_BY_ENDPOINT: dict[str, type[BaseModel]] = {}
 
 
 def has_request_body(request_body_class):

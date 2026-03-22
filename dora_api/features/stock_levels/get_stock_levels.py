@@ -22,7 +22,7 @@ class StockLevelDto:
         return StockLevelDto(
             name = stock_level.name,
             sequence = stock_level.sequence,
-            stock_level_id = stock_level.id.value
+            stock_level_id = stock_level.id
         )
 
 

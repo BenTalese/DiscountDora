@@ -10,6 +10,7 @@ from dora_api.app import db
 from dora_api.domain.entities.base_entity import BaseEntity
 from dora_api.domain.exceptions import PersistenceError
 from dora_api.domain.generics import TEntity
+from dora_api.domain.types import EMPTY_UUID
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.table_mappings import _mapper_registry
@@ -24,10 +25,12 @@ class SqlAlchemyRepository:
         return db.session
 
     def add(self, entity: BaseEntity) -> None:
+        def is_not_persisted(entity: BaseEntity) -> bool:
+            return entity.id == EMPTY_UUID
         # Catch inline-constructed related entities that were never added
         for f in fields(entity):
             value = getattr(entity, f.name)
-            if isinstance(value, BaseEntity) and value.id == UUID(int=0):
+            if isinstance(value, BaseEntity) and is_not_persisted(value):
                 raise PersistenceError(
                     f"{type(entity).__name__}.{f.name} has not been persisted. "
                     f"Call repo.add() on it before adding {type(entity).__name__}."

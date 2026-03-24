@@ -9,6 +9,7 @@ from varname import nameof
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.get_stock_items import (StockItemDto,
                                                            get_stock_items)
@@ -32,7 +33,7 @@ class CreateStockItemRequest(BaseModel):
 
 @dataclass(slots=True)
 class CreateStockItemResponse:
-    new_stock_item_id: UUID = UUID(int=0)
+    new_stock_item_id: UUID = EMPTY_UUID
     stock_level_not_found: bool = False
     stock_location_not_found: bool = False
     stock_item_already_exists: bool = False

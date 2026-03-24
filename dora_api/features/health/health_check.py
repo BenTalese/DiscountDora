@@ -3,5 +3,5 @@ from dora_api.features.routers import HEALTH_ROUTER
 
 
 @HEALTH_ROUTER.route("")
-async def health_check_async():
+def health_check():
     return jsonify(True), 200

@@ -1,5 +1,5 @@
-from uuid import uuid4
 from unittest.mock import ANY
+from uuid import uuid4
 
 import requests
 
@@ -15,7 +15,7 @@ base_route = 'http://localhost:5170/api/stock-locations'
 
 #endregion setup
 
-#region ---------------- create_stock_location_async tests ----------------
+#region ---------------- create_stock_location tests ----------------
 
 
 def test__create_stock_location__CreatingStockLocationWithAllAttributes__StockLocationCreated(api):
@@ -62,9 +62,9 @@ def test__create_stock_location__EmptyRequest__IsRequiredInputsValidationFailure
     }
 
 
-#endregion create_stock_location_async tests
+#endregion create_stock_location tests
 
-#region ---------------- get_stock_locations_async tests ----------------
+#region ---------------- get_stock_locations tests ----------------
 
 
 def test__get_stock_locations__GettingStockLocations__GetsAllExpectedAttributes(api):
@@ -246,9 +246,9 @@ def test__get_stock_locations__FilteringSortingAndPagingStockLocations__GetsMatc
     assert len(_Response.json()) == 1
 
 
-#endregion get_stock_locations_async tests
+#endregion get_stock_locations tests
 
-#region ---------------- update_stock_location_async tests ----------------
+#region ---------------- update_stock_location tests ----------------
 
 
 def test__update_stock_location__EmptyUpdate__StockLocationUnaffected(api):
@@ -318,9 +318,9 @@ def test__update_stock_location__OtherStockLocationHasSameName__CannotUpdateToDu
     }
 
 
-#endregion update_stock_location_async tests
+#endregion update_stock_location tests
 
-#region ---------------- delete_stock_location_async tests ----------------
+#region ---------------- delete_stock_location tests ----------------
 
 
 def test__delete_stock_location__DeletingStockLocation__StockLocationDeleted(api):
@@ -347,4 +347,4 @@ def test__delete_stock_location__StockLocationDoesNotExist__StockLocationNotFoun
     }
 
 
-#endregion delete_stock_location_async tests
+#endregion delete_stock_location tests

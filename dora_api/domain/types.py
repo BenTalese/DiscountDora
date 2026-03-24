@@ -1,3 +1,6 @@
+from uuid import UUID
+
+
 class Unset:
     @classmethod
     def __get_pydantic_core_schema__(cls, source, handler):
@@ -9,3 +12,6 @@ class Unset:
 
 
 UNSET = Unset()
+
+
+EMPTY_UUID = UUID(int=0)

@@ -4,9 +4,6 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from dora_api.services.iconfiguration_manager import \
-    IConfigurationManager
-
 
 class Config(BaseModel):
     API_HOST: str = "0.0.0.0"
@@ -16,7 +13,7 @@ class Config(BaseModel):
     WEB_APP_PORT: int = 5174
 
 
-class ConfigurationManager(IConfigurationManager):
+class DoraConfig:
     _config: Config
     _config_path: Path = Path().resolve() / 'config' / 'dapi.appsettings.json'
 

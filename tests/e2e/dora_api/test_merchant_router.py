@@ -10,7 +10,7 @@ base_route = 'http://localhost:5170/api/merchants'
 
 #endregion setup
 
-#region ---------------- get_merchants_async tests ----------------
+#region ---------------- get_merchants tests ----------------
 
 
 def test__get_merchants__GettingMerchant__GetsAllExpectedAttributes(api):
@@ -192,4 +192,4 @@ def test__get_merchants__FilteringSortingAndPagingStockItems__GetsMatchingMercha
     assert len(_Response.json()) == 1
 
 
-#endregion get_merchants_async tests
+#endregion get_merchants tests

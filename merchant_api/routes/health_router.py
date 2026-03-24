@@ -7,12 +7,12 @@ HEALTH_ROUTER = Blueprint("HEALTH_ROUTER", __name__, url_prefix="/api/health")
 
 
 @HEALTH_ROUTER.route("")
-async def health_check_async():
+async def health_check():
     return jsonify(True), 200
 
 
 @HEALTH_ROUTER.route("data-providers")
-async def data_providers_health_check_async():
+async def data_providers_health_check():
     _DataProviders = get_merchant_data_providers()
 
     return jsonify([{

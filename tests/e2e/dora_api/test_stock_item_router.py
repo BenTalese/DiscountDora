@@ -1,5 +1,5 @@
-from uuid import uuid4
 from unittest.mock import ANY
+from uuid import uuid4
 
 import pytest
 import requests
@@ -26,7 +26,7 @@ def stock_location_id():
 
 #endregion setup
 
-#region ---------------- create_stock_item_async tests ----------------
+#region ---------------- create_stock_item tests ----------------
 
 
 def test__create_stock_item__CreatingStockItemWithAllAttributes__StockItemCreated(api, stock_level_id, stock_location_id):
@@ -163,9 +163,9 @@ def test__create_stock_item__StockLocationDoesNotExist__IsEntityExistenceFailure
     }
 
 
-#endregion create_stock_item_async tests
+#endregion create_stock_item tests
 
-#region ---------------- get_stock_items_async tests ----------------
+#region ---------------- get_stock_items tests ----------------
 
 
 def test__get_stock_items__GettingStockItem__GetsAllExpectedAttributes(api):
@@ -367,9 +367,9 @@ def test__get_stock_items__FilteringSortingAndPagingStockItems__GetsMatchingStoc
     assert len(_Response.json()) == 1
 
 
-#endregion get_stock_items_async tests
+#endregion get_stock_items tests
 
-#region ---------------- update_stock_item_async tests ----------------
+#region ---------------- update_stock_item tests ----------------
 
 
 def test__update_stock_item__EmptyUpdate__StockItemUnaffected(api):
@@ -448,9 +448,9 @@ def test__update_stock_item__OtherStockItemHasSameName__CannotUpdateToDuplicateN
     }
 
 
-#endregion update_stock_item_async tests
+#endregion update_stock_item tests
 
-#region ---------------- delete_stock_item_async tests ----------------
+#region ---------------- delete_stock_item tests ----------------
 
 
 def test__delete_stock_item__DeletingStockItem__StockItemDeleted(api):
@@ -477,4 +477,4 @@ def test__delete_stock_item__StockItemDoesNotExist__StockItemNotFound(api):
     }
 
 
-#endregion delete_stock_item_async tests
+#endregion delete_stock_item tests

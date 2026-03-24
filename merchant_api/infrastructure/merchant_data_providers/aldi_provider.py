@@ -10,8 +10,7 @@ import requests
 from bs4 import BeautifulSoup, ResultSet
 from pydantic import ValidationError
 
-# FIXME: Directly referencing the other API model? (grimace)
-from dora_api.domain.entities.merchant import Merchant
+from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.aldi_product_offer import AldiProductOffer
 from merchant_api.domain.entities.dora_product import DoraProduct
 from merchant_api.domain.entities.scraped_product_offer import \

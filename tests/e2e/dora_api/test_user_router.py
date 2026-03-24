@@ -10,7 +10,7 @@ base_route = 'http://localhost:5170/api/users'
 
 #endregion setup
 
-#region ---------------- get_users_async tests ----------------
+#region ---------------- get_users tests ----------------
 
 
 def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
@@ -160,4 +160,4 @@ def test__get_users__FilteringSortingAndPagingUsers__GetsMatchingUsers(api):
     assert len(_Response.json()) == 1
 
 
-#endregion get_users_async tests
+#endregion get_users tests

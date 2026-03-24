@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from varname import nameof
 
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.features.stock_locations.get_stock_locations import (
     StockLocationDto, get_stock_locations)
@@ -25,7 +26,7 @@ class CreateStockLocationRequest(BaseModel):
 
 @dataclass(slots=True)
 class CreateStockLocationResponse:
-    new_stock_location_id: UUID = UUID(int=0)
+    new_stock_location_id: UUID = EMPTY_UUID
     stock_location_already_exists: bool = False
 
 

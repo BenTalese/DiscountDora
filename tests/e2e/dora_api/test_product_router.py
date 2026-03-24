@@ -13,7 +13,7 @@ base_route = 'http://localhost:5170/api/products'
 
 #endregion setup
 
-#region ---------------- create_product_async tests ----------------
+#region ---------------- create_product tests ----------------
 
 
 # TODO: Write test for optional fields (brand, stockcode, etc)
@@ -190,9 +190,9 @@ def test__create_product__EmptyRequest__IsRequiredInputsValidationFailure(api):
     }
 
 
-#endregion create_product_async tests
+#endregion create_product tests
 
-#region ---------------- get_products_async tests ----------------
+#region ---------------- get_products tests ----------------
 
 
 def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
@@ -299,9 +299,9 @@ def test__get_products__SortingByNonExistentAttribute__IsBadRequest(api):
     }
 
 
-#endregion get_products_async tests
+#endregion get_products tests
 
-#region ---------------- update_product_async tests ----------------
+#region ---------------- update_product tests ----------------
 
 
 def test__update_product__EmptyUpdate__ProductUnaffected(api):
@@ -424,4 +424,4 @@ def test__update_product__UpdatingPriceWasWithoutPriceNow__IsValidationFailure(a
     }
 
 
-#endregion update_product_async tests
+#endregion update_product tests

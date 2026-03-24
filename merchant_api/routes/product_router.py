@@ -24,7 +24,7 @@ PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products
 
 
 @PRODUCT_ROUTER.route("/search", methods = ["POST"])
-async def search_for_product_async() -> List[ScrapedProductOffer]:
+async def search_for_product() -> List[ScrapedProductOffer]:
     class SearchForProductQuery(BaseModel):
         merchants_to_search: List[str]
         result_limit: int
@@ -88,7 +88,7 @@ async def search_for_product_async() -> List[ScrapedProductOffer]:
 
 
 @PRODUCT_ROUTER.route("/offers")
-async def get_product_offers_async():
+async def get_product_offers():
     _Logger = logging.getLogger(__name__)
     _DataProviders = get_healthy_merchant_data_providers()
 

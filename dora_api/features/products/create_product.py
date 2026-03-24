@@ -9,6 +9,7 @@ from varname import nameof
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
+from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.products.get_products import ProductDto, get_products
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
@@ -39,7 +40,7 @@ class CreateProductRequest(BaseModel):
 
 @dataclass(slots=True)
 class CreateProductResponse:
-    new_product_id: UUID = UUID(int=0)
+    new_product_id: UUID = EMPTY_UUID
     product_already_exists: bool = False
 
 

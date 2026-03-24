@@ -10,7 +10,7 @@ base_route = 'http://localhost:5170/api/stock-levels'
 
 #endregion setup
 
-#region ---------------- get_stock_levels_async tests ----------------
+#region ---------------- get_stock_levels tests ----------------
 
 
 def test__get_stock_levels__GettingStockLevel__GetsAllExpectedAttributes(api):
@@ -200,4 +200,4 @@ def test__get_stock_levels__FilteringSortingAndPagingStockItems__GetsMatchingSto
     assert len(_Response.json()) == 1
 
 
-#endregion get_stock_levels_async tests
+#endregion get_stock_levels tests

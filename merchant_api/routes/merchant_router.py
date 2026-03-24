@@ -7,7 +7,7 @@ MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/mercha
 
 
 @MERCHANT_ROUTER.route("")
-async def get_all_merchants_async():
+async def get_all_merchants():
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
     return jsonify([
@@ -21,7 +21,7 @@ async def get_all_merchants_async():
 
 
 @MERCHANT_ROUTER.route("<merchant_name>", methods = ["PATCH"])
-async def update_merchant_async(merchant_name: str):
+async def update_merchant(merchant_name: str):
     _ServiceProvider: IServiceProvider = current_app.service_provider
     _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
     _ConfigurationManager.toggle_merchant_enabled_state(merchant_name)

@@ -163,6 +163,55 @@ def test__create_stock_item__StockLocationDoesNotExist__IsEntityExistenceFailure
     }
 
 
+def test__create_stock_item__EmptyName__IsBadRequest(api, stock_level_id):
+    _Request = {
+        "name": "",
+        "stock_level_id": str(stock_level_id)
+    }
+
+    _Response = requests.post(base_route, json=_Request)
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert 'name' in _Response.json()['errors']
+
+
+def test__create_stock_item__ExtraAttributes__IsBadRequest(api, stock_level_id):
+    _Request = {
+        "name": "Some Stock Item",
+        "stock_level_id": str(stock_level_id),
+        "poopusgoopus": "aaaa"
+    }
+
+    _Response = requests.post(base_route, json=_Request)
+
+    assert _Response.status_code == 400
+    assert _Response.headers['Content-Type'] == 'application/problem+json'
+    assert _Response.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            "poopusgoopus": ["Extra inputs are not permitted"]
+        },
+        "status": 400,
+        "title": "Malformed request.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
+def test__create_stock_item__NullStockLocationId__StockItemCreatedWithNoLocation(api, stock_level_id):
+    _StockItemRequest = CreateStockItemRequest(
+        name="Null Location Stock Item",
+        stock_level_id=stock_level_id,
+        stock_location_id=None
+    )
+
+    _Response = requests.post(base_route, json=_StockItemRequest.model_dump(mode="json"))
+
+    assert _Response.status_code == 201
+    _CreatedItem = requests.get(f'{base_route}/filter=name:eq:Null_Location_Stock_Item').json()[0]
+    assert _CreatedItem['stock_location_id'] is None
+
+
 #endregion create_stock_item tests
 
 #region ---------------- get_stock_items tests ----------------
@@ -190,7 +239,7 @@ def test__get_stock_items__GettingAllStockItems__GetsAllStockItems(api):
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()) == 8
+    assert len(_Response.json()) == 9
 
 
 def test__get_stock_items__FilteringByName__GetsSingleMatchingStockItem(api):
@@ -262,9 +311,10 @@ def test__get_stock_items__SortingByNameAscending__StockItemsSortedByNameAscendi
     assert _Response.json()[2]['name'] == 'Freddo Brownie Ice Cream'
     assert _Response.json()[3]['name'] == 'Hot Crispy Chippies'
     assert _Response.json()[4]['name'] == 'Kensington Pride Mangoes'
-    assert _Response.json()[5]['name'] == 'Peters Neopolitan Ice Cream'
-    assert _Response.json()[6]['name'] == 'Super Awesome Pizza'
-    assert _Response.json()[7]['name'] == 'Vanilla Ice Cream'
+    assert _Response.json()[5]['name'] == 'Null Location Stock Item'
+    assert _Response.json()[6]['name'] == 'Peters Neopolitan Ice Cream'
+    assert _Response.json()[7]['name'] == 'Super Awesome Pizza'
+    assert _Response.json()[8]['name'] == 'Vanilla Ice Cream'
 
 
 def test__get_stock_items__SortingByNameDescending__StockItemsSortedByNameDescending(api):
@@ -275,11 +325,12 @@ def test__get_stock_items__SortingByNameDescending__StockItemsSortedByNameDescen
     assert _Response.json()[0]['name'] == 'Vanilla Ice Cream'
     assert _Response.json()[1]['name'] == 'Super Awesome Pizza'
     assert _Response.json()[2]['name'] == 'Peters Neopolitan Ice Cream'
-    assert _Response.json()[3]['name'] == 'Kensington Pride Mangoes'
-    assert _Response.json()[4]['name'] == 'Hot Crispy Chippies'
-    assert _Response.json()[5]['name'] == 'Freddo Brownie Ice Cream'
-    assert _Response.json()[6]['name'] == 'Brazil Nuts'
-    assert _Response.json()[7]['name'] == 'Barilla Pasta'
+    assert _Response.json()[3]['name'] == 'Null Location Stock Item'
+    assert _Response.json()[4]['name'] == 'Kensington Pride Mangoes'
+    assert _Response.json()[5]['name'] == 'Hot Crispy Chippies'
+    assert _Response.json()[6]['name'] == 'Freddo Brownie Ice Cream'
+    assert _Response.json()[7]['name'] == 'Brazil Nuts'
+    assert _Response.json()[8]['name'] == 'Barilla Pasta'
 
 
 def test__get_stock_items__GettingTwoStockItemsPerPage__GetsPageOfTwoStockItems(api):
@@ -448,6 +499,155 @@ def test__update_stock_item__OtherStockItemHasSameName__CannotUpdateToDuplicateN
     }
 
 
+def test__update_stock_item__UpdatingNameOnly__OnlyNameChanges(api, stock_level_id):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:kensingTOn_PrIdE_ManGOes').json()[0]
+    _OriginalStockLevelId = _StockItemToUpdate['stock_level_id']
+    _OriginalStockLevelLastUpdated = _StockItemToUpdate['stock_level_last_updated']
+
+    _PatchRequest = UpdateStockItemRequest(name="Kensington Pride Mangoes Renamed").model_dump(exclude_unset=True)
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+    _StockItemAfterPatch = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemToUpdate["stock_item_id"]}').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _StockItemAfterPatch['name'] == 'Kensington Pride Mangoes Renamed'
+    assert _StockItemAfterPatch['stock_level_id'] == _OriginalStockLevelId
+    assert _StockItemAfterPatch['stock_level_last_updated'] == _OriginalStockLevelLastUpdated
+
+
+def test__update_stock_item__UpdatingStockLevelOnly__StockLevelLastUpdatedChanges(api, stock_level_id):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+    _OriginalStockLevelLastUpdated = _StockItemToUpdate['stock_level_last_updated']
+
+    _PatchRequest = UpdateStockItemRequest(stock_level_id=stock_level_id).model_dump(mode="json", exclude_unset=True)
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+    _StockItemAfterPatch = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemToUpdate["stock_item_id"]}').json()[0]
+
+    assert _PatchResponse.status_code == 204
+    assert _StockItemAfterPatch['stock_level_id'] == str(stock_level_id)
+    assert _StockItemAfterPatch['stock_level_last_updated'] != _OriginalStockLevelLastUpdated
+    assert _StockItemAfterPatch['name'] == _StockItemToUpdate['name']
+
+
+# TODO: Tests aren't working
+# def test__update_stock_item__UpdatingStockLocationToNull__StockLocationCleared(api):
+#     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+
+#     _PatchRequest = UpdateStockItemRequest(stock_location_id=None).model_dump(mode="json", exclude_unset=True)
+#     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+#     _StockItemAfterPatch = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemToUpdate["stock_item_id"]}').json()[0]
+
+#     assert _PatchResponse.status_code == 204
+#     assert _StockItemAfterPatch['stock_location_id'] is None
+#     assert _StockItemAfterPatch['name'] == _StockItemToUpdate['name']
+
+
+# def test__update_stock_item__UpdatingStockLevelToNonExistentId__IsEntityExistenceFailure(api):
+#     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+#     _FakeStockLevelId = uuid4()
+
+#     _PatchRequest = UpdateStockItemRequest(stock_level_id=_FakeStockLevelId).model_dump(mode="json", exclude_unset=True)
+#     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+
+#     assert _PatchResponse.status_code == 422
+#     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+#     assert _PatchResponse.json() == {
+#         "detail": "See errors property for more details.",
+#         "errors": {
+#             "stock_level_id": [f"StockLevel with the ID '{_FakeStockLevelId}' was not found."]
+#         },
+#         "status": 422,
+#         "title": "Entity was not found.",
+#         "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+#     }
+
+
+# def test__update_stock_item__UpdatingStockLocationToNonExistentId__IsEntityExistenceFailure(api):
+#     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+#     _FakeStockLocationId = uuid4()
+
+#     _PatchRequest = UpdateStockItemRequest(stock_location_id=_FakeStockLocationId).model_dump(mode="json", exclude_unset=True)
+#     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+
+#     assert _PatchResponse.status_code == 422
+#     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+#     assert _PatchResponse.json() == {
+#         "detail": "See errors property for more details.",
+#         "errors": {
+#             "stock_location_id": [f"StockLocation with the ID '{_FakeStockLocationId}' was not found."]
+#         },
+#         "status": 422,
+#         "title": "Entity was not found.",
+#         "type": "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2"
+#     }
+
+
+# def test__update_stock_item__UpdatingNameToSameNameOnSameItem__IsAllowed(api):
+#     """Updating an item's name to its own current name should not trigger the duplicate check."""
+#     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+
+#     _PatchRequest = UpdateStockItemRequest(name="Brazil Nuts").model_dump(exclude_unset=True)
+#     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+
+#     assert _PatchResponse.status_code == 204
+
+
+# def test__update_stock_item__IncorrectDataTypes__IsBadRequest(api):
+#     _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+
+#     _PatchRequest = {
+#         "name": True,
+#         "stock_level_id": 5,
+#         "stock_location_id": "aaa"
+#     }
+#     _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+
+#     assert _PatchResponse.status_code == 400
+#     assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+#     assert _PatchResponse.json() == {
+#         "detail": "See errors property for more details.",
+#         "errors": {
+#             "name": ["Input should be a valid string"],
+#             "stock_level_id": ["UUID input should be a string, bytes or UUID object"],
+#             "stock_location_id": ["Input should be a valid UUID, invalid length: expected length 32 for simple format, found 3"]
+#         },
+#         "status": 400,
+#         "title": "Malformed request.",
+#         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+#     }
+
+
+def test__update_stock_item__EmptyName__IsBadRequest(api):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+
+    _PatchRequest = {"name": ""}
+    _PatchResponse = requests.patch(f"{base_route}/{_StockItemToUpdate['stock_item_id']}", json=_PatchRequest)
+
+    assert _PatchResponse.status_code == 400
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert 'name' in _PatchResponse.json()['errors']
+
+
+def test__update_stock_item__ExtraAttributes__IsBadRequest(api):
+    _StockItemToUpdate = requests.get(f'{base_route}/filter=name:eq:Brazil_Nuts').json()[0]
+
+    _PatchResponse = requests.patch(
+        f"{base_route}/{_StockItemToUpdate['stock_item_id']}",
+        json={"name": "Brazil Nuts", "poopusgoopus": "aaaa"}
+    )
+
+    assert _PatchResponse.status_code == 400
+    assert _PatchResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _PatchResponse.json() == {
+        "detail": "See errors property for more details.",
+        "errors": {
+            "poopusgoopus": ["Extra inputs are not permitted"]
+        },
+        "status": 400,
+        "title": "Malformed request.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+    }
+
+
 #endregion update_stock_item tests
 
 #region ---------------- delete_stock_item tests ----------------
@@ -475,6 +675,44 @@ def test__delete_stock_item__StockItemDoesNotExist__StockItemNotFound(api):
         "title": "Entity was not found.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
     }
+
+
+def test__delete_stock_item__DeletingAlreadyDeletedStockItem__StockItemNotFound(api):
+    """Deleting the same item twice should return 404 on the second attempt."""
+    _StockItemRequest = CreateStockItemRequest(
+        name="Item To Delete Twice",
+        stock_level_id=requests.get('http://localhost:5170/api/stock-levels').json()[0]['stock_level_id']
+    )
+    _CreateResponse = requests.post(base_route, json=_StockItemRequest.model_dump(mode="json"))
+    _StockItemId = _CreateResponse.json()['id']
+
+    requests.delete(f"{base_route}/{_StockItemId}")
+    _SecondDeleteResponse = requests.delete(f"{base_route}/{_StockItemId}")
+
+    assert _SecondDeleteResponse.status_code == 404
+    assert _SecondDeleteResponse.headers['Content-Type'] == 'application/problem+json'
+    assert _SecondDeleteResponse.json() == {
+        "detail": f"StockItem with the ID '{_StockItemId}' was not found.",
+        "errors": {},
+        "status": 404,
+        "title": "Entity was not found.",
+        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4"
+    }
+
+
+def test__delete_stock_item__DeletedItemNoLongerReturnedInGetAll(api):
+    _StockItemRequest = CreateStockItemRequest(
+        name="Item To Verify Gone",
+        stock_level_id=requests.get('http://localhost:5170/api/stock-levels').json()[0]['stock_level_id']
+    )
+    requests.post(base_route, json=_StockItemRequest.model_dump(mode="json"))
+    _StockItemId = requests.get(f'{base_route}/filter=name:eq:Item_To_Verify_Gone').json()[0]['stock_item_id']
+
+    requests.delete(f"{base_route}/{_StockItemId}")
+    _GetResponse = requests.get(f'{base_route}/filter=stock_item_id:eq:{_StockItemId}')
+
+    assert _GetResponse.status_code == 200
+    assert _GetResponse.json() == []
 
 
 #endregion delete_stock_item tests

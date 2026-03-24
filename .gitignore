@@ -41,8 +41,8 @@ __pycache__
 coverage
 dist
 dist-ssr
-framework/web_app_old/.vscode/*
-framework/web_app/.vscode/*
+web_app_old/.vscode/*
+web_app/.vscode/*
 lerna-debug.log*
 logs
 node_modules

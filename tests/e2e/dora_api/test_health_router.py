@@ -6,10 +6,10 @@ base_route = 'http://localhost:5170/api/health'
 
 #endregion setup
 
-#region ---------------- health_check_async tests ----------------
+#region ---------------- health_check tests ----------------
 
 
-def test__health_check_async__ApiIsHealthy__GetsOkayResponse(api):
+def test__health_check__ApiIsHealthy__GetsOkayResponse(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
@@ -17,4 +17,4 @@ def test__health_check_async__ApiIsHealthy__GetsOkayResponse(api):
     assert _Response.json() is True
 
 
-#endregion health_check_async tests
+#endregion health_check tests

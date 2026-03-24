@@ -10,10 +10,10 @@ base_route = 'http://localhost:5170/api/merchants'
 
 #endregion setup
 
-#region ---------------- get_merchants_async tests ----------------
+#region ---------------- get_merchants tests ----------------
 
 
-def test__get_merchants_async__GettingMerchant__GetsAllExpectedAttributes(api):
+def test__get_merchants__GettingMerchant__GetsAllExpectedAttributes(api):
     _Merchant = requests.get(base_route).json()[0]
 
     assert is_valid_uuid(_Merchant['merchant_id'])
@@ -24,7 +24,7 @@ def test__get_merchants_async__GettingMerchant__GetsAllExpectedAttributes(api):
     }
 
 
-def test__get_merchants_async__GettingAllMerchants__GetsAllMerchants(api):
+def test__get_merchants__GettingAllMerchants__GetsAllMerchants(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
@@ -32,7 +32,7 @@ def test__get_merchants_async__GettingAllMerchants__GetsAllMerchants(api):
     assert len(_Response.json()) == 2
 
 
-def test__get_merchants_async__FilteringByName__GetsSingleMatchingMerchant(api):
+def test__get_merchants__FilteringByName__GetsSingleMatchingMerchant(api):
     _Response = requests.get(f'{base_route}/filter=name:eq:woolworths')
 
     assert _Response.status_code == 200
@@ -41,7 +41,7 @@ def test__get_merchants_async__FilteringByName__GetsSingleMatchingMerchant(api):
     assert len(_Response.json()) == 1
 
 
-def test__get_merchants_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
+def test__get_merchants__FilteringOnNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=thing:eq:woolworths')
 
     assert _Response.status_code == 400
@@ -55,7 +55,7 @@ def test__get_merchants_async__FilteringOnNonExistentAttribute__IsBadRequest(api
     }
 
 
-def test__get_merchants_async__FilteringForMerchantThatDoesNotExist__EmptyResult(api):
+def test__get_merchants__FilteringForMerchantThatDoesNotExist__EmptyResult(api):
     _Response = requests.get(f'{base_route}/filter=merchant_id:eq:{uuid.uuid4()}')
 
     assert _Response.status_code == 200
@@ -63,13 +63,13 @@ def test__get_merchants_async__FilteringForMerchantThatDoesNotExist__EmptyResult
     assert _Response.json() == []
 
 
-def test__get_merchants_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
+def test__get_merchants__FilteringWithUnsupportedOperator__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=merchant_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
+        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
         'errors': {},
         'status': 400,
         'title': 'Unsupported query operation.',
@@ -77,7 +77,7 @@ def test__get_merchants_async__FilteringWithUnsupportedOperator__IsBadRequest(ap
     }
 
 
-def test__get_merchants_async__SortingByNonExistentAttribute__IsBadRequest(api):
+def test__get_merchants__SortingByNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/sort=thing:desc')
 
     assert _Response.status_code == 400
@@ -91,7 +91,7 @@ def test__get_merchants_async__SortingByNonExistentAttribute__IsBadRequest(api):
     }
 
 
-def test__get_merchants_async__SortingByNameAscending__MerchantsSortedByNameAscending(api):
+def test__get_merchants__SortingByNameAscending__MerchantsSortedByNameAscending(api):
     _Response = requests.get(f'{base_route}/sort=name:asc')
 
     assert _Response.status_code == 200
@@ -100,7 +100,7 @@ def test__get_merchants_async__SortingByNameAscending__MerchantsSortedByNameAsce
     assert _Response.json()[1]['name'] == 'Woolworths'
 
 
-def test__get_merchants_async__SortingByNameDescending__MerchantsSortedByNameDescending(api):
+def test__get_merchants__SortingByNameDescending__MerchantsSortedByNameDescending(api):
     _Response = requests.get(f'{base_route}/sort=name:desc')
 
     assert _Response.status_code == 200
@@ -109,7 +109,7 @@ def test__get_merchants_async__SortingByNameDescending__MerchantsSortedByNameDes
     assert _Response.json()[1]['name'] == 'Coles'
 
 
-def test__get_merchants_async__GettingOneMerchantPerPage__GetsPageOfOneMerchant(api):
+def test__get_merchants__GettingOneMerchantPerPage__GetsPageOfOneMerchant(api):
     _Response = requests.get(f'{base_route}/page=1&limit=1')
 
     assert _Response.status_code == 200
@@ -118,7 +118,7 @@ def test__get_merchants_async__GettingOneMerchantPerPage__GetsPageOfOneMerchant(
     assert len(_Response.json()) == 1
 
 
-def test__get_merchants_async__GettingSecondPage__GetsSecondPageOfMerchants(api):
+def test__get_merchants__GettingSecondPage__GetsSecondPageOfMerchants(api):
     _Response = requests.get(f'{base_route}/page=2&limit=1')
 
     assert _Response.status_code == 200
@@ -127,13 +127,13 @@ def test__get_merchants_async__GettingSecondPage__GetsSecondPageOfMerchants(api)
     assert len(_Response.json()) == 1
 
 
-def test__get_merchants_async__PageValueIsNotInteger__IsBadRequest(api):
+def test__get_merchants__PageValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=true&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "detail": 'Page and limit must be integers.',
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -141,13 +141,13 @@ def test__get_merchants_async__PageValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_merchants_async__LimitValueIsNotInteger__IsBadRequest(api):
+def test__get_merchants__LimitValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1&limit=true')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "detail": 'Page and limit must be integers.',
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -155,13 +155,13 @@ def test__get_merchants_async__LimitValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_merchants_async__PagingWithoutLimit__IsBadRequest(api):
+def test__get_merchants__PagingWithoutLimit__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": 'You must use page and limit together.',
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -169,13 +169,13 @@ def test__get_merchants_async__PagingWithoutLimit__IsBadRequest(api):
     }
 
 
-def test__get_merchants_async__LimitingWithoutPage__IsBadRequest(api):
+def test__get_merchants__LimitingWithoutPage__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/limit=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": 'You must use page and limit together.',
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -183,7 +183,7 @@ def test__get_merchants_async__LimitingWithoutPage__IsBadRequest(api):
     }
 
 
-def test__get_merchants_async__FilteringSortingAndPagingStockItems__GetsMatchingMerchants(api):
+def test__get_merchants__FilteringSortingAndPagingStockItems__GetsMatchingMerchants(api):
     _Response = requests.get(f'{base_route}/filter=name:ct:wool&sort=name:asc&page=1&limit=1')
 
     assert _Response.status_code == 200
@@ -192,4 +192,4 @@ def test__get_merchants_async__FilteringSortingAndPagingStockItems__GetsMatching
     assert len(_Response.json()) == 1
 
 
-#endregion get_merchants_async tests
+#endregion get_merchants tests

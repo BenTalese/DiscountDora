@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Step 3. Install Node.js dependencies for the Vue app
-COPY framework/web_app/package*.json ./
+COPY web_app/package*.json ./
 RUN npm install
 
 # Step 4. Copy all files (minus ignored via .dockerignore)
@@ -20,14 +20,14 @@ COPY . .
 
 # Step 5. Build the Vue app
 FROM develop-stage as build-stage
-WORKDIR /app/framework/web_app
+WORKDIR /app/web_app
 RUN quasar build
 WORKDIR /app
 
 # # Step 6. Install Nginx and Gunicorn
 # FROM nginx:stable-alpine as production-stage
 # COPY nginx.conf /etc/nginx/conf.d/default.conf
-# COPY --from=build-stage /app/framework/web_app/dist/spa /usr/share/nginx/html
+# COPY --from=build-stage /app/web_app/dist/spa /usr/share/nginx/html
 
 # RUN pip install gunicorn
 # # RUN apt-get update && apt-get install -y nginx \
@@ -45,5 +45,5 @@ COPY startup.sh /usr/local/bin/startup.sh
 RUN chmod +x /usr/local/bin/startup.sh
 CMD ["bash", "/usr/local/bin/startup.sh"]
 
-# CMD ["python", "framework/dora_api/startup.py"]
-# CMD ["bash", "-c", "python framework/dora_api/startup.py & python framework/merchant_api/startup.py & python framework/emailer/startup.py & quasar serve /app/framework/web_app/dist/spa & wait"]
+# CMD ["python", "dora_api/startup.py"]
+# CMD ["bash", "-c", "python dora_api/startup.py & python merchant_api/startup.py & python emailer/startup.py & quasar serve /app/web_app/dist/spa & wait"]

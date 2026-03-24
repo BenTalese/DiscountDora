@@ -1,0 +1,12 @@
+from dataclasses import dataclass
+from datetime import datetime
+
+from dora_api.domain.entities.base_entity import BaseEntity
+
+
+@dataclass
+class ProductOffer(BaseEntity):
+    offered_on: datetime
+    price_now: float
+    price_was: float
+    # TODO: Presentation only: calculate save amount, save percentage, per unit price

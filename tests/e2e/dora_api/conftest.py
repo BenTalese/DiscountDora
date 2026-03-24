@@ -1,29 +1,41 @@
-from multiprocessing import Process
+import threading
 from time import sleep
-import pytest_asyncio
 
-from framework.dora_api.app import app
-from framework.dora_api.startup import startup
+import pytest
+import requests
 
-
-def run_api():
-    app.run('localhost', 5170)
+from dora_api.app import app
+from dora_api.startup import startup
 
 
-@pytest_asyncio.fixture(scope="session")
-async def api():
-    await startup(is_test_env = True)
-    process = Process(target=run_api)
-    process.start()
-    sleep(3)
+@pytest.fixture(scope="session")
+def api():
+    startup(is_test_env=True)
 
-    yield
+    thread = threading.Thread(
+        target=lambda: app.run(host="localhost", port=5170, use_reloader=False, debug=False),
+        daemon=True,
+    )
+    thread.start()
 
-    process.terminate()
-    process.join()
+    sleep(2)
 
-# Saved for later...
-# @pytest.fixture(autouse=True)
-# def slow_down_tests():
-#     yield
-#     sleep(0.3)
+    yield ApiClient("http://localhost:5170")
+
+
+class ApiClient:
+    def __init__(self, base_url: str):
+        self._base = base_url
+        self._session = requests.Session()
+
+    def get(self, path: str, **kwargs):
+        return self._session.get(f"{self._base}{path}", **kwargs)
+
+    def post(self, path: str, **kwargs):
+        return self._session.post(f"{self._base}{path}", **kwargs)
+
+    def put(self, path: str, **kwargs):
+        return self._session.put(f"{self._base}{path}", **kwargs)
+
+    def delete(self, path: str, **kwargs):
+        return self._session.delete(f"{self._base}{path}", **kwargs)

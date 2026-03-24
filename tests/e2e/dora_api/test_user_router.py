@@ -10,10 +10,10 @@ base_route = 'http://localhost:5170/api/users'
 
 #endregion setup
 
-#region ---------------- get_users_async tests ----------------
+#region ---------------- get_users tests ----------------
 
 
-def test__get_users_async__GettingUsers__GetsAllExpectedAttributes(api):
+def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
     _User = requests.get(base_route).json()[0]
 
     assert _User['email'] == 'ben.talese@gmail.com'
@@ -28,7 +28,7 @@ def test__get_users_async__GettingUsers__GetsAllExpectedAttributes(api):
     }
 
 
-def test__get_users_async__GettingAllUsers__GetsAllUsers(api):
+def test__get_users__GettingAllUsers__GetsAllUsers(api):
     _Response = requests.get(base_route)
 
     assert _Response.status_code == 200
@@ -36,7 +36,7 @@ def test__get_users_async__GettingAllUsers__GetsAllUsers(api):
     assert len(_Response.json()) == 1
 
 
-def test__get_users_async__FilteringByName__GetsSingleMatchingUser(api):
+def test__get_users__FilteringByName__GetsSingleMatchingUser(api):
     _Response = requests.get(f'{base_route}/filter=username:ct:guy')
 
     assert _Response.status_code == 200
@@ -45,7 +45,7 @@ def test__get_users_async__FilteringByName__GetsSingleMatchingUser(api):
     assert len(_Response.json()) == 1
 
 
-def test__get_users_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
+def test__get_users__FilteringOnNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=poopus_goopus:ct:guy')
 
     assert _Response.status_code == 400
@@ -59,7 +59,7 @@ def test__get_users_async__FilteringOnNonExistentAttribute__IsBadRequest(api):
     }
 
 
-def test__get_users_async__FilteringForUserThatDoesNotExist__EmptyResult(api):
+def test__get_users__FilteringForUserThatDoesNotExist__EmptyResult(api):
     _Response = requests.get(f'{base_route}/filter=user_id:eq:{uuid.uuid4()}')
 
     assert _Response.status_code == 200
@@ -67,13 +67,13 @@ def test__get_users_async__FilteringForUserThatDoesNotExist__EmptyResult(api):
     assert _Response.json() == []
 
 
-def test__get_users_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
+def test__get_users__FilteringWithUnsupportedOperator__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/filter=user_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator xx is not supported. Supported operators include 'eq', 'lt', 'gt', 'le', 'ge', 'ne' and 'ct'.",
+        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
         'errors': {},
         'status': 400,
         'title': 'Unsupported query operation.',
@@ -81,7 +81,7 @@ def test__get_users_async__FilteringWithUnsupportedOperator__IsBadRequest(api):
     }
 
 
-def test__get_users_async__SortingByNonExistentAttribute__IsBadRequest(api):
+def test__get_users__SortingByNonExistentAttribute__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/sort=dingo:desc')
 
     assert _Response.status_code == 400
@@ -95,13 +95,13 @@ def test__get_users_async__SortingByNonExistentAttribute__IsBadRequest(api):
     }
 
 
-def test__get_users_async__PageValueIsNotInteger__IsBadRequest(api):
+def test__get_users__PageValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=true&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The page parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -109,13 +109,13 @@ def test__get_users_async__PageValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_users_async__LimitValueIsNotInteger__IsBadRequest(api):
+def test__get_users__LimitValueIsNotInteger__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1&limit=true')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "The limit parameter must be an integer.",
+        "detail": "Page and limit must be integers.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -123,13 +123,13 @@ def test__get_users_async__LimitValueIsNotInteger__IsBadRequest(api):
     }
 
 
-def test__get_users_async__PagingWithoutLimit__IsBadRequest(api):
+def test__get_users__PagingWithoutLimit__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/page=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -137,13 +137,13 @@ def test__get_users_async__PagingWithoutLimit__IsBadRequest(api):
     }
 
 
-def test__get_users_async__LimitingWithoutPage__IsBadRequest(api):
+def test__get_users__LimitingWithoutPage__IsBadRequest(api):
     _Response = requests.get(f'{base_route}/limit=1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "You must use page and limit operations together.",
+        "detail": "You must use page and limit together.",
         "status": 400,
         "errors": {},
         "title": "Unsupported query operation.",
@@ -151,7 +151,7 @@ def test__get_users_async__LimitingWithoutPage__IsBadRequest(api):
     }
 
 
-def test__get_users_async__FilteringSortingAndPagingUsers__GetsMatchingUsers(api):
+def test__get_users__FilteringSortingAndPagingUsers__GetsMatchingUsers(api):
     _Response = requests.get(f'{base_route}/filter=username:ct:guy&sort=username:asc&page=1&limit=1')
 
     assert _Response.status_code == 200
@@ -160,4 +160,4 @@ def test__get_users_async__FilteringSortingAndPagingUsers__GetsMatchingUsers(api
     assert len(_Response.json()) == 1
 
 
-#endregion get_users_async tests
+#endregion get_users tests

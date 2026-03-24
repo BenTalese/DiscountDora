@@ -52,7 +52,6 @@ class CreateProductHandler:
         _MerchantName = EntityField(Merchant, nameof(Merchant.name))
         _ProductName = EntityField(Product, nameof(Product.name))
         _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
-        _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
 
         _ExistingProduct: Product | None = (
             self.repository

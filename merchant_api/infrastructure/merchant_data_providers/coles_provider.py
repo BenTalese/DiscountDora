@@ -7,18 +7,18 @@ from typing import List
 from bs4 import BeautifulSoup
 from pydantic import ValidationError
 
-from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.coles_product_offer import ColesProductOffer
 from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
 
 
-class ColesProvider(IMerchantDataProvider):
+class ColesProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
@@ -37,7 +37,7 @@ class ColesProvider(IMerchantDataProvider):
         return 1
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> List[SupportedMerchant]:
         return [
             SupportedMerchant.COLES
         ]

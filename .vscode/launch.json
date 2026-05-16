@@ -61,8 +61,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH1": "${env:PYTHONPATH}:${workspaceFolder}",
-                "PYTHONPATH2": "${workspaceFolder}:${env:PYTHONPATH}"
+                "PYTHONPATH": "${workspaceFolder}"
             }
         },
         {

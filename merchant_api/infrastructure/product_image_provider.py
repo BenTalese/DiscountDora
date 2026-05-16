@@ -1,17 +1,16 @@
 import logging
 from base64 import b64encode
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Dict
 
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.iproduct_image_provider import IProductImageProvider
 
 
-class ProductImageProvider(IProductImageProvider):
+class ProductImageProvider:
 
     #region ---------------- Fields ----------------
 
-    _cache_folder: PurePath = Path() / ".image_cache"
+    _cache_folder: Path = Path() / ".image_cache"
     _image_cache: Dict[str, str] = {}
     _logger: logging.Logger
 
@@ -55,8 +54,8 @@ class ProductImageProvider(IProductImageProvider):
         except Exception:
             self._logger.exception(f"Encountered a problem grabbing image for product with image URI: {image_uri}")
 
-    def _get_image_uri_from_filename(self, filename: str):
-        return filename.replace("_", "/")
+    def _get_image_uri_from_filename(self, filename: Path):
+        return filename.name.replace("_", "/")
 
     def _get_filename_from_image_uri(self, image_uri: str):
         return image_uri.replace("/", "_")
@@ -68,3 +67,6 @@ class ProductImageProvider(IProductImageProvider):
             file.write(image_data)
 
     #endregion Methods
+
+
+PRODUCT_IMAGE_PROVIDER = ProductImageProvider()

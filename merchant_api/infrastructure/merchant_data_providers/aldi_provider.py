@@ -4,32 +4,32 @@ import random
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Tuple
 
 import requests
 from bs4 import BeautifulSoup, ResultSet
 from pydantic import ValidationError
 
-from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.aldi_product_offer import AldiProductOffer
 from merchant_api.domain.entities.dora_product import DoraProduct
+from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from merchant_api.infrastructure.similarity import is_similar_phrase
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
 
 
-class AldiProvider(IMerchantDataProvider):
+class AldiProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
-    _aldi_product_names_by_category: Dict[str, List[str]]
+    _aldi_product_names_by_category: dict[str, list[str]]
 
-    _cached_offers_by_category: Dict[str, List[ScrapedProductOffer]] = {}
+    _cached_offers_by_category: dict[str, list[ScrapedProductOffer]] = {}
 
-    _cached_offers_last_updated_by_category: Dict[str, datetime] = {}
+    _cached_offers_last_updated_by_category: dict[str, datetime] = {}
 
     _logger: logging.Logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class AldiProvider(IMerchantDataProvider):
         return 1
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> list[SupportedMerchant]:
         return [
             SupportedMerchant.ALDI
         ]
@@ -91,8 +91,8 @@ class AldiProvider(IMerchantDataProvider):
 
         return next(_Offer for _Offer in self._cached_offers_by_category[_ProductCategory] if _Offer.name == product.name)
 
-    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
-        _ScrapedProductOffers: List[ScrapedProductOffer] = []
+    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> list[ScrapedProductOffer]:
+        _ScrapedProductOffers: list[ScrapedProductOffer] = []
 
         _CategoriesToSearch = self._get_relevant_categories_to_search(search_term)
 
@@ -117,8 +117,8 @@ class AldiProvider(IMerchantDataProvider):
         else:
             return default_value
 
-    def _get_relevant_categories_to_search(self, search_term: str) -> List[str]:
-        _CategoriesWithRelevancyScore: List[Tuple[str, int]] = []
+    def _get_relevant_categories_to_search(self, search_term: str) -> list[str]:
+        _CategoriesWithRelevancyScore: list[Tuple[str, int]] = []
         for _Category in self._aldi_product_names_by_category.keys():
             _ProductsInCategory = self._aldi_product_names_by_category[_Category]
             _RelevancyScore = 0

@@ -10,7 +10,7 @@ class IGAProductOffer(BaseModel, extra='allow'):
 
     available: bool
     brand: str
-    image: dict[str, Optional[str]] = None
+    image: dict[str, Optional[str]] = {}
     name: str
     price: str
     priceNumeric: float

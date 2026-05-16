@@ -3,8 +3,6 @@ import random
 import time
 from typing import List
 
-from clapy import IServiceProvider
-from flask import current_app
 from pydantic import ValidationError
 
 from merchant_api.domain.entities.dora_product import DoraProduct
@@ -14,12 +12,12 @@ from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
+from merchant_api.infrastructure.configuration_manager import CONFIGURATION_MANAGER
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.iconfiguration_manager import IConfigurationManager
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
 
 
-class IGAProvider(IMerchantDataProvider):
+class IGAProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
@@ -38,7 +36,7 @@ class IGAProvider(IMerchantDataProvider):
         return 1
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> List[SupportedMerchant]:
         return [
             SupportedMerchant.IGA
         ]
@@ -48,9 +46,7 @@ class IGAProvider(IMerchantDataProvider):
     #region ---------------- Methods ----------------
 
     def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
-        _ServiceProvider: IServiceProvider = current_app.service_provider
-        _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-        _StoreID = _ConfigurationManager.get_iga_store_id()
+        _StoreID = CONFIGURATION_MANAGER.get_iga_store_id()
 
         with get_cached_session() as _Session:
             _Url = f"{self.base_url}/api/storefront/stores/{_StoreID}/products/{product.merchant_stockcode}"
@@ -69,9 +65,7 @@ class IGAProvider(IMerchantDataProvider):
                     )
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
-        _ServiceProvider: IServiceProvider = current_app.service_provider
-        _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-        _StoreID = _ConfigurationManager.get_iga_store_id()
+        _StoreID = CONFIGURATION_MANAGER.get_iga_store_id()
 
         _Url = f'{self.base_url}/api/storefront/stores/{_StoreID}/search'
         _Params = {

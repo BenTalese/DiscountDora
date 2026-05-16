@@ -1,32 +1,23 @@
-import asyncio
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from clapy import DependencyInjectorServiceProvider, IServiceProvider
 from flask import Flask
 from flask_cors import CORS
 
 from dora_api.infrastructure.utils import get_attributes_ending_with
-from merchant_api.infrastructure.merchant_data_providers import \
-    get_merchant_data_providers
+from merchant_api.infrastructure.configuration_manager import CONFIGURATION_MANAGER
+from merchant_api.infrastructure.merchant_data_providers import MERCHANT_DATA_PROVIDERS
 from merchant_api.infrastructure.middleware import MIDDLEWARE
-from merchant_api.infrastructure.service_collection_builder import \
-    ServiceCollectionBuilder
-from merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 
-async def startup():
+def startup():
     _App = Flask(__name__)
 
-    _ServiceProvider: IServiceProvider = ServiceCollectionBuilder(DependencyInjectorServiceProvider()).build_service_provider()
-    _App.service_provider = _ServiceProvider
-    _ConfigurationManager: IConfigurationManager = _ServiceProvider.get_service(IConfigurationManager)
-
-    WEB_APP_HOST = _ConfigurationManager.get_web_app_host()
-    WEB_APP_PORT = _ConfigurationManager.get_web_app_port()
+    WEB_APP_HOST = CONFIGURATION_MANAGER.get_web_app_host()
+    WEB_APP_PORT = CONFIGURATION_MANAGER.get_web_app_port()
 
     CORS(_App, resources={r'/api/*': {
         'origins': [
@@ -38,19 +29,18 @@ async def startup():
         'allow_headers': ['*', 'Content-Type']
     }})
 
-    configure_logger(_ConfigurationManager.get_log_level())
+    configure_logger(CONFIGURATION_MANAGER.get_log_level())
     register_routers(_App)
-    register_api_infrastructure(_App)
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(data_provider_cron_health_check, IntervalTrigger(days = 1), args = [_ServiceProvider])
+    scheduler.add_job(data_provider_cron_health_check, IntervalTrigger(days = 1))
     scheduler.start()
 
     _App.run(
-        _ConfigurationManager.get_api_host(),
-        _ConfigurationManager.get_api_port(),
-        _ConfigurationManager.is_debug_mode_enabled(),
-        use_reloader = _ConfigurationManager.is_reloader_enabled()
+        CONFIGURATION_MANAGER.get_api_host(),
+        CONFIGURATION_MANAGER.get_api_port(),
+        CONFIGURATION_MANAGER.is_debug_mode_enabled(),
+        use_reloader = CONFIGURATION_MANAGER.is_reloader_enabled()
     )
 
 
@@ -67,22 +57,17 @@ def configure_logger(log_level: int):
 
 
 def register_routers(app: Flask):
-    for _Router in get_attributes_ending_with('router', Path() / 'framework' / 'merchant_api' / 'routes'):
+    for _Router in get_attributes_ending_with('router', Path() / 'merchant_api' / 'features'):
         app.register_blueprint(_Router)
-
-
-def register_api_infrastructure(app: Flask):
     app.register_blueprint(MIDDLEWARE)
 
 
-def data_provider_cron_health_check(service_provider: IServiceProvider):
-    _ConfigurationManager: IConfigurationManager = service_provider.get_service(IConfigurationManager)
+def data_provider_cron_health_check():
     _Logger = logging.getLogger(__name__)
-    _DataProviders = get_merchant_data_providers()
-    _Merchants = _ConfigurationManager.get_all_merchants()
+    _Merchants = CONFIGURATION_MANAGER.get_all_merchants()
     _Logger.info("Running health check for merchant data providers.")
 
-    for _MerchantDataProvider in _DataProviders:
+    for _MerchantDataProvider in MERCHANT_DATA_PROVIDERS:
 
         try:
             _Offers = _MerchantDataProvider.search_by_term(
@@ -91,14 +76,13 @@ def data_provider_cron_health_check(service_provider: IServiceProvider):
                 1)
 
             _MerchantDataProvider.is_healthy = bool(_Offers)
-            _Logger.info(
-                f"Merchant Data Provider '{_MerchantDataProvider.base_url}' is {'HEALTHY' if _MerchantDataProvider.is_healthy else 'NOT HEALTHY'}."
-            )
+            _Log = f"Merchant Data Provider '{_MerchantDataProvider.base_url}' is {'HEALTHY' if _MerchantDataProvider.is_healthy else 'NOT HEALTHY'}."
+            _Logger.info(_Log) if _MerchantDataProvider.is_healthy else _Logger.warning(_Log)
 
         except Exception:
             _MerchantDataProvider.is_healthy = False
-            _Logger.exception(f"Merchant data provider '{_MerchantDataProvider.base_url}' encountered a problem.")
+            _Logger.exception(f"Merchant data provider '{_MerchantDataProvider.base_url}' encountered a problem during health check.")
 
 
 if __name__ == '__main__':
-    asyncio.run(startup())
+    startup()

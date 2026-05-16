@@ -5,12 +5,12 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ScrapedProductOffer:
-    brand: str
+    brand: str | None
     image_uri: str
     image: str | None
     is_available: bool
     merchant_name: str
-    merchant_stockcode: str
+    merchant_stockcode: str | None
     name: str
     price_difference: float = field(init=False)
     price_now: float
@@ -22,10 +22,11 @@ class ScrapedProductOffer:
     web_url: str
 
     def __post_init__(self):
-        self.price_difference = "{:.2f}".format(self.price_was - self.price_now)
-        self.price_now = "{:.2f}".format(self.price_now)
-        self.price_was = "{:.2f}".format(self.price_was)
+        self.price_difference = float("{:.2f}".format(self.price_was - self.price_now))
+        self.price_now = float("{:.2f}".format(self.price_now))
+        self.price_was = float("{:.2f}".format(self.price_was))
 
+    @staticmethod
     def _extract_value_and_unit_from_size(size: str):
         _SizePattern = r'(\d+(\.\d+)?)(\s*[a-zA-Z]+)'
         _Match = re.match(_SizePattern, size)

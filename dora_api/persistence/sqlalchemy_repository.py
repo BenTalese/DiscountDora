@@ -2,7 +2,6 @@ from dataclasses import fields
 from typing import Any, Callable, Generic, List
 from uuid import UUID, uuid4
 
-from flask import Flask
 from sqlalchemy import Select, select
 from sqlalchemy.orm import contains_eager, registry
 
@@ -17,7 +16,6 @@ from dora_api.persistence.table_mappings import _mapper_registry
 
 
 class SqlAlchemyRepository:
-    _flask_app: Flask
 
     @property
     def session(self):
@@ -40,7 +38,7 @@ class SqlAlchemyRepository:
         db.session.add(entity)
 
     def get(self, entity_type: type[TEntity]) -> 'SqlAlchemyQueryBuilder[TEntity]':
-        return SqlAlchemyQueryBuilder(entity_type, _mapper_registry, self._flask_app)
+        return SqlAlchemyQueryBuilder(entity_type, _mapper_registry)
 
     def reattach_and_save(self, entity: BaseEntity) -> None:
         """Use when an entity was loaded outside the current session.
@@ -106,7 +104,7 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
     )
     ```
     '''
-    def __init__(self, entity_type: type[TEntity], mapper_registry: registry, flask_app: Flask):
+    def __init__(self, entity_type: type[TEntity], mapper_registry: registry):
         self._mapper_registry = mapper_registry
         self.entity_type = entity_type
         self.query: Select = select(entity_type)

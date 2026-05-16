@@ -2,7 +2,6 @@ import logging
 import random
 import time
 import urllib.parse
-from typing import List
 
 from pydantic import ValidationError
 
@@ -15,10 +14,10 @@ from merchant_api.domain.entities.woolworths_product_offer import \
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
 
 
-class WoolworthsProvider(IMerchantDataProvider):
+class WoolworthsProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
@@ -37,7 +36,7 @@ class WoolworthsProvider(IMerchantDataProvider):
         return 1
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> list[SupportedMerchant]:
         return [
             SupportedMerchant.WOOLWORTHS
         ]
@@ -73,7 +72,7 @@ class WoolworthsProvider(IMerchantDataProvider):
                         f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
                     )
 
-    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
+    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> list[ScrapedProductOffer]:
         with get_cached_session() as _Session:
             _Session.get(self.base_url)
             _Url = f'{self.base_url}/apis/ui/Search/products'
@@ -87,7 +86,7 @@ class WoolworthsProvider(IMerchantDataProvider):
                 'SortType': "TraderRelevance"
             }
 
-            _ScrapedProductOffers: List[ScrapedProductOffer] = []
+            _ScrapedProductOffers: list[ScrapedProductOffer] = []
             _StartTime = time.time()
 
             while time.time() - _StartTime < self._max_attempt_time_seconds:

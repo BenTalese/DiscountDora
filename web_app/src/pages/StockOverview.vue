@@ -141,7 +141,7 @@
                         <q-item v-bind="scope.itemProps">
                             <q-item-section avatar>
                                 <q-avatar
-                                    :color="getStockLevelColour(scope.opt.stock_level_id)"
+                                    :color="getStockLevelColour(stockLevels.find((sl) => sl.stock_level_id === scope.opt.stock_level_id)!.name)"
                                     size="25px"
                                 />
                             </q-item-section>

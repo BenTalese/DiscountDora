@@ -13,20 +13,14 @@ from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import \
+    MerchantDataProvider
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
 
 
-class SaveOnGroceriesProvider(IMerchantDataProvider):
+class SaveOnGroceriesProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
-
-    _get_merchant_stockcode_func_mapping = {
-        SupportedMerchant.ALDI: lambda url: None,
-        SupportedMerchant.COLES: lambda url: url.rsplit('/', 1)[-1],
-        SupportedMerchant.IGA: lambda url: url.rsplit('-', 1)[-1],
-        SupportedMerchant.WOOLWORTHS: lambda url: url.rsplit('/', 2)[-2]
-    }
 
     _logger = logging.getLogger(__name__)
 
@@ -50,7 +44,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
         return 10
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> List[SupportedMerchant]:
         return [
             SupportedMerchant.ALDI,
             SupportedMerchant.COLES,
@@ -64,7 +58,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
 
     def get_product(self, product: DoraProduct) -> ScrapedProductOffer | None:
         with get_cached_session() as _Session:
-            _ShopID = self._merchant_id_mapping.get(product.merchant_name)
+            _ShopID = self._merchant_id_mapping.get(SupportedMerchant(product.merchant_name))
             _Url = f'{self.base_url}/search-in-store?query={product.name}&shop_id={_ShopID}&page={1}'
             _PageSearchResult = _Session.get(_Url).json()['products']['data']
 
@@ -74,7 +68,7 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
             try:
                 return self._translate_offer(
                     SaveOnGroceriesProductOffer.model_validate(_PageSearchResult[0]),
-                    product.merchant_name
+                    SupportedMerchant(product.merchant_name)
                 )
 
             except ValidationError as e:
@@ -128,13 +122,23 @@ class SaveOnGroceriesProvider(IMerchantDataProvider):
     def _translate_offer(self, offer: SaveOnGroceriesProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer:
         _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(offer.product_package_size)
 
+        match merchant_name:
+            case SupportedMerchant.COLES:
+                offer.product_url = offer.product_url.rsplit('/', 1)[-1]
+            case SupportedMerchant.IGA:
+                offer.product_url = offer.product_url.rsplit('-', 1)[-1]
+            case SupportedMerchant.WOOLWORTHS:
+                offer.product_url = offer.product_url.rsplit('/', 2)[-2]
+            case _:
+                raise Exception(f"Unsupported merchant name '{merchant_name}' for offer translation.")
+
         return ScrapedProductOffer(
             brand = None,
             image = None,
             image_uri = offer.product_image_url,
             is_available = True,
             merchant_name = merchant_name.value,
-            merchant_stockcode = self._get_merchant_stockcode_func_mapping.get(merchant_name)(offer.product_url),
+            merchant_stockcode = offer.product_url,
             name = offer.name.rstrip(offer.product_package_size),
             price_now = offer.price,
             price_per_cup = offer.product_price_per_amount,

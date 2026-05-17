@@ -1,14 +1,12 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List
 
 from pydantic import BaseModel
 
 from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
-from merchant_api.services.iconfiguration_manager import IConfigurationManager
 
 
 class Config(BaseModel):
@@ -16,7 +14,7 @@ class Config(BaseModel):
     API_PORT: int = 5172
     IGA_STORE_ID: int = 52511
     LOG_LEVEL: str = "ERROR"
-    MERCHANTS: Dict[str, bool] = {
+    MERCHANTS: dict[str, bool] = {
         SupportedMerchant.ALDI.value: True,
         SupportedMerchant.COLES.value: True,
         SupportedMerchant.IGA.value: True,
@@ -26,7 +24,7 @@ class Config(BaseModel):
     WEB_APP_PORT: int = 5174
 
 
-class ConfigurationManager(IConfigurationManager):
+class ConfigurationManager:
     _config: Config
     _config_path: Path = Path().resolve() / 'config' / 'mapi.appsettings.json'
 
@@ -39,7 +37,7 @@ class ConfigurationManager(IConfigurationManager):
         with open(self._config_path, 'r') as _AppSettings:
             self._config = Config(**json.load(_AppSettings))
 
-    def get_all_merchants(self) -> List[Merchant]:
+    def get_all_merchants(self) -> list[Merchant]:
         return [
             Merchant(is_enabled = _IsEnabled, name = SupportedMerchant(_MerchantName))
             for _MerchantName, _IsEnabled
@@ -97,3 +95,6 @@ class ConfigurationManager(IConfigurationManager):
     def _save_configuration(self) -> None:
         with open(self._config_path, 'w') as _AppSettings:
             json.dump(self._config.model_dump_json(), _AppSettings, indent = 4)
+
+
+CONFIGURATION_MANAGER = ConfigurationManager()  # ensure there is only one instance

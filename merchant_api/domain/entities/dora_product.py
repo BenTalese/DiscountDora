@@ -5,7 +5,7 @@ from uuid import UUID
 @dataclass
 class DoraProduct:
     brand: str
-    image: bytes
+    image: str
     is_active: bool
     is_available: bool
     merchant_id: UUID

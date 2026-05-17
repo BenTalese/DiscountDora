@@ -1,30 +1,22 @@
 from pathlib import Path
 from typing import List
 
-from clapy import IServiceProvider
-from flask import current_app
-
 from dora_api.infrastructure.utils import get_classes_ending_with
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
+
+MERCHANT_DATA_PROVIDERS: list[MerchantDataProvider] = [
+    _Provider()
+    for _Provider
+    in get_classes_ending_with('provider', Path() / 'merchant_api' / 'infrastructure' / 'merchant_data_providers')
+    if _Provider != MerchantDataProvider  # Exclude the base class itself
+]
+MERCHANT_DATA_PROVIDERS.sort(key = lambda mdp: mdp.priority)
 
 
-def get_merchant_data_providers() -> List[IMerchantDataProvider]:
-    _ServiceProvider: IServiceProvider = current_app.service_provider
-    _DataProviders: List[IMerchantDataProvider] = [
-        _ServiceProvider.get_service(_Provider)
-        for _Provider
-        in get_classes_ending_with('provider', Path() / 'framework' / 'merchant_api' / 'infrastructure' / 'merchant_data_providers')
-    ]
-
-    _DataProviders.sort(key = lambda mdp: mdp.priority)
-
-    return _DataProviders
-
-
-def get_healthy_merchant_data_providers() -> List[IMerchantDataProvider]:
+def get_healthy_providers() -> List[MerchantDataProvider]:
     return [
         _Provider
         for _Provider
-        in get_merchant_data_providers()
+        in MERCHANT_DATA_PROVIDERS
         if _Provider.is_healthy
     ]

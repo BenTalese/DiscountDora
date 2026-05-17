@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 from merchant_api.domain.entities.dora_product import DoraProduct
 from merchant_api.domain.entities.merchant import Merchant
 from merchant_api.domain.entities.scraped_product_offer import \
     ScrapedProductOffer
+from merchant_api.domain.enumerations.supported_merchant import \
+    SupportedMerchant
 
 
-class IMerchantDataProvider(ABC):
+class MerchantDataProvider(ABC):
 
     #region ---------------- Fields ----------------
 
@@ -41,7 +42,7 @@ class IMerchantDataProvider(ABC):
 
     @property
     @abstractmethod
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> list[SupportedMerchant]:
         pass
 
     #endregion Properties
@@ -56,7 +57,7 @@ class IMerchantDataProvider(ABC):
         return merchant.name in self.supported_merchants
 
     @abstractmethod
-    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
+    def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> list[ScrapedProductOffer]:
         pass
 
     #endregion Methods

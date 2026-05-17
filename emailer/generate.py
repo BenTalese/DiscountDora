@@ -109,7 +109,7 @@ def generate_html():
     # # Render the template with stock item data
     # html_content = template.render(stock_items=stock_items)
 
-    email_template_path = 'framework/emailer/templates/mjml_test.mjml'
+    email_template_path = 'emailer/templates/mjml_test.mjml'
 
     html_content = compile_mjml_from_file(email_template_path)
 
@@ -189,7 +189,7 @@ def compile_heml_from_file(file_path):
 
 def heml_test():
     # Specify the path to your HEML file
-    heml_file_path = 'framework/emailer/templates/heml_test.heml'
+    heml_file_path = 'emailer/templates/heml_test.heml'
 
     # Compile HEML to HTML
     html_output = compile_heml_from_file(heml_file_path)

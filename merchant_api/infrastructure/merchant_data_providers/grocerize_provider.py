@@ -14,24 +14,14 @@ from merchant_api.domain.entities.scraped_product_offer import \
 from merchant_api.domain.enumerations.supported_merchant import \
     SupportedMerchant
 from merchant_api.infrastructure.session import get_cached_session
-from merchant_api.services.imerchant_data_provider import IMerchantDataProvider
+from merchant_api.infrastructure.merchant_data_providers.merchant_data_provider import MerchantDataProvider
 
 
-class GrocerizeProvider(IMerchantDataProvider):
+class GrocerizeProvider(MerchantDataProvider):
 
     #region ---------------- Fields ----------------
 
-    _get_product_url_func_mapping = {
-        1: lambda product_id: f'https://www.coles.com.au/product/{product_id}',
-        2: lambda product_id: f'https://www.woolworths.com.au/shop/productdetails/{product_id}'
-    }
-
     _logger = logging.getLogger(__name__)
-
-    _merchant_id_mapping = {
-        1: SupportedMerchant.COLES.value,
-        2: SupportedMerchant.WOOLWORTHS.value
-    }
 
     #endregion Fields
 
@@ -46,7 +36,7 @@ class GrocerizeProvider(IMerchantDataProvider):
         return 5
 
     @property
-    def supported_merchants(self) -> List[str]:
+    def supported_merchants(self) -> List[SupportedMerchant]:
         return [
             SupportedMerchant.COLES,
             SupportedMerchant.WOOLWORTHS
@@ -67,16 +57,16 @@ class GrocerizeProvider(IMerchantDataProvider):
             _SortedOffers = sorted(_PageSearchResult['items'], key=lambda item: not item['has_exact_match'])
 
             try:
-                _Offers = self._translate_offers(
+                return self._translate_offer(
                     GrocerizeProductOffer.model_validate(_SortedOffers[0]),
+                    SupportedMerchant(product.merchant_name)
                 )
             except ValidationError as e:
                 for _Error in e.errors():
                     self._logger.exception(
                         f"Pydantic error in {_Error['loc']}: {_Error['msg']}, received value: {_Error['input']}"
                     )
-
-            return next((_Offer for _Offer in _Offers if _Offer.merchant_name == product.merchant_name), None)
+                return None
 
     def search_by_term(self, search_term: str, merchant: Merchant, result_limit: int) -> List[ScrapedProductOffer]:
         _Page = 2
@@ -124,16 +114,27 @@ class GrocerizeProvider(IMerchantDataProvider):
 
     def _translate_offer(self, offer_grouping: GrocerizeProductOffer, merchant_name: SupportedMerchant) -> ScrapedProductOffer | None:
         for _Offer in offer_grouping.item_pricing:
-            if self._merchant_id_mapping.get(_Offer.vendor_id) == merchant_name.value:
+            if _Offer.vendor_id == 1 and merchant_name.value == 'Coles' or _Offer.vendor_id == 2 and merchant_name.value == 'Woolworths':
                 _Value, _Unit = ScrapedProductOffer._extract_value_and_unit_from_size(_Offer.volume)
+
+                if _Offer.vendor_id == 1:
+                    _MerchantName = 'Coles'
+                    _WebUrl = f'https://www.coles.com.au/product/{_Offer.vendor_product_code}'
+
+                elif _Offer.vendor_id == 2:
+                    _MerchantName = 'Woolworths'
+                    _WebUrl = f'https://www.woolworths.com.au/shop/productdetails/{_Offer.vendor_product_code}'
+
+                else:
+                    raise Exception()
 
                 return ScrapedProductOffer(
                     brand = None,
                     image = None,
                     image_uri = offer_grouping.image_url,
                     is_available = _Offer.available,
-                    merchant_name = self._merchant_id_mapping.get(_Offer.vendor_id),
-                    merchant_stockcode = _Offer.vendor_product_code,
+                    merchant_name = _MerchantName,
+                    merchant_stockcode = str(_Offer.vendor_product_code),
                     name = offer_grouping.name.rstrip(_Offer.volume),
                     price_now = _Offer.price,
                     price_per_cup = f'${_Offer.cup_price} / {_Offer.cup_volume.upper()}'
@@ -142,7 +143,7 @@ class GrocerizeProvider(IMerchantDataProvider):
                     size = _Offer.volume.upper(),
                     size_unit = _Unit or _Offer.volume.upper(),
                     size_value = _Value,
-                    web_url = self._get_product_url_func_mapping.get(_Offer.vendor_id)(_Offer.vendor_product_code)
+                    web_url = _WebUrl
                 )
 
     #endregion Methods

@@ -2,10 +2,10 @@ import logging
 
 from flask import jsonify
 
-from dora_api.features.routers import HEALTH_ROUTER
+from merchant_api.routers import HEALTH_ROUTER
 
 
 @HEALTH_ROUTER.route("")
-def health_check():
+def get_api_health():
     logging.getLogger(__name__).info("API health check requested.")
     return jsonify(True), 200

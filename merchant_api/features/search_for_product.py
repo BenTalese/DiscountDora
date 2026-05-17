@@ -72,4 +72,5 @@ def search_for_product():
     for _Offer in _ScrapedOffers:
         _Offer.image = PRODUCT_IMAGE_PROVIDER.get_image(_Offer.image_uri)
 
+    _Logger.info(f"Search complete, found {len(_ScrapedOffers)} product offers.")
     return jsonify(_ScrapedOffers)

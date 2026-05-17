@@ -65,4 +65,5 @@ def get_product_offers():
         # Instead of regetting the image from its web source, copy it from the saved product.
         _Offer.image = next(_Product.image for _Product in _SavedProducts if _Product.product_id == _ProductID)
 
+    _Logger.info(f"Updated offers for {len(_OffersByProductID)} products.")
     return jsonify(_OffersByProductID.values())

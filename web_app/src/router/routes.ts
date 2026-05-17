@@ -1,6 +1,10 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
+    // { # TODO: Add login page
+    //     path: '/login',
+    //     component: () => import('pages/Login.vue')
+    // },
     {
         path: '/',
         component: () => import('layouts/MainLayout.vue'),

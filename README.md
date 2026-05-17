@@ -73,6 +73,16 @@ As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is 
 
 🚧 <i>Contribution guide to be added.</i>
 
+BACKEND:
+ - python3.11 -m venv venv
+ - source venv/bin/activate
+ - pip install -r requirements.txt
+
+FRONTEND:
+ - sudo apt install npm
+ - cd web_app
+ - npm install
+
 <br/>
 
 ## ☕ Want to support us?

@@ -7,6 +7,7 @@ from dora_api.domain.types import EMPTY_UUID
 
 @dataclass(eq=False, kw_only=True)
 class BaseEntity(ABC):
+    ID = "id"
     id: UUID = field(default=EMPTY_UUID)
 
     def __eq__(self, other):

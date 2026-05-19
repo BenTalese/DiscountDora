@@ -1,35 +1,55 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List
 
 from dora_api.domain.entities.base_entity import BaseEntity
-from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.recipe_collection import RecipeCollection
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 
 
 @dataclass
 class Recipe(BaseEntity):
+    CATEGORY = "category"
+    category: str | None
+
+    COOK_TIME_MINUTES = "cook_time_minutes"
+    cook_time_minutes: int | None
+
+    CUISINE = "cuisine"
+    cuisine: str | None
+
+    DIFFICULTY = "difficulty"
+    difficulty: str | None
+
+    IMAGE = "image"
     image: bytes | None
-    ingredients: List[StockItem]
+
+    INGREDIENTS = "ingredients"
+    ingredients: List[RecipeIngredient]
+
+    INSTRUCTIONS = "instructions"
     instructions: str | None
+
+    IS_FAVOURITE = "is_favourite"
+    is_favourite: bool
+
+    LAST_MADE_ON = "last_made_on"
+    last_made_on: datetime | None
+
+    NAME = "name"
     name: str
 
+    NUTRITION = "nutrition"
+    nutrition: str | None
 
-# from typing import List, Optional
+    PREP_TIME_MINUTES = "prep_time_minutes"
+    prep_time_minutes: int | None
 
-# class Ingredient:
-#     def __init__(self, name: str, quantity: float, unit: str):
-#         self.name = name
-#         self.quantity = quantity
-#         self.unit = unit
+    RECIPE_COLLECTION = "recipe_collection"
+    recipe_collection: RecipeCollection | None
 
-# class RecipeStep:
-#     def __init__(self, description: str, ingredients: Optional[List[Ingredient]] = None,
-#                  duration: Optional[int] = None, equipment: Optional[List[str]] = None):
-#         self.description = description
-#         self.ingredients = ingredients or []  # List of Ingredient instances
-#         self.duration = duration  # Duration in minutes, for example
-#         self.equipment = equipment or []  # List of equipment used
+    SERVINGS = "servings"
+    servings: int | None
 
-# class Recipe:
-#     def __init__(self, name: str, steps: List[RecipeStep]):
-#         self.name = name
-#         self.steps = steps  # List of RecipeStep instances
+    TIME_OF_DAY = "time_of_day"
+    time_of_day: str | None

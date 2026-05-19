@@ -16,6 +16,11 @@ rework and I can't be assed...
 
 @dataclass
 class ProductHistoricOffer(BaseEntity):
+    OFFERED_ON = "offered_on"
     offered_on: datetime
+
+    PRICE_NOW = "price_now"
     price_now: float
+
+    PRICE_WAS = "price_was"
     price_was: float

@@ -4,13 +4,12 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import Base64Bytes, BaseModel, ConfigDict, Field
-from varname import nameof
 
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.types import EMPTY_UUID
-from dora_api.features.products.get_products import ProductDto, get_products
+from dora_api.features.products.get_products import get_products
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
@@ -49,14 +48,14 @@ class CreateProductHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        _MerchantName = EntityField(Merchant, nameof(Merchant.name))
-        _ProductName = EntityField(Product, nameof(Product.name))
-        _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
+        _MerchantName = EntityField(Merchant, Merchant.NAME)
+        _ProductName = EntityField(Product, Product.NAME)
+        _ProductStockcode = EntityField(Product, Product.MERCHANT_STOCKCODE)
 
         _ExistingProduct: Product | None = (
             self.repository
             .get(Product)
-            .include(nameof(Product.merchant))  # TODO: Is this line necessary?
+            .include(Product.MERCHANT)  # TODO: Is this line necessary?
             .one(_ProductStockcode.eq(request.merchant_stockcode)
                  & _MerchantName.eq(request.merchant_name)
                  & _ProductName.eq(request.name))
@@ -119,9 +118,10 @@ def create_product():
             f"stockcode '{_Request.merchant_stockcode}'."
         )
 
+    # TODO: Verify: f"{PRODUCT_ROUTER.name}.{get_products.__name__}"
     _Logger.info(f"Successfully created product with ID: {_Response.new_product_id}")
     return created(
         _Response.new_product_id,
-        f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products)}",
-        nameof(ProductDto.product_id)
+        f"{PRODUCT_ROUTER.name}.{get_products.__name__}",
+        "product_id"
     )

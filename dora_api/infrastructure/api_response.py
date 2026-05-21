@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from http.client import (BAD_REQUEST, CREATED, INTERNAL_SERVER_ERROR,
-                         NO_CONTENT, NOT_FOUND, OK, UNPROCESSABLE_ENTITY)
+from http.client import (BAD_REQUEST, CREATED, FORBIDDEN, INTERNAL_SERVER_ERROR,
+                         NO_CONTENT, NOT_FOUND, OK, UNAUTHORIZED,
+                         UNPROCESSABLE_ENTITY)
 from typing import Any
 from uuid import UUID
 
@@ -37,11 +38,19 @@ def bad_request(title: str, detail: str | None = None, errors: dict[str, list[st
     return response
 
 
-# FIXME: query parameter needs to update once querying is solved (currently "= result.id" will be incorrect)
-def created(resource_id: UUID, get_route: str, id_attribute_name: str) -> Response:
-    response = jsonify({'id': resource_id})
+def created(
+    resource_id: UUID,
+    get_route: str,
+    id_attribute_name: str,
+    body: Any | None = None,
+) -> Response:
+    response = jsonify(body if body is not None else {'id': resource_id})
     response.status_code = CREATED
-    response.headers['location'] = url_for(get_route, query = f'filter={id_attribute_name}:eq:{resource_id}', _external=True)
+    response.headers['location'] = url_for(
+        get_route,
+        filter=f'{id_attribute_name}:eq:{resource_id}',
+        _external=True,
+    )
     return response
 
 
@@ -81,6 +90,30 @@ def no_content() -> Response:
     return response
 
 
+def unauthorized(detail: str = "Authentication required.") -> Response:
+    response = jsonify(ProblemDetails(
+        detail = detail,
+        errors = {},
+        status = UNAUTHORIZED,
+        title = "Unauthenticated.",
+        type = "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1"))
+    response.content_type = 'application/problem+json'
+    response.status_code = UNAUTHORIZED
+    return response
+
+
+def forbidden(detail: str = "You do not have permission to perform this action.") -> Response:
+    response = jsonify(ProblemDetails(
+        detail = detail,
+        errors = {},
+        status = FORBIDDEN,
+        title = "Forbidden.",
+        type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3"))
+    response.content_type = 'application/problem+json'
+    response.status_code = FORBIDDEN
+    return response
+
+
 def not_found(entity_name: str, id: UUID) -> Response:
     response = jsonify(ProblemDetails(
         detail = f"{entity_name} with the ID '{id}' was not found.",
@@ -95,6 +128,17 @@ def not_found(entity_name: str, id: UUID) -> Response:
 
 def ok(result: Any) -> Response:
     response = jsonify(result)
+    response.status_code = OK
+    return response
+
+
+def paginated(items: list, total: int, page: int, limit: int) -> Response:
+    response = jsonify({
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+    })
     response.status_code = OK
     return response
 

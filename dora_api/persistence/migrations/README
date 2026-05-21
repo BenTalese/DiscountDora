@@ -1,1 +1,39 @@
 Single-database configuration for Flask.
+
+## Workflow
+
+This project uses Flask-Migrate (Alembic). The current dev-mode startup will
+call `db.create_all()` for missing tables but never drops data unless you set
+`DORA_ALLOW_DESTRUCTIVE=true`. Production startup calls `flask db upgrade`.
+
+### Generating a new migration after a model change
+
+```
+flask db migrate -m "20260518_short_description_of_change"
+```
+
+Review the generated file in `versions/` — autogenerate is a starting point,
+not a finished migration:
+  - FK constraint names: Alembic emits placeholder names on SQLite; on
+    Postgres/MySQL you typically want to rename them to `<table>_<col>_fkey`
+    or pass `name=...` to `create_foreign_key` so down-migrations are stable.
+  - Data migrations (e.g. seeding lookup rows) must be added by hand inside
+    `upgrade()` after the schema changes — see the initial migration for an
+    example with `op.bulk_insert`.
+  - Indexes the autogen missed.
+
+### Applying
+
+```
+flask db upgrade            # apply all unapplied migrations
+flask db downgrade -1       # roll back one migration
+flask db current            # show current head
+```
+
+### Common pitfalls
+
+  - SQLite does **not** enforce foreign-key constraints unless
+    `PRAGMA foreign_keys=ON` is issued per connection. The app sets this in
+    `app.py` via a connect event; do the same in any standalone scripts.
+  - `db.drop_all()` is gated behind `DORA_ALLOW_DESTRUCTIVE=true` in
+    `dora_api/startup.py` to prevent accidental data loss in debug mode.

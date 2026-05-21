@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import List
+from uuid import UUID
 
 from dora_api.domain.entities.base_entity import BaseEntity
 from dora_api.domain.entities.product import Product
@@ -11,42 +12,55 @@ from dora_api.domain.entities.stock_location import StockLocation
 
 @dataclass
 class StockItem(BaseEntity):
-    DAYS_UNTIL_STOCKTAKE_ALERT = "days_until_stocktake_alert"
     days_until_stocktake_alert: int
-
-    IMAGE = "image"
     image: bytes | None
-
-    NAME = "name"
     name: str
-
-    NOTES = "notes"
     notes: str | None
-
-    STOCK_GROUP = "stock_group"
     stock_group: StockGroup | None
-
-    STOCK_LEVEL = "stock_level"
-    stock_level: StockLevel
-
-    STOCK_LEVEL_LAST_UPDATED = "stock_level_last_updated"
     stock_level_last_updated: datetime
-
-    STOCK_LOCATION = "stock_location"
+    stock_level: StockLevel
     stock_location: StockLocation | None
-
-    STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
     stocktake_alerts_are_enabled: bool
-
-    EXPIRY_DATE = "expiry_date"
     expiry_date: date | None = None
-
-    IS_FLAGGED = "is_flagged"
     is_flagged: bool = False
-
+    # When True, transitioning this item to Low or Out of stock auto-adds it
+    # to the primary shopping list. Independent of `is_flagged` — that one
+    # drives auto-generate and severity weighting on alerts, this one is
+    # the "always restock" preference.
+    auto_add_when_low: bool = False
+    # "I've cracked open the jar" — true while the item is being actively
+    # consumed. `opened_on` is set automatically when `is_open` flips to
+    # True; flipping back to False clears it.
+    is_open: bool = False
+    opened_on: date | None = None
     # Merchant products linked to this stock item, used by the product-search
     # flow to surface deals and by the detail view to show "what merchant
     # SKUs are tracked here". Default empty so callers that don't care about
     # the m2m don't have to pass it.
-    PRODUCTS = "products"
     products: List[Product] = field(default_factory=list)
+    # The linked product the user prefers to buy (drives "preferred merchant
+    # first" ordering). FK to Product, cleared (SET NULL) if that product is
+    # deleted. Stored as a raw UUID rather than a relationship.
+    preferred_product_id: UUID | None = None
+    # NOTE: substitutes are a self-referential m2m stored in the
+    # StockItemSubstitute table and accessed directly (the generic repository
+    # can't self-join an entity to itself), so there's no relationship field
+    # here. See features/stock_items/add_substitute.py and get_stock_item_detail.
+
+    class Fields(BaseEntity.Fields):
+        AUTO_ADD_WHEN_LOW = "auto_add_when_low"
+        DAYS_UNTIL_STOCKTAKE_ALERT = "days_until_stocktake_alert"
+        EXPIRY_DATE = "expiry_date"
+        IMAGE = "image"
+        IS_FLAGGED = "is_flagged"
+        IS_OPEN = "is_open"
+        NAME = "name"
+        NOTES = "notes"
+        OPENED_ON = "opened_on"
+        PREFERRED_PRODUCT_ID = "preferred_product_id"
+        PRODUCTS = "products"
+        STOCK_GROUP = "stock_group"
+        STOCK_LEVEL = "stock_level"
+        STOCK_LEVEL_LAST_UPDATED = "stock_level_last_updated"
+        STOCK_LOCATION = "stock_location"
+        STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"

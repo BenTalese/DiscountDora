@@ -230,7 +230,9 @@ def test__get_stock_items__GettingStockItem__GetsAllExpectedAttributes(api):
         'stock_item_id',
         'stock_level_id',
         'stock_level_last_updated',
-        'stock_location_id'
+        'stock_location_id',
+        'expiry_date',
+        'is_flagged'
     }
 
 

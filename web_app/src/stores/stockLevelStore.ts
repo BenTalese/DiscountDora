@@ -14,7 +14,7 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
     const getStockLevelsAsync = () =>
         stockLevelApiService
             .getAllAsync()
-            .then((res) => (stockLevels.value = res.sort((sl1, sl2) => sl1.sequence - sl2.sequence)));
+            .then((page) => (stockLevels.value = [...page.items].sort((sl1, sl2) => sl1.sequence - sl2.sequence)));
 
     //#endregion Stock Levels
 

@@ -1,13 +1,10 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint
 
+# The Flask-CORS extension (configured in startup.py) handles preflight
+# (OPTIONS) requests automatically — including writing the
+# Access-Control-Allow-* headers on the response. A previous incarnation of
+# this blueprint short-circuited OPTIONS with a JSON body whose keys looked
+# like CORS headers, which silently broke the actual headers. Leaving the
+# blueprint as an empty placeholder so existing register_blueprint calls
+# in startup.py stay valid.
 MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
-
-
-@MIDDLEWARE.before_app_request
-def handle_cors_preflight_request():
-    if request.method.upper() == 'OPTIONS':
-        return jsonify({
-            'Access-Control-Allow-Origin': 'http://localhost:5174',
-            'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-        })

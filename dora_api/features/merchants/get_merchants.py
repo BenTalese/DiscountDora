@@ -1,13 +1,17 @@
 import logging
 from dataclasses import dataclass
-from typing import List
 from uuid import UUID
+
+from flask import request
 
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.features.routers import MERCHANT_ROUTER
-from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.query_options import (InvalidQueryParameter,
+                                                   parse_query_options)
 from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -24,21 +28,28 @@ class MerchantDto:
         )
 
 
+_FIELD_MAP: dict[str, EntityField] = {
+    "merchant_id": EntityField(Merchant, "id"),
+}
+
+
 class GetMerchantsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self) -> List[MerchantDto]:
-        return self.repository.get(Merchant).project(MerchantDto.from_entity)
+    def handle(self, options) -> Page[MerchantDto]:
+        return self.repository.get(Merchant).paginate(
+            options, MerchantDto.from_entity, field_map=_FIELD_MAP
+        )
 
 
 @MERCHANT_ROUTER.route("")
-@MERCHANT_ROUTER.route("<query>")
-@has_response(MerchantDto)
-def get_merchants(query: str | None = None):
+def get_merchants():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to get merchants.")
-    _Handler = get_container().inject(GetMerchantsHandler)
-    _Result = _Handler.handle()
-    _Logger.info(f"Successfully retrieved {len(_Result)} merchants.")
-    return ok(_Result)
+    try:
+        _Options = parse_query_options(request.args)
+        _Page = get_container().inject(GetMerchantsHandler).handle(_Options)
+    except InvalidQueryParameter as exc:
+        return bad_request(str(exc))
+    _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} merchants.")
+    return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)

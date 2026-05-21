@@ -8,11 +8,11 @@ from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 
 @dataclass
 class MealPlan(BaseEntity):
-    ENTRIES = "entries"
     entries: List[MealPlanEntry]
-
-    NAME = "name"
     name: str
-
-    START_DATE = "start_date"
     start_date: date
+
+    class Fields(BaseEntity.Fields):
+        ENTRIES = "entries"
+        NAME = "name"
+        START_DATE = "start_date"

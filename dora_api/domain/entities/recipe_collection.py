@@ -5,5 +5,7 @@ from dora_api.domain.entities.base_entity import BaseEntity
 
 @dataclass
 class RecipeCollection(BaseEntity):
-    NAME = "name"
     name: str
+
+    class Fields(BaseEntity.Fields):
+        NAME = "name"

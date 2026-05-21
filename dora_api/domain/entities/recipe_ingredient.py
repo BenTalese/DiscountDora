@@ -6,14 +6,13 @@ from dora_api.domain.entities.stock_item import StockItem
 
 @dataclass
 class RecipeIngredient(BaseEntity):
-    NOTES = "notes"
     notes: str | None
-
-    QUANTITY = "quantity"
     quantity: float | None
-
-    STOCK_ITEM = "stock_item"
     stock_item: StockItem
-
-    UNIT = "unit"
     unit: str | None
+
+    class Fields(BaseEntity.Fields):
+        NOTES = "notes"
+        QUANTITY = "quantity"
+        STOCK_ITEM = "stock_item"
+        UNIT = "unit"

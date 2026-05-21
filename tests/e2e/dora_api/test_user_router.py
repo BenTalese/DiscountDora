@@ -19,12 +19,15 @@ def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
     assert _User['email'] == 'ben.talese@gmail.com'
     assert _User['send_deals_on_day'] == 6
     assert _User['username'] == 'The Coolest Guy'
+    assert _User['is_admin'] is False
     assert is_valid_uuid(_User['user_id'])
     assert _User.keys() == {
         'email',
         'send_deals_on_day',
         'username',
-        'user_id'
+        'user_id',
+        'is_admin',
+        'deals_email_enabled'
     }
 
 

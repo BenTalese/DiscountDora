@@ -1,7 +1,9 @@
 import type { Product } from 'src/models/product';
 import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
+import type { PriceHistory } from 'src/models/stockItemDetail';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
+import type { Page } from './queryStringBuilder';
 
 export default class ProductApiService {
     private dapiHttpClient: AxiosHttpClient;
@@ -15,7 +17,11 @@ export default class ProductApiService {
     createAsync = async (productToCreate: CreateProductCommand): Promise<CreatedResponse> =>
         await this.dapiHttpClient.post<CreatedResponse>('/products', productToCreate);
 
-    getAllAsync = async (): Promise<Product[]> => await this.dapiHttpClient.get<Product[]>('/products');
+    getAllAsync = async (): Promise<Page<Product>> =>
+        await this.dapiHttpClient.get<Page<Product>>('/products');
+
+    getPriceHistoryAsync = async (productId: string): Promise<PriceHistory> =>
+        await this.dapiHttpClient.get<PriceHistory>(`/products/${productId}/price-history`);
 
     searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.post<ScrapedProductOffer[]>('/products/search', searchQuery);

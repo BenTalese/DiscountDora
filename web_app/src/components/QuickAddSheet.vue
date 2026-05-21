@@ -1,0 +1,285 @@
+<template>
+    <q-dialog v-model="open" position="bottom" @hide="onHide">
+        <q-card class="quick-add-sheet">
+            <q-card-section class="row items-center q-pb-none">
+                <div class="text-h6">Quick add to list</div>
+                <q-space />
+                <q-btn flat round dense icon="close" v-close-popup />
+            </q-card-section>
+
+            <q-card-section>
+                <!-- Target list -->
+                <q-select
+                    v-model="targetListId"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    label="Add to"
+                    :options="listOptions"
+                    class="q-mb-md"
+                />
+
+                <!-- Step 1: pick a stock item -->
+                <template v-if="!selectedItem">
+                    <q-input
+                        v-model="query"
+                        outlined
+                        dense
+                        autofocus
+                        clearable
+                        debounce="150"
+                        label="Search stock items"
+                        prepend-icon="search"
+                    />
+                    <q-list separator class="q-mt-sm quick-add-sheet__results">
+                        <q-item
+                            v-for="item in results"
+                            :key="item.stock_item_id"
+                            clickable
+                            @click="selectItem(item)"
+                        >
+                            <q-item-section avatar>
+                                <q-avatar
+                                    :color="levelColour(item.stock_level_id)"
+                                    text-color="white"
+                                    size="28px"
+                                >
+                                    <q-icon name="inventory_2" size="16px" />
+                                </q-avatar>
+                            </q-item-section>
+                            <q-item-section>{{ item.name }}</q-item-section>
+                            <q-item-section side>
+                                <q-icon name="chevron_right" />
+                            </q-item-section>
+                        </q-item>
+                        <q-item v-if="results.length === 0">
+                            <q-item-section class="text-grey">
+                                {{ query ? 'No matches.' : 'No stock items yet.' }}
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
+                    <div v-if="!query" class="text-caption text-grey q-mt-xs">
+                        Showing low/out items first.
+                    </div>
+                </template>
+
+                <!-- Step 2: pick quantity + merchant offer -->
+                <template v-else>
+                    <div class="row items-center q-mb-sm">
+                        <q-btn flat dense round icon="arrow_back" @click="clearSelection" />
+                        <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
+                    </div>
+
+                    <q-input
+                        v-model.number="quantity"
+                        type="number"
+                        outlined
+                        dense
+                        min="1"
+                        label="Quantity"
+                        class="q-mb-md"
+                        style="max-width: 140px"
+                    />
+
+                    <div class="text-subtitle2 q-mb-xs">Merchant offer</div>
+                    <q-spinner v-if="offersLoading" color="primary" />
+                    <template v-else>
+                        <q-option-group
+                            v-model="selectedProductId"
+                            :options="offerOptions"
+                            type="radio"
+                            dense
+                        />
+                        <div v-if="offers.length === 0" class="text-caption text-grey">
+                            No linked products — added without a specific offer.
+                        </div>
+                    </template>
+                </template>
+            </q-card-section>
+
+            <q-card-actions v-if="selectedItem" align="right">
+                <q-btn flat no-caps label="Cancel" v-close-popup />
+                <q-btn
+                    unelevated
+                    color="primary"
+                    no-caps
+                    label="Add"
+                    :loading="adding"
+                    :disable="!targetListId"
+                    @click="confirmAdd"
+                />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
+</template>
+
+<script lang="ts" setup>
+    import { storeToRefs } from 'pinia';
+    import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import type { LinkedProduct } from 'src/models/stockItemDetail';
+    import type { StockItem } from 'src/models/stockItem';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { computed, ref, watch } from 'vue';
+
+    const stockItemApi = new StockItemApiService();
+
+    const { isOpen, presetStockItemId, presetListId, closeQuickAdd } = useQuickAdd();
+    const { addItems } = useShoppingListActions();
+
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
+    const shoppingListStore = useShoppingListStore();
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { stockLevels } = storeToRefs(stockLevelStore);
+    const { summaries, primaryListId } = storeToRefs(shoppingListStore);
+
+    // Bridge the module-level open flag to a local v-model so q-dialog's hide
+    // event can close it cleanly.
+    const open = computed({
+        get: () => isOpen.value,
+        set: (v) => {
+            if (!v) closeQuickAdd();
+        },
+    });
+
+    const query = ref('');
+    const selectedItem = ref<StockItem | null>(null);
+    const quantity = ref(1);
+    const offers = ref<LinkedProduct[]>([]);
+    const offersLoading = ref(false);
+    const selectedProductId = ref<string | null>(null);
+    const targetListId = ref<string | null>(null);
+    const adding = ref(false);
+
+    const listOptions = computed(() =>
+        summaries.value
+            .filter((s) => !s.is_archived)
+            .map((s) => ({
+                label: s.name + (s.is_primary ? ' (primary)' : ''),
+                value: s.shopping_list_id,
+            })),
+    );
+
+    function levelSequence(id: string | null) {
+        return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? -1;
+    }
+    function levelColour(id: string | null) {
+        const name = stockLevels.value.find((l) => l.stock_level_id === id)?.name;
+        return name ? getStockLevelColour(name) : 'grey';
+    }
+
+    const results = computed(() => {
+        const q = query.value?.trim().toLowerCase() ?? '';
+        const items = [...stockItems.value];
+        if (q) {
+            return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 30);
+        }
+        // No query → surface low/out items first as suggestions.
+        return items
+            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id))
+            .slice(0, 12);
+    });
+
+    const offerOptions = computed(() => [
+        { label: 'No specific offer', value: null },
+        ...offers.value.map((o) => ({
+            label: offerLabel(o),
+            value: o.product_id,
+        })),
+    ]);
+
+    function offerLabel(o: LinkedProduct): string {
+        const price = o.price_now != null ? `$${o.price_now.toFixed(2)}` : 'n/a';
+        const merchant = o.merchant_name ? ` · ${o.merchant_name}` : '';
+        const size = o.size ? ` · ${o.size}` : '';
+        return `${o.name} — ${price}${merchant}${size}`;
+    }
+
+    async function selectItem(item: StockItem) {
+        selectedItem.value = item;
+        await loadOffers(item.stock_item_id);
+    }
+
+    async function loadOffers(stockItemId: string) {
+        offersLoading.value = true;
+        offers.value = [];
+        selectedProductId.value = null;
+        try {
+            const detail = await stockItemApi.getDetailAsync(stockItemId);
+            // API returns products cheapest-first; default to the cheapest.
+            offers.value = detail.products ?? [];
+            selectedProductId.value = offers.value[0]?.product_id ?? null;
+        } catch {
+            offers.value = [];
+        } finally {
+            offersLoading.value = false;
+        }
+    }
+
+    function clearSelection() {
+        selectedItem.value = null;
+        offers.value = [];
+        selectedProductId.value = null;
+        quantity.value = 1;
+    }
+
+    async function confirmAdd() {
+        if (!selectedItem.value || !targetListId.value) return;
+        adding.value = true;
+        try {
+            await addItems(targetListId.value, [
+                {
+                    stock_item_id: selectedItem.value.stock_item_id,
+                    quantity: quantity.value > 0 ? quantity.value : 1,
+                    selected_product_id: selectedProductId.value,
+                },
+            ]);
+            closeQuickAdd();
+        } finally {
+            adding.value = false;
+        }
+    }
+
+    function onHide() {
+        query.value = '';
+        clearSelection();
+    }
+
+    // When the sheet opens, make sure the supporting data is loaded and apply
+    // any presets the caller passed to openQuickAdd().
+    watch(isOpen, async (nowOpen) => {
+        if (!nowOpen) return;
+        const loads: Promise<unknown>[] = [];
+        if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
+        if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        loads.push(shoppingListStore.refreshAsync());
+        await Promise.all(loads);
+
+        targetListId.value =
+            presetListId.value ?? primaryListId.value ?? listOptions.value[0]?.value ?? null;
+
+        if (presetStockItemId.value) {
+            const preset = stockItems.value.find(
+                (i) => i.stock_item_id === presetStockItemId.value,
+            );
+            if (preset) await selectItem(preset);
+        }
+    });
+</script>
+
+<style scoped>
+    .quick-add-sheet {
+        width: 520px;
+        max-width: 96vw;
+    }
+    .quick-add-sheet__results {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+</style>

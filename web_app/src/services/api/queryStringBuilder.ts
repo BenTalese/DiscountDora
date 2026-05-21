@@ -1,10 +1,11 @@
 export enum FilterOperator {
     EQUAL = 'eq',
+    NOT_EQUAL = 'ne',
     LESS_THAN = 'lt',
     GREATER_THAN = 'gt',
     LESS_THAN_OR_EQUAL = 'le',
     GREATER_THAN_OR_EQUAL = 'ge',
-    NOT_EQUAL = 'ne'
+    CONTAINS = 'ct'
 }
 
 export enum SortOrder {
@@ -12,69 +13,53 @@ export enum SortOrder {
     DESCENDING = 'desc'
 }
 
-interface FilterOperation {
+export interface FilterOperation {
     field: string;
     operator: FilterOperator;
     value: string | number | boolean;
 }
 
-interface SortOperation {
+export interface SortOperation {
     field: string;
     order?: SortOrder;
 }
 
-interface PaginationOperation {
+export interface PaginationOperation {
     page: number;
     limit: number;
 }
 
-function createFilterString(filters: FilterOperation[]): string {
-    return filters.map((filter) => `filter=${filter.field}:${filter.operator}:${filter.value}`).join('&');
-}
-
-function createSortString(sort: SortOperation): string {
-    return `sort=${sort.field}${sort.order ? `:${sort.order}` : ':asc'}`;
-}
-
-function createPaginationString(pagination: PaginationOperation): string {
-    return `page=${pagination.page}&limit=${pagination.limit}`;
+export interface Page<T> {
+    items: T[];
+    total: number;
+    page: number;
+    limit: number;
 }
 
 /**
- * Generates a complete query string with filters, sorting, and pagination.
- * @param filters An optional array of `FilterOperation` objects.
- * @param sort An optional `SortOperation` object.
- * @param pagination An optional `PaginationOperation` object.
- * @returns A query string combining filters, sorting, and pagination parameters.
- * @example
- * const filters: FilterOperation[] = [
- *     { field: 'stock_item_id', operator: FilterOperator.EQUAL, value: 12345 },
- *     { field: 'age', operator: FilterOperator.GREATER_THAN, value: 18 }
- * ];
- * const sort: SortOperation = { field: 'age_or_something', order: SortOrder.ASCENDING };
- * const pagination: PaginationOperation = { page: 1, limit: 10 };
- * const queryString = createQueryString(filters, sort, pagination);
- *
- * Output: "filter=stock_item_id:eq:12345&filter=age:gt:18&sort=age_or_something:asc&page=1&limit=10"
+ * Builds a `?filter=...&filter=...&sort=field:asc&page=1&limit=50` query
+ * string against list endpoints. Returns the leading "?" or an empty string.
  */
 export function createQueryString(
     filters?: FilterOperation[],
     sort?: SortOperation,
     pagination?: PaginationOperation
 ): string {
-    const _Parts: string[] = [];
+    const params = new URLSearchParams();
 
-    if (filters && filters.length > 0) {
-        _Parts.push(createFilterString(filters));
+    if (filters) {
+        for (const f of filters) {
+            params.append('filter', `${f.field}:${f.operator}:${f.value}`);
+        }
     }
-
     if (sort) {
-        _Parts.push(createSortString(sort));
+        params.set('sort', `${sort.field}:${sort.order ?? SortOrder.ASCENDING}`);
     }
-
     if (pagination) {
-        _Parts.push(createPaginationString(pagination));
+        params.set('page', String(pagination.page));
+        params.set('limit', String(pagination.limit));
     }
 
-    return _Parts.join('&');
+    const qs = params.toString();
+    return qs.length > 0 ? `?${qs}` : '';
 }

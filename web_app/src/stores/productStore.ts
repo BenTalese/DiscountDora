@@ -1,5 +1,4 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import { Loading } from 'quasar';
 import NotSupportedError from 'src/exceptions/notSupportedError';
 import type { IOfferSortByOption } from 'src/helpers/offerSortByOptions';
 import { OfferSortByOptions } from 'src/helpers/offerSortByOptions';
@@ -84,8 +83,8 @@ export const useProductStore = defineStore('product', () => {
         productApiService.createAsync(command).then(() => getProductsAsync());
 
     const getProductsAsync = (): Promise<void> =>
-        productApiService.getAllAsync().then((productsData) => {
-            products.value = productsData;
+        productApiService.getAllAsync().then((page) => {
+            products.value = page.items;
         });
 
     const updateProductAsync = (command: UpdateProductCommand): Promise<void> =>
@@ -125,22 +124,53 @@ export const useProductStore = defineStore('product', () => {
         return shallowOffersCopy;
     });
 
+    // The product search lives on the page now — we expose per-request
+    // state instead of leaning on Quasar's global Loading overlay, which
+    // hijacks the whole screen and can't be cancelled by the user.
+    const isSearching = ref(false);
+    const searchError = ref<string | null>(null);
+    // Monotonic token: each search bumps it. Late results from cancelled
+    // requests check this and refuse to overwrite `productOffers` if their
+    // token is stale.
+    let inflightSearchId = 0;
+
+    function cancelSearch(): void {
+        // We don't have AbortController plumbing on the http client yet, so
+        // "cancel" means "ignore the in-flight result when it arrives".
+        // From the user's perspective the loading indicator dismisses now.
+        inflightSearchId += 1;
+        isSearching.value = false;
+    }
+
     async function searchByTermAsync(query: SearchByTermQuery): Promise<void> {
         if (!query.search_term?.trim()) return;
 
-        Loading.show();
+        const myId = ++inflightSearchId;
+        isSearching.value = true;
+        searchError.value = null;
 
-        await productApiService
-            .searchByTermAsync(query)
-            .then((offers) => {
-                productOffers.value = offers.map((off) => {
-                    const savedProduct = findSavedProduct(off, products.value);
-                    off.is_saved = !!savedProduct;
-                    off.is_saved_product_active = savedProduct?.is_active ?? false;
-                    return off;
-                });
-            })
-            .finally(() => Loading.hide());
+        try {
+            const offers = await productApiService.searchByTermAsync(query);
+
+            // Cancelled or superseded by a newer search? Bail.
+            if (myId !== inflightSearchId) return;
+
+            productOffers.value = offers.map((off) => {
+                const savedProduct = findSavedProduct(off, products.value);
+                off.is_saved = !!savedProduct;
+                off.is_saved_product_active = savedProduct?.is_active ?? false;
+                return off;
+            });
+        } catch (err) {
+            if (myId !== inflightSearchId) return;
+            searchError.value = String(err);
+            // Leave any previous results untouched so the user doesn't lose
+            // their last successful search when one merchant flakes.
+        } finally {
+            if (myId === inflightSearchId) {
+                isSearching.value = false;
+            }
+        }
     }
 
     //#endregion Product Offers
@@ -161,7 +191,10 @@ export const useProductStore = defineStore('product', () => {
         productOffers: readonly(productOffers),
         filteredProductOffers,
         updateProductOffer,
-        searchByTermAsync
+        searchByTermAsync,
+        cancelSearch,
+        isSearching: readonly(isSearching),
+        searchError: readonly(searchError)
     };
 });
 

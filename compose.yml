@@ -2,9 +2,15 @@ services:
   discount_dora:
     container_name: discount_dora
     environment:
-      - PUID=1000  # TODO: Make this actually do something
-      - PGID=1000  # TODO: Make this actually do something
-      - TZ=Australia/Sydney  # TODO: Make this actually do something
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Sydney
+      # Override these in a sibling .env file. The repo's .env.example lists
+      # every supported var. The defaults below keep dev running without
+      # any extra setup; production should set DORA_SECRET_KEY explicitly.
+      - DORA_SECRET_KEY=${DORA_SECRET_KEY:-}
+      - DORA_SECURE_COOKIES=${DORA_SECURE_COOKIES:-false}
+      - DORA_ALLOW_DESTRUCTIVE=${DORA_ALLOW_DESTRUCTIVE:-false}
     # image: <IMAGE HOSTING SERVICE>/discountdora:latest # TODO: Once the image is uploaded to somewhere, use this instead of "build"
     build:
       context: .
@@ -14,7 +20,16 @@ services:
       - 5170:5170
       - 5172:5172
       - 5174:5174
+    # Named volumes so the container has stable, host-managed storage without
+    # forcing users to invent host paths. The previous compose used literal
+    # `/path/to/cache` placeholders that fail to mount on every fresh checkout.
+    # `docker compose down -v` clears these.
     volumes:
-      - /path/to/cache:/app/cache
-      - /path/to/data:/app/data
-      - /path/to/config:/app/config
+      - dora_cache:/app/cache
+      - dora_data:/app/data
+      - dora_config:/app/config
+
+volumes:
+  dora_cache:
+  dora_data:
+  dora_config:

@@ -16,7 +16,15 @@ STYLE GUIDE:
     font-style: normal;
 }
 
+// The base font-size is driven by the signed-in user's font_size preference
+// (themeService writes --dora-base-font-size on document.documentElement).
+// Falls back to 16px while logged out or for first paint.
+:root {
+    font-size: var(--dora-base-font-size, 16px);
+}
+
 body {
     background-color: var(--q-page);
     font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
+    color: var(--q-text);
 }

@@ -5,6 +5,7 @@ __pycache__
 .DS_Store
 .env
 .env.local*
+data/.secret_key
 .idea
 .image_cache
 .quasar

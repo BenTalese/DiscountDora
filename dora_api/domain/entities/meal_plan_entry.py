@@ -7,14 +7,13 @@ from dora_api.domain.entities.meal import Meal
 
 @dataclass
 class MealPlanEntry(BaseEntity):
-    MEAL = "meal"
     meal: Meal
-
-    SCHEDULED_FOR = "scheduled_for"
     scheduled_for: date
-
-    SERVINGS = "servings"
     servings: int
-
-    SLOT = "slot"
     slot: str
+
+    class Fields(BaseEntity.Fields):
+        MEAL = "meal"
+        SCHEDULED_FOR = "scheduled_for"
+        SERVINGS = "servings"
+        SLOT = "slot"

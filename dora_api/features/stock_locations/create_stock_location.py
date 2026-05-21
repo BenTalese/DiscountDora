@@ -3,13 +3,12 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from varname import nameof
 
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
-from dora_api.features.stock_locations.get_stock_locations import (
-    StockLocationDto, get_stock_locations)
+from dora_api.features.stock_locations.get_stock_locations import \
+    get_stock_locations
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created)
 from dora_api.infrastructure.decorators import has_request_body
@@ -36,7 +35,7 @@ class CreateStockLocationHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateStockLocationRequest) -> CreateStockLocationResponse:
-        _StockLocationName = EntityField(StockLocation, nameof(StockLocation.name))
+        _StockLocationName = EntityField(StockLocation, StockLocation.Fields.NAME)
         _ExistingStockLocation: StockLocation | None = (
             self.repository
             .get(StockLocation)
@@ -70,8 +69,14 @@ def create_stock_location():
         return business_rule_violation(f"A stock location with the name '{_Request.name}' already exists.")
 
     _Logger.info(f"Successfully created stock location with ID: {_Response.new_stock_location_id}")
+    from dora_api.features.stock_locations.get_stock_locations import \
+        GetStockLocationsHandler
+    _Dto = get_container().inject(GetStockLocationsHandler).handle_by_id(
+        _Response.new_stock_location_id
+    )
     return created(
         _Response.new_stock_location_id,
-        f"{nameof(STOCK_LOCATION_ROUTER)}.{nameof(get_stock_locations)}",
-        nameof(StockLocationDto.stock_location_id)
+        f"{STOCK_LOCATION_ROUTER.name}.{get_stock_locations.__name__}",
+        "stock_location_id",
+        body = _Dto,
     )

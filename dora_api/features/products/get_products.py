@@ -1,15 +1,17 @@
-from dataclasses import dataclass
 import logging
-from typing import List
+from dataclasses import dataclass
 from uuid import UUID
 
-from varname import nameof
+from flask import request
 
 from dora_api.domain.entities.product import Product
 from dora_api.features.routers import PRODUCT_ROUTER
-from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.query_options import (InvalidQueryParameter,
+                                                   parse_query_options)
 from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -55,27 +57,33 @@ class ProductDto:
         )
 
 
+_FIELD_MAP: dict[str, EntityField] = {
+    "product_id": EntityField(Product, "id"),
+    "merchant_id": EntityField(Product, "_merchant_id"),
+}
+
+
 class GetProductsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self) -> List[ProductDto]:
+    def handle(self, options) -> Page[ProductDto]:
         return (
             self.repository
             .get(Product)
-            .include(nameof(Product.current_offer))
-            .include(nameof(Product.merchant))
-            .project(ProductDto.from_entity)
+            .include(Product.Fields.CURRENT_OFFER)
+            .include(Product.Fields.MERCHANT)
+            .paginate(options, ProductDto.from_entity, field_map=_FIELD_MAP)
         )
 
 
 @PRODUCT_ROUTER.route("")
-@PRODUCT_ROUTER.route("<query>")
-@has_response(ProductDto)
-def get_products(query: str | None = None):
+def get_products():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to get products.")
-    _Handler = get_container().inject(GetProductsHandler)
-    _Result = _Handler.handle()
-    _Logger.info(f"Successfully retrieved {len(_Result)} products.")
-    return ok(_Result)
+    try:
+        _Options = parse_query_options(request.args)
+        _Page = get_container().inject(GetProductsHandler).handle(_Options)
+    except InvalidQueryParameter as exc:
+        return bad_request(str(exc))
+    _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} products.")
+    return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)

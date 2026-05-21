@@ -1,18 +1,16 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from varname import nameof
 
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.routers import STOCK_ITEM_ROUTER
-from dora_api.features.stock_items.get_stock_items import (StockItemDto,
-                                                           get_stock_items)
+from dora_api.features.stock_items.get_stock_items import get_stock_items
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created,
                                                   entity_existence_failure)
@@ -29,6 +27,11 @@ class CreateStockItemRequest(BaseModel):
     name: str = Field(min_length = 1)
     stock_level_id: UUID
     stock_location_id: UUID | None = None
+    stock_group_id: UUID | None = None
+    expiry_date: date | None = None
+    is_flagged: bool = False
+    auto_add_when_low: bool = False
+    is_open: bool = False
 
 
 @dataclass(slots=True)
@@ -36,6 +39,7 @@ class CreateStockItemResponse:
     new_stock_item_id: UUID = EMPTY_UUID
     stock_level_not_found: bool = False
     stock_location_not_found: bool = False
+    stock_group_not_found: bool = False
     stock_item_already_exists: bool = False
 
 
@@ -55,7 +59,17 @@ class CreateStockItemHandler:
             if not _StockLocation:
                 return CreateStockItemResponse(stock_location_not_found=True)
 
-        _StockItemName = EntityField(StockItem, nameof(StockItem.name))
+        # Stock group is optional; we look it up locally so we can pass the
+        # entity into the StockItem constructor (saves an extra round-trip
+        # from the repository on read later).
+        from dora_api.domain.entities.stock_group import StockGroup
+        _StockGroup = None
+        if request.stock_group_id:
+            _StockGroup = self.repository.get(StockGroup).by_id(request.stock_group_id)
+            if not _StockGroup:
+                return CreateStockItemResponse(stock_group_not_found=True)
+
+        _StockItemName = EntityField(StockItem, StockItem.Fields.NAME)
         _ExistingStockItem: StockItem | None = (
             self.repository
             .get(StockItem)
@@ -70,11 +84,16 @@ class CreateStockItemHandler:
             image = None,
             name = request.name,
             notes = None,
-            stock_group = None,
+            stock_group = _StockGroup,
             stock_level = _StockLevel,
             stock_level_last_updated = datetime.now(),
             stock_location = _StockLocation,
-            stocktake_alerts_are_enabled = False
+            stocktake_alerts_are_enabled = False,
+            expiry_date = request.expiry_date,
+            is_flagged = request.is_flagged,
+            auto_add_when_low = request.auto_add_when_low,
+            is_open = request.is_open,
+            opened_on = date.today() if request.is_open else None,
         )
 
         self.repository.add(_NewStockItem)
@@ -94,19 +113,35 @@ def create_stock_item():
 
     if _Response.stock_level_not_found:
         _Logger.warning(f"Stock level not found: {_Request.stock_level_id}")
-        return entity_existence_failure(nameof(StockLevel), field_of(CreateStockItemRequest, 'stock_level_id'), _Request.stock_level_id)
+        return entity_existence_failure(StockLevel.__name__, field_of(CreateStockItemRequest, 'stock_level_id'), _Request.stock_level_id)
 
     if _Response.stock_location_not_found and _Request.stock_location_id:
         _Logger.warning(f"Stock location not found: {_Request.stock_location_id}")
-        return entity_existence_failure(nameof(StockLocation), field_of(CreateStockItemRequest, 'stock_location_id'), _Request.stock_location_id)
+        return entity_existence_failure(StockLocation.__name__, field_of(CreateStockItemRequest, 'stock_location_id'), _Request.stock_location_id)
+
+    if _Response.stock_group_not_found and _Request.stock_group_id:
+        _Logger.warning(f"Stock group not found: {_Request.stock_group_id}")
+        # Lazy import — avoids dragging StockGroup into the module's top-
+        # level imports just for an error response constant.
+        from dora_api.domain.entities.stock_group import StockGroup
+        return entity_existence_failure(
+            StockGroup.__name__,
+            field_of(CreateStockItemRequest, 'stock_group_id'),
+            _Request.stock_group_id,
+        )
 
     if _Response.stock_item_already_exists:
         _Logger.warning(f"Stock item already exists with name: {_Request.name}")
         return business_rule_violation(f"A stock item with the name '{_Request.name}' already exists.")
 
     _Logger.info(f"Successfully created stock item with ID: {_Response.new_stock_item_id}")
+    from dora_api.features.stock_items.get_stock_items import GetStockItemsHandler
+    _Dto = get_container().inject(GetStockItemsHandler).handle_by_id(
+        _Response.new_stock_item_id
+    )
     return created(
         _Response.new_stock_item_id,
-        f"{nameof(STOCK_ITEM_ROUTER)}.{nameof(get_stock_items)}",
-        nameof(StockItemDto.stock_item_id)
+        f"{STOCK_ITEM_ROUTER.name}.{get_stock_items.__name__}",
+        "stock_item_id",
+        body = _Dto,
     )

@@ -19,14 +19,22 @@ def startup():
     WEB_APP_HOST = CONFIGURATION_MANAGER.get_web_app_host()
     WEB_APP_PORT = CONFIGURATION_MANAGER.get_web_app_port()
 
+    # The web client uses axios `withCredentials: true` for every request
+    # (shared with the dora_api so the session cookie rides along), so the
+    # merchant_api must also reply with Access-Control-Allow-Credentials: true.
+    # Without supports_credentials=True the browser blocks the response and
+    # the product-search page fails instantly on first call. Origins must
+    # be an explicit list — wildcard origins are forbidden when credentials
+    # are enabled.
     CORS(_App, resources={r'/api/*': {
         'origins': [
             f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
             f'http://127.0.0.1:{WEB_APP_PORT}',
             f'http://localhost:{WEB_APP_PORT}',
-            f'http://172.17.0.1:{WEB_APP_PORT}'
+            f'http://172.17.0.1:{WEB_APP_PORT}',
         ],
-        'allow_headers': ['*', 'Content-Type']
+        'allow_headers': ['Content-Type'],
+        'supports_credentials': True,
     }})
 
     configure_logger(CONFIGURATION_MANAGER.get_log_level())

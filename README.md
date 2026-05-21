@@ -60,6 +60,14 @@ As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is 
 
 🚧 <i>System requirements to be documented.</i>
 
+### Local dev quick reference
+
+- Copy `.env.example` → `.env` and `web_app/.env.example` → `web_app/.env`. Adjust as needed.
+- Set `DORA_ALLOW_DESTRUCTIVE=true` only when you intentionally want to drop & re-seed the database on startup. Debug mode no longer auto-wipes data.
+- Apply schema changes: `flask db migrate -m "<description>"` (review the generated file — see [dora_api/persistence/migrations/README](dora_api/persistence/migrations/README)) then `flask db upgrade`.
+- List endpoints accept standard query params: `?filter=name:ct:pasta&filter=is_favourite:eq:true&sort=name:asc&page=1&limit=50`. Responses are `{ items, total, page, limit }`.
+- **AI assistant (optional, bring-your-own-LLM):** Dora's chat can be backed by a language model you host yourself. It's off by default and falls back to a rule-based helper. Dora does **not** bundle, download, or dictate a model. To turn it on: (1) run an OpenAI-compatible LLM server that supports tool-calling — [Ollama](https://ollama.com) is the easy option: `ollama pull qwen2.5:7b` then `ollama serve`; (2) sign in as an admin and go to **Settings → System → AI assistant**; (3) enable it and enter your server's base URL (e.g. `http://localhost:11434`) and model name (e.g. `qwen2.5:7b`), then save. The model must be tool-capable (qwen2.5, llama3.1, etc.). The LLM runs wherever you host it (a desktop/home server); other devices reach Dora over the network as usual.
+
 <!-- TODO: Offer both docker and manual install options -->
 <br/>
 

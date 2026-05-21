@@ -48,14 +48,14 @@ class CreateProductHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        _MerchantName = EntityField(Merchant, Merchant.NAME)
-        _ProductName = EntityField(Product, Product.NAME)
-        _ProductStockcode = EntityField(Product, Product.MERCHANT_STOCKCODE)
+        _MerchantName = EntityField(Merchant, Merchant.Fields.NAME)
+        _ProductName = EntityField(Product, Product.Fields.NAME)
+        _ProductStockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
 
         _ExistingProduct: Product | None = (
             self.repository
             .get(Product)
-            .include(Product.MERCHANT)  # TODO: Is this line necessary?
+            .include(Product.Fields.MERCHANT)  # TODO: Is this line necessary?
             .one(_ProductStockcode.eq(request.merchant_stockcode)
                  & _MerchantName.eq(request.merchant_name)
                  & _ProductName.eq(request.name))
@@ -118,10 +118,9 @@ def create_product():
             f"stockcode '{_Request.merchant_stockcode}'."
         )
 
-    # TODO: Verify: f"{PRODUCT_ROUTER.name}.{get_products.__name__}"
     _Logger.info(f"Successfully created product with ID: {_Response.new_product_id}")
     return created(
         _Response.new_product_id,
         f"{PRODUCT_ROUTER.name}.{get_products.__name__}",
-        "product_id"
+        "product_id",
     )

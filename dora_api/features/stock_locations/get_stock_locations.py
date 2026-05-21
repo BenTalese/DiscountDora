@@ -1,13 +1,17 @@
-from dataclasses import dataclass
 import logging
-from typing import List
+from dataclasses import dataclass
 from uuid import UUID
+
+from flask import request
 
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
-from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.query_options import (InvalidQueryParameter,
+                                                   parse_query_options)
 from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -24,21 +28,32 @@ class StockLocationDto:
         )
 
 
+_FIELD_MAP: dict[str, EntityField] = {
+    "stock_location_id": EntityField(StockLocation, "id"),
+}
+
+
 class GetStockLocationsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self) -> List[StockLocationDto]:
-        return self.repository.get(StockLocation).project(StockLocationDto.from_entity)
+    def handle(self, options) -> Page[StockLocationDto]:
+        return self.repository.get(StockLocation).paginate(
+            options, StockLocationDto.from_entity, field_map=_FIELD_MAP
+        )
+
+    def handle_by_id(self, stock_location_id: UUID) -> StockLocationDto | None:
+        entity = self.repository.get(StockLocation).by_id(stock_location_id)
+        return StockLocationDto.from_entity(entity) if entity else None
 
 
 @STOCK_LOCATION_ROUTER.route("")
-@STOCK_LOCATION_ROUTER.route("<query>")
-@has_response(StockLocationDto)
-def get_stock_locations(query: str | None = None):
+def get_stock_locations():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to get stock locations.")
-    _Handler = get_container().inject(GetStockLocationsHandler)
-    _Result = _Handler.handle()
-    _Logger.info(f"Successfully retrieved {len(_Result)} stock locations.")
-    return ok(_Result)
+    try:
+        _Options = parse_query_options(request.args)
+        _Page = get_container().inject(GetStockLocationsHandler).handle(_Options)
+    except InvalidQueryParameter as exc:
+        return bad_request(str(exc))
+    _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} stock locations.")
+    return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)

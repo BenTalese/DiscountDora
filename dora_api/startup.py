@@ -1,4 +1,5 @@
 import logging
+import os
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -20,12 +21,23 @@ def startup(is_test_env: bool = False):
 
     WEB_APP_HOST = DORA_CONFIG.get_web_app_host()
     WEB_APP_PORT = DORA_CONFIG.get_web_app_port()
-    CORS(app, resources={r'/api/*': {'origins': [
-        f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
-        f'http://127.0.0.1:{WEB_APP_PORT}',
-        f'http://localhost:{WEB_APP_PORT}',
-        f'http://172.17.0.1:{WEB_APP_PORT}',
-    ], 'allow_headers': ['*', 'Content-Type']}})
+    # supports_credentials must be True for the browser to send the
+    # `dora_session` cookie cross-origin. Origins must be an explicit list
+    # (never '*') when credentials are enabled — the browser refuses the
+    # wildcard in that case.
+    CORS(
+        app,
+        resources={r'/api/*': {
+            'origins': [
+                f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
+                f'http://127.0.0.1:{WEB_APP_PORT}',
+                f'http://localhost:{WEB_APP_PORT}',
+                f'http://172.17.0.1:{WEB_APP_PORT}',
+            ],
+            'allow_headers': ['Content-Type'],
+            'supports_credentials': True,
+        }},
+    )
 
     init_db(is_test_env)
     configure_logger(DORA_CONFIG.get_log_level())
@@ -42,12 +54,21 @@ def startup(is_test_env: bool = False):
 
 def init_db(is_test_env: bool):
     with app.app_context():
-        if DORA_CONFIG.is_debug_mode_enabled() or is_test_env:
+        _AllowDestructive = os.environ.get("DORA_ALLOW_DESTRUCTIVE", "").lower() in ("1", "true", "yes")
+
+        if is_test_env or (DORA_CONFIG.is_debug_mode_enabled() and _AllowDestructive):
             db.drop_all()
             db.create_all()
             seed_dev_data()
-        else:
-            upgrade()
+            return
+
+        if DORA_CONFIG.is_debug_mode_enabled():
+            # Create any missing tables for local dev, but never drop existing data.
+            # Set DORA_ALLOW_DESTRUCTIVE=true to wipe and re-seed.
+            db.create_all()
+            return
+
+        upgrade()
 
 
 def configure_logger(log_level: int):

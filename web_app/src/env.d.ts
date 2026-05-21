@@ -5,3 +5,14 @@ declare namespace NodeJS {
         VUE_ROUTER_BASE: string | undefined;
     }
 }
+
+interface ImportMetaEnv {
+    /** Base URL for the main Dora API (dora_api). Defaults to `<hostname>:5170/api`. */
+    readonly VITE_API_BASE_URL?: string;
+    /** Base URL for the merchant API (merchant_api). Defaults to `<hostname>:5172/api`. */
+    readonly VITE_MERCHANT_API_BASE_URL?: string;
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}

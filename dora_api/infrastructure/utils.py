@@ -3,12 +3,10 @@ import inspect
 import os
 import re
 from pathlib import Path
-from typing import Any, List, TypeGuard
+from typing import Any, List
 
 from pydantic import BaseModel
 
-from dora_api.domain.generics import TValue
-from dora_api.domain.types import Unset
 from dora_api.infrastructure.dependency_container import DependencyContainer
 
 
@@ -51,10 +49,11 @@ def get_classes_ending_with(term: str, path_to_search: Path | str):
         _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
         for _File in _Files:
             _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
-            [_Classes.append((_Class))
+            [_Classes.append(_Class)
                 for _, _Class
                 in inspect.getmembers(_Module, inspect.isclass)
-                if _Class.__name__.lower().endswith(term.lower())]
+                if _Class.__name__.lower().endswith(term.lower())
+                and _Class.__module__ == _Module.__name__]
 
     return _Classes
 
@@ -83,10 +82,6 @@ def field_of(model: type[BaseModel], field: str) -> str:
     if field not in model.model_fields:
         raise ValueError(f"'{field}' is not a field on '{model.__name__}'")
     return field
-
-
-def is_set(value: TValue | Unset) -> TypeGuard[TValue]:
-    return not isinstance(value, Unset)
 
 
 def get_request_body() -> Any:

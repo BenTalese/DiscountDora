@@ -2,8 +2,6 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID
 
-from varname import nameof
-
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
@@ -41,7 +39,7 @@ def delete_stock_location(stock_location_id: UUID):
 
     if _Response.stock_location_not_found:
         _Logger.warning(f"Stock location not found with ID: {stock_location_id}")
-        return not_found(nameof(StockLocation), stock_location_id)
+        return not_found(StockLocation.__name__, stock_location_id)
 
     _Logger.info(f"Successfully deleted stock location with ID {stock_location_id}.")
     return no_content()

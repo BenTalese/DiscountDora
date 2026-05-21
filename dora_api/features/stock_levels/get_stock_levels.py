@@ -1,13 +1,17 @@
 import logging
 from dataclasses import dataclass
-from typing import List
 from uuid import UUID
+
+from flask import request
 
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.features.routers import STOCK_LEVEL_ROUTER
-from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.query_options import (InvalidQueryParameter,
+                                                   parse_query_options)
 from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -26,21 +30,28 @@ class StockLevelDto:
         )
 
 
+_FIELD_MAP: dict[str, EntityField] = {
+    "stock_level_id": EntityField(StockLevel, "id"),
+}
+
+
 class GetStockLevelsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self) -> List[StockLevelDto]:
-        return self.repository.get(StockLevel).project(StockLevelDto.from_entity)
+    def handle(self, options) -> Page[StockLevelDto]:
+        return self.repository.get(StockLevel).paginate(
+            options, StockLevelDto.from_entity, field_map=_FIELD_MAP
+        )
 
 
 @STOCK_LEVEL_ROUTER.route("")
-@STOCK_LEVEL_ROUTER.route("<query>")
-@has_response(StockLevelDto)
-def get_stock_levels(query: str | None = None):
+def get_stock_levels():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to get stock levels.")
-    _Handler = get_container().inject(GetStockLevelsHandler)
-    _Result = _Handler.handle()
-    _Logger.info(f"Successfully retrieved {len(_Result)} stock levels.")
-    return ok(_Result)
+    try:
+        _Options = parse_query_options(request.args)
+        _Page = get_container().inject(GetStockLevelsHandler).handle(_Options)
+    except InvalidQueryParameter as exc:
+        return bad_request(str(exc))
+    _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} stock levels.")
+    return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)

@@ -1,17 +1,11 @@
 import { defineRouter } from '#q-app/wrappers';
+import { Notify } from 'quasar';
+import { useAuthStore } from 'src/stores/authStore';
 import { createMemoryHistory, createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
 
-import { Notify } from 'quasar';
 import routes from './routes';
 
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- *
- * The function below can be async too; either use
- * async/await or return a Promise which resolves
- * with the Router instance.
- */
+const PUBLIC_ROUTES = new Set<string>(['/login']);
 
 export default defineRouter(function (/* { store, ssrContext } */) {
     const createHistory = process.env.SERVER
@@ -33,6 +27,33 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     Router.onError((err) => {
         console.error('Vue Router Error: ' + err.message);
         Notify.create({ type: 'oopsie' });
+    });
+
+    // Global auth guard. Bootstraps the session on first navigation, then
+    // either lets the request through, redirects to /login (when a protected
+    // route needs a session), or redirects to / (when an already-logged-in
+    // user lands on /login).
+    Router.beforeEach(async (to) => {
+        const authStore = useAuthStore();
+        if (!authStore.isBootstrapped) {
+            await authStore.bootstrapAsync();
+        }
+
+        const isPublic = PUBLIC_ROUTES.has(to.path);
+        if (!isPublic && !authStore.isAuthenticated()) {
+            return { path: '/login', query: { redirect: to.fullPath } };
+        }
+        if (to.path === '/login' && authStore.isAuthenticated()) {
+            return { path: '/' };
+        }
+
+        // Block non-admins from the global/admin settings tree. They get
+        // bounced to the personal Preferences page so they don't end up on a
+        // blank screen if they navigated by URL.
+        if (to.path.startsWith('/settings/admin') && !authStore.currentUser?.is_admin) {
+            return { path: '/settings/preferences' };
+        }
+        return true;
     });
 
     return Router;

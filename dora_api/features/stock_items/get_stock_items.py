@@ -1,16 +1,18 @@
-from dataclasses import dataclass
-from datetime import datetime
 import logging
-from typing import List
+from dataclasses import dataclass
+from datetime import date, datetime
 from uuid import UUID
 
-from varname import nameof
+from flask import request
 
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
-from dora_api.infrastructure.api_response import ok
-from dora_api.infrastructure.decorators import has_response
+from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.query_options import (InvalidQueryParameter,
+                                                   parse_query_options)
 from dora_api.infrastructure.utils import get_container
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.page import Page
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -20,7 +22,12 @@ class StockItemDto:
     stock_item_id: UUID
     stock_level_id: UUID
     stock_location_id: UUID | None
+    stock_group_id: UUID | None
     stock_level_last_updated: datetime
+    expiry_date: date | None
+    is_flagged: bool
+    is_open: bool
+    opened_on: date | None
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
@@ -29,31 +36,55 @@ class StockItemDto:
             stock_item_id = stock_item.id,
             stock_level_id = stock_item.stock_level.id,
             stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,
-            stock_level_last_updated = stock_item.stock_level_last_updated
+            stock_group_id = stock_item.stock_group.id if stock_item.stock_group else None,
+            stock_level_last_updated = stock_item.stock_level_last_updated,
+            expiry_date = stock_item.expiry_date,
+            is_flagged = bool(stock_item.is_flagged),
+            is_open = bool(stock_item.is_open),
+            opened_on = stock_item.opened_on,
         )
+
+
+_FIELD_MAP: dict[str, EntityField] = {
+    "stock_item_id": EntityField(StockItem, "id"),
+    "stock_level_id": EntityField(StockItem, "_stock_level_id"),
+    "stock_location_id": EntityField(StockItem, "_stock_location_id"),
+    "stock_group_id": EntityField(StockItem, "_stock_group_id"),
+    "is_flagged": EntityField(StockItem, StockItem.Fields.IS_FLAGGED),
+    "is_open": EntityField(StockItem, StockItem.Fields.IS_OPEN),
+}
 
 
 class GetStockItemsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self) -> List[StockItemDto]:
+    def _base_query(self):
         return (
             self.repository
             .get(StockItem)
-            .include(nameof(StockItem.stock_level))
-            .include(nameof(StockItem.stock_location))
-            .project(StockItemDto.from_entity)
+            .include(StockItem.Fields.STOCK_LEVEL)
+            .include(StockItem.Fields.STOCK_LOCATION)
+            .include(StockItem.Fields.STOCK_GROUP)
         )
+
+    def handle(self, options) -> Page[StockItemDto]:
+        return self._base_query().paginate(
+            options, StockItemDto.from_entity, field_map=_FIELD_MAP
+        )
+
+    def handle_by_id(self, stock_item_id: UUID) -> StockItemDto | None:
+        entity = self._base_query().by_id(stock_item_id)
+        return StockItemDto.from_entity(entity) if entity else None
 
 
 @STOCK_ITEM_ROUTER.route("")
-@STOCK_ITEM_ROUTER.route("<query>")
-@has_response(StockItemDto)
-def get_stock_items(query: str | None = None):
+def get_stock_items():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to get stock items.")
-    _Handler = get_container().inject(GetStockItemsHandler)
-    _Result = _Handler.handle()
-    _Logger.info(f"Successfully retrieved {len(_Result)} stock items.")
-    return ok(_Result)
+    try:
+        _Options = parse_query_options(request.args)
+        _Page = get_container().inject(GetStockItemsHandler).handle(_Options)
+    except InvalidQueryParameter as exc:
+        return bad_request(str(exc))
+    _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} stock items.")
+    return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)

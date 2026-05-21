@@ -4,7 +4,9 @@ import {
     sortOffersByFullNameDesc,
     sortOffersByPriceHighToLow,
     sortOffersByPriceLowToHigh,
-    sortOffersBySpecialBestToWorst
+    sortOffersBySpecialBestToWorst,
+    sortOffersByUnitPriceHighToLow,
+    sortOffersByUnitPriceLowToHigh
 } from './scrapedProductOfferLogic';
 
 export interface IOfferSortByOption {
@@ -15,27 +17,37 @@ export interface IOfferSortByOption {
 
 export const OfferSortByOptions: IOfferSortByOption[] = [
     {
-        description: 'Name (A - Z)',
+        description: 'Name (A → Z)',
         isDefault: true,
         sort: sortOffersByFullNameAsc
     },
     {
-        description: 'Name (Z - A)',
+        description: 'Name (Z → A)',
         isDefault: false,
         sort: sortOffersByFullNameDesc
     },
     {
-        description: 'Price (Low to High)',
+        description: 'Price (low → high)',
         isDefault: false,
         sort: sortOffersByPriceLowToHigh
     },
     {
-        description: 'Price (High to Low)',
+        description: 'Price (high → low)',
         isDefault: false,
         sort: sortOffersByPriceHighToLow
     },
     {
-        description: 'Specials',
+        description: 'Unit price (low → high)',
+        isDefault: false,
+        sort: sortOffersByUnitPriceLowToHigh
+    },
+    {
+        description: 'Unit price (high → low)',
+        isDefault: false,
+        sort: sortOffersByUnitPriceHighToLow
+    },
+    {
+        description: 'Best specials first',
         isDefault: false,
         sort: sortOffersBySpecialBestToWorst
     }

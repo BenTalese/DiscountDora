@@ -22,42 +22,59 @@ branch_labels = None
 depends_on = None
 
 
+def _has_table(name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(name)
+
+
+def _has_column(table: str, column: str) -> bool:
+    return any(c['name'] == column for c in sa.inspect(op.get_bind()).get_columns(table))
+
+
 def upgrade():
-    op.create_table(
-        'StockItemSubstitute',
-        sa.Column('stock_item_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
-        sa.Column('substitute_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
-        sa.ForeignKeyConstraint(['stock_item_id'], ['StockItem.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['substitute_id'], ['StockItem.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('stock_item_id', 'substitute_id'),
-    )
-
-    op.create_table(
-        'StockLevelChange',
-        sa.Column('id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
-        sa.Column('stock_item_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
-        sa.Column('stock_level_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=True),
-        sa.Column('stock_level_name', sa.String(length=255), nullable=True),
-        sa.Column('changed_at', sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(['stock_item_id'], ['StockItem.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['stock_level_id'], ['StockLevel.id'], ondelete='SET NULL'),
-        sa.PrimaryKeyConstraint('id'),
-    )
-
-    with op.batch_alter_table('StockItem') as batch:
-        batch.add_column(sa.Column(
-            'preferred_product_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=True
-        ))
-        batch.create_foreign_key(
-            'fk_StockItem_preferred_product_id_Product',
-            'Product', ['preferred_product_id'], ['id'], ondelete='SET NULL',
+    # Guarded so this is safe whether or not `db.create_all()` (the dev-mode
+    # path) already materialised these tables/columns from the ORM metadata.
+    if not _has_table('StockItemSubstitute'):
+        op.create_table(
+            'StockItemSubstitute',
+            sa.Column('stock_item_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
+            sa.Column('substitute_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
+            sa.ForeignKeyConstraint(['stock_item_id'], ['StockItem.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['substitute_id'], ['StockItem.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('stock_item_id', 'substitute_id'),
         )
+
+    if not _has_table('StockLevelChange'):
+        op.create_table(
+            'StockLevelChange',
+            sa.Column('id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
+            sa.Column('stock_item_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
+            sa.Column('stock_level_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=True),
+            sa.Column('stock_level_name', sa.String(length=255), nullable=True),
+            sa.Column('changed_at', sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(['stock_item_id'], ['StockItem.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['stock_level_id'], ['StockLevel.id'], ondelete='SET NULL'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+
+    if not _has_column('StockItem', 'preferred_product_id'):
+        with op.batch_alter_table('StockItem') as batch:
+            batch.add_column(sa.Column(
+                'preferred_product_id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=True
+            ))
+            batch.create_foreign_key(
+                'fk_StockItem_preferred_product_id_Product',
+                'Product', ['preferred_product_id'], ['id'], ondelete='SET NULL',
+            )
 
 
 def downgrade():
-    # Dropping the column in batch mode recreates the table without it, taking
-    # the FK with it — no explicit drop_constraint (SQLite doesn't name FKs).
-    with op.batch_alter_table('StockItem') as batch:
-        batch.drop_column('preferred_product_id')
-    op.drop_table('StockLevelChange')
-    op.drop_table('StockItemSubstitute')
+    if _has_column('StockItem', 'preferred_product_id'):
+        # Dropping the column in batch mode recreates the table without it,
+        # taking the FK with it — no explicit drop_constraint (SQLite doesn't
+        # name FKs).
+        with op.batch_alter_table('StockItem') as batch:
+            batch.drop_column('preferred_product_id')
+    if _has_table('StockLevelChange'):
+        op.drop_table('StockLevelChange')
+    if _has_table('StockItemSubstitute'):
+        op.drop_table('StockItemSubstitute')

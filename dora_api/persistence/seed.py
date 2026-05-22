@@ -2,19 +2,24 @@ from datetime import UTC, date, datetime, timedelta
 
 from werkzeug.security import generate_password_hash
 
+from dora_api.app import db
 from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
+from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list_template import (
+    ShoppingListTemplate, ShoppingListTemplateLine)
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import (
     LOCATION_KIND_AREA, LOCATION_KIND_SECTION, LOCATION_KIND_ZONE,
     StockLocation)
@@ -23,354 +28,473 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 def seed_dev_data():
-    _Repository = SqlAlchemyRepository()
+    """Populate a rich dev dataset that exercises every screen.
 
-    # ---------------- MERCHANT ---------------- #
-    _MerchantOne = Merchant(name = "Woolworths")
-    _MerchantTwo = Merchant(name = "Coles")
-    _Repository.add(_MerchantOne)
-    _Repository.add(_MerchantTwo)
+    Covers: multiple merchants and products (with current + historic offers
+    for sparklines), product↔stock-item links and a preferred product, a deep
+    location hierarchy, stock items across all levels / expiry states / flags /
+    open markers, substitutes, level-change history, recipes (cookable and
+    not) across collections, meals, a full week's meal plan, primary /
+    in-progress / archived shopping lists with selected offers, and templates.
+    """
+    repo = SqlAlchemyRepository()
+    now = datetime.now(UTC)
+    today = date.today()
 
-    # ---------------- PRODUCT ---------------- #
-    _OfferOne = ProductOffer(
-        offered_on=datetime.now(UTC),
-        price_now = 2.82,
-        price_was = 3.52
+    # Build with autoflush off: we add child rows (e.g. RecipeIngredient) before
+    # their parent exists to link them, and an autoflush in that gap would try to
+    # insert with a null FK. The explicit save_changes() calls below flush with
+    # every relationship resolved. Restored before the final commit.
+    db.session.autoflush = False
+
+    # ---------------- MERCHANTS ---------------- #
+    woolworths = Merchant(name="Woolworths")
+    coles = Merchant(name="Coles")
+    aldi = Merchant(name="Aldi")
+    iga = Merchant(name="IGA")
+    for m in (woolworths, coles, aldi, iga):
+        repo.add(m)
+
+    # ---------------- PRODUCTS ---------------- #
+    def make_product(*, merchant, name, brand, size, size_unit, size_value,
+                     stockcode, price_now, price_was, history):
+        """history: list of (days_ago, price_now, price_was)."""
+        current = ProductOffer(offered_on=now, price_now=price_now, price_was=price_was)
+        repo.add(current)
+        historic = []
+        for days_ago, h_now, h_was in history:
+            offer = ProductHistoricOffer(
+                offered_on=now - timedelta(days=days_ago),
+                price_now=h_now,
+                price_was=h_was,
+            )
+            repo.add(offer)
+            historic.append(offer)
+        product = Product(
+            brand=brand,
+            current_offer=current,
+            historic_offers=historic,
+            image=None,
+            is_active=True,
+            is_available=True,
+            merchant=merchant,
+            merchant_stockcode=stockcode,
+            name=name,
+            size=size,
+            size_unit=size_unit,
+            size_value=size_value,
+            web_url=f"https://example.com/p/{stockcode}",
+        )
+        repo.add(product)
+        return product
+
+    milk_woolies = make_product(
+        merchant=woolworths, name="Woolworths Full Cream Milk 2L", brand="Woolworths",
+        size="2L", size_unit="L", size_value=2.0, stockcode="W-MILK-2L",
+        price_now=3.10, price_was=3.10,
+        history=[(28, 3.30, 3.30), (21, 3.30, 3.30), (14, 3.10, 3.30), (7, 3.10, 3.10)],
     )
-
-    _FreddoCake = Product(
-        brand = "Cadbury",
-        current_offer = _OfferOne,
-        historic_offers = [],
-        image = None,
-        is_active = True,
-        is_available = True,
-        merchant = _MerchantOne,
-        merchant_stockcode = "51741",
-        name = "Cadbury Freddo Cake",
-        size = "1.5L",
-        size_unit = "L",
-        size_value = 1.0,
-        web_url = "https://www.woolworths.com.au/shop/productdetails/51741"
+    milk_coles = make_product(
+        merchant=coles, name="Coles Full Cream Milk 2L", brand="Coles",
+        size="2L", size_unit="L", size_value=2.0, stockcode="C-MILK-2L",
+        price_now=2.90, price_was=3.30,
+        history=[(28, 3.30, 3.30), (14, 3.30, 3.30), (7, 2.90, 3.30)],
     )
-
-    _OfferTwo = ProductOffer(
-        offered_on=datetime.now(UTC),
-        price_now = 22.15,
-        price_was = 32.16
+    eggs_woolies = make_product(
+        merchant=woolworths, name="Woolworths Free Range Eggs 12pk", brand="Woolworths",
+        size="700g", size_unit="g", size_value=700.0, stockcode="W-EGG-12",
+        price_now=5.50, price_was=6.20,
+        history=[(30, 6.20, 6.20), (15, 5.90, 6.20), (5, 5.50, 6.20)],
     )
-
-    _CupcakeMix = Product(
-        brand = "Cadbury",
-        current_offer = _OfferTwo,
-        historic_offers = [],
-        image = None,
-        is_active = True,
-        is_available = True,
-        merchant = _MerchantTwo,
-        merchant_stockcode = "3056737",
-        name = "Betty Crocker Gluten Free Vanilla Cupcake Mix",
-        size = "460G",
-        size_unit = "G",
-        size_value = 460.0,
-        web_url = "https://www.coles.com.au/product/3056737"
+    pasta_barilla = make_product(
+        merchant=coles, name="Barilla Spaghetti No.5 500g", brand="Barilla",
+        size="500g", size_unit="g", size_value=500.0, stockcode="C-PASTA-500",
+        price_now=1.50, price_was=3.00,
+        history=[(30, 3.00, 3.00), (20, 2.50, 3.00), (10, 1.50, 3.00), (2, 1.50, 3.00)],
     )
-
-    _Repository.add(_OfferOne)
-    _Repository.add(_FreddoCake)
-    _Repository.add(_OfferTwo)
-    _Repository.add(_CupcakeMix)
+    oil_aldi = make_product(
+        merchant=aldi, name="Aldi Extra Virgin Olive Oil 1L", brand="Vialli",
+        size="1L", size_unit="L", size_value=1.0, stockcode="A-OIL-1L",
+        price_now=7.99, price_was=9.99,
+        history=[(25, 9.99, 9.99), (12, 8.99, 9.99), (3, 7.99, 9.99)],
+    )
+    parmesan_coles = make_product(
+        merchant=coles, name="Coles Parmesan Wedge 200g", brand="Coles",
+        size="200g", size_unit="g", size_value=200.0, stockcode="C-PARM-200",
+        price_now=6.00, price_was=6.00, history=[(20, 6.50, 6.50), (8, 6.00, 6.50)],
+    )
+    coffee_iga = make_product(
+        merchant=iga, name="Vittoria Coffee Beans 1kg", brand="Vittoria",
+        size="1kg", size_unit="kg", size_value=1.0, stockcode="I-COFFEE-1KG",
+        price_now=28.00, price_was=40.00,
+        history=[(40, 40.00, 40.00), (20, 34.00, 40.00), (5, 28.00, 40.00)],
+    )
+    freddo = make_product(
+        merchant=woolworths, name="Cadbury Freddo Cake", brand="Cadbury",
+        size="1.5L", size_unit="L", size_value=1.0, stockcode="51741",
+        price_now=2.82, price_was=3.52, history=[(15, 3.52, 3.52), (4, 2.82, 3.52)],
+    )
+    cupcake = make_product(
+        merchant=coles, name="Betty Crocker Gluten Free Vanilla Cupcake Mix", brand="Betty Crocker",
+        size="460g", size_unit="g", size_value=460.0, stockcode="3056737",
+        price_now=22.15, price_was=32.16, history=[(18, 32.16, 32.16), (6, 22.15, 32.16)],
+    )
 
     # ---------------- USER ---------------- #
-    # Default dev user. Username `dora`, password `dora`. Override either by
-    # editing this file or by registering a new account through the UI.
-    _UserOne = User(
-        email = "ben.talese@gmail.com",
-        password_hash = generate_password_hash("dora"),
-        send_deals_on_day = 6,
-        username = "dora",
-        is_admin = True,
-    )
-    _Repository.add(_UserOne)
+    # Default dev user. Username `dora`, password `dora`.
+    repo.add(User(
+        email="ben.talese@gmail.com",
+        password_hash=generate_password_hash("dora"),
+        send_deals_on_day=6,
+        username="dora",
+        is_admin=True,
+    ))
 
-    # ---------------- STOCK LOCATION HIERARCHY ---------------- #
-    # Top-level zones.
-    _Pantry = StockLocation(name = "Pantry", kind = LOCATION_KIND_ZONE, sequence = 0)
-    _Fridge = StockLocation(name = "Fridge", kind = LOCATION_KIND_ZONE, sequence = 1)
-    _Freezer = StockLocation(name = "Freezer", kind = LOCATION_KIND_ZONE, sequence = 2)
-    _Repository.add(_Pantry)
-    _Repository.add(_Fridge)
-    _Repository.add(_Freezer)
-    _Repository.save_changes()  # need ids before children can FK
+    # ---------------- LOCATION HIERARCHY ---------------- #
+    pantry = StockLocation(name="Pantry", kind=LOCATION_KIND_ZONE, sequence=0)
+    fridge = StockLocation(name="Fridge", kind=LOCATION_KIND_ZONE, sequence=1)
+    freezer = StockLocation(name="Freezer", kind=LOCATION_KIND_ZONE, sequence=2)
+    for loc in (pantry, fridge, freezer):
+        repo.add(loc)
+    repo.save_changes()  # need ids before children FK to them
 
-    # Pantry areas + sections (demonstrates the 3-level case).
-    _TopShelf = StockLocation(
-        name = "Top shelf", kind = LOCATION_KIND_AREA,
-        parent_id = _Pantry.id, sequence = 0
-    )
-    _MiddleShelf = StockLocation(
-        name = "Middle shelf", kind = LOCATION_KIND_AREA,
-        parent_id = _Pantry.id, sequence = 1
-    )
-    _Repository.add(_TopShelf)
-    _Repository.add(_MiddleShelf)
-    _Repository.save_changes()
+    top_shelf = StockLocation(name="Top shelf", kind=LOCATION_KIND_AREA, parent_id=pantry.id, sequence=0)
+    middle_shelf = StockLocation(name="Middle shelf", kind=LOCATION_KIND_AREA, parent_id=pantry.id, sequence=1)
+    for loc in (top_shelf, middle_shelf):
+        repo.add(loc)
+    repo.save_changes()
 
-    _MiddleLeft = StockLocation(
-        name = "Left side", kind = LOCATION_KIND_SECTION,
-        parent_id = _MiddleShelf.id, sequence = 0
-    )
-    _MiddleRight = StockLocation(
-        name = "Right side", kind = LOCATION_KIND_SECTION,
-        parent_id = _MiddleShelf.id, sequence = 1
-    )
-    _Repository.add(_MiddleLeft)
-    _Repository.add(_MiddleRight)
+    middle_left = StockLocation(name="Left side", kind=LOCATION_KIND_SECTION, parent_id=middle_shelf.id, sequence=0)
+    middle_right = StockLocation(name="Right side", kind=LOCATION_KIND_SECTION, parent_id=middle_shelf.id, sequence=1)
+    crisper = StockLocation(name="Crisper drawer", kind=LOCATION_KIND_AREA, parent_id=fridge.id, sequence=0)
+    for loc in (middle_left, middle_right, crisper):
+        repo.add(loc)
 
-    # Fridge gets a single child area (demonstrates 2-level).
-    _CrisperDrawer = StockLocation(
-        name = "Crisper drawer", kind = LOCATION_KIND_AREA,
-        parent_id = _Fridge.id, sequence = 0
-    )
-    _Repository.add(_CrisperDrawer)
-
-    # ---------------- STOCK LEVEL ---------------- #
-    _WellStocked = StockLevel(name = "Well-Stocked", sequence = 0)
-    _Sufficient = StockLevel(name = "Sufficient Stock", sequence = 1)
-    _Low = StockLevel(name = "Low Stock", sequence = 2)
-    _OutOfStock = StockLevel(name = "Out of Stock", sequence = 3)
-
-    _Repository.add(_WellStocked)
-    _Repository.add(_Sufficient)
-    _Repository.add(_Low)
-    _Repository.add(_OutOfStock)
+    # ---------------- STOCK LEVELS ---------------- #
+    well = StockLevel(name="Well-Stocked", sequence=0)
+    sufficient = StockLevel(name="Sufficient Stock", sequence=1)
+    low = StockLevel(name="Low Stock", sequence=2)
+    out = StockLevel(name="Out of Stock", sequence=3)
+    for lvl in (well, sufficient, low, out):
+        repo.add(lvl)
 
     # ---------------- STOCK GROUPS ---------------- #
-    # Pre-defined groups give users a sensible starting taxonomy out of
-    # the box. They're plain rows — fully editable / deletable through the
-    # settings page.
-    _GroupFruit = StockGroup(name = "Fruit & Veg")
-    _GroupDairy = StockGroup(name = "Dairy")
-    _GroupPantry = StockGroup(name = "Pantry staples")
-    _GroupFrozen = StockGroup(name = "Frozen")
-    _GroupSnacks = StockGroup(name = "Snacks & treats")
-    for _Group in (_GroupFruit, _GroupDairy, _GroupPantry, _GroupFrozen, _GroupSnacks):
-        _Repository.add(_Group)
+    g_fruit = StockGroup(name="Fruit & Veg")
+    g_dairy = StockGroup(name="Dairy")
+    g_pantry = StockGroup(name="Pantry staples")
+    g_frozen = StockGroup(name="Frozen")
+    g_snacks = StockGroup(name="Snacks & treats")
+    g_meat = StockGroup(name="Meat & seafood")
+    for grp in (g_fruit, g_dairy, g_pantry, g_frozen, g_snacks, g_meat):
+        repo.add(grp)
 
-    # ---------------- STOCK ITEM ---------------- #
-    _Today = date.today()
-    _Mangoes = StockItem(
-        days_until_stocktake_alert = 3,
-        image = None,
-        name = "Kensington Pride Mangoes",
-        notes = None,
-        stock_group = _GroupFruit,
-        stock_level_last_updated = datetime.now(UTC),
-        stock_level = _WellStocked,
-        stock_location = _CrisperDrawer,
-        stocktake_alerts_are_enabled = False,
-        expiry_date = _Today + timedelta(days = 4),
+    # ---------------- STOCK ITEMS ---------------- #
+    def make_item(*, name, group, level, location, **kw):
+        item = StockItem(
+            days_until_stocktake_alert=kw.get("stocktake_days", 7),
+            image=None,
+            name=name,
+            notes=kw.get("notes"),
+            stock_group=group,
+            stock_level_last_updated=now - timedelta(days=kw.get("updated_days_ago", 0)),
+            stock_level=level,
+            stock_location=location,
+            stocktake_alerts_are_enabled=kw.get("stocktake_alerts", False),
+            expiry_date=kw.get("expiry"),
+            is_flagged=kw.get("flagged", False),
+            auto_add_when_low=kw.get("auto_add", False),
+            is_open=kw.get("is_open", False),
+            opened_on=kw.get("opened_on"),
+            products=kw.get("products", []),
+            preferred_product_id=kw.get("preferred"),
+        )
+        repo.add(item)
+        return item
+
+    mangoes = make_item(name="Kensington Pride Mangoes", group=g_fruit, level=well,
+                        location=crisper, expiry=today + timedelta(days=4), stocktake_days=3)
+    pizza = make_item(name="Super Awesome Pizza", group=g_frozen, level=sufficient, location=freezer)
+    chips = make_item(name="Hot Crispy Chippies", group=g_snacks, level=low, location=None,
+                      stocktake_alerts=True, stocktake_days=5)
+    brazil = make_item(name="Brazil Nuts", group=g_snacks, level=low, location=middle_left,
+                       flagged=True, stocktake_alerts=True)
+    icecream = make_item(name="Vanilla Ice Cream", group=g_frozen, level=low, location=freezer,
+                         stocktake_alerts=True, expiry=today - timedelta(days=3))
+    pasta = make_item(name="Barilla Pasta", group=g_pantry, level=well, location=top_shelf,
+                      products=[pasta_barilla], preferred=pasta_barilla.id)
+    milk = make_item(name="Full Cream Milk", group=g_dairy, level=low, location=fridge,
+                     expiry=today + timedelta(days=2), auto_add=True, is_open=True,
+                     opened_on=today - timedelta(days=2), products=[milk_woolies, milk_coles],
+                     preferred=milk_woolies.id, updated_days_ago=1)
+    eggs = make_item(name="Free Range Eggs", group=g_dairy, level=sufficient, location=fridge,
+                     flagged=True, products=[eggs_woolies])
+    butter = make_item(name="Butter", group=g_dairy, level=well, location=fridge,
+                       is_open=True, opened_on=today - timedelta(days=5))
+    tomatoes = make_item(name="Canned Tomatoes", group=g_pantry, level=well, location=middle_right)
+    onions = make_item(name="Brown Onions", group=g_fruit, level=sufficient, location=pantry)
+    garlic = make_item(name="Garlic", group=g_fruit, level=well, location=pantry)
+    olive_oil = make_item(name="Olive Oil", group=g_pantry, level=sufficient, location=top_shelf,
+                          flagged=True, is_open=True, opened_on=today - timedelta(days=20),
+                          products=[oil_aldi], preferred=oil_aldi.id)
+    parmesan = make_item(name="Parmesan Cheese", group=g_dairy, level=out, location=fridge,
+                         auto_add=True, products=[parmesan_coles])
+    chicken = make_item(name="Chicken Breast", group=g_meat, level=sufficient, location=freezer)
+    rice = make_item(name="Jasmine Rice", group=g_pantry, level=well, location=middle_right)
+    soy = make_item(name="Soy Sauce", group=g_pantry, level=sufficient, location=middle_left)
+    broccoli = make_item(name="Broccoli", group=g_fruit, level=low, location=crisper,
+                         expiry=today + timedelta(days=1), auto_add=True, stocktake_alerts=True)
+    bread = make_item(name="Sourdough Bread", group=g_pantry, level=out, location=None,
+                      flagged=True, auto_add=True)
+    coffee = make_item(name="Coffee Beans", group=g_pantry, level=well, location=top_shelf,
+                       flagged=True, is_open=True, opened_on=today - timedelta(days=3),
+                       products=[coffee_iga], preferred=coffee_iga.id)
+
+    repo.save_changes()  # items need ids before substitutes / history / lines
+
+    # ---------------- SUBSTITUTES (self-referential m2m) ---------------- #
+    assoc = db.metadata.tables["StockItemSubstitute"]
+    substitute_pairs = [
+        (olive_oil.id, butter.id),   # cooking fat
+        (butter.id, olive_oil.id),
+        (pasta.id, rice.id),         # carb base
+        (parmesan.id, butter.id),    # weak, but demonstrates the graph
+        (milk.id, butter.id),
+    ]
+    db.session.execute(
+        assoc.insert(),
+        [{"stock_item_id": a, "substitute_id": b} for a, b in substitute_pairs],
     )
 
-    _Pizza = StockItem(
-        days_until_stocktake_alert=2,
-        image = None,
-        name = "Super Awesome Pizza",
-        notes = None,
-        stock_group = _GroupFrozen,
-        stock_level_last_updated=datetime.now(UTC),
-        stock_level=_Sufficient,
-        stock_location = _Freezer,
-        stocktake_alerts_are_enabled=False,
-    )
-
-    _Chips = StockItem(
-        days_until_stocktake_alert=5,
-        image = None,
-        name = "Hot Crispy Chippies",
-        notes = None,
-        stock_group = _GroupSnacks,
-        stock_level_last_updated=datetime.now(UTC),
-        stock_level=_Low,
-        stock_location = None,
-        stocktake_alerts_are_enabled=True,
-    )
-
-    _BrazilNuts = StockItem(
-        days_until_stocktake_alert = 3,
-        image = None,
-        name = "Brazil Nuts",
-        notes = None,
-        stock_group = _GroupSnacks,
-        stock_level =_Low,
-        stock_level_last_updated = datetime.now(UTC),
-        stock_location = _MiddleLeft,
-        stocktake_alerts_are_enabled = True,
-        is_flagged = True,
-    )
-
-    _IceCream = StockItem(
-        days_until_stocktake_alert = 7,
-        image = None,
-        name = "Vanilla Ice Cream",
-        notes = None,
-        stock_group = _GroupFrozen,
-        stock_level = _Low,
-        stock_level_last_updated = datetime.now(UTC),
-        stock_location = _Freezer,
-        stocktake_alerts_are_enabled = True,
-        # Already-expired sample so the heatmap has something red to chew on.
-        expiry_date = _Today - timedelta(days = 3),
-    )
-
-    _Pasta = StockItem(
-        days_until_stocktake_alert = 14,
-        image = None,
-        name = "Barilla Pasta",
-        notes = None,
-        stock_group = _GroupPantry,
-        stock_level = _WellStocked,
-        stock_level_last_updated = datetime.now(UTC),
-        stock_location = _TopShelf,
-        stocktake_alerts_are_enabled = False,
-    )
-
-    _Repository.add(_BrazilNuts)
-    _Repository.add(_Mangoes)
-    _Repository.add(_Pasta)
-    _Repository.add(_Pizza)
-    _Repository.add(_Chips)
-    _Repository.add(_IceCream)
-
-    # ---------------- SHOPPING LIST ---------------- #
-    # Lines need a persisted shopping_list_id, so we save the lists first
-    # then add lines pointing to them.
-    _Today = datetime.now(UTC)
-    _PrimaryList = ShoppingList(
-        name = "This week",
-        created_at = _Today,
-        is_primary = True,
-    )
-    _OldList = ShoppingList(
-        name = "Last week",
-        created_at = _Today - timedelta(days = 7),
-        completed_at = _Today - timedelta(days = 5),
-        is_archived = True,
-    )
-    _Repository.add(_PrimaryList)
-    _Repository.add(_OldList)
-    _Repository.save_changes()
-
-    for _StockItem in (_BrazilNuts, _Chips, _IceCream):
-        _Repository.add(ShoppingListLine(
-            shopping_list_id = _PrimaryList.id,
-            stock_item_id = _StockItem.id,
-            quantity = 1,
-        ))
-    for _StockItem in (_Pasta, _Pizza):
-        _Repository.add(ShoppingListLine(
-            shopping_list_id = _OldList.id,
-            stock_item_id = _StockItem.id,
-            quantity = 1,
-            is_ticked = True,
+    # ---------------- STOCK-LEVEL HISTORY ---------------- #
+    def level_change(item, level, days_ago):
+        repo.add(StockLevelChange(
+            stock_item_id=item.id,
+            stock_level_id=level.id,
+            stock_level_name=level.name,
+            changed_at=now - timedelta(days=days_ago),
         ))
 
-    # ---------------- RECIPE COLLECTION ---------------- #
-    _Weeknight = RecipeCollection(name = "Weeknight Dinners")
-    _ToTry = RecipeCollection(name = "To Try")
-    _Repository.add(_Weeknight)
-    _Repository.add(_ToTry)
+    level_change(milk, well, 9)
+    level_change(milk, sufficient, 5)
+    level_change(milk, low, 1)
+    level_change(pasta, sufficient, 12)
+    level_change(pasta, well, 3)
+    level_change(icecream, sufficient, 8)
+    level_change(icecream, low, 2)
+    level_change(parmesan, low, 6)
+    level_change(parmesan, out, 1)
 
-    # ---------------- RECIPE ---------------- #
-    _PastaIngredient = RecipeIngredient(
-        notes = None,
-        quantity = 250.0,
-        stock_item = _Pasta,
-        unit = "g",
+    # ---------------- RECIPE COLLECTIONS ---------------- #
+    weeknight = RecipeCollection(name="Weeknight Dinners")
+    to_try = RecipeCollection(name="To Try")
+    breakfast = RecipeCollection(name="Quick Breakfasts")
+    for c in (weeknight, to_try, breakfast):
+        repo.add(c)
+
+    # ---------------- RECIPES ---------------- #
+    def ingredient(item, qty, unit, notes=None):
+        ri = RecipeIngredient(notes=notes, quantity=qty, stock_item=item, unit=unit)
+        repo.add(ri)
+        return ri
+
+    def make_recipe(*, name, collection, ingredients, instructions, **kw):
+        recipe = Recipe(
+            category=kw.get("category"),
+            cook_time_minutes=kw.get("cook", 20),
+            cuisine=kw.get("cuisine"),
+            difficulty=kw.get("difficulty", "Easy"),
+            image=None,
+            ingredients=ingredients,
+            instructions=instructions,
+            is_favourite=kw.get("favourite", False),
+            last_made_on=kw.get("last_made"),
+            name=name,
+            nutrition=kw.get("nutrition"),
+            prep_time_minutes=kw.get("prep", 10),
+            recipe_collection=collection,
+            servings=kw.get("servings", 2),
+            time_of_day=kw.get("time_of_day", "Dinner"),
+        )
+        repo.add(recipe)
+        return recipe
+
+    # Cookable now (all ingredients well/sufficient).
+    aglio = make_recipe(
+        name="Spaghetti Aglio e Olio", collection=weeknight, cuisine="Italian",
+        category="Pasta", favourite=True, cook=15, prep=5, servings=2,
+        ingredients=[
+            ingredient(pasta, 250, "g"),
+            ingredient(garlic, 4, "cloves"),
+            ingredient(olive_oil, 60, "ml"),
+        ],
+        instructions=(
+            "1. Boil a large pot of salted water and cook the Barilla Pasta until al dente.\n"
+            "2. Meanwhile, gently heat the Olive Oil and sliced Garlic until fragrant, about 3 minutes.\n"
+            "3. Toss the drained pasta through the garlic oil and serve."
+        ),
     )
-    _IceCreamIngredient = RecipeIngredient(
-        notes = "for serving",
-        quantity = 2.0,
-        stock_item = _IceCream,
-        unit = "scoops",
+    # Missing an ingredient (Parmesan is Out).
+    simple_pasta = make_recipe(
+        name="Tomato Pasta", collection=weeknight, cuisine="Italian", category="Pasta",
+        cook=20, prep=10, servings=2, last_made=now - timedelta(days=4),
+        ingredients=[
+            ingredient(pasta, 250, "g"),
+            ingredient(tomatoes, 1, "can"),
+            ingredient(garlic, 2, "cloves"),
+            ingredient(olive_oil, 30, "ml"),
+            ingredient(parmesan, 30, "g", notes="to serve"),
+        ],
+        instructions=(
+            "1. Cook the Barilla Pasta in salted boiling water.\n"
+            "2. Soften the Garlic in Olive Oil, then add the Canned Tomatoes and simmer 10 minutes.\n"
+            "3. Toss the pasta through the sauce and finish with grated Parmesan Cheese."
+        ),
     )
-    _Repository.add(_PastaIngredient)
-    _Repository.add(_IceCreamIngredient)
-
-    _SimplePasta = Recipe(
-        category = "Pasta",
-        cook_time_minutes = 15,
-        cuisine = "Italian",
-        difficulty = "Easy",
-        image = None,
-        ingredients = [_PastaIngredient],
-        instructions = "1. Boil water.\n2. Cook pasta until al dente.\n3. Drain and serve.",
-        is_favourite = True,
-        last_made_on = None,
-        name = "Simple Pasta",
-        nutrition = None,
-        prep_time_minutes = 5,
-        recipe_collection = _Weeknight,
-        servings = 2,
-        time_of_day = "Dinner",
+    stir_fry = make_recipe(
+        name="Veggie Stir Fry", collection=weeknight, cuisine="Asian", category="Stir fry",
+        cook=15, prep=10, servings=3,
+        ingredients=[
+            ingredient(rice, 300, "g"),
+            ingredient(broccoli, 1, "head"),
+            ingredient(soy, 30, "ml"),
+            ingredient(garlic, 2, "cloves"),
+            ingredient(chicken, 400, "g"),
+        ],
+        instructions=(
+            "1. Cook the Jasmine Rice according to packet directions.\n"
+            "2. Stir-fry the Chicken Breast until golden, then add Garlic and Broccoli.\n"
+            "3. Splash in the Soy Sauce, toss for 2 minutes and serve over rice."
+        ),
+    )
+    fried_rice = make_recipe(
+        name="Egg Fried Rice", collection=weeknight, cuisine="Asian", category="Rice",
+        cook=15, prep=5, servings=2,
+        ingredients=[
+            ingredient(rice, 300, "g"),
+            ingredient(eggs, 3, "whole"),
+            ingredient(soy, 20, "ml"),
+            ingredient(onions, 1, "whole"),
+        ],
+        instructions=(
+            "1. Scramble the Free Range Eggs and set aside.\n"
+            "2. Fry the Brown Onions, add the Jasmine Rice and Soy Sauce.\n"
+            "3. Fold the egg back through and serve hot."
+        ),
+    )
+    # Missing (Bread is Out, Parmesan is Out).
+    garlic_bread = make_recipe(
+        name="Cheesy Garlic Bread", collection=to_try, cuisine="Italian", category="Side",
+        cook=12, prep=8, servings=4,
+        ingredients=[
+            ingredient(bread, 1, "loaf"),
+            ingredient(butter, 50, "g"),
+            ingredient(garlic, 3, "cloves"),
+            ingredient(parmesan, 40, "g"),
+        ],
+        instructions=(
+            "1. Mash the Butter with crushed Garlic.\n"
+            "2. Spread over sliced Sourdough Bread and top with Parmesan Cheese.\n"
+            "3. Bake at 200C for 10 minutes until golden."
+        ),
+    )
+    icecream_bowl = make_recipe(
+        name="Vanilla Ice Cream Bowl", collection=to_try, category="Dessert",
+        difficulty="Easy", cook=0, prep=2, servings=1, time_of_day="Dessert",
+        ingredients=[ingredient(icecream, 2, "scoops", notes="for serving")],
+        instructions="1. Scoop the Vanilla Ice Cream into a bowl.\n2. Enjoy.",
     )
 
-    _IceCreamDessert = Recipe(
-        category = "Dessert",
-        cook_time_minutes = 0,
-        cuisine = None,
-        difficulty = "Easy",
-        image = None,
-        ingredients = [_IceCreamIngredient],
-        instructions = "1. Scoop ice cream into bowl.\n2. Enjoy.",
-        is_favourite = False,
-        last_made_on = None,
-        name = "Vanilla Ice Cream Bowl",
-        nutrition = None,
-        prep_time_minutes = 2,
-        recipe_collection = _ToTry,
-        servings = 1,
-        time_of_day = "Dessert",
+    # ---------------- MEALS ---------------- #
+    repo.add(Meal(name="Pasta Night", quantity_in_stock=3, recipes=[aglio]))
+    repo.add(Meal(name="Stir Fry Night", quantity_in_stock=2, recipes=[stir_fry]))
+    big_dinner = Meal(name="Big Italian Dinner", quantity_in_stock=1, recipes=[simple_pasta, icecream_bowl])
+    pasta_meal = Meal(name="Aglio Olio", quantity_in_stock=4, recipes=[aglio])
+    fry_meal = Meal(name="Fried Rice", quantity_in_stock=2, recipes=[fried_rice])
+    repo.add(big_dinner)
+    repo.add(pasta_meal)
+    repo.add(fry_meal)
+
+    # ---------------- MEAL PLAN (this week) ---------------- #
+    monday = today - timedelta(days=today.weekday())
+
+    def plan_entry(meal, day_offset, slot, servings=2):
+        entry = MealPlanEntry(
+            meal=meal,
+            scheduled_for=monday + timedelta(days=day_offset),
+            servings=servings,
+            slot=slot,
+        )
+        repo.add(entry)
+        return entry
+
+    entries = [
+        plan_entry(pasta_meal, 0, "Dinner"),
+        plan_entry(fry_meal, 1, "Dinner"),
+        plan_entry(pasta_meal, 2, "Lunch", servings=1),
+        # Big Italian Dinner pulls in out-of-stock Parmesan and low Ice Cream so
+        # the week's "need to buy" rollup has something to show.
+        plan_entry(big_dinner, 3, "Dinner", servings=2),
+        plan_entry(fry_meal, 4, "Dinner", servings=3),
+        plan_entry(pasta_meal, 5, "Dinner", servings=4),
+    ]
+    repo.add(MealPlan(name="This Week", start_date=monday, entries=entries))
+
+    # ---------------- SHOPPING LISTS ---------------- #
+    primary = ShoppingList(name="This week", created_at=now, is_primary=True)
+    in_progress = ShoppingList(
+        name="Saturday shop", created_at=now - timedelta(days=1), is_in_progress=True,
     )
-
-    _Repository.add(_SimplePasta)
-    _Repository.add(_IceCreamDessert)
-
-    # ---------------- MEAL ---------------- #
-    _PastaMeal = Meal(name = "Pasta Night", quantity_in_stock = 3, recipes = [_SimplePasta])
-    _DessertMeal = Meal(
-        name = "Pasta with Dessert",
-        quantity_in_stock = 1,
-        recipes = [_SimplePasta, _IceCreamDessert],
+    archived = ShoppingList(
+        name="Last week", created_at=now - timedelta(days=7),
+        completed_at=now - timedelta(days=5), is_archived=True,
     )
-    _Repository.add(_PastaMeal)
-    _Repository.add(_DessertMeal)
+    for sl in (primary, in_progress, archived):
+        repo.add(sl)
+    repo.save_changes()  # lines need persisted list ids
 
-    # ---------------- MEAL PLAN ---------------- #
-    _Today = date.today()
-    # Start the week on the most recent Monday so "this week" looks reasonable.
-    _MondayThisWeek = _Today - timedelta(days = _Today.weekday())
+    def line(list_id, item, seq, qty=1, ticked=False, selected_product=None):
+        repo.add(ShoppingListLine(
+            shopping_list_id=list_id,
+            stock_item_id=item.id,
+            quantity=qty,
+            is_ticked=ticked,
+            sequence=seq,
+            selected_product_id=selected_product.id if selected_product else None,
+        ))
 
-    _Monday = MealPlanEntry(
-        meal = _PastaMeal,
-        scheduled_for = _MondayThisWeek,
-        servings = 2,
-        slot = "Dinner",
-    )
-    _Tuesday = MealPlanEntry(
-        meal = _DessertMeal,
-        scheduled_for = _MondayThisWeek + timedelta(days = 1),
-        servings = 2,
-        slot = "Dinner",
-    )
-    _Repository.add(_Monday)
-    _Repository.add(_Tuesday)
+    # Primary: a mix of low/out essentials, one with a chosen offer.
+    line(primary.id, milk, 0, qty=2, selected_product=milk_coles)
+    line(primary.id, parmesan, 1, selected_product=parmesan_coles)
+    line(primary.id, bread, 2)
+    line(primary.id, brazil, 3)
+    line(primary.id, broccoli, 4)
 
-    _WeekPlan = MealPlan(
-        name = "This Week",
-        start_date = _MondayThisWeek,
-        entries = [_Monday, _Tuesday],
-    )
-    _Repository.add(_WeekPlan)
+    # In-progress: mid-shop, a couple already ticked.
+    line(in_progress.id, eggs, 0, ticked=True, selected_product=eggs_woolies)
+    line(in_progress.id, olive_oil, 1, selected_product=oil_aldi)
+    line(in_progress.id, coffee, 2, ticked=True, selected_product=coffee_iga)
 
-    _Repository.save_changes()
+    # Archived: completed last week.
+    line(archived.id, pasta, 0, ticked=True, selected_product=pasta_barilla)
+    line(archived.id, pizza, 1, ticked=True)
+    line(archived.id, chips, 2, ticked=True)
+
+    # ---------------- SHOPPING LIST TEMPLATES ---------------- #
+    staples = ShoppingListTemplate(name="Weekly staples", created_at=now, updated_at=now)
+    taco = ShoppingListTemplate(name="Pantry restock", created_at=now, updated_at=now)
+    repo.add(staples)
+    repo.add(taco)
+    repo.save_changes()
+
+    def template_line(template_id, item, seq, qty=1):
+        repo.add(ShoppingListTemplateLine(
+            template_id=template_id, stock_item_id=item.id, quantity=qty, sequence=seq,
+        ))
+
+    for seq, item in enumerate((milk, eggs, bread, pasta, butter)):
+        template_line(staples.id, item, seq)
+    for seq, item in enumerate((rice, soy, olive_oil, garlic, tomatoes)):
+        template_line(taco.id, item, seq)
+
+    db.session.autoflush = True
+    repo.save_changes()

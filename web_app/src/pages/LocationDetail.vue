@@ -18,6 +18,40 @@
                 :label="`Add ${childKind(zone.kind)}`"
                 @click="onAddChild(zone)"
             />
+            <q-btn
+                v-if="zone"
+                outline
+                no-caps
+                icon="priority_high"
+                label="Needs attention here"
+                class="q-ml-sm"
+                :disable="(zone.attention_score ?? 0) === 0"
+                @click="onShowAttentionInStock(zone!)"
+            >
+                <q-tooltip>
+                    Jump to Stock filtered to attention items in this zone.
+                </q-tooltip>
+            </q-btn>
+            <q-btn
+                v-if="zone"
+                color="primary"
+                no-caps
+                icon="auto_awesome"
+                :label="
+                    lowOrOutSubtreeIds.length > 0
+                        ? `Shopping list (${lowOrOutSubtreeIds.length})`
+                        : 'Shopping list'
+                "
+                class="q-ml-sm"
+                :loading="generatingList"
+                :disable="lowOrOutSubtreeIds.length === 0"
+                @click="onGenerateListForZone(zone!)"
+            >
+                <q-tooltip>
+                    Create a list from every low/out item stored anywhere
+                    under this zone.
+                </q-tooltip>
+            </q-btn>
         </div>
 
         <q-banner
@@ -252,7 +286,9 @@
         type LocationKind,
         type LocationNode
     } from 'src/models/location';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useLocationStore } from 'src/stores/locationStore';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
@@ -260,6 +296,8 @@
     const router = useRouter();
     const $q = useQuasar();
     const locationStore = useLocationStore();
+    const shoppingListStore = useShoppingListStore();
+    const shoppingListApi = new ShoppingListApiService();
 
     const zoneId = computed(() => String(route.params.id ?? ''));
     const zone = computed<LocationNode | null>(() =>
@@ -282,6 +320,92 @@
 
     function reasonChips(node: LocationNode): string[] {
         return summarizeReasons(node.attention_reasons).slice(0, 4);
+    }
+
+    // ── Per-zone cross-feature actions ────────────────────────────────
+    // Subtree walk: every stock item stored anywhere under this zone, used
+    // to spin up a shopping list scoped to "everything that needs restocking
+    // in here". Item ids are unique per subtree (a stock item lives in one
+    // location), so no dedup needed.
+    function subtreeLowOrOutIds(node: LocationNode): string[] {
+        const lowOutNames = new Set(['Low Stock', 'Out of Stock']);
+        const ids: string[] = [];
+        const stack: LocationNode[] = [node];
+        while (stack.length) {
+            const n = stack.pop()!;
+            for (const item of n.items) {
+                if (item.stock_level_name && lowOutNames.has(item.stock_level_name)) {
+                    ids.push(item.stock_item_id);
+                }
+            }
+            for (const child of n.children) stack.push(child);
+        }
+        return ids;
+    }
+
+    const lowOrOutSubtreeIds = computed<string[]>(() =>
+        zone.value ? subtreeLowOrOutIds(zone.value) : [],
+    );
+
+    const generatingList = ref(false);
+
+    function onShowAttentionInStock(node: LocationNode) {
+        void router.push({
+            path: '/stock',
+            query: {
+                location_id: node.location_id,
+                attention: 'true',
+            },
+        });
+    }
+
+    async function onGenerateListForZone(node: LocationNode) {
+        const ids = subtreeLowOrOutIds(node);
+        if (ids.length === 0) return;
+        generatingList.value = true;
+        try {
+            const { shopping_list_id } = await shoppingListApi.createAsync({
+                name: `Restock ${node.name}`,
+                make_primary: !shoppingListStore.primarySummary,
+            });
+            let added = 0;
+            let skipped = 0;
+            for (const id of ids) {
+                try {
+                    const result = await shoppingListApi.addLineAsync(shopping_list_id, {
+                        stock_item_id: id,
+                    });
+                    if (result.already_on_list) skipped++;
+                    else added++;
+                } catch {
+                    skipped++;
+                }
+            }
+            await shoppingListStore.refreshAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message:
+                    `Created "Restock ${node.name}". ${added} added` +
+                    (skipped > 0 ? `, ${skipped} skipped` : '') + '.',
+                actions: [
+                    {
+                        label: 'Open',
+                        color: 'white',
+                        handler: () => router.push(`/shopping-lists/${shopping_list_id}`),
+                    },
+                ],
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not generate list.',
+                caption: String(err),
+            });
+        } finally {
+            generatingList.value = false;
+        }
     }
 
     function toggleExpanded(id: string) {

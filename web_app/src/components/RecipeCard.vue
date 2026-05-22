@@ -3,19 +3,61 @@
         bordered
         flat
         class="recipe-card cursor-pointer"
-        :class="{ 'recipe-card--dim': dim }"
-        @click="emit('open', recipe.recipe_id)"
+        :class="{
+            'recipe-card--dim': dim,
+            'recipe-card--selected': selected,
+            'recipe-card--selectable': selectable,
+        }"
+        @click="onCardClick"
     >
         <q-card-section class="q-pb-xs">
-            <div class="row items-start no-wrap">
-                <q-icon name="menu_book" size="20px" class="q-mr-sm q-mt-xs" />
+            <div class="row items-start no-wrap q-gutter-xs">
+                <q-checkbox
+                    v-if="selectable"
+                    :model-value="selected"
+                    dense
+                    class="q-mr-xs"
+                    @click.stop
+                    @update:model-value="emit('toggle-select', recipe.recipe_id)"
+                />
+                <q-icon v-else name="menu_book" size="20px" class="q-mr-xs q-mt-xs" />
                 <div class="col">
-                    <div class="text-subtitle2 ellipsis-2-lines">{{ recipe.name }}</div>
+                    <div class="text-subtitle1 ellipsis-2-lines">
+                        {{ recipe.name }}
+                    </div>
                     <div class="text-caption text-grey">
                         <span v-if="recipe.cuisine">{{ recipe.cuisine }}</span>
-                        <span v-if="recipe.cook_time_minutes"> · {{ recipe.cook_time_minutes }}m</span>
+                        <span v-if="recipe.cuisine && recipe.category"> · </span>
+                        <span v-if="recipe.category">{{ recipe.category }}</span>
                     </div>
                 </div>
+                <q-btn
+                    :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
+                    :color="recipe.is_favourite ? 'red' : 'grey'"
+                    flat
+                    round
+                    dense
+                    size="sm"
+                    @click.stop="emit('toggle-favourite', recipe.recipe_id)"
+                >
+                    <q-tooltip>
+                        {{ recipe.is_favourite ? 'Remove from favourites' : 'Mark favourite' }}
+                    </q-tooltip>
+                </q-btn>
+            </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+            <div class="row q-gutter-xs items-center">
+                <q-chip v-if="totalTime !== null" dense icon="schedule">
+                    {{ totalTime }}m
+                </q-chip>
+                <q-chip v-if="recipe.servings" dense icon="restaurant">
+                    Serves {{ recipe.servings }}
+                </q-chip>
+                <q-chip v-if="recipe.difficulty" dense icon="star_outline">
+                    {{ recipe.difficulty }}
+                </q-chip>
             </div>
         </q-card-section>
 
@@ -36,16 +78,95 @@
                 color="orange-9"
                 text-color="white"
                 icon="remove_shopping_cart"
-                @click.stop="emit('add-missing', missingIds)"
+                @click.stop="emit('add-missing', recipe.recipe_id, missingIds)"
             >
                 Missing {{ missingIds.length }}
                 <q-tooltip>Add missing ingredients to a list</q-tooltip>
+            </q-chip>
+            <q-chip
+                v-if="lowCount > 0"
+                dense
+                outline
+                color="warning"
+                icon="warning"
+                class="q-ml-xs"
+            >
+                {{ lowCount }} low
             </q-chip>
         </q-card-section>
 
         <q-separator />
         <q-card-actions align="right">
-            <q-btn flat dense no-caps icon="restaurant" label="Cook" @click.stop="emit('cook', recipe.recipe_id)" />
+            <q-btn
+                flat
+                dense
+                no-caps
+                icon="restaurant"
+                label="Cook"
+                color="primary"
+                @click.stop="emit('cook', recipe.recipe_id)"
+            />
+            <q-btn flat round dense icon="more_vert" @click.stop>
+                <q-menu auto-close>
+                    <q-list dense style="min-width: 220px">
+                        <q-item clickable @click="emit('edit', recipe.recipe_id)">
+                            <q-item-section avatar>
+                                <q-icon name="edit" />
+                            </q-item-section>
+                            <q-item-section>Edit</q-item-section>
+                        </q-item>
+                        <q-item clickable @click="emit('duplicate', recipe.recipe_id)">
+                            <q-item-section avatar>
+                                <q-icon name="content_copy" />
+                            </q-item-section>
+                            <q-item-section>Duplicate</q-item-section>
+                        </q-item>
+                        <q-item clickable @click="emit('mark-made', recipe.recipe_id)">
+                            <q-item-section avatar>
+                                <q-icon name="check" />
+                            </q-item-section>
+                            <q-item-section>Mark made</q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item
+                            clickable
+                            :disable="recipe.ingredients.length === 0"
+                            @click="emit('add-all-to-list', recipe.recipe_id)"
+                        >
+                            <q-item-section avatar>
+                                <q-icon name="add_shopping_cart" />
+                            </q-item-section>
+                            <q-item-section>
+                                <q-item-label>Add all ingredients to a list</q-item-label>
+                                <q-item-label
+                                    v-if="recipe.ingredients.length === 0"
+                                    caption
+                                >
+                                    No ingredients
+                                </q-item-label>
+                            </q-item-section>
+                        </q-item>
+                        <q-item
+                            clickable
+                            @click="emit('add-to-meal-plan', recipe.recipe_id)"
+                        >
+                            <q-item-section avatar>
+                                <q-icon name="event_note" />
+                            </q-item-section>
+                            <q-item-section>Add to a meal plan…</q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item clickable @click="emit('delete', recipe.recipe_id)">
+                            <q-item-section avatar>
+                                <q-icon name="delete" color="negative" />
+                            </q-item-section>
+                            <q-item-section class="text-negative">
+                                Delete recipe
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-menu>
+            </q-btn>
         </q-card-actions>
     </q-card>
 </template>
@@ -63,14 +184,31 @@
             // When set, this ingredient is excluded from the "others missing"
             // dim check (the card is being shown *because* of this item).
             highlightStockItemId?: string;
+            // Comparison-mode plumbing: when `selectable` is true, the card
+            // shows a checkbox instead of the book icon and clicks toggle
+            // selection rather than emitting `open`.
+            selectable?: boolean;
+            selected?: boolean;
         }>(),
-        { highlightStockItemId: '' },
+        {
+            highlightStockItemId: '',
+            selectable: false,
+            selected: false,
+        },
     );
 
     const emit = defineEmits<{
         (e: 'open', recipeId: string): void;
         (e: 'cook', recipeId: string): void;
-        (e: 'add-missing', stockItemIds: string[]): void;
+        (e: 'edit', recipeId: string): void;
+        (e: 'duplicate', recipeId: string): void;
+        (e: 'mark-made', recipeId: string): void;
+        (e: 'delete', recipeId: string): void;
+        (e: 'toggle-favourite', recipeId: string): void;
+        (e: 'toggle-select', recipeId: string): void;
+        (e: 'add-missing', recipeId: string, stockItemIds: string[]): void;
+        (e: 'add-all-to-list', recipeId: string): void;
+        (e: 'add-to-meal-plan', recipeId: string): void;
     }>();
 
     const stockItemStore = useStockItemStore();
@@ -78,36 +216,83 @@
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
 
-    // An ingredient is "missing" when its stock item is out of stock or not
-    // tracked at all.
-    function isMissing(stockItemId: string): boolean {
+    function levelNameFor(stockItemId: string): string | null {
         const item = stockItems.value.find((si) => si.stock_item_id === stockItemId);
-        if (!item) return true;
-        const level = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id);
-        return level?.name === 'Out of Stock';
+        if (!item) return null;
+        return (
+            stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name
+                ?? null
+        );
+    }
+
+    // "Missing" — out of stock OR not tracked. Matches what the spec calls
+    // the "missing N" chip and what cook mode treats as unavailable.
+    function isMissing(stockItemId: string): boolean {
+        const name = levelNameFor(stockItemId);
+        return name === null || name === 'Out of Stock';
     }
 
     const missingIds = computed(() =>
-        [...new Set(props.recipe.ingredients.map((i) => i.stock_item_id))].filter(isMissing),
+        [...new Set(props.recipe.ingredients.map((i) => i.stock_item_id))]
+            .filter((id) => Boolean(id) && isMissing(id)),
     );
+
+    const lowCount = computed(
+        () =>
+            new Set(
+                props.recipe.ingredients
+                    .map((i) => i.stock_item_id)
+                    .filter((id) => Boolean(id) && levelNameFor(id) === 'Low Stock'),
+            ).size,
+    );
+
     const cookableNow = computed(() => missingIds.value.length === 0);
+
+    const totalTime = computed(() => {
+        if (
+            props.recipe.prep_time_minutes === null
+            && props.recipe.cook_time_minutes === null
+        ) {
+            return null;
+        }
+        return (props.recipe.prep_time_minutes ?? 0) + (props.recipe.cook_time_minutes ?? 0);
+    });
 
     // Dim when ingredients *other than* the highlighted one are also missing,
     // i.e. restocking this item alone wouldn't make the recipe cookable.
     const dim = computed(
-        () => missingIds.value.filter((id) => id !== props.highlightStockItemId).length > 0,
+        () =>
+            missingIds.value.filter((id) => id !== props.highlightStockItemId).length > 0
+            && props.highlightStockItemId !== '',
     );
+
+    function onCardClick() {
+        if (props.selectable) {
+            emit('toggle-select', props.recipe.recipe_id);
+            return;
+        }
+        emit('open', props.recipe.recipe_id);
+    }
 </script>
 
 <style scoped>
     .recipe-card {
-        transition: box-shadow 0.15s ease;
+        transition: box-shadow 0.15s ease, outline-color 0.15s ease;
+        outline: 2px solid transparent;
+        outline-offset: -2px;
+        height: 100%;
     }
     .recipe-card:hover {
         box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.4);
     }
     .recipe-card--dim {
         opacity: 0.55;
+    }
+    .recipe-card--selectable {
+        cursor: pointer;
+    }
+    .recipe-card--selected {
+        outline-color: var(--q-primary);
     }
     .ellipsis-2-lines {
         display: -webkit-box;

@@ -17,8 +17,14 @@ export interface IOfferSortByOption {
 
 export const OfferSortByOptions: IOfferSortByOption[] = [
     {
-        description: 'Name (A → Z)',
+        // Relevancy = the order the merchant scrapers returned results in.
+        description: 'Relevancy',
         isDefault: true,
+        sort: (offers) => offers
+    },
+    {
+        description: 'Name (A → Z)',
+        isDefault: false,
         sort: sortOffersByFullNameAsc
     },
     {

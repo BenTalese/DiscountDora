@@ -105,32 +105,52 @@
                 />
             </div>
 
-            <q-expansion-item label="Ingredients" icon="kitchen" header-class="text-subtitle1">
+            <q-expansion-item
+                default-opened
+                icon="kitchen"
+                header-class="text-subtitle1"
+            >
+                <template #header>
+                    <q-item-section avatar><q-icon name="kitchen" /></q-item-section>
+                    <q-item-section>Ingredients</q-item-section>
+                    <q-item-section side>
+                        <span class="text-caption text-grey">
+                            {{ usedIds.size }} / {{ ingredientRows.length }} used
+                        </span>
+                    </q-item-section>
+                </template>
                 <q-list dense>
-                    <q-item v-for="ingredient in recipe.ingredients" :key="ingredient.recipe_ingredient_id">
-                        <q-item-section>
-                            <q-item-label>
-                                <span v-if="ingredient.quantity">{{ ingredient.quantity }}</span>
-                                <span v-if="ingredient.unit"> {{ ingredient.unit }}</span>
-                                {{ ingredient.stock_item_name }}
-                                <span v-if="ingredient.notes" class="text-grey">
-                                    — {{ ingredient.notes }}
-                                </span>
-                            </q-item-label>
-                            <q-item-label
-                                v-if="ingredient.stock_location_id"
-                                caption
+                    <q-item v-for="row in ingredientRows" :key="row.ingredient.recipe_ingredient_id">
+                        <q-item-section side top>
+                            <q-checkbox
+                                :model-value="usedIds.has(row.ingredient.stock_item_id)"
+                                @update:model-value="toggleUsed(row.ingredient.stock_item_id)"
                             >
-                                <q-icon name="place" size="14px" />
-                                {{ breadcrumbFor(ingredient.stock_location_id).join(' › ') }}
-                            </q-item-label>
+                                <q-tooltip>Mark used</q-tooltip>
+                            </q-checkbox>
+                        </q-item-section>
+                        <q-item-section>
+                            <div class="row items-center q-gutter-xs no-wrap">
+                                <span class="text-caption text-grey">
+                                    <span v-if="row.ingredient.quantity">{{ row.ingredient.quantity }}</span>
+                                    <span v-if="row.ingredient.unit"> {{ row.ingredient.unit }}</span>
+                                </span>
+                                <StockItemChip v-if="row.stockItem" :stock-item="row.stockItem" />
+                                <span v-else>{{ row.ingredient.stock_item_name }}</span>
+                            </div>
                             <q-item-label
-                                v-else
+                                v-if="row.ingredient.notes"
                                 caption
                                 class="text-grey"
                             >
-                                <q-icon name="help_outline" size="14px" />
-                                Unassigned — drop into a location when you find it.
+                                {{ row.ingredient.notes }}
+                            </q-item-label>
+                            <q-item-label
+                                v-if="row.ingredient.stock_location_id"
+                                caption
+                            >
+                                <q-icon name="place" size="14px" />
+                                {{ breadcrumbFor(row.ingredient.stock_location_id).join(' › ') }}
                             </q-item-label>
                         </q-item-section>
                     </q-item>
@@ -142,25 +162,57 @@
                     <q-item
                         v-for="(step, idx) in steps"
                         :key="idx"
-                        clickable
                         :active="idx === currentStepIndex"
-                        @click="goToStep(idx)"
                     >
+                        <q-item-section side top>
+                            <q-checkbox
+                                :model-value="doneSteps.has(idx)"
+                                @update:model-value="toggleStepDone(idx)"
+                            >
+                                <q-tooltip>Mark step done (marks its ingredients used)</q-tooltip>
+                            </q-checkbox>
+                        </q-item-section>
                         <q-item-section side>{{ idx + 1 }}.</q-item-section>
-                        <q-item-section>{{ step }}</q-item-section>
+                        <q-item-section clickable @click="goToStep(idx)">{{ step }}</q-item-section>
                     </q-item>
                 </q-list>
             </q-expansion-item>
         </template>
+
+        <!-- Finish flow ─────────────────────────────────────────────────── -->
+        <q-dialog v-model="finishDialogOpen" persistent>
+            <q-card style="min-width: 360px; max-width: 95vw">
+                <q-card-section class="text-h6">Finished cooking?</q-card-section>
+                <q-card-section class="q-gutter-sm q-pt-none">
+                    <q-toggle v-model="finishUpdateLevels" label="Update stock levels (use up what you cooked with)" />
+                    <q-toggle v-model="finishLogMeal" label="Log this as a meal eaten" />
+                    <q-toggle v-model="finishAddRanOut" label="Add anything that ran out to a shopping list" />
+                    <div class="text-caption text-grey">
+                        {{ usedIds.size }} ingredient(s) marked used.
+                    </div>
+                </q-card-section>
+                <q-card-actions align="right">
+                    <q-btn flat no-caps label="Skip & exit" @click="finishDialogOpen = false; exitCookMode()" />
+                    <q-btn color="primary" no-caps label="Done" :loading="finishing" @click="confirmFinish" />
+                </q-card-actions>
+            </q-card>
+        </q-dialog>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import StockItemChip from 'src/components/chips/StockItemChip.vue';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe } from 'src/models/recipe';
+    import type { StockItem } from 'src/models/stockItem';
     import RecipeApiService from 'src/services/api/recipeApiService';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
@@ -169,7 +221,14 @@
     const $q = useQuasar();
     const recipeStore = useRecipeStore();
     const locationStore = useLocationStore();
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
+    const shoppingListStore = useShoppingListStore();
     const recipeApiService = new RecipeApiService();
+    const slActions = useShoppingListActions();
+
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { stockLevels } = storeToRefs(stockLevelStore);
 
     // Resolve location_id → breadcrumb names using the locations tree.
     // We hit the location store lazily on mount so cook mode keeps working
@@ -214,6 +273,45 @@
     });
 
     const currentStep = computed(() => steps.value[currentStepIndex.value] ?? '');
+
+    // ── Ingredient "used" tracking ───────────────────────────────────────
+    const usedIds = ref<Set<string>>(new Set());
+    const doneSteps = ref<Set<number>>(new Set());
+
+    type IngredientRow = { ingredient: Recipe['ingredients'][number]; stockItem: StockItem | null };
+    const ingredientRows = computed<IngredientRow[]>(() =>
+        (recipe.value?.ingredients ?? []).map((ingredient) => ({
+            ingredient,
+            stockItem:
+                stockItems.value.find((si) => si.stock_item_id === ingredient.stock_item_id) ?? null,
+        })),
+    );
+
+    function toggleUsed(stockItemId: string) {
+        if (usedIds.value.has(stockItemId)) usedIds.value.delete(stockItemId);
+        else usedIds.value.add(stockItemId);
+        usedIds.value = new Set(usedIds.value);
+    }
+
+    // Mark every ingredient whose name appears in a step's text as used.
+    function markIngredientsUsedInStep(stepText: string) {
+        const text = stepText.toLowerCase();
+        for (const ing of recipe.value?.ingredients ?? []) {
+            if (text.includes(ing.stock_item_name.toLowerCase())) {
+                usedIds.value.add(ing.stock_item_id);
+            }
+        }
+        usedIds.value = new Set(usedIds.value);
+    }
+
+    function toggleStepDone(idx: number) {
+        if (doneSteps.value.has(idx)) doneSteps.value.delete(idx);
+        else {
+            doneSteps.value.add(idx);
+            markIngredientsUsedInStep(steps.value[idx] ?? '');
+        }
+        doneSteps.value = new Set(doneSteps.value);
+    }
 
     const detectedTimerMinutes = computed<number | null>(() => {
         const text = currentStep.value.toLowerCase();
@@ -278,11 +376,14 @@
 
     function nextStep() {
         resetTimer();
+        // Advancing past a step counts it done and uses up its ingredients.
+        doneSteps.value.add(currentStepIndex.value);
+        doneSteps.value = new Set(doneSteps.value);
+        markIngredientsUsedInStep(currentStep.value);
         if (currentStepIndex.value < steps.value.length - 1) {
             currentStepIndex.value += 1;
         } else {
-            $q.notify({ type: 'positive', message: 'Recipe complete!', icon: 'check_circle' });
-            exitCookMode();
+            openFinish();
         }
     }
 
@@ -296,6 +397,86 @@
     function goToStep(idx: number) {
         resetTimer();
         currentStepIndex.value = idx;
+    }
+
+    // ── Finish flow ──────────────────────────────────────────────────────
+    const finishDialogOpen = ref(false);
+    const finishing = ref(false);
+    const finishUpdateLevels = ref(true);
+    const finishLogMeal = ref(true);
+    const finishAddRanOut = ref(true);
+
+    function openFinish() {
+        pauseTimer();
+        finishDialogOpen.value = true;
+    }
+
+    // The next level "down" toward Out of Stock (one higher sequence).
+    function nextLowerLevelId(currentLevelId: string): string | null {
+        const current = stockLevels.value.find((l) => l.stock_level_id === currentLevelId);
+        if (!current) return null;
+        const lower = stockLevels.value
+            .filter((l) => l.sequence > current.sequence)
+            .sort((a, b) => a.sequence - b.sequence)[0];
+        return lower?.stock_level_id ?? null;
+    }
+
+    function isLowOrOut(levelId: string | undefined): boolean {
+        const name = stockLevels.value.find((l) => l.stock_level_id === levelId)?.name;
+        return name === 'Low Stock' || name === 'Out of Stock';
+    }
+
+    async function confirmFinish() {
+        finishing.value = true;
+        try {
+            const used = [...usedIds.value];
+
+            if (finishUpdateLevels.value) {
+                for (const id of used) {
+                    const item = stockItems.value.find((si) => si.stock_item_id === id);
+                    if (!item) continue;
+                    const next = nextLowerLevelId(item.stock_level_id);
+                    if (next && next !== item.stock_level_id) {
+                        await stockItemStore.updateStockLevelAsync({
+                            stock_item_id: id,
+                            stock_level_id: next,
+                        });
+                    }
+                }
+            }
+
+            if (finishLogMeal.value && recipe.value) {
+                await recipeStore.markMadeAsync(recipe.value.recipe_id);
+            }
+
+            if (finishAddRanOut.value) {
+                // After decrementing, anything now low/out is a candidate to
+                // restock. Read fresh levels from the store.
+                const ranOut = used.filter((id) => {
+                    const item = stockItems.value.find((si) => si.stock_item_id === id);
+                    return item && isLowOrOut(item.stock_level_id);
+                });
+                const primary = shoppingListStore.primaryListId;
+                if (ranOut.length > 0 && primary) {
+                    await slActions.addItems(
+                        primary,
+                        ranOut.map((id) => ({ stock_item_id: id })),
+                    );
+                } else if (ranOut.length > 0) {
+                    $q.notify({
+                        type: 'info',
+                        position: 'bottom-right',
+                        message: 'Set a primary shopping list to auto-add ran-out items.',
+                    });
+                }
+            }
+
+            $q.notify({ type: 'positive', message: 'Nice cooking!', icon: 'check_circle' });
+            finishDialogOpen.value = false;
+            exitCookMode();
+        } finally {
+            finishing.value = false;
+        }
     }
 
     function exitCookMode() {
@@ -394,7 +575,7 @@
                 await recipeStore.getRecipesAsync();
             }
             const fromStore = recipeStore.recipes.find((r) => r.recipe_id === recipeId);
-            recipe.value = fromStore ?? (await recipeApiService.getAsync(recipeId));
+            recipe.value = (fromStore ?? (await recipeApiService.getAsync(recipeId))) as Recipe;
         } catch {
             recipe.value = null;
         } finally {
@@ -406,6 +587,14 @@
         if (locationStore.tree.length === 0) {
             void locationStore.refreshAsync();
         }
+
+        // Stock items + levels back the ingredient chips and the finish flow;
+        // membership/primary feed the "add ran-out items" step.
+        await Promise.all([
+            stockItems.value.length === 0 ? stockItemStore.getStockItemsAsync() : Promise.resolve(),
+            stockLevels.value.length === 0 ? stockLevelStore.getStockLevelsAsync() : Promise.resolve(),
+            shoppingListStore.refreshAsync(),
+        ]);
     });
 
     onBeforeUnmount(() => {

@@ -73,4 +73,36 @@ export default class RecipeApiService {
 
     markMadeAsync = async (recipeId: string): Promise<void> =>
         await this.httpClient.post<void>(`/recipes/${recipeId}/mark-made`, {});
+
+    importFromUrlAsync = async (url: string): Promise<ImportedRecipe> =>
+        await this.httpClient.post<ImportedRecipe, { url: string }>(
+            '/recipes/import-from-url',
+            { url },
+        );
 }
+
+// Mirrors ImportedRecipeDto / ImportedIngredientDto from
+// dora_api/features/recipes/import_recipe_from_url.py.
+export type ImportedIngredient = {
+    raw_text: string;
+    stock_item_id: string | null;
+    stock_item_name: string | null;
+    match_score: number;
+    quantity: number | null;
+    unit: string | null;
+    notes: string | null;
+};
+
+export type ImportedRecipe = {
+    name: string;
+    cuisine: string | null;
+    category: string | null;
+    difficulty: string | null;
+    servings: number | null;
+    prep_time_minutes: number | null;
+    cook_time_minutes: number | null;
+    instructions: string | null;
+    nutrition: string | null;
+    source_url: string;
+    ingredients: ImportedIngredient[];
+};

@@ -61,17 +61,22 @@
                 >
                     <q-menu anchor="bottom right" self="top right">
                         <q-list dense style="min-width: 220px">
-                            <q-item clickable v-close-popup @click="toggleGroupByMerchant">
+                            <q-item-label header class="q-pb-none">Group by</q-item-label>
+                            <q-item
+                                v-for="opt in groupByOptions"
+                                :key="opt.value"
+                                clickable
+                                v-close-popup
+                                @click="groupBy = opt.value"
+                            >
                                 <q-item-section avatar>
                                     <q-icon
-                                        :name="
-                                            groupByMerchant
-                                                ? 'check_box'
-                                                : 'check_box_outline_blank'
-                                        "
+                                        :name="groupBy === opt.value
+                                            ? 'radio_button_checked'
+                                            : 'radio_button_unchecked'"
                                     />
                                 </q-item-section>
-                                <q-item-section>Group by merchant</q-item-section>
+                                <q-item-section>{{ opt.label }}</q-item-section>
                             </q-item>
                             <q-separator />
                             <q-item
@@ -149,6 +154,19 @@
                     </q-menu>
                 </q-btn>
                 <q-btn
+                    flat
+                    no-caps
+                    :icon="reviewMode ? 'visibility_off' : 'preview'"
+                    :label="reviewMode ? 'Exit review' : 'Review mode'"
+                    :disable="tickedCount === 0"
+                    @click="toggleReviewMode"
+                >
+                    <q-tooltip>
+                        Show only ticked items and preview what will restock
+                        when you finish.
+                    </q-tooltip>
+                </q-btn>
+                <q-btn
                     v-if="!detail.is_in_progress"
                     color="primary"
                     no-caps
@@ -220,35 +238,29 @@
                 </template>
             </q-banner>
 
-            <!-- Add-item bar (hidden mid-shop) -->
-            <q-card v-if="!detail.is_in_progress" flat bordered class="q-mb-md">
-                <q-card-section class="row q-col-gutter-sm items-center">
-                    <q-select
-                        v-model="itemPickerSelection"
-                        use-input
-                        input-debounce="200"
-                        :options="filteredStockItems"
-                        option-value="stock_item_id"
-                        option-label="name"
-                        emit-value
-                        map-options
-                        outlined
-                        dense
-                        clearable
-                        class="col"
-                        label="Add a stock item…"
+            <!-- Add-item bar (hidden mid-shop and during review). The actual
+                 picker lives in <QuickAddSheet> so search, frequently-added
+                 suggestions and offer selection behave identically wherever
+                 they're triggered from. -->
+            <q-card
+                v-if="!detail.is_in_progress && !reviewMode"
+                flat
+                bordered
+                class="q-mb-md"
+            >
+                <q-card-section class="row items-center q-gutter-sm">
+                    <q-btn
+                        color="primary"
+                        no-caps
+                        icon="add"
+                        label="Quick add an item"
                         :disable="detail.is_archived"
-                        @filter="onItemPickerFilter"
-                        @update:model-value="onAddItem"
-                    >
-                        <template #no-option>
-                            <q-item>
-                                <q-item-section class="text-grey">
-                                    No matching stock items.
-                                </q-item-section>
-                            </q-item>
-                        </template>
-                    </q-select>
+                        @click="onOpenQuickAdd"
+                    />
+                    <span class="text-caption text-grey">
+                        Search across every stock item, pick the offer, and
+                        drop it onto this list.
+                    </span>
                 </q-card-section>
             </q-card>
 
@@ -319,10 +331,10 @@
             <!-- Lines -->
             <q-card v-if="detail.lines.length === 0" flat bordered>
                 <q-card-section class="text-center text-grey">
-                    No items yet. Add some via the picker above, or
-                    <router-link to="/stock" class="text-primary"
-                        >quick-add from your stock list</router-link
-                    >.
+                    No items yet. Use <strong>Quick add</strong> above, or
+                    <router-link to="/stock" class="text-primary">
+                        cart-add from your stock list
+                    </router-link>.
                 </q-card-section>
             </q-card>
 
@@ -333,10 +345,13 @@
                     class="q-mb-md"
                 >
                     <div
-                        v-if="groupByMerchant && group.label"
+                        v-if="groupBy !== 'none' && group.label"
                         class="text-subtitle2 text-grey q-mb-xs row items-center q-gutter-xs"
                     >
-                        <q-icon name="storefront" size="16px" />
+                        <q-icon
+                            :name="groupBy === 'location' ? 'place' : 'storefront'"
+                            size="16px"
+                        />
                         {{ group.label }}
                         <span class="text-caption">
                             ({{ group.lines.length }} item{{ group.lines.length === 1 ? '' : 's' }})
@@ -382,15 +397,35 @@
                             </q-item-section>
 
                             <q-item-section>
-                                <q-item-label
-                                    class="shopping-line-name"
-                                    :class="{ 'text-strike text-grey': line.is_ticked }"
+                                <!-- The chip carries level, alert dot,
+                                     on-list indicator and the cross-feature
+                                     menu (find substitutes, see recipes etc.)
+                                     consistently with every other screen. -->
+                                <div
+                                    class="row items-center q-gutter-xs"
+                                    :class="{
+                                        'shopping-line-ticked-content': line.is_ticked,
+                                    }"
                                 >
-                                    {{ line.stock_item_name }}
-                                </q-item-label>
-                                <q-item-label caption>
-                                    <span v-if="line.stock_level_name">
-                                        {{ line.stock_level_name }} ·
+                                    <StockItemChip
+                                        v-if="stockItemFor(line.stock_item_id)"
+                                        :stock-item="stockItemFor(line.stock_item_id)!"
+                                    />
+                                    <q-chip
+                                        v-else
+                                        dense
+                                        color="grey-4"
+                                    >
+                                        {{ line.stock_item_name }}
+                                    </q-chip>
+                                </div>
+                                <q-item-label caption class="q-mt-xs">
+                                    <span
+                                        v-if="line.stock_location_breadcrumb.length > 0"
+                                        class="q-mr-sm"
+                                    >
+                                        <q-icon name="place" size="14px" />
+                                        {{ line.stock_location_breadcrumb.join(' › ') }}
                                     </span>
                                     <span v-if="line.offers.length > 0">
                                         {{ line.offers.length }} merchant offer{{
@@ -424,12 +459,40 @@
                                         :disable="detail.is_archived"
                                         @click="onPickOffer(line.line_id, offer.product_id)"
                                     >
-                                        <q-icon name="storefront" size="14px" class="q-mr-xs" />
+                                        <q-icon
+                                            v-if="offer.is_preferred"
+                                            name="star"
+                                            size="14px"
+                                            color="amber-7"
+                                            class="q-mr-xs"
+                                        >
+                                            <q-tooltip>Preferred merchant for this item</q-tooltip>
+                                        </q-icon>
+                                        <q-icon
+                                            v-else
+                                            name="storefront"
+                                            size="14px"
+                                            class="q-mr-xs"
+                                        />
                                         {{ offer.merchant_name }} ·
                                         {{ offer.price_now != null ? `$${offer.price_now.toFixed(2)}` : '—' }}
+                                        <span
+                                            v-if="offerSavings(offer) > 0"
+                                            class="q-ml-xs offer-savings"
+                                            :class="
+                                                isChosen(line, offer.product_id)
+                                                    ? 'text-amber-2'
+                                                    : 'text-positive'
+                                            "
+                                        >
+                                            save ${{ offerSavings(offer).toFixed(2) }}
+                                        </span>
                                         <q-tooltip>
                                             {{ offer.brand ? `${offer.brand} — ` : '' }}{{ offer.name }}
                                             <span v-if="offer.size"> ({{ offer.size }})</span>
+                                            <span v-if="offer.price_was != null && offer.price_now != null">
+                                                · RRP ${{ offer.price_was.toFixed(2) }}
+                                            </span>
                                         </q-tooltip>
                                     </q-chip>
                                 </div>
@@ -485,17 +548,99 @@
                                     flat
                                     round
                                     dense
-                                    icon="delete_outline"
+                                    icon="more_vert"
                                     :disable="detail.is_archived"
-                                    @click="onRemoveLine(line.line_id)"
                                 >
-                                    <q-tooltip>Remove from list</q-tooltip>
+                                    <q-menu auto-close>
+                                        <q-list dense style="min-width: 220px">
+                                            <q-item
+                                                clickable
+                                                @click="onSwapSubstitute(line)"
+                                            >
+                                                <q-item-section avatar>
+                                                    <q-icon name="swap_horiz" />
+                                                </q-item-section>
+                                                <q-item-section>
+                                                    Swap with substitute…
+                                                </q-item-section>
+                                            </q-item>
+                                            <q-item
+                                                clickable
+                                                :disable="otherActiveLists.length === 0"
+                                                @click="onMoveLine(line)"
+                                            >
+                                                <q-item-section avatar>
+                                                    <q-icon name="drive_file_move" />
+                                                </q-item-section>
+                                                <q-item-section>
+                                                    <q-item-label>Move to another list…</q-item-label>
+                                                    <q-item-label
+                                                        v-if="otherActiveLists.length === 0"
+                                                        caption
+                                                    >
+                                                        No other active lists
+                                                    </q-item-label>
+                                                </q-item-section>
+                                            </q-item>
+                                            <q-separator />
+                                            <q-item
+                                                clickable
+                                                @click="onRemoveLine(line.line_id)"
+                                            >
+                                                <q-item-section avatar>
+                                                    <q-icon name="delete_outline" color="negative" />
+                                                </q-item-section>
+                                                <q-item-section class="text-negative">
+                                                    Remove from list
+                                                </q-item-section>
+                                            </q-item>
+                                        </q-list>
+                                    </q-menu>
                                 </q-btn>
                             </q-item-section>
                         </q-item>
                     </q-list>
                 </div>
             </template>
+
+            <!-- Review-mode preview: what will bump to Well-Stocked on
+                 finish, so the user can sanity-check before archiving. -->
+            <q-card
+                v-if="reviewMode && detail.lines.length > 0"
+                flat
+                bordered
+                class="q-mt-md bg-blue-1"
+            >
+                <q-card-section>
+                    <div class="row items-center q-mb-sm">
+                        <q-icon name="preview" class="q-mr-sm" />
+                        <div class="text-subtitle1">
+                            Review — {{ tickedCount }} item{{ tickedCount === 1 ? '' : 's' }} ready to finish
+                        </div>
+                    </div>
+                    <div v-if="tickedCount === 0" class="text-grey">
+                        Nothing is ticked yet — tick the items you've actually
+                        picked up to preview what will restock.
+                    </div>
+                    <div v-else>
+                        <div class="text-caption text-grey q-mb-xs">
+                            These items will be bumped to <strong>Well-Stocked</strong>
+                            when you finish:
+                        </div>
+                        <div class="row q-gutter-xs">
+                            <template
+                                v-for="line in tickedLines"
+                                :key="line.line_id"
+                            >
+                                <StockItemChip
+                                    v-if="stockItemFor(line.stock_item_id)"
+                                    :stock-item="stockItemFor(line.stock_item_id)!"
+                                />
+                            </template>
+                        </div>
+                    </div>
+                </q-card-section>
+            </q-card>
 
             <!-- Totals -->
             <q-card v-if="detail.lines.length > 0" flat bordered class="q-mt-md">
@@ -514,6 +659,13 @@
                         <div class="text-caption text-grey">Full list total</div>
                         <div class="text-h6">${{ fullTotal.toFixed(2) }}</div>
                     </div>
+                    <q-separator v-if="savingsTotal > 0" vertical />
+                    <div v-if="savingsTotal > 0" class="col">
+                        <div class="text-caption text-grey">Savings vs RRP</div>
+                        <div class="text-h6 text-positive">
+                            ${{ savingsTotal.toFixed(2) }}
+                        </div>
+                    </div>
                 </q-card-section>
             </q-card>
         </template>
@@ -522,17 +674,24 @@
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import StockItemChip from 'src/components/chips/StockItemChip.vue';
+    import { useQuickAdd } from 'src/composables/useQuickAdd';
     import {
         chosenOfferFor,
         priceOfLine,
+        savingsOfLine,
+        type LineProductOffer,
         type ShoppingListDetail,
         type ShoppingListLine
     } from 'src/models/shoppingList';
+    import type { StockItem } from 'src/models/stockItem';
+    import type { Substitute } from 'src/models/stockItemDetail';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
     const route = useRoute();
@@ -540,8 +699,10 @@
     const $q = useQuasar();
     const api = new ShoppingListApiService();
     const templateApi = new ShoppingListTemplateApiService();
+    const stockItemApi = new StockItemApiService();
     const store = useShoppingListStore();
     const stockItemStore = useStockItemStore();
+    const { openQuickAdd, isOpen: quickAddOpen } = useQuickAdd();
 
     const listId = computed(() => String(route.params.id ?? ''));
     const detail = ref<ShoppingListDetail | null>(null);
@@ -551,7 +712,26 @@
 
     const editingName = ref(false);
     const nameDraft = ref('');
-    const groupByMerchant = ref(false);
+
+    // Group lines by nothing, by stock location (matches the shopper's
+    // route through the store) or by chosen merchant. Location is the
+    // P5 default because most shopping happens at one merchant but across
+    // many storage spots.
+    type GroupByMode = 'none' | 'location' | 'merchant';
+    const groupBy = ref<GroupByMode>('none');
+    const groupByOptions: { value: GroupByMode; label: string }[] = [
+        { value: 'none', label: 'Nothing (just sequence)' },
+        { value: 'location', label: 'Stock location' },
+        { value: 'merchant', label: 'Merchant' },
+    ];
+
+    // Review mode: hides unticked lines and surfaces the bump-to-Well-Stocked
+    // preview so the user can sanity-check before pulling the trigger on
+    // Finish shopping.
+    const reviewMode = ref(false);
+    function toggleReviewMode() {
+        reviewMode.value = !reviewMode.value;
+    }
 
     // ── Start/stop shopping ───────────────────────────────────────────
     const togglingProgress = ref(false);
@@ -657,8 +837,9 @@
         !!detail.value
             && !detail.value.is_archived
             && !detail.value.is_in_progress
-            && !groupByMerchant.value
+            && groupBy.value === 'none'
             && !bulkMode.value
+            && !reviewMode.value
     );
 
     const dragLineId = ref<string | null>(null);
@@ -727,57 +908,77 @@
         }
     }
 
-    function toggleGroupByMerchant() {
-        groupByMerchant.value = !groupByMerchant.value;
+    // ── Line grouping ────────────────────────────────────────────────
+    // One flat list, or one bucket per stock location (in shopper-route
+    // order — alphabetical for now since we don't have a route weight),
+    // or one bucket per chosen merchant. "No location" / "No merchant"
+    // lines drop into a labelled bucket at the end so they don't vanish.
+    type LineGroup = { key: string; label: string | null; lines: typeof detail.value.lines };
+
+    function locationKeyFor(line: ShoppingListLine): string {
+        if (line.stock_location_breadcrumb.length === 0) return '__no_location__';
+        return line.stock_location_breadcrumb.join(' › ');
     }
 
-    // Either one flat group (default) or one group per merchant. "No
-    // merchant" lines (no linked product / no chosen offer) get their own
-    // bucket at the end so they don't silently disappear.
-    type LineGroup = { key: string; label: string | null; lines: typeof detail.value.lines };
-    const lineGroups = computed<LineGroup[]>(() => {
+    const baseLines = computed(() => {
         const lines = detail.value?.lines ?? [];
-        if (!groupByMerchant.value) {
+        return reviewMode.value ? lines.filter((l) => l.is_ticked) : lines;
+    });
+
+    const lineGroups = computed<LineGroup[]>(() => {
+        const lines = baseLines.value;
+        if (groupBy.value === 'none') {
             return [{ key: 'all', label: null, lines }];
         }
         const buckets = new Map<string, LineGroup>();
         for (const line of lines) {
-            const chosen = chosenOfferFor(line);
-            const key = chosen?.merchant_name ?? '__no_merchant__';
-            const label = chosen?.merchant_name ?? 'No merchant linked';
+            let key: string;
+            let label: string;
+            if (groupBy.value === 'merchant') {
+                const chosen = chosenOfferFor(line);
+                key = chosen?.merchant_name ?? '__no_merchant__';
+                label = chosen?.merchant_name ?? 'No merchant linked';
+            } else {
+                key = locationKeyFor(line);
+                label = key === '__no_location__' ? 'No location set' : key;
+            }
             if (!buckets.has(key)) buckets.set(key, { key, label, lines: [] });
             buckets.get(key)!.lines.push(line);
         }
+        // Sort lines inside each bucket alphabetically — within a bucket,
+        // sequence is irrelevant because grouping has already broken the
+        // shopper's manual ordering. Items with no chosen offer / no
+        // location sink to the bottom of their group.
+        for (const bucket of buckets.values()) {
+            bucket.lines.sort((a, b) =>
+                a.stock_item_name.localeCompare(b.stock_item_name)
+            );
+        }
         return [...buckets.values()].sort((a, b) => {
-            if (a.key === '__no_merchant__') return 1;
-            if (b.key === '__no_merchant__') return -1;
+            const aMissing = a.key.startsWith('__');
+            const bMissing = b.key.startsWith('__');
+            if (aMissing && !bMissing) return 1;
+            if (!aMissing && bMissing) return -1;
             return (a.label ?? '').localeCompare(b.label ?? '');
         });
     });
 
-    const itemPickerSelection = ref<string | null>(null);
-    const itemPickerFilter = ref('');
-
-    const filteredStockItems = computed(() => {
-        // The picker excludes items already on this list — adding twice is
-        // redundant (lines are unique per item).
-        const existingItemIds = new Set(
-            (detail.value?.lines ?? []).map((l) => l.stock_item_id)
+    // Stock items keyed by id, looked up from the store, so we can hand
+    // the right StockItem to <StockItemChip> per line.
+    function stockItemFor(stockItemId: string): StockItem | undefined {
+        return stockItemStore.stockItems.find(
+            (si) => si.stock_item_id === stockItemId
         );
-        const filter = itemPickerFilter.value.toLowerCase();
-        return stockItemStore.stockItems
-            .filter((si) => !existingItemIds.has(si.stock_item_id))
-            .filter(
-                (si) => !filter || si.name.toLowerCase().includes(filter)
-            )
-            .map((si) => ({ stock_item_id: si.stock_item_id, name: si.name }));
-    });
+    }
 
     const tickedCount = computed(() =>
         (detail.value?.lines ?? []).filter((l) => l.is_ticked).length
     );
     const untickedCount = computed(() =>
         (detail.value?.lines ?? []).filter((l) => !l.is_ticked).length
+    );
+    const tickedLines = computed(() =>
+        (detail.value?.lines ?? []).filter((l) => l.is_ticked)
     );
     const remainingTotal = computed(() =>
         (detail.value?.lines ?? [])
@@ -790,6 +991,11 @@
             .reduce((sum, l) => sum + priceOfLine(l), 0)
     );
     const fullTotal = computed(() => remainingTotal.value + tickedTotal.value);
+    // List-level savings vs RRP — sum across every line (ticked + unticked)
+    // so the headline reflects the whole shop, not just what's left.
+    const savingsTotal = computed(() =>
+        (detail.value?.lines ?? []).reduce((sum, l) => sum + savingsOfLine(l), 0)
+    );
 
     function isChosen(line: ShoppingListLine, productId: string): boolean {
         const chosen = chosenOfferFor(line);
@@ -798,6 +1004,12 @@
 
     function priceForLine(line: ShoppingListLine): number {
         return priceOfLine(line);
+    }
+
+    function offerSavings(offer: LineProductOffer): number {
+        if (offer.price_now == null || offer.price_was == null) return 0;
+        const diff = offer.price_was - offer.price_now;
+        return diff > 0 ? diff : 0;
     }
 
     function formatDate(iso: string): string {
@@ -875,28 +1087,142 @@
         }
     }
 
-    function onItemPickerFilter(
-        value: string,
-        update: (cb: () => void) => void,
-    ) {
-        update(() => {
-            itemPickerFilter.value = value;
-        });
+    function onOpenQuickAdd() {
+        // Pre-target this list so the sheet skips its list picker default.
+        openQuickAdd({ listId: listId.value });
     }
 
-    async function onAddItem(stockItemId: string | null) {
-        if (!stockItemId) return;
-        // Reset the picker immediately — feels snappier and prevents
-        // accidental double-adds while the request is in flight.
-        itemPickerSelection.value = null;
+    // QuickAddSheet writes via shoppingListStore.refreshAsync but the
+    // per-list detail isn't part of that refresh — reload it locally
+    // whenever the sheet closes so a freshly-added line shows up.
+    watch(quickAddOpen, (open, wasOpen) => {
+        if (wasOpen && !open) void load();
+    });
+
+    // ── Swap with substitute ─────────────────────────────────────────
+    async function onSwapSubstitute(line: ShoppingListLine) {
+        // Pull substitutes from the stock item's detail — we don't keep
+        // them in the line DTO because they're a per-item attribute and
+        // would bloat every line.
+        let subs: Substitute[] = [];
         try {
-            await api.addLineAsync(listId.value, { stock_item_id: stockItemId });
-            await refreshAll();
+            const itemDetail = await stockItemApi.getDetailAsync(line.stock_item_id);
+            subs = itemDetail.substitutes ?? [];
         } catch (err) {
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not add item.',
+                message: 'Could not load substitutes.',
+                caption: String(err),
+            });
+            return;
+        }
+        if (subs.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `No substitutes recorded for ${line.stock_item_name}.`,
+                caption: 'Add some on the stock item\'s detail page.',
+            });
+            return;
+        }
+        // Filter out subs already on this list — swapping into a duplicate
+        // would just delete the line.
+        const onListIds = new Set(detail.value?.lines.map((l) => l.stock_item_id) ?? []);
+        const choosable = subs.filter((s) => !onListIds.has(s.stock_item_id));
+        if (choosable.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'All recorded substitutes are already on this list.',
+            });
+            return;
+        }
+        const targetId = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: `Swap ${line.stock_item_name} with…`,
+                options: {
+                    type: 'radio',
+                    model: '',
+                    items: choosable.map((s) => ({
+                        label: s.name + (s.stock_level_name ? ` (${s.stock_level_name})` : ''),
+                        value: s.stock_item_id,
+                    })),
+                },
+                ok: { label: 'Swap', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((value: string) => resolve(value || null))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!targetId) return;
+        try {
+            // Add-then-delete order: if the add fails we leave the original
+            // line intact instead of silently emptying the slot.
+            await api.addLineAsync(listId.value, {
+                stock_item_id: targetId,
+                quantity: line.quantity,
+            });
+            await api.deleteLineAsync(listId.value, line.line_id);
+            await refreshAll();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Swapped with substitute.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not swap.',
+                caption: String(err),
+            });
+        }
+    }
+
+    // ── Move single line to another list ─────────────────────────────
+    async function onMoveLine(line: ShoppingListLine) {
+        if (otherActiveLists.value.length === 0) return;
+        const targetId = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: `Move ${line.stock_item_name} to…`,
+                options: {
+                    type: 'radio',
+                    model: '',
+                    items: otherActiveLists.value.map((s) => ({
+                        label: s.name + (s.is_primary ? ' (primary)' : ''),
+                        value: s.shopping_list_id,
+                    })),
+                },
+                ok: { label: 'Move', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((value: string) => resolve(value || null))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!targetId) return;
+        try {
+            const result = await api.addLineAsync(targetId, {
+                stock_item_id: line.stock_item_id,
+                quantity: line.quantity,
+                selected_product_id: line.selected_product_id,
+            });
+            await api.deleteLineAsync(listId.value, line.line_id);
+            await refreshAll();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: result.already_on_list
+                    ? 'Already on target list — original line removed.'
+                    : 'Moved.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not move line.',
                 caption: String(err),
             });
         }
@@ -1019,26 +1345,93 @@
 
     async function onFinish() {
         if (!detail.value) return;
-        const untickedCount = detail.value.lines.length - tickedCount.value;
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: 'Finish shopping?',
-                message:
-                    untickedCount > 0
-                        ? `This will archive the list and reset ticked items' stock level to Well-Stocked. ${untickedCount} unticked item${untickedCount === 1 ? '' : 's'} will be archived with it — copy them to a new list first if you want to keep them active.`
-                        : 'This will archive the list and reset ticked items\' stock level to Well-Stocked.',
-                ok: { label: 'Finish', color: 'positive', noCaps: true },
-                cancel: { noCaps: true },
-                persistent: true,
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!ok) return;
+        const unticked = detail.value.lines.length - tickedCount.value;
+
+        // When there are unticked items, give the user a three-way choice:
+        //   - Cancel
+        //   - Copy unticked to a new list (carries them over) then finish
+        //   - Finish anyway (unticked are archived with the list)
+        let copyUnticked = false;
+        if (unticked > 0) {
+            const choice = await new Promise<'copy' | 'finish' | null>((resolve) => {
+                $q.dialog({
+                    title: 'Finish shopping?',
+                    message:
+                        `${unticked} unticked item${unticked === 1 ? '' : 's'} ` +
+                        `${unticked === 1 ? 'is' : 'are'} still on this list. ` +
+                        `Copy ${unticked === 1 ? 'it' : 'them'} to a new active list, ` +
+                        `or finish anyway?`,
+                    options: {
+                        type: 'radio',
+                        model: 'copy',
+                        items: [
+                            {
+                                label: `Copy unticked to a new list, then finish`,
+                                value: 'copy',
+                            },
+                            {
+                                label: `Finish anyway (unticked archived too)`,
+                                value: 'finish',
+                            },
+                        ],
+                    },
+                    ok: { label: 'Finish', color: 'positive', noCaps: true },
+                    cancel: { noCaps: true },
+                    persistent: true,
+                })
+                    .onOk((value: 'copy' | 'finish') => resolve(value || 'finish'))
+                    .onCancel(() => resolve(null))
+                    .onDismiss(() => resolve(null));
+            });
+            if (choice === null) return;
+            copyUnticked = choice === 'copy';
+        } else {
+            const ok = await new Promise<boolean>((resolve) => {
+                $q.dialog({
+                    title: 'Finish shopping?',
+                    message:
+                        'Archives the list and resets ticked items\' stock level to Well-Stocked.',
+                    ok: { label: 'Finish', color: 'positive', noCaps: true },
+                    cancel: { noCaps: true },
+                    persistent: true,
+                })
+                    .onOk(() => resolve(true))
+                    .onCancel(() => resolve(false))
+                    .onDismiss(() => resolve(false));
+            });
+            if (!ok) return;
+        }
+
         finishing.value = true;
         try {
+            // Copy first — if the copy fails we'd rather leave the list
+            // unarchived so the user can retry, than silently lose lines.
+            let copiedListId: string | null = null;
+            if (copyUnticked) {
+                const copy = await api.copyAsync(listId.value, { include: 'unticked' });
+                copiedListId = copy.shopping_list_id;
+            }
             const result = await api.finishAsync(listId.value);
+            if (copiedListId) {
+                $q.notify({
+                    type: 'positive',
+                    position: 'bottom-right',
+                    message:
+                        `Finished. ${result.items_restocked} item${
+                            result.items_restocked === 1 ? '' : 's'
+                        } restocked. Unticked items copied to a new list.`,
+                    actions: [
+                        {
+                            label: 'Open new list',
+                            color: 'white',
+                            handler: () => router.push(`/shopping-lists/${copiedListId}`),
+                        },
+                    ],
+                });
+                await Promise.all([store.refreshAsync(), stockItemStore.getStockItemsAsync()]);
+                void router.push(`/shopping-lists/${copiedListId}`);
+                return;
+            }
             await Promise.all([store.refreshAsync(), stockItemStore.getStockItemsAsync()]);
             $q.notify({
                 type: 'positive',
@@ -1298,6 +1691,13 @@
     }
     .shopping-line-name {
         font-weight: 500;
+    }
+    .shopping-line-ticked-content {
+        opacity: 0.6;
+    }
+    .offer-savings {
+        font-weight: 600;
+        font-size: 0.92em;
     }
     .shopping-line-qty {
         min-width: 24px;

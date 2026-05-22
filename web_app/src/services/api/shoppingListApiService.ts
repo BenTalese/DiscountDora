@@ -50,6 +50,8 @@ export type AutogenerateCommand = {
     target_shopping_list_id?: string | null;
     name?: string;
     include_well_stocked?: boolean;
+    /** Which item set to pull from. Defaults to 'flagged'. */
+    source?: 'flagged' | 'low_or_out';
 };
 
 export type AutogenerateResult = {
@@ -71,6 +73,13 @@ export type RefreshDealsResult = {
 
 export type ClearListResult = {
     removed_count: number;
+};
+
+export type FrequentlyAddedItem = {
+    stock_item_id: string;
+    name: string;
+    stock_level_id: string | null;
+    add_count: number;
 };
 
 export default class ShoppingListApiService {
@@ -196,5 +205,10 @@ export default class ShoppingListApiService {
         await this.httpClient.post<ClearListResult, Record<string, never>>(
             `/shopping-lists/${id}/clear`,
             {},
+        );
+
+    getFrequentlyAddedAsync = async (limit = 12): Promise<FrequentlyAddedItem[]> =>
+        await this.httpClient.get<FrequentlyAddedItem[]>(
+            `/shopping-lists/frequently-added?limit=${limit}`,
         );
 }

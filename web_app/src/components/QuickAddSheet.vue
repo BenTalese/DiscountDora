@@ -48,7 +48,19 @@
                                     <q-icon name="inventory_2" size="16px" />
                                 </q-avatar>
                             </q-item-section>
-                            <q-item-section>{{ item.name }}</q-item-section>
+                            <q-item-section>
+                                <div class="row items-center q-gutter-xs">
+                                    <q-icon
+                                        v-if="!query && isFrequent(item.stock_item_id)"
+                                        name="star"
+                                        size="14px"
+                                        color="amber-7"
+                                    >
+                                        <q-tooltip>Frequently added</q-tooltip>
+                                    </q-icon>
+                                    <span>{{ item.name }}</span>
+                                </div>
+                            </q-item-section>
                             <q-item-section side>
                                 <q-icon name="chevron_right" />
                             </q-item-section>
@@ -60,7 +72,11 @@
                         </q-item>
                     </q-list>
                     <div v-if="!query" class="text-caption text-grey q-mt-xs">
-                        Showing low/out items first.
+                        {{
+                            frequentlyAdded.length > 0
+                                ? 'Showing what you usually buy, then low/out.'
+                                : 'Showing low/out items first.'
+                        }}
                     </div>
                 </template>
 
@@ -121,6 +137,9 @@
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { LinkedProduct } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
+    import ShoppingListApiService, {
+        type FrequentlyAddedItem,
+    } from 'src/services/api/shoppingListApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -128,6 +147,7 @@
     import { computed, ref, watch } from 'vue';
 
     const stockItemApi = new StockItemApiService();
+    const shoppingListApi = new ShoppingListApiService();
 
     const { isOpen, presetStockItemId, presetListId, closeQuickAdd } = useQuickAdd();
     const { addItems } = useShoppingListActions();
@@ -174,17 +194,41 @@
         return name ? getStockLevelColour(name) : 'grey';
     }
 
+    // Cached on each sheet-open: stock items the user has historically added
+    // to a list most often. We surface these first when there's no query so
+    // "the thing I always buy" is one tap away. Falls back gracefully if
+    // the endpoint hasn't returned yet or fails.
+    const frequentlyAdded = ref<FrequentlyAddedItem[]>([]);
+
     const results = computed(() => {
         const q = query.value?.trim().toLowerCase() ?? '';
         const items = [...stockItems.value];
         if (q) {
             return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 30);
         }
-        // No query → surface low/out items first as suggestions.
-        return items
-            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id))
-            .slice(0, 12);
+        // No query: lead with frequently-added, then top up with low/out
+        // items so first-time users (zero history) still see suggestions.
+        const seen = new Set<string>();
+        const ordered: StockItem[] = [];
+        if (frequentlyAdded.value.length > 0) {
+            const lookup = new Map(items.map((i) => [i.stock_item_id, i]));
+            for (const f of frequentlyAdded.value) {
+                const item = lookup.get(f.stock_item_id);
+                if (item && !seen.has(item.stock_item_id)) {
+                    ordered.push(item);
+                    seen.add(item.stock_item_id);
+                }
+            }
+        }
+        const remaining = items
+            .filter((i) => !seen.has(i.stock_item_id))
+            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id));
+        return [...ordered, ...remaining].slice(0, 12);
     });
+
+    function isFrequent(stockItemId: string): boolean {
+        return frequentlyAdded.value.some((f) => f.stock_item_id === stockItemId);
+    }
 
     const offerOptions = computed(() => [
         { label: 'No specific offer', value: null },
@@ -259,6 +303,18 @@
         if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
         if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
         loads.push(shoppingListStore.refreshAsync());
+        // Frequently-added is best-effort; failure shouldn't block the
+        // sheet, so swallow errors and fall back to low/out ordering.
+        loads.push(
+            shoppingListApi
+                .getFrequentlyAddedAsync(12)
+                .then((items) => {
+                    frequentlyAdded.value = items;
+                })
+                .catch(() => {
+                    frequentlyAdded.value = [];
+                }),
+        );
         await Promise.all(loads);
 
         targetListId.value =

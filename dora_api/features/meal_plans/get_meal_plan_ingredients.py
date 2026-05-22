@@ -5,7 +5,6 @@ from uuid import UUID
 
 from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
-from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.features.routers import MEAL_PLAN_ROUTER
@@ -29,26 +28,33 @@ class GetMealPlanIngredientsHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, meal_plan_id: UUID) -> List[MealPlanIngredientDto] | None:
+        # Load entries only — we read the raw `_meal_id` FK rather than the
+        # `meal` relationship on purpose. Loading the meal here would put it in
+        # the session identity map with its `recipes` collection unloaded, and
+        # the per-meal reload below would then return that stale instance with
+        # empty recipes (SQLAlchemy won't overwrite an already-present
+        # collection without populate_existing).
         _Plan = (
             self.repository
             .get(MealPlan)
             .include(MealPlan.Fields.ENTRIES)
-                .then_include(MealPlanEntry.Fields.MEAL)
             .one(EntityField(MealPlan, "id").eq(meal_plan_id))
         )
         if not _Plan:
             return None
 
-        # For each unique meal in the plan, load its recipes with ingredients.
         _MealIdToServings: dict[UUID, int] = {}
         for _Entry in _Plan.entries or []:
-            _MealIdToServings[_Entry.meal.id] = _MealIdToServings.get(_Entry.meal.id, 0) + _Entry.servings
+            _MealIdToServings[_Entry._meal_id] = (
+                _MealIdToServings.get(_Entry._meal_id, 0) + _Entry.servings
+            )
 
         if not _MealIdToServings:
             return []
 
-        # Reload each meal with its recipes + ingredients + stock_item.
-        # Two-step because the query builder doesn't chain 4 levels deep.
+        # Load each meal with its recipes → ingredients → stock_item in one deep
+        # (linear) eager chain. The meals weren't loaded above, so their
+        # collections populate cleanly.
         _Aggregated: dict[UUID, dict] = {}
 
         for _MealId, _Servings in _MealIdToServings.items():
@@ -56,20 +62,13 @@ class GetMealPlanIngredientsHandler:
                 self.repository
                 .get(Meal)
                 .include(Meal.Fields.RECIPES)
+                    .then_include(Recipe.Fields.INGREDIENTS)
+                    .then_include(RecipeIngredient.Fields.STOCK_ITEM)
                 .one(EntityField(Meal, "id").eq(_MealId))
             )
             if not _Meal:
                 continue
-            for _Recipe in _Meal.recipes or []:
-                _LoadedRecipe = (
-                    self.repository
-                    .get(Recipe)
-                    .include(Recipe.Fields.INGREDIENTS)
-                        .then_include(RecipeIngredient.Fields.STOCK_ITEM)
-                    .one(EntityField(Recipe, "id").eq(_Recipe.id))
-                )
-                if not _LoadedRecipe:
-                    continue
+            for _LoadedRecipe in _Meal.recipes or []:
                 _RecipeServings = _LoadedRecipe.servings or 1
                 _Scale = _Servings / _RecipeServings if _RecipeServings else 1
                 for _Ingredient in _LoadedRecipe.ingredients or []:

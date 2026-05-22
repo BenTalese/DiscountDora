@@ -6,6 +6,82 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Product search is now a deal-comparison surface.** Results render as cards
+  with a discount badge that deepens from amber to red as the saving grows, the
+  unit price (per 100g/ml or each), the merchant logo, and — for products you've
+  saved — a price-trend sparkline. Each card can save to favourites, link to an
+  existing stock item, or "quick-add" (saves the product, starts tracking it as
+  a stock item, links them, and drops it on your primary list in one tap). Pick
+  2–3 results and open a side-by-side comparison. New filters: price range,
+  unit-price ceiling, size/weight range, and a half-price-or-better toggle;
+  sort by relevancy, name, price, unit price or biggest saving. Merchant
+  connection status badges sit up top so you can see at a glance which scrapers
+  are healthy.
+- **Meal plans are now a drag-and-drop week.** Drag any meal from the palette
+  onto a day to plan it (cookable-now meals are flagged green), and click a
+  planned entry to jump to its recipe or straight into cook mode. A sidebar
+  rolls up the whole week's ingredient demand against current stock and shows
+  exactly how many items you'll need to buy, with one click to generate a
+  shopping list for the week. A "Suggest meals I can cook now" button surfaces
+  everything fully in stock right now. (Also fixed the week's ingredient
+  rollup, which was silently returning nothing.)
+- **Cook mode now closes the loop on what you used.** The ingredients pane
+  shows the shared stock-item chips and marks each one "used" as you tick a
+  step (or advance through it) — names mentioned in a step are matched
+  automatically, and you can toggle any ingredient by hand. Finishing prompts
+  to update stock levels (used items step down one level), log it as a meal
+  eaten, and add anything that's now low or out straight onto your primary
+  shopping list. Per-step timers and voice control are unchanged.
+- **Recipes overview is now a cooking command center.** Recipes are grouped
+  by collection (with an "Uncategorised" bucket), every card surfaces a live
+  **Cookable now** badge — or a one-click **Missing N** chip that opens an
+  "add ingredients to a shopping list" dialog — and the action menu on each
+  card covers cook, edit, duplicate, mark made, add all ingredients to a
+  list, add to a meal plan and delete. New filters: cookable now, missing
+  ≤ N ingredients, collection (incl. uncategorised), tags pulled from
+  cuisine + category, and "uses stock item" (which deep-links here from the
+  stock item detail page via `?usesStockItem=…`). A new **Compare** mode
+  lets you pick 2–3 recipes and pop them open side-by-side — ingredients,
+  times, difficulty and what's missing right now — so you can decide what
+  to cook tonight at a glance.
+- **Locations are wired into the rest of the app.** Clicking a zone on the
+  heatmap now opens a side panel that lists every item stored anywhere
+  under it (rolled up across descendants), with each chip carrying the same
+  cross-feature menu the rest of the app uses — add to a list, mark
+  restocked, push expiry, find substitutes, see recipes using it. Two new
+  per-zone shortcuts: **Needs attention here** jumps to the Stock screen
+  pre-filtered to that location's attention items, and **Shopping list**
+  spins up a fresh list from every low/out item in the zone (named "Restock
+  &lt;zone&gt;"). The same two actions live in the header of the zone detail
+  page. The Stock screen now reads `?location_id=…&attention=true&level_id=…`
+  query params so other screens can deep-link straight into a filtered view.
+- **Shopping lists overview is the launchpad for every kind of list.** The
+  "New list" menu now bundles every starting point in one place: from
+  flagged essentials, from every low-or-out item (with a live count of how
+  many that is), from a recipe (pulls the recipe's ingredients into a fresh
+  list), from a meal plan (aggregates ingredients across every meal in the
+  plan, scaled by servings), or from a saved template. Each card carries
+  more actions — open, set primary, copy unticked → new list (active),
+  copy archived → new list, archive without finishing, delete — and the
+  primary list gets a richer stats strip showing remaining, full list and
+  Savings vs RRP totals at a glance. The empty state recommends
+  auto-generating from low/out items when stock data says there's something
+  worth restocking.
+- **Shopping list detail is now a shopping-trip companion.** Lines render as
+  the shared stock-item chip — same level badge, alert dot, on-list
+  indicator and overflow menu as everywhere else — with a per-line menu to
+  swap an item with one of its recorded substitutes or move it onto another
+  list. You can group lines by stock location (for a shopper's route through
+  the storage areas at home) or by chosen merchant. Offer chips now mark
+  your preferred merchant with a star and show how much you save vs the
+  product's RRP, and the totals card carries a "Savings vs RRP" headline.
+  A new **Review mode** hides unticked items and shows exactly which stock
+  items will bump to Well-Stocked when you finish. Finishing a list with
+  unticked items now offers to copy them straight into a new active list
+  before archiving, so nothing falls through the cracks. The inline picker
+  has been replaced by the shared **Quick add** sheet so the same search,
+  offer-selection and frequently-added suggestions appear wherever you
+  trigger it.
 - **Stock item detail is now a relationship hub.** A tabbed page — Overview,
   Linked Products, Recipes, Substitutes, Lists and History — with a toolbar to
   mark open, restock, set expiry, find deals or add to a list. Linked products
@@ -25,6 +101,29 @@ semver — major bumps signal schema or breaking-config changes.
   state points you at building a pantry from a recipe or a shopping list.
 
 ### Added
+- **Dedicated recipe detail / edit page.** Recipes now have a proper editing
+  surface at `/recipes/:id` with a two-column layout. Each ingredient row
+  is an autocomplete bound to your tracked stock items — type a name that
+  doesn't exist and "Create '<name>'" inlines a new stock item without
+  leaving the page — plus a live level badge, a "Missing" chip when it's
+  out of stock or untracked, and a per-row "add to primary list" button.
+  A sidebar carries the cooking shortcuts: **Start cook mode**, **Add all
+  missing to a shopping list**, and **Find substitutes for missing
+  ingredients** (uses the substitutes graph from each stock item's detail
+  page — click a substitute chip to swap it straight into the recipe).
+  Secondary actions (mark made, delete, mark favourite) are one click away.
+- **Import a recipe from a URL.** Paste any recipe page that publishes
+  schema.org/Recipe JSON-LD (which is most major recipe sites) and Dora
+  pulls the name, cuisine, category, times, servings, instructions,
+  nutrition and ingredients. Ingredients are fuzzy-matched against your
+  tracked stock items so most rows land pre-filled; unmatched items keep
+  their raw text in the notes so you can pick a match or create a new
+  stock item inline.
+- **Frequently-added suggestions in Quick add.** The Quick add sheet now
+  surfaces the stock items you've added to a list most often — based on
+  every line you've ever added — so opening it without typing puts your
+  usual basket one tap away. Each frequent suggestion is starred so it's
+  obvious why it's first.
 - **Shared building blocks for stock and shopping actions.** Stock items now
   appear as a consistent chip everywhere — picture, live stock level, an
   on-a-list indicator and an attention dot — with a built-in menu to add to a

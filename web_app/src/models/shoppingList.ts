@@ -22,6 +22,7 @@ export type LineProductOffer = {
     price_now: number | null;
     price_was: number | null;
     is_selected: boolean;
+    is_preferred: boolean;
 };
 
 export type ShoppingListLine = {
@@ -29,6 +30,8 @@ export type ShoppingListLine = {
     stock_item_id: string;
     stock_item_name: string;
     stock_level_name: string | null;
+    stock_location_id: string | null;
+    stock_location_breadcrumb: string[];
     quantity: number | null;
     is_ticked: boolean;
     selected_product_id: string | null;
@@ -95,4 +98,16 @@ export function priceOfLine(line: ShoppingListLine): number {
     if (!offer || offer.price_now == null) return 0;
     const qty = line.quantity ?? 1;
     return offer.price_now * qty;
+}
+
+// Savings vs the line's chosen offer's RRP (price_was). Zero when the offer
+// has no `price_was` recorded or isn't currently discounted. Multiplied by
+// quantity so list-level totals work without re-doing the math.
+export function savingsOfLine(line: ShoppingListLine): number {
+    const offer = chosenOfferFor(line);
+    if (!offer || offer.price_now == null || offer.price_was == null) return 0;
+    const diff = offer.price_was - offer.price_now;
+    if (diff <= 0) return 0;
+    const qty = line.quantity ?? 1;
+    return diff * qty;
 }

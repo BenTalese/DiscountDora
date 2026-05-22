@@ -606,13 +606,14 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
-    import { useRouter } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
     const stockGroupApi = new StockGroupApiService();
     const stockItemApi = new StockItemApiService();
 
     const router = useRouter();
+    const route = useRoute();
     const actions = useStockItemActions();
 
     const stockItemStore = useStockItemStore();
@@ -1104,6 +1105,28 @@
         }
     }
 
+    // Deep-link filter hydration: other screens (e.g. Locations) link here
+    // with `?location_id=…&attention=true` to pre-narrow the list. Read those
+    // on mount and reactively whenever the query changes (e.g. user uses
+    // back/forward).
+    function applyQueryFilters() {
+        const q = route.query;
+        if (typeof q.location_id === 'string' && q.location_id) {
+            locationFilter.value = q.location_id;
+        }
+        if (q.attention === 'true' || q.attention === '1') {
+            hasAlertOnly.value = true;
+        }
+        if (typeof q.level_id === 'string' && q.level_id) {
+            levelFilter.value = q.level_id;
+        }
+    }
+
+    watch(
+        () => [route.query.location_id, route.query.attention, route.query.level_id],
+        applyQueryFilters,
+    );
+
     onMounted(async () => {
         await Promise.all([
             stockItemStore.getStockItemsAsync(),
@@ -1113,6 +1136,9 @@
             recipeStore.getRecipesAsync(),
             loadStockGroups(),
         ]);
+        // Apply *after* the supporting data is loaded so the filter chips
+        // visibly snap to the linked-from state on the first render.
+        applyQueryFilters();
     });
 </script>
 

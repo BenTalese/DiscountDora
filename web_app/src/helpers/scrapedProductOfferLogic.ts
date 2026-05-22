@@ -100,12 +100,31 @@ function normaliseSize(offer: ScrapedProductOffer): { base: number; group: strin
 
 /** Per-base-unit price ($ per gram, $ per ml, $ per each). Unparseable items
  *  return Infinity so they sort to the end. */
-function unitPrice(offer: ScrapedProductOffer): { price: number; group: string } {
+export function unitPrice(offer: ScrapedProductOffer): { price: number; group: string } {
     const normalised = normaliseSize(offer);
     if (!normalised || offer.price_now <= 0) {
         return { price: Number.POSITIVE_INFINITY, group: 'unknown' };
     }
     return { price: offer.price_now / normalised.base, group: normalised.group };
+}
+
+/** Discount percentage (0–100) when on special, else null. */
+export function discountPercent(offer: ScrapedProductOffer): number | null {
+    if (offer.price_was <= 0 || offer.price_now <= 0 || offer.price_now >= offer.price_was) {
+        return null;
+    }
+    return Math.round(((offer.price_was - offer.price_now) / offer.price_was) * 100);
+}
+
+/** A human label for the per-base-unit price, e.g. "$0.85 / 100g". */
+export function unitPriceLabel(offer: ScrapedProductOffer): string | null {
+    const { price, group } = unitPrice(offer);
+    if (!isFinite(price)) return null;
+    if (group === 'count') return `$${price.toFixed(2)} / ea`;
+    // Per-100 for mass/volume reads better than per-gram.
+    const per100 = price * 100;
+    const unit = group === 'mass' ? '100g' : '100ml';
+    return `$${per100.toFixed(2)} / ${unit}`;
 }
 
 /** Sort by unit price ascending, keeping groups (mass / volume / count) intact

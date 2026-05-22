@@ -20,6 +20,7 @@ const routes: RouteRecordRaw[] = [
             { path: 'product-search', component: () => import('pages/ProductSearch.vue') },
             { path: 'help', component: () => import('pages/HelpPage.vue') },
             { path: 'recipes', component: () => import('pages/RecipesOverview.vue') },
+            { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue') },
             { path: 'recipes/:id/cook', component: () => import('pages/RecipeCookMode.vue') },
             { path: 'meals', component: () => import('pages/MealsOverview.vue') },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue') },

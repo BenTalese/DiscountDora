@@ -20,15 +20,37 @@
                 split
                 @click="onCreate"
             >
-                <q-list>
-                    <q-item clickable v-close-popup @click="onAutogenerateNew">
+                <q-list style="min-width: 320px">
+                    <q-item-label header class="q-pb-none">From your stock</q-item-label>
+                    <q-item clickable v-close-popup @click="onAutogenerateNew('flagged')">
                         <q-item-section avatar>
                             <q-icon name="auto_awesome" color="primary" />
                         </q-item-section>
                         <q-item-section>
-                            <q-item-label>Auto-generate from flagged items</q-item-label>
+                            <q-item-label>From flagged items</q-item-label>
                             <q-item-label caption>
-                                Builds a list from every essential item that's low or out of stock.
+                                Every essential that's low or out of stock.
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="onAutogenerateNew('low_or_out')">
+                        <q-item-section avatar>
+                            <q-icon name="warning" color="warning" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>
+                                From all low/out stock
+                                <q-badge
+                                    v-if="lowOrOutCount > 0"
+                                    color="warning"
+                                    text-color="dark"
+                                    class="q-ml-xs"
+                                >
+                                    {{ lowOrOutCount }}
+                                </q-badge>
+                            </q-item-label>
+                            <q-item-label caption>
+                                Every item below Sufficient stock — flagged or not.
                             </q-item-label>
                         </q-item-section>
                     </q-item>
@@ -44,12 +66,37 @@
                         <q-item-section>
                             <q-item-label>Top up the primary list</q-item-label>
                             <q-item-label caption>
-                                Adds any flagged-and-low items missing from
+                                Adds flagged-and-low items missing from
                                 "{{ primarySummary.name }}".
                             </q-item-label>
                         </q-item-section>
                     </q-item>
                     <q-separator />
+                    <q-item-label header class="q-pb-none">From your cooking</q-item-label>
+                    <q-item clickable v-close-popup @click="onPickRecipe">
+                        <q-item-section avatar>
+                            <q-icon name="menu_book" color="primary" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>From a recipe…</q-item-label>
+                            <q-item-label caption>
+                                Pick a recipe and add its ingredients to a new list.
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="onPickMealPlan">
+                        <q-item-section avatar>
+                            <q-icon name="event_note" color="primary" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>From a meal plan…</q-item-label>
+                            <q-item-label caption>
+                                Aggregate ingredients across every meal in a plan.
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
+                    <q-separator />
+                    <q-item-label header class="q-pb-none">Other</q-item-label>
                     <q-item clickable v-close-popup @click="onPickTemplate">
                         <q-item-section avatar>
                             <q-icon name="bookmarks" color="primary" />
@@ -100,7 +147,38 @@
 
         <div v-else-if="visibleLists.length === 0" class="text-center text-grey q-py-xl">
             <q-icon name="shopping_cart" size="60px" class="q-mb-sm" />
-            <div v-if="tab === 'active'">No active shopping lists. Create one to start.</div>
+            <template v-if="tab === 'active'">
+                <div class="text-h6">No active shopping lists yet.</div>
+                <div
+                    v-if="lowOrOutCount > 0"
+                    class="q-mt-md"
+                >
+                    {{ lowOrOutCount }} item{{ lowOrOutCount === 1 ? ' is' : 's are' }}
+                    low or out of stock — kickstart a list:
+                    <div class="row justify-center q-gutter-sm q-mt-sm">
+                        <q-btn
+                            color="primary"
+                            no-caps
+                            icon="auto_awesome"
+                            :label="`Auto-generate from low/out (${lowOrOutCount})`"
+                            :loading="autogenerating"
+                            @click="onAutogenerateNew('low_or_out')"
+                        />
+                        <q-btn
+                            outline
+                            no-caps
+                            icon="add"
+                            label="Empty list"
+                            :loading="creating"
+                            @click="onCreate"
+                        />
+                    </div>
+                </div>
+                <div v-else class="q-mt-md">
+                    Stock is full — when items go low, "New list" can
+                    auto-generate from low/out items.
+                </div>
+            </template>
             <div v-else>No archived lists yet — finished lists show up here.</div>
         </div>
 
@@ -143,7 +221,11 @@
 
                         <q-btn flat round dense icon="more_vert" @click.stop>
                             <q-menu>
-                                <q-list dense style="min-width: 180px">
+                                <q-list dense style="min-width: 220px">
+                                    <q-item clickable v-close-popup @click.stop="openList(list.shopping_list_id)">
+                                        <q-item-section avatar><q-icon name="open_in_new" /></q-item-section>
+                                        <q-item-section>Open</q-item-section>
+                                    </q-item>
                                     <q-item
                                         v-if="!list.is_archived && !list.is_primary"
                                         clickable
@@ -154,13 +236,45 @@
                                         <q-item-section>Set as primary</q-item-section>
                                     </q-item>
                                     <q-item
+                                        v-if="!list.is_archived"
+                                        clickable
+                                        v-close-popup
+                                        :disable="
+                                            list.line_count - list.ticked_count === 0
+                                        "
+                                        @click.stop="copyList(list.shopping_list_id, 'unticked')"
+                                    >
+                                        <q-item-section avatar>
+                                            <q-icon name="content_copy" />
+                                        </q-item-section>
+                                        <q-item-section>
+                                            <q-item-label>Copy unticked → new list</q-item-label>
+                                            <q-item-label
+                                                v-if="list.line_count - list.ticked_count === 0"
+                                                caption
+                                            >
+                                                Nothing unticked to copy
+                                            </q-item-label>
+                                        </q-item-section>
+                                    </q-item>
+                                    <q-item
                                         v-if="list.is_archived"
                                         clickable
                                         v-close-popup
                                         @click.stop="copyList(list.shopping_list_id, 'all')"
                                     >
                                         <q-item-section avatar><q-icon name="content_copy" /></q-item-section>
-                                        <q-item-section>Copy to new list</q-item-section>
+                                        <q-item-section>Copy archived → new list</q-item-section>
+                                    </q-item>
+                                    <q-separator />
+                                    <q-item
+                                        v-if="!list.is_archived"
+                                        clickable
+                                        v-close-popup
+                                        @click.stop="archiveList(list)"
+                                    >
+                                        <q-item-section avatar><q-icon name="archive" /></q-item-section>
+                                        <q-item-section>Archive list</q-item-section>
                                     </q-item>
                                     <q-item
                                         clickable
@@ -193,12 +307,50 @@
                         </q-circular-progress>
                         <div class="q-ml-md col">
                             <div class="text-body2">
-                                {{ list.line_count }} item{{ list.line_count === 1 ? '' : 's' }}
+                                {{ remainingCount(list) }} item{{
+                                    remainingCount(list) === 1 ? '' : 's'
+                                }} remaining
                             </div>
                             <div class="text-caption text-grey">
-                                {{ list.ticked_count }} ticked off
+                                {{ list.line_count }} total ·
+                                {{ list.ticked_count }} ticked
                             </div>
                         </div>
+                    </q-card-section>
+
+                    <!-- Primary card gets a richer stats strip with the
+                         live dollar totals. We only fetch detail for the
+                         primary list so the overview stays cheap. -->
+                    <q-separator v-if="list.is_primary" />
+                    <q-card-section
+                        v-if="list.is_primary"
+                        class="row q-gutter-md q-pt-sm q-pb-sm primary-stats"
+                    >
+                        <template v-if="primaryStats">
+                            <div class="col">
+                                <div class="text-caption text-grey">Remaining</div>
+                                <div class="text-subtitle1">
+                                    ${{ primaryStats.remaining.toFixed(2) }}
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="text-caption text-grey">Full total</div>
+                                <div class="text-subtitle1">
+                                    ${{ primaryStats.full.toFixed(2) }}
+                                </div>
+                            </div>
+                            <div v-if="primaryStats.savings > 0" class="col">
+                                <div class="text-caption text-grey">Saves vs RRP</div>
+                                <div class="text-subtitle1 text-positive">
+                                    ${{ primaryStats.savings.toFixed(2) }}
+                                </div>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="col text-caption text-grey">
+                                <q-spinner size="14px" /> Loading totals…
+                            </div>
+                        </template>
                     </q-card-section>
                 </q-card>
             </div>
@@ -207,19 +359,34 @@
 </template>
 
 <script lang="ts" setup>
+    import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import type { ShoppingListSummary } from 'src/models/shoppingList';
+    import {
+        priceOfLine,
+        savingsOfLine,
+        type ShoppingListSummary,
+    } from 'src/models/shoppingList';
+    import MealPlanApiService from 'src/services/api/mealPlanApiService';
+    import RecipeApiService from 'src/services/api/recipeApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
-    import { computed, onMounted, ref } from 'vue';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
     const $q = useQuasar();
     const router = useRouter();
     const api = new ShoppingListApiService();
     const templateApi = new ShoppingListTemplateApiService();
+    const recipeApi = new RecipeApiService();
+    const mealPlanApi = new MealPlanApiService();
     const store = useShoppingListStore();
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const tab = ref<'active' | 'archived'>('active');
     const creating = ref(false);
@@ -232,6 +399,69 @@
 
     const activeCount = computed(() => summaries.value.filter((s) => !s.is_archived).length);
     const archivedCount = computed(() => summaries.value.filter((s) => s.is_archived).length);
+
+    // Count of stock items currently Low or Out — used by the empty state
+    // and the "Auto-generate from low/out" menu entry. Computed off the
+    // stockItem + stockLevel stores so it tracks any concurrent changes
+    // (restock, level edit) without us having to re-fetch.
+    const lowOrOutCount = computed(() => {
+        const lowOutLevelIds = new Set(
+            stockLevels.value
+                .filter((l) => l.name === 'Low Stock' || l.name === 'Out of Stock')
+                .map((l) => l.stock_level_id),
+        );
+        if (lowOutLevelIds.size === 0) return 0;
+        return stockItems.value.filter((s) => lowOutLevelIds.has(s.stock_level_id)).length;
+    });
+
+    function remainingCount(list: ShoppingListSummary): number {
+        return Math.max(0, list.line_count - list.ticked_count);
+    }
+
+    // Primary list dollar stats. The summary DTO is intentionally cheap
+    // (no offer joins), so we lazy-fetch the full detail of the primary
+    // list to surface remaining/full/savings on its card.
+    const primaryStats = ref<{
+        remaining: number;
+        full: number;
+        savings: number;
+    } | null>(null);
+
+    async function loadPrimaryStats() {
+        const summary = primarySummary.value;
+        if (!summary) {
+            primaryStats.value = null;
+            return;
+        }
+        primaryStats.value = null;
+        try {
+            const detail = await api.getDetailAsync(summary.shopping_list_id);
+            let remaining = 0;
+            let full = 0;
+            let savings = 0;
+            for (const line of detail.lines) {
+                const price = priceOfLine(line);
+                full += price;
+                if (!line.is_ticked) remaining += price;
+                savings += savingsOfLine(line);
+            }
+            primaryStats.value = { remaining, full, savings };
+        } catch {
+            // Non-fatal — the card just shows "Loading totals…" indefinitely
+            // in this case, which is benign and re-tries on next refresh.
+            primaryStats.value = null;
+        }
+    }
+
+    // Whenever the primary list changes (after a refresh / set-primary
+    // action), reload its stats. We key on the id rather than the whole
+    // summary object so changes to other lists don't refetch.
+    watch(
+        () => primarySummary.value?.shopping_list_id ?? null,
+        () => {
+            void loadPrimaryStats();
+        },
+    );
 
     const visibleLists = computed(() =>
         tab.value === 'active'
@@ -279,21 +509,28 @@
         }
     }
 
-    async function runAutogen(targetListId: string | null) {
+    async function runAutogen(
+        targetListId: string | null,
+        source: 'flagged' | 'low_or_out',
+    ) {
         autogenerating.value = true;
         try {
             const result = await api.autogenerateAsync({
                 target_shopping_list_id: targetListId,
+                source,
             });
-            await store.refreshAsync();
+            await Promise.all([store.refreshAsync(), loadPrimaryStats()]);
             if (result.nothing_flagged) {
-                // Nothing essential is low/out — surface this clearly so the
-                // user knows it ran rather than silently doing nothing.
+                // Backend reuses `nothing_flagged` for both sources — for
+                // low/out we phrase it differently so the user gets useful
+                // guidance instead of a misleading "flag essentials" hint.
                 $q.notify({
                     type: 'info',
                     position: 'bottom-right',
                     message:
-                        'Nothing to auto-add. Flag essentials on items that are low or out of stock first.',
+                        source === 'flagged'
+                            ? 'Nothing to auto-add. Flag essentials on items that are low or out of stock first.'
+                            : 'Nothing low or out — stock is in good shape.',
                     timeout: 5000,
                 });
                 return;
@@ -322,12 +559,237 @@
         }
     }
 
-    function onAutogenerateNew() {
-        void runAutogen(null);
+    function onAutogenerateNew(source: 'flagged' | 'low_or_out' = 'flagged') {
+        void runAutogen(null, source);
     }
     function onAutogenerateOntoPrimary() {
         if (!primarySummary.value) return;
-        void runAutogen(primarySummary.value.shopping_list_id);
+        void runAutogen(primarySummary.value.shopping_list_id, 'flagged');
+    }
+
+    // ── Generate from a recipe ───────────────────────────────────────
+    // The recipe and meal-plan paths both use the same shape: pick a
+    // source entity, derive its stock-item ids, create a fresh list, then
+    // add every item. We do it client-side because the existing autogen
+    // backend only knows about flagged/low items.
+    async function onPickRecipe() {
+        let recipes;
+        try {
+            recipes = (await recipeApi.getAllAsync()).items;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not load recipes.',
+                caption: String(err),
+            });
+            return;
+        }
+        if (recipes.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'No recipes saved yet.',
+                actions: [
+                    { label: 'Go to Recipes', color: 'white', handler: () => router.push('/recipes') },
+                ],
+            });
+            return;
+        }
+        const recipeId = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: 'Generate a list from which recipe?',
+                message: 'Every ingredient is added to a new list — duplicates skipped.',
+                options: {
+                    type: 'radio',
+                    model: recipes[0]!.recipe_id,
+                    items: recipes.map((r) => ({
+                        label: `${r.name}${
+                            r.ingredients?.length
+                                ? ` (${r.ingredients.length} ingredients)`
+                                : ''
+                        }`,
+                        value: r.recipe_id,
+                    })),
+                },
+                ok: { label: 'Create list', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((v: string) => resolve(v))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!recipeId) return;
+        const recipe = recipes.find((r) => r.recipe_id === recipeId);
+        if (!recipe) return;
+        const ingredients = (recipe.ingredients ?? []).filter(
+            (i): i is typeof i & { stock_item_id: string } => Boolean(i.stock_item_id),
+        );
+        if (ingredients.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `"${recipe.name}" has no stock-item ingredients to add.`,
+            });
+            return;
+        }
+        await createListFromItems(
+            `Shop for ${recipe.name}`,
+            ingredients.map((i) => i.stock_item_id),
+        );
+    }
+
+    // ── Generate from a meal plan ────────────────────────────────────
+    async function onPickMealPlan() {
+        let plans;
+        try {
+            plans = (await mealPlanApi.getAllAsync()).items;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not load meal plans.',
+                caption: String(err),
+            });
+            return;
+        }
+        if (plans.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'No meal plans yet.',
+                actions: [
+                    { label: 'Go to Meal Plans', color: 'white', handler: () => router.push('/meal-plans') },
+                ],
+            });
+            return;
+        }
+        const planId = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: 'Generate a list from which meal plan?',
+                message:
+                    'Aggregates ingredients across every meal in the plan, scaled by servings.',
+                options: {
+                    type: 'radio',
+                    model: plans[0]!.meal_plan_id,
+                    items: plans.map((p) => ({
+                        label: `${p.name} (${p.entries?.length ?? 0} meals)`,
+                        value: p.meal_plan_id,
+                    })),
+                },
+                ok: { label: 'Create list', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk((v: string) => resolve(v))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!planId) return;
+        const plan = plans.find((p) => p.meal_plan_id === planId);
+        let ingredients;
+        try {
+            ingredients = await mealPlanApi.getIngredientsAsync(planId);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not load meal plan ingredients.',
+                caption: String(err),
+            });
+            return;
+        }
+        if (ingredients.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `"${plan?.name ?? 'Plan'}" has no ingredients to add.`,
+            });
+            return;
+        }
+        await createListFromItems(
+            `Shop for ${plan?.name ?? 'meal plan'}`,
+            ingredients.map((i) => i.stock_item_id),
+        );
+    }
+
+    // Shared helper: create a fresh list (primary if none exists), then
+    // bulk-add every stock_item_id (skipping duplicates server-side).
+    async function createListFromItems(name: string, stockItemIds: string[]) {
+        if (stockItemIds.length === 0) return;
+        creating.value = true;
+        try {
+            const { shopping_list_id } = await api.createAsync({
+                name,
+                make_primary: !primarySummary.value,
+            });
+            let added = 0;
+            let skipped = 0;
+            for (const id of stockItemIds) {
+                try {
+                    const result = await api.addLineAsync(shopping_list_id, {
+                        stock_item_id: id,
+                    });
+                    if (result.already_on_list) skipped++;
+                    else added++;
+                } catch {
+                    // Per-line failures shouldn't blow up the whole batch —
+                    // log silently; user will see the partial-count notify.
+                    skipped++;
+                }
+            }
+            await Promise.all([store.refreshAsync(), loadPrimaryStats()]);
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message:
+                    `Created "${name}". ${added} item${added === 1 ? '' : 's'} added` +
+                    (skipped > 0 ? `, ${skipped} skipped` : '') + '.',
+            });
+            void router.push(`/shopping-lists/${shopping_list_id}`);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not create list.',
+                caption: String(err),
+            });
+        } finally {
+            creating.value = false;
+        }
+    }
+
+    // ── Archive (without finish) ─────────────────────────────────────
+    async function archiveList(list: ShoppingListSummary) {
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: `Archive "${list.name}"?`,
+                message:
+                    'Archived lists are read-only and move to the Archived tab. ' +
+                    'No stock levels are bumped — use Finish shopping for that.',
+                ok: { label: 'Archive', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        try {
+            await api.updateAsync(list.shopping_list_id, { is_archived: true });
+            await store.refreshAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'List archived.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not archive.',
+                caption: String(err),
+            });
+        }
     }
 
     async function onPickTemplate() {
@@ -481,7 +943,16 @@
         }
     }
 
-    onMounted(store.refreshAsync);
+    onMounted(async () => {
+        // Kick off everything in parallel — the lists/stock-levels/items are
+        // independent and the overview is more useful when all three land.
+        const loads: Promise<unknown>[] = [store.refreshAsync()];
+        if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
+        if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        await Promise.all(loads);
+        // Primary stats wait for the lists refresh so primarySummary is set.
+        void loadPrimaryStats();
+    });
 </script>
 
 <style scoped>
@@ -497,5 +968,8 @@
     }
     .shopping-list-archived {
         opacity: 0.65;
+    }
+    .primary-stats {
+        background: rgba(0, 0, 0, 0.025);
     }
 </style>

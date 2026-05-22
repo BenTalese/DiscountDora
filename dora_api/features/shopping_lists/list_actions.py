@@ -27,7 +27,7 @@ Endpoints:
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -62,8 +62,15 @@ class AutogenerateRequest(BaseModel):
     # existing list.
     name: str | None = None
     # If True, *all* flagged items go onto the list, not just the low/out
-    # ones. Useful for "shop the staples" lists.
+    # ones. Useful for "shop the staples" lists. Only honoured when
+    # source='flagged'.
     include_well_stocked: bool = False
+    # Which catalogue of items to pull from.
+    #   flagged    — essentials marked is_flagged (current behaviour).
+    #   low_or_out — every item whose level is Low or Out, flagged or not.
+    # The latter is for "fill the trolley with whatever's run down" runs;
+    # the former for "shop the staples I care about most".
+    source: Literal["flagged", "low_or_out"] = "flagged"
 
 
 @dataclass(slots=True)
@@ -116,19 +123,33 @@ class AutogenerateHandler:
             self.repository.save_changes()
 
         # ── Select source items ──────────────────────────────────────────
-        flagged_items: List[StockItem] = (
-            self.repository.get(StockItem)
-            .include(StockItem.Fields.STOCK_LEVEL)
-            .all(EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True))
-        )
-        if not request.include_well_stocked:
-            flagged_items = [
-                i for i in flagged_items
+        # 'flagged'  → essentials, optionally filtered to low/out.
+        # 'low_or_out' → every item that's low or out, regardless of flag.
+        if request.source == "low_or_out":
+            candidate_items: List[StockItem] = (
+                self.repository.get(StockItem)
+                .include(StockItem.Fields.STOCK_LEVEL)
+                .all()
+            )
+            candidate_items = [
+                i for i in candidate_items
                 if i.stock_level is not None
                 and getattr(i.stock_level, "sequence", -1) in LOW_OR_OUT_SEQUENCES
             ]
+        else:
+            candidate_items = (
+                self.repository.get(StockItem)
+                .include(StockItem.Fields.STOCK_LEVEL)
+                .all(EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True))
+            )
+            if not request.include_well_stocked:
+                candidate_items = [
+                    i for i in candidate_items
+                    if i.stock_level is not None
+                    and getattr(i.stock_level, "sequence", -1) in LOW_OR_OUT_SEQUENCES
+                ]
 
-        if not flagged_items:
+        if not candidate_items:
             return AutogenerateResponse(
                 target_shopping_list_id=target.id, nothing_flagged=True
             )
@@ -142,7 +163,7 @@ class AutogenerateHandler:
 
         added = 0
         skipped = 0
-        for item in flagged_items:
+        for item in candidate_items:
             if item.id in existing_item_ids:
                 skipped += 1
                 continue

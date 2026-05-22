@@ -15,6 +15,7 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.utils import get_container
@@ -33,6 +34,7 @@ class LineProductOfferDto:
     price_now: float | None
     price_was: float | None
     is_selected: bool
+    is_preferred: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +43,8 @@ class ShoppingListLineDto:
     stock_item_id: UUID
     stock_item_name: str
     stock_level_name: str | None
+    stock_location_id: UUID | None
+    stock_location_breadcrumb: List[str]
     quantity: int | None
     is_ticked: bool
     selected_product_id: UUID | None
@@ -83,6 +87,7 @@ class GetShoppingListDetailHandler:
             _Loaded = (
                 self.repository.get(StockItem)
                 .include("stock_level")
+                .include("stock_location")
                 .include("products")
                     .then_include("merchant")
                     .then_include("current_offer")
@@ -90,10 +95,35 @@ class GetShoppingListDetailHandler:
             )
             _StockItems = {s.id: s for s in _Loaded}
 
+        # Location lookup powers the per-line breadcrumb used to group lines
+        # by shopper's route through the store. Loaded once and walked
+        # locally so we don't do per-line ancestry queries.
+        _LocationLookup: dict[UUID, StockLocation] = {}
+        if any(s.stock_location is not None for s in _StockItems.values()):
+            _LocationLookup = {
+                loc.id: loc for loc in self.repository.get(StockLocation).all()
+            }
+
+        def _breadcrumb_for(item: StockItem | None) -> List[str]:
+            if item is None or item.stock_location is None:
+                return []
+            crumbs: List[str] = []
+            cursor: StockLocation | None = item.stock_location
+            safety = 16
+            while cursor is not None and safety > 0:
+                crumbs.append(cursor.name)
+                cursor = (
+                    _LocationLookup.get(cursor.parent_id) if cursor.parent_id else None
+                )
+                safety -= 1
+            crumbs.reverse()
+            return crumbs
+
         _LineDtos: List[ShoppingListLineDto] = []
         for line in _Lines:
             item = _StockItems.get(line.stock_item_id)
             offers: List[LineProductOfferDto] = []
+            preferred_id: UUID | None = item.preferred_product_id if item else None
             if item is not None:
                 for product in item.products or []:
                     offers.append(LineProductOfferDto(
@@ -106,10 +136,14 @@ class GetShoppingListDetailHandler:
                         price_now = product.current_offer.price_now if product.current_offer else None,
                         price_was = product.current_offer.price_was if product.current_offer else None,
                         is_selected = line.selected_product_id == product.id,
+                        is_preferred = preferred_id is not None and preferred_id == product.id,
                     ))
-                # Surface cheapest available offer first so the picker
-                # defaults to the obvious "good" choice.
+                # Sort offers: preferred merchant first, then cheapest, then
+                # alphabetical. The picker shows preferred up top because the
+                # user has explicitly marked it; cheapest is the next-best
+                # tiebreak.
                 offers.sort(key=lambda o: (
+                    0 if o.is_preferred else 1,
                     o.price_now if o.price_now is not None else float("inf"),
                     o.merchant_name.lower(),
                 ))
@@ -120,6 +154,10 @@ class GetShoppingListDetailHandler:
                 stock_level_name = (
                     item.stock_level.name if item and item.stock_level else None
                 ),
+                stock_location_id = (
+                    item.stock_location.id if item and item.stock_location else None
+                ),
+                stock_location_breadcrumb = _breadcrumb_for(item),
                 quantity = line.quantity,
                 is_ticked = bool(line.is_ticked),
                 selected_product_id = line.selected_product_id,

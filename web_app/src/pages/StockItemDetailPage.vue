@@ -675,7 +675,7 @@
     function goToCook(recipeId: string) {
         void router.push(`/recipes/${recipeId}/cook`);
     }
-    async function onAddMissing(stockItemIds: string[]) {
+    async function onAddMissing(_recipeId: string, stockItemIds: string[]) {
         const primary = shoppingListStore.primaryListId;
         if (!primary) {
             await actions.addToList(stockItemIds[0] ?? stockItemId.value);

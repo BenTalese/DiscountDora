@@ -7,6 +7,16 @@ const routes: RouteRecordRaw[] = [
         path: '/login',
         component: () => import('pages/LoginPage.vue')
     },
+    // First-run wizard. Uses its own minimal layout so the nav drawer /
+    // dashboard chrome don't peek through while the user is still being
+    // set up. Router guard forces incomplete users here.
+    {
+        path: '/welcome',
+        component: () => import('layouts/WelcomeLayout.vue'),
+        children: [
+            { path: '', component: () => import('pages/onboarding/WelcomeWizard.vue') },
+        ],
+    },
     {
         path: '/',
         component: () => import('layouts/MainLayout.vue'),
@@ -18,6 +28,7 @@ const routes: RouteRecordRaw[] = [
             { path: 'locations', component: () => import('pages/LocationsOverview.vue') },
             { path: 'locations/:id', component: () => import('pages/LocationDetail.vue') },
             { path: 'product-search', component: () => import('pages/ProductSearch.vue') },
+            { path: 'my-products', component: () => import('pages/MyProductsPage.vue') },
             { path: 'help', component: () => import('pages/HelpPage.vue') },
             { path: 'recipes', component: () => import('pages/RecipesOverview.vue') },
             { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue') },
@@ -27,6 +38,18 @@ const routes: RouteRecordRaw[] = [
             { path: 'shopping-lists', component: () => import('pages/ShoppingListsOverview.vue') },
             { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue') },
             { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue') },
+            // In-layout error pages (F3). These keep the header/drawer
+            // around so the user can navigate away without a full reload.
+            // The bare-URL catch-all at the bottom of this file still
+            // renders the fullscreen ErrorNotFound page for typo'd routes.
+            {
+                path: 'errors/not-found',
+                component: () => import('pages/errors/ErrorPageNotFound.vue'),
+            },
+            {
+                path: 'errors/server',
+                component: () => import('pages/errors/ErrorServer.vue'),
+            },
             // Settings shell hosts sub-routes via its own <router-view>.
             // Personal sections live at /settings/*, admin/global sections at
             // /settings/admin/* (gated by the global router guard).

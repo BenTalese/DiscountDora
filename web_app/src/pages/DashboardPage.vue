@@ -21,7 +21,7 @@
                     dense
                     icon="refresh"
                     :loading="loading"
-                    @click="loadSummary"
+                    @click="loadAll"
                 >
                     <q-tooltip>Refresh dashboard</q-tooltip>
                 </q-btn>
@@ -57,11 +57,285 @@
             {{ loadError }}
         </q-banner>
 
+        <!-- F1: 24h skip-reminder. Shown when the user pressed
+             "Skip everything" in the wizard; gentle nudge with a Continue
+             link, plus a dismiss that suppresses for the rest of the
+             window. After 24h the skip flag is treated as expired. -->
+        <q-banner
+            v-if="showSkipReminder"
+            class="bg-amber-2 text-grey-9 q-mb-md skip-reminder"
+            rounded
+            dense
+        >
+            <template #avatar>
+                <q-icon name="auto_awesome" size="20px" color="amber-9" />
+            </template>
+            <strong>Welcome —</strong>
+            you skipped the setup wizard. Finish in two minutes whenever
+            you're ready.
+            <template #action>
+                <q-btn flat no-caps icon="east" label="Continue" to="/welcome" />
+                <q-btn flat no-caps icon="close" label="Hide" @click="dismissSkipReminder" />
+            </template>
+        </q-banner>
+
         <div v-if="loading && !summary" class="row justify-center q-pa-xl">
             <q-spinner size="48px" color="primary" />
         </div>
 
         <div v-else-if="summary" class="row q-col-gutter-md dora-cards">
+            <!-- ───── Needs your attention (P12) ─────────────────────────── -->
+            <div
+                v-if="isCardVisible('attention') && topAlerts.length > 0"
+                class="col-12 col-lg-6"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon name="notifications_active" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Needs your attention</h3>
+                        <a
+                            class="dora-card-action dora-card-link"
+                            href="#"
+                            @click.prevent="goTo('/alerts')"
+                        >
+                            All {{ alerts.length }} →
+                        </a>
+                    </header>
+                    <ul class="dora-attn-list">
+                        <li
+                            v-for="alert in topAlerts"
+                            :key="alert.alert_id"
+                            class="dora-attn-row"
+                        >
+                            <span
+                                class="dora-attn-dot"
+                                :class="`dora-attn-dot-${alert.severity}`"
+                            />
+                            <q-icon
+                                :name="alertIconFor(alert.kind)"
+                                :color="alertColorFor(alert.severity)"
+                                size="18px"
+                            />
+                            <a
+                                href="#"
+                                class="dora-attn-name"
+                                @click.prevent="goTo(`/stock/${alert.stock_item_id}`)"
+                            >
+                                {{ alert.stock_item_name }}
+                            </a>
+                            <span class="dora-attn-msg">{{ alert.message }}</span>
+                            <span class="dora-attn-actions">
+                                <q-btn
+                                    v-for="a in alertActionsFor(alert.kind)"
+                                    :key="a.action"
+                                    flat
+                                    dense
+                                    size="sm"
+                                    no-caps
+                                    :icon="a.icon"
+                                    :label="a.label"
+                                    @click="applyAlertAction(alert, a.action)"
+                                />
+                            </span>
+                        </li>
+                    </ul>
+                </article>
+            </div>
+
+            <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
+            <div
+                v-if="isCardVisible('primary_list') && primarySummary"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article
+                    class="dora-card dora-card-clickable"
+                    @click="goTo(`/shopping-lists/${primarySummary.shopping_list_id}`)"
+                >
+                    <header class="dora-card-head">
+                        <q-icon name="shopping_cart" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Primary shopping list</h3>
+                        <span class="dora-card-action">Open list →</span>
+                    </header>
+                    <div class="dora-primary-list-name">
+                        {{ primarySummary.name }}
+                    </div>
+                    <div v-if="primaryListStats" class="dora-stat-grid q-mt-sm">
+                        <div class="dora-stat">
+                            <div class="dora-stat-num">{{ primaryListStats.unticked }}</div>
+                            <div class="dora-stat-label">to grab</div>
+                        </div>
+                        <div class="dora-stat">
+                            <div class="dora-stat-num">
+                                ${{ primaryListStats.remaining.toFixed(0) }}
+                            </div>
+                            <div class="dora-stat-label">remaining</div>
+                        </div>
+                        <div
+                            v-if="primaryListStats.savings > 0"
+                            class="dora-stat dora-stat-ok"
+                        >
+                            <div class="dora-stat-num">
+                                ${{ primaryListStats.savings.toFixed(0) }}
+                            </div>
+                            <div class="dora-stat-label">saves vs rrp</div>
+                        </div>
+                    </div>
+                    <div v-else class="dora-empty q-mt-sm">
+                        Loading totals…
+                    </div>
+                </article>
+            </div>
+            <div
+                v-else-if="isCardVisible('primary_list') && !primarySummary"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article class="dora-card dora-card-clickable" @click="goTo('/shopping-lists')">
+                    <header class="dora-card-head">
+                        <q-icon name="shopping_cart" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Primary shopping list</h3>
+                        <span class="dora-card-action">Pick one →</span>
+                    </header>
+                    <div class="dora-empty">
+                        No primary set — the cart button needs one to one-tap items in.
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Cookable tonight (P12) ──────────────────────────────── -->
+            <div
+                v-if="isCardVisible('cookable')"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon name="restaurant_menu" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Cookable tonight</h3>
+                        <a
+                            class="dora-card-action dora-card-link"
+                            href="#"
+                            @click.prevent="goTo('/recipes?cookable=true')"
+                        >
+                            See more →
+                        </a>
+                    </header>
+                    <ul v-if="cookableTonight.length > 0" class="dora-cook-list">
+                        <li
+                            v-for="r in cookableTonight"
+                            :key="r.recipe_id"
+                            class="dora-cook-row"
+                        >
+                            <a
+                                href="#"
+                                class="dora-cook-name"
+                                @click.prevent="goTo(`/recipes/${r.recipe_id}`)"
+                            >
+                                <q-icon
+                                    v-if="r.is_favourite"
+                                    name="favorite"
+                                    color="red-5"
+                                    size="14px"
+                                    class="q-mr-xs"
+                                />
+                                {{ r.name }}
+                            </a>
+                            <span class="dora-cook-meta">
+                                <span v-if="recipeTotalTime(r) !== null">
+                                    {{ recipeTotalTime(r) }}m
+                                </span>
+                                <span v-if="r.servings">
+                                    · serves {{ r.servings }}
+                                </span>
+                            </span>
+                            <q-btn
+                                flat
+                                dense
+                                no-caps
+                                size="sm"
+                                icon="restaurant"
+                                label="Cook"
+                                color="primary"
+                                @click="goTo(`/recipes/${r.recipe_id}/cook`)"
+                            />
+                        </li>
+                    </ul>
+                    <div v-else class="dora-empty">
+                        Nothing's fully in stock right now.
+                        <a
+                            class="dora-empty-cta"
+                            href="#"
+                            @click.prevent="goTo('/recipes')"
+                        >Browse recipes →</a>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Best deals on saved products (P12) ──────────────────── -->
+            <div
+                v-if="isCardVisible('best_deals')"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon name="local_offer" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Best deals on your saved products</h3>
+                        <a
+                            class="dora-card-action dora-card-link"
+                            href="#"
+                            @click.prevent="goTo('/my-products')"
+                        >
+                            My products →
+                        </a>
+                    </header>
+                    <ul v-if="bestDeals.length > 0" class="dora-deal-list">
+                        <li
+                            v-for="p in bestDeals"
+                            :key="p.product_id"
+                            class="dora-deal-row"
+                        >
+                            <q-avatar rounded size="36px" class="bg-grey-2 dora-deal-img">
+                                <img v-if="p.image" :src="p.image" :alt="p.name" />
+                                <q-icon v-else name="shopping_bag" size="18px" />
+                            </q-avatar>
+                            <div class="dora-deal-text">
+                                <div class="dora-deal-name">{{ p.name }}</div>
+                                <div class="dora-deal-meta">
+                                    {{ p.merchant_name }}
+                                    <span v-if="p.linked_stock_item_id">
+                                        ·
+                                        <a
+                                            href="#"
+                                            class="text-primary"
+                                            @click.prevent="goTo(`/stock/${p.linked_stock_item_id}`)"
+                                        >
+                                            {{ p.linked_stock_item_name }}
+                                        </a>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="dora-deal-price">
+                                <span class="dora-deal-now">
+                                    ${{ p.price_now.toFixed(2) }}
+                                </span>
+                                <span class="dora-deal-was">
+                                    ${{ p.price_was.toFixed(2) }}
+                                </span>
+                            </div>
+                            <q-badge class="dora-deal-badge" color="negative" text-color="white">
+                                {{ discountPctFor(p) }}% off
+                            </q-badge>
+                        </li>
+                    </ul>
+                    <div v-else class="dora-empty">
+                        Nothing on special among your saved products right now.
+                        <a
+                            class="dora-empty-cta"
+                            href="#"
+                            @click.prevent="goTo('/product-search')"
+                        >Hunt for deals →</a>
+                    </div>
+                </article>
+            </div>
+
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div v-if="isCardVisible('stock_items')" class="col-12 col-sm-6 col-lg-4">
                 <article class="dora-card dora-card-clickable" @click="goTo('/stock')">
@@ -277,13 +551,35 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
+    import {
+        actionsFor as alertActionsFor,
+        colorFor as alertColorFor,
+        iconFor as alertIconFor,
+        type Alert,
+        type AlertAction,
+    } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
+    import type { Product } from 'src/models/product';
+    import type { Recipe } from 'src/models/recipe';
+    import type { ShoppingListDetail } from 'src/models/shoppingList';
+    import { priceOfLine, savingsOfLine } from 'src/models/shoppingList';
+    import AlertApiService from 'src/services/api/alertApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
+    import ProductApiService from 'src/services/api/productApiService';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
     type CardId =
+        | 'attention'
+        | 'primary_list'
+        | 'cookable'
+        | 'best_deals'
         | 'stock_items'
         | 'recipes'
         | 'meals'
@@ -293,9 +589,16 @@
 
     type CardDef = { id: CardId; label: string; icon: string };
 
+    // Order matters: this is the visible order in the "Cards" toggle menu,
+    // and the default render order on first visit. Newer P12 cards lead so
+    // first-time users land on the actionable stuff before the totals.
     const CARD_DEFS: CardDef[] = [
-        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' },
+        { id: 'attention', label: 'Needs your attention', icon: 'notifications_active' },
+        { id: 'primary_list', label: 'Primary shopping list', icon: 'shopping_cart' },
+        { id: 'cookable', label: 'Cookable tonight', icon: 'restaurant_menu' },
+        { id: 'best_deals', label: 'Best deals on saved products', icon: 'local_offer' },
         { id: 'meal_plan', label: 'The week ahead', icon: 'calendar_month' },
+        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' },
         { id: 'recipes', label: 'Recipes', icon: 'menu_book' },
         { id: 'meals', label: 'Meals', icon: 'restaurant' },
         { id: 'shopping_lists', label: 'Shopping', icon: 'shopping_cart' },
@@ -321,11 +624,54 @@
     const { currentUser } = storeToRefs(authStore);
 
     const dashboardApiService = new DashboardApiService();
+    const alertApi = new AlertApiService();
+    const productApi = new ProductApiService();
+    const shoppingListApi = new ShoppingListApiService();
+
+    const recipeStore = useRecipeStore();
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
+    const shoppingListStore = useShoppingListStore();
+
+    const { recipes } = storeToRefs(recipeStore);
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
     const tipDismissed = ref(false);
+
+    // ── 24h "you skipped the wizard" reminder (F1) ───────────────────
+    // The wizard writes `dora.onboarding.skipped_at` on Skip-everything;
+    // we surface a soft banner on the dashboard for 24 hours after that
+    // moment. Dismissing it sets a session-scoped flag so the banner
+    // stays hidden for this tab.
+    const SKIP_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+    const skipReminderDismissed = ref(false);
+    const showSkipReminder = computed(() => {
+        if (skipReminderDismissed.value) return false;
+        try {
+            const raw = localStorage.getItem('dora.onboarding.skipped_at');
+            if (!raw) return false;
+            const stamped = new Date(raw).getTime();
+            if (!Number.isFinite(stamped)) return false;
+            return Date.now() - stamped < SKIP_REMINDER_WINDOW_MS;
+        } catch {
+            return false;
+        }
+    });
+    function dismissSkipReminder() {
+        skipReminderDismissed.value = true;
+    }
+
+    // Independent slot loaders. Each card surfaces a small chunk of data
+    // beyond what the bulk dashboard summary endpoint returns. They live
+    // in parallel and never block each other — a slow alerts response
+    // shouldn't gate the rest of the dashboard.
+    const alerts = ref<Alert[]>([]);
+    const products = ref<Product[]>([]);
+    const primaryListDetail = ref<ShoppingListDetail | null>(null);
 
     const firstName = computed(() => currentUser.value?.username ?? '');
 
@@ -514,6 +860,150 @@
         void router.push(path);
     }
 
+    // ── Needs your attention ─────────────────────────────────────────────
+    // Top-by-severity alerts; the panel page (P13) handles bulk-acknowledge
+    // and history. Dashboard only ever shows the most urgent few.
+    const ATTENTION_LIMIT = 5;
+
+    const topAlerts = computed(() => {
+        const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
+        return [...alerts.value]
+            .sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9))
+            .slice(0, ATTENTION_LIMIT);
+    });
+
+    async function loadAlerts() {
+        try {
+            const result = await alertApi.getAlertsAsync();
+            alerts.value = result.items;
+        } catch {
+            // Non-fatal — the card just hides itself when empty.
+            alerts.value = [];
+        }
+    }
+
+    async function applyAlertAction(alert: Alert, action: AlertAction) {
+        try {
+            await alertApi.applyActionAsync(alert.alert_id, action);
+            await Promise.all([loadAlerts(), loadSummary()]);
+        } catch {
+            // Best-effort; the alerts panel page is the canonical surface
+            // for retries.
+        }
+    }
+
+    // ── Cookable tonight ────────────────────────────────────────────────
+    // Same "missing = out-of-stock OR untracked" definition the rest of the
+    // app uses. Favourites bubble up first within the cookable subset so
+    // your usuals show up before the long tail.
+    const outOfStockLevelId = computed(
+        () => stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null,
+    );
+
+    function recipeIsCookable(recipe: Recipe): boolean {
+        for (const ing of recipe.ingredients) {
+            if (!ing.stock_item_id) return false;
+            const item = stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id);
+            if (!item) return false;
+            if (item.stock_level_id === outOfStockLevelId.value) return false;
+        }
+        return recipe.ingredients.length > 0;
+    }
+
+    const cookableTonight = computed<Recipe[]>(() => {
+        const cookable = recipes.value.filter(recipeIsCookable);
+        cookable.sort((a, b) => {
+            // Favourites win the tiebreak; then last-made-recent (so you
+            // rotate your repertoire rather than seeing the same three
+            // recipes every night); then alphabetical.
+            if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1;
+            const al = a.last_made_on ?? '';
+            const bl = b.last_made_on ?? '';
+            if (al !== bl) return bl.localeCompare(al);
+            return a.name.localeCompare(b.name);
+        });
+        return cookable.slice(0, 3);
+    });
+
+    function recipeTotalTime(recipe: Recipe): number | null {
+        if (recipe.prep_time_minutes === null && recipe.cook_time_minutes === null) {
+            return null;
+        }
+        return (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
+    }
+
+    // ── Best deals on your saved products ────────────────────────────────
+    function discountPctFor(product: Product): number | null {
+        if (!product.price_was || !product.price_now) return null;
+        if (product.price_was <= product.price_now) return null;
+        return Math.round(((product.price_was - product.price_now) / product.price_was) * 100);
+    }
+
+    const bestDeals = computed<Product[]>(() =>
+        [...products.value]
+            .filter((p) => p.is_active && discountPctFor(p) !== null)
+            .sort((a, b) => (discountPctFor(b) ?? 0) - (discountPctFor(a) ?? 0))
+            .slice(0, 3),
+    );
+
+    async function loadProducts() {
+        try {
+            const page = await productApi.getAllAsync();
+            products.value = page.items;
+        } catch {
+            products.value = [];
+        }
+    }
+
+    // ── Primary shopping list ────────────────────────────────────────────
+    const primaryListId = computed(() => shoppingListStore.primaryListId);
+    const primarySummary = computed(() => shoppingListStore.primarySummary);
+
+    const primaryListStats = computed(() => {
+        const detail = primaryListDetail.value;
+        if (!detail) return null;
+        let remaining = 0;
+        let full = 0;
+        let savings = 0;
+        let unticked = 0;
+        for (const line of detail.lines) {
+            const price = priceOfLine(line);
+            full += price;
+            savings += savingsOfLine(line);
+            if (!line.is_ticked) {
+                remaining += price;
+                unticked++;
+            }
+        }
+        return {
+            remaining,
+            full,
+            savings,
+            unticked,
+            ticked: detail.lines.length - unticked,
+            total: detail.lines.length,
+        };
+    });
+
+    async function loadPrimaryListDetail() {
+        const id = primaryListId.value;
+        if (!id) {
+            primaryListDetail.value = null;
+            return;
+        }
+        try {
+            primaryListDetail.value = await shoppingListApi.getDetailAsync(id);
+        } catch {
+            primaryListDetail.value = null;
+        }
+    }
+
+    // Re-fetch detail when the primary list changes (e.g. set-primary from
+    // another tab) so the card stays honest.
+    watch(primaryListId, () => {
+        void loadPrimaryListDetail();
+    });
+
     async function loadSummary() {
         loading.value = true;
         loadError.value = null;
@@ -528,7 +1018,32 @@
         }
     }
 
-    onMounted(loadSummary);
+    async function loadAll() {
+        // Fire everything in parallel — the hero/card shells render off the
+        // bulk summary, the four P12 cards each have their own slot loader.
+        // Stores are deduped, so calling getX() when already populated is
+        // ~free (they return the cached array).
+        await Promise.all([
+            loadSummary(),
+            loadAlerts(),
+            loadProducts(),
+            stockItems.value.length === 0
+                ? stockItemStore.getStockItemsAsync()
+                : Promise.resolve(),
+            stockLevels.value.length === 0
+                ? stockLevelStore.getStockLevelsAsync()
+                : Promise.resolve(),
+            recipes.value.length === 0
+                ? recipeStore.getRecipesAsync()
+                : Promise.resolve(),
+            shoppingListStore.refreshAsync(),
+        ]);
+        // Primary list detail depends on the shoppingListStore refresh
+        // having landed, so it runs after.
+        await loadPrimaryListDetail();
+    }
+
+    onMounted(loadAll);
 </script>
 
 <style scoped>
@@ -851,6 +1366,185 @@
         font-size: 0.65rem;
         font-weight: 600;
         opacity: 0.7;
+    }
+
+    /* ───── P12 cards ──────────────────────────────────────────────── */
+    .dora-card-link {
+        color: var(--c-accent);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .dora-card-link:hover {
+        text-decoration: underline;
+    }
+
+    /* Needs your attention */
+    .dora-attn-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .dora-attn-row {
+        display: grid;
+        grid-template-columns: 6px 20px minmax(0, auto) 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        background: #faf6eb;
+        border-radius: 10px;
+    }
+    .dora-attn-dot {
+        width: 6px;
+        height: 100%;
+        min-height: 26px;
+        border-radius: 3px;
+    }
+    .dora-attn-dot-high { background: var(--c-bad); }
+    .dora-attn-dot-medium { background: var(--c-warn); }
+    .dora-attn-dot-low { background: var(--c-accent); }
+    .dora-attn-name {
+        font-weight: 600;
+        color: var(--c-ink);
+        text-decoration: none;
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dora-attn-name:hover {
+        text-decoration: underline;
+    }
+    .dora-attn-msg {
+        color: var(--c-ink-mute);
+        font-size: 0.85rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dora-attn-actions {
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    /* Primary shopping list */
+    .dora-primary-list-name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--c-ink);
+    }
+
+    /* Cookable tonight */
+    .dora-cook-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .dora-cook-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: #faf6eb;
+        border-radius: 10px;
+    }
+    .dora-cook-name {
+        color: var(--c-ink);
+        text-decoration: none;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dora-cook-name:hover {
+        text-decoration: underline;
+    }
+    .dora-cook-meta {
+        font-size: 0.8rem;
+        color: var(--c-ink-mute);
+        white-space: nowrap;
+    }
+
+    /* Best deals */
+    .dora-deal-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .dora-deal-row {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: #faf6eb;
+        border-radius: 10px;
+    }
+    .dora-deal-img img {
+        object-fit: contain;
+        max-width: 100%;
+        max-height: 100%;
+    }
+    .dora-deal-text {
+        min-width: 0;
+    }
+    .dora-deal-name {
+        font-weight: 600;
+        color: var(--c-ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dora-deal-meta {
+        font-size: 0.78rem;
+        color: var(--c-ink-mute);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dora-deal-price {
+        text-align: right;
+        white-space: nowrap;
+    }
+    .dora-deal-now {
+        font-weight: 700;
+        color: var(--c-ink);
+    }
+    .dora-deal-was {
+        font-size: 0.78rem;
+        color: var(--c-ink-mute);
+        text-decoration: line-through;
+        margin-left: 4px;
+    }
+    .dora-deal-badge {
+        font-weight: 700;
+    }
+
+    @media (max-width: 600px) {
+        .dora-attn-row,
+        .dora-deal-row {
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            grid-template-rows: auto auto;
+        }
+        .dora-attn-msg,
+        .dora-attn-actions {
+            grid-column: 1 / -1;
+        }
+        .dora-deal-price,
+        .dora-deal-badge {
+            grid-column: 1 / -1;
+            text-align: left;
+        }
     }
 
     /* ───── Dora tip footer ──────────────────────────────────────────── */

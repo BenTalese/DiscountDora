@@ -675,7 +675,11 @@
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
+    import { notifyUndoable } from 'src/composables/useNotifyUndoable';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { tryWithQueue } from 'src/composables/useOfflineQueue';
+    import { register as registerUndo } from 'src/composables/useUndo';
+    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import {
         chosenOfferFor,
         priceOfLine,
@@ -1230,11 +1234,43 @@
 
     async function onToggleTicked(lineId: string, value: boolean) {
         // Optimistic flip so the checkbox feels instant; if the request
-        // fails we re-load the canonical state.
+        // fails we re-load the canonical state. Network errors specifically
+        // are absorbed into the offline queue so ticking-off mid-shop keeps
+        // working while we hunt for signal.
         const line = detail.value?.lines.find((l) => l.line_id === lineId);
+        const wasTicked = line?.is_ticked ?? false;
+        const itemName = line?.stock_item_name ?? 'item';
         if (line) line.is_ticked = value;
         try {
-            await api.updateLineAsync(listId.value, lineId, { is_ticked: value });
+            const result = await tryWithQueue(
+                () => api.updateLineAsync(listId.value, lineId, { is_ticked: value }),
+                {
+                    url: `${resolveBaseURL('dora')}/shopping-lists/${listId.value}/lines/${lineId}`,
+                    method: 'PATCH',
+                    body: { is_ticked: value },
+                    kind: 'shopping_list_line_tick',
+                    label: value ? 'Tick item' : 'Untick item',
+                },
+            );
+            // If the request was queued, we keep the optimistic flip in
+            // place — no re-load until the queue drains and the server
+            // round-trip succeeds.
+            void result;
+            // F5: register a silent undo entry. Skipped when value didn't
+            // actually change (defensive; checkbox events fire on identical
+            // values during rapid taps).
+            if (wasTicked !== value) {
+                const applyTick = async (target: boolean) => {
+                    await api.updateLineAsync(listId.value, lineId, { is_ticked: target });
+                    const fresh = detail.value?.lines.find((l) => l.line_id === lineId);
+                    if (fresh) fresh.is_ticked = target;
+                };
+                registerUndo({
+                    label: value ? `Ticked ${itemName}` : `Unticked ${itemName}`,
+                    inverse: () => applyTick(wasTicked),
+                    redo: () => applyTick(value),
+                });
+            }
         } catch (err) {
             await load();
             $q.notify({
@@ -1330,9 +1366,42 @@
     }
 
     async function onRemoveLine(lineId: string) {
+        // F5: snapshot the line so undo can re-add it. We capture the
+        // outward-facing shape (stock_item + qty + selected offer) — the
+        // backend mints a fresh line_id on re-add, which is fine for the
+        // user's purposes (they get the same item back at roughly the
+        // same place; precise sequence isn't worth a reorder round-trip).
+        const before = detail.value?.lines.find((l) => l.line_id === lineId);
         try {
             await api.deleteLineAsync(listId.value, lineId);
             await refreshAll();
+            if (before) {
+                const targetListId = listId.value;
+                const snapshot = {
+                    stock_item_id: before.stock_item_id,
+                    quantity: before.quantity ?? null,
+                    selected_product_id: before.selected_product_id ?? null,
+                };
+                notifyUndoable({
+                    message: `Removed ${before.stock_item_name}.`,
+                    undo: {
+                        label: `Remove: ${before.stock_item_name}`,
+                        inverse: async () => {
+                            await api.addLineAsync(targetListId, snapshot);
+                            await load();
+                        },
+                        redo: async () => {
+                            // Re-removing by stock_item_id (the only stable
+                            // handle now that the line_id has changed).
+                            await api.removeByStockItemFromListAsync(
+                                targetListId,
+                                snapshot.stock_item_id,
+                            );
+                            await load();
+                        },
+                    },
+                });
+            }
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -1403,6 +1472,25 @@
         }
 
         finishing.value = true;
+        // F5: capture the pre-finish snapshot so undo can roll the levels
+        // (and the archived flag, and primary status) back. We capture
+        // *before* the finish API call so the read can't race with the
+        // restock writes.
+        const wasPrimary = detail.value.is_primary;
+        const listName = detail.value.name;
+        const sourceListId = listId.value;
+        const levelRestores: { stock_item_id: string; stock_level_id: string }[] = [];
+        for (const line of detail.value.lines) {
+            if (!line.is_ticked) continue;
+            const item = stockItemStore.stockItems.find(
+                (si) => si.stock_item_id === line.stock_item_id,
+            );
+            if (!item) continue;
+            levelRestores.push({
+                stock_item_id: line.stock_item_id,
+                stock_level_id: item.stock_level_id,
+            });
+        }
         try {
             // Copy first — if the copy fails we'd rather leave the list
             // unarchived so the user can retry, than silently lose lines.
@@ -1412,6 +1500,36 @@
                 copiedListId = copy.shopping_list_id;
             }
             const result = await api.finishAsync(listId.value);
+            // Register the undo *after* we know the server succeeded —
+            // includes the new-primary-list-id so undo can demote it.
+            registerUndo({
+                label: `Finish: ${listName}`,
+                inverse: async () => {
+                    await api.unfinishAsync(sourceListId, {
+                        was_primary: wasPrimary,
+                        demote_primary_list_id: result.new_primary_list_id ?? null,
+                        level_restores: levelRestores,
+                    });
+                    await Promise.all([
+                        store.refreshAsync(),
+                        stockItemStore.getStockItemsAsync(),
+                    ]);
+                    // After unfinishing we're back on an active list —
+                    // route the user there so they can resume.
+                    void router.push(`/shopping-lists/${sourceListId}`);
+                },
+                // Redo is the same shape as finish, but the list-promotion
+                // logic on the server side might pick a different "new
+                // primary" candidate this time — that's acceptable for a
+                // redo (user explicitly asked to refire the action).
+                redo: async () => {
+                    await api.finishAsync(sourceListId);
+                    await Promise.all([
+                        store.refreshAsync(),
+                        stockItemStore.getStockItemsAsync(),
+                    ]);
+                },
+            });
             if (copiedListId) {
                 $q.notify({
                     type: 'positive',

@@ -65,7 +65,7 @@ class DoraConfig:
         return self._config.WEB_APP_PORT
 
     def is_debug_mode_enabled(self) -> bool:
-        return False
+        return True
 
     def is_modification_tracking_enabled(self) -> bool:
         return True

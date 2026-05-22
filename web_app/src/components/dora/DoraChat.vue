@@ -159,6 +159,36 @@
         <q-separator />
 
         <q-card-section class="q-py-sm">
+            <!-- ── On-this-page actions (P14) ────────────────────────────
+                 These are the most likely next moves for the current
+                 screen, wired through the same composables (P0) the rest
+                 of the app uses. Empty on screens with nothing specific
+                 to suggest, in which case we just lead with the generic
+                 quick-actions below. -->
+            <div
+                v-if="contextualActions.length > 0"
+                class="dora-context-row q-mb-sm"
+            >
+                <div class="text-caption text-grey q-mb-xs">
+                    <q-icon name="adjust" size="12px" />
+                    On this page
+                </div>
+                <div class="row q-gutter-xs">
+                    <q-chip
+                        v-for="(action, idx) in contextualActions"
+                        :key="idx"
+                        dense
+                        clickable
+                        color="primary"
+                        text-color="white"
+                        :icon="action.icon"
+                        @click="onContextualAction(action)"
+                    >
+                        {{ action.label }}
+                    </q-chip>
+                </div>
+            </div>
+
             <div class="row q-gutter-xs q-mb-sm">
                 <q-chip
                     v-for="action in quickActions"
@@ -197,8 +227,12 @@
 </template>
 
 <script lang="ts" setup>
+    import { storeToRefs } from 'pinia';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import type { DoraMood } from 'src/components/dora/doraTypes';
+    import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { useStockItemActions } from 'src/composables/useStockItemActions';
     import type { AuthenticatedUser } from 'src/models/auth';
     import AlertApiService from 'src/services/api/alertApiService';
     import AssistantApiService, {
@@ -207,6 +241,10 @@
     } from 'src/services/api/assistantApiService';
     import HelpApiService from 'src/services/api/helpApiService';
     import {
+        contextualActionsFor,
+        type ContextualAction,
+    } from 'src/services/doraContextualActions';
+    import {
         QUICK_ACTIONS,
         detectIntent,
         labelFor,
@@ -214,6 +252,10 @@
         type DoraContext,
         type DoraIntentId
     } from 'src/services/doraIntents';
+    import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, nextTick, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
@@ -241,11 +283,35 @@
     const alertApi = new AlertApiService();
     const assistantApi = new AssistantApiService();
 
+    // ── Cross-feature composables used by the contextual actions (P14).
+    // Reaching for the same composables every other screen uses keeps
+    // behaviour (notifications, quantity defaults, error handling) honest.
+    const stockActions = useStockItemActions();
+    const { addItems } = useShoppingListActions();
+    const { openQuickAdd } = useQuickAdd();
+
+    const recipeStore = useRecipeStore();
+    const stockItemStore = useStockItemStore();
+    const stockLevelStore = useStockLevelStore();
+    const shoppingListStore = useShoppingListStore();
+    const { recipes } = storeToRefs(recipeStore);
+    const { stockItems } = storeToRefs(stockItemStore);
+    const { stockLevels } = storeToRefs(stockLevelStore);
+
     const messages = ref<Message[]>([]);
     const draft = ref('');
     const thinking = ref(false);
     const messagesEl = ref<HTMLElement | null>(null);
     const quickActions = QUICK_ACTIONS;
+
+    // ── Contextual quick actions (P14) ───────────────────────────────
+    // Recompute on every route change so navigating between recipes /
+    // stock items / lists updates the chip row live.
+    const contextualActions = computed<ContextualAction[]>(() =>
+        contextualActionsFor(route.path, {
+            id: typeof route.params.id === 'string' ? route.params.id : undefined,
+        }),
+    );
     // Whether the assistant is running on AI vs the rule-based fallback.
     // null = not yet known (hides the badge until the first status check).
     const aiActive = ref<boolean | null>(null);
@@ -429,6 +495,159 @@
         void dispatch(id, labelFor(id));
     }
 
+    // ── Contextual action dispatcher (P14) ───────────────────────────
+    // Each action kind routes through the appropriate composable so the
+    // app stays consistent (same notifications, same data flow).
+    async function onContextualAction(action: ContextualAction) {
+        // Echo the user's intent into the chat so the log reads like a
+        // conversation, not a series of unexplained side effects.
+        messages.value.push({ from: 'user', text: action.label });
+        await scrollToBottom();
+
+        switch (action.kind) {
+            case 'navigate': {
+                pushDoraMessage({
+                    text: `Heading to ${action.label.toLowerCase()}.`,
+                    mood: 'happy',
+                    navigateTo: { path: action.path, label: 'Take me there' },
+                });
+                if (action.query) {
+                    void router.push({ path: action.path, query: action.query });
+                } else {
+                    void router.push(action.path);
+                }
+                emit('close');
+                break;
+            }
+            case 'add_to_list': {
+                pushDoraMessage({
+                    text: 'On it — adding to your primary list.',
+                    mood: 'excited',
+                });
+                await stockActions.addToList(action.stockItemId);
+                break;
+            }
+            case 'quick_add': {
+                pushDoraMessage({
+                    text: 'Quick-add coming up.',
+                    mood: 'happy',
+                });
+                openQuickAdd({ listId: action.listId ?? null });
+                emit('close');
+                break;
+            }
+            case 'whats_missing': {
+                await onWhatsMissing(action.recipeId);
+                break;
+            }
+            case 'add_missing': {
+                await onAddMissingFromRecipe(action.recipeId);
+                break;
+            }
+        }
+    }
+
+    // ── Recipe-aware helpers ─────────────────────────────────────────
+    // Missing = not tracked OR stock_level == "Out of Stock". Same
+    // definition the rest of the app uses (RecipeCard, RecipeDetailPage).
+    async function ensureRecipeData() {
+        const loads: Promise<unknown>[] = [];
+        if (recipes.value.length === 0) loads.push(recipeStore.getRecipesAsync());
+        if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
+        if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        if (loads.length > 0) await Promise.all(loads);
+    }
+
+    function missingIdsForRecipe(recipeId: string): { id: string; name: string }[] {
+        const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
+        if (!recipe) return [];
+        const outLevelId =
+            stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null;
+        const seen = new Set<string>();
+        const missing: { id: string; name: string }[] = [];
+        for (const ing of recipe.ingredients) {
+            if (!ing.stock_item_id || seen.has(ing.stock_item_id)) continue;
+            seen.add(ing.stock_item_id);
+            const item = stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id);
+            if (!item || item.stock_level_id === outLevelId) {
+                missing.push({ id: ing.stock_item_id, name: ing.stock_item_name });
+            }
+        }
+        return missing;
+    }
+
+    async function onWhatsMissing(recipeId: string) {
+        thinking.value = true;
+        await scrollToBottom();
+        try {
+            await ensureRecipeData();
+            const missing = missingIdsForRecipe(recipeId);
+            const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
+            const name = recipe?.name ?? 'this recipe';
+            if (missing.length === 0) {
+                pushDoraMessage({
+                    text: `Nothing's missing for ${name} — you're cookable right now.`,
+                    mood: 'excited',
+                });
+            } else {
+                const list = missing.map((m) => `• ${m.name}`).join('\n');
+                pushDoraMessage({
+                    text:
+                        `${name} is missing ${missing.length} ingredient${
+                            missing.length === 1 ? '' : 's'
+                        }:\n\n${list}\n\nWant me to drop them on your primary list?`,
+                    mood: 'curious',
+                });
+            }
+        } finally {
+            thinking.value = false;
+            await scrollToBottom();
+        }
+    }
+
+    async function onAddMissingFromRecipe(recipeId: string) {
+        thinking.value = true;
+        await scrollToBottom();
+        try {
+            await ensureRecipeData();
+            const missing = missingIdsForRecipe(recipeId);
+            const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
+            const name = recipe?.name ?? 'this recipe';
+            if (missing.length === 0) {
+                pushDoraMessage({
+                    text: `Nothing missing for ${name} — your pantry is on it.`,
+                    mood: 'happy',
+                });
+                return;
+            }
+            const primary = shoppingListStore.primaryListId;
+            if (!primary) {
+                pushDoraMessage({
+                    text:
+                        `You don't have a primary shopping list set yet. Set one and I'll add the ${missing.length} missing ingredient${
+                            missing.length === 1 ? '' : 's'
+                        } in a second.`,
+                    mood: 'confused',
+                    navigateTo: { path: '/shopping-lists', label: 'Open shopping lists' },
+                });
+                return;
+            }
+            await addItems(
+                primary,
+                missing.map((m) => ({ stock_item_id: m.id })),
+            );
+            pushDoraMessage({
+                text: `Done — added ${missing.length} missing ingredient${
+                    missing.length === 1 ? '' : 's'
+                } from ${name} to your primary list.`,
+                mood: 'excited',
+            });
+        } finally {
+            thinking.value = false;
+            await scrollToBottom();
+        }
+    }
+
     // Free-form text goes to the SLM assistant first. The backend tells us
     // when it can't help — model unreachable (`available: false`) or the
     // message wasn't a data question (`defer_to_local: true`) — and in both
@@ -568,5 +787,16 @@
     }
     .dora-action-item + .dora-action-item {
         margin-top: 6px;
+    }
+    /* P14: contextual "on this page" chip row — a slightly warmer band so
+       the eye picks the page-specific actions out of the generic ones. */
+    .dora-context-row {
+        padding: 8px 10px;
+        background: linear-gradient(
+            120deg,
+            rgba(23, 176, 115, 0.06),
+            rgba(254, 210, 36, 0.06)
+        );
+        border-radius: 10px;
     }
 </style>

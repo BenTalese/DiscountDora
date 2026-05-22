@@ -5,8 +5,8 @@ export default class HealthApiService {
     private mapiHttpClient: AxiosHttpClient;
 
     constructor() {
-        this.dapiHttpClient = new AxiosHttpClient(5170);
-        this.mapiHttpClient = new AxiosHttpClient(5172);
+        this.dapiHttpClient = new AxiosHttpClient('dora');
+        this.mapiHttpClient = new AxiosHttpClient('merchant');
     }
 
     healthCheckAsync = async (): Promise<boolean> => {

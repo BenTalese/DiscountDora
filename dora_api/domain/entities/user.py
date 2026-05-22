@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from dora_api.domain.entities.base_entity import BaseEntity
 
@@ -36,6 +37,11 @@ class User(BaseEntity):
     theme: str = THEME_SYSTEM
     font_family: str = FONT_FAMILY_DEFAULT
     font_size: str = FONT_SIZE_MD
+    # NULL until the user finishes (or skips) the welcome wizard. The
+    # auth/router guard reads this on every navigation to decide whether
+    # to bounce them to /welcome. Cleared by the Settings → Account
+    # "Restart onboarding" entry.
+    onboarding_completed_at: datetime | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -49,3 +55,4 @@ class User(BaseEntity):
         THEME = "theme"
         FONT_FAMILY = "font_family"
         FONT_SIZE = "font_size"
+        ONBOARDING_COMPLETED_AT = "onboarding_completed_at"

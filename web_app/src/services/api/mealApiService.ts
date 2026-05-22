@@ -20,7 +20,7 @@ export default class MealApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient(5170);
+        this.httpClient = new AxiosHttpClient('dora');
     }
 
     createAsync = async (command: CreateMealCommand): Promise<CreatedResponse> =>

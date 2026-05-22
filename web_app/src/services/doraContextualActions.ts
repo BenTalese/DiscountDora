@@ -1,0 +1,191 @@
+// Screen-aware quick actions for the Dora assistant (P14).
+//
+// `contextualActionsFor` returns a list of actions tailored to the current
+// route and its params — e.g. on `/stock/:id` the assistant offers "Find
+// cheaper alternatives", "Add to list", and "Find substitutes" wired to
+// that specific item. Handlers are dispatched by kind in DoraChat so the
+// composables (P0) stay in `setup` scope where Vue requires them.
+//
+// We keep this list short on purpose — the assistant should suggest the
+// 2-3 *most likely* next moves, not every possible action. If a screen
+// already has the action one click away (e.g. the cart button on every
+// stock row), the assistant doesn't need to duplicate it.
+
+export type ContextualAction =
+    // Plain route push. Used when the destination page already implements
+    // the action better than the assistant could (e.g. /meal-plans for
+    // scheduling a recipe).
+    | { kind: 'navigate'; label: string; icon: string; path: string; query?: Record<string, string> }
+    // "Add this stock item to the user's primary list" — goes through
+    // useStockItemActions so notify/error handling matches the rest of
+    // the app.
+    | { kind: 'add_to_list'; label: string; icon: string; stockItemId: string }
+    // Pop the QuickAddSheet, optionally pre-targeting a list (used on
+    // shopping list detail to drop a fresh item onto the current list).
+    | { kind: 'quick_add'; label: string; icon: string; listId?: string }
+    // Recipe-specific helpers. The chat handles the "what's missing"
+    // computation inline so we don't have to drag the recipe store
+    // through this module.
+    | { kind: 'whats_missing'; label: string; icon: string; recipeId: string }
+    | { kind: 'add_missing'; label: string; icon: string; recipeId: string };
+
+// Route-aware contextual action lookup. The function takes the path and
+// the resolved `:id` param (when present) — we don't need the whole
+// `useRoute` object here, which keeps this testable.
+export function contextualActionsFor(
+    path: string,
+    params: { id?: string },
+): ContextualAction[] {
+    // ── Stock item detail ───────────────────────────────────────────
+    if (path.startsWith('/stock/') && params.id) {
+        const id = params.id;
+        return [
+            {
+                kind: 'navigate',
+                label: 'Find cheaper alternatives',
+                icon: 'price_check',
+                path: '/product-search',
+                query: { stock_item_id: id },
+            },
+            {
+                kind: 'add_to_list',
+                label: 'Add to my list',
+                icon: 'add_shopping_cart',
+                stockItemId: id,
+            },
+            {
+                kind: 'navigate',
+                label: 'Find substitutes',
+                icon: 'swap_horiz',
+                path: `/stock/${id}`,
+                query: { section: 'substitutes' },
+            },
+        ];
+    }
+
+    // ── Recipe detail / edit ────────────────────────────────────────
+    if (
+        path.startsWith('/recipes/')
+        && params.id
+        && !path.endsWith('/cook')
+    ) {
+        const id = params.id;
+        return [
+            {
+                kind: 'whats_missing',
+                label: "What's missing?",
+                icon: 'fact_check',
+                recipeId: id,
+            },
+            {
+                kind: 'navigate',
+                label: 'Plan this for a day',
+                icon: 'event_note',
+                path: '/meal-plans',
+                query: { recipe_id: id },
+            },
+            {
+                kind: 'add_missing',
+                label: 'Add missing to a list',
+                icon: 'add_shopping_cart',
+                recipeId: id,
+            },
+        ];
+    }
+
+    // ── Stock overview ──────────────────────────────────────────────
+    if (path === '/stock') {
+        return [
+            {
+                kind: 'navigate',
+                label: "Items needing attention",
+                icon: 'priority_high',
+                path: '/stock',
+                query: { attention: 'true' },
+            },
+            {
+                kind: 'quick_add',
+                label: 'Quick-add to my list',
+                icon: 'add_shopping_cart',
+            },
+        ];
+    }
+
+    // ── Recipes overview ────────────────────────────────────────────
+    if (path === '/recipes') {
+        return [
+            {
+                kind: 'navigate',
+                label: 'Cookable now',
+                icon: 'check_circle',
+                path: '/recipes',
+                query: { cookable: 'true' },
+            },
+        ];
+    }
+
+    // ── Shopping list detail ────────────────────────────────────────
+    if (path.startsWith('/shopping-lists/') && params.id) {
+        return [
+            {
+                kind: 'quick_add',
+                label: 'Quick-add an item',
+                icon: 'add',
+                listId: params.id,
+            },
+        ];
+    }
+
+    // ── Shopping lists overview ─────────────────────────────────────
+    if (path === '/shopping-lists') {
+        return [
+            {
+                kind: 'navigate',
+                label: 'Find a recipe to cook',
+                icon: 'menu_book',
+                path: '/recipes',
+                query: { cookable: 'true' },
+            },
+        ];
+    }
+
+    // ── My products ─────────────────────────────────────────────────
+    if (path === '/my-products') {
+        return [
+            {
+                kind: 'navigate',
+                label: 'Hunt for fresh deals',
+                icon: 'search',
+                path: '/product-search',
+            },
+        ];
+    }
+
+    // ── Locations overview / detail ─────────────────────────────────
+    if (path === '/locations' || path.startsWith('/locations/')) {
+        return [
+            {
+                kind: 'navigate',
+                label: 'Open the pantry',
+                icon: 'inventory_2',
+                path: '/stock',
+            },
+        ];
+    }
+
+    // ── Dashboard ───────────────────────────────────────────────────
+    if (path === '/' || path === '') {
+        return [
+            {
+                kind: 'navigate',
+                label: 'See what needs attention',
+                icon: 'priority_high',
+                path: '/stock',
+                query: { attention: 'true' },
+            },
+        ];
+    }
+
+    // Nothing specific — caller falls back to the generic QUICK_ACTIONS.
+    return [];
+}

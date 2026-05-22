@@ -1,0 +1,25 @@
+[
+    {
+        "name": "Kitchen",
+        "kind": "zone",
+        "children": [
+            { "name": "Pantry", "kind": "area" },
+            { "name": "Fridge", "kind": "area" },
+            { "name": "Freezer", "kind": "area" }
+        ]
+    },
+    {
+        "name": "Bathroom",
+        "kind": "zone",
+        "children": [
+            { "name": "Cabinet", "kind": "area" }
+        ]
+    },
+    {
+        "name": "Laundry",
+        "kind": "zone",
+        "children": [
+            { "name": "Shelf", "kind": "area" }
+        ]
+    }
+]

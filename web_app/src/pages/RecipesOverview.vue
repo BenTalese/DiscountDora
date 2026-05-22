@@ -760,8 +760,15 @@
         if (typeof id === 'string' && id) {
             usesStockItemId.value = id;
         }
+        // Dashboard's "Cookable tonight → See more" link sets ?cookable=true.
+        if (route.query.cookable === 'true' || route.query.cookable === '1') {
+            cookableNowOnly.value = true;
+        }
     }
-    watch(() => route.query.usesStockItem, applyQuery);
+    watch(
+        () => [route.query.usesStockItem, route.query.cookable],
+        applyQuery,
+    );
 
     onMounted(async () => {
         loading.value = true;

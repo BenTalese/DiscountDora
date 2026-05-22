@@ -47,6 +47,10 @@ class AuthenticatedUserDto:
     theme: str
     font_family: str
     font_size: str
+    # Surfaced on the auth payload so the router guard (F1) can decide
+    # whether to bounce the user to /welcome without an extra round-trip
+    # per navigation.
+    onboarding_completed_at: str | None
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -61,6 +65,11 @@ class AuthenticatedUserDto:
             theme = user.theme,
             font_family = user.font_family,
             font_size = user.font_size,
+            onboarding_completed_at = (
+                user.onboarding_completed_at.isoformat()
+                if user.onboarding_completed_at is not None
+                else None
+            ),
         )
 
 
@@ -124,4 +133,5 @@ def register_user():
         theme = "system",
         font_family = "default",
         font_size = "md",
+        onboarding_completed_at= None
     ))

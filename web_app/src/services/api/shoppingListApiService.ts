@@ -82,6 +82,17 @@ export type FrequentlyAddedItem = {
     add_count: number;
 };
 
+export type LevelRestoreSnapshot = {
+    stock_item_id: string;
+    stock_level_id: string;
+};
+
+export type UnfinishCommand = {
+    was_primary?: boolean;
+    demote_primary_list_id?: string | null;
+    level_restores?: LevelRestoreSnapshot[];
+};
+
 export default class ShoppingListApiService {
     private httpClient = new AxiosHttpClient();
 
@@ -110,6 +121,18 @@ export default class ShoppingListApiService {
         await this.httpClient.post<FinishResult, Record<string, never>>(
             `/shopping-lists/${id}/finish`,
             {},
+        );
+
+    /** F5: inverse of finish. The caller snapshots the pre-finish state and
+     *  posts it back; the server un-archives, restores levels, and demotes
+     *  whichever sibling was auto-promoted to primary. */
+    unfinishAsync = async (
+        id: string,
+        command: UnfinishCommand,
+    ): Promise<void> =>
+        await this.httpClient.post<void, UnfinishCommand>(
+            `/shopping-lists/${id}/unfinish`,
+            command,
         );
 
     copyAsync = async (id: string, command: CopyShoppingListCommand): Promise<{ shopping_list_id: string }> =>

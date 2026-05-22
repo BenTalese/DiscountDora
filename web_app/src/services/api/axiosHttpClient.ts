@@ -1,5 +1,6 @@
-import type { Axios, AxiosError } from 'axios';
+import type { Axios, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
+import { Notify } from 'quasar';
 
 class ApiErrorResponse extends Error {
     detail!: string;
@@ -7,6 +8,40 @@ class ApiErrorResponse extends Error {
     errors!: Map<string, string>;
     title!: string;
     type!: string;
+}
+
+// Normalised error shape every caller sees, regardless of backend response
+// shape. Carriers a correlationId so logs/bug-reports can be matched back to
+// the request line on the server side.
+export class NormalisedApiError extends Error {
+    status: number;
+    code: string;
+    details: Record<string, unknown> | null;
+    correlationId: string;
+    isNetworkError: boolean;
+    method: string;
+    url: string;
+
+    constructor(args: {
+        status: number;
+        code: string;
+        message: string;
+        details: Record<string, unknown> | null;
+        correlationId: string;
+        isNetworkError: boolean;
+        method: string;
+        url: string;
+    }) {
+        super(args.message);
+        this.name = 'NormalisedApiError';
+        this.status = args.status;
+        this.code = args.code;
+        this.details = args.details;
+        this.correlationId = args.correlationId;
+        this.isNetworkError = args.isNetworkError;
+        this.method = args.method;
+        this.url = args.url;
+    }
 }
 
 // Optional callback the auth store registers to react to expired sessions
@@ -45,7 +80,7 @@ export interface HttpClient {
  *  dev port fallback without knowing URLs. */
 export type ApiBackend = 'dora' | 'merchant';
 
-function resolveBaseURL(backend: ApiBackend): string {
+export function resolveBaseURL(backend: ApiBackend): string {
     const envValue =
         backend === 'merchant'
             ? import.meta.env.VITE_MERCHANT_API_BASE_URL
@@ -59,6 +94,54 @@ function resolveBaseURL(backend: ApiBackend): string {
     }
     return `http://localhost:${port}/api`;
 }
+
+// ─── Correlation id ──────────────────────────────────────────────────
+// Lightweight UUIDv4 generator. We can't rely on `crypto.randomUUID` in
+// every target browser (Chrome ≥92, but still); fall back if missing.
+function newCorrelationId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return (crypto as Crypto & { randomUUID: () => string }).randomUUID();
+    }
+    // RFC4122 v4 fallback. Not cryptographically strong, but fine for an
+    // id whose only job is to match log lines.
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+
+// ─── Retry policy ────────────────────────────────────────────────────
+// Spec: GET only, max 3 attempts, exponential backoff on network errors
+// and 502/503/504. Never retry POST/PUT/PATCH/DELETE (those are
+// the offline queue's job — see useOfflineQueue).
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+const MAX_RETRIES = 3;
+
+function isRetryable(method: string | undefined, error: AxiosError): boolean {
+    const m = (method ?? 'get').toLowerCase();
+    if (m !== 'get') return false;
+    if (!error.response) return true; // network error / no response
+    return RETRYABLE_STATUSES.has(error.response.status);
+}
+
+function backoffDelay(attempt: number): number {
+    // 1: 200ms, 2: 400ms, 3: 800ms + small jitter
+    const base = 200 * 2 ** (attempt - 1);
+    const jitter = Math.random() * 100;
+    return base + jitter;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Augment axios's request config with our retry / correlation-id state
+// so the interceptors can pass it across attempts.
+type DoraRequestConfig = InternalAxiosRequestConfig & {
+    __retryCount?: number;
+    __correlationId?: string;
+};
 
 export default class AxiosHttpClient implements HttpClient {
     private axios: Axios;
@@ -79,12 +162,36 @@ export default class AxiosHttpClient implements HttpClient {
             withCredentials: true
         });
 
+        // ── Request interceptor: correlation id ─────────────────────
+        this.axios.interceptors.request.use((config) => {
+            const cfg = config as DoraRequestConfig;
+            if (!cfg.__correlationId) cfg.__correlationId = newCorrelationId();
+            cfg.headers.set?.('X-Request-Id', cfg.__correlationId);
+            return cfg;
+        });
+
+        // ── Response interceptor: 401 + retry + normalisation ──────
         this.axios.interceptors.response.use(
             (response) => response,
-            (error: AxiosError) => {
-                if (error.response?.status === 401 && !shouldSuppress401(error.config?.url)) {
+            async (error: AxiosError) => {
+                const cfg = (error.config ?? {}) as DoraRequestConfig;
+
+                // 401 — session expired (or never authed). Route to login.
+                if (error.response?.status === 401 && !shouldSuppress401(cfg.url)) {
                     unauthorizedHandler?.();
+                    return Promise.reject(error);
                 }
+
+                // Retry GETs on network errors and 5xx-class transient codes.
+                if (isRetryable(cfg.method, error)) {
+                    const attempt = (cfg.__retryCount ?? 0) + 1;
+                    if (attempt <= MAX_RETRIES) {
+                        cfg.__retryCount = attempt;
+                        await sleep(backoffDelay(attempt));
+                        return this.axios.request(cfg);
+                    }
+                }
+
                 return Promise.reject(error);
             }
         );
@@ -94,7 +201,7 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.delete<TResponse>(path)).data;
         } catch (error) {
-            return this.handleError(error as AxiosError);
+            return this.handleError(error as AxiosError, 'DELETE', path);
         }
     }
 
@@ -102,22 +209,76 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.get<TResponse>(path)).data;
         } catch (error) {
-            return this.handleError(error as AxiosError);
+            return this.handleError(error as AxiosError, 'GET', path);
         }
     }
 
-    private handleError(error: AxiosError): Promise<never> {
+    /** Map any axios error into a NormalisedApiError, surface 5xx via notify. */
+    private handleError(error: AxiosError, method: string, path: string): Promise<never> {
+        const cfg = (error.config ?? {}) as DoraRequestConfig;
+        const correlationId = cfg.__correlationId ?? '';
+        const status = error.response?.status ?? 0;
+        const isNetworkError = !error.response;
         const errorData = error.response?.data;
+
+        let code = 'unknown_error';
+        let message = error.message || 'Request failed';
+        let details: Record<string, unknown> | null = null;
+
         if (this.isCustomApiErrorResponse(errorData)) {
             const apiError = errorData;
-            return Promise.reject(
-                new Error(
-                    `API ERROR :: STATUS CODE ${apiError.status} :: ${apiError.title} :: ${apiError.detail} :: ${Object.values(apiError.errors).join(', ')}`
-                )
-            );
+            code = apiError.type || `http_${status}`;
+            message =
+                apiError.detail ||
+                apiError.title ||
+                Object.values(apiError.errors ?? {}).join(', ') ||
+                message;
+            details = {
+                title: apiError.title,
+                errors: apiError.errors,
+                type: apiError.type,
+            };
+        } else if (isNetworkError) {
+            code = 'network_error';
+            message = 'Network request failed';
         } else {
-            return Promise.reject(new Error(`API ERROR :: ${error.name} :: ${error.message} :: ${error.config?.url}`));
+            code = `http_${status}`;
         }
+
+        // 5xx → noisy toast so the user knows the server tripped.
+        // 4xx is the caller's responsibility to phrase — it might be a
+        // benign 404 from a search, etc.
+        if (status >= 500) {
+            try {
+                Notify.create({
+                    type: 'negative',
+                    position: 'top',
+                    message: 'Something on the server tripped. We logged the error.',
+                    caption: correlationId ? `Ref: ${correlationId.slice(0, 8)}` : undefined,
+                    timeout: 5000,
+                });
+                // eslint-disable-next-line no-console
+                console.warn(
+                    `[api] ${method} ${path} → ${status} ${code} (${correlationId})`,
+                    details,
+                );
+            } catch {
+                // Notify isn't available during boot — ignore.
+            }
+        }
+
+        return Promise.reject(
+            new NormalisedApiError({
+                status,
+                code,
+                message,
+                details,
+                correlationId,
+                isNetworkError,
+                method,
+                url: path,
+            }),
+        );
     }
 
     isCustomApiErrorResponse = (error: unknown): error is ApiErrorResponse =>
@@ -136,7 +297,7 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.patch<TResponse>(path, body)).data;
         } catch (error) {
-            return this.handleError(error as AxiosError);
+            return this.handleError(error as AxiosError, 'PATCH', path);
         }
     }
 
@@ -147,7 +308,7 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.post<TResponse>(path, body)).data;
         } catch (error) {
-            return this.handleError(error as AxiosError);
+            return this.handleError(error as AxiosError, 'POST', path);
         }
     }
 
@@ -155,7 +316,21 @@ export default class AxiosHttpClient implements HttpClient {
         try {
             return (await this.axios.put<TResponse>(path, body)).data;
         } catch (error) {
-            return this.handleError(error as AxiosError);
+            return this.handleError(error as AxiosError, 'PUT', path);
+        }
+    }
+
+    /** Raw config-bearing call used by the offline queue when draining: we need
+     *  to replay a stored request exactly as it was, without rewrapping. */
+    async request<TResponse = unknown>(config: AxiosRequestConfig): Promise<TResponse> {
+        try {
+            return (await this.axios.request<TResponse>(config)).data;
+        } catch (error) {
+            return this.handleError(
+                error as AxiosError,
+                (config.method ?? 'GET').toUpperCase(),
+                config.url ?? '',
+            );
         }
     }
 }

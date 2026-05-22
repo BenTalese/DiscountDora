@@ -27,6 +27,12 @@ export const useAuthStore = defineStore('auth', () => {
         isBootstrapped.value = true;
     };
 
+    /** Force a fresh /me probe (e.g. after the user restarts onboarding so
+     *  `onboarding_completed_at` flips back to null and the guard kicks in). */
+    const refreshAsync = async () => {
+        currentUser.value = await authApiService.getMeAsync();
+    };
+
     const loginAsync = async (command: LoginCommand) => {
         currentUser.value = await authApiService.loginAsync(command);
     };
@@ -64,6 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
         isAdmin,
         isAuthenticated,
         bootstrapAsync,
+        refreshAsync,
         loginAsync,
         registerAsync,
         updateMeAsync,

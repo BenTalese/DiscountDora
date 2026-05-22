@@ -90,6 +90,7 @@ class GetShoppingListDetailHandler:
                 .include("stock_location")
                 .include("products")
                     .then_include("merchant")
+                .include("products")
                     .then_include("current_offer")
                 .all(EntityField(StockItem, "id").in_(_StockItemIds))
             )

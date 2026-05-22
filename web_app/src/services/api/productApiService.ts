@@ -10,8 +10,8 @@ export default class ProductApiService {
     private mapiHttpClient: AxiosHttpClient;
 
     constructor() {
-        this.dapiHttpClient = new AxiosHttpClient(5170);
-        this.mapiHttpClient = new AxiosHttpClient(5172);
+        this.dapiHttpClient = new AxiosHttpClient('dora');
+        this.mapiHttpClient = new AxiosHttpClient('merchant');
     }
 
     createAsync = async (productToCreate: CreateProductCommand): Promise<CreatedResponse> =>

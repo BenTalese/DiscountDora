@@ -6,6 +6,91 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **One-click Undo across the app.** A new Undo button in the header
+  (tooltip shows the most-recent action label) reverses the last 20
+  actions; Ctrl/Cmd-Z does the same from anywhere outside a text input,
+  Ctrl/Cmd-Shift-Z (or Ctrl-Y) redoes. Destructive actions also pop a
+  toast with an inline Undo for 10 seconds. Wired actions: bumping a
+  stock item's level, ticking or unticking a shopping list line, moving
+  / editing a stock item, **deleting a stock item** (round-trips through
+  a new `/api/stock-items/restore` so the item comes back with the same
+  id and references), removing a line from a shopping list, and the big
+  one — **Finish shopping**: un-archives the list, rolls back the bulk
+  stock-level bumps from the original ticks, and demotes whichever list
+  was auto-promoted to primary, all in one click. Undoing an action that
+  was processed via the offline queue works once sync completes.
+- **Dora keeps working when the network doesn't.** A slim banner pins
+  under the header whenever you're offline or we can't reach the server
+  — with a Retry button and a live "N changes queued" counter. While
+  offline, the four most common mid-shop actions (ticking shopping-list
+  lines, bumping a stock item's level, marking it opened or restocked,
+  pushing or clearing an expiry date) are queued in the browser and
+  drained automatically when we reconnect — your optimistic ticks stay
+  put in the meantime. Creates and deletes still fail loudly because
+  silently inventing-or-vanishing entities is rarely what you want.
+- **Errors no longer take down the whole screen.** A new error boundary
+  wraps every page; if something on the page throws while rendering,
+  the rest of the app (header, drawer, Dora bubble, alerts bell) stays
+  alive and the page itself shows a friendly recovery card with Reload,
+  Go to dashboard, and Report this (pre-fills a GitHub issue with the
+  error message and a reference id). New `/errors/server` and
+  `/errors/not-found` routes pick up failed lazy-chunk loads and
+  in-app "not found" links respectively. Server (5xx) responses now
+  surface a normalised "the server tripped" toast instead of silently
+  collapsing.
+- **HTTP client is harder to surprise.** Every request now carries a
+  unique X-Request-Id so any error you see references back to the exact
+  server log line. GETs auto-retry up to 3 times with exponential
+  backoff on network errors and 502/503/504; mutations never auto-retry
+  (the offline queue is the right tool for that). Every error reaching
+  callers is normalised into the same shape — status, code, message,
+  details, correlation id — instead of leaking raw axios objects.
+- **Dora is now context-aware.** Open the chat on any screen and a fresh
+  "On this page" chip row sits above the generic quick-actions, suggesting
+  the 2-3 most useful next moves for that screen. On a stock item it's
+  **Find cheaper alternatives** (jumps to Product Search pre-filtered),
+  **Add to my list** (uses the same composable as the cart button), and
+  **Find substitutes** (opens the substitutes section on the detail
+  page). On a recipe: **What's missing?** (lists out-of-stock or
+  untracked ingredients in chat), **Plan this for a day** (jumps to Meal
+  Plans with the recipe pre-targeted), and **Add missing to a list**
+  (bulk-adds the missing ingredients straight to your primary list).
+  Stock overview, recipes overview, shopping list detail, my products,
+  locations and the dashboard get their own contextual chips too. Every
+  action routes through the same cross-feature composables (P0) the rest
+  of the app uses, so behaviour stays identical wherever you trigger it.
+- **Alerts panel rounded out.** Alerts are now grouped under **High
+  priority / Medium / Low / FYI** headers so the eye doesn't have to
+  scan for severity. Every row picks up two new actions alongside the
+  existing extend-expiry / mark-restocked / acknowledge: **View in
+  context** jumps you to the Stock screen pre-filtered to attention
+  items, and **Snooze 7d** hides the alert on this device for a week
+  (with a one-click Undo in the toast). Snoozed alerts get their own
+  collapsed section at the bottom of the panel with per-row Unsnooze.
+  A new bottom action — **Add N low/out items to primary list** —
+  bulk-queues every low- and out-of-stock item from the panel onto your
+  primary shopping list in one click (skipping anything already on it).
+- **Dashboard is now the morning glance.** Four new cards sit above the
+  pantry/totals strip and surface what to actually do, not just what
+  exists:
+  - **Needs your attention** lists the top alerts (expired, expiring soon,
+    low/out, essentials low) with the same inline actions as the alerts
+    panel — push expiry, mark restocked, acknowledge — and each item name
+    deep-links to its stock detail page.
+  - **Primary shopping list** shows the live "to grab" count, dollar
+    remaining, and savings-vs-RRP total for whatever list is primary, with
+    a one-tap jump-to-list. When no primary is set the card prompts you
+    to pick one.
+  - **Cookable tonight** lists up to three recipes that have every
+    ingredient in stock right now (favourites and recently-cooked-less
+    bubble up first), each with prep+cook time, servings, a deep link to
+    the recipe and a "Cook" button straight into cook mode.
+  - **Best deals on your saved products** ranks your saved products by %
+    off, showing the merchant, the linked stock item chip, the price now
+    vs the strike-through RRP, and the discount badge.
+  Every chip, number, and "See more" link deep-links into the relevant
+  screen (Stock, Recipes with `?cookable=true`, My Products, etc.). Cards
+  can be toggled in the existing **Cards** menu.
 - **Product search is now a deal-comparison surface.** Results render as cards
   with a discount badge that deepens from amber to red as the saving grows, the
   unit price (per 100g/ml or each), the merchant logo, and — for products you've
@@ -101,6 +186,28 @@ semver — major bumps signal schema or breaking-config changes.
   state points you at building a pantry from a recipe or a shopping list.
 
 ### Added
+- **First-run setup wizard.** New users (and anyone with a fresh
+  `onboarding_completed_at`) land on a guarded `/welcome` route that
+  walks them through five short steps: a name + theme + font picker,
+  an admin "you're in charge" callout for the first user, optional
+  seeding of Dora's default stock groups and locations (idempotent —
+  re-importing won't duplicate), adding their first stock item with
+  inline "add another" and skip, and a four-card tour with deep links
+  into the screens that matter. Progress persists to localStorage so
+  refresh resumes where you left off. **Skip everything** stamps the
+  completion timestamp and surfaces a 24-hour "finish setting up"
+  banner on the dashboard with a one-tap Continue. Settings → Account
+  carries a **Restart onboarding** entry for returning users who want
+  to redo the tour.
+- **My Products is now its own screen.** A dedicated grid at `/my-products`
+  shows every saved product with the stock item it links to (click the chip
+  to jump to that item), the live deal badge, the merchant, and an
+  inactive/out-of-stock marker. Filters: by linked stock item, on-deal-now,
+  by merchant, plus search across name/brand/merchant/size. Bulk-select adds
+  **Add all on-deal to a list** (pre-selecting the merchant offer per line),
+  **Unlink** and **Mark inactive**. A "Stock items without products"
+  shortcut lists every tracked item that no active product links to, with
+  one-click jumps into Product Search to find a match.
 - **Dedicated recipe detail / edit page.** Recipes now have a proper editing
   surface at `/recipes/:id` with a two-column layout. Each ingredient row
   is an autocomplete bound to your tracked stock items — type a name that

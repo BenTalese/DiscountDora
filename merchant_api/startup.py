@@ -33,7 +33,7 @@ def startup():
             f'http://localhost:{WEB_APP_PORT}',
             f'http://172.17.0.1:{WEB_APP_PORT}',
         ],
-        'allow_headers': ['Content-Type'],
+        'allow_headers': ['Content-Type', 'X-Request-Id'],
         'supports_credentials': True,
     }})
 

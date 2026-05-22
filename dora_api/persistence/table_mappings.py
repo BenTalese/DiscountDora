@@ -269,6 +269,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("theme", String(20), nullable=False, server_default="system"),
         Column("font_family", String(20), nullable=False, server_default="default"),
         Column("font_size", String(2), nullable=False, server_default="md"),
+        Column("onboarding_completed_at", DateTime, nullable=True),
     )
 
     # ── Mappings ──────────────────────────────────────────────────────────────

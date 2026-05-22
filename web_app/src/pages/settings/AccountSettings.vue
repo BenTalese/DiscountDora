@@ -36,6 +36,26 @@
 
         <q-separator />
 
+        <!-- ── Onboarding (F1) ─────────────────────────────────── -->
+        <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">First-run wizard</div>
+            <div class="text-caption text-grey q-mb-md">
+                Want to revisit the welcome tour? This sends you back to
+                /welcome — nothing in your data is touched, you'll just
+                step through the prompts again.
+            </div>
+            <q-btn
+                outline
+                no-caps
+                icon="restart_alt"
+                label="Restart onboarding"
+                :loading="restartingOnboarding"
+                @click="onRestartOnboarding"
+            />
+        </q-card-section>
+
+        <q-separator />
+
         <q-card-section>
             <div class="text-subtitle2 q-mb-sm">Danger zone</div>
             <div class="text-caption text-grey q-mb-md">
@@ -55,15 +75,62 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
+    import { useQuasar } from 'quasar';
+    import OnboardingApiService from 'src/services/api/onboardingApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
 
+    const $q = useQuasar();
     const router = useRouter();
     const authStore = useAuthStore();
+    const onboardingApi = new OnboardingApiService();
     const { currentUser } = storeToRefs(authStore);
 
     const signingOut = ref(false);
+    const restartingOnboarding = ref(false);
+
+    async function onRestartOnboarding() {
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: 'Restart onboarding?',
+                message:
+                    "We'll send you back to /welcome. Your stock items, " +
+                    "groups, locations and shopping lists are untouched.",
+                ok: { label: 'Restart', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        restartingOnboarding.value = true;
+        try {
+            await onboardingApi.restartAsync();
+            // Refresh the auth payload so the router guard sees the
+            // newly-NULL onboarding_completed_at and bounces us to /welcome
+            // on the next navigation.
+            await authStore.refreshAsync();
+            // Drop the "skipped" flag too so the dashboard banner is
+            // suppressed once the user is back in the wizard properly.
+            try {
+                localStorage.removeItem('dora.onboarding.skipped_at');
+            } catch {
+                // Ignore.
+            }
+            void router.push('/welcome');
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not restart onboarding.',
+                caption: String(err),
+            });
+        } finally {
+            restartingOnboarding.value = false;
+        }
+    }
 
     const initials = computed(() => {
         const name = currentUser.value?.username ?? '';

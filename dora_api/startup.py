@@ -34,7 +34,7 @@ def startup(is_test_env: bool = False):
                 f'http://localhost:{WEB_APP_PORT}',
                 f'http://172.17.0.1:{WEB_APP_PORT}',
             ],
-            'allow_headers': ['Content-Type'],
+            'allow_headers': ['Content-Type', 'X-Request-Id'],
             'supports_credentials': True,
         }},
     )
@@ -54,7 +54,7 @@ def startup(is_test_env: bool = False):
 
 def init_db(is_test_env: bool):
     with app.app_context():
-        _AllowDestructive = os.environ.get("DORA_ALLOW_DESTRUCTIVE", "").lower() in ("1", "true", "yes")
+        _AllowDestructive = os.environ.get("DORA_ALLOW_DESTRUCTIVE", "").lower() == "true"
 
         if is_test_env or (DORA_CONFIG.is_debug_mode_enabled() and _AllowDestructive):
             db.drop_all()

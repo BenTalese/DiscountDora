@@ -46,7 +46,7 @@ export default class RecipeApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient(5170);
+        this.httpClient = new AxiosHttpClient('dora');
     }
 
     createAsync = async (recipeToCreate: CreateRecipeCommand): Promise<CreatedResponse> =>

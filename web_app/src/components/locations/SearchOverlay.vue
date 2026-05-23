@@ -29,60 +29,44 @@
             </q-card-section>
 
             <q-card-section
-                v-else-if="results && results.items.length === 0 && results.locations.length === 0"
+                v-else-if="locationHits.length === 0 && itemHits.length === 0"
                 class="text-grey text-caption q-pa-lg text-center"
             >
                 No matches for "{{ query }}".
             </q-card-section>
 
-            <template v-else-if="results">
+            <template v-else>
                 <q-list separator class="search-results">
-                    <q-item-label
-                        v-if="results.locations.length > 0"
-                        header
-                        class="search-section-header"
-                    >
+                    <q-item-label v-if="locationHits.length > 0" header class="search-section-header">
                         Locations
                     </q-item-label>
                     <q-item
-                        v-for="hit in results.locations"
+                        v-for="hit in locationHits"
                         :key="`loc-${hit.id}`"
                         clickable
                         @click="onSelectLocation(hit.id)"
                     >
-                        <q-item-section avatar>
-                            <q-icon name="place" />
-                        </q-item-section>
+                        <q-item-section avatar><q-icon name="place" /></q-item-section>
                         <q-item-section>
-                            <q-item-label>{{ hit.name }}</q-item-label>
-                            <q-item-label caption>
-                                {{ hit.breadcrumb.join(' › ') }}
-                            </q-item-label>
+                            <q-item-label>{{ hit.title }}</q-item-label>
+                            <q-item-label caption>{{ hit.subtitle ?? '' }}</q-item-label>
                         </q-item-section>
                     </q-item>
 
-                    <q-item-label
-                        v-if="results.items.length > 0"
-                        header
-                        class="search-section-header"
-                    >
+                    <q-item-label v-if="itemHits.length > 0" header class="search-section-header">
                         Items
                     </q-item-label>
                     <q-item
-                        v-for="hit in results.items"
+                        v-for="hit in itemHits"
                         :key="`item-${hit.id}`"
                         clickable
                         @click="onSelectItem(hit.id)"
                     >
-                        <q-item-section avatar>
-                            <q-icon name="inventory_2" />
-                        </q-item-section>
+                        <q-item-section avatar><q-icon name="inventory_2" /></q-item-section>
                         <q-item-section>
-                            <q-item-label>{{ hit.name }}</q-item-label>
+                            <q-item-label>{{ hit.title }}</q-item-label>
                             <q-item-label caption>
-                                <span v-if="hit.breadcrumb.length > 0">
-                                    {{ hit.breadcrumb.join(' › ') }}
-                                </span>
+                                <span v-if="hit.subtitle">{{ hit.subtitle }}</span>
                                 <span v-else class="text-grey">Unassigned</span>
                             </q-item-label>
                         </q-item-section>
@@ -94,9 +78,7 @@
 </template>
 
 <script lang="ts" setup>
-    import SearchApiService, {
-        type SearchResults
-    } from 'src/services/api/searchApiService';
+    import SearchApiService, { type SearchResult } from 'src/services/api/searchApiService';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
 
@@ -105,32 +87,39 @@
 
     const open = computed({
         get: () => props.modelValue,
-        set: (v) => emit('update:modelValue', v)
+        set: (v) => emit('update:modelValue', v),
     });
 
     const api = new SearchApiService();
     const router = useRouter();
 
     const query = ref('');
-    const results = ref<SearchResults | null>(null);
+    const results = ref<SearchResult[]>([]);
     const loading = ref(false);
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const itemHits = computed(() => results.value.filter((r) => r.type === 'stock_item'));
+    const locationHits = computed(() => results.value.filter((r) => r.type === 'location'));
 
     function onQueryChange() {
         if (debounceTimer) clearTimeout(debounceTimer);
         if (!query.value.trim()) {
-            results.value = null;
+            results.value = [];
             return;
         }
-        // 200ms debounce so we don't hammer the API on every keystroke; the
-        // overlay-style UX needs to feel snappy but not chatty.
-        debounceTimer = setTimeout(async () => {
-            loading.value = true;
-            try {
-                results.value = await api.searchAsync(query.value);
-            } finally {
-                loading.value = false;
-            }
+        debounceTimer = setTimeout(() => {
+            void (async () => {
+                loading.value = true;
+                try {
+                    const resp = await api.searchAsync(query.value, {
+                        types: ['stock_item', 'location'],
+                        limit: 25,
+                    });
+                    results.value = resp.results;
+                } finally {
+                    loading.value = false;
+                }
+            })();
         }, 200);
     }
 

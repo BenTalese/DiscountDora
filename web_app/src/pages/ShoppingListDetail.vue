@@ -365,6 +365,7 @@
                                 'shopping-line-ticked': line.is_ticked,
                                 'shopping-line-dragging': dragLineId === line.line_id,
                                 'shopping-line-drop-over': dragOverLineId === line.line_id,
+                                'shopping-line-focused': focusedLineId === line.line_id,
                             }"
                             :draggable="canReorder"
                             @dragstart="onLineDragStart($event, line.line_id)"
@@ -677,6 +678,7 @@
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { notifyUndoable } from 'src/composables/useNotifyUndoable';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useShortcut } from 'src/composables/useShortcut';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { register as registerUndo } from 'src/composables/useUndo';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
@@ -917,7 +919,7 @@
     // order — alphabetical for now since we don't have a route weight),
     // or one bucket per chosen merchant. "No location" / "No merchant"
     // lines drop into a labelled bucket at the end so they don't vanish.
-    type LineGroup = { key: string; label: string | null; lines: typeof detail.value.lines };
+    type LineGroup = { key: string; label: string | null; lines: ShoppingListLine[] };
 
     function locationKeyFor(line: ShoppingListLine): string {
         if (line.stock_location_breadcrumb.length === 0) return '__no_location__';
@@ -1095,6 +1097,30 @@
         // Pre-target this list so the sheet skips its list picker default.
         openQuickAdd({ listId: listId.value });
     }
+
+    // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
+    const orderedLines = computed(() => lineGroups.value.flatMap((g) => g.lines));
+    const focusedLineId = ref<string | null>(null);
+
+    function moveLineFocus(delta: number) {
+        const lines = orderedLines.value;
+        if (lines.length === 0) return;
+        const current = lines.findIndex((l) => l.line_id === focusedLineId.value);
+        const next = current < 0 ? 0 : Math.max(0, Math.min(lines.length - 1, current + delta));
+        focusedLineId.value = lines[next]?.line_id ?? null;
+    }
+    function tickFocusedLine() {
+        if (detail.value?.is_archived) return;
+        const line = orderedLines.value.find((l) => l.line_id === focusedLineId.value);
+        if (line) void onToggleTicked(line.line_id, !line.is_ticked);
+    }
+
+    useShortcut([
+        { keys: 'n', scope: 'Shopping list', description: 'Add an item', handler: onOpenQuickAdd },
+        { keys: 'space', scope: 'Shopping list', description: 'Tick / untick the focused line', handler: tickFocusedLine },
+        { keys: 'arrowdown', scope: 'Shopping list', description: 'Focus next line', handler: () => moveLineFocus(1) },
+        { keys: 'arrowup', scope: 'Shopping list', description: 'Focus previous line', handler: () => moveLineFocus(-1) },
+    ]);
 
     // QuickAddSheet writes via shoppingListStore.refreshAsync but the
     // per-list detail isn't part of that refresh — reload it locally
@@ -1787,6 +1813,10 @@
 <style scoped>
     .shopping-line-ticked {
         background-color: rgba(0, 0, 0, 0.02);
+    }
+    .shopping-line-focused {
+        outline: 2px dashed var(--q-accent);
+        outline-offset: -2px;
     }
     .shopping-line-dragging {
         opacity: 0.4;

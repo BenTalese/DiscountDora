@@ -6,6 +6,29 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Command palette anywhere with Cmd/Ctrl-K.** A top-of-screen palette opens
+  from any page (even when an input is focused) and searches across stock
+  items, shopping lists, recipes, locations, products, meals and meal plans —
+  plus runs in-app commands like _Create stock item_, _Open primary shopping
+  list_, _Auto-generate shopping list from low stock_, _Toggle dark mode_,
+  _Show keyboard shortcuts_, and every _Go to …_ navigation. Substring and
+  fuzzy matches are highlighted in the result title. Empty query shows your
+  recents (last 20 entities you visited, kept per-device) and your most-used
+  commands. Arrow keys move the selection, **Enter** runs it, the first
+  **Esc** clears the query and the second closes. Pages can register their
+  own contextual commands via `useCommands()`, auto-deregistered on unmount.
+  The locations "find item" overlay now rides the same unified `/api/search`
+  endpoint.
+- **Keyboard shortcuts everywhere.** Press **?** anywhere to open a cheatsheet
+  of every shortcut live on the current screen, grouped by area. Global keys:
+  **/** focuses the Stock search (or jumps there), and **g** then **s / l / r /
+  d / h** navigates to Stock, Lists, Recipes, Dashboard or Help. On the Stock
+  screen, **n** adds an item, **f** focuses the filter, arrow keys move a
+  highlight through the grid, **Enter** opens the focused item, and **a** adds
+  the focused (or selected) items to your primary list. On a shopping list,
+  arrow keys move between lines, **Space** ticks the focused line and **n** adds
+  an item. Shortcuts ignore your typing in text fields, and **Esc** closes the
+  cheatsheet. (Ctrl/Cmd-Z undo/redo from the undo system still works alongside.)
 - **One-click Undo across the app.** A new Undo button in the header
   (tooltip shows the most-recent action label) reverses the last 20
   actions; Ctrl/Cmd-Z does the same from anywhere outside a text input,

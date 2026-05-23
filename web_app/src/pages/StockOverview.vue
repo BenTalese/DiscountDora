@@ -6,6 +6,7 @@
             <q-btn color="positive" icon="add" label="New item" no-caps @click="onCreateClick" />
             <q-space />
             <q-input
+                ref="searchInputRef"
                 v-model="searchText"
                 outlined
                 dense
@@ -257,7 +258,7 @@
                 <div class="q-pr-md">
                     <q-list v-if="filteredStockItems.length > 0" class="q-gutter-y-sm">
                         <q-card
-                            v-for="item in filteredStockItems"
+                            v-for="(item, idx) in filteredStockItems"
                             :key="item.stock_item_id"
                             bordered
                             flat
@@ -266,6 +267,7 @@
                                 'stock-row-dim':
                                     stockLevelName(item.stock_level_id) === 'Out of Stock',
                                 'stock-row-selected': peekId === item.stock_item_id,
+                                'stock-row-focused': focusedIndex === idx,
                             }"
                             @click="onRowClick(item.stock_item_id)"
                         >
@@ -590,7 +592,9 @@
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
+    import { useShortcut } from 'src/composables/useShortcut';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
+    import type { QInput } from 'quasar';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
     import type { StockGroup } from 'src/models/stockGroup';
@@ -970,6 +974,43 @@
         peekId.value = peekId.value === stockItemId ? null : stockItemId;
     }
 
+    // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
+    const searchInputRef = ref<QInput | null>(null);
+    const focusedIndex = ref(-1);
+
+    function focusSearch() {
+        searchInputRef.value?.focus();
+    }
+    function moveFocus(delta: number) {
+        const count = filteredStockItems.value.length;
+        if (count === 0) return;
+        focusedIndex.value = Math.max(0, Math.min(count - 1, focusedIndex.value + delta));
+    }
+    function openFocused() {
+        const item = filteredStockItems.value[focusedIndex.value];
+        if (item) onRowClick(item.stock_item_id);
+    }
+    function addFocusedOrSelected() {
+        if (bulkSelection.value.size > 0) {
+            void bulkAddToPrimary();
+            return;
+        }
+        const item = filteredStockItems.value[focusedIndex.value];
+        if (item) void actions.addToList(item.stock_item_id);
+    }
+
+    useShortcut([
+        { keys: 'n', scope: 'Stock overview', description: 'New stock item', handler: onCreateClick },
+        { keys: 'f', scope: 'Stock overview', description: 'Focus the filter/search', handler: focusSearch },
+        { keys: '/', scope: 'Stock overview', description: 'Focus the filter/search', handler: focusSearch },
+        { keys: 'a', scope: 'Stock overview', description: 'Add focused / selected to primary list', handler: addFocusedOrSelected },
+        { keys: 'arrowdown', scope: 'Stock overview', description: 'Focus next item', handler: () => moveFocus(1) },
+        { keys: 'arrowup', scope: 'Stock overview', description: 'Focus previous item', handler: () => moveFocus(-1) },
+        { keys: 'arrowright', scope: 'Stock overview', description: 'Focus next item', handler: () => moveFocus(1) },
+        { keys: 'arrowleft', scope: 'Stock overview', description: 'Focus previous item', handler: () => moveFocus(-1) },
+        { keys: 'enter', scope: 'Stock overview', description: 'Open the focused item', handler: openFocused },
+    ]);
+
     // ── Bulk select mode ─────────────────────────────────────────────────
     const bulkMode = ref(false);
     const bulkSelection = ref<Set<string>>(new Set());
@@ -1127,6 +1168,19 @@
         applyQueryFilters,
     );
 
+    // Open the create dialog when ?create=1 lands — works for both initial
+    // arrivals (onMounted) and re-navigations from the command palette when
+    // the page is already mounted (Vue Router updates query in place without
+    // unmounting). The query is replaced away straight after so a refresh
+    // doesn't reopen the dialog.
+    function maybeOpenCreateFromQuery(): void {
+        if (route.query.create === '1') {
+            onCreateClick();
+            void router.replace({ path: '/stock', query: {} });
+        }
+    }
+    watch(() => route.query.create, () => maybeOpenCreateFromQuery());
+
     onMounted(async () => {
         await Promise.all([
             stockItemStore.getStockItemsAsync(),
@@ -1139,6 +1193,7 @@
         // Apply *after* the supporting data is loaded so the filter chips
         // visibly snap to the linked-from state on the first render.
         applyQueryFilters();
+        maybeOpenCreateFromQuery();
     });
 </script>
 
@@ -1163,6 +1218,10 @@
     }
     .stock-row-selected {
         outline: 2px solid var(--q-primary);
+        outline-offset: -2px;
+    }
+    .stock-row-focused {
+        outline: 2px dashed var(--q-accent);
         outline-offset: -2px;
     }
     .stock-splitter {

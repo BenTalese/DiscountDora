@@ -125,6 +125,12 @@
         <!-- Global quick-add sheet. Mounted once; any screen pops it via
              useQuickAdd().openQuickAdd(). -->
         <QuickAddSheet v-if="currentUser" />
+
+        <!-- Keyboard-shortcut cheatsheet (opened with "?"). -->
+        <ShortcutsCheatsheet v-if="currentUser" />
+
+        <!-- Command palette (Cmd/Ctrl-K). Lazy-mounted on first open. -->
+        <CommandPalette v-if="currentUser && hasEverOpened" />
     </q-layout>
 </template>
 
@@ -136,6 +142,13 @@
     import DoraBubble from 'src/components/dora/DoraBubble.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
+    import CommandPalette from 'src/components/CommandPalette.vue';
+    import ShortcutsCheatsheet from 'src/components/ShortcutsCheatsheet.vue';
+    import { useCommandPalette } from 'src/composables/useCommandPalette';
+    import { useCommands } from 'src/composables/useCommands';
+    import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useUndo } from 'src/composables/useUndo';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, onUnmounted, ref } from 'vue';
@@ -213,6 +226,100 @@
             window.removeEventListener('keydown', onKeyDown);
         }
     });
+
+    // ── Global keyboard shortcuts (S5) ──────────────────────────────────
+    const { openCheatsheet } = useShortcutRegistry();
+    useShortcut([
+        {
+            keys: '?',
+            scope: 'Global',
+            description: 'Show keyboard shortcuts',
+            handler: openCheatsheet,
+        },
+        {
+            keys: '/',
+            scope: 'Global',
+            description: 'Focus search / go to Stock',
+            handler: () => {
+                // On Stock the page registers its own "/" to focus the filter;
+                // it wins (newest). Elsewhere we route there (search autofocuses).
+                if (router.currentRoute.value.path !== '/stock') void router.push('/stock');
+            },
+        },
+        { keys: 'g s', scope: 'Global', description: 'Go to Stock', handler: () => void router.push('/stock') },
+        { keys: 'g l', scope: 'Global', description: 'Go to Shopping Lists', handler: () => void router.push('/shopping-lists') },
+        { keys: 'g r', scope: 'Global', description: 'Go to Recipes', handler: () => void router.push('/recipes') },
+        { keys: 'g d', scope: 'Global', description: 'Go to Dashboard', handler: () => void router.push('/') },
+        { keys: 'g h', scope: 'Global', description: 'Go to Help', handler: () => void router.push('/help') },
+    ]);
+
+    // ── Command palette (S1) ────────────────────────────────────────────
+    const { paletteOpen, hasEverOpened, togglePalette } = useCommandPalette();
+    void paletteOpen;
+    const shoppingListStore = useShoppingListStore();
+    const shoppingListApi = new ShoppingListApiService();
+
+    function onCommandPaletteKey(event: KeyboardEvent) {
+        // Cmd-K (mac) / Ctrl-K (everyone else). Cmd-K must work even when an
+        // input is focused, so we don't gate on isTypingTarget here.
+        if (!(event.ctrlKey || event.metaKey)) return;
+        if (event.shiftKey || event.altKey) return;
+        if (event.key.toLowerCase() !== 'k') return;
+        event.preventDefault();
+        togglePalette();
+    }
+    onMounted(() => {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', onCommandPaletteKey);
+        }
+    });
+    onUnmounted(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('keydown', onCommandPaletteKey);
+        }
+    });
+
+    // Static commands — registered while MainLayout is mounted (the whole
+    // authenticated session). Page-specific commands register themselves via
+    // useCommands() with their own lifecycle.
+    async function autogenerateFromLowStock() {
+        const result = await shoppingListApi.autogenerateAsync({});
+        if (result.shopping_list_id) {
+            void shoppingListStore.refreshAsync();
+            void router.push(`/shopping-lists/${result.shopping_list_id}`);
+        } else {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'Nothing low or out — no list generated.',
+            });
+        }
+    }
+    function openPrimaryList() {
+        const id = shoppingListStore.primaryListId;
+        if (id) void router.push(`/shopping-lists/${id}`);
+        else void router.push('/shopping-lists');
+    }
+    useCommands([
+        { id: 'nav.dashboard', label: 'Go to Dashboard', icon: 'dashboard', section: 'Navigate', action: () => router.push('/') },
+        { id: 'nav.stock', label: 'Go to Stock', icon: 'inventory_2', section: 'Navigate', action: () => router.push('/stock') },
+        { id: 'nav.lists', label: 'Go to Shopping Lists', icon: 'shopping_cart', section: 'Navigate', action: () => router.push('/shopping-lists') },
+        { id: 'nav.recipes', label: 'Go to Recipes', icon: 'menu_book', section: 'Navigate', action: () => router.push('/recipes') },
+        { id: 'nav.meals', label: 'Go to Meals', icon: 'restaurant', section: 'Navigate', action: () => router.push('/meals') },
+        { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: 'calendar_month', section: 'Navigate', action: () => router.push('/meal-plans') },
+        { id: 'nav.products', label: 'Go to Product Search', icon: 'local_offer', section: 'Navigate', action: () => router.push('/product-search') },
+        { id: 'nav.my-products', label: 'Go to My Products', icon: 'favorite', section: 'Navigate', action: () => router.push('/my-products') },
+        { id: 'nav.settings', label: 'Go to Settings', icon: 'settings', section: 'Navigate', action: () => router.push('/settings') },
+        { id: 'nav.help', label: 'Go to Help', icon: 'help_outline', section: 'Navigate', action: () => router.push('/help') },
+
+        { id: 'create.stock-item', label: 'Create stock item', icon: 'add_box', section: 'Create', tags: ['new item', 'add item'], action: () => router.push({ path: '/stock', query: { create: '1' } }) },
+        { id: 'lists.open-primary', label: 'Open primary shopping list', icon: 'shopping_cart', section: 'Shopping lists', action: openPrimaryList },
+        { id: 'lists.autogenerate-low', label: 'Auto-generate shopping list from low stock', icon: 'auto_awesome', section: 'Shopping lists', tags: ['generate', 'restock'], action: autogenerateFromLowStock },
+
+        { id: 'ui.toggle-dark', label: 'Toggle dark mode', icon: 'dark_mode', section: 'View', tags: ['theme', 'light'], action: () => $q.dark.toggle() },
+        { id: 'help.shortcuts', label: 'Show keyboard shortcuts', icon: 'keyboard', section: 'Help', tags: ['cheatsheet'], action: openCheatsheet },
+        { id: 'help.restart-onboarding', label: 'Restart onboarding', icon: 'play_circle', section: 'Help', action: () => router.push('/welcome') },
+    ]);
 
     const linksList: EssentialLinkProps[] = [
         { title: 'Dashboard', icon: 'dashboard', link: '/' },

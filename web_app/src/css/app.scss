@@ -23,6 +23,13 @@ STYLE GUIDE:
     font-size: var(--dora-base-font-size, 16px);
 }
 
+// Theme-coloured browser scrollbars. Firefox honours scrollbar-color directly;
+// Chromium 121+ also supports the standard property. Older Chromium falls back
+// to the default OS scrollbar — no extra rules needed.
+html {
+    scrollbar-color: var(--q-secondary) var(--q-page);
+}
+
 body {
     background-color: var(--q-page);
     font-family: 'Nunito Variable', 'Nunito', 'Segoe UI', sans-serif;

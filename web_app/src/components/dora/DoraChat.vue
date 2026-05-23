@@ -31,7 +31,14 @@
 
         <q-separator />
 
-        <div ref="messagesEl" class="dora-chat-messages col">
+        <q-scroll-area
+            ref="messagesScrollEl"
+            class="col dora-chat-scroll"
+            :thumb-style="scrollThumbStyle"
+            :bar-style="scrollBarStyle"
+            visible
+        >
+            <div class="dora-chat-messages">
             <div
                 v-for="(message, idx) in messages"
                 :key="idx"
@@ -154,7 +161,8 @@
                     <q-spinner-dots size="20px" color="primary" />
                 </div>
             </div>
-        </div>
+            </div>
+        </q-scroll-area>
 
         <q-separator />
 
@@ -256,6 +264,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import type { QScrollArea } from 'quasar';
     import { computed, nextTick, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -302,7 +311,22 @@
     const messages = ref<Message[]>([]);
     const draft = ref('');
     const thinking = ref(false);
-    const messagesEl = ref<HTMLElement | null>(null);
+    const messagesScrollEl = ref<QScrollArea | null>(null);
+
+    const scrollThumbStyle = {
+        right: '2px',
+        borderRadius: '4px',
+        background: 'var(--q-secondary)',
+        width: '6px',
+        opacity: '0.6',
+    } as const;
+    const scrollBarStyle = {
+        right: '0px',
+        borderRadius: '4px',
+        background: 'transparent',
+        width: '10px',
+        opacity: '0.2',
+    } as const;
     const quickActions = QUICK_ACTIONS;
 
     // ── Contextual quick actions (P14) ───────────────────────────────
@@ -371,8 +395,11 @@
 
     async function scrollToBottom() {
         await nextTick();
-        const el = messagesEl.value;
-        if (el) el.scrollTop = el.scrollHeight;
+        const el = messagesScrollEl.value;
+        if (!el) return;
+        // Smooth animated scroll-to-bottom. setScrollPercentage clamps so
+        // we don't need to compute the precise pixel target.
+        el.setScrollPercentage('vertical', 1, 200);
     }
 
     function pushDoraMessage(reply: Awaited<ReturnType<typeof runIntent>>) {
@@ -741,19 +768,16 @@
             rgba(254, 210, 36, 0.08)
         );
     }
+    /* QScrollArea is the flex child that fills the column and owns the
+       overflow; min-height: 0 lets it shrink so the footer stays visible. */
+    .dora-chat-scroll {
+        min-height: 0;
+    }
     .dora-chat-messages {
-        overflow-y: auto;
         padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 10px;
-        /* `flex: 1` + a zero `min-height` is the documented incantation
-           for "fill remaining flex space, allow overflow to scroll".
-           Setting min-height: 0 is the key — without it Chrome refuses
-           to shrink the box below content size, which pushes the footer
-           out of view after a few replies. */
-        flex: 1 1 0;
-        min-height: 0;
     }
     .dora-chat-message {
         display: flex;

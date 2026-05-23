@@ -22,7 +22,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
           ? createWebHistory
           : createWebHashHistory;
 
-    const Router = createRouter({
+    const ROUTER = createRouter({
         scrollBehavior: () => ({ left: 0, top: 0 }),
         routes,
 
@@ -36,7 +36,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     // user to /errors/server with a retry rather than leaving them on a
     // half-loaded screen. We tag with the error message so the report-this
     // link in PageErrorState carries useful context.
-    Router.onError((err) => {
+    ROUTER.onError((err) => {
         console.error('Vue Router Error: ' + err.message);
         Notify.create({
             type: 'negative',
@@ -49,7 +49,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
             return;
         }
         try {
-            void Router.push({
+            void ROUTER.push({
                 path: '/errors/server',
                 query: { ref: err.message.slice(0, 80) },
             });
@@ -64,7 +64,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     // either lets the request through, redirects to /login (when a protected
     // route needs a session), or redirects to / (when an already-logged-in
     // user lands on /login).
-    Router.beforeEach(async (to) => {
+    ROUTER.beforeEach(async (to) => {
         const authStore = useAuthStore();
         if (!authStore.isBootstrapped) {
             await authStore.bootstrapAsync();
@@ -109,5 +109,17 @@ export default defineRouter(function (/* { store, ssrContext } */) {
         return true;
     });
 
-    return Router;
+    // Browser tab title — picks the nearest matched-route's meta.title so
+    // nested settings pages get their leaf title (e.g. "Preferences"), not
+    // the parent ("Settings"). Falls back to the app name if a route has
+    // no title set.
+    const APP_NAME = 'Discount Dora';
+    ROUTER.afterEach((to) => {
+        if (typeof document === 'undefined') return;
+        const titled = [...to.matched].reverse().find((r) => r.meta?.title);
+        const leaf = titled?.meta.title;
+        document.title = leaf ? `${leaf} | ${APP_NAME}` : APP_NAME;
+    });
+
+    return ROUTER;
 });

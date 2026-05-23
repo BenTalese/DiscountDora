@@ -1,5 +1,11 @@
 export type ThemePreference = 'system' | 'light' | 'dark';
-export type FontFamilyPreference = 'default' | 'urbanist' | 'nunito';
+export type FontFamilyPreference =
+    | 'default'
+    | 'urbanist'
+    | 'nunito'
+    | 'inter'
+    | 'lexend'
+    | 'plus_jakarta_sans';
 export type FontSizePreference = 'sm' | 'md' | 'lg';
 
 export type AuthenticatedUser = {

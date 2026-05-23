@@ -9,43 +9,12 @@ STYLE GUIDE:
     7. If a css class only has one property, make it inline
 */
 
+// Nunito and Urbanist are loaded via @fontsource-variable in src/boot/fonts.ts.
 @font-face {
     font-family: 'Cute Dino';
     src: url('/fonts/CuteDino.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Nunito';
-    src: url('/fonts/Nunito-Regular.woff2') format('woff2');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Nunito';
-    src: url('/fonts/Nunito-Italic.woff2') format('woff2');
-    font-weight: normal;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Urbanist';
-    src: url('/fonts/Urbanist-Regular.woff2') format('woff2');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Urbanist';
-    src: url('/fonts/Urbanist-Italic.woff2') format('woff2');
-    font-weight: normal;
-    font-style: italic;
     font-display: swap;
 }
 
@@ -58,6 +27,6 @@ STYLE GUIDE:
 
 body {
     background-color: var(--q-page);
-    font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
+    font-family: 'Nunito Variable', 'Nunito', 'Segoe UI', sans-serif;
     color: var(--q-text);
 }

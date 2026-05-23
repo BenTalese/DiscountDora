@@ -325,7 +325,7 @@
                 {
                     title: 'Theme, font, and text size',
                     summary:
-                        'In Preferences, switch between System / Light / Dark, pick a font (Urbanist or Nunito), and adjust text size.',
+                        'In Preferences, switch between System / Light / Dark, pick a font (Urbanist, Nunito, Inter, Lexend, or Plus Jakarta Sans), and adjust text size.',
                     path: '/settings/preferences',
                 },
                 {

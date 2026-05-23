@@ -400,6 +400,9 @@
         { label: 'Default', value: 'default' },
         { label: 'Urbanist', value: 'urbanist' },
         { label: 'Nunito', value: 'nunito' },
+        { label: 'Inter', value: 'inter' },
+        { label: 'Lexend', value: 'lexend' },
+        { label: 'Plus Jakarta Sans', value: 'plus_jakarta_sans' },
     ];
     const TOUR_CARDS = [
         {

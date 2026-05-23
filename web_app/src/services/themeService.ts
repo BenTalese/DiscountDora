@@ -76,12 +76,15 @@ const FONT_SIZE_PX: Record<FontSizePreference, string> = {
 
 // font-family CSS values. `default` falls back to whatever the global CSS
 // sets via `body { font-family: ... }` so legacy pages remain stable.
+const SYSTEM_FALLBACK =
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const FONT_FAMILY_CSS: Record<FontFamilyPreference, string> = {
     default: '',
-    urbanist:
-        "'Urbanist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    nunito:
-        "'Nunito', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    urbanist: `'Urbanist Variable', 'Urbanist', ${SYSTEM_FALLBACK}`,
+    nunito: `'Nunito Variable', 'Nunito', ${SYSTEM_FALLBACK}`,
+    inter: `'Inter Variable', 'Inter', ${SYSTEM_FALLBACK}`,
+    lexend: `'Lexend Variable', 'Lexend', ${SYSTEM_FALLBACK}`,
+    plus_jakarta_sans: `'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ${SYSTEM_FALLBACK}`
 };
 
 let mediaQuery: MediaQueryList | null = null;

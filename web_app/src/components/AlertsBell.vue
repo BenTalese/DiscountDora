@@ -241,6 +241,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, onUnmounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -354,7 +355,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not apply.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             busy.value = null;

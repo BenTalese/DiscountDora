@@ -258,6 +258,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, nextTick, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     type Message = {
         from: 'user' | 'dora';
@@ -456,7 +457,7 @@
         } catch (err) {
             message.done = false;
             pushDoraMessage({
-                text: `I couldn't update the list — ${String(err)}`,
+                text: `I couldn't update the list — ${describeApiError(err)}`,
                 mood: 'confused',
             });
         } finally {
@@ -482,7 +483,7 @@
             pushDoraMessage(reply);
         } catch (err) {
             pushDoraMessage({
-                text: `Something went wrong while answering — ${String(err)}`,
+                text: `Something went wrong while answering — ${describeApiError(err)}`,
                 mood: 'confused',
             });
         } finally {

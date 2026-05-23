@@ -234,6 +234,7 @@
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -334,7 +335,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save AI settings.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         } finally {
             saving.value = false;

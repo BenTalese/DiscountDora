@@ -1,6 +1,7 @@
 <template>
     <q-select
-        class="dora-minWidth-200 q-ma-sm rounded-borders shadow-1"
+        class="q-ma-sm rounded-borders shadow-1"
+        style="min-width: 200px"
         :clearable="clearable"
         :label="label"
         :multiple="multiple"
@@ -38,7 +39,7 @@
                         :name="getOptionIconName(scope)"
                         size="md"
                     />
-                    <q-item-label class="dora-fontWeight-400">
+                    <q-item-label class="text-weight-regular">
                         {{ getOptionLabel(scope) }}
                     </q-item-label>
                 </div>

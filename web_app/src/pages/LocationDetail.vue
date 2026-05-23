@@ -291,6 +291,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const route = useRoute();
     const router = useRouter();
@@ -401,7 +402,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not generate list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             generatingList.value = false;
@@ -464,7 +465,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: `Could not add ${kind}.`,
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         }
     }

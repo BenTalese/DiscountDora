@@ -552,6 +552,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -585,7 +586,7 @@
             ]);
             products.value = page.items;
         } catch (err) {
-            loadError.value = `Could not load: ${String(err)}`;
+            loadError.value = `Could not load: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -835,7 +836,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not unlink everything.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             bulkBusy.value = false;
@@ -875,7 +876,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             bulkBusy.value = false;
@@ -921,7 +922,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not unlink.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -938,7 +939,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

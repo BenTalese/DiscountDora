@@ -232,6 +232,7 @@
         type LocationNode,
     } from 'src/models/location';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, ref } from 'vue';
@@ -394,11 +395,14 @@
             });
             panelOpen.value = false;
         } catch (err) {
+            const extracted = extractFieldErrors(err);
+            const detail =
+                Object.values(extracted.fieldErrors).filter(Boolean).join(' ') ||
+                extracted.generalError;
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not generate list.',
-                caption: String(err),
+                message: detail || 'Could not generate list.',
             });
         } finally {
             generatingList.value = false;
@@ -426,11 +430,14 @@
                 message: `Created zone "${name}".`
             });
         } catch (err) {
+            const extracted = extractFieldErrors(err);
+            const detail =
+                Object.values(extracted.fieldErrors).filter(Boolean).join(' ') ||
+                extracted.generalError;
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not create zone.',
-                caption: String(err)
+                message: detail || 'Could not create zone.'
             });
         }
     }

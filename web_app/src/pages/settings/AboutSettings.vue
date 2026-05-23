@@ -5,7 +5,7 @@
                 <img src="../../assets/logo-mascot.png" alt="Discount Dora" />
             </q-avatar>
             <div>
-                <div class="text-h6 dora-fontFamily-cuteDino">Discount Dora</div>
+                <div class="text-h6" style="font-family: 'Cute Dino'">Discount Dora</div>
                 <div class="text-caption text-grey">Your pantry at your fingertips.</div>
             </div>
         </q-card-section>

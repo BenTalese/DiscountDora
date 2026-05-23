@@ -6,12 +6,17 @@
             </q-card-section>
             <q-card-section>
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
+                    <FormErrorSummary :message="generalError" />
+
                     <div class="row q-col-gutter-md">
                         <q-input
                             class="col-12 col-sm-6"
                             outlined
                             label="Name *"
                             v-model="form.name"
+                            :error="!!fieldErrors.name"
+                            :error-message="fieldErrors.name"
+                            @update:model-value="clearField('name')"
                             :rules="[(v: string) => !!v || 'Required']"
                         />
                         <q-input
@@ -20,6 +25,9 @@
                             label="Start date (Monday) *"
                             type="date"
                             v-model="form.start_date"
+                            :error="!!fieldErrors.start_date"
+                            :error-message="fieldErrors.start_date"
+                            @update:model-value="clearField('start_date')"
                         />
                     </div>
 
@@ -90,8 +98,10 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
+    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { MealPlan } from 'src/models/meal';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
+    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useMealStore } from 'src/stores/mealStore';
     import { computed, reactive, ref, watch } from 'vue';
 
@@ -120,12 +130,24 @@
     const emptyForm = (): Form => ({ name: '', start_date: todayIso(), entries: [] });
     const form = reactive<Form>(emptyForm());
     const saving = ref(false);
+    const generalError = ref<string | null>(null);
+    const fieldErrors = ref<Record<string, string>>({});
+
+    function clearField(field: string) {
+        if (fieldErrors.value[field]) {
+            const next = { ...fieldErrors.value };
+            delete next[field];
+            fieldErrors.value = next;
+        }
+    }
 
     watch(
         () => props.modelValue,
         (open) => {
             if (!open) return;
             Object.assign(form, emptyForm());
+            generalError.value = null;
+            fieldErrors.value = {};
             if (props.plan) {
                 form.name = props.plan.name;
                 form.start_date = props.plan.start_date;
@@ -154,6 +176,8 @@
 
     async function onSubmit() {
         saving.value = true;
+        generalError.value = null;
+        fieldErrors.value = {};
         try {
             const entries = form.entries.filter((e) => !!e.meal_id);
             if (props.plan) {
@@ -171,6 +195,11 @@
                 });
             }
             emit('saved');
+        } catch (err) {
+            const extracted = extractFieldErrors(err);
+            fieldErrors.value = extracted.fieldErrors;
+            generalError.value =
+                extracted.generalError ?? 'Could not save the meal plan. Please review the form.';
         } finally {
             saving.value = false;
         }

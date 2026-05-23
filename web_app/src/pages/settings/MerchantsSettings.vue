@@ -142,6 +142,7 @@
     } from 'src/services/api/merchantManagementApiService';
     import { computed, onMounted, ref } from 'vue';
     import ProviderHealthChip from 'src/components/settings/ProviderHealthChip.vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const service = new MerchantManagementApiService();
@@ -252,7 +253,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: `Could not update ${merchant.name}.`,
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         } finally {
             togglingMerchant.value = null;
@@ -274,7 +275,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Health check failed.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         } finally {
             checking.value = false;

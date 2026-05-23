@@ -235,6 +235,7 @@
     } from 'src/services/api/helpApiService';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     type GuideEntry = { title: string; summary: string; path?: string };
     type GuideGroup = { title: string; icon: string; entries: GuideEntry[] };
@@ -406,7 +407,7 @@
             const result = await helpApi.getChangelogAsync();
             changelogEntries.value = result.entries;
         } catch (err) {
-            changelogError.value = `Couldn't load the changelog: ${String(err)}`;
+            changelogError.value = `Couldn't load the changelog: ${describeApiError(err)}`;
         } finally {
             changelogLoading.value = false;
         }

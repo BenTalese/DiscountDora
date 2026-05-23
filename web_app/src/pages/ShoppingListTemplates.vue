@@ -260,6 +260,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -307,7 +308,7 @@
         try {
             templates.value = await api.getAllAsync();
         } catch (err) {
-            loadError.value = `Could not load templates: ${String(err)}`;
+            loadError.value = `Could not load templates: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -336,7 +337,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create template.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -360,7 +361,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             editingId.value = null;
@@ -388,7 +389,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -413,7 +414,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -432,7 +433,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load template.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             editorOpen.value = false;
         }
@@ -463,7 +464,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not add item.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -482,7 +483,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update quantity.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -529,7 +530,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove item.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

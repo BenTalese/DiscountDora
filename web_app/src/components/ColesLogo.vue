@@ -1,6 +1,5 @@
 <template>
     <svg
-        class="dora-height-32 dora-width-48"
         data-di-rand="1713606983167"
         role="img"
         aria-labelledby="colesTitle"

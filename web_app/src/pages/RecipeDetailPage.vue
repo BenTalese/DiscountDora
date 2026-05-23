@@ -597,6 +597,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const route = useRoute();
     const router = useRouter();
@@ -782,7 +783,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create stock item.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -818,7 +819,7 @@
             recipe.value = fresh;
             hydrateForm(fresh);
         } catch (err) {
-            loadError.value = `Could not load recipe: ${String(err)}`;
+            loadError.value = `Could not load recipe: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -856,7 +857,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save recipe.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             saving.value = false;
@@ -874,7 +875,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not toggle favourite.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -983,7 +984,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load substitutes.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             substitutesOpen.value = false;
         } finally {
@@ -1106,7 +1107,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not mark made.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1134,7 +1135,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

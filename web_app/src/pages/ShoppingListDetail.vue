@@ -699,6 +699,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const route = useRoute();
     const router = useRouter();
@@ -757,7 +758,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not start shopping.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             togglingProgress.value = false;
@@ -774,7 +775,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not stop shopping.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             togglingProgress.value = false;
@@ -827,7 +828,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Bulk update failed.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             bulkBusy.value = false;
@@ -909,7 +910,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not reorder.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1036,7 +1037,7 @@
         try {
             detail.value = await api.getDetailAsync(listId.value);
         } catch (err) {
-            loadError.value = `Could not load list: ${String(err)}`;
+            loadError.value = `Could not load list: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -1072,7 +1073,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             editingName.value = false;
@@ -1088,7 +1089,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not set primary.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1143,7 +1144,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load substitutes.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             return;
         }
@@ -1206,7 +1207,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not swap.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1253,7 +1254,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move line.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1303,7 +1304,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update line.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1320,7 +1321,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update quantity.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1386,7 +1387,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not set offer.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1433,7 +1434,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove line.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1594,7 +1595,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not finish.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             finishing.value = false;
@@ -1630,7 +1631,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not refresh deals.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1662,7 +1663,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1730,7 +1731,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save template.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1780,7 +1781,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move items.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -1797,7 +1798,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

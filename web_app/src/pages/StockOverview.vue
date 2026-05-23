@@ -611,6 +611,7 @@
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const stockGroupApi = new StockGroupApiService();
@@ -735,7 +736,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear expiry.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -954,7 +955,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             openBusyId.value = null;
@@ -1088,7 +1089,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move items.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             bulkBusy.value = false;

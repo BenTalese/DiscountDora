@@ -330,6 +330,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -592,7 +593,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not mark made.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -631,7 +632,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not duplicate.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

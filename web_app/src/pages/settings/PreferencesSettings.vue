@@ -275,6 +275,7 @@
     } from 'src/models/auth';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref, watch } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
@@ -341,7 +342,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: err ? String(err) : undefined
+            caption: describeApiError(err) || ''
         });
     }
 

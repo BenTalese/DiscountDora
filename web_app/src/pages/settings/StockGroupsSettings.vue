@@ -91,6 +91,7 @@
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import { onMounted, ref } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const api = new StockGroupApiService();
@@ -109,7 +110,7 @@
         try {
             groups.value = await api.getAllAsync();
         } catch (err) {
-            loadError.value = `Could not load: ${String(err)}`;
+            loadError.value = `Could not load: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -137,7 +138,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             creating.value = false;
@@ -163,7 +164,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             editingId.value = null;
@@ -197,7 +198,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

@@ -7,10 +7,15 @@
 
             <q-card-section>
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
+                    <FormErrorSummary :message="generalError" />
+
                     <q-input
                         outlined
                         label="Name *"
                         v-model="form.name"
+                        :error="!!fieldErrors.name"
+                        :error-message="fieldErrors.name"
+                        @update:model-value="clearField('name')"
                         :rules="[(v: string) => !!v || 'Name is required']"
                         autofocus
                     />
@@ -154,8 +159,10 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
+    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { Recipe } from 'src/models/recipe';
     import type { CreateRecipeIngredientCommand } from 'src/services/api/recipeApiService';
+    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, reactive, ref, watch } from 'vue';
@@ -205,6 +212,16 @@
 
     const form = reactive<RecipeForm>(emptyForm());
     const saving = ref(false);
+    const generalError = ref<string | null>(null);
+    const fieldErrors = ref<Record<string, string>>({});
+
+    function clearField(field: string) {
+        if (fieldErrors.value[field]) {
+            const next = { ...fieldErrors.value };
+            delete next[field];
+            fieldErrors.value = next;
+        }
+    }
 
     const stockItemOptions = computed(() =>
         stockItems.value.map((s) => ({ label: s.name, value: s.stock_item_id }))
@@ -218,6 +235,8 @@
         (open) => {
             if (!open) return;
             Object.assign(form, emptyForm());
+            generalError.value = null;
+            fieldErrors.value = {};
             if (props.recipe) {
                 form.name = props.recipe.name;
                 form.category = props.recipe.category;
@@ -250,6 +269,8 @@
 
     async function onSubmit() {
         saving.value = true;
+        generalError.value = null;
+        fieldErrors.value = {};
         try {
             const ingredients = form.ingredients.filter((i) => !!i.stock_item_id);
             if (props.recipe) {
@@ -285,6 +306,11 @@
                 });
             }
             emit('saved');
+        } catch (err) {
+            const extracted = extractFieldErrors(err);
+            fieldErrors.value = extracted.fieldErrors;
+            generalError.value =
+                extracted.generalError ?? 'Could not save the recipe. Please review the form.';
         } finally {
             saving.value = false;
         }

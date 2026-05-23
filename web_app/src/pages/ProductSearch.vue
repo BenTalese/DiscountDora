@@ -314,6 +314,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const merchantStore = useMerchantStore();
@@ -530,7 +531,7 @@
                 $q.notify({ type: 'positive', position: 'bottom-right', message: `Saved ${offer.name}.` });
             }
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update the saved product.', caption: String(err) });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update the saved product.', caption: describeApiError(err) || '' });
         }
     }
 
@@ -560,7 +561,7 @@
 
             $q.notify({ type: 'positive', position: 'bottom-right', message: `Tracking ${offer.name} and added to your list.` });
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Quick-add failed.', caption: String(err) });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Quick-add failed.', caption: describeApiError(err) || '' });
         }
     }
 
@@ -618,7 +619,7 @@
             $q.notify({ type: 'positive', position: 'bottom-right', message: 'Linked to stock item.' });
             linkOpen.value = false;
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not link.', caption: String(err) });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not link.', caption: describeApiError(err) || '' });
         } finally {
             linking.value = false;
         }

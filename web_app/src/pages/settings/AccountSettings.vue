@@ -80,6 +80,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -125,7 +126,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not restart onboarding.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             restartingOnboarding.value = false;

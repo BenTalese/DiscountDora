@@ -1,6 +1,5 @@
 <template>
     <q-img
-        class="dora-width-32"
         src="../../src/assets/woolworths-logo.webp"
         :style="`width: ${width}px;`"
     />

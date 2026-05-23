@@ -16,7 +16,10 @@
                 class="absolute-top text-center"
                 v-if="imgCaption"
             >
-                <span class="dora-letterSpacing-3 text-subtitle2 text-weight-regular">
+                <span
+                    class="text-subtitle2 text-weight-regular"
+                    style="letter-spacing: 3px"
+                >
                     {{ imgCaption }}
                 </span>
             </div>
@@ -26,7 +29,10 @@
             </template>
         </q-img>
 
-        <div class="dora-colour-component column dora-flex-1 row">
+        <div
+            class="dora-colour-component column row"
+            style="flex: 1"
+        >
             <q-card-section>
                 <q-btn
                     class="absolute dorascoped-top-right-offset"
@@ -39,7 +45,7 @@
             </q-card-section>
 
             <slot name="body">
-                <q-card-section class="dora-flex-1">
+                <q-card-section style="flex: 1">
                     {{ body }}
                 </q-card-section>
             </slot>

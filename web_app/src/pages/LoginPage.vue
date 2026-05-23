@@ -5,7 +5,7 @@
                 <q-avatar size="120px" class="q-mb-md">
                     <img src="../assets/logo-mascot.png" alt="Discount Dora logo" />
                 </q-avatar>
-                <div class="dora-fontFamily-cuteDino text-h4 text-primary">Discount Dora</div>
+                <div class="text-h4 text-primary" style="font-family: 'Cute Dino'">Discount Dora</div>
                 <div class="text-caption text-grey q-mt-xs">
                     {{ mode === 'login' ? 'Sign in to your pantry' : 'Create your account' }}
                 </div>
@@ -19,6 +19,9 @@
                         v-model="form.username"
                         label="Username"
                         autocomplete="username"
+                        :error="!!fieldErrors.username"
+                        :error-message="fieldErrors.username"
+                        @update:model-value="clearField('username')"
                         :rules="[(v: string) => !!v || 'Username is required']"
                     />
 
@@ -29,6 +32,9 @@
                         label="Email (optional)"
                         type="email"
                         autocomplete="email"
+                        :error="!!fieldErrors.email"
+                        :error-message="fieldErrors.email"
+                        @update:model-value="clearField('email')"
                     />
 
                     <q-input
@@ -37,6 +43,9 @@
                         label="Password"
                         :type="showPassword ? 'text' : 'password'"
                         :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+                        :error="!!fieldErrors.password"
+                        :error-message="fieldErrors.password"
+                        @update:model-value="clearField('password')"
                         :rules="[
                             (v: string) => !!v || 'Password is required',
                             (v: string) =>
@@ -52,9 +61,7 @@
                         </template>
                     </q-input>
 
-                    <q-banner v-if="errorMessage" class="bg-red-1 text-red-9" dense rounded>
-                        {{ errorMessage }}
-                    </q-banner>
+                    <FormErrorSummary :message="generalError" />
 
                     <q-btn
                         type="submit"
@@ -83,6 +90,9 @@
 </template>
 
 <script lang="ts" setup>
+    import FormErrorSummary from 'src/components/FormErrorSummary.vue';
+    import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
+    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useAuthStore } from 'src/stores/authStore';
     import { reactive, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -94,7 +104,8 @@
     const mode = ref<'login' | 'register'>('login');
     const showPassword = ref(false);
     const submitting = ref(false);
-    const errorMessage = ref<string | null>(null);
+    const generalError = ref<string | null>(null);
+    const fieldErrors = ref<Record<string, string>>({});
 
     const form = reactive({
         username: '',
@@ -102,14 +113,27 @@
         email: ''
     });
 
+    function resetErrors() {
+        generalError.value = null;
+        fieldErrors.value = {};
+    }
+
+    function clearField(field: string) {
+        if (fieldErrors.value[field]) {
+            const next = { ...fieldErrors.value };
+            delete next[field];
+            fieldErrors.value = next;
+        }
+    }
+
     function toggleMode() {
         mode.value = mode.value === 'login' ? 'register' : 'login';
-        errorMessage.value = null;
+        resetErrors();
     }
 
     async function onSubmit() {
         submitting.value = true;
-        errorMessage.value = null;
+        resetErrors();
         try {
             if (mode.value === 'login') {
                 await authStore.loginAsync({
@@ -127,11 +151,24 @@
             const redirect = (route.query.redirect as string | undefined) ?? '/';
             void router.replace(redirect);
         } catch (err) {
-            errorMessage.value =
-                mode.value === 'login'
-                    ? 'Sign-in failed. Check your username and password.'
-                    : 'Registration failed. That username may already be taken.';
-            // Surface the underlying error in the console for dev visibility.
+            // Login 401 is opaque by design — never tell the user *which*
+            // half (username vs password) was wrong. Show a stable message
+            // and skip the field-level extraction.
+            if (
+                mode.value === 'login' &&
+                err instanceof NormalisedApiError &&
+                err.status === 401
+            ) {
+                generalError.value = 'Sign-in failed. Check your username and password.';
+            } else {
+                const extracted = extractFieldErrors(err);
+                fieldErrors.value = extracted.fieldErrors;
+                generalError.value =
+                    extracted.generalError ??
+                    (mode.value === 'login'
+                        ? 'Sign-in failed. Please try again.'
+                        : 'Registration failed. Please review the form and try again.');
+            }
             // eslint-disable-next-line no-console
             console.warn('auth submit failed', err);
         } finally {

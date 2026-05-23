@@ -250,6 +250,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -458,7 +459,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not generate the list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             generating.value = false;

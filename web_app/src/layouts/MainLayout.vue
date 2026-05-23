@@ -14,7 +14,7 @@
                     @click="toggleLeftDrawer"
                 />
 
-                <q-toolbar-title class="dora-fontFamily-cuteDino dora-fontSize-30">
+                <q-toolbar-title style="font-family: 'Cute Dino'; font-size: 30px">
                     <q-avatar
                         square
                         size="50px"
@@ -23,7 +23,8 @@
                         <img src="../../src/assets/logo-mascot.png" />
                     </q-avatar>
                     <p
-                        class="dora-marginTop-5 dora-marginBottom-0 dora-marginLeft-15 dora-display-inlineBlock text-accent"
+                        class="text-accent"
+                        style="margin: 5px 0 0 15px; display: inline-block"
                     >
                         Discount Dora
                     </p>
@@ -153,6 +154,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, onUnmounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -175,7 +177,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: "Couldn't undo.",
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -210,7 +212,7 @@
                     type: 'negative',
                     position: 'bottom-right',
                     message: "Couldn't redo.",
-                    caption: String(err),
+                    caption: describeApiError(err) || '',
                 });
             }
         }

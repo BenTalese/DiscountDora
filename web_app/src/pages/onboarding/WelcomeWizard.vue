@@ -61,6 +61,9 @@
                         dense
                         label="What should I call you?"
                         autofocus
+                        :error="!!displayNameError"
+                        :error-message="displayNameError ?? undefined"
+                        @update:model-value="displayNameError = null"
                         @keydown.enter.prevent="onNext"
                     />
                     <div class="row q-col-gutter-md">
@@ -363,6 +366,7 @@
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useAuthStore } from 'src/stores/authStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
@@ -453,6 +457,7 @@
 
     const state = ref<OnboardingState | null>(null);
     const loadError = ref<string | null>(null);
+    const displayNameError = ref<string | null>(null);
     const stepIndex = ref(0);
     const advancing = ref(false);
     const completing = ref(false);
@@ -592,7 +597,16 @@
             }
             advance();
         } catch (err) {
-            loadError.value = `Couldn't advance — ${String(err)}`;
+            const extracted = extractFieldErrors(err);
+            // The displayName field maps to the server's `username` validator.
+            if (extracted.fieldErrors.username) {
+                displayNameError.value = extracted.fieldErrors.username;
+                delete extracted.fieldErrors.username;
+            }
+            const remainingFields = Object.values(extracted.fieldErrors).filter(Boolean);
+            loadError.value =
+                [extracted.generalError, ...remainingFields].filter(Boolean).join(' ') ||
+                "Couldn't advance. Please try again.";
         } finally {
             advancing.value = false;
         }
@@ -646,11 +660,14 @@
                 message: 'Added.',
             });
         } catch (err) {
+            const extracted = extractFieldErrors(err);
+            const detail =
+                Object.values(extracted.fieldErrors).filter(Boolean).join(' ') ||
+                extracted.generalError;
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not add — try again.',
-                caption: String(err),
+                message: detail || 'Could not add — try again.',
             });
         } finally {
             addingItem.value = false;
@@ -681,7 +698,9 @@
             clearDraft();
             void router.push('/');
         } catch (err) {
-            loadError.value = `Couldn't skip — ${String(err)}`;
+            const extracted = extractFieldErrors(err);
+            loadError.value =
+                extracted.generalError ?? "Couldn't skip onboarding. Please try again.";
         } finally {
             completing.value = false;
         }
@@ -701,7 +720,9 @@
             }
             void router.push('/');
         } catch (err) {
-            loadError.value = `Couldn't finish — ${String(err)}`;
+            const extracted = extractFieldErrors(err);
+            loadError.value =
+                extracted.generalError ?? "Couldn't finish onboarding. Please try again.";
         } finally {
             completing.value = false;
         }
@@ -711,7 +732,9 @@
         try {
             state.value = await onboardingApi.getStateAsync();
         } catch (err) {
-            loadError.value = `Couldn't load state — ${String(err)}`;
+            const extracted = extractFieldErrors(err);
+            loadError.value =
+                extracted.generalError ?? "Couldn't load onboarding state. Please refresh.";
         }
         // Seed the displayName from the current username, theme/font from
         // the user's prefs, then layer the saved draft on top.

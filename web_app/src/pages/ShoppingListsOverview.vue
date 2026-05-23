@@ -375,6 +375,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -502,7 +503,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             creating.value = false;
@@ -552,7 +553,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not auto-generate.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             autogenerating.value = false;
@@ -581,7 +582,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load recipes.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             return;
         }
@@ -649,7 +650,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load meal plans.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             return;
         }
@@ -694,7 +695,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load meal plan ingredients.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             return;
         }
@@ -751,7 +752,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         } finally {
             creating.value = false;
@@ -787,7 +788,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not archive.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -803,7 +804,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load templates.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
             return;
         }
@@ -860,7 +861,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create from template.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -879,7 +880,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update primary.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -899,7 +900,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy list.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }
@@ -938,7 +939,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: String(err),
+                caption: describeApiError(err) || '',
             });
         }
     }

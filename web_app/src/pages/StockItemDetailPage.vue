@@ -454,6 +454,7 @@
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{ idOverride?: string; embedded?: boolean }>();
     const emit = defineEmits<{ (e: 'close'): void }>();
@@ -806,7 +807,7 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────
     function notifyErr(message: string, err: unknown) {
-        $q.notify({ type: 'negative', position: 'bottom-right', message, caption: String(err) });
+        $q.notify({ type: 'negative', position: 'bottom-right', message, caption: describeApiError(err) || '' });
     }
     function formatDateTime(iso: string): string {
         if (!iso) return '';

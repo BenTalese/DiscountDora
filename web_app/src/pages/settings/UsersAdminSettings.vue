@@ -203,6 +203,7 @@
     } from 'src/services/api/userAdminApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const api = new UserAdminApiService();
@@ -238,7 +239,7 @@
             const page = await api.getAllAsync();
             users.value = page.items;
         } catch (err) {
-            loadError.value = `Could not load users: ${String(err)}`;
+            loadError.value = `Could not load users: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
@@ -255,7 +256,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Update failed.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
             return false;
         } finally {
@@ -315,7 +316,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Reset failed.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         } finally {
             resettingId.value = null;
@@ -335,7 +336,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         }
     }

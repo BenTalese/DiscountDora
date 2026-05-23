@@ -144,6 +144,7 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useLocationStore } from 'src/stores/locationStore';
     import { computed, ref, watch } from 'vue';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{
         modelValue: boolean;
@@ -259,7 +260,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move the item.',
-                caption: String(err)
+                caption: describeApiError(err) || ''
             });
         } finally {
             saving.value = false;

@@ -3,32 +3,25 @@
         <q-header
             bordered
             class="bg-primary text-white"
+            :reveal="$q.screen.lt.md"
         >
-            <q-toolbar>
-                <q-btn
-                    flat
-                    dense
-                    round
-                    icon="menu"
-                    aria-label="Menu"
-                    @click="toggleLeftDrawer"
+            <q-toolbar class="dora-titlebar">
+                <HamburgerButton
+                    :is-visible="$q.screen.lt.md"
+                    :on-click="toggleLeftDrawer"
                 />
 
-                <q-toolbar-title style="font-family: 'Cute Dino'; font-size: 30px">
-                    <q-avatar
-                        square
-                        size="50px"
-                        class="q-ma-xs"
-                    >
-                        <img src="../../src/assets/logo-mascot.png" />
-                    </q-avatar>
-                    <p
-                        class="text-accent"
-                        style="margin: 5px 0 0 15px; display: inline-block"
-                    >
-                        Discount Dora
-                    </p>
-                </q-toolbar-title>
+                <ApplicationLogo />
+
+                <PageTitle
+                    v-if="$q.screen.lt.md && route.meta.title"
+                    :label="String(route.meta.title)"
+                />
+
+                <MainMenuButtonStrip
+                    :is-visible="$q.screen.gt.sm"
+                    :menu-links="linksList"
+                />
 
                 <!-- Global Undo (F5). Reflects the top of the undo stack —
                      tooltip shows the action's label, disabled when there's
@@ -96,15 +89,15 @@
         </q-header>
 
         <q-drawer
+            v-if="$q.screen.lt.md"
             v-model="leftDrawerOpen"
-            show-if-above
             bordered
             side="left"
         >
             <q-list>
-                <EssentialLink
+                <SideMenuButton
                     v-for="link in linksList"
-                    :key="link.title"
+                    :key="link.label"
                     v-bind="link"
                 />
             </q-list>
@@ -136,7 +129,6 @@
 </template>
 
 <script setup lang="ts">
-    import EssentialLink, { type EssentialLinkProps } from 'components/EssentialLink.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AlertsBell from 'src/components/AlertsBell.vue';
@@ -145,6 +137,12 @@
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
     import CommandPalette from 'src/components/CommandPalette.vue';
     import ShortcutsCheatsheet from 'src/components/ShortcutsCheatsheet.vue';
+    import ApplicationLogo from 'src/components/menu/ApplicationLogo.vue';
+    import HamburgerButton from 'src/components/menu/HamburgerButton.vue';
+    import MainMenuButtonStrip from 'src/components/menu/MainMenuButtonStrip.vue';
+    import PageTitle from 'src/components/menu/PageTitle.vue';
+    import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
+    import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
     import { useCommandPalette } from 'src/composables/useCommandPalette';
     import { useCommands } from 'src/composables/useCommands';
     import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
@@ -153,10 +151,11 @@
     import { useUndo } from 'src/composables/useUndo';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, onUnmounted, ref } from 'vue';
-    import { useRouter } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
+    const route = useRoute();
     const router = useRouter();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
@@ -323,17 +322,16 @@
         { id: 'help.restart-onboarding', label: 'Restart onboarding', icon: 'play_circle', section: 'Help', action: () => router.push('/welcome') },
     ]);
 
-    const linksList: EssentialLinkProps[] = [
-        { title: 'Dashboard', icon: 'dashboard', link: '/' },
-        { title: 'Stock', icon: 'inventory_2', link: '/stock' },
-        { title: 'Locations', icon: 'place', link: '/locations' },
-        { title: 'Product Search', icon: 'search', link: '/product-search' },
-        { title: 'My Products', icon: 'shopping_bag', link: '/my-products' },
-        { title: 'Recipes', icon: 'menu_book', link: '/recipes' },
-        { title: 'Meals', icon: 'restaurant', link: '/meals' },
-        { title: 'Meal Plans', icon: 'calendar_month', link: '/meal-plans' },
-        { title: 'Shopping Lists', icon: 'shopping_cart', link: '/shopping-lists' },
-        { title: 'Settings', icon: 'settings', link: '/settings' }
+    const linksList: MenuButtonProps[] = [
+        { label: 'Stock', icon: 'inventory_2', link: '/stock' },
+        { label: 'Locations', icon: 'place', link: '/locations' },
+        { label: 'Product Search', icon: 'search', link: '/product-search' },
+        { label: 'My Products', icon: 'shopping_bag', link: '/my-products' },
+        { label: 'Recipes', icon: 'menu_book', link: '/recipes' },
+        { label: 'Meals', icon: 'restaurant', link: '/meals' },
+        { label: 'Meal Plans', icon: 'calendar_month', link: '/meal-plans' },
+        { label: 'Shopping Lists', icon: 'shopping_cart', link: '/shopping-lists' },
+        { label: 'Settings', icon: 'settings', link: '/settings' },
     ];
 
     const leftDrawerOpen = ref(false);
@@ -347,3 +345,11 @@
         void router.push('/login');
     }
 </script>
+
+<style scoped lang="scss">
+    .dora-titlebar {
+        height: 64px;
+        gap: 8px;
+        padding: 0 12px;
+    }
+</style>

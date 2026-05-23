@@ -7,7 +7,7 @@
             <q-space />
             <q-input
                 ref="searchInputRef"
-                v-model="searchText"
+                v-model="filters.searchText.value"
                 outlined
                 dense
                 debounce="150"
@@ -33,120 +33,88 @@
             </div>
             <q-separator vertical />
             <div class="stock-summary-stat">
-                <div class="text-h6 text-orange-9">{{ summaryCounts.low }}</div>
+                <div class="text-h6 text-orange-9">{{ filters.summaryCounts.value.low }}</div>
                 <div class="text-caption text-grey">low stock</div>
             </div>
             <div class="stock-summary-stat">
-                <div class="text-h6 text-red-7">{{ summaryCounts.out }}</div>
+                <div class="text-h6 text-red-7">{{ filters.summaryCounts.value.out }}</div>
                 <div class="text-caption text-grey">out of stock</div>
             </div>
             <q-separator vertical />
             <div class="stock-summary-stat">
-                <div class="text-h6 text-amber-9">{{ summaryCounts.essentials }}</div>
+                <div class="text-h6 text-amber-9">{{ filters.summaryCounts.value.essentials }}</div>
                 <div class="text-caption text-grey">essentials</div>
             </div>
             <div class="stock-summary-stat">
-                <div class="text-h6 text-secondary">{{ summaryCounts.open }}</div>
+                <div class="text-h6 text-secondary">{{ filters.summaryCounts.value.open }}</div>
                 <div class="text-caption text-grey">open / in-use</div>
             </div>
             <q-space />
             <div class="text-caption text-grey">
-                {{ filteredStockItems.length }} of {{ stockItems.length }} shown
+                {{ filters.filteredStockItems.value.length }} of {{ stockItems.length }} shown
             </div>
         </div>
 
         <!-- Quick filters ──────────────────────────────────────────────── -->
         <div class="row q-gutter-sm q-mb-md items-center">
             <q-chip
-                v-for="level in stockLevelStore.stockLevels"
+                v-for="level in stockLevels"
                 :key="level.stock_level_id"
                 clickable
-                :selected="levelFilter === level.stock_level_id"
+                :selected="filters.levelFilter.value === level.stock_level_id"
                 :color="
-                    levelFilter === level.stock_level_id
+                    filters.levelFilter.value === level.stock_level_id
                         ? getStockLevelColour(level.name)
                         : undefined
                 "
-                :text-color="levelFilter === level.stock_level_id ? 'white' : undefined"
+                :text-color="filters.levelFilter.value === level.stock_level_id ? 'white' : undefined"
                 outline
-                @click="toggleLevelFilter(level.stock_level_id)"
+                @click="filters.toggleLevelFilter(level.stock_level_id)"
             >
                 <q-icon
-                    v-if="levelFilter === level.stock_level_id"
+                    v-if="filters.levelFilter.value === level.stock_level_id"
                     name="check"
                     class="q-mr-xs"
                 />
                 {{ level.name }}
                 <q-badge floating color="grey-3" text-color="grey-9">
-                    {{ countByLevel.get(level.stock_level_id) ?? 0 }}
+                    {{ filters.countByLevel.value.get(level.stock_level_id) ?? 0 }}
                 </q-badge>
             </q-chip>
 
             <q-separator vertical class="q-mx-sm" />
 
-            <q-chip
-                clickable
-                outline
-                :selected="essentialsOnly"
-                :color="essentialsOnly ? 'amber-9' : undefined"
-                :text-color="essentialsOnly ? 'white' : undefined"
-                @click="essentialsOnly = !essentialsOnly"
-            >
-                <q-icon name="flag" size="14px" class="q-mr-xs" />
+            <FilterChip v-model="filters.essentialsOnly.value" icon="flag" active-color="amber-9">
                 Essentials only
-            </q-chip>
+            </FilterChip>
 
-            <q-chip
-                clickable
-                outline
-                :selected="openOnly"
-                :color="openOnly ? 'secondary' : undefined"
-                :text-color="openOnly ? 'white' : undefined"
-                @click="openOnly = !openOnly"
-            >
-                <q-icon name="lock_open" size="14px" class="q-mr-xs" />
+            <FilterChip v-model="filters.openOnly.value" icon="lock_open" active-color="secondary">
                 Open / in-use
-            </q-chip>
+            </FilterChip>
 
-            <q-chip
-                clickable
-                outline
-                :selected="hasAlertOnly"
-                :color="hasAlertOnly ? 'negative' : undefined"
-                :text-color="hasAlertOnly ? 'white' : undefined"
-                @click="hasAlertOnly = !hasAlertOnly"
-            >
-                <q-icon name="warning" size="14px" class="q-mr-xs" />
+            <FilterChip v-model="filters.hasAlertOnly.value" icon="warning" active-color="negative">
                 Needs attention
-            </q-chip>
+            </FilterChip>
 
-            <q-chip
-                clickable
-                outline
-                :selected="usedInRecipeOnly"
-                :color="usedInRecipeOnly ? 'primary' : undefined"
-                :text-color="usedInRecipeOnly ? 'white' : undefined"
-                @click="usedInRecipeOnly = !usedInRecipeOnly"
-            >
-                <q-icon name="menu_book" size="14px" class="q-mr-xs" />
+            <FilterChip v-model="filters.usedInRecipeOnly.value" icon="menu_book" active-color="primary">
                 Used in a recipe
-            </q-chip>
+            </FilterChip>
 
             <q-chip
-                v-if="cartFilter !== 'all'"
+                v-if="filters.cartFilter.value !== 'all'"
                 clickable
                 color="primary"
                 text-color="white"
                 removable
-                @remove="cartFilter = 'all'"
+                @remove="filters.cartFilter.value = 'all'"
             >
                 <q-icon name="shopping_cart" size="14px" class="q-mr-xs" />
-                {{ cartFilter === 'on_list' ? 'On a list' : 'Not on any list' }}
+                {{ filters.cartFilter.value === 'on_list' ? 'On a list' : 'Not on any list' }}
             </q-chip>
 
             <q-select
-                v-model="locationFilter"
-                :options="locationOptions"
+                v-model="filters.locationFilter.value"
+                :options="filters.locationOptions.value"
                 dense
                 outlined
                 emit-value
@@ -157,8 +125,8 @@
             />
 
             <q-select
-                v-model="groupFilter"
-                :options="groupOptions"
+                v-model="filters.groupFilter.value"
+                :options="filters.groupOptions.value"
                 dense
                 outlined
                 emit-value
@@ -169,8 +137,8 @@
             />
 
             <q-select
-                v-model="sortBy"
-                :options="sortOptions"
+                v-model="filters.sortBy.value"
+                :options="STOCK_SORT_OPTIONS"
                 option-value="value"
                 option-label="label"
                 emit-value
@@ -256,198 +224,23 @@
         >
             <template #before>
                 <div class="q-pr-md">
-                    <q-list v-if="filteredStockItems.length > 0" class="q-gutter-y-sm">
-                        <q-card
-                            v-for="(item, idx) in filteredStockItems"
+                    <q-list
+                        v-if="filters.filteredStockItems.value.length > 0"
+                        class="q-gutter-y-sm"
+                    >
+                        <StockItemRow
+                            v-for="(item, idx) in filters.filteredStockItems.value"
                             :key="item.stock_item_id"
-                            bordered
-                            flat
-                            class="stock-row cursor-pointer"
-                            :class="{
-                                'stock-row-dim':
-                                    stockLevelName(item.stock_level_id) === 'Out of Stock',
-                                'stock-row-selected': peekId === item.stock_item_id,
-                                'stock-row-focused': focusedIndex === idx,
-                            }"
-                            @click="onRowClick(item.stock_item_id)"
-                        >
-                            <q-card-section class="row items-center no-wrap q-py-sm q-gutter-x-sm">
-                                <q-checkbox
-                                    v-if="bulkMode"
-                                    :model-value="bulkSelection.has(item.stock_item_id)"
-                                    @click.stop
-                                    @update:model-value="toggleBulk(item.stock_item_id)"
-                                />
-
-                                <!-- Identity (P0 chip) -->
-                                <StockItemChip :stock-item="item" @click.stop />
-
-                                <!-- Location chip → filter to this location -->
-                                <q-chip
-                                    v-if="item.stock_location_id"
-                                    dense
-                                    clickable
-                                    icon="place"
-                                    color="grey-3"
-                                    text-color="grey-9"
-                                    @click.stop="locationFilter = item.stock_location_id"
-                                >
-                                    {{ locationName(item.stock_location_id) }}
-                                    <q-tooltip>Filter to this location</q-tooltip>
-                                </q-chip>
-
-                                <!-- On N lists chip → which lists -->
-                                <q-chip
-                                    v-if="onListsCount(item.stock_item_id) > 0"
-                                    dense
-                                    clickable
-                                    icon="shopping_cart"
-                                    color="primary"
-                                    text-color="white"
-                                    @click.stop
-                                >
-                                    On {{ onListsCount(item.stock_item_id) }}
-                                    {{ onListsCount(item.stock_item_id) === 1 ? 'list' : 'lists' }}
-                                    <q-menu auto-close>
-                                        <q-list dense style="min-width: 200px">
-                                            <q-item-label header>On these lists</q-item-label>
-                                            <q-item
-                                                v-for="l in listsFor(item.stock_item_id)"
-                                                :key="l.shopping_list_id"
-                                                clickable
-                                                @click="goToList(l.shopping_list_id)"
-                                            >
-                                                <q-item-section>
-                                                    {{ l.name }}
-                                                    <span v-if="l.is_primary"> (primary)</span>
-                                                </q-item-section>
-                                                <q-item-section side>
-                                                    <q-icon name="open_in_new" size="16px" />
-                                                </q-item-section>
-                                            </q-item>
-                                        </q-list>
-                                    </q-menu>
-                                </q-chip>
-
-                                <!-- Expiry / alert dot → push or clear inline -->
-                                <q-btn
-                                    flat
-                                    dense
-                                    round
-                                    size="sm"
-                                    :icon="expiryIcon(item)"
-                                    :color="expiryColour(item)"
-                                    @click.stop
-                                >
-                                    <q-tooltip>{{ expiryTooltip(item) }}</q-tooltip>
-                                    <q-menu auto-close>
-                                        <q-list dense style="min-width: 180px">
-                                            <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 7)">
-                                                <q-item-section>Push expiry +7 days</q-item-section>
-                                            </q-item>
-                                            <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 30)">
-                                                <q-item-section>Push expiry +30 days</q-item-section>
-                                            </q-item>
-                                            <q-item
-                                                clickable
-                                                :disable="!item.expiry_date"
-                                                @click="clearExpiry(item.stock_item_id)"
-                                            >
-                                                <q-item-section>Clear expiry</q-item-section>
-                                            </q-item>
-                                        </q-list>
-                                    </q-menu>
-                                </q-btn>
-
-                                <!-- Used in N recipes → hover list, click → recipes -->
-                                <q-btn
-                                    v-if="recipesUsing(item.stock_item_id).length > 0"
-                                    flat
-                                    dense
-                                    round
-                                    size="sm"
-                                    icon="menu_book"
-                                    color="primary"
-                                    @click.stop="actions.seeRecipesUsing(item.stock_item_id)"
-                                >
-                                    <q-badge floating color="primary">
-                                        {{ recipesUsing(item.stock_item_id).length }}
-                                    </q-badge>
-                                    <q-tooltip>
-                                        <div class="text-weight-bold q-mb-xs">Used in recipes</div>
-                                        <div
-                                            v-for="r in recipesUsing(item.stock_item_id)"
-                                            :key="r.recipe_id"
-                                        >
-                                            {{ r.name }}
-                                        </div>
-                                    </q-tooltip>
-                                </q-btn>
-
-                                <q-space />
-
-                                <!-- Stock-level cycler -->
-                                <q-btn-dropdown
-                                    flat
-                                    dense
-                                    no-caps
-                                    :label="stockLevelName(item.stock_level_id) || 'Set level'"
-                                    class="text-caption"
-                                    @click.stop
-                                >
-                                    <q-list dense>
-                                        <q-item
-                                            v-for="level in stockLevelStore.stockLevels"
-                                            :key="level.stock_level_id"
-                                            clickable
-                                            v-close-popup
-                                            @click.stop="
-                                                updateStockLevelAsync({
-                                                    stock_item_id: item.stock_item_id,
-                                                    stock_level_id: level.stock_level_id,
-                                                })
-                                            "
-                                        >
-                                            <q-item-section avatar>
-                                                <q-avatar
-                                                    :color="getStockLevelColour(level.name)"
-                                                    size="14px"
-                                                />
-                                            </q-item-section>
-                                            <q-item-section>{{ level.name }}</q-item-section>
-                                        </q-item>
-                                    </q-list>
-                                </q-btn-dropdown>
-
-                                <!-- Open / in-use toggle -->
-                                <q-btn
-                                    flat
-                                    dense
-                                    size="sm"
-                                    :icon="item.is_open ? 'lock_open' : 'lock'"
-                                    :color="item.is_open ? 'secondary' : undefined"
-                                    :loading="openBusyId === item.stock_item_id"
-                                    @click.stop="onToggleOpen(item)"
-                                >
-                                    <q-tooltip>
-                                        {{ item.is_open ? 'Mark as sealed' : 'Mark as open / in-use' }}
-                                    </q-tooltip>
-                                </q-btn>
-
-                                <!-- Cart quick-add (via P0 composable) -->
-                                <q-btn
-                                    flat
-                                    dense
-                                    size="sm"
-                                    :icon="cartIcon(item.stock_item_id)"
-                                    :color="cartColor(item.stock_item_id)"
-                                    :loading="cartBusyId === item.stock_item_id"
-                                    @click.stop="onCartClick(item.stock_item_id)"
-                                >
-                                    <q-tooltip>{{ cartTooltip(item.stock_item_id) }}</q-tooltip>
-                                </q-btn>
-                            </q-card-section>
-                        </q-card>
+                            :item="item"
+                            :bulk-mode="bulkMode"
+                            :selected="bulkSelection.has(item.stock_item_id)"
+                            :focused="focusedIndex === idx"
+                            :peeking="peekId === item.stock_item_id"
+                            @click="onRowClick"
+                            @bulk-toggle="toggleBulk"
+                            @filter-location="filters.locationFilter.value = $event"
+                            @go-to-list="goToList"
+                        />
                     </q-list>
 
                     <!-- Empty state ───────────────────────────────────── -->
@@ -480,7 +273,7 @@
                         </template>
                         <template v-else>
                             No items match the current filters.
-                            <q-btn flat dense no-caps label="Clear" @click="clearFilters" />
+                            <q-btn flat dense no-caps label="Clear" @click="filters.clearFilters" />
                         </template>
                     </q-banner>
                 </div>
@@ -497,121 +290,43 @@
             </template>
         </q-splitter>
 
-        <!-- Create dialog ─────────────────────────────────────────────── -->
-        <q-dialog v-model="createDialogOpen" @hide="resetCreateForm">
-            <q-card style="width: 600px; max-width: 95vw">
-                <q-card-section>
-                    <div class="text-h6">Add a stock item</div>
-                </q-card-section>
-                <q-card-section>
-                    <q-form @submit.prevent="onCreateSubmit" class="q-gutter-md">
-                        <q-input
-                            v-model="createForm.name"
-                            outlined
-                            autofocus
-                            label="Name"
-                            :rules="[(v: string) => (!!v && v.length > 0) || 'Name is required']"
-                        />
-                        <q-select
-                            v-model="createForm.stock_level_id"
-                            :options="stockLevels"
-                            :option-label="(o: StockLevel) => o.name"
-                            :option-value="(o: StockLevel) => o.stock_level_id"
-                            emit-value
-                            map-options
-                            outlined
-                            label="Stock level"
-                            :rules="[(v: string) => !!v || 'Pick a stock level']"
-                        >
-                            <template #option="scope">
-                                <q-item v-bind="scope.itemProps">
-                                    <q-item-section avatar>
-                                        <q-avatar
-                                            :color="getStockLevelColour(scope.opt.name)"
-                                            size="16px"
-                                        />
-                                    </q-item-section>
-                                    <q-item-section>{{ scope.opt.name }}</q-item-section>
-                                </q-item>
-                            </template>
-                        </q-select>
-                        <q-select
-                            v-model="createForm.stock_location_id"
-                            :options="stockLocationStore.stockLocations"
-                            option-label="name"
-                            option-value="stock_location_id"
-                            emit-value
-                            map-options
-                            clearable
-                            outlined
-                            label="Location (optional)"
-                        />
+        <CreateStockItemDialog v-model="createDialogOpen" />
 
-                        <q-card-actions align="right">
-                            <q-btn flat label="Cancel" v-close-popup />
-                            <q-btn type="submit" color="primary" label="Add" :loading="saving" />
-                        </q-card-actions>
-                    </q-form>
-                </q-card-section>
-            </q-card>
-        </q-dialog>
-
-        <!-- Bulk move-location dialog ─────────────────────────────────── -->
-        <q-dialog v-model="moveDialogOpen">
-            <q-card style="width: 480px; max-width: 95vw">
-                <q-card-section>
-                    <div class="text-h6">Move {{ bulkSelection.size }} item(s)</div>
-                </q-card-section>
-                <q-card-section>
-                    <q-select
-                        v-model="moveTargetLocation"
-                        :options="locationOptions"
-                        emit-value
-                        map-options
-                        clearable
-                        outlined
-                        label="Destination location"
-                    />
-                </q-card-section>
-                <q-card-actions align="right">
-                    <q-btn flat label="Cancel" v-close-popup />
-                    <q-btn
-                        color="primary"
-                        label="Move"
-                        :loading="bulkBusy"
-                        @click="bulkMove"
-                    />
-                </q-card-actions>
-            </q-card>
-        </q-dialog>
+        <BulkMoveLocationDialog
+            v-model="moveDialogOpen"
+            :count="bulkSelection.size"
+            :location-options="filters.locationOptions.value"
+            :busy="bulkBusy"
+            @confirm="bulkMove"
+        />
     </div>
 </template>
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
-    import StockItemChip from 'src/components/chips/StockItemChip.vue';
-    import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
-    import { useShortcut } from 'src/composables/useShortcut';
-    import { useStockItemActions } from 'src/composables/useStockItemActions';
     import type { QInput } from 'quasar';
+    import { useQuasar } from 'quasar';
+    import FilterChip from 'src/components/chips/FilterChip.vue';
+    import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
+    import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
+    import StockItemRow from 'src/components/stock/StockItemRow.vue';
+    import { useShortcut } from 'src/composables/useShortcut';
+    import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
+    import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
+    import type { Membership } from 'src/models/shoppingList';
     import type { StockGroup } from 'src/models/stockGroup';
-    import type { StockItem } from 'src/models/stockItem';
-    import type { StockLevel } from 'src/models/stockLevel';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
-    import StockItemApiService, {
-        type CreateStockItemCommand,
-    } from 'src/services/api/stockItemApiService';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
-    import { computed, onMounted, reactive, ref, watch } from 'vue';
+    import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
+    import { onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const stockGroupApi = new StockGroupApiService();
@@ -631,336 +346,19 @@
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { stockLocations } = storeToRefs(stockLocationStore);
     const { recipes } = storeToRefs(recipeStore);
-    const { createStockItemAsync, updateStockLevelAsync } = stockItemStore;
 
-    // ── Lookup maps for O(1) name resolution ─────────────────────────────
-    const stockLevelById = computed(() => {
-        const map = new Map<string, StockLevel>();
-        stockLevels.value.forEach((l) => map.set(l.stock_level_id, l));
-        return map;
-    });
-    const stockLocationById = computed(() => {
-        const map = new Map<string, string>();
-        stockLocations.value.forEach((l) => map.set(l.stock_location_id, l.name));
-        return map;
-    });
-
-    function stockLevelName(id: string | null): string {
-        if (!id) return '';
-        return stockLevelById.value.get(id)?.name ?? '';
-    }
-
-    function locationName(id: string | null): string {
-        if (!id) return '';
-        return stockLocationById.value.get(id) ?? '';
-    }
-
-    // ── Live cross-feature indexes ───────────────────────────────────────
-    // Recipes that reference each stock item (live count + names for hover).
-    const recipesByStockItem = computed(() => {
-        const map = new Map<string, { recipe_id: string; name: string }[]>();
-        for (const r of recipes.value) {
-            const seen = new Set<string>();
-            for (const ing of r.ingredients) {
-                if (seen.has(ing.stock_item_id)) continue;
-                seen.add(ing.stock_item_id);
-                const arr = map.get(ing.stock_item_id) ?? [];
-                arr.push({ recipe_id: r.recipe_id, name: r.name });
-                map.set(ing.stock_item_id, arr);
-            }
-        }
-        return map;
-    });
-    function recipesUsing(id: string) {
-        return recipesByStockItem.value.get(id) ?? [];
-    }
-
-    // Shopping lists each item sits on (unticked).
-    function listsFor(id: string) {
-        const m = shoppingListStore.membership;
-        const entry = m?.items.find((i) => i.stock_item_id === id);
-        const ids = entry?.unticked_list_ids ?? [];
-        const lookup = new Map((m?.active_lists ?? []).map((l) => [l.shopping_list_id, l]));
-        return ids.map(
-            (lid) =>
-                lookup.get(lid) ?? { shopping_list_id: lid, name: lid, is_primary: false },
-        );
-    }
-    function onListsCount(id: string) {
-        return listsFor(id).length;
-    }
-
-    // ── Expiry / attention ───────────────────────────────────────────────
-    function isExpiringSoon(item: StockItem): boolean {
-        if (!item.expiry_date) return false;
-        const days = (new Date(item.expiry_date).getTime() - Date.now()) / 86_400_000;
-        return days <= 7;
-    }
-    function isExpired(item: StockItem): boolean {
-        if (!item.expiry_date) return false;
-        return new Date(item.expiry_date).getTime() < Date.now();
-    }
-    function hasAlert(item: StockItem): boolean {
-        const n = stockLevelName(item.stock_level_id);
-        return (
-            n === 'Low Stock' ||
-            n === 'Out of Stock' ||
-            isExpiringSoon(item) ||
-            item.is_flagged === true
-        );
-    }
-    function expiryIcon(item: StockItem): string {
-        if (isExpired(item)) return 'error';
-        if (isExpiringSoon(item)) return 'event_busy';
-        return 'event_available';
-    }
-    function expiryColour(item: StockItem): string | undefined {
-        if (isExpired(item)) return 'negative';
-        if (isExpiringSoon(item)) return 'orange-9';
-        return item.expiry_date ? 'positive' : 'grey-5';
-    }
-    function expiryTooltip(item: StockItem): string {
-        if (!item.expiry_date) return 'No expiry set — click to push or set one';
-        if (isExpired(item)) return `Expired ${item.expiry_date}`;
-        return `Expires ${item.expiry_date}`;
-    }
-    async function clearExpiry(stockItemId: string) {
-        try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: stockItemId,
-                expiry_date: null,
-            });
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Expiry cleared.' });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not clear expiry.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
-
-    // ── Filters ──────────────────────────────────────────────────────────
-    const searchText = ref('');
-    const levelFilter = ref<string | null>(null);
-    const locationFilter = ref<string | null>(null);
-    const groupFilter = ref<string | null>(null);
-    const essentialsOnly = ref(false);
-    const openOnly = ref(false);
-    const hasAlertOnly = ref(false);
-    const usedInRecipeOnly = ref(false);
-    const cartFilter = ref<'all' | 'on_list' | 'off_list'>('all');
-
-    const sortOptions = [
-        { value: 'name_asc', label: 'Name (A-Z)' },
-        { value: 'name_desc', label: 'Name (Z-A)' },
-        { value: 'level_lowest', label: 'Stock level (lowest first)' },
-        { value: 'level_highest', label: 'Stock level (highest first)' },
-        { value: 'updated_recent', label: 'Recently updated' },
-        { value: 'updated_oldest', label: 'Stalest first' },
-    ];
-    const sortBy = ref<string>('name_asc');
-
-    const locationOptions = computed(() =>
-        stockLocations.value.map((l) => ({ label: l.name, value: l.stock_location_id })),
-    );
-
+    // Stock groups load locally — no store yet, only needed by the filter
+    // dropdown on this page.
     const stockGroups = ref<StockGroup[]>([]);
-    const groupOptions = computed(() =>
-        stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
-    );
 
-    function toggleLevelFilter(id: string) {
-        levelFilter.value = levelFilter.value === id ? null : id;
-    }
-
-    function clearFilters() {
-        searchText.value = '';
-        levelFilter.value = null;
-        locationFilter.value = null;
-        groupFilter.value = null;
-        essentialsOnly.value = false;
-        openOnly.value = false;
-        hasAlertOnly.value = false;
-        usedInRecipeOnly.value = false;
-        cartFilter.value = 'all';
-    }
-
-    const summaryCounts = computed(() => {
-        let low = 0;
-        let out = 0;
-        let essentials = 0;
-        let open = 0;
-        for (const item of stockItems.value) {
-            const levelName = stockLevelName(item.stock_level_id);
-            if (levelName === 'Low Stock') low++;
-            if (levelName === 'Out of Stock') out++;
-            if (item.is_flagged) essentials++;
-            if (item.is_open) open++;
-        }
-        return { low, out, essentials, open };
+    const filters = useStockFilters({
+        stockItems: () => stockItems.value,
+        stockLevels: () => stockLevels.value,
+        stockLocations: () => stockLocations.value,
+        recipes: () => recipes.value,
+        stockGroups: () => stockGroups.value,
+        membership: () => shoppingListStore.membership as Membership | null,
     });
-
-    const countByLevel = computed(() => {
-        const map = new Map<string, number>();
-        for (const item of stockItems.value) {
-            if (!item.stock_level_id) continue;
-            map.set(item.stock_level_id, (map.get(item.stock_level_id) ?? 0) + 1);
-        }
-        return map;
-    });
-
-    const levelSequenceById = computed(() => {
-        const map = new Map<string, number>();
-        stockLevels.value.forEach((l) => map.set(l.stock_level_id, l.sequence ?? 0));
-        return map;
-    });
-    function levelSequence(id: string | null): number {
-        if (!id) return -1;
-        return levelSequenceById.value.get(id) ?? -1;
-    }
-
-    const cartStateById = computed(() => {
-        const map = new Map<string, CartState>();
-        const membership = shoppingListStore.membership as Membership | null;
-        for (const item of stockItems.value) {
-            map.set(item.stock_item_id, cartStateFor(item.stock_item_id, membership));
-        }
-        return map;
-    });
-
-    const filteredStockItems = computed(() => {
-        const tokens = (searchText.value ?? '')
-            .trim()
-            .toLowerCase()
-            .split(/\s+/)
-            .filter((t) => t.length > 0);
-        const matches = stockItems.value.filter((item) => {
-            if (levelFilter.value && item.stock_level_id !== levelFilter.value) return false;
-            if (locationFilter.value && item.stock_location_id !== locationFilter.value)
-                return false;
-            if (groupFilter.value && item.stock_group_id !== groupFilter.value) return false;
-            if (essentialsOnly.value && !item.is_flagged) return false;
-            if (openOnly.value && !item.is_open) return false;
-            if (hasAlertOnly.value && !hasAlert(item)) return false;
-            if (usedInRecipeOnly.value && recipesUsing(item.stock_item_id).length === 0)
-                return false;
-            if (tokens.length > 0) {
-                const haystack = item.name.toLowerCase();
-                if (!tokens.some((t) => haystack.includes(t))) return false;
-            }
-            if (cartFilter.value !== 'all') {
-                const state = cartStateById.value.get(item.stock_item_id) ?? 'none';
-                const onList = state !== 'none';
-                if (cartFilter.value === 'on_list' && !onList) return false;
-                if (cartFilter.value === 'off_list' && onList) return false;
-            }
-            return true;
-        });
-
-        const collator = new Intl.Collator('en', { sensitivity: 'base' });
-        const sorted = [...matches];
-        switch (sortBy.value) {
-            case 'name_desc':
-                sorted.sort((a, b) => collator.compare(b.name, a.name));
-                break;
-            case 'level_lowest':
-                sorted.sort(
-                    (a, b) =>
-                        levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id) ||
-                        collator.compare(a.name, b.name),
-                );
-                break;
-            case 'level_highest':
-                sorted.sort(
-                    (a, b) =>
-                        levelSequence(a.stock_level_id) - levelSequence(b.stock_level_id) ||
-                        collator.compare(a.name, b.name),
-                );
-                break;
-            case 'updated_recent':
-                sorted.sort((a, b) =>
-                    (b.stock_level_last_updated ?? '').localeCompare(
-                        a.stock_level_last_updated ?? '',
-                    ),
-                );
-                break;
-            case 'updated_oldest':
-                sorted.sort((a, b) =>
-                    (a.stock_level_last_updated ?? '').localeCompare(
-                        b.stock_level_last_updated ?? '',
-                    ),
-                );
-                break;
-            case 'name_asc':
-            default:
-                sorted.sort((a, b) => collator.compare(a.name, b.name));
-                break;
-        }
-        return sorted;
-    });
-
-    // ── Cart button state ────────────────────────────────────────────────
-    const cartBusyId = ref<string | null>(null);
-
-    function cartIcon(stockItemId: string): string {
-        const state = cartStateById.value.get(stockItemId) ?? 'none';
-        if (state === 'none') return 'add_shopping_cart';
-        if (state === 'on_multiple') return 'shopping_cart_checkout';
-        return 'shopping_cart';
-    }
-    function cartColor(stockItemId: string): string | undefined {
-        const state = cartStateById.value.get(stockItemId) ?? 'none';
-        if (state === 'on_primary') return 'primary';
-        if (state === 'on_other') return 'accent';
-        if (state === 'on_multiple') return 'amber-9';
-        return undefined;
-    }
-    function cartTooltip(stockItemId: string): string {
-        const state = cartStateById.value.get(stockItemId) ?? 'none';
-        if (state === 'none') return 'Add to primary list';
-        if (state === 'on_primary') return 'On your primary list';
-        if (state === 'on_other') return 'On a non-primary list';
-        return 'On multiple lists';
-    }
-    async function onCartClick(stockItemId: string) {
-        cartBusyId.value = stockItemId;
-        try {
-            await actions.addToList(stockItemId);
-        } finally {
-            cartBusyId.value = null;
-        }
-    }
-
-    // ── Open / in-use marker ─────────────────────────────────────────────
-    const openBusyId = ref<string | null>(null);
-    async function onToggleOpen(item: { stock_item_id: string; is_open?: boolean; name: string }) {
-        const next = !item.is_open;
-        openBusyId.value = item.stock_item_id;
-        try {
-            await stockItemStore.updateStockItemAsync({
-                stock_item_id: item.stock_item_id,
-                is_open: next,
-            });
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: next
-                    ? `Marked "${item.name}" as open.`
-                    : `Marked "${item.name}" as sealed.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not update.',
-                caption: describeApiError(err) || '',
-            });
-        } finally {
-            openBusyId.value = null;
-        }
-    }
 
     // ── Splitter peek ────────────────────────────────────────────────────
     const peekId = ref<string | null>(null);
@@ -983,12 +381,12 @@
         searchInputRef.value?.focus();
     }
     function moveFocus(delta: number) {
-        const count = filteredStockItems.value.length;
+        const count = filters.filteredStockItems.value.length;
         if (count === 0) return;
         focusedIndex.value = Math.max(0, Math.min(count - 1, focusedIndex.value + delta));
     }
     function openFocused() {
-        const item = filteredStockItems.value[focusedIndex.value];
+        const item = filters.filteredStockItems.value[focusedIndex.value];
         if (item) onRowClick(item.stock_item_id);
     }
     function addFocusedOrSelected() {
@@ -996,7 +394,7 @@
             void bulkAddToPrimary();
             return;
         }
-        const item = filteredStockItems.value[focusedIndex.value];
+        const item = filters.filteredStockItems.value[focusedIndex.value];
         if (item) void actions.addToList(item.stock_item_id);
     }
 
@@ -1023,7 +421,9 @@
         bulkSelection.value = new Set(bulkSelection.value);
     }
     function selectVisible() {
-        for (const item of filteredStockItems.value) bulkSelection.value.add(item.stock_item_id);
+        for (const item of filters.filteredStockItems.value) {
+            bulkSelection.value.add(item.stock_item_id);
+        }
         bulkSelection.value = new Set(bulkSelection.value);
     }
     function cancelBulk() {
@@ -1064,17 +464,15 @@
 
     // ── Bulk move location ───────────────────────────────────────────────
     const moveDialogOpen = ref(false);
-    const moveTargetLocation = ref<string | null>(null);
     function openMoveDialog() {
-        moveTargetLocation.value = null;
         moveDialogOpen.value = true;
     }
-    async function bulkMove() {
+    async function bulkMove(locationId: string | null) {
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
             for (const id of bulkSelection.value) {
-                await stockItemApi.moveAsync(id, moveTargetLocation.value);
+                await stockItemApi.moveAsync(id, locationId);
             }
             await stockItemStore.getStockItemsAsync();
             $q.notify({
@@ -1107,36 +505,10 @@
         void router.push('/shopping-lists');
     }
 
-    // ── Create form ──────────────────────────────────────────────────────
+    // ── Create dialog ────────────────────────────────────────────────────
     const createDialogOpen = ref(false);
-    const saving = ref(false);
-
-    const defaultCreateForm = (): CreateStockItemCommand => ({
-        name: '',
-        stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
-        stock_location_id: null,
-    });
-    const createForm: CreateStockItemCommand = reactive(defaultCreateForm());
-
     function onCreateClick() {
-        Object.assign(createForm, defaultCreateForm());
         createDialogOpen.value = true;
-    }
-    function resetCreateForm() {
-        Object.assign(createForm, defaultCreateForm());
-    }
-    async function onCreateSubmit() {
-        saving.value = true;
-        try {
-            await createStockItemAsync({
-                name: createForm.name,
-                stock_level_id: createForm.stock_level_id,
-                stock_location_id: createForm.stock_location_id,
-            });
-            createDialogOpen.value = false;
-        } finally {
-            saving.value = false;
-        }
     }
 
     async function loadStockGroups() {
@@ -1154,13 +526,13 @@
     function applyQueryFilters() {
         const q = route.query;
         if (typeof q.location_id === 'string' && q.location_id) {
-            locationFilter.value = q.location_id;
+            filters.locationFilter.value = q.location_id;
         }
         if (q.attention === 'true' || q.attention === '1') {
-            hasAlertOnly.value = true;
+            filters.hasAlertOnly.value = true;
         }
         if (typeof q.level_id === 'string' && q.level_id) {
-            levelFilter.value = q.level_id;
+            filters.levelFilter.value = q.level_id;
         }
     }
 
@@ -1207,23 +579,6 @@
     .stock-summary-stat {
         text-align: center;
         min-width: 84px;
-    }
-    .stock-row {
-        transition: box-shadow 0.15s ease;
-    }
-    .stock-row:hover {
-        box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.4);
-    }
-    .stock-row-dim {
-        opacity: 0.62;
-    }
-    .stock-row-selected {
-        outline: 2px solid var(--q-primary);
-        outline-offset: -2px;
-    }
-    .stock-row-focused {
-        outline: 2px dashed var(--q-accent);
-        outline-offset: -2px;
     }
     .stock-splitter {
         min-height: 50vh;

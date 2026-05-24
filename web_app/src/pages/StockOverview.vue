@@ -2,7 +2,6 @@
     <div class="q-pa-md">
         <!-- Header bar ───────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
-            <div class="text-h5 q-mr-md">Pantry</div>
             <q-btn color="positive" icon="add" label="New item" no-caps @click="onCreateClick" />
             <q-space />
             <q-input

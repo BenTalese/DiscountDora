@@ -1,11 +1,8 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <div>
-                <div class="text-h5">Where things live</div>
-                <div class="text-caption text-grey">
-                    Your zones, ranked by what needs attention.
-                </div>
+            <div class="text-caption text-grey">
+                Your zones, ranked by what needs attention.
             </div>
             <q-space />
             <q-btn

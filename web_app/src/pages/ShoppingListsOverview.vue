@@ -1,14 +1,11 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <div>
-                <div class="text-h5">Shopping lists</div>
-                <div class="text-caption text-grey">
-                    {{ activeCount }} active, {{ archivedCount }} archived.
-                    <span v-if="!primarySummary && activeCount > 0">
-                        · No primary list set — pick one for quick-add.
-                    </span>
-                </div>
+            <div class="text-caption text-grey">
+                {{ activeCount }} active, {{ archivedCount }} archived.
+                <span v-if="!primarySummary && activeCount > 0">
+                    · No primary list set — pick one for quick-add.
+                </span>
             </div>
             <q-space />
             <q-btn-dropdown

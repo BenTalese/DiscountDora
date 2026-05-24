@@ -1,7 +1,16 @@
 <template>
     <div class="dora-bubble-root" :class="{ 'dora-bubble-open': open }">
         <transition name="dora-bubble-pop">
-            <DoraChat v-if="open" :current-user="currentUser" @close="onClose" />
+            <DoraChat
+                v-if="open"
+                :current-user="currentUser"
+                @close="onClose"
+                @prompt-submitted="wake"
+                @mood="onConversationMood"
+                @thinking="onConversationThinking"
+                @talking="onConversationTalking"
+                @ai-offline="onAiOffline"
+            />
         </transition>
 
         <transition name="dora-bubble-hint">
@@ -24,21 +33,35 @@
 
         <button
             class="dora-bubble-launcher"
+            :class="{
+                'is-active': open,
+                'is-attention': updateBadge && !open,
+                'is-sleeping': connection === 'sleeping' && !open,
+                'is-wiggling': wiggling,
+                'is-hint-visible': showFirstTimeHint && !open,
+            }"
             :aria-label="open ? 'Close Dora' : 'Open Dora help assistant'"
-            @click="toggle"
+            @click="onLauncherClick"
         >
-            <DoraMascot :mood="mood" :size="56" />
-            <q-badge
-                v-if="updateBadge"
-                floating
-                color="accent"
-                text-color="grey-10"
-                rounded
-                class="dora-update-badge"
-            >
-                NEW
-                <q-tooltip>A newer version of Discount Dora is available.</q-tooltip>
-            </q-badge>
+            <div class="dora-bubble-launcher-inner">
+                <DoraMascot
+                    :mood="displayMood"
+                    :state="mascotState"
+                    :connection="connection"
+                    :size="80"
+                />
+                <q-badge
+                    v-if="updateBadge"
+                    floating
+                    color="accent"
+                    text-color="grey-10"
+                    rounded
+                    class="dora-update-badge"
+                >
+                    NEW
+                    <q-tooltip>A newer version of Discount Dora is available.</q-tooltip>
+                </q-badge>
+            </div>
         </button>
     </div>
 </template>
@@ -47,10 +70,15 @@
     import { storeToRefs } from 'pinia';
     import DoraChat from 'src/components/dora/DoraChat.vue';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
-    import type { DoraMood } from 'src/components/dora/doraTypes';
+    import {
+        MOODS_WITH_TALKING_VARIANT,
+        type DoraConnection,
+        type DoraMood,
+        type DoraState,
+    } from 'src/components/dora/doraTypes';
     import HelpApiService from 'src/services/api/helpApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { onMounted, ref, watch } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
     const LOCAL_STORAGE_HINT_KEY = 'dora.helpHintDismissed';
 
@@ -58,10 +86,77 @@
     const { currentUser } = storeToRefs(authStore);
     const helpApi = new HelpApiService();
 
+    // How long without interaction before Dora's eyes droop shut. Short
+    // enough to read as "she's napping" but long enough not to nod off
+    // mid-task. Sleep persists across opening the chat panel — only sending
+    // a prompt or closing the chat counts as waking her up.
+    const SLEEP_AFTER_MS = 60 * 1000;
+
     const open = ref(false);
-    const mood = ref<DoraMood>('happy');
     const updateBadge = ref(false);
     const showFirstTimeHint = ref(false);
+    let sleepTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // ── Connection composition ─────────────────────────────────────────
+    // Two independent signals: the sleep timer turns `isSleeping` on after
+    // a stretch of inactivity, and the chat panel tells us when AI was
+    // working and has now dropped. Offline wins over sleeping — if the
+    // model's gone down we want that visible regardless of the timer.
+    const isSleeping = ref(false);
+    const isAiOffline = ref(false);
+    const connection = computed<DoraConnection>(() => {
+        if (isAiOffline.value) return 'offline';
+        if (isSleeping.value) return 'sleeping';
+        return 'online';
+    });
+
+    // ── Face-state composition ─────────────────────────────────────────
+    // Each input is independent (chat emits drive them) and `displayMood` /
+    // `mascotState` are derived. Priority, top to bottom:
+    //   thinking         → thinking face
+    //   talking          → happy face + lip-flap (the talking artwork only
+    //                      matches the happy/ready face)
+    //   replyMood held   → whatever Dora just said
+    //   otherwise        → resting (happy, or excited when an update's available)
+    const replyMood = ref<DoraMood | null>(null);
+    const thinking = ref(false);
+    const talking = ref(false);
+
+    function restingMood(): DoraMood {
+        return updateBadge.value ? 'excited' : 'happy';
+    }
+
+    const displayMood = computed<DoraMood>(() => {
+        if (thinking.value) return 'thinking';
+        const mood = replyMood.value ?? restingMood();
+        // While talking: if the mood has its own talking-overlay artwork
+        // (happy / confused / sad), keep the mood — the mascot will play the
+        // matching lip-flap. Otherwise fall back to happy so the generic
+        // ready-face lip-flap still animates (the alternative is a frozen
+        // mood face throughout the reply, which reads as broken).
+        if (talking.value && !MOODS_WITH_TALKING_VARIANT.has(mood)) return 'happy';
+        return mood;
+    });
+
+    const mascotState = computed<DoraState>(() =>
+        talking.value && !thinking.value ? 'talking' : 'idle',
+    );
+
+    function armSleepTimer() {
+        if (sleepTimer !== null) clearTimeout(sleepTimer);
+        sleepTimer = setTimeout(() => {
+            isSleeping.value = true;
+        }, SLEEP_AFTER_MS);
+    }
+
+    function wake() {
+        isSleeping.value = false;
+        armSleepTimer();
+    }
+
+    function onAiOffline(offline: boolean) {
+        isAiOffline.value = offline;
+    }
 
     function dismissHint() {
         showFirstTimeHint.value = false;
@@ -74,13 +169,66 @@
         }
     }
 
+    // Brief "wiggle" class added on click so the launcher gives tactile
+    // feedback before the chat panel slides in.
+    const wiggling = ref(false);
+
     function toggle() {
         open.value = !open.value;
-        if (open.value) dismissHint();
+        if (open.value) {
+            dismissHint();
+        } else {
+            // Closing the chat is treated as a deliberate interaction — wake
+            // up so the next interaction starts fresh.
+            wake();
+        }
+    }
+
+    function onLauncherClick() {
+        wiggling.value = true;
+        setTimeout(() => (wiggling.value = false), 380);
+        toggle();
     }
 
     function onClose() {
         open.value = false;
+    }
+
+    // ── Conversation-driven reactions ──────────────────────────────────
+    // The chat panel tells the launcher what the reply mood is, whether
+    // a round-trip is in flight, and whether text is currently streaming.
+    // The reply mood is held for a beat past the talking animation so the
+    // expression (super_excited, sad, etc.) actually registers before
+    // relaxing back to resting.
+    const HOLD_MOOD_MS = 4000;
+    let moodHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function scheduleMoodRelax() {
+        if (moodHoldTimer !== null) clearTimeout(moodHoldTimer);
+        moodHoldTimer = setTimeout(() => {
+            replyMood.value = null;
+            moodHoldTimer = null;
+        }, HOLD_MOOD_MS);
+    }
+
+    function onConversationMood(mood: DoraMood) {
+        if (moodHoldTimer !== null) clearTimeout(moodHoldTimer);
+        replyMood.value = mood;
+        // If we're still talking, the hold timer should start after talking
+        // ends — otherwise start it now.
+        if (!talking.value) scheduleMoodRelax();
+        wake();
+    }
+
+    function onConversationThinking(active: boolean) {
+        thinking.value = active;
+    }
+
+    function onConversationTalking(active: boolean) {
+        talking.value = active;
+        // When talking stops, kick off the relax timer so the just-revealed
+        // expression lingers HOLD_MOOD_MS before settling back to resting.
+        if (!active) scheduleMoodRelax();
     }
 
     onMounted(async () => {
@@ -104,21 +252,28 @@
         try {
             const info = await helpApi.getVersionAsync();
             updateBadge.value = info.update_available;
-            if (info.update_available) mood.value = 'excited';
         } catch {
             // Don't bug the user — the bubble still works without this.
         }
     });
 
-    // If the user goes quiet on the chat, cycle the launcher mood to a
-    // subtle "curious" so it feels alive. Just on open/close right now —
-    // expressive enough without a timer.
+    // Closing the chat clears any held reply mood so the launcher resets to
+    // its resting expression rather than freezing on whatever Dora last said.
     watch(open, (isOpen) => {
         if (!isOpen) {
-            mood.value = updateBadge.value ? 'excited' : 'happy';
-        } else {
-            mood.value = 'curious';
+            if (moodHoldTimer !== null) {
+                clearTimeout(moodHoldTimer);
+                moodHoldTimer = null;
+            }
+            replyMood.value = null;
+            thinking.value = false;
+            talking.value = false;
         }
+    });
+
+    onMounted(armSleepTimer);
+    onBeforeUnmount(() => {
+        if (sleepTimer !== null) clearTimeout(sleepTimer);
     });
 </script>
 
@@ -133,6 +288,14 @@
         align-items: flex-end;
         gap: 12px;
     }
+    /* Launcher behaviour
+       ──────────────────
+       Idle  : shrunk + semi-transparent so it doesn't crowd the page.
+       Hover : full size + full opacity + a slow floating bob.
+       Active: full size + full opacity (chat panel is open).
+       Sleep : extra-faded so the napping frame reads as "off duty".
+       Attention (update available, idle): gentle opacity pulse so the NEW
+       badge still draws the eye even when the launcher is faded out. */
     .dora-bubble-launcher {
         appearance: none;
         background: transparent;
@@ -140,10 +303,134 @@
         padding: 0;
         cursor: pointer;
         position: relative;
-        transition: transform 180ms ease;
+        opacity: 0.55;
+        transform: scale(0.55);
+        transform-origin: bottom right;
+        transition:
+            transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 240ms ease;
     }
-    .dora-bubble-launcher:hover {
-        transform: translateY(-2px);
+    /* Hover: full opacity + full size. Active (chat open): pop a bit beyond
+       full so it reads as the focused element while the panel is up. The
+       first-time hint bubble pegs us at the hover state so the speech
+       balloon doesn't appear to float over an invisible launcher. */
+    .dora-bubble-launcher:hover,
+    .dora-bubble-launcher:focus-visible,
+    .dora-bubble-launcher.is-hint-visible {
+        opacity: 1;
+        transform: scale(1);
+        outline: none;
+    }
+    .dora-bubble-launcher.is-active {
+        opacity: 1;
+        transform: scale(1.12);
+        outline: none;
+    }
+    .dora-bubble-launcher.is-sleeping {
+        opacity: 0.35;
+    }
+    .dora-bubble-launcher.is-sleeping:hover,
+    .dora-bubble-launcher.is-sleeping:focus-visible {
+        opacity: 1;
+    }
+    .dora-bubble-launcher.is-attention:not(:hover):not(.is-active) {
+        animation: dora-attention-pulse 2.4s ease-in-out infinite;
+    }
+
+    /* Inner wrapper holds the per-state float/wiggle animations and the
+       active-only circle background. Animations live here so they compose
+       with the launcher's scale transform without fighting it. */
+    .dora-bubble-launcher-inner {
+        position: relative;
+        display: inline-block;
+        transform-origin: center bottom;
+        will-change: transform;
+    }
+    /* Translucent disc behind the mascot — only shown when the chat is open,
+       so Dora reads clearly against any page colour while she's the active
+       control. Sized off the mascot's bounding box via inset rather than a
+       fixed px so it scales with the chosen :size. */
+    .dora-bubble-launcher-inner::before {
+        content: '';
+        position: absolute;
+        /* Slight positive inset — disc hugs the mascot's silhouette, just
+           barely visible at the edges. Not a halo, just a backdrop. */
+        inset: 4%;
+        border-radius: 50%;
+        /* Warm off-white (#f7f3ea) so the disc reads as a soft paper backdrop
+           rather than a stark white plate against the page. */
+        background: radial-gradient(
+            circle at 50% 45%,
+            rgba(247, 243, 234, 0.97),
+            rgba(247, 243, 234, 0.75) 65%,
+            rgba(247, 243, 234, 0) 100%
+        );
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+        opacity: 0;
+        transform: scale(0.6);
+        transition:
+            opacity 220ms ease,
+            transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+        z-index: 0;
+        pointer-events: none;
+    }
+    .body--dark .dora-bubble-launcher-inner::before {
+        /* Theme-tinted disc in dark mode — same primary green as the brand
+           (#17B073) at low opacity so it reads as Dora's own halo rather
+           than a generic dark plate. */
+        background: radial-gradient(
+            circle at 50% 45%,
+            rgba(23, 176, 115, 0.55),
+            rgba(23, 176, 115, 0.32) 65%,
+            rgba(23, 176, 115, 0) 100%
+        );
+        box-shadow: 0 6px 22px rgba(23, 176, 115, 0.35);
+    }
+    .dora-bubble-launcher.is-active .dora-bubble-launcher-inner::before {
+        opacity: 1;
+        transform: scale(1);
+    }
+    /* Mascot + badge sit above the disc. */
+    .dora-bubble-launcher-inner > * {
+        position: relative;
+        z-index: 1;
+    }
+    .dora-bubble-launcher:hover .dora-bubble-launcher-inner {
+        animation: dora-hover-bob 1.6s ease-in-out infinite;
+    }
+    .dora-bubble-launcher.is-wiggling .dora-bubble-launcher-inner {
+        animation: dora-wiggle 380ms ease-in-out;
+    }
+
+    @keyframes dora-hover-bob {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50%      { transform: translateY(-6px) rotate(-1.5deg); }
+    }
+    @keyframes dora-wiggle {
+        0%   { transform: rotate(0deg); }
+        25%  { transform: rotate(-6deg); }
+        50%  { transform: rotate(5deg); }
+        75%  { transform: rotate(-3deg); }
+        100% { transform: rotate(0deg); }
+    }
+    @keyframes dora-attention-pulse {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 0.95; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .dora-bubble-launcher,
+        .dora-bubble-launcher-inner {
+            animation: none !important;
+            transition: opacity 240ms ease;
+        }
+        .dora-bubble-launcher {
+            transform: scale(0.75);
+        }
+        .dora-bubble-launcher:hover,
+        .dora-bubble-launcher:focus-visible,
+        .dora-bubble-launcher.is-active {
+            transform: scale(1);
+        }
     }
     .dora-update-badge {
         font-weight: 700;

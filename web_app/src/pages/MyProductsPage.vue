@@ -2,15 +2,12 @@
     <q-page padding>
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div>
-                <div class="text-h5">My products</div>
-                <div class="text-caption text-grey">
-                    {{ filteredProducts.length }} of {{ products.length }} shown
-                    · {{ onDealCount }} on deal
-                    <span v-if="unlinkedCount > 0">
-                        · {{ unlinkedCount }} unlinked
-                    </span>
-                </div>
+            <div class="text-caption text-grey">
+                {{ filteredProducts.length }} of {{ products.length }} shown
+                · {{ onDealCount }} on deal
+                <span v-if="unlinkedCount > 0">
+                    · {{ unlinkedCount }} unlinked
+                </span>
             </div>
             <q-space />
             <q-btn

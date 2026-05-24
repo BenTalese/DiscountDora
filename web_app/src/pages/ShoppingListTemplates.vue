@@ -2,12 +2,9 @@
     <q-page padding>
         <div class="row items-center q-mb-md">
             <q-btn flat round dense icon="arrow_back" @click="goBack" />
-            <div class="q-ml-sm col">
-                <div class="text-h5">Shopping list templates</div>
-                <div class="text-caption text-grey">
-                    Saved list shapes you can drop into a new shop in one click.
-                    {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
-                </div>
+            <div class="q-ml-sm col text-caption text-grey">
+                Saved list shapes you can drop into a new shop in one click.
+                {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
             </div>
             <q-btn
                 color="primary"

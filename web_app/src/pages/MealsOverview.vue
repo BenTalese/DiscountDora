@@ -1,7 +1,6 @@
 <template>
     <div class="q-pa-md">
         <div class="row items-center q-mb-md">
-            <div class="text-h5 q-mr-md">Meals</div>
             <q-btn color="positive" icon="add" label="New Meal" @click="onCreate" />
             <q-space />
             <div class="text-subtitle1">

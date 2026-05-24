@@ -1,7 +1,6 @@
 <template>
     <div class="q-pa-md">
         <div class="row items-center q-mb-md q-gutter-sm">
-            <div class="text-h5 q-mr-md">Meal Plans</div>
             <q-btn color="positive" icon="add" no-caps label="New plan" @click="onCreatePlan" />
             <q-btn
                 outline

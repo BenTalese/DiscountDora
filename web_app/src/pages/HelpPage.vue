@@ -3,7 +3,6 @@
         <div class="row items-center q-mb-md">
             <DoraMascot mood="excited" :size="48" />
             <div class="q-ml-md col">
-                <div class="text-h5">Help & guides</div>
                 <div class="text-caption text-grey">
                     Guides by area, a peek at what's new, and a fun fact while you're here.
                 </div>

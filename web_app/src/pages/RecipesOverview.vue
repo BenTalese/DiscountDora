@@ -2,12 +2,9 @@
     <div class="q-pa-md">
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div>
-                <div class="text-h5">Recipes</div>
-                <div class="text-caption text-grey">
-                    {{ filteredRecipes.length }} of {{ recipes.length }} shown
-                    · {{ cookableNowCount }} cookable now
-                </div>
+            <div class="text-caption text-grey">
+                {{ filteredRecipes.length }} of {{ recipes.length }} shown
+                · {{ cookableNowCount }} cookable now
             </div>
             <q-space />
             <q-btn

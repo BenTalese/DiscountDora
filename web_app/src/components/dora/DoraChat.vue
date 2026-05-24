@@ -1,32 +1,30 @@
 <template>
     <q-card flat bordered class="dora-chat-card column" style="width: 360px">
-        <q-card-section class="row items-center q-pb-sm dora-chat-header">
-            <DoraMascot :mood="latestMood" :size="40" />
-            <div class="q-ml-md col">
-                <div class="row items-center no-wrap">
-                    <span class="text-weight-medium">Dora</span>
-                    <q-chip
-                        v-if="aiActive !== null"
-                        dense
-                        size="sm"
-                        class="q-ml-sm dora-mode-chip"
-                        :icon="aiActive ? 'auto_awesome' : 'chat_bubble_outline'"
-                        :color="aiActive ? 'primary' : 'grey-4'"
-                        :text-color="aiActive ? 'white' : 'grey-9'"
-                    >
-                        {{ aiActive ? 'AI' : 'Basic' }}
-                        <q-tooltip>
-                            {{ aiActive
-                                ? 'AI mode: powered by your connected language model.'
-                                : 'Basic mode: built-in rule-based replies. An admin can enable AI in Settings → System.' }}
-                        </q-tooltip>
-                    </q-chip>
-                </div>
-                <div class="text-caption text-grey">
-                    Your in-app helper. {{ pageHintForHeader }}
-                </div>
+        <q-card-section class="dora-chat-header q-py-sm">
+            <div class="row items-center no-wrap">
+                <span class="text-weight-medium">Dora</span>
+                <q-chip
+                    v-if="aiActive !== null"
+                    dense
+                    size="sm"
+                    class="q-ml-sm dora-mode-chip"
+                    :icon="aiActive ? 'auto_awesome' : 'chat_bubble_outline'"
+                    :color="aiActive ? 'primary' : 'grey-4'"
+                    :text-color="aiActive ? 'white' : 'grey-9'"
+                >
+                    {{ aiActive ? 'AI' : 'Basic' }}
+                    <q-tooltip>
+                        {{ aiActive
+                            ? 'AI mode: powered by your connected language model.'
+                            : 'Basic mode: built-in rule-based replies. An admin can enable AI in Settings → System.' }}
+                    </q-tooltip>
+                </q-chip>
+                <q-space />
+                <q-btn flat round dense icon="close" @click="emit('close')" />
             </div>
-            <q-btn flat round dense icon="close" @click="emit('close')" />
+            <div class="text-caption text-grey">
+                Your in-app helper. {{ pageHintForHeader }}
+            </div>
         </q-card-section>
 
         <q-separator />
@@ -46,7 +44,10 @@
                 :class="`dora-chat-message-${message.from}`"
             >
                 <div class="dora-chat-bubble">
-                    <div class="dora-chat-text">{{ message.text }}</div>
+                    <div class="dora-chat-text">{{ message.displayText ?? message.text }}<span
+                        v-if="message.from === 'dora' && message.displayText !== undefined && message.displayText.length < message.text.length"
+                        class="dora-chat-caret"
+                    >▌</span></div>
                     <div
                         v-if="message.navigateTo || message.externalLink"
                         class="dora-chat-actions q-mt-xs"
@@ -197,9 +198,9 @@
                 </div>
             </div>
 
-            <div class="row q-gutter-xs q-mb-sm">
+            <div class="row q-gutter-xs q-mb-sm items-center">
                 <q-chip
-                    v-for="action in quickActions"
+                    v-for="action in suggestedActions"
                     :key="action"
                     dense
                     clickable
@@ -209,6 +210,28 @@
                 >
                     {{ labelFor(action) }}
                 </q-chip>
+                <q-btn
+                    flat
+                    dense
+                    round
+                    size="sm"
+                    icon="help_outline"
+                    class="dora-help-btn"
+                    @click="openDoraHelp"
+                >
+                    <q-tooltip>What can Dora do?</q-tooltip>
+                </q-btn>
+                <q-btn
+                    flat
+                    dense
+                    round
+                    size="sm"
+                    icon="refresh"
+                    class="dora-help-btn"
+                    @click="rotateSuggestions"
+                >
+                    <q-tooltip>Show different suggestions</q-tooltip>
+                </q-btn>
             </div>
 
             <q-input
@@ -236,7 +259,6 @@
 
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
-    import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import type { DoraMood } from 'src/components/dora/doraTypes';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
@@ -260,18 +282,23 @@
         type DoraContext,
         type DoraIntentId
     } from 'src/services/doraIntents';
+    import { useMealStore } from 'src/stores/mealStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import type { QScrollArea } from 'quasar';
-    import { computed, nextTick, onMounted, ref, watch } from 'vue';
+    import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     type Message = {
         from: 'user' | 'dora';
         text: string;
+        // Animated reveal — for dora messages we set displayText to '' on
+        // push and grow it character-by-character so the talking face has
+        // something visible to sync against. User messages skip it.
+        displayText?: string;
         mood?: DoraMood;
         navigateTo?: { path: string; label: string };
         externalLink?: { url: string; label: string };
@@ -285,7 +312,31 @@
     };
 
     const props = defineProps<{ currentUser: AuthenticatedUser | null }>();
-    const emit = defineEmits<{ (e: 'close'): void }>();
+    const emit = defineEmits<{
+        (e: 'close'): void;
+        // Fired whenever the user actively submits something — free-form
+        // prompt, quick-action chip, or contextual action. The launcher uses
+        // this to reset its sleep timer (Dora wakes up when you talk to her).
+        (e: 'prompt-submitted'): void;
+        // Fired when a reply lands so the launcher mascot can mirror the
+        // conversation's current expression — this is the BIG visible Dora,
+        // so the per-message mood reactions live here now (the mini one in
+        // the header was retired).
+        (e: 'mood', mood: DoraMood): void;
+        // Fired while we wait on a backend reply so the launcher can wear
+        // the thinking face during the round-trip.
+        (e: 'thinking', value: boolean): void;
+        // Fired while a dora message's text is streaming in (typewriter).
+        // The launcher uses this to drive the lip-flap talking overlay —
+        // ON when reveal starts, OFF a beat after reveal finishes so the
+        // animation lingers long enough to register.
+        (e: 'talking', value: boolean): void;
+        // Fired when the /assistant/status probe transitions the AI's
+        // reachability. Only emitted as `offline` once AI has been seen
+        // working in this session — so users who never configured AI don't
+        // get a permanent "offline" face for what's just normal Basic mode.
+        (e: 'ai-offline', value: boolean): void;
+    }>();
 
     const route = useRoute();
     const router = useRouter();
@@ -302,6 +353,7 @@
 
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
+    const mealStore = useMealStore();
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const { recipes } = storeToRefs(recipeStore);
@@ -312,6 +364,10 @@
     const draft = ref('');
     const thinking = ref(false);
     const messagesScrollEl = ref<QScrollArea | null>(null);
+
+    // Bubble up thinking-state changes so the launcher mascot can flip to
+    // the thinking face while a backend round-trip is in flight.
+    watch(thinking, (value) => emit('thinking', value));
 
     const scrollThumbStyle = {
         right: '2px',
@@ -327,7 +383,27 @@
         width: '10px',
         opacity: '0.2',
     } as const;
-    const quickActions = QUICK_ACTIONS;
+    // Pick a random handful of suggestion chips from the larger pool each time
+    // the chat opens, so users see different prompts on different visits.
+    // Three keeps the button row breathable next to the "?" and refresh icons.
+    const SUGGESTION_COUNT = 3;
+    function pickSuggestions(): DoraIntentId[] {
+        const pool = [...QUICK_ACTIONS];
+        const out: DoraIntentId[] = [];
+        while (out.length < SUGGESTION_COUNT && pool.length > 0) {
+            const idx = Math.floor(Math.random() * pool.length);
+            out.push(pool.splice(idx, 1)[0]!);
+        }
+        return out;
+    }
+    const suggestedActions = ref<DoraIntentId[]>(pickSuggestions());
+    function rotateSuggestions() {
+        suggestedActions.value = pickSuggestions();
+    }
+    function openDoraHelp() {
+        void router.push('/help/dora');
+        emit('close');
+    }
 
     // ── Contextual quick actions (P14) ───────────────────────────────
     // Recompute on every route change so navigating between recipes /
@@ -339,17 +415,33 @@
     );
     // Whether the assistant is running on AI vs the rule-based fallback.
     // null = not yet known (hides the badge until the first status check).
+    // We only flip this from the cheap /assistant/status probe (initially on
+    // mount and again whenever a request fails) — NOT from each /ask reply.
+    // A single timed-out chat call shouldn't downgrade the badge if the
+    // model is still actually reachable; that caused visible flickering.
     const aiActive = ref<boolean | null>(null);
 
-    // Latest mood drives the header mascot face. Falls back to 'happy' so
-    // first paint has a stable expression.
-    const latestMood = computed<DoraMood>(() => {
-        for (let i = messages.value.length - 1; i >= 0; i--) {
-            const m = messages.value[i];
-            if (m?.from === 'dora' && m.mood) return m.mood;
+    // Tracks whether AI has been confirmed reachable at least once in this
+    // session. Used to gate the "offline" face — without this, anyone who
+    // hasn't configured an LLM at all would see the sad-error mascot, which
+    // is wrong (Basic mode is the intended baseline, not a failure).
+    let aiEverAvailable = false;
+
+    async function refreshAiStatus() {
+        try {
+            const s = await assistantApi.getStatusAsync();
+            aiActive.value = s.ai_available;
+            if (s.ai_available) {
+                aiEverAvailable = true;
+                emit('ai-offline', false);
+            } else if (aiEverAvailable) {
+                emit('ai-offline', true);
+            }
+        } catch {
+            aiActive.value = false;
+            if (aiEverAvailable) emit('ai-offline', true);
         }
-        return 'happy';
-    });
+    }
 
     const pageHintForHeader = computed(() => {
         const p = route.path;
@@ -367,6 +459,10 @@
         return 'arrow_forward';
     }
 
+    // Build snapshots off the Pinia stores. Stores are autoloaded elsewhere
+    // in the app (Dashboard, Stock, etc.); if they haven't been loaded in
+    // this session yet we return empty arrays and the intent handlers
+    // degrade with friendly "nothing tracked yet" messaging.
     function context(): DoraContext {
         return {
             currentPath: route.path,
@@ -390,27 +486,153 @@
                     topMessages: a.items.slice(0, 3).map((alert) => alert.message),
                 };
             },
+            getStock: () => {
+                const levels = stockLevels.value;
+                const levelById = new Map(levels.map((l) => [l.stock_level_id, l]));
+                return stockItems.value.map((s) => {
+                    const lvl = levelById.get(s.stock_level_id);
+                    return {
+                        id: s.stock_item_id,
+                        name: s.name,
+                        levelName: lvl?.name ?? null,
+                        levelSequence: lvl?.sequence ?? null,
+                        // Location names need the location store; if it's
+                        // not loaded the location stays null — not a blocker.
+                        locationName: null,
+                        expiryDate: s.expiry_date ?? null,
+                        isFlagged: Boolean(s.is_flagged),
+                        isOpen: Boolean(s.is_open),
+                    };
+                });
+            },
+            getRecipes: () => recipes.value.map((r) => ({
+                id: r.recipe_id,
+                name: r.name,
+                cuisine: r.cuisine,
+                category: r.category,
+                cookTimeMinutes: r.cook_time_minutes,
+                isFavourite: Boolean(r.is_favourite),
+                ingredientStockItemIds: r.ingredients
+                    .map((i) => i.stock_item_id)
+                    .filter((id): id is string => !!id),
+            })),
+            getShoppingLists: () => shoppingListStore.summaries.map((l) => ({
+                id: l.shopping_list_id,
+                name: l.name,
+                itemCount: l.line_count,
+                isPrimary: l.is_primary,
+            })),
+            getMealPlan: () => {
+                const plans = mealStore.mealPlans;
+                if (!plans || plans.length === 0) return null;
+                // Plans sorted ascending by start_date — pick the soonest one
+                // that hasn't fully passed. Surface up to 5 next meal names.
+                const today = new Date().toISOString().slice(0, 10);
+                const live = plans.find((p) =>
+                    p.entries.some((e) => e.scheduled_for >= today),
+                ) ?? plans[plans.length - 1]!;
+                const upcoming = [...live.entries]
+                    .filter((e) => e.scheduled_for >= today)
+                    .sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for))
+                    .slice(0, 5)
+                    .map((e) => `${e.scheduled_for} — ${e.meal_name} (×${e.servings})`);
+                const lastDate = live.entries.length
+                    ? live.entries.map((e) => e.scheduled_for).sort().at(-1)!
+                    : live.start_date;
+                return {
+                    startDate: live.start_date,
+                    endDate: lastDate,
+                    upcomingMealNames: upcoming,
+                };
+            },
         };
     }
 
     async function scrollToBottom() {
         await nextTick();
+        // One extra frame so any DOM that was just appended (typing dots,
+        // freshly-pushed message bubble) has been laid out before the scroll
+        // target is measured. Without this, setScrollPercentage sometimes
+        // animates to a position that's already the old bottom.
+        await new Promise((r) => requestAnimationFrame(r));
         const el = messagesScrollEl.value;
         if (!el) return;
-        // Smooth animated scroll-to-bottom. setScrollPercentage clamps so
-        // we don't need to compute the precise pixel target.
-        el.setScrollPercentage('vertical', 1, 200);
+        const target = el.getScrollTarget();
+        // Seek to the real measured bottom rather than a clamped percentage —
+        // percentage targets can resolve stale when content height grows
+        // mid-animation.
+        el.setScrollPosition('vertical', target.scrollHeight, 200);
+    }
+
+    // Per-character reveal so the talking face has something to sync against.
+    // 22ms/char feels fluid; for very long replies we accelerate slightly so
+    // we don't keep the user waiting more than ~3s for the full text. The
+    // talking event stays on for an extra TALK_TAIL_MS after the last char
+    // so the lip-flap is visible even on short replies.
+    const TYPE_CHAR_MS = 22;
+    const TYPE_MAX_TOTAL_MS = 3000;
+    const TALK_TAIL_MS = 600;
+    let activeTypewriter: { cancel: () => void } | null = null;
+
+    function startTypewriter(message: Message) {
+        if (activeTypewriter) activeTypewriter.cancel();
+        const full = message.text;
+        message.displayText = '';
+        if (!full) {
+            emit('talking', false);
+            return;
+        }
+        const charMs = Math.max(8, Math.min(TYPE_CHAR_MS, Math.floor(TYPE_MAX_TOTAL_MS / full.length)));
+        let i = 0;
+        let cancelled = false;
+        emit('talking', true);
+        const tick = () => {
+            if (cancelled) return;
+            i += 1;
+            message.displayText = full.slice(0, i);
+            // Throttled scroll-follow so the new lines don't disappear below
+            // the fold while typing.
+            if (i % 6 === 0) void scrollToBottom();
+            if (i >= full.length) {
+                message.displayText = full;
+                void scrollToBottom();
+                setTimeout(() => {
+                    if (!cancelled) emit('talking', false);
+                }, TALK_TAIL_MS);
+                activeTypewriter = null;
+                return;
+            }
+            timer = setTimeout(tick, charMs);
+        };
+        let timer = setTimeout(tick, charMs);
+        activeTypewriter = {
+            cancel: () => {
+                cancelled = true;
+                clearTimeout(timer);
+                message.displayText = full;
+                emit('talking', false);
+                activeTypewriter = null;
+            },
+        };
     }
 
     function pushDoraMessage(reply: Awaited<ReturnType<typeof runIntent>>) {
-        messages.value.push({
+        const message: Message = {
             from: 'dora',
             text: reply.text,
+            displayText: '',
             mood: reply.mood,
             navigateTo: reply.navigateTo,
             externalLink: reply.externalLink,
             suggestions: reply.suggestions,
-        });
+        };
+        messages.value.push(message);
+        emit('mood', reply.mood);
+        // Mutate the in-array (reactive-proxied) reference, not the local
+        // one we just built — otherwise per-char displayText writes don't
+        // trigger re-renders and the bubble stays empty until something
+        // else nudges reactivity.
+        startTypewriter(messages.value[messages.value.length - 1]!);
     }
 
     function qtyLabel(quantity: number | null): string {
@@ -485,7 +707,7 @@
             message.done = false;
             pushDoraMessage({
                 text: `I couldn't update the list — ${describeApiError(err)}`,
-                mood: 'confused',
+                mood: 'sad',
             });
         } finally {
             thinking.value = false;
@@ -493,25 +715,25 @@
         }
     }
 
-    async function dispatch(intent: DoraIntentId, userText?: string) {
-        if (userText) {
-            messages.value.push({ from: 'user', text: userText });
-            await scrollToBottom();
-        }
+    // dispatch runs an intent and pushes Dora's reply. It does NOT push a
+    // user message — callers do that themselves when appropriate. `rawText`
+    // is the original user phrasing so intent handlers can extract targets
+    // (e.g. "where is the cheese" → "cheese").
+    async function dispatch(intent: DoraIntentId, rawText?: string) {
         thinking.value = true;
         await scrollToBottom();
         try {
             // Small delay so the spinner registers visually even on instant
             // responses — keeps the "I'm thinking" affordance honest.
             const [reply] = await Promise.all([
-                runIntent(intent, context()),
+                runIntent(intent, context(), rawText),
                 new Promise((r) => setTimeout(r, 220)),
             ]);
             pushDoraMessage(reply);
         } catch (err) {
             pushDoraMessage({
                 text: `Something went wrong while answering — ${describeApiError(err)}`,
-                mood: 'confused',
+                mood: 'sad',
             });
         } finally {
             thinking.value = false;
@@ -520,7 +742,11 @@
     }
 
     function onIntentClick(id: DoraIntentId) {
-        void dispatch(id, labelFor(id));
+        emit('prompt-submitted');
+        const label = labelFor(id);
+        messages.value.push({ from: 'user', text: label });
+        void scrollToBottom();
+        void dispatch(id, label);
     }
 
     // ── Contextual action dispatcher (P14) ───────────────────────────
@@ -624,7 +850,7 @@
                         `${name} is missing ${missing.length} ingredient${
                             missing.length === 1 ? '' : 's'
                         }:\n\n${list}\n\nWant me to drop them on your primary list?`,
-                    mood: 'curious',
+                    mood: 'searching',
                 });
             }
         } finally {
@@ -655,7 +881,7 @@
                         `You don't have a primary shopping list set yet. Set one and I'll add the ${missing.length} missing ingredient${
                             missing.length === 1 ? '' : 's'
                         } in a second.`,
-                    mood: 'confused',
+                    mood: 'sad',
                     navigateTo: { path: '/shopping-lists', label: 'Open shopping lists' },
                 });
                 return;
@@ -685,37 +911,54 @@
         const text = draft.value.trim();
         if (!text) return;
         draft.value = '';
+        emit('prompt-submitted');
         messages.value.push({ from: 'user', text });
         await scrollToBottom();
+        // Short-circuit "personality" intents to the local rule engine even
+        // when AI is available — the rule engine has hand-written, on-brand
+        // replies (kawaii compliments, etc.) the model wouldn't reproduce,
+        // and this guarantees the matching mood/face fires.
+        const preempt = detectIntent(text);
+        if (preempt === 'compliment' || preempt === 'insult') {
+            await dispatch(preempt, text);
+            return;
+        }
         thinking.value = true;
         await scrollToBottom();
         try {
             const reply = await assistantApi.askAsync(text, route.path);
-            // Keep the AI/Basic badge honest with the latest real outcome.
-            aiActive.value = reply.available;
             if (reply.available && !reply.defer_to_local && reply.answer) {
-                messages.value.push({
+                const mood = (reply.mood as DoraMood) ?? 'happy';
+                const message: Message = {
                     from: 'dora',
                     text: reply.answer,
-                    mood: (reply.mood as DoraMood) ?? 'happy',
+                    displayText: '',
+                    mood,
                     ...(reply.navigate_to ? { navigateTo: reply.navigate_to } : {}),
                     ...(reply.pending_action
                         ? { action: reply.pending_action, selections: {} }
                         : {}),
-                });
+                };
+                messages.value.push(message);
+                emit('mood', mood);
+                // Use the proxied in-array ref so the typewriter's per-char
+                // displayText writes are actually reactive (see pushDoraMessage).
+                startTypewriter(messages.value[messages.value.length - 1]!);
                 await scrollToBottom();
                 return;
             }
         } catch (err) {
             // Network/parse failure — degrade silently to the rule engine.
-            aiActive.value = false;
+            // Don't immediately mark AI as down (one failed call != model
+            // gone); re-probe the cheap /status endpoint to get the truth.
             console.debug('Assistant backend unavailable, using local intents', err);
+            void refreshAiStatus();
         } finally {
             thinking.value = false;
             await scrollToBottom();
         }
         const intent = detectIntent(text);
-        await dispatch(intent);
+        await dispatch(intent, text);
     }
 
     function onNavigate(path: string) {
@@ -726,14 +969,13 @@
     onMounted(() => {
         void dispatch('greet');
         // Show the AI/Basic badge from the start, before the first message.
-        void assistantApi
-            .getStatusAsync()
-            .then((s) => {
-                aiActive.value = s.ai_available;
-            })
-            .catch(() => {
-                aiActive.value = false;
-            });
+        void refreshAiStatus();
+    });
+
+    onBeforeUnmount(() => {
+        // Make sure the talking-state event doesn't get stranded if the
+        // chat is closed while a reveal is in flight.
+        if (activeTypewriter) activeTypewriter.cancel();
     });
 
     // Re-summarise the page when the user navigates while the chat is open
@@ -805,6 +1047,27 @@
     }
     .dora-chat-text {
         white-space: pre-wrap;
+    }
+    .dora-help-btn {
+        opacity: 0.6;
+        transition: opacity 160ms ease;
+    }
+    .dora-help-btn:hover {
+        opacity: 1;
+    }
+    /* Inline blinking caret shown only while a dora message is mid-reveal.
+       Visual hint that more text is coming, paired with the talking face. */
+    .dora-chat-caret {
+        display: inline-block;
+        margin-left: 1px;
+        color: var(--q-primary);
+        animation: dora-caret-blink 900ms steps(1) infinite;
+    }
+    @keyframes dora-caret-blink {
+        50% { opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .dora-chat-caret { animation: none; }
     }
     .dora-action-card {
         border-top: 1px solid rgba(0, 0, 0, 0.08);

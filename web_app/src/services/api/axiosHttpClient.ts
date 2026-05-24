@@ -57,9 +57,19 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 // login attempt), so we must NOT trigger the global session-expired handler.
 const SUPPRESS_401_PATHS = ['/auth/me', '/auth/login', '/auth/register'];
 
+// Endpoints whose failures are surfaced in-page rather than via toast — the
+// boot probe is owned by SplashScreen, so a noisy "server tripped" notify on
+// cold-load would race with the splash and look broken.
+const SUPPRESS_NOTIFY_PATHS = ['/auth/me'];
+
 function shouldSuppress401(url: string | undefined): boolean {
     if (!url) return false;
     return SUPPRESS_401_PATHS.some((p) => url.endsWith(p));
+}
+
+function shouldSuppressNotify(url: string | undefined): boolean {
+    if (!url) return false;
+    return SUPPRESS_NOTIFY_PATHS.some((p) => url.endsWith(p));
 }
 
 // The API may return either a bare { id } envelope or the full created
@@ -248,7 +258,7 @@ export default class AxiosHttpClient implements HttpClient {
         // 5xx → noisy toast so the user knows the server tripped.
         // 4xx is the caller's responsibility to phrase — it might be a
         // benign 404 from a search, etc.
-        if (status >= 500) {
+        if (status >= 500 && !shouldSuppressNotify(path)) {
             try {
                 Notify.create({
                     type: 'negative',

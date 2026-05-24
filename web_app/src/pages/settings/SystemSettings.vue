@@ -46,7 +46,9 @@
                         :disable="saving"
                     />
                     <div class="text-caption text-grey q-ml-sm">
-                        Requires a base URL and model below.
+                        {{ enabledDraft
+                            ? 'Enter a base URL and model below, then Save to apply.'
+                            : 'Toggle on to configure. Nothing is applied until you Save.' }}
                     </div>
                 </q-card-section>
 
@@ -58,7 +60,7 @@
                         outlined
                         dense
                         class="col-12 col-sm-8"
-                        :disable="saving"
+                        :disable="saving || !enabledDraft"
                         hint="Your LLM server's address (Ollama's default is shown). Models load when you leave this field."
                         @blur="onBaseUrlBlur"
                     />
@@ -70,7 +72,7 @@
                             icon="wifi_tethering"
                             label="Test connection"
                             :loading="probing"
-                            :disable="saving || !baseUrlDraft.trim()"
+                            :disable="saving || !enabledDraft || !baseUrlDraft.trim()"
                             @click="() => onTest(true)"
                         />
                     </div>
@@ -115,7 +117,7 @@
                         hide-selected
                         input-debounce="0"
                         new-value-mode="add-unique"
-                        :disable="saving"
+                        :disable="saving || !enabledDraft"
                         :hint="allModels.length
                             ? 'Pick a detected model, or type one to pull later.'
                             : 'Type a model name, or test the connection to list installed models. Must support tool-calling.'"
@@ -139,9 +141,16 @@
                         icon="save"
                         label="Save AI settings"
                         :loading="saving"
-                        :disable="unchanged"
+                        :disable="!canSave"
                         @click="onSave"
                     />
+                    <div
+                        v-if="!unchanged && !canSave"
+                        class="text-caption text-grey q-mt-xs"
+                    >
+                        Enable, then fill in both the base URL and the model
+                        before saving.
+                    </div>
                 </q-card-section>
 
                 <q-card-section>
@@ -307,6 +316,14 @@
             baseUrlDraft.value === saved.value.baseUrl &&
             modelDraft.value === saved.value.model
     );
+
+    // Save is gated on: something changed AND (if enabling, valid inputs).
+    // Disabling is always valid — turning AI off doesn't need a URL/model.
+    const canSave = computed(() => {
+        if (unchanged.value) return false;
+        if (!enabledDraft.value) return true;
+        return baseUrlDraft.value.trim().length > 0 && modelDraft.value.trim().length > 0;
+    });
 
     // Placeholder state for the not-yet-wired toggles.
     const allowRegistrations = ref(true);

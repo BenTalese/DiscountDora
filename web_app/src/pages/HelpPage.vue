@@ -10,6 +10,15 @@
             <q-btn
                 flat
                 no-caps
+                color="accent"
+                icon="smart_toy"
+                label="Meet DoraBot"
+                :to="{ path: '/help/dora' }"
+                class="q-mr-sm"
+            />
+            <q-btn
+                flat
+                no-caps
                 icon="open_in_new"
                 label="Report a bug"
                 type="a"

@@ -2,7 +2,7 @@
     <q-page padding>
         <!-- ── Header ──────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <DoraMascot mood="cute" :size="64" />
+            <DoraMascot mood="cute" :size="96" />
             <div class="q-ml-md col">
                 <div class="text-h6">Meet Dora</div>
                 <div class="text-caption text-grey">

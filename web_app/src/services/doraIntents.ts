@@ -43,6 +43,7 @@ export type DoraIntentId =
     | 'substitute'
     | 'compliment'
     | 'insult'
+    | 'report_issue'
     | 'fallback';
 
 export type DoraReply = {
@@ -291,6 +292,19 @@ const INSULT_REPLIES = [
     "Cool cool cool. I'll just go cry into a tub of margarine.",
 ];
 
+// Fallback bank — rotated when the rule engine can't make sense of an input.
+// Every variant still gets the Help nav + GitHub issues externalLink + the
+// quick-action suggestions (those are set on the reply, not in the text), so
+// the user always has a path forward.
+const FALLBACK_REPLIES = [
+    "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.) If something's actually broken, the GitHub issues page is where to flag it.",
+    "Hmm, drawing a blank on that one. Could be I'm having a moment, or it's a feature I haven't learned yet. Try rephrasing — and if you reckon I should know this, the issues link is your friend.",
+    "Not sure what you're after there. The quick actions below might point you the right way, or open Help. Genuine bug? GitHub issues is the proper place to dob me in.",
+    "I tried to parse that and got a Blue Screen Of Burger. Could you rephrase? Or report it if it feels like a bug, the issues link is right there.",
+    "That one's stumped me. Either my training's outdated or you've found a gap — issues page is the move if it's the latter. Otherwise, rephrase and I'll have another crack.",
+    "Sorry, I'm beef. Not following. Try a quick action, hit Help for the guides, or open an issue if something's properly off.",
+];
+
 // ── Local helpers for data intents ─────────────────────────────────────
 
 const LOW_STOCK_SEQUENCE = 2;   // "Low Stock" and worse
@@ -335,24 +349,33 @@ function extractAfter(text: string, keywords: string[]): string | null {
 }
 
 // ── Unit conversion table ──────────────────────────────────────────────
-// Kitchen units only. Everything reduces to a base unit per dimension so a
-// single ratio call does the work. Aussie metric defaults (250ml cup, 20ml
-// tbsp) — the AU/US split is a thing for tbsp + cup + fl oz.
+// Kitchen units across five dimensions: volume, mass, temperature, length,
+// and energy. Each unit reduces to a base unit per dimension so a single
+// ratio call does the work. Aussie metric defaults (250ml cup, 20ml tbsp)
+// — but US cup (240ml) is explicitly available too.
+// Gas mark <-> °C uses a non-linear lookup table and is handled separately.
 
-type Unit = { aliases: string[]; dimension: 'volume' | 'mass' | 'temperature'; toBase: (n: number) => number; fromBase: (n: number) => number };
+type Dimension = 'volume' | 'mass' | 'temperature' | 'length' | 'energy';
+type Unit = { aliases: string[]; dimension: Dimension; toBase: (n: number) => number; fromBase: (n: number) => number };
 
 const UNITS: Unit[] = [
     // Volume — base ml
     { aliases: ['ml', 'milliliter', 'millilitre', 'milliliters', 'millilitres'], dimension: 'volume', toBase: n => n, fromBase: n => n },
     { aliases: ['l', 'litre', 'liter', 'litres', 'liters'], dimension: 'volume', toBase: n => n * 1000, fromBase: n => n / 1000 },
+    { aliases: ['smidgen', 'smidgens', 'smidge'], dimension: 'volume', toBase: n => n * 0.156, fromBase: n => n / 0.156 }, // ~1/32 tsp
+    { aliases: ['pinch', 'pinches'], dimension: 'volume', toBase: n => n * 0.3125, fromBase: n => n / 0.3125 }, // ~1/16 tsp
+    { aliases: ['dash', 'dashes'], dimension: 'volume', toBase: n => n * 0.625, fromBase: n => n / 0.625 }, // ~1/8 tsp
     { aliases: ['tsp', 'teaspoon', 'teaspoons'], dimension: 'volume', toBase: n => n * 5, fromBase: n => n / 5 },
     { aliases: ['tbsp', 'tablespoon', 'tablespoons'], dimension: 'volume', toBase: n => n * 20, fromBase: n => n / 20 }, // AU metric
+    { aliases: ['us tbsp', 'american tbsp', 'us tablespoon'], dimension: 'volume', toBase: n => n * 14.7868, fromBase: n => n / 14.7868 },
     { aliases: ['cup', 'cups'], dimension: 'volume', toBase: n => n * 250, fromBase: n => n / 250 }, // AU metric
+    { aliases: ['us cup', 'us cups', 'american cup', 'american cups'], dimension: 'volume', toBase: n => n * 240, fromBase: n => n / 240 },
     { aliases: ['fl oz', 'floz', 'fluid ounce', 'fluid ounces'], dimension: 'volume', toBase: n => n * 29.5735, fromBase: n => n / 29.5735 },
     { aliases: ['pint', 'pints', 'pt'], dimension: 'volume', toBase: n => n * 568.261, fromBase: n => n / 568.261 }, // UK pint
     { aliases: ['quart', 'quarts', 'qt'], dimension: 'volume', toBase: n => n * 946.353, fromBase: n => n / 946.353 }, // US
     { aliases: ['gallon', 'gallons', 'gal'], dimension: 'volume', toBase: n => n * 3785.41, fromBase: n => n / 3785.41 },
     // Mass — base g
+    { aliases: ['mg', 'milligram', 'milligrams'], dimension: 'mass', toBase: n => n * 0.001, fromBase: n => n / 0.001 },
     { aliases: ['g', 'gram', 'grams', 'gm'], dimension: 'mass', toBase: n => n, fromBase: n => n },
     { aliases: ['kg', 'kilogram', 'kilograms', 'kilo', 'kilos'], dimension: 'mass', toBase: n => n * 1000, fromBase: n => n / 1000 },
     { aliases: ['oz', 'ounce', 'ounces'], dimension: 'mass', toBase: n => n * 28.3495, fromBase: n => n / 28.3495 },
@@ -362,28 +385,236 @@ const UNITS: Unit[] = [
     { aliases: ['c', '°c', 'celsius', 'celcius'], dimension: 'temperature', toBase: n => n, fromBase: n => n },
     { aliases: ['f', '°f', 'fahrenheit'], dimension: 'temperature', toBase: n => (n - 32) * 5 / 9, fromBase: n => n * 9 / 5 + 32 },
     { aliases: ['k', 'kelvin'], dimension: 'temperature', toBase: n => n - 273.15, fromBase: n => n + 273.15 },
+    // Length — base mm. Useful for cake-pan sizing.
+    { aliases: ['mm', 'millimeter', 'millimetre', 'millimeters', 'millimetres'], dimension: 'length', toBase: n => n, fromBase: n => n },
+    { aliases: ['cm', 'centimeter', 'centimetre', 'centimeters', 'centimetres'], dimension: 'length', toBase: n => n * 10, fromBase: n => n / 10 },
+    { aliases: ['m', 'meter', 'metre', 'meters', 'metres'], dimension: 'length', toBase: n => n * 1000, fromBase: n => n / 1000 },
+    { aliases: ['in', 'inch', 'inches', '"'], dimension: 'length', toBase: n => n * 25.4, fromBase: n => n / 25.4 },
+    { aliases: ['ft', 'foot', 'feet'], dimension: 'length', toBase: n => n * 304.8, fromBase: n => n / 304.8 },
+    // Energy — base kJ (AU nutrition labels show both kJ and kcal).
+    { aliases: ['kj', 'kilojoule', 'kilojoules'], dimension: 'energy', toBase: n => n, fromBase: n => n },
+    { aliases: ['kcal', 'calorie', 'calories', 'cal'], dimension: 'energy', toBase: n => n * 4.184, fromBase: n => n / 4.184 },
+    { aliases: ['j', 'joule', 'joules'], dimension: 'energy', toBase: n => n / 1000, fromBase: n => n * 1000 },
 ];
 
+// Gas mark <-> °C — non-linear, so it lives outside the unit table. Common
+// UK oven scale; recipes will say "gas mark 6" rather than "200 °C".
+const GAS_MARK_TO_C: Record<string, number> = {
+    '1/4': 110, '1/2': 120, '1': 140, '2': 150, '3': 160, '4': 180,
+    '5': 190, '6': 200, '7': 220, '8': 230, '9': 240,
+};
+const GAS_MARK_ALIASES = new Set(['gas', 'gas mark', 'gm']);
+
+function isGasMark(token: string): boolean {
+    return GAS_MARK_ALIASES.has(token.toLowerCase().trim());
+}
+
+function gasMarkToC(value: string | number): number | null {
+    const key = typeof value === 'number' ? String(value) : value.trim();
+    return GAS_MARK_TO_C[key] ?? null;
+}
+
+function cToGasMark(celsius: number): string {
+    // Snap to the nearest entry in the table, returning the closest mark.
+    let bestKey = '4';
+    let bestDelta = Infinity;
+    for (const [key, val] of Object.entries(GAS_MARK_TO_C)) {
+        const delta = Math.abs(val - celsius);
+        if (delta < bestDelta) {
+            bestDelta = delta;
+            bestKey = key;
+        }
+    }
+    return bestKey;
+}
+
+// Parse "1", "1.5", "1/2", or "1 1/2" into a number. Returns null on bad
+// input so the caller can hand back a friendly "couldn't parse" reply.
+function parseAmount(raw: string): number | null {
+    const s = raw.trim();
+    if (!s) return null;
+    const mixed = s.match(/^(-?\d+)\s+(\d+)\/(\d+)$/);
+    if (mixed) {
+        const [, w, n, d] = mixed;
+        const denom = Number(d);
+        if (!denom) return null;
+        const whole = Number(w);
+        const frac = Number(n) / denom;
+        return whole < 0 ? whole - frac : whole + frac;
+    }
+    const frac = s.match(/^(-?\d+)\/(\d+)$/);
+    if (frac) {
+        const [, n, d] = frac;
+        const denom = Number(d);
+        if (!denom) return null;
+        return Number(n) / denom;
+    }
+    if (/^-?\d+(?:\.\d+)?$/.test(s)) return Number(s);
+    return null;
+}
+
 function findUnit(token: string): Unit | null {
-    const t = token.toLowerCase();
+    const t = token.toLowerCase().trim();
     return UNITS.find(u => u.aliases.includes(t)) ?? null;
 }
 
+// Grams per millilitre for common ingredients — mirrors a curated subset of
+// the backend table. Lets the rule engine cross mass↔volume so AI-style
+// phrasings ("how many grams in a cup of chocolate chips") still resolve
+// when AI is unavailable or doesn't tool-call.
+const INGREDIENT_DENSITY: Record<string, number> = {
+    'water': 1.00, 'milk': 1.03,
+    'oil': 0.92, 'olive oil': 0.92, 'vegetable oil': 0.92, 'canola oil': 0.92,
+    'honey': 1.42, 'maple syrup': 1.32, 'golden syrup': 1.40,
+    'flour': 0.53, 'plain flour': 0.53, 'all-purpose flour': 0.53, 'all purpose flour': 0.53,
+    'self-raising flour': 0.53, 'self raising flour': 0.53, 'wholemeal flour': 0.56,
+    'almond flour': 0.42, 'almond meal': 0.42,
+    'sugar': 0.85, 'white sugar': 0.85, 'caster sugar': 0.85, 'granulated sugar': 0.85,
+    'brown sugar': 0.93,
+    'icing sugar': 0.56, 'powdered sugar': 0.56,
+    'butter': 0.91, 'margarine': 0.91,
+    'yogurt': 1.04, 'greek yogurt': 1.05,
+    'sour cream': 0.95, 'cream cheese': 0.95, 'ricotta': 0.85, 'mascarpone': 1.00,
+    'cream': 1.00, 'heavy cream': 1.00, 'thickened cream': 1.00,
+    'peanut butter': 1.05,
+    'rice': 0.78, 'white rice': 0.78, 'brown rice': 0.76,
+    'oats': 0.41, 'rolled oats': 0.41, 'porridge oats': 0.41,
+    'quinoa': 0.72, 'couscous': 0.72,
+    'lentils': 0.85, 'dried lentils': 0.85, 'chickpeas': 0.78,
+    'pasta': 0.50, 'dry pasta': 0.50,
+    'cornstarch': 0.65, 'cornflour': 0.65,
+    'chocolate': 0.62, 'chocolate chips': 0.65, 'choc chips': 0.65,
+    'almonds': 0.60, 'chopped almonds': 0.50, 'sliced almonds': 0.45,
+    'walnuts': 0.55, 'chopped walnuts': 0.55,
+    'raisins': 0.65, 'sultanas': 0.65,
+    'shredded coconut': 0.30, 'desiccated coconut': 0.45,
+    'breadcrumbs': 0.45, 'panko': 0.30,
+    'cocoa': 0.51, 'cocoa powder': 0.51,
+    'salt': 1.20,
+    'parmesan': 0.45, 'grated parmesan': 0.45,
+    'cheddar': 0.48, 'grated cheddar': 0.48, 'grated cheese': 0.48,
+};
+
+function findDensity(name: string): number | null {
+    const key = name.trim().toLowerCase();
+    if (key in INGREDIENT_DENSITY) return INGREDIENT_DENSITY[key]!;
+    const singular = key.replace(/s$/, '');
+    if (singular in INGREDIENT_DENSITY) return INGREDIENT_DENSITY[singular]!;
+    return null;
+}
+
+// Treat "a"/"an"/"one"/"half a" as numeric prefixes when the user writes
+// natural language like "how many grams in a cup of flour".
+function parseQualitativeQty(s: string): number | null {
+    const t = s.trim().toLowerCase();
+    if (t === 'a' || t === 'an' || t === 'one') return 1;
+    if (t === 'half' || t === 'half a' || t === 'half an') return 0.5;
+    if (t === 'a couple' || t === 'a couple of' || t === 'couple of') return 2;
+    if (t === 'a few') return 3;
+    return parseAmount(t);
+}
+
+// Convert across dimensions when one side is mass and the other volume, using
+// the ingredient's density. Returns the result in `to` units, or null when
+// the conversion isn't possible (no density, dimensions don't bridge).
+function crossConvert(value: number, from: Unit, to: Unit, ingredient: string | null): number | null {
+    if (from.dimension === to.dimension) {
+        return to.fromBase(from.toBase(value));
+    }
+    const dims = new Set([from.dimension, to.dimension]);
+    if (!dims.has('mass') || !dims.has('volume')) return null;
+    if (!ingredient) return null;
+    const density = findDensity(ingredient);
+    if (density === null) return null;
+    // Convert source to its base unit, swap dimension via density, then
+    // express in the target unit.
+    const sourceBase = from.toBase(value);
+    if (from.dimension === 'mass') {
+        // grams → ml via density (g/ml) → target volume unit
+        const ml = sourceBase / density;
+        return to.fromBase(ml);
+    } else {
+        // volume base is ml → grams → target mass unit
+        const grams = sourceBase * density;
+        return to.fromBase(grams);
+    }
+}
+
+function formatResult(n: number): string {
+    return Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(2).replace(/\.?0+$/, '');
+}
+
 function tryConvert(text: string): string | null {
-    // Loose regex: number + unit (multi-word ok) + (to|in|=) + unit
-    const m = text.toLowerCase().match(/(-?\d+(?:\.\d+)?)\s*([a-z°]+(?:\s[a-z]+)?)\s*(?:to|in|=|into)\s*([a-z°]+(?:\s[a-z]+)?)/);
+    const lower = text.toLowerCase();
+
+    // ── Form 2: "how many <unitA> in [qty] <unitB> [of <ingredient>]" ──
+    // Natural English wording the AI-mode chips lean on. Defaults qty to 1
+    // when the user writes "a"/"an"/"one"; handles the cross-dimension case
+    // (e.g. cup → g via ingredient density).
+    const natural = lower.match(/how\s+many\s+([a-z°"]+(?:\s[a-z]+)?)\s+(?:in|per)\s+(?:(half\s+an?|a|an|one|[\d./\s]+?)\s+)?([a-z°"]+(?:\s[a-z]+)?)(?:\s+of\s+([a-z\s'-]+?))?[?.!]?$/);
+    if (natural) {
+        const [, toRaw, qtyRaw, fromRaw, ingredientRaw] = natural;
+        const qty = qtyRaw ? parseQualitativeQty(qtyRaw) : 1;
+        if (qty === null) return null;
+        const from = findUnit(fromRaw!) ?? findUnit(fromRaw!.replace(/s$/, ''));
+        const to = findUnit(toRaw!) ?? findUnit(toRaw!.replace(/s$/, ''));
+        if (!from || !to) return null;
+        const ingredient = ingredientRaw?.trim() || null;
+        const result = crossConvert(qty, from, to, ingredient);
+        if (result === null) {
+            if (from.dimension !== to.dimension && !ingredient) {
+                return `Need an ingredient to bridge ${fromRaw} and ${toRaw} — try "how many ${toRaw} in a ${fromRaw} of flour".`;
+            }
+            if (from.dimension !== to.dimension && ingredient) {
+                return `I don't have a density for "${ingredient}" — try a common bakers' staple (flour, sugar, butter, rice, oats, chocolate chips…).`;
+            }
+            return null;
+        }
+        const rounded = formatResult(result);
+        const ingPhrase = ingredient ? ` of ${ingredient}` : '';
+        const qtyDisplay = qty === 1 ? 'a' : (qtyRaw?.trim() ?? String(qty));
+        return `${qtyDisplay} ${fromRaw}${ingPhrase} ≈ ${rounded} ${toRaw}.`;
+    }
+
+    // ── Form 1: "<qty> <unit> to/in <unit>" ──
+    // Amount: integer, decimal, fraction (1/2), or mixed (1 1/2). Unit can be
+    // multi-word ("us cup", "gas mark"). Connector: to / in / = / into.
+    const m = lower.match(/((?:\d+\s+)?\d+\/\d+|-?\d+(?:\.\d+)?)\s*([a-z°"]+(?:\s[a-z]+)?)\s*(?:to|in|=|into)\s*([a-z°"]+(?:\s[a-z]+)?)/);
     if (!m) return null;
     const [, valueStr, fromRaw, toRaw] = m;
-    const value = Number(valueStr);
-    if (!Number.isFinite(value)) return null;
-    const from = findUnit(fromRaw!.trim()) ?? findUnit(fromRaw!.trim().replace(/s$/, ''));
-    const to = findUnit(toRaw!.trim()) ?? findUnit(toRaw!.trim().replace(/s$/, ''));
+    const value = parseAmount(valueStr!);
+    if (value === null) return null;
+    const fromTok = fromRaw!.trim();
+    const toTok = toRaw!.trim();
+
+    // Gas mark special-case: lookup table both directions.
+    if (isGasMark(fromTok)) {
+        const c = gasMarkToC(valueStr!);
+        if (c === null) return `Gas mark ${valueStr} isn't on the scale — try 1/4, 1/2, or 1–9.`;
+        const to = findUnit(toTok);
+        if (!to || to.dimension !== 'temperature') {
+            return `Gas marks convert to temperature — try °C or °F.`;
+        }
+        const result = to.fromBase(c);
+        return `Gas mark ${valueStr} ≈ ${Math.round(result)} ${toTok}.`;
+    }
+    if (isGasMark(toTok)) {
+        const from = findUnit(fromTok);
+        if (!from || from.dimension !== 'temperature') {
+            return `Only temperatures convert to gas marks.`;
+        }
+        const celsius = from.toBase(value);
+        return `${valueStr} ${fromTok} ≈ gas mark ${cToGasMark(celsius)}.`;
+    }
+
+    const from = findUnit(fromTok) ?? findUnit(fromTok.replace(/s$/, ''));
+    const to = findUnit(toTok) ?? findUnit(toTok.replace(/s$/, ''));
     if (!from || !to) return null;
     if (from.dimension !== to.dimension) {
         return `Those don't quite match up — ${fromRaw} is ${from.dimension}, ${toRaw} is ${to.dimension}. Apples and oranges. Or grams and millilitres.`;
     }
     const result = to.fromBase(from.toBase(value));
-    const rounded = Math.abs(result) >= 100 ? result.toFixed(0) : result.toFixed(2).replace(/\.?0+$/, '');
+    const rounded = formatResult(result);
     return `${valueStr} ${fromRaw} ≈ ${rounded} ${toRaw}.`;
 }
 
@@ -445,20 +676,33 @@ function trySubstitute(query: string): string | null {
 // ── Intent registry ────────────────────────────────────────────────────
 // ORDER MATTERS. Narrower / data-driven intents first; broad keyword
 // catches (greet, fallback) last.
+// Convert intent's matcher needs a real "<number> <unit> to/in <unit>" shape
+// or an explicit conversion phrase — otherwise short keyword tokens like
+// ' to g' wrongly fire on natural phrases ("what's about to go off this
+// week" → 'about to g_o' contains ' to g'). Tested against detectIntent
+// separately from the generic substring matches.
+const CONVERT_NUMERIC_REGEX = /\d+\s*\.?\d*\s*[a-z°]+\s+(?:to|in|into)\s+[a-z°]+/i;
+
 export const INTENTS: ReadonlyArray<{
     id: DoraIntentId;
     label: string;
     matches: string[];
+    extraMatch?: (text: string) => boolean;
 }> = [
     // Narrow / phrase-specific intents come first so a stray "thanks for the
     // milk" doesn't get eaten by `compliment`.
     {
         id: 'convert',
         label: 'Convert units',
-        matches: [' to ml', ' to grams', ' to g', ' to ounces', ' to oz',
-                  ' to cups', ' to tbsp', ' to tsp', ' in ml', ' in grams',
-                  ' in cups', ' in tbsp', 'convert ', 'how many ml', 'how many g',
-                  'how many cups', '°c to', '°f to', 'celsius to', 'fahrenheit to'],
+        // Keep only the safe long phrases — the numeric pattern handles
+        // anything shaped like "200g to oz" via extraMatch below.
+        matches: [
+            'convert ',
+            'how many ml', 'how many grams', 'how many cups',
+            'how many ounces', 'how many tbsp', 'how many tsp',
+            'celsius to', 'fahrenheit to', '°c to', '°f to',
+        ],
+        extraMatch: (text) => CONVERT_NUMERIC_REGEX.test(text),
     },
     {
         id: 'substitute',
@@ -578,6 +822,21 @@ export const INTENTS: ReadonlyArray<{
         matches: ['tour', 'show me around', 'walk me through', 'overview', 'what can you do'],
     },
     {
+        // Bug reporting — explicit affordance for "I found an issue" so the
+        // user gets a direct GitHub-issues prompt instead of the rotating
+        // fallback text. Phrased to catch the common reports without
+        // overlapping with general help intents.
+        id: 'report_issue',
+        label: 'I found an issue',
+        matches: [
+            'found an issue', 'found a bug', 'found a problem',
+            'report an issue', 'report a bug', 'report a problem',
+            'this is broken', "something's broken", 'something is broken',
+            "it's broken", 'its broken', 'there is a bug', "there's a bug",
+            'bug report', 'raise an issue', 'file a bug',
+        ],
+    },
+    {
         // Insults first — they overlap with `compliment` keywords (e.g.
         // "you're not great" contains "great").
         id: 'insult',
@@ -635,6 +894,7 @@ export function detectIntent(text: string): DoraIntentId {
     const lower = text.toLowerCase().trim();
     if (!lower) return 'greet';
     for (const intent of INTENTS) {
+        if (intent.extraMatch?.(lower)) return intent.id;
         if (intent.matches.some((m) => lower.includes(m))) return intent.id;
     }
     return 'fallback';
@@ -1051,10 +1311,27 @@ export async function runIntent(
             return { text: result, mood: 'lightbulb', suggestions: ['shopping_list_status', 'find_recipe'] };
         }
 
+        case 'report_issue': {
+            const intros = [
+                "Oh no — sorry about that. Best place to flag it is the GitHub issues page.",
+                "Bugs! My one weakness (other than soggy buns). Drop the details on GitHub and it'll get looked at properly.",
+                "Appreciate the heads-up. The issues page on GitHub is the right home for it — more eyes than just mine.",
+                "Noted! Quick favour: file it on GitHub so it doesn't get lost in my burger-brain. Steps to reproduce + what you expected = chef's kiss.",
+            ];
+            return {
+                text: pick(intros),
+                mood: 'worried',
+                externalLink: {
+                    url: 'https://github.com/BenTalese/DiscountDora/issues/new',
+                    label: 'Open a GitHub issue',
+                },
+                suggestions: ['stuck', 'guides'],
+            };
+        }
         case 'fallback':
         default: {
             return {
-                text: "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.)",
+                text: pick(FALLBACK_REPLIES),
                 mood: 'confused',
                 navigateTo: { path: '/help', label: 'Open Help' },
                 externalLink: {

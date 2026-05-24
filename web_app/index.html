@@ -22,6 +22,40 @@
 
   </head>
   <body>
+    <!-- Pre-mount splash. Paints the moment HTML parses so cold-load doesn't
+         flash black before Vue/Quasar mount. App.vue's onMounted removes it.
+         Background tracks the OS colour scheme so it lines up with whatever
+         theme themeService will pick once it boots. -->
+    <style>
+        #pre-mount-splash {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #E8F6F3;
+            z-index: 10000;
+        }
+        @media (prefers-color-scheme: dark) {
+            #pre-mount-splash { background: #1B2026; }
+        }
+        #pre-mount-splash img {
+            width: clamp(120px, 24vw, 200px);
+            height: auto;
+            opacity: 0.85;
+            animation: pre-mount-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes pre-mount-pulse {
+            0%, 100% { opacity: 0.7; transform: scale(0.96); }
+            50%      { opacity: 1;   transform: scale(1.04); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #pre-mount-splash img { animation: none; }
+        }
+    </style>
+    <div id="pre-mount-splash">
+        <img src="icons/web-app-manifest-512x512.png" alt="Discount Dora" />
+    </div>
     <!-- quasar:entry-point -->
   </body>
 </html>

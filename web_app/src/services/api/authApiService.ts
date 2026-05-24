@@ -4,7 +4,7 @@ import type {
     FontSizePreference,
     ThemePreference
 } from 'src/models/auth';
-import AxiosHttpClient from './axiosHttpClient';
+import AxiosHttpClient, { NormalisedApiError } from './axiosHttpClient';
 
 export type LoginCommand = { username: string; password: string };
 export type RegisterCommand = {
@@ -52,9 +52,13 @@ export default class AuthApiService {
     getMeAsync = async (): Promise<AuthenticatedUser | null> => {
         try {
             return await this.httpClient.get<AuthenticatedUser>('/auth/me');
-        } catch {
+        } catch (error) {
             // 401 means no session — caller treats null as "not logged in".
-            return null;
+            // Network/server errors propagate so bootstrap can show a splash.
+            if (error instanceof NormalisedApiError && error.status === 401) {
+                return null;
+            }
+            throw error;
         }
     };
 }

@@ -1,0 +1,182 @@
+<template>
+    <div class="splash-screen" role="status" :aria-busy="!error">
+        <div class="splash-logo-wrap">
+            <img
+                :src="error ? offlineSrc : logoSrc"
+                alt="Discount Dora"
+                class="splash-logo"
+                :class="{ 'splash-logo--pulse': !error }"
+                draggable="false"
+            />
+        </div>
+
+        <div class="splash-text">
+            <p v-if="error" class="splash-error-headline">
+                Can't reach Dora's brain
+            </p>
+            <p v-if="error" class="splash-error-detail">{{ error }}</p>
+            <p
+                v-else
+                class="splash-loading-message"
+                :key="loadingMessage"
+            >
+                {{ loadingMessage }}
+            </p>
+        </div>
+
+        <q-btn
+            v-if="error"
+            unelevated
+            color="primary"
+            label="Try again"
+            class="splash-retry"
+            @click="emit('retry')"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+    import logoSrc from 'src/assets/logo-mascot.png';
+    import offlineSrc from 'src/assets/dora/dorabot-fatal-error-or-offline.png';
+    import { onBeforeUnmount, ref, watch } from 'vue';
+
+    const props = defineProps<{ error: string | null }>();
+    const emit = defineEmits<{ retry: [] }>();
+
+    // Loading flavour text. Cycled while the boot probe is in flight so the
+    // user has something to read instead of staring at the pulsing logo.
+    const LOADING_MESSAGES = [
+        'Waking up Dora...',
+        'Counting cucumbers...',
+        'Polishing the apples...',
+        'Stacking shelves...',
+        'Checking the specials catalogue...',
+        'Sharpening pencils for the shopping list...',
+        'Untangling the trolley wheels...',
+        'Asking Dora nicely to wake up...',
+    ];
+    const MESSAGE_INTERVAL_MS = 1800;
+
+    const loadingMessage = ref(LOADING_MESSAGES[0] ?? '');
+    let messageTimer: ReturnType<typeof setInterval> | null = null;
+
+    function startMessageCycle() {
+        stopMessageCycle();
+        let i = 0;
+        loadingMessage.value = LOADING_MESSAGES[i] ?? '';
+        messageTimer = setInterval(() => {
+            i = (i + 1) % LOADING_MESSAGES.length;
+            loadingMessage.value = LOADING_MESSAGES[i] ?? '';
+        }, MESSAGE_INTERVAL_MS);
+    }
+
+    function stopMessageCycle() {
+        if (messageTimer !== null) {
+            clearInterval(messageTimer);
+            messageTimer = null;
+        }
+    }
+
+    watch(
+        () => props.error,
+        (err) => {
+            if (err) stopMessageCycle();
+            else startMessageCycle();
+        },
+        { immediate: true }
+    );
+
+    onBeforeUnmount(stopMessageCycle);
+</script>
+
+<style scoped>
+    .splash-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 24px;
+        background: var(--q-page, #fff);
+        color: var(--q-text, #222);
+        z-index: 9000;
+    }
+
+    .splash-logo-wrap {
+        display: inline-flex;
+        line-height: 0;
+    }
+
+    .splash-logo {
+        width: clamp(140px, 28vw, 240px);
+        height: auto;
+        object-fit: contain;
+        user-select: none;
+        -webkit-user-drag: none;
+    }
+
+    .splash-logo--pulse {
+        animation: splash-pulse 1.6s ease-in-out infinite;
+        transform-origin: center;
+    }
+
+    @keyframes splash-pulse {
+        0%, 100% {
+            opacity: 0.7;
+            transform: scale(0.96);
+        }
+        50% {
+            opacity: 1;
+            transform: scale(1.04);
+        }
+    }
+
+    .splash-text {
+        min-height: 3.5em;
+        max-width: 380px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 6px;
+        text-align: center;
+    }
+
+    .splash-loading-message {
+        margin: 0;
+        font-size: 0.95rem;
+        opacity: 0.8;
+        animation: splash-fade-in 0.4s ease;
+    }
+
+    .splash-error-headline {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 600;
+    }
+
+    .splash-error-detail {
+        margin: 0;
+        font-size: 0.95rem;
+        opacity: 0.8;
+        line-height: 1.4;
+    }
+
+    .splash-retry {
+        margin-top: 8px;
+    }
+
+    @keyframes splash-fade-in {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 0.8; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .splash-logo--pulse,
+        .splash-loading-message {
+            animation: none;
+        }
+    }
+</style>

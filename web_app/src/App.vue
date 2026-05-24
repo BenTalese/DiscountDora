@@ -1,14 +1,47 @@
 <template>
-    <!-- ErrorBoundary catches render / lifecycle / async setup errors anywhere
-         in the router-view subtree and surfaces a friendly PageErrorState
-         in its place, instead of leaving a half-broken screen. Layout-level
-         chrome (header bell, Dora bubble, etc.) lives outside the boundary
-         in MainLayout so they keep working even when a page crashes. -->
-    <ErrorBoundary>
+    <!-- Splash sits in front of the router-view until the auth bootstrap probe
+         resolves. If the probe fails (backend unreachable) the splash also
+         renders a retry button — without this, a failed probe leaves the
+         router guard awaiting forever and the user staring at a blank page.
+         The Transition fades the splash out once the app is ready so the
+         handoff feels intentional rather than abrupt. -->
+    <Transition name="splash-fade">
+        <SplashScreen
+            v-if="!authStore.isBootstrapped"
+            :error="authStore.bootstrapError"
+            @retry="authStore.retryBootstrap"
+        />
+    </Transition>
+    <ErrorBoundary v-if="authStore.isBootstrapped">
         <router-view />
     </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
     import ErrorBoundary from 'src/components/ErrorBoundary.vue';
+    import SplashScreen from 'src/components/SplashScreen.vue';
+    import { useAuthStore } from 'src/stores/authStore';
+    import { onMounted } from 'vue';
+
+    const authStore = useAuthStore();
+    // Kick off the boot probe immediately so the splash shows even before the
+    // router has resolved its first navigation — the guard awaits the same
+    // promise, so this just front-loads it.
+    void authStore.bootstrapAsync();
+
+    // The inline splash in index.html paints before Vue mounts so the user
+    // never sees a black flash on cold load. Once Vue takes over, remove it
+    // so it doesn't sit underneath our reactive splash forever.
+    onMounted(() => {
+        document.getElementById('pre-mount-splash')?.remove();
+    });
 </script>
+
+<style>
+    .splash-fade-leave-active {
+        transition: opacity 320ms ease;
+    }
+    .splash-fade-leave-to {
+        opacity: 0;
+    }
+</style>

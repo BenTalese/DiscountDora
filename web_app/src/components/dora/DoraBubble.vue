@@ -390,10 +390,21 @@
         opacity: 1;
         transform: scale(1);
     }
-    /* Mascot + badge sit above the disc. */
-    .dora-bubble-launcher-inner > * {
+    /* Mascot sits above the disc. The badge is excluded so Quasar's
+       `floating` absolute-positioning keeps working — otherwise the
+       generic `position: relative` here puts it back into flow and
+       shoves the mascot sideways. */
+    .dora-bubble-launcher-inner > :not(.dora-update-badge) {
         position: relative;
         z-index: 1;
+    }
+    .dora-update-badge {
+        /* Stay pinned to the top-right of the mascot bounding box and
+           sit above the disc backdrop. */
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        z-index: 2;
     }
     .dora-bubble-launcher:hover .dora-bubble-launcher-inner {
         animation: dora-hover-bob 1.6s ease-in-out infinite;

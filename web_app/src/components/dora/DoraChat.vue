@@ -2,7 +2,7 @@
     <q-card flat bordered class="dora-chat-card column" style="width: 360px">
         <q-card-section class="dora-chat-header q-py-sm">
             <div class="row items-center no-wrap">
-                <span class="text-weight-medium">Dora</span>
+                <span class="dora-bot-name">DoraBot</span>
                 <q-chip
                     v-if="aiActive !== null"
                     dense
@@ -20,6 +20,16 @@
                     </q-tooltip>
                 </q-chip>
                 <q-space />
+                <q-btn
+                    flat
+                    round
+                    dense
+                    icon="help_outline"
+                    class="dora-accent-btn"
+                    @click="openDoraHelp"
+                >
+                    <q-tooltip>What can DoraBot do?</q-tooltip>
+                </q-btn>
                 <q-btn flat round dense icon="close" @click="emit('close')" />
             </div>
             <div class="text-caption text-grey">
@@ -77,22 +87,9 @@
                             rel="noopener"
                         />
                     </div>
-                    <div
-                        v-if="message.suggestions && message.suggestions.length > 0"
-                        class="row q-gutter-xs q-mt-sm"
-                    >
-                        <q-chip
-                            v-for="suggestion in message.suggestions"
-                            :key="suggestion"
-                            dense
-                            clickable
-                            color="grey-2"
-                            text-color="grey-10"
-                            @click="onIntentClick(suggestion)"
-                        >
-                            {{ labelFor(suggestion) }}
-                        </q-chip>
-                    </div>
+                    <!-- Per-message suggestion chips were dropped: the green
+                         chip row at the bottom now absorbs that behaviour and
+                         biases its order off the latest reply's suggestions. -->
 
                     <!-- Tier-2 confirm-style action: one summary + Confirm/Cancel. -->
                     <div
@@ -225,37 +222,29 @@
                 </div>
             </div>
 
-            <div class="row q-gutter-xs q-mb-sm items-center">
-                <q-chip
-                    v-for="action in suggestedActions"
-                    :key="action"
-                    dense
-                    clickable
-                    outline
-                    color="primary"
-                    @click="onIntentClick(action)"
-                >
-                    {{ labelFor(action) }}
-                </q-chip>
+            <div class="row no-wrap items-center q-mb-sm dora-chip-row">
+                <div class="row q-gutter-xs col">
+                    <q-chip
+                        v-for="chip in visibleChips"
+                        :key="chip.key"
+                        dense
+                        clickable
+                        outline
+                        color="primary"
+                        @click="onChipClick(chip)"
+                    >
+                        {{ chip.label }}
+                    </q-chip>
+                </div>
                 <q-btn
-                    flat
-                    dense
-                    round
-                    size="sm"
-                    icon="help_outline"
-                    class="dora-help-btn"
-                    @click="openDoraHelp"
-                >
-                    <q-tooltip>What can Dora do?</q-tooltip>
-                </q-btn>
-                <q-btn
+                    v-if="canRotateChips"
                     flat
                     dense
                     round
                     size="sm"
                     icon="refresh"
-                    class="dora-help-btn"
-                    @click="rotateSuggestions"
+                    class="dora-help-btn q-ml-xs"
+                    @click="rotateChips"
                 >
                     <q-tooltip>Show different suggestions</q-tooltip>
                 </q-btn>
@@ -275,6 +264,7 @@
                         round
                         dense
                         icon="send"
+                        :class="draft.trim() ? 'dora-accent-btn' : ''"
                         :disable="!draft.trim()"
                         @click="onSubmit"
                     />
@@ -412,23 +402,204 @@
         width: '10px',
         opacity: '0.2',
     } as const;
-    // Pick a random handful of suggestion chips from the larger pool each time
-    // the chat opens, so users see different prompts on different visits.
-    // Three keeps the button row breathable next to the "?" and refresh icons.
-    const SUGGESTION_COUNT = 3;
-    function pickSuggestions(): DoraIntentId[] {
-        const pool = [...QUICK_ACTIONS];
-        const out: DoraIntentId[] = [];
-        while (out.length < SUGGESTION_COUNT && pool.length > 0) {
-            const idx = Math.floor(Math.random() * pool.length);
-            out.push(pool.splice(idx, 1)[0]!);
+    // ── Suggestion chips ─────────────────────────────────────────────
+    // The bottom chip row absorbs what used to be per-message grey chips:
+    // its order is biased by the latest reply's `suggestions` so a follow-up
+    // from what Dora just said sits first, then the row is filled from the
+    // mode's pool (basic = intent shortcuts; AI = natural-language prompts).
+    // Capped so the row stays breathable.
+    type ChipDispatch =
+        | { kind: 'intent'; id: DoraIntentId }
+        | { kind: 'prompt'; text: string };
+    type Chip = { key: string; label: string; dispatch: ChipDispatch };
+
+    const CHIP_LIMIT = 4;
+
+    // Basic-mode pool: intent shortcuts the rule engine handles directly.
+    // Ordered by everyday usefulness — practical pantry asks first, then
+    // app-help, then personality/fun. Refresh button cycles through these.
+    const BASIC_CHIP_POOL: DoraIntentId[] = [
+        'whats_for_dinner',
+        'attention',
+        'pantry_summary',
+        'low_stock',
+        'expiring',
+        'shopping_list_status',
+        'weeks_meals',
+        'find_recipe',
+        'convert',
+        'substitute',
+        'page_help',
+        'how_do_i',
+        'show_around',
+        'guides',
+        'whats_new',
+        'food_fact',
+        'tell_me_something',
+        'joke',
+        'report_issue',
+    ];
+
+    // AI-mode pool: full-sentence prompts that play to the model's strengths.
+    // Each is what would be sent to /ask if clicked — the chip label is the
+    // short version shown on the button. Wider pool than basic since AI can
+    // handle the open-ended natural-language ones too.
+    const AI_CHIP_POOL: { label: string; prompt: string }[] = [
+        // Pantry data
+        { label: "What's for dinner?", prompt: "what's for dinner tonight" },
+        { label: 'What needs attention?', prompt: 'what needs my attention right now' },
+        { label: "What's expiring?", prompt: "what's about to go off this week" },
+        { label: "What's low?", prompt: "what's running low in my pantry" },
+        { label: 'Pantry health', prompt: "how's my pantry looking" },
+        { label: "What's on my list?", prompt: "what's on my shopping list" },
+        { label: "What's in the fridge?", prompt: "what's in the fridge" },
+        // Recipe ideas
+        { label: 'What can I cook now?', prompt: 'what can I make with what I have' },
+        { label: 'Kid-friendly tonight', prompt: 'something kid-friendly tonight' },
+        { label: 'Comfort food', prompt: 'comfort food ideas' },
+        { label: 'Quick weeknight', prompt: 'something quick for a weeknight' },
+        { label: 'Date night', prompt: 'date night recipe ideas' },
+        { label: 'Fancy dessert', prompt: 'fancy dessert ideas' },
+        // Shopping + deals
+        { label: "What's in season?", prompt: "what's in season right now" },
+        { label: 'Any deals?', prompt: "what's on special right now" },
+        { label: 'Compare prices', prompt: "where's milk cheapest right now" },
+        // Kitchen helpers
+        { label: 'Substitute for…', prompt: 'what can I use instead of buttermilk' },
+        { label: 'Convert units', prompt: 'how many ml in a cup of flour' },
+        // Planning
+        { label: "What's the plan?", prompt: "what's on the meal plan this week" },
+        // App help
+        { label: "What's new?", prompt: "what's new in the app" },
+        { label: 'How do I…?', prompt: 'how do I add a stock item' },
+        { label: 'What can I do here?', prompt: 'what can I do on this page' },
+        { label: 'Show me around', prompt: 'give me a tour of the app' },
+        // Personality
+        { label: 'Tell me a joke', prompt: 'tell me a joke' },
+        { label: 'Random food fact', prompt: 'tell me a random food fact' },
+        { label: 'Tell me something', prompt: 'tell me something silly' },
+        { label: 'Thanks DoraBot', prompt: 'thanks dora' },
+        { label: 'I found an issue', prompt: 'i found an issue' },
+    ];
+
+    // Map intent IDs → AI-mode chip (label + prompt). Used to translate a
+    // reply's `suggestions: DoraIntentId[]` into AI chips when the bias
+    // runs in AI mode. If an intent has no entry it just doesn't bias the
+    // AI row — basic mode still uses it directly via labelFor().
+    const INTENT_TO_AI_CHIP: Partial<Record<DoraIntentId, { label: string; prompt: string }>> = {
+        attention: { label: 'What needs attention?', prompt: 'what needs my attention right now' },
+        pantry_summary: { label: 'Pantry health', prompt: "how's my pantry looking" },
+        low_stock: { label: "What's low?", prompt: "what's running low in my pantry" },
+        expiring: { label: "What's expiring?", prompt: "what's about to go off this week" },
+        shopping_list_status: { label: "What's on my list?", prompt: "what's on my shopping list" },
+        whats_for_dinner: { label: "What's for dinner?", prompt: "what's for dinner tonight" },
+        weeks_meals: { label: "What's the plan?", prompt: "what's on the meal plan this week" },
+        joke: { label: 'Tell me a joke', prompt: 'tell me a joke' },
+        food_fact: { label: 'Food fact', prompt: 'tell me a food fact' },
+        tell_me_something: { label: 'Tell me something', prompt: 'tell me something silly' },
+        guides: { label: 'Open the guides', prompt: 'show me the guides' },
+        compliment: { label: 'Thanks Dora', prompt: 'thanks dora' },
+        substitute: { label: 'Substitute for…', prompt: 'what can I use instead of buttermilk' },
+        convert: { label: 'Convert units', prompt: 'how many ml in a cup of flour' },
+        find_recipe: { label: 'Find a recipe', prompt: 'find me a recipe for pasta' },
+        show_around: { label: 'Show me around', prompt: 'give me a tour of the app' },
+        page_help: { label: 'What can I do here?', prompt: 'what can I do on this page' },
+        how_do_i: { label: 'How do I…?', prompt: 'how do I add a stock item' },
+        whats_new: { label: "What's new?", prompt: "what's new in the app" },
+        report_issue: { label: 'I found an issue', prompt: 'i found an issue' },
+    };
+
+    // Latest reply's suggestion list, in order. Drives the front-of-row bias.
+    const latestSuggestions = computed<DoraIntentId[]>(() => {
+        for (let i = messages.value.length - 1; i >= 0; i--) {
+            const m = messages.value[i];
+            if (m?.from === 'dora' && m.suggestions?.length) {
+                return m.suggestions;
+            }
+        }
+        return [];
+    });
+
+    // Refresh cursor — advanced by the refresh button. Suspends the
+    // reply-bias for the current turn (so every slot is a fresh pool chip);
+    // a new reply resets both the cursor and the suspension so the bias
+    // returns. This gives the refresh button real power instead of only
+    // ever cycling the trailing 2-3 slots behind pinned suggestions.
+    const chipCursor = ref(0);
+    const suppressReplyBias = ref(false);
+
+    function rotate<T>(arr: readonly T[], offset: number): T[] {
+        if (arr.length === 0) return [];
+        const n = ((offset % arr.length) + arr.length) % arr.length;
+        return [...arr.slice(n), ...arr.slice(0, n)];
+    }
+
+    const visibleChips = computed<Chip[]>(() => {
+        const seen = new Set<string>();
+        const out: Chip[] = [];
+        const push = (chip: Chip) => {
+            if (seen.has(chip.key) || out.length >= CHIP_LIMIT) return;
+            seen.add(chip.key);
+            out.push(chip);
+        };
+        const useReplyBias = !suppressReplyBias.value;
+
+        if (aiActive.value) {
+            if (useReplyBias) {
+                for (const id of latestSuggestions.value) {
+                    const ai = INTENT_TO_AI_CHIP[id];
+                    if (ai) push({ key: `prompt:${ai.prompt}`, label: ai.label, dispatch: { kind: 'prompt', text: ai.prompt } });
+                }
+            }
+            for (const entry of rotate(AI_CHIP_POOL, chipCursor.value)) {
+                push({ key: `prompt:${entry.prompt}`, label: entry.label, dispatch: { kind: 'prompt', text: entry.prompt } });
+            }
+        } else {
+            if (useReplyBias) {
+                for (const id of latestSuggestions.value) {
+                    push({ key: `intent:${id}`, label: labelFor(id), dispatch: { kind: 'intent', id } });
+                }
+            }
+            for (const id of rotate(BASIC_CHIP_POOL, chipCursor.value)) {
+                push({ key: `intent:${id}`, label: labelFor(id), dispatch: { kind: 'intent', id } });
+            }
         }
         return out;
+    });
+
+    // Only worth showing the refresh button when the active pool actually
+    // has more entries than fit on the row (after the reply-bias chips).
+    const canRotateChips = computed(() => {
+        const poolSize = aiActive.value ? AI_CHIP_POOL.length : BASIC_CHIP_POOL.length;
+        return poolSize > CHIP_LIMIT;
+    });
+
+    function rotateChips() {
+        // First press just suspends the reply-bias (so the row immediately
+        // changes by giving the pool the front slots back); subsequent
+        // presses advance the cursor through the pool.
+        if (!suppressReplyBias.value && latestSuggestions.value.length > 0) {
+            suppressReplyBias.value = true;
+        } else {
+            chipCursor.value += CHIP_LIMIT;
+        }
     }
-    const suggestedActions = ref<DoraIntentId[]>(pickSuggestions());
-    function rotateSuggestions() {
-        suggestedActions.value = pickSuggestions();
+
+    // When Dora replies (suggestions change), reset the cursor and bring the
+    // reply-bias back so the row reflects the new reply.
+    watch(latestSuggestions, () => {
+        chipCursor.value = 0;
+        suppressReplyBias.value = false;
+    });
+
+    function onChipClick(chip: Chip) {
+        if (chip.dispatch.kind === 'intent') {
+            onIntentClick(chip.dispatch.id);
+            return;
+        }
+        void submitPromptText(chip.dispatch.text);
     }
+
     function openDoraHelp() {
         void router.push('/help/dora');
         emit('close');
@@ -982,22 +1153,27 @@
         const text = draft.value.trim();
         if (!text) return;
         draft.value = '';
+        await submitPromptText(text);
+    }
+
+    // Shared submission path used by both the text input and the AI-mode
+    // suggestion chips. Pushes the user text, runs AI when active, and falls
+    // back to the rule engine when AI defers or is unavailable.
+    async function submitPromptText(text: string) {
+        const trimmed = text.trim();
+        if (!trimmed) return;
         emit('prompt-submitted');
-        messages.value.push({ from: 'user', text });
+        messages.value.push({ from: 'user', text: trimmed });
         await scrollToBottom();
-        // Short-circuit "personality" intents to the local rule engine even
-        // when AI is available — the rule engine has hand-written, on-brand
-        // replies (kawaii compliments, etc.) the model wouldn't reproduce,
-        // and this guarantees the matching mood/face fires.
-        const preempt = detectIntent(text);
-        if (preempt === 'compliment' || preempt === 'insult') {
-            await dispatch(preempt, text);
+        const preempt = detectIntent(trimmed);
+        if (preempt === 'compliment' || preempt === 'insult' || preempt === 'report_issue') {
+            await dispatch(preempt, trimmed);
             return;
         }
         thinking.value = true;
         await scrollToBottom();
         try {
-            const reply = await assistantApi.askAsync(text, route.path);
+            const reply = await assistantApi.askAsync(trimmed, route.path);
             if (reply.available && !reply.defer_to_local && reply.answer) {
                 const mood = (reply.mood as DoraMood) ?? 'happy';
                 const message: Message = {
@@ -1012,24 +1188,19 @@
                 };
                 messages.value.push(message);
                 emit('mood', mood);
-                // Use the proxied in-array ref so the typewriter's per-char
-                // displayText writes are actually reactive (see pushDoraMessage).
                 startTypewriter(messages.value[messages.value.length - 1]!);
                 await scrollToBottom();
                 return;
             }
         } catch (err) {
-            // Network/parse failure — degrade silently to the rule engine.
-            // Don't immediately mark AI as down (one failed call != model
-            // gone); re-probe the cheap /status endpoint to get the truth.
             console.debug('Assistant backend unavailable, using local intents', err);
             void refreshAiStatus();
         } finally {
             thinking.value = false;
             await scrollToBottom();
         }
-        const intent = detectIntent(text);
-        await dispatch(intent, text);
+        const intent = detectIntent(trimmed);
+        await dispatch(intent, trimmed);
     }
 
     function onNavigate(path: string) {
@@ -1098,13 +1269,19 @@
     .dora-chat-message-user {
         justify-content: flex-end;
     }
+    /* Dora's bubble — slightly darker than the card so the edge reads. The
+       primary green at low alpha picks up the brand instead of looking like
+       grey wash. Dark mode mirrors with the same tint over the dark card. */
     .dora-chat-bubble {
         max-width: 80%;
         padding: 8px 12px;
         border-radius: 12px;
-        background: rgba(0, 0, 0, 0.05);
+        background: rgba(23, 176, 115, 0.12);
         font-size: 0.92em;
         line-height: 1.35;
+    }
+    .body--dark .dora-chat-bubble {
+        background: rgba(23, 176, 115, 0.22);
     }
     .dora-chat-message-user .dora-chat-bubble {
         background: var(--q-primary);
@@ -1114,7 +1291,10 @@
         color: white;
     }
     .dora-chat-thinking {
-        background: rgba(0, 0, 0, 0.03);
+        background: rgba(23, 176, 115, 0.08);
+    }
+    .body--dark .dora-chat-thinking {
+        background: rgba(23, 176, 115, 0.16);
     }
     .dora-chat-text {
         white-space: pre-wrap;
@@ -1125,6 +1305,22 @@
     }
     .dora-help-btn:hover {
         opacity: 1;
+    }
+    /* Bot name + accent-style buttons. The Dora yellow is gorgeous on the
+       dark background but vanishes against the light card; flip to black in
+       light mode for legibility, keep the accent pop in dark mode. */
+    .dora-bot-name {
+        font-weight: 700;
+        color: #000;
+    }
+    .body--dark .dora-bot-name {
+        color: var(--q-accent);
+    }
+    .dora-accent-btn {
+        color: #000;
+    }
+    .body--dark .dora-accent-btn {
+        color: var(--q-accent);
     }
     /* Inline blinking caret shown only while a dora message is mid-reveal.
        Visual hint that more text is coming, paired with the talking face. */

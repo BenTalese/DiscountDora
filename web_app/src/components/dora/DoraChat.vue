@@ -94,8 +94,35 @@
                         </q-chip>
                     </div>
 
+                    <!-- Tier-2 confirm-style action: one summary + Confirm/Cancel. -->
                     <div
-                        v-if="message.action && !message.action.no_primary"
+                        v-if="isConfirmAction(message.action) && message.action.status === 'ready' && !message.done"
+                        class="dora-action-card q-mt-sm"
+                    >
+                        <div class="row q-gutter-sm q-mt-xs">
+                            <q-btn
+                                size="sm"
+                                no-caps
+                                unelevated
+                                color="primary"
+                                icon="check"
+                                label="Confirm"
+                                @click="confirmAction(message)"
+                            />
+                            <q-btn
+                                size="sm"
+                                no-caps
+                                flat
+                                color="grey-7"
+                                label="Cancel"
+                                @click="cancelAction(message)"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Existing add-to-shopping-list flow: multi-item + chip disambiguation. -->
+                    <div
+                        v-if="isAddAction(message.action) && !message.action.no_primary"
                         class="dora-action-card q-mt-sm"
                     >
                         <div
@@ -266,7 +293,9 @@
     import type { AuthenticatedUser } from 'src/models/auth';
     import AlertApiService from 'src/services/api/alertApiService';
     import AssistantApiService, {
+        type AddToShoppingListAction,
         type CommitAddItem,
+        type ConfirmAction,
         type PendingAction,
     } from 'src/services/api/assistantApiService';
     import HelpApiService from 'src/services/api/helpApiService';
@@ -640,7 +669,9 @@
     }
 
     function isResolved(message: Message, itemIdx: number): boolean {
-        const item = message.action?.items[itemIdx];
+        const action = message.action;
+        if (!isAddAction(action)) return false;
+        const item = action.items[itemIdx];
         if (!item) return false;
         if (item.status === 'ready') return true;
         if (item.status === 'ambiguous') return Boolean(message.selections?.[itemIdx]);
@@ -659,6 +690,16 @@
         return 'warning';
     }
 
+    // ── Action-shape guards ──────────────────────────────────────────
+    // PendingAction is now a discriminated union — these narrow into the
+    // right shape so the templates and helpers can rely on the right fields.
+    function isAddAction(action: PendingAction | undefined): action is AddToShoppingListAction {
+        return action?.type === 'add_to_shopping_list';
+    }
+    function isConfirmAction(action: PendingAction | undefined): action is ConfirmAction {
+        return action !== undefined && action.type !== 'add_to_shopping_list';
+    }
+
     function selectCandidate(message: Message, itemIdx: number, stockItemId: string) {
         if (!message.selections) message.selections = {};
         message.selections[itemIdx] = stockItemId;
@@ -669,7 +710,7 @@
     // too-many items are silently dropped.
     function commitItems(message: Message): CommitAddItem[] {
         const action = message.action;
-        if (!action) return [];
+        if (!isAddAction(action)) return [];
         const out: CommitAddItem[] = [];
         action.items.forEach((item, idx) => {
             if (item.status === 'ready' && item.candidates[0]) {
@@ -686,7 +727,7 @@
     // ambiguous item has been resolved (so we never commit a half-answered prompt).
     function canCommit(message: Message): boolean {
         const action = message.action;
-        if (!action || !action.shopping_list || message.done) return false;
+        if (!isAddAction(action) || !action.shopping_list || message.done) return false;
         const everyAmbiguousResolved = action.items.every(
             (item, idx) => item.status !== 'ambiguous' || Boolean(message.selections?.[idx]),
         );
@@ -695,7 +736,7 @@
 
     async function commitAction(message: Message) {
         const action = message.action;
-        if (!action?.shopping_list || !canCommit(message)) return;
+        if (!isAddAction(action) || !action.shopping_list || !canCommit(message)) return;
         const items = commitItems(message);
         message.done = true;
         thinking.value = true;
@@ -713,6 +754,36 @@
             thinking.value = false;
             await scrollToBottom();
         }
+    }
+
+    // ── Tier-2 confirm-style action handlers ─────────────────────────
+    async function confirmAction(message: Message) {
+        const action = message.action;
+        if (!isConfirmAction(action) || action.status !== 'ready' || !action.payload) return;
+        message.done = true;
+        thinking.value = true;
+        await scrollToBottom();
+        try {
+            const result = await assistantApi.confirmAsync(action.type, action.payload);
+            pushDoraMessage({
+                text: result.answer,
+                mood: result.ok ? 'super_excited' : 'sad',
+            });
+        } catch (err) {
+            message.done = false;
+            pushDoraMessage({
+                text: `Couldn't pull that off — ${describeApiError(err)}`,
+                mood: 'sad',
+            });
+        } finally {
+            thinking.value = false;
+            await scrollToBottom();
+        }
+    }
+
+    function cancelAction(message: Message) {
+        message.done = true;
+        pushDoraMessage({ text: 'No worries, cancelled that one.', mood: 'cute' });
     }
 
     // dispatch runs an intent and pushes Dora's reply. It does NOT push a

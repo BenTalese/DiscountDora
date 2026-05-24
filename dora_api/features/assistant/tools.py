@@ -15,16 +15,19 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, Callable
 
+from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -34,6 +37,11 @@ _Logger = logging.getLogger(__name__)
 # Cap rows handed back to the model. A small model's context is precious and
 # the user doesn't want a wall of text — summaries beat exhaustive dumps.
 _MAX_ROWS = 25
+
+# When a name lookup finds multiple matches, we don't drown the user (or
+# the model) in options. Above this we say "be more specific" rather than
+# listing everything. Mirrors the shopping_actions threshold.
+_MAX_CANDIDATES = 6
 
 # Stock levels are ordered by ascending `sequence`; higher = less stock.
 # "Low Stock" = 2, "Out of Stock" = 3 in the seed, so >= 2 means "needs
@@ -274,6 +282,330 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "get_alerts",
+            "description": (
+                "Return the things needing the user's attention right now — "
+                "the same data behind the bell icon. Use for 'what needs "
+                "attention', 'anything urgent', 'what's wrong'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "severity": {"type": "string", "description": "Filter by severity: 'high', 'medium', or 'low'. Omit for all."},
+                    "kind": {"type": "string", "description": "Filter by kind: 'expired', 'expiring_soon', 'out_of_stock', 'low_stock', 'stocktake_overdue', 'essential_low'. Omit for all."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stock_item_detail",
+            "description": (
+                "Detailed snapshot of one stock item — level, location, expiry, "
+                "flagged/open state, last stocktake, recipes that use it, "
+                "whether it's on a shopping list. Use for 'tell me about my "
+                "milk', 'how's the cheese looking'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Item name (or partial)."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recipe_detail",
+            "description": (
+                "Detailed snapshot of one recipe — ingredients with their "
+                "in-stock status, cook time, difficulty, an instructions preview. "
+                "Use for 'tell me about carbonara', 'how do I make pad thai', "
+                "'what's in lasagne'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Recipe name (or partial)."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "shopping_list_contents",
+            "description": (
+                "List the lines on a shopping list — what's on it, ticked vs "
+                "outstanding, with stock-level context. Use for 'what's on my "
+                "list', 'what do I still need at woolies'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "List name (or partial). Omit to use the primary list."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "meal_detail",
+            "description": (
+                "Detailed snapshot of one meal — the constituent recipes and "
+                "their cook times. Use for 'what's in the Sunday roast meal', "
+                "'tell me about my taco night meal'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Meal name (or partial)."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_location",
+            "description": (
+                "Look up a storage location and what's in it. Use for 'what's "
+                "in the fridge', 'anything urgent in the pantry', 'list the "
+                "items in zone 3'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Location name (or partial), e.g. 'fridge', 'pantry', 'zone 3'."},
+                    "urgent_only": {"type": "boolean", "description": "Only return items needing attention (low/out/expired/expiring) at this location."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_stock_level",
+            "description": (
+                "Change the stock level of an item — use when the user reports "
+                "consuming, restocking, or otherwise re-evaluating an item's "
+                "stock (e.g. 'I just used the last milk', 'mark eggs as low', "
+                "'cheese is fully stocked again'). Levels include 'out', 'low', "
+                "'sufficient', 'well stocked'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                    "level": {"type": "string", "description": "'out', 'low', 'sufficient', 'well stocked' (or aliases)."},
+                },
+                "required": ["item_name", "level"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mark_opened",
+            "description": (
+                "Mark a stock item as opened (start of its in-use countdown). "
+                "Set closed=true to mark it closed/unopened again."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                    "closed": {"type": "boolean", "description": "Set true to mark it closed (unopen) instead."},
+                },
+                "required": ["item_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "push_expiry",
+            "description": (
+                "Shift an item's expiry date by a number of days (positive to "
+                "push it back, negative to bring it forward). Use for 'push "
+                "bread by 3 days', 'add a week to the milk expiry'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                    "days": {"type": "integer"},
+                },
+                "required": ["item_name", "days"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tick_shopping_line",
+            "description": (
+                "Tick (mark complete) a line on the primary shopping list. Set "
+                "untick=true to un-tick. Use for 'cross off bread', 'I got the "
+                "milk', 'I haven't actually got the eggs yet'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                    "untick": {"type": "boolean", "description": "Set true to un-tick instead of ticking."},
+                },
+                "required": ["item_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "seasonal_picks",
+            "description": (
+                "What produce is in season in Australia right now (or for a "
+                "named month). Curated table covering common fruit and veg. "
+                "Use for 'what's in season', 'what should I be buying this "
+                "month', 'seasonal produce'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "month": {"type": "string", "description": "Optional month name (e.g. 'march') or number 1-12. Defaults to the current month."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_prices",
+            "description": (
+                "Compare prices for a stock item across the merchant products "
+                "linked to it. Use for 'where's milk cheapest right now', "
+                "'best price on cheese'. Only works for stock items that "
+                "have linked products."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                },
+                "required": ["item_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recipe_for_occasion",
+            "description": (
+                "Suggest recipes that fit an occasion / vibe (kid-friendly, "
+                "date night, guests, comfort food, quick weeknight, healthy, "
+                "fancy, party). Translates the occasion into concrete recipe "
+                "filters and ranks by stock coverage so you get suggestions "
+                "you can actually cook."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "occasion": {"type": "string", "description": "Free-form occasion / vibe phrase."},
+                },
+                "required": ["occasion"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_item",
+            "description": (
+                "Move a stock item to a different storage location. Use for "
+                "'move the cheese to the fridge', 'put the rice in the pantry'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string"},
+                    "destination": {"type": "string", "description": "Location name (or partial), e.g. 'fridge', 'pantry'."},
+                },
+                "required": ["item_name", "destination"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_primary_list",
+            "description": (
+                "Make a named shopping list the primary one (the default target "
+                "for new additions). Use for 'make Groceries the primary list', "
+                "'switch primary to Aldi run'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_meal_for_date",
+            "description": (
+                "Add a meal to the meal plan for a specific date and slot. "
+                "Use for 'plan carbonara for Friday dinner', 'put taco night "
+                "on Tuesday'. Requires `date` as yyyy-mm-dd."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "meal_name": {"type": "string"},
+                    "date": {"type": "string", "description": "yyyy-mm-dd"},
+                    "slot": {"type": "string", "description": "'Breakfast', 'Lunch', 'Dinner'. Defaults to Dinner."},
+                    "servings": {"type": "integer", "description": "Default 1."},
+                },
+                "required": ["meal_name", "date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_recipe_to_list",
+            "description": (
+                "Add a recipe's ingredients to the primary shopping list. "
+                "Defaults to the recipe's MISSING ingredients (anything Out of "
+                "Stock or untracked); set missing_only=false to add all "
+                "ingredients regardless of stock."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_name": {"type": "string"},
+                    "missing_only": {"type": "boolean", "description": "Default true."},
+                },
+                "required": ["recipe_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_to_shopping_list",
             "description": "Add one or more items to the user's shopping list, e.g. 'add 3 apples and some milk'.",
             "parameters": {
@@ -302,7 +634,18 @@ TOOL_SCHEMAS: list[dict] = [
 # proposes them, but a deterministic resolver + an explicit commit step run the
 # change. They are deliberately NOT in `_TOOLS`.
 ADD_TO_SHOPPING_LIST = "add_to_shopping_list"
-_ACTION_TOOLS = frozenset({ADD_TO_SHOPPING_LIST})
+_ACTION_TOOLS = frozenset({
+    ADD_TO_SHOPPING_LIST,
+    # Tier-2 confirm-style actions — single-decision Confirm/Cancel cards.
+    "update_stock_level",
+    "mark_opened",
+    "push_expiry",
+    "tick_shopping_line",
+    "move_item",
+    "set_primary_list",
+    "plan_meal_for_date",
+    "add_recipe_to_list",
+})
 
 
 def is_action_tool(name: str) -> bool:
@@ -908,6 +1251,560 @@ def recipes_using_item(args: dict) -> list[dict]:
     return matches[:_MAX_ROWS]
 
 
+
+# ─────────────────────────────────────────────────────────────────────────
+# Tier-1 detail / introspection tools
+# ─────────────────────────────────────────────────────────────────────────
+
+def get_alerts(args: dict) -> list[dict]:
+    """Delegate to the alerts handler that powers the bell icon, then expose
+    the rows in a model-friendly shape (with optional severity/kind filters)."""
+    handler = GetAlertsHandler()
+    payload = handler.handle()
+    severity = (args.get("severity") or "").strip().lower() or None
+    kind = (args.get("kind") or "").strip().lower() or None
+    rows: list[dict] = []
+    for alert in payload.items:
+        if severity and alert.severity != severity:
+            continue
+        if kind and alert.kind != kind:
+            continue
+        rows.append({
+            "kind": alert.kind,
+            "severity": alert.severity,
+            "stock_item_name": alert.stock_item_name,
+            "message": alert.message,
+            "detail": alert.detail,
+            "related_date": alert.related_date,
+        })
+    # Severity order: high first, then medium, then low.
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    rows.sort(key=lambda r: severity_rank.get(r["severity"], 99))
+    return rows[:_MAX_ROWS]
+
+
+def _find_one_by_name(repo: SqlAlchemyRepository, entity: type, name: str, query_builder=None):
+    """Exact name match first (case-insensitive), substring fallback. Returns
+    the single best match or None when there are 0 or >1 candidates. The
+    caller renders a 'be more specific' message in the >1 case."""
+    field = EntityField(entity, "name")
+    query = query_builder() if query_builder else repo.get(entity)
+    exact = query.all(field.eq(name))
+    if len(exact) == 1:
+        return exact[0], "exact"
+    if len(exact) > 1:
+        return None, "ambiguous_exact"
+    query = query_builder() if query_builder else repo.get(entity)
+    fuzzy = query.all(field.contains(name))
+    if len(fuzzy) == 1:
+        return fuzzy[0], "fuzzy"
+    if len(fuzzy) == 0:
+        return None, "not_found"
+    return None, "ambiguous_fuzzy", fuzzy
+
+
+def stock_item_detail(args: dict) -> list[dict]:
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return [{"error": "name is required"}]
+    repo = SqlAlchemyRepository()
+
+    def build():
+        return (
+            repo.get(StockItem)
+            .include(StockItem.Fields.STOCK_LEVEL)
+            .include(StockItem.Fields.STOCK_LOCATION)
+            .include(StockItem.Fields.STOCK_GROUP)
+        )
+
+    result = _find_one_by_name(repo, StockItem, name, build)
+    status = result[1] if isinstance(result, tuple) else "not_found"
+    if status == "not_found":
+        return [{"query": name, "status": "not_found"}]
+    if status.startswith("ambiguous"):
+        candidates = result[2] if len(result) > 2 else []
+        return [{
+            "query": name,
+            "status": "ambiguous",
+            "candidates": [{"name": c.name, "location": c.stock_location.name if c.stock_location else None} for c in candidates[:_MAX_CANDIDATES]],
+        }]
+    item: StockItem = result[0]
+
+    # Recipes that reference this item.
+    recipes_using: list[str] = []
+    recipes: list[Recipe] = (
+        repo.get(Recipe)
+        .include(Recipe.Fields.INGREDIENTS)
+        .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+        .all()
+    )
+    for recipe in recipes:
+        for ing in (recipe.ingredients or []):
+            if ing.stock_item and ing.stock_item.id == item.id:
+                recipes_using.append(recipe.name)
+                break
+
+    # On a shopping list?
+    list_lines: list[ShoppingListLine] = repo.get(ShoppingListLine).all(
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(item.id)
+    )
+    on_lists_count = len(list_lines)
+
+    return [{
+        "name": item.name,
+        "stock_level": item.stock_level.name if item.stock_level else None,
+        "location": item.stock_location.name if item.stock_location else None,
+        "group": item.stock_group.name if item.stock_group else None,
+        "expiry_date": item.expiry_date.isoformat() if item.expiry_date else None,
+        "is_flagged": bool(item.is_flagged),
+        "is_open": bool(item.is_open),
+        "opened_on": item.opened_on.isoformat() if getattr(item, "opened_on", None) else None,
+        "auto_add_when_low": bool(getattr(item, "auto_add_when_low", False)),
+        "stock_level_last_updated": (
+            item.stock_level_last_updated.isoformat()
+            if getattr(item, "stock_level_last_updated", None) else None
+        ),
+        "recipes_using_item": recipes_using[:_MAX_ROWS],
+        "on_shopping_lists_count": on_lists_count,
+    }]
+
+
+def recipe_detail(args: dict) -> list[dict]:
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return [{"error": "name is required"}]
+    repo = SqlAlchemyRepository()
+
+    def build():
+        return (
+            repo.get(Recipe)
+            .include(Recipe.Fields.INGREDIENTS)
+            .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+            .then_include(StockItem.Fields.STOCK_LEVEL)
+        )
+
+    result = _find_one_by_name(repo, Recipe, name, build)
+    status = result[1] if isinstance(result, tuple) else "not_found"
+    if status == "not_found":
+        return [{"query": name, "status": "not_found"}]
+    if status.startswith("ambiguous"):
+        candidates = result[2] if len(result) > 2 else []
+        return [{
+            "query": name,
+            "status": "ambiguous",
+            "candidates": [{"name": c.name, "cuisine": c.cuisine} for c in candidates[:_MAX_CANDIDATES]],
+        }]
+    recipe: Recipe = result[0]
+
+    in_stock, total, missing = _stock_coverage(recipe)
+
+    # Trim instructions preview — small models choke on long blobs and the
+    # user can open the recipe page if they want the full thing.
+    instructions_preview = None
+    if recipe.instructions:
+        text = recipe.instructions.strip()
+        instructions_preview = text[:400] + ("…" if len(text) > 400 else "")
+
+    return [{
+        "name": recipe.name,
+        "cuisine": recipe.cuisine,
+        "category": recipe.category,
+        "difficulty": recipe.difficulty,
+        "cook_time_minutes": recipe.cook_time_minutes,
+        "prep_time_minutes": recipe.prep_time_minutes,
+        "servings": recipe.servings,
+        "is_favourite": bool(recipe.is_favourite),
+        "last_made_on": recipe.last_made_on.isoformat() if recipe.last_made_on else None,
+        "total_ingredients": total,
+        "in_stock_count": in_stock,
+        "can_make_now": total > 0 and in_stock == total,
+        "missing_ingredients": missing,
+        "ingredients": [
+            {
+                "name": ing.stock_item.name if ing.stock_item else "(unlinked)",
+                "quantity": ing.quantity,
+                "unit": ing.unit,
+                "notes": ing.notes,
+                "in_stock": bool(
+                    ing.stock_item
+                    and ing.stock_item.stock_level
+                    and ing.stock_item.stock_level.sequence < _OUT_OF_STOCK_SEQUENCE
+                ),
+            }
+            for ing in (recipe.ingredients or [])
+        ],
+        "instructions_preview": instructions_preview,
+    }]
+
+
+def shopping_list_contents(args: dict) -> list[dict]:
+    repo = SqlAlchemyRepository()
+    name = str(args.get("name") or "").strip()
+
+    if name:
+        lists = repo.get(ShoppingList).all(
+            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            & EntityField(ShoppingList, ShoppingList.Fields.NAME).contains(name)
+        )
+        if not lists:
+            return [{"query": name, "status": "not_found"}]
+        if len(lists) > 1:
+            return [{
+                "query": name,
+                "status": "ambiguous",
+                "candidates": [{"name": l.name, "is_primary": l.is_primary} for l in lists[:_MAX_CANDIDATES]],
+            }]
+        shopping_list = lists[0]
+    else:
+        # Default to the primary, non-archived list.
+        primary = repo.get(ShoppingList).one(
+            EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
+            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+        )
+        if not primary:
+            return [{"status": "no_primary"}]
+        shopping_list = primary
+
+    lines: list[ShoppingListLine] = repo.get(ShoppingListLine).all(
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID).eq(shopping_list.id)
+    )
+    if not lines:
+        return [{
+            "list_name": shopping_list.name,
+            "is_primary": shopping_list.is_primary,
+            "is_in_progress": shopping_list.is_in_progress,
+            "total_lines": 0,
+            "ticked": 0,
+            "outstanding": 0,
+            "lines": [],
+        }]
+
+    # Resolve stock-item names + levels in a second pass so we don't N+1 the lookups.
+    item_ids = list({line.stock_item_id for line in lines})
+    items: list[StockItem] = (
+        repo.get(StockItem)
+        .include(StockItem.Fields.STOCK_LEVEL)
+        .all(EntityField(StockItem, StockItem.Fields.ID).in_(item_ids))
+        if item_ids else []
+    )
+    item_lookup = {it.id: it for it in items}
+
+    rendered = []
+    for line in sorted(lines, key=lambda l: (l.is_ticked, l.sequence)):
+        item = item_lookup.get(line.stock_item_id)
+        rendered.append({
+            "name": item.name if item else "(unknown item)",
+            "quantity": line.quantity,
+            "is_ticked": line.is_ticked,
+            "stock_level": item.stock_level.name if item and item.stock_level else None,
+        })
+
+    ticked = sum(1 for l in lines if l.is_ticked)
+    return [{
+        "list_name": shopping_list.name,
+        "is_primary": shopping_list.is_primary,
+        "is_in_progress": shopping_list.is_in_progress,
+        "total_lines": len(lines),
+        "ticked": ticked,
+        "outstanding": len(lines) - ticked,
+        "lines": rendered[:_MAX_ROWS],
+    }]
+
+
+def meal_detail(args: dict) -> list[dict]:
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return [{"error": "name is required"}]
+    repo = SqlAlchemyRepository()
+
+    def build():
+        return repo.get(Meal).include(Meal.Fields.RECIPES)
+
+    result = _find_one_by_name(repo, Meal, name, build)
+    status = result[1] if isinstance(result, tuple) else "not_found"
+    if status == "not_found":
+        return [{"query": name, "status": "not_found"}]
+    if status.startswith("ambiguous"):
+        candidates = result[2] if len(result) > 2 else []
+        return [{
+            "query": name,
+            "status": "ambiguous",
+            "candidates": [{"name": c.name} for c in candidates[:_MAX_CANDIDATES]],
+        }]
+    meal: Meal = result[0]
+
+    return [{
+        "name": meal.name,
+        "quantity_in_stock": getattr(meal, "quantity_in_stock", 0),
+        "recipe_count": len(meal.recipes or []),
+        "recipes": [
+            {
+                "name": r.name,
+                "cuisine": r.cuisine,
+                "cook_time_minutes": r.cook_time_minutes,
+                "difficulty": r.difficulty,
+            }
+            for r in (meal.recipes or [])
+        ],
+    }]
+
+
+def find_location(args: dict) -> list[dict]:
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return [{"error": "name is required"}]
+    urgent_only = _truthy(args.get("urgent_only"))
+    repo = SqlAlchemyRepository()
+
+    locations: list[StockLocation] = repo.get(StockLocation).all(
+        EntityField(StockLocation, StockLocation.Fields.NAME).contains(name)
+    )
+    if not locations:
+        return [{"query": name, "status": "not_found"}]
+    # Collect items at any of these locations (locations include zones/areas/
+    # sections — we match by location_id directly, so a zone match only returns
+    # items pinned at the zone level; areas/sections are separate matches).
+    location_ids = [l.id for l in locations]
+    items: list[StockItem] = (
+        repo.get(StockItem)
+        .include(StockItem.Fields.STOCK_LEVEL)
+        .include(StockItem.Fields.STOCK_LOCATION)
+        .all(EntityField(StockItem, StockItem.Fields.STOCK_LOCATION_ID).in_(location_ids))
+    )
+
+    today = date.today()
+    horizon = today + timedelta(days=_EXPIRY_HORIZON_DAYS)
+
+    def is_urgent(it: StockItem) -> bool:
+        level_bad = it.stock_level and it.stock_level.sequence >= _LOW_STOCK_SEQUENCE
+        expiry_bad = it.expiry_date and (it.expiry_date < today or it.expiry_date <= horizon)
+        return bool(level_bad or expiry_bad)
+
+    filtered = [it for it in items if is_urgent(it)] if urgent_only else items
+
+    rows = []
+    for loc in locations:
+        loc_items = [it for it in filtered if it.stock_location and it.stock_location.id == loc.id]
+        rows.append({
+            "location_name": loc.name,
+            "kind": loc.kind,
+            "item_count": len(loc_items),
+            "items": [
+                {
+                    "name": it.name,
+                    "stock_level": it.stock_level.name if it.stock_level else None,
+                    "expiry_date": it.expiry_date.isoformat() if it.expiry_date else None,
+                    "is_flagged": bool(it.is_flagged),
+                }
+                for it in loc_items[:_MAX_ROWS]
+            ],
+        })
+    return rows[:_MAX_ROWS]
+
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Tier-3 cognitive / curated tools
+# ─────────────────────────────────────────────────────────────────────────
+
+# AU seasonal produce by month. Curated rather than computed — fits a small
+# pocket reference better than a date library. Apologies to the southern-
+# hemisphere edge cases; this is the rough consensus.
+_SEASONAL_AU: dict[int, dict[str, list[str]]] = {
+    # month → { "fruit": [...], "veg": [...] }
+    1:  {"fruit": ["apricot", "blackberry", "blueberry", "cherry", "fig", "lychee", "mango", "nectarine", "peach", "plum", "raspberry", "watermelon"],
+         "veg":   ["basil", "capsicum", "corn", "cucumber", "eggplant", "green bean", "lettuce", "snow pea", "tomato", "zucchini"]},
+    2:  {"fruit": ["apple", "blackberry", "fig", "grape", "mango", "nectarine", "passionfruit", "peach", "plum", "raspberry", "watermelon"],
+         "veg":   ["basil", "capsicum", "chilli", "corn", "cucumber", "eggplant", "leek", "lettuce", "tomato", "zucchini"]},
+    3:  {"fruit": ["apple", "fig", "grape", "kiwifruit", "passionfruit", "pear", "persimmon", "pomegranate", "quince"],
+         "veg":   ["beetroot", "broccoli", "cabbage", "cauliflower", "eggplant", "leek", "mushroom", "pumpkin", "silverbeet", "sweet potato"]},
+    4:  {"fruit": ["apple", "feijoa", "kiwifruit", "mandarin", "pear", "persimmon", "pomegranate", "quince"],
+         "veg":   ["beetroot", "broccoli", "brussels sprout", "cabbage", "cauliflower", "fennel", "leek", "mushroom", "pumpkin", "silverbeet", "sweet potato"]},
+    5:  {"fruit": ["apple", "kiwifruit", "lemon", "mandarin", "orange", "pear", "persimmon", "rhubarb"],
+         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "celeriac", "fennel", "kale", "leek", "parsnip", "pumpkin", "swede", "turnip"]},
+    6:  {"fruit": ["apple", "kiwifruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
+         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "celeriac", "fennel", "kale", "leek", "parsnip", "pumpkin", "silverbeet", "swede", "turnip"]},
+    7:  {"fruit": ["apple", "grapefruit", "kiwifruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
+         "veg":   ["broccoli", "brussels sprout", "cabbage", "cauliflower", "carrot", "fennel", "kale", "leek", "parsnip", "pumpkin", "silverbeet", "swede", "turnip"]},
+    8:  {"fruit": ["apple", "blood orange", "grapefruit", "lemon", "mandarin", "orange", "pear", "rhubarb"],
+         "veg":   ["asparagus", "broccoli", "brussels sprout", "cabbage", "cauliflower", "fennel", "kale", "leek", "parsnip", "spinach", "swede"]},
+    9:  {"fruit": ["apple", "blood orange", "grapefruit", "lemon", "mandarin", "orange", "pineapple", "strawberry"],
+         "veg":   ["artichoke", "asparagus", "broad bean", "broccoli", "cabbage", "fennel", "kale", "leek", "spinach", "spring onion"]},
+    10: {"fruit": ["apple", "loquat", "mango", "papaya", "pineapple", "rhubarb", "strawberry"],
+         "veg":   ["artichoke", "asparagus", "broad bean", "broccoli", "leek", "lettuce", "rocket", "snow pea", "spinach", "spring onion"]},
+    11: {"fruit": ["apricot", "blueberry", "cherry", "mango", "nectarine", "papaya", "peach", "pineapple", "raspberry", "strawberry", "watermelon"],
+         "veg":   ["asparagus", "broad bean", "capsicum", "cucumber", "lettuce", "rocket", "snow pea", "spring onion", "tomato", "zucchini"]},
+    12: {"fruit": ["apricot", "blueberry", "cherry", "lychee", "mango", "nectarine", "peach", "pineapple", "plum", "raspberry", "strawberry", "watermelon"],
+         "veg":   ["basil", "capsicum", "corn", "cucumber", "lettuce", "rocket", "snow pea", "spring onion", "tomato", "zucchini"]},
+}
+
+_MONTH_NAMES = ["january", "february", "march", "april", "may", "june",
+                "july", "august", "september", "october", "november", "december"]
+
+
+def _resolve_month(raw: str) -> int:
+    raw = raw.strip().lower()
+    if not raw:
+        return date.today().month
+    try:
+        n = int(raw)
+        if 1 <= n <= 12:
+            return n
+    except ValueError:
+        pass
+    for i, name in enumerate(_MONTH_NAMES, start=1):
+        if raw.startswith(name[:3]):
+            return i
+    return date.today().month
+
+
+def seasonal_picks(args: dict) -> list[dict]:
+    month_num = _resolve_month(str(args.get("month") or ""))
+    table = _SEASONAL_AU.get(month_num, {"fruit": [], "veg": []})
+    return [{
+        "month": _MONTH_NAMES[month_num - 1].capitalize(),
+        "fruit": table["fruit"],
+        "veg": table["veg"],
+        "note": "Australian seasonal guide — pricing and availability vary by region.",
+    }]
+
+
+def compare_prices(args: dict) -> list[dict]:
+    name = str(args.get("item_name") or "").strip()
+    if not name:
+        return [{"error": "item_name is required"}]
+    repo = SqlAlchemyRepository()
+
+    # Resolve the stock item with its linked products + offers + merchants.
+    def build_query():
+        return (
+            repo.get(StockItem)
+            .include(StockItem.Fields.PRODUCTS)
+                .then_include("merchant")
+            .include(StockItem.Fields.PRODUCTS)
+                .then_include("current_offer")
+        )
+
+    field = EntityField(StockItem, StockItem.Fields.NAME)
+    matches = build_query().all(field.eq(name))
+    if not matches:
+        matches = build_query().all(field.contains(name))
+    if not matches:
+        return [{"query": name, "status": "not_found"}]
+    if len(matches) > 1:
+        return [{
+            "query": name,
+            "status": "ambiguous",
+            "candidates": [{"name": m.name} for m in matches[:_MAX_CANDIDATES]],
+        }]
+    item = matches[0]
+    products = item.products or []
+    if not products:
+        return [{
+            "stock_item_name": item.name,
+            "status": "no_linked_products",
+            "note": "No merchant products are linked to this stock item — link one on the item's detail page.",
+            "rows": [],
+        }]
+
+    rows = []
+    for p in products:
+        offer = p.current_offer
+        if not offer or offer.price_now is None:
+            continue
+        savings = (offer.price_was - offer.price_now) if offer.price_was else 0
+        rows.append({
+            "product_name": p.name,
+            "brand": p.brand,
+            "merchant": p.merchant.name if p.merchant else None,
+            "size": p.size,
+            "price_now": offer.price_now,
+            "price_was": offer.price_was,
+            "on_special": bool(offer.price_was and offer.price_now < offer.price_was),
+            "savings": round(savings, 2) if savings else 0,
+            "web_url": p.web_url,
+        })
+    rows.sort(key=lambda r: r["price_now"])
+    return [{
+        "stock_item_name": item.name,
+        "status": "ok",
+        "cheapest_merchant": rows[0]["merchant"] if rows else None,
+        "cheapest_price": rows[0]["price_now"] if rows else None,
+        "rows": rows[:_MAX_ROWS],
+    }]
+
+
+# Occasion vocab → search/filter recipe. Each entry is a hint bundle the
+# tool wraps around suggest_recipes' existing scorer (which already handles
+# stock coverage + favourite tie-breakers).
+_OCCASION_PROFILES: dict[str, dict[str, Any]] = {
+    "kid": {"keywords": "pasta pizza burger nugget mac cheese sausage", "max_cook_time_minutes": 35, "difficulty": "easy"},
+    "kids": {"keywords": "pasta pizza burger nugget mac cheese sausage", "max_cook_time_minutes": 35, "difficulty": "easy"},
+    "kid friendly": {"keywords": "pasta pizza burger nugget mac cheese sausage", "max_cook_time_minutes": 35, "difficulty": "easy"},
+    "family": {"keywords": "pasta roast casserole curry lasagne", "max_cook_time_minutes": 60},
+    "date": {"keywords": "steak risotto pasta seafood salmon", "difficulty": "medium"},
+    "date night": {"keywords": "steak risotto pasta seafood salmon", "difficulty": "medium"},
+    "romantic": {"keywords": "steak risotto pasta seafood salmon"},
+    "guests": {"keywords": "roast risotto lamb seafood tart pavlova", "difficulty": "medium"},
+    "dinner party": {"keywords": "roast risotto lamb seafood tart pavlova"},
+    "fancy": {"keywords": "duck lamb risotto seafood scallop souffle"},
+    "comfort": {"keywords": "stew casserole roast pasta lasagne pie soup"},
+    "comfort food": {"keywords": "stew casserole roast pasta lasagne pie soup"},
+    "cosy": {"keywords": "stew casserole soup pie risotto"},
+    "cozy": {"keywords": "stew casserole soup pie risotto"},
+    "quick": {"keywords": "stir fry pasta salad wrap omelette", "max_cook_time_minutes": 20},
+    "quick dinner": {"keywords": "stir fry pasta salad wrap omelette", "max_cook_time_minutes": 20},
+    "weeknight": {"keywords": "stir fry pasta sheet pan curry rice", "max_cook_time_minutes": 30, "difficulty": "easy"},
+    "lazy": {"keywords": "sheet pan one pot pasta toastie", "max_cook_time_minutes": 25},
+    "healthy": {"keywords": "salad bowl grilled fish steamed vegetable"},
+    "light": {"keywords": "salad soup wrap fish"},
+    "spicy": {"keywords": "curry chilli laksa kimchi sichuan"},
+    "vegetarian": {"keywords": "vegetable tofu lentil chickpea pasta", "category": "vegetarian"},
+    "vego": {"keywords": "vegetable tofu lentil chickpea pasta", "category": "vegetarian"},
+    "party": {"keywords": "platter dip skewer wing slider"},
+    "breakfast": {"keywords": "pancake omelette toastie smoothie porridge"},
+    "brunch": {"keywords": "pancake eggs benedict fritter shakshuka avocado"},
+    "dessert": {"keywords": "cake pavlova tart pudding crumble brownie"},
+    "treat": {"keywords": "cake brownie cookie tart pudding"},
+}
+
+
+def _occasion_profile(occasion: str) -> dict[str, Any] | None:
+    key = occasion.strip().lower()
+    if key in _OCCASION_PROFILES:
+        return _OCCASION_PROFILES[key]
+    # Loose match: longest matching alias substring wins.
+    best = None
+    best_len = 0
+    for alias, profile in _OCCASION_PROFILES.items():
+        if alias in key and len(alias) > best_len:
+            best, best_len = profile, len(alias)
+    return best
+
+
+def recipe_for_occasion(args: dict) -> list[dict]:
+    occasion = str(args.get("occasion") or "").strip()
+    if not occasion:
+        return [{"error": "occasion is required"}]
+    profile = _occasion_profile(occasion)
+    if not profile:
+        return [{
+            "occasion": occasion,
+            "status": "unknown_occasion",
+            "note": "No specific profile for that one — try 'kid-friendly', 'date night', 'comfort', 'quick', 'fancy', 'healthy', 'party', 'dessert'.",
+            "rows": [],
+        }]
+    # Wrap suggest_recipes with the profile's filters plus stock-aware ranking.
+    suggest_args = {**profile, "based_on_stock": True}
+    rows = suggest_recipes(suggest_args)
+    return [{
+        "occasion": occasion,
+        "matched_profile": profile,
+        "status": "ok",
+        "rows": rows,
+    }]
+
+
 _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "search_stock": search_stock,
     "search_products": search_products,
@@ -920,6 +1817,15 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "pantry_health": pantry_health,
     "meal_plan_for_date": meal_plan_for_date,
     "recipes_using_item": recipes_using_item,
+    "get_alerts": get_alerts,
+    "stock_item_detail": stock_item_detail,
+    "recipe_detail": recipe_detail,
+    "shopping_list_contents": shopping_list_contents,
+    "meal_detail": meal_detail,
+    "find_location": find_location,
+    "seasonal_picks": seasonal_picks,
+    "compare_prices": compare_prices,
+    "recipe_for_occasion": recipe_for_occasion,
 }
 
 # Where the UI should offer to navigate after answering, per tool.
@@ -933,7 +1839,15 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "pantry_health": {"path": "/stock", "label": "Open Stock"},
     "meal_plan_for_date": {"path": "/meal-plans", "label": "Open Meal Plans"},
     "recipes_using_item": {"path": "/recipes", "label": "Browse recipes"},
-    # convert_measurement / suggest_substitution don't need navigation.
+    "get_alerts": {"path": "/stock", "label": "See on Stock"},
+    "stock_item_detail": {"path": "/stock", "label": "Open Stock"},
+    "recipe_detail": {"path": "/recipes", "label": "Browse recipes"},
+    "shopping_list_contents": {"path": "/shopping-lists", "label": "Open Shopping Lists"},
+    "meal_detail": {"path": "/meals", "label": "Open Meals"},
+    "find_location": {"path": "/locations", "label": "Open Locations"},
+    "compare_prices": {"path": "/product-search", "label": "Open product search"},
+    "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},
+    # convert_measurement / suggest_substitution / seasonal_picks need no nav.
 }
 
 

@@ -1,0 +1,785 @@
+"""Resolve + commit "confirm-style" assistant actions.
+
+These are mutating tools where the proposal reduces to a single human-readable
+sentence and a single Confirm button on the frontend — distinct from the
+add-to-shopping-list flow which has its own multi-item disambiguation UI.
+
+Pattern per action:
+  propose_<action>(args)  -> {type, summary, payload, status, candidates?}
+  commit_<action>(payload) -> {ok, message}
+
+`status` is one of:
+  'ready'         - resolved; payload is sufficient to commit
+  'ambiguous'     - multiple matching entities; `candidates` lists them
+  'not_found'     - nothing matched
+  'invalid'       - args don't make sense (bad level name, negative days, etc.)
+
+The frontend treats anything non-'ready' as a non-mutating message and never
+shows a Confirm button; the model's reply text already explains the issue.
+"""
+import logging
+from datetime import date, timedelta
+from typing import Any, Callable
+from uuid import UUID
+
+from dora_api.domain.entities.meal import Meal
+from dora_api.domain.entities.meal_plan import MealPlan
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.features.meal_plans.update_meal_plan import (
+    UpdateMealPlanEntryRequest, UpdateMealPlanHandler, UpdateMealPlanRequest)
+from dora_api.features.shopping_lists.manage_shopping_list import (
+    UpdateShoppingListHandler, UpdateShoppingListRequest)
+from dora_api.features.shopping_lists.manage_shopping_list_lines import (
+    AddLineHandler, AddLineRequest, UpdateLineHandler, UpdateLineRequest)
+from dora_api.features.stock_items.move_stock_item import (
+    MoveStockItemHandler, MoveStockItemRequest)
+from dora_api.features.stock_items.update_stock_item import (
+    UpdateStockItemHandler, UpdateStockItemRequest)
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+_Logger = logging.getLogger(__name__)
+
+_MAX_CANDIDATES = 6
+
+
+# ── Common helpers ─────────────────────────────────────────────────────
+
+def _find_stock_item(repo: SqlAlchemyRepository, name: str) -> tuple[str, list[StockItem]]:
+    """Returns ('exact'|'fuzzy'|'none', [items]). Exact match wins outright."""
+    field = EntityField(StockItem, StockItem.Fields.NAME)
+    exact = (
+        repo.get(StockItem)
+        .include(StockItem.Fields.STOCK_LEVEL)
+        .include(StockItem.Fields.STOCK_LOCATION)
+        .all(field.eq(name))
+    )
+    if exact:
+        return "exact", exact
+    fuzzy = (
+        repo.get(StockItem)
+        .include(StockItem.Fields.STOCK_LEVEL)
+        .include(StockItem.Fields.STOCK_LOCATION)
+        .all(field.contains(name))
+    )
+    return ("fuzzy" if fuzzy else "none"), fuzzy
+
+
+def _stock_item_candidate(item: StockItem) -> dict[str, Any]:
+    return {
+        "stock_item_id": str(item.id),
+        "name": item.name,
+        "location": item.stock_location.name if item.stock_location else None,
+        "stock_level": item.stock_level.name if item.stock_level else None,
+    }
+
+
+def _resolve_single_item(name: str) -> dict[str, Any] | StockItem:
+    """Resolve a name to a StockItem. Returns a status dict OR the StockItem
+    itself when there's a single match. Caller flips the dict into the
+    pending_action when not 'ready'."""
+    if not name:
+        return {"status": "invalid", "summary": "I didn't catch which item you meant.", "candidates": []}
+    repo = SqlAlchemyRepository()
+    kind, matches = _find_stock_item(repo, name)
+    if not matches:
+        return {"status": "not_found", "summary": f"I don't have anything called \"{name}\" in your stock.", "candidates": []}
+    if len(matches) == 1:
+        return matches[0]
+    return {
+        "status": "ambiguous",
+        "summary": f"A few items match \"{name}\" — which one?",
+        "candidates": [_stock_item_candidate(m) for m in matches[:_MAX_CANDIDATES]],
+    }
+
+
+# ── update_stock_level ─────────────────────────────────────────────────
+
+# Common phrasings the model might emit. Resolved against StockLevel.name
+# (case-insensitive substring) too, so seed-customised names still work.
+_LEVEL_ALIASES: dict[str, str] = {
+    "out": "Out of Stock", "out of stock": "Out of Stock", "empty": "Out of Stock",
+    "gone": "Out of Stock", "none": "Out of Stock", "finished": "Out of Stock",
+    "low": "Low Stock", "low stock": "Low Stock", "running low": "Low Stock",
+    "almost out": "Low Stock", "almost gone": "Low Stock",
+    "sufficient": "Sufficient", "ok": "Sufficient", "fine": "Sufficient",
+    "well stocked": "Well Stocked", "well-stocked": "Well Stocked",
+    "stocked up": "Well Stocked", "full": "Well Stocked", "plenty": "Well Stocked",
+}
+
+
+def _resolve_level(repo: SqlAlchemyRepository, level_input: str) -> StockLevel | None:
+    if not level_input:
+        return None
+    canonical = _LEVEL_ALIASES.get(level_input.lower().strip())
+    if canonical:
+        exact = repo.get(StockLevel).all(
+            EntityField(StockLevel, StockLevel.Fields.NAME).eq(canonical)
+        )
+        if exact:
+            return exact[0]
+    # Fallback: substring against name.
+    matches = repo.get(StockLevel).all(
+        EntityField(StockLevel, StockLevel.Fields.NAME).contains(level_input)
+    )
+    return matches[0] if len(matches) == 1 else None
+
+
+def propose_update_stock_level(args: dict) -> dict[str, Any]:
+    item_resolved = _resolve_single_item(str(args.get("item_name") or "").strip())
+    if isinstance(item_resolved, dict):
+        return {"type": "update_stock_level", **item_resolved}
+    item: StockItem = item_resolved
+
+    repo = SqlAlchemyRepository()
+    level = _resolve_level(repo, str(args.get("level") or "").strip())
+    if level is None:
+        return {
+            "type": "update_stock_level",
+            "status": "invalid",
+            "summary": f"I'm not sure what level to set {item.name} to — try 'out', 'low', 'sufficient', or 'well stocked'.",
+            "candidates": [],
+        }
+    previous = item.stock_level.name if item.stock_level else "(unknown)"
+    if item.stock_level and item.stock_level.id == level.id:
+        return {
+            "type": "update_stock_level",
+            "status": "invalid",
+            "summary": f"{item.name} is already {previous}.",
+            "candidates": [],
+        }
+    return {
+        "type": "update_stock_level",
+        "status": "ready",
+        "summary": f"Set {item.name} to {level.name}? (was {previous})",
+        "payload": {
+            "stock_item_id": str(item.id),
+            "stock_item_name": item.name,
+            "new_level_id": str(level.id),
+            "new_level_name": level.name,
+            "previous_level_name": previous,
+        },
+        "candidates": [],
+    }
+
+
+def commit_update_stock_level(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = UpdateStockItemHandler()
+    response = handler.handle(
+        UpdateStockItemRequest(stock_level_id=UUID(payload["new_level_id"])),
+        stock_item_id=UUID(payload["stock_item_id"]),
+    )
+    if response.stock_item_not_found:
+        return {"ok": False, "message": "I lost track of that item — maybe it was deleted."}
+    if response.stock_level_not_found:
+        return {"ok": False, "message": "That stock level doesn't exist anymore."}
+    return {
+        "ok": True,
+        "message": f"Done — {payload['stock_item_name']} is now {payload['new_level_name']}.",
+    }
+
+
+# ── mark_opened / mark_closed ──────────────────────────────────────────
+
+def propose_mark_opened(args: dict) -> dict[str, Any]:
+    item_resolved = _resolve_single_item(str(args.get("item_name") or "").strip())
+    if isinstance(item_resolved, dict):
+        return {"type": "mark_opened", **item_resolved}
+    item: StockItem = item_resolved
+    closed = bool(args.get("closed"))
+    already_in_state = (closed and not item.is_open) or (not closed and item.is_open)
+    if already_in_state:
+        state = "closed" if closed else "open"
+        return {
+            "type": "mark_opened",
+            "status": "invalid",
+            "summary": f"{item.name} is already marked as {state}.",
+            "candidates": [],
+        }
+    verb = "closed" if closed else "opened"
+    return {
+        "type": "mark_opened",
+        "status": "ready",
+        "summary": f"Mark {item.name} as {verb}?",
+        "payload": {
+            "stock_item_id": str(item.id),
+            "stock_item_name": item.name,
+            "is_open": not closed,
+        },
+        "candidates": [],
+    }
+
+
+def commit_mark_opened(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = UpdateStockItemHandler()
+    response = handler.handle(
+        UpdateStockItemRequest(is_open=bool(payload["is_open"])),
+        stock_item_id=UUID(payload["stock_item_id"]),
+    )
+    if response.stock_item_not_found:
+        return {"ok": False, "message": "I lost track of that item — maybe it was deleted."}
+    state = "opened" if payload["is_open"] else "closed"
+    return {"ok": True, "message": f"Done — {payload['stock_item_name']} marked as {state}."}
+
+
+# ── push_expiry ────────────────────────────────────────────────────────
+
+def propose_push_expiry(args: dict) -> dict[str, Any]:
+    item_resolved = _resolve_single_item(str(args.get("item_name") or "").strip())
+    if isinstance(item_resolved, dict):
+        return {"type": "push_expiry", **item_resolved}
+    item: StockItem = item_resolved
+    try:
+        days = int(args.get("days"))
+    except (TypeError, ValueError):
+        return {
+            "type": "push_expiry", "status": "invalid",
+            "summary": f"How many days should I push {item.name}'s expiry by?",
+            "candidates": [],
+        }
+    if days == 0:
+        return {
+            "type": "push_expiry", "status": "invalid",
+            "summary": "Zero days isn't really pushing anything, mate.",
+            "candidates": [],
+        }
+    base = item.expiry_date or date.today()
+    new_expiry = base + timedelta(days=days)
+    direction = "back" if days < 0 else "forward"
+    delta = f"{abs(days)} day{'s' if abs(days) != 1 else ''}"
+    base_phrase = item.expiry_date.isoformat() if item.expiry_date else f"today ({base.isoformat()})"
+    return {
+        "type": "push_expiry",
+        "status": "ready",
+        "summary": f"Push {item.name}'s expiry {direction} {delta} — from {base_phrase} to {new_expiry.isoformat()}?",
+        "payload": {
+            "stock_item_id": str(item.id),
+            "stock_item_name": item.name,
+            "new_expiry": new_expiry.isoformat(),
+        },
+        "candidates": [],
+    }
+
+
+def commit_push_expiry(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = UpdateStockItemHandler()
+    response = handler.handle(
+        UpdateStockItemRequest(expiry_date=date.fromisoformat(payload["new_expiry"])),
+        stock_item_id=UUID(payload["stock_item_id"]),
+    )
+    if response.stock_item_not_found:
+        return {"ok": False, "message": "I lost track of that item."}
+    return {"ok": True, "message": f"Done — {payload['stock_item_name']} now expires {payload['new_expiry']}."}
+
+
+# ── tick_shopping_line / untick ───────────────────────────────────────
+
+def _primary_list(repo: SqlAlchemyRepository) -> ShoppingList | None:
+    return repo.get(ShoppingList).one(
+        EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
+        & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+    )
+
+
+def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
+    name = str(args.get("item_name") or "").strip()
+    if not name:
+        return {"type": "tick_shopping_line", "status": "invalid",
+                "summary": "Which item should I tick off?", "candidates": []}
+    untick = bool(args.get("untick"))
+    repo = SqlAlchemyRepository()
+    primary = _primary_list(repo)
+    if primary is None:
+        return {"type": "tick_shopping_line", "status": "invalid",
+                "summary": "You don't have a primary shopping list set yet — set one on the Shopping Lists page.",
+                "candidates": []}
+
+    # Find lines on the primary list whose stock item name matches.
+    lines: list[ShoppingListLine] = repo.get(ShoppingListLine).all(
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID).eq(primary.id)
+    )
+    if not lines:
+        return {"type": "tick_shopping_line", "status": "not_found",
+                "summary": f"Your primary list \"{primary.name}\" is empty.", "candidates": []}
+
+    item_ids = list({line.stock_item_id for line in lines})
+    items: list[StockItem] = (
+        repo.get(StockItem)
+        .all(EntityField(StockItem, StockItem.Fields.ID).in_(item_ids))
+        if item_ids else []
+    )
+    item_by_id = {it.id: it for it in items}
+
+    name_lower = name.lower()
+    matching = [
+        line for line in lines
+        if (item := item_by_id.get(line.stock_item_id)) is not None
+        and name_lower in item.name.lower()
+    ]
+    if not matching:
+        return {"type": "tick_shopping_line", "status": "not_found",
+                "summary": f"\"{name}\" isn't on your primary list.", "candidates": []}
+    if len(matching) > 1:
+        return {
+            "type": "tick_shopping_line",
+            "status": "ambiguous",
+            "summary": f"A few \"{name}\" entries on your list — which?",
+            "candidates": [
+                {
+                    "line_id": str(line.id),
+                    "name": item_by_id[line.stock_item_id].name,
+                    "is_ticked": line.is_ticked,
+                }
+                for line in matching[:_MAX_CANDIDATES]
+            ],
+        }
+    line = matching[0]
+    item = item_by_id[line.stock_item_id]
+    if untick and not line.is_ticked:
+        return {"type": "tick_shopping_line", "status": "invalid",
+                "summary": f"{item.name} isn't ticked yet — nothing to untick.",
+                "candidates": []}
+    if not untick and line.is_ticked:
+        return {"type": "tick_shopping_line", "status": "invalid",
+                "summary": f"{item.name} is already ticked off.",
+                "candidates": []}
+
+    verb = "untick" if untick else "tick"
+    return {
+        "type": "tick_shopping_line",
+        "status": "ready",
+        "summary": f"{verb.capitalize()} {item.name} on \"{primary.name}\"?",
+        "payload": {
+            "shopping_list_id": str(primary.id),
+            "line_id": str(line.id),
+            "stock_item_name": item.name,
+            "is_ticked": not untick,
+        },
+        "candidates": [],
+    }
+
+
+def commit_tick_shopping_line(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = UpdateLineHandler()
+    response = handler.handle(
+        UpdateLineRequest(is_ticked=bool(payload["is_ticked"])),
+        shopping_list_id=UUID(payload["shopping_list_id"]),
+        line_id=UUID(payload["line_id"]),
+    )
+    if response.line_not_found:
+        return {"ok": False, "message": "That line's not on the list anymore."}
+    verb = "ticked" if payload["is_ticked"] else "unticked"
+    return {"ok": True, "message": f"Done — {verb} {payload['stock_item_name']}."}
+
+
+# ── move_item ──────────────────────────────────────────────────────────
+
+def _find_location(repo: SqlAlchemyRepository, name: str) -> tuple[str, list[StockLocation]]:
+    field = EntityField(StockLocation, StockLocation.Fields.NAME)
+    exact = repo.get(StockLocation).all(field.eq(name))
+    if exact:
+        return "exact", exact
+    fuzzy = repo.get(StockLocation).all(field.contains(name))
+    return ("fuzzy" if fuzzy else "none"), fuzzy
+
+
+def propose_move_item(args: dict) -> dict[str, Any]:
+    item_resolved = _resolve_single_item(str(args.get("item_name") or "").strip())
+    if isinstance(item_resolved, dict):
+        return {"type": "move_item", **item_resolved}
+    item: StockItem = item_resolved
+
+    dest_name = str(args.get("destination") or "").strip()
+    if not dest_name:
+        return {"type": "move_item", "status": "invalid",
+                "summary": f"Where should I move {item.name}?", "candidates": []}
+    repo = SqlAlchemyRepository()
+    _, locations = _find_location(repo, dest_name)
+    if not locations:
+        return {"type": "move_item", "status": "not_found",
+                "summary": f"No location matches \"{dest_name}\".", "candidates": []}
+    if len(locations) > 1:
+        return {
+            "type": "move_item",
+            "status": "ambiguous",
+            "summary": f"A few locations match \"{dest_name}\" — which one?",
+            "candidates": [
+                {"location_id": str(l.id), "name": l.name, "kind": l.kind}
+                for l in locations[:_MAX_CANDIDATES]
+            ],
+        }
+    destination = locations[0]
+    if item.stock_location and item.stock_location.id == destination.id:
+        return {"type": "move_item", "status": "invalid",
+                "summary": f"{item.name} is already in {destination.name}.",
+                "candidates": []}
+    current = item.stock_location.name if item.stock_location else "(no location)"
+    return {
+        "type": "move_item",
+        "status": "ready",
+        "summary": f"Move {item.name} from {current} to {destination.name}?",
+        "payload": {
+            "stock_item_id": str(item.id),
+            "stock_item_name": item.name,
+            "destination_location_id": str(destination.id),
+            "destination_name": destination.name,
+        },
+        "candidates": [],
+    }
+
+
+def commit_move_item(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = MoveStockItemHandler()
+    response = handler.handle(
+        MoveStockItemRequest(destination_location_id=UUID(payload["destination_location_id"])),
+        stock_item_id=UUID(payload["stock_item_id"]),
+    )
+    if getattr(response, "stock_item_not_found", False):
+        return {"ok": False, "message": "I lost track of that item."}
+    if response.destination_not_found:
+        return {"ok": False, "message": "That destination doesn't exist anymore."}
+    return {"ok": True, "message": f"Done — moved {payload['stock_item_name']} to {payload['destination_name']}."}
+
+
+# ── set_primary_list ───────────────────────────────────────────────────
+
+def _find_shopping_list(repo: SqlAlchemyRepository, name: str) -> list[ShoppingList]:
+    field = EntityField(ShoppingList, ShoppingList.Fields.NAME)
+    archived = EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+    exact = repo.get(ShoppingList).all(field.eq(name) & archived)
+    if exact:
+        return exact
+    return repo.get(ShoppingList).all(field.contains(name) & archived)
+
+
+def propose_set_primary_list(args: dict) -> dict[str, Any]:
+    name = str(args.get("name") or "").strip()
+    if not name:
+        return {"type": "set_primary_list", "status": "invalid",
+                "summary": "Which list should I make primary?", "candidates": []}
+    repo = SqlAlchemyRepository()
+    lists = _find_shopping_list(repo, name)
+    if not lists:
+        return {"type": "set_primary_list", "status": "not_found",
+                "summary": f"No active list matches \"{name}\".", "candidates": []}
+    if len(lists) > 1:
+        return {
+            "type": "set_primary_list",
+            "status": "ambiguous",
+            "summary": f"A few lists match \"{name}\" — which?",
+            "candidates": [
+                {"shopping_list_id": str(l.id), "name": l.name, "is_primary": l.is_primary}
+                for l in lists[:_MAX_CANDIDATES]
+            ],
+        }
+    target = lists[0]
+    if target.is_primary:
+        return {"type": "set_primary_list", "status": "invalid",
+                "summary": f"\"{target.name}\" is already the primary list.",
+                "candidates": []}
+    return {
+        "type": "set_primary_list",
+        "status": "ready",
+        "summary": f"Make \"{target.name}\" the primary shopping list?",
+        "payload": {
+            "shopping_list_id": str(target.id),
+            "list_name": target.name,
+        },
+        "candidates": [],
+    }
+
+
+def commit_set_primary_list(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = UpdateShoppingListHandler()
+    response = handler.handle(
+        UpdateShoppingListRequest(is_primary=True),
+        shopping_list_id=UUID(payload["shopping_list_id"]),
+    )
+    if getattr(response, "shopping_list_not_found", False):
+        return {"ok": False, "message": "I lost track of that list."}
+    return {"ok": True, "message": f"Done — \"{payload['list_name']}\" is now the primary list."}
+
+
+# ── plan_meal_for_date ────────────────────────────────────────────────
+
+_DEFAULT_SLOT = "Dinner"
+
+
+def _find_meal(repo: SqlAlchemyRepository, name: str) -> list[Meal]:
+    field = EntityField(Meal, Meal.Fields.NAME)
+    exact = repo.get(Meal).all(field.eq(name))
+    if exact:
+        return exact
+    return repo.get(Meal).all(field.contains(name))
+
+
+def _plan_covering(repo: SqlAlchemyRepository, target: date) -> MealPlan | None:
+    """Find the meal plan whose existing entries straddle the target date.
+    Falls back to the latest plan whose start_date is on/before the target."""
+    plans: list[MealPlan] = (
+        repo.get(MealPlan).include(MealPlan.Fields.ENTRIES).all()
+    )
+    if not plans:
+        return None
+    covering = [p for p in plans if any(e.scheduled_for == target for e in (p.entries or []))]
+    if covering:
+        return covering[0]
+    # Plans whose start_date is <= target — pick the most recent.
+    earlier = [p for p in plans if p.start_date <= target]
+    if earlier:
+        return max(earlier, key=lambda p: p.start_date)
+    # Otherwise just take the earliest plan and we'll add the entry to it.
+    return min(plans, key=lambda p: p.start_date)
+
+
+def propose_plan_meal_for_date(args: dict) -> dict[str, Any]:
+    name = str(args.get("meal_name") or "").strip()
+    if not name:
+        return {"type": "plan_meal_for_date", "status": "invalid",
+                "summary": "Which meal should I plan?", "candidates": []}
+    date_str = str(args.get("date") or "").strip()
+    try:
+        scheduled = date.fromisoformat(date_str)
+    except ValueError:
+        return {"type": "plan_meal_for_date", "status": "invalid",
+                "summary": "I need a date in yyyy-mm-dd format.", "candidates": []}
+    slot = str(args.get("slot") or _DEFAULT_SLOT).strip() or _DEFAULT_SLOT
+    try:
+        servings = max(1, int(args.get("servings", 1)))
+    except (TypeError, ValueError):
+        servings = 1
+
+    repo = SqlAlchemyRepository()
+    meals = _find_meal(repo, name)
+    if not meals:
+        return {"type": "plan_meal_for_date", "status": "not_found",
+                "summary": f"No meal called \"{name}\".", "candidates": []}
+    if len(meals) > 1:
+        return {
+            "type": "plan_meal_for_date",
+            "status": "ambiguous",
+            "summary": f"A few meals match \"{name}\" — which?",
+            "candidates": [{"meal_id": str(m.id), "name": m.name} for m in meals[:_MAX_CANDIDATES]],
+        }
+    meal = meals[0]
+    plan = _plan_covering(repo, scheduled)
+    if plan is None:
+        return {"type": "plan_meal_for_date", "status": "not_found",
+                "summary": "You don't have a meal plan to add to — set one up on the Meal Plans page first.",
+                "candidates": []}
+    return {
+        "type": "plan_meal_for_date",
+        "status": "ready",
+        "summary": f"Plan {meal.name} for {slot.lower()} on {scheduled.isoformat()} (×{servings}) in \"{plan.name}\"?",
+        "payload": {
+            "meal_plan_id": str(plan.id),
+            "meal_id": str(meal.id),
+            "meal_name": meal.name,
+            "scheduled_for": scheduled.isoformat(),
+            "slot": slot,
+            "servings": servings,
+        },
+        "candidates": [],
+    }
+
+
+def commit_plan_meal_for_date(payload: dict[str, Any]) -> dict[str, Any]:
+    """Append the requested entry to the target plan. UpdateMealPlanHandler
+    rewrites the full entry list, so we fetch the existing entries, append,
+    and submit the merged list."""
+    repo = SqlAlchemyRepository()
+    plan_id = UUID(payload["meal_plan_id"])
+    plan: MealPlan | None = (
+        repo.get(MealPlan).include(MealPlan.Fields.ENTRIES).by_id(plan_id)
+    )
+    if plan is None:
+        return {"ok": False, "message": "That meal plan doesn't exist anymore."}
+    existing = [
+        UpdateMealPlanEntryRequest(
+            meal_id=e.meal.id,
+            scheduled_for=e.scheduled_for,
+            servings=e.servings,
+            slot=e.slot,
+        )
+        for e in (plan.entries or [])
+        if e.meal is not None
+    ]
+    existing.append(UpdateMealPlanEntryRequest(
+        meal_id=UUID(payload["meal_id"]),
+        scheduled_for=date.fromisoformat(payload["scheduled_for"]),
+        servings=int(payload["servings"]),
+        slot=payload["slot"],
+    ))
+    handler = UpdateMealPlanHandler()
+    response = handler.handle(UpdateMealPlanRequest(entries=existing), meal_plan_id=plan_id)
+    if response.meal_plan_not_found:
+        return {"ok": False, "message": "That meal plan vanished mid-request."}
+    if response.missing_meal_ids:
+        return {"ok": False, "message": "One of the meals couldn't be found."}
+    return {
+        "ok": True,
+        "message": f"Done — {payload['meal_name']} planned for {payload['slot'].lower()} on {payload['scheduled_for']}.",
+    }
+
+
+# ── add_recipe_to_list ────────────────────────────────────────────────
+
+def _find_recipe(repo: SqlAlchemyRepository, name: str) -> list[Recipe]:
+    field = EntityField(Recipe, Recipe.Fields.NAME)
+    exact = repo.get(Recipe).all(field.eq(name))
+    if exact:
+        return exact
+    return repo.get(Recipe).all(field.contains(name))
+
+
+def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
+    name = str(args.get("recipe_name") or "").strip()
+    if not name:
+        return {"type": "add_recipe_to_list", "status": "invalid",
+                "summary": "Which recipe's ingredients should I add?", "candidates": []}
+    missing_only = bool(args.get("missing_only", True))
+    repo = SqlAlchemyRepository()
+    recipes = _find_recipe(repo, name)
+    if not recipes:
+        return {"type": "add_recipe_to_list", "status": "not_found",
+                "summary": f"No recipe matches \"{name}\".", "candidates": []}
+    if len(recipes) > 1:
+        return {
+            "type": "add_recipe_to_list",
+            "status": "ambiguous",
+            "summary": f"A few recipes match \"{name}\" — which?",
+            "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
+        }
+    recipe = recipes[0]
+    primary = _primary_list(repo)
+    if primary is None:
+        return {"type": "add_recipe_to_list", "status": "invalid",
+                "summary": "You don't have a primary shopping list set yet.",
+                "candidates": []}
+
+    # Rehydrate ingredients with stock-level info so we know what's missing.
+    full: Recipe | None = (
+        repo.get(Recipe)
+        .include(Recipe.Fields.INGREDIENTS)
+        .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+        .then_include(StockItem.Fields.STOCK_LEVEL)
+        .by_id(recipe.id)
+    )
+    ingredients = (full.ingredients if full else []) or []
+    candidates: list[dict[str, Any]] = []
+    for ing in ingredients:
+        item = ing.stock_item
+        if item is None:
+            continue
+        if missing_only:
+            level = item.stock_level
+            is_in_stock = level is not None and level.sequence < 3  # OUT_OF_STOCK = 3
+            if is_in_stock:
+                continue
+        candidates.append({"stock_item_id": str(item.id), "name": item.name})
+
+    if not candidates:
+        msg = (
+            f"Nothing missing for {recipe.name} — you're cookable right now."
+            if missing_only
+            else f"{recipe.name} has no tracked ingredients to add."
+        )
+        return {"type": "add_recipe_to_list", "status": "invalid",
+                "summary": msg, "candidates": []}
+
+    count_phrase = f"{len(candidates)} missing ingredient" + ("s" if len(candidates) != 1 else "")
+    if not missing_only:
+        count_phrase = f"all {len(candidates)} tracked ingredient" + ("s" if len(candidates) != 1 else "")
+    return {
+        "type": "add_recipe_to_list",
+        "status": "ready",
+        "summary": f"Add {count_phrase} for {recipe.name} to \"{primary.name}\"?",
+        "payload": {
+            "shopping_list_id": str(primary.id),
+            "list_name": primary.name,
+            "recipe_name": recipe.name,
+            "stock_item_ids": [c["stock_item_id"] for c in candidates],
+            "ingredient_names": [c["name"] for c in candidates],
+        },
+        "candidates": [],
+    }
+
+
+def commit_add_recipe_to_list(payload: dict[str, Any]) -> dict[str, Any]:
+    handler = AddLineHandler()
+    list_id = UUID(payload["shopping_list_id"])
+    added = 0
+    already = 0
+    missing = 0
+    for raw in payload.get("stock_item_ids", []) or []:
+        try:
+            response = handler.handle(
+                AddLineRequest(stock_item_id=UUID(str(raw)), quantity=1),
+                shopping_list_id=list_id,
+            )
+        except Exception:
+            missing += 1
+            continue
+        if response.item_not_found or response.list_not_found:
+            missing += 1
+        elif response.already_on_list:
+            already += 1
+        elif response.line_id is not None:
+            added += 1
+    bits: list[str] = []
+    if added:
+        bits.append(f"added {added}")
+    if already:
+        bits.append(f"{already} already there")
+    if missing:
+        bits.append(f"{missing} couldn't be added")
+    detail = ", ".join(bits) if bits else "nothing changed"
+    return {
+        "ok": added > 0 or already > 0,
+        "message": f"Done — {detail} on {payload['list_name']}.",
+    }
+
+
+# ── Public dispatchers ─────────────────────────────────────────────────
+
+PROPOSERS: dict[str, Callable[[dict], dict]] = {
+    "update_stock_level": propose_update_stock_level,
+    "mark_opened": propose_mark_opened,
+    "push_expiry": propose_push_expiry,
+    "tick_shopping_line": propose_tick_shopping_line,
+    "move_item": propose_move_item,
+    "set_primary_list": propose_set_primary_list,
+    "plan_meal_for_date": propose_plan_meal_for_date,
+    "add_recipe_to_list": propose_add_recipe_to_list,
+}
+
+COMMITTERS: dict[str, Callable[[dict], dict]] = {
+    "update_stock_level": commit_update_stock_level,
+    "mark_opened": commit_mark_opened,
+    "push_expiry": commit_push_expiry,
+    "tick_shopping_line": commit_tick_shopping_line,
+    "move_item": commit_move_item,
+    "set_primary_list": commit_set_primary_list,
+    "plan_meal_for_date": commit_plan_meal_for_date,
+    "add_recipe_to_list": commit_add_recipe_to_list,
+}
+
+
+def is_confirm_action(name: str) -> bool:
+    return name in PROPOSERS
+
+
+def propose(name: str, args: dict) -> dict | None:
+    proposer = PROPOSERS.get(name)
+    return proposer(args or {}) if proposer else None
+
+
+def commit(name: str, payload: dict) -> dict | None:
+    committer = COMMITTERS.get(name)
+    return committer(payload or {}) if committer else None

@@ -16,12 +16,36 @@ export type AddPlanItem = {
     candidates: AddCandidate[];
 };
 
-export type PendingAction = {
+export type AddToShoppingListAction = {
     type: 'add_to_shopping_list';
     no_primary: boolean;
     shopping_list: { id: string; name: string } | null;
     items: AddPlanItem[];
 };
+
+// Confirm-style actions: one summary sentence + a single Confirm/Cancel
+// button on the frontend. `status` other than 'ready' means the model is
+// asking back / not proposing; the chat just shows the summary text and
+// no action card.
+export type ConfirmActionStatus = 'ready' | 'ambiguous' | 'not_found' | 'invalid';
+
+export type ConfirmAction = {
+    type:
+        | 'update_stock_level'
+        | 'mark_opened'
+        | 'push_expiry'
+        | 'tick_shopping_line'
+        | 'move_item'
+        | 'set_primary_list'
+        | 'plan_meal_for_date'
+        | 'add_recipe_to_list';
+    status: ConfirmActionStatus;
+    summary: string;
+    payload?: Record<string, unknown>;
+    candidates?: Array<Record<string, unknown>>;
+};
+
+export type PendingAction = AddToShoppingListAction | ConfirmAction;
 
 export type AssistantReply = {
     // When false, the model couldn't be reached — caller should fall back to
@@ -65,5 +89,14 @@ export default class AssistantApiService {
         await this.httpClient.post<CommitResult>('/assistant/act', {
             shopping_list_id: shoppingListId,
             items,
+        });
+
+    confirmAsync = async (
+        type: ConfirmAction['type'],
+        payload: Record<string, unknown>,
+    ): Promise<{ ok: boolean; answer: string }> =>
+        await this.httpClient.post<{ ok: boolean; answer: string }>('/assistant/confirm', {
+            type,
+            payload,
         });
 }

@@ -24,7 +24,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.features.app_settings.access import get_or_create_app_setting
-from dora_api.features.assistant import app_knowledge, shopping_actions, tools
+from dora_api.features.assistant import (app_knowledge, confirm_actions,
+                                          shopping_actions, tools)
 from dora_api.features.routers import ASSISTANT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.decorators import has_request_body
@@ -96,7 +97,23 @@ _SYSTEM_PROMPT = (
     "suggest_substitution. 'what's about to go off?' → whats_expiring. "
     "'what's for dinner tomorrow?' → meal_plan_for_date. 'what can I make "
     "with these strawberries?' → recipes_using_item. 'how's my pantry?' → "
-    "pantry_health.\n\n"
+    "pantry_health. 'what needs attention?' → get_alerts. 'tell me about my "
+    "milk' / 'how's the cheese' → stock_item_detail. 'what's in carbonara?' / "
+    "'how do I make pad thai?' → recipe_detail. 'what's on my list?' → "
+    "shopping_list_contents. 'what's in the fridge?' → find_location. 'what "
+    "recipes are in the roast meal?' → meal_detail. 'I just used the last "
+    "milk' / 'mark eggs as low' → update_stock_level. 'I opened the milk' "
+    "→ mark_opened. 'push the bread expiry by 3 days' → push_expiry. "
+    "'cross off bread on my list' / 'I got the milk' → tick_shopping_line. "
+    "'move the cheese to the fridge' → move_item. 'make Groceries the "
+    "primary list' → set_primary_list. 'plan carbonara for Friday dinner' "
+    "→ plan_meal_for_date (date as yyyy-mm-dd). 'add what I need for "
+    "carbonara to my list' → add_recipe_to_list. 'what's in season right "
+    "now' → seasonal_picks. 'where's milk cheapest right now' → "
+    "compare_prices. 'something kid-friendly tonight' / 'date night ideas' "
+    "/ 'comfort food' → recipe_for_occasion. Mutating tools ALWAYS produce "
+    "a confirm card the user has to click — you never actually change "
+    "anything on your own.\n\n"
     "When you call a data tool, base your reply only on the rows returned; "
     "if the result is empty, say so plainly with a touch of personality "
     "(e.g. 'nothing's low — pantry's flexing right now') rather than "
@@ -195,17 +212,45 @@ class AskAssistantHandler:
         )
 
     def _propose_action(self, tool_name: str, args: dict) -> AssistantReplyDto:
-        # Only add-to-shopping-list this round. Resolution is deterministic;
-        # the answer text is templated (no second model call) so it stays
-        # accurate about what was/wasn't matched.
-        plan = shopping_actions.resolve_add_plan(args.get("items"))
+        # Two flavours of mutating action: the multi-item add-to-shopping-list
+        # flow (its own bespoke disambiguation card) and the confirm-style
+        # actions that all share one Confirm/Cancel card.
+        if tool_name == tools.ADD_TO_SHOPPING_LIST:
+            plan = shopping_actions.resolve_add_plan(args.get("items"))
+            return AssistantReplyDto(
+                available=True,
+                defer_to_local=False,
+                answer=_describe_add_plan(plan),
+                mood="searching" if _plan_needs_input(plan) else "happy",
+                tool=tool_name,
+                pending_action=plan,
+            )
+        if confirm_actions.is_confirm_action(tool_name):
+            plan = confirm_actions.propose(tool_name, args) or {}
+            status = plan.get("status")
+            # Pick a mood that matches what just happened. The bubble's mood
+            # animation already handles the rest.
+            mood = (
+                "confident" if status == "ready"
+                else "searching" if status == "ambiguous"
+                else "confused"
+            )
+            return AssistantReplyDto(
+                available=True,
+                defer_to_local=False,
+                answer=plan.get("summary") or "I'm not sure what to do with that.",
+                mood=mood,
+                tool=tool_name,
+                pending_action=plan,
+            )
+        # Unknown action tool — shouldn't happen because is_action_tool gated
+        # us, but fail soft rather than crash.
         return AssistantReplyDto(
             available=True,
             defer_to_local=False,
-            answer=_describe_add_plan(plan),
-            mood="searching" if _plan_needs_input(plan) else "happy",
+            answer="I'm not sure how to do that yet.",
+            mood="confused",
             tool=tool_name,
-            pending_action=plan,
         )
 
 
@@ -338,3 +383,26 @@ def commit_action():
         "shopping_list_id": str(_Request.shopping_list_id),
         "answer": _describe_commit(result, "your list"),
     })
+
+
+# ───── Confirm a confirm-style action ────────────────────────────────────
+# One endpoint covers every Tier-2 confirm action (update_stock_level,
+# mark_opened, push_expiry, tick_shopping_line). Dispatcher lives in
+# confirm_actions.COMMITTERS — adding a new action means a new entry there
+# and a tool schema; no route changes needed.
+
+class ConfirmActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: str = Field(min_length=1)
+    payload: dict
+
+
+@ASSISTANT_ROUTER.route("/confirm", methods=["POST"])
+@has_request_body(ConfirmActionRequest)
+def confirm_action():
+    _Request: ConfirmActionRequest = get_request_body()
+    _Logger.info("Assistant confirming action: %s", _Request.type)
+    result = confirm_actions.commit(_Request.type, _Request.payload)
+    if result is None:
+        return ok({"ok": False, "answer": f"I don't know how to commit '{_Request.type}'."})
+    return ok({"ok": bool(result.get("ok")), "answer": result.get("message", "Done.")})

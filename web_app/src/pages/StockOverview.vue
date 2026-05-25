@@ -3,6 +3,29 @@
         <!-- Header bar ───────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <q-btn color="positive" icon="add" label="New item" no-caps @click="onCreateClick" />
+            <q-btn
+                outline
+                icon="qr_code_scanner"
+                label="Scan"
+                no-caps
+                @click="overviewScanOpen = true"
+            />
+            <q-btn-dropdown flat no-caps icon="more_horiz" label="Export">
+                <q-list dense style="min-width: 200px">
+                    <q-item clickable v-close-popup @click="overviewExport.downloadCsv()">
+                        <q-item-section avatar>
+                            <q-icon name="file_download" />
+                        </q-item-section>
+                        <q-item-section>Export as CSV</q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="overviewExport.openPrintView()">
+                        <q-item-section avatar>
+                            <q-icon name="print" />
+                        </q-item-section>
+                        <q-item-section>Print / Save as PDF</q-item-section>
+                    </q-item>
+                </q-list>
+            </q-btn-dropdown>
             <q-space />
             <q-input
                 ref="searchInputRef"
@@ -210,6 +233,15 @@
                     :disable="bulkSelection.size === 0"
                     @click="bulkSetSubstitute"
                 />
+                <q-btn
+                    flat
+                    no-caps
+                    icon="qr_code_2"
+                    label="Print QRs"
+                    color="white"
+                    :disable="bulkSelection.size === 0"
+                    @click="bulkPrintQrs"
+                />
             </template>
         </q-banner>
 
@@ -298,6 +330,13 @@
             :busy="bulkBusy"
             @confirm="bulkMove"
         />
+
+        <!-- ── Scan (N5) — jumps to the matching item's detail page ── -->
+        <ScanOverlay
+            v-model="overviewScanOpen"
+            close-on-decode
+            @decoded="onOverviewScanDecoded"
+        />
     </div>
 </template>
 
@@ -306,6 +345,7 @@
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
     import FilterChip from 'src/components/chips/FilterChip.vue';
+    import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
@@ -315,6 +355,8 @@
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Membership } from 'src/models/shoppingList';
     import type { StockGroup } from 'src/models/stockGroup';
+    import { useStockOverviewExport } from 'src/composables/useStockOverviewExport';
+    import BarcodeApiService from 'src/services/api/barcodeApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -330,6 +372,8 @@
     const $q = useQuasar();
     const stockGroupApi = new StockGroupApiService();
     const stockItemApi = new StockItemApiService();
+    const barcodeApi = new BarcodeApiService();
+    const overviewExport = useStockOverviewExport();
 
     const router = useRouter();
     const route = useRoute();
@@ -508,6 +552,51 @@
     const createDialogOpen = ref(false);
     function onCreateClick() {
         createDialogOpen.value = true;
+    }
+
+    // ── Bulk-print QRs (post-N5 polish) ───────────────────────────────────
+    // Fires the same QR-sheet endpoint Data → Barcodes & QR uses, scoped to
+    // the current bulk selection so the user can stocktake-print without
+    // round-tripping through that page.
+    function bulkPrintQrs() {
+        if (bulkSelection.value.size === 0) return;
+        overviewExport.openQrSheet(Array.from(bulkSelection.value));
+    }
+
+    // ── Scan overlay (N5) ────────────────────────────────────────────────
+    // Same flow as Data → Barcodes & QR · Scan, but the success path jumps
+    // straight to the matched item's detail page rather than opening an
+    // inline modal — the user came here looking for a specific item.
+    const overviewScanOpen = ref(false);
+    async function onOverviewScanDecoded(value: string) {
+        try {
+            const result = await barcodeApi.lookupAsync(value);
+            if (result.kind === 'stock_item') {
+                overviewScanOpen.value = false;
+                void router.push(`/stock/${result.id}`);
+                return;
+            }
+            if (result.kind === 'product' && result.stock_item_id) {
+                overviewScanOpen.value = false;
+                void router.push(`/stock/${result.stock_item_id}`);
+                return;
+            }
+            $q.notify({
+                type: 'warning',
+                position: 'bottom-right',
+                message:
+                    result.kind === 'product'
+                        ? 'Product barcode not yet linked to a stock item.'
+                        : 'Unknown barcode — register it from Data → Barcodes & QR.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Lookup failed.',
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
     }
 
     async function loadStockGroups() {

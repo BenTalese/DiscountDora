@@ -137,6 +137,40 @@
                                     </q-item-label>
                                 </q-item-section>
                             </q-item>
+                            <q-separator />
+                            <q-item
+                                clickable
+                                v-close-popup
+                                :disable="detail.lines.length === 0"
+                                @click="onExportCsv"
+                            >
+                                <q-item-section avatar>
+                                    <q-icon name="file_download" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Export as CSV</q-item-label>
+                                    <q-item-label caption>
+                                        Download as a spreadsheet
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-item
+                                clickable
+                                v-close-popup
+                                :disable="detail.lines.length === 0"
+                                @click="onPrint"
+                            >
+                                <q-item-section avatar>
+                                    <q-icon name="print" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Print / Save as PDF</q-item-label>
+                                    <q-item-label caption>
+                                        Opens a printable view in a new tab
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-separator />
                             <q-item
                                 clickable
                                 v-close-popup
@@ -678,6 +712,7 @@
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { notifyUndoable } from 'src/composables/useNotifyUndoable';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { register as registerUndo } from 'src/composables/useUndo';
@@ -1634,6 +1669,18 @@
                 caption: describeApiError(err) || '',
             });
         }
+    }
+
+    // Export actions — both pull from the shared composable so this page
+    // and ExportPrint.vue stay in lockstep on URL shape and filename.
+    const exportActions = useShoppingListExport();
+
+    function onExportCsv() {
+        void exportActions.downloadCsv(listId.value);
+    }
+
+    function onPrint() {
+        exportActions.openPrintView(listId.value);
     }
 
     async function onClearAll() {

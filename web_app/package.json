@@ -21,6 +21,8 @@
         "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
         "@fontsource-variable/urbanist": "^5.2.7",
         "@quasar/extras": "^1.16.4",
+        "@zxing/browser": "^0.1.5",
+        "@zxing/library": "^0.21.3",
         "axios": "^1.2.1",
         "pinia": "^3.0.1",
         "prettier-plugin-organize-attributes": "^1.0.0",

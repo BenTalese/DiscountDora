@@ -23,3 +23,6 @@ ASSISTANT_ROUTER = Blueprint("ASSISTANT_ROUTER", __name__, url_prefix="/api/assi
 APP_SETTINGS_ROUTER = Blueprint("APP_SETTINGS_ROUTER", __name__, url_prefix="/api/app-settings")
 USER_ROUTER = Blueprint("USER_ROUTER", __name__, url_prefix="/api/users")
 ONBOARDING_ROUTER = Blueprint("ONBOARDING_ROUTER", __name__, url_prefix="/api/onboarding")
+DATA_ROUTER = Blueprint("DATA_ROUTER", __name__, url_prefix="/api/data")
+CLIENT_LOGS_ROUTER = Blueprint("CLIENT_LOGS_ROUTER", __name__, url_prefix="/api/client-logs")
+AUDIT_ROUTER = Blueprint("AUDIT_ROUTER", __name__, url_prefix="/api/audit")

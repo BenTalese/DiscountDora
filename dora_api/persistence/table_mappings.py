@@ -4,11 +4,13 @@ from sqlalchemy.orm import registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
 from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.audit_event import AuditEvent
 from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
+from dora_api.domain.entities.product_barcode import ProductBarcode
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
@@ -126,6 +128,33 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_location_id", UUIDType, ForeignKey("StockLocation.id", ondelete="SET NULL"), nullable=True),
         Column("stocktake_alerts_are_enabled", Boolean),
         Column("preferred_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
+        Column("barcode", String(255), nullable=True, unique=True),
+    )
+
+    product_barcode_table = Table(
+        "ProductBarcode", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column(
+            "product_id", UUIDType,
+            ForeignKey("Product.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column("barcode", String(255), nullable=False, unique=True),
+    )
+
+    audit_event_table = Table(
+        "AuditEvent", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+        Column("source", String(16), nullable=False),
+        Column("actor_user_id", UUIDType, nullable=True),
+        Column("actor_ip", String(64), nullable=True),
+        Column("action", String(128), nullable=False),
+        Column("entity_type", String(64), nullable=True),
+        Column("entity_id", UUIDType, nullable=True),
+        Column("request_id", String(64), nullable=True),
+        Column("payload", String, nullable=True),
+        Column("severity", String(16), nullable=False),
     )
 
     shopping_list_table = Table(
@@ -270,6 +299,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("font_family", String(20), nullable=False, server_default="default"),
         Column("font_size", String(2), nullable=False, server_default="md"),
         Column("onboarding_completed_at", DateTime, nullable=True),
+        Column("last_backup_at", DateTime(timezone=True), nullable=True),
     )
 
     # ── Mappings ──────────────────────────────────────────────────────────────
@@ -347,6 +377,16 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(StockLevelChange, stock_level_change_table, properties={
         "_id_col": stock_level_change_table.c.id,
         "id": stock_level_change_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(ProductBarcode, product_barcode_table, properties={
+        "_id_col": product_barcode_table.c.id,
+        "id": product_barcode_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(AuditEvent, audit_event_table, properties={
+        "_id_col": audit_event_table.c.id,
+        "id": audit_event_table.c.id,
     })
 
     _mapper_registry.map_imperatively(RecipeCollection, recipe_collection_table, properties={

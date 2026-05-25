@@ -1,12 +1,17 @@
 import logging
+import time
 from http.client import NOT_FOUND
+from uuid import uuid4
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, g, jsonify, request, session
 from pydantic import ValidationError
 
 from dora_api.infrastructure.api_response import (ProblemDetails, bad_request,
                                                   unauthorized)
+from dora_api.infrastructure.audit import auto_audit_after_request
 from dora_api.infrastructure.decorators import REQUEST_BODYS_BY_ENDPOINT
+from dora_api.infrastructure.log_context import (reset_context, set_request_id,
+                                                 set_user_id)
 
 
 _Logger = logging.getLogger(__name__)
@@ -18,12 +23,30 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 PUBLIC_ENDPOINTS = frozenset({
     "login",
     "register_user",
-    "health_check",   # health probes must not require auth (used by container orchestrators)
+    "health_check",        # health probes must not require auth (used by container orchestrators)
+    "submit_client_log",   # the SPA may need to ship errors before login completes
 })
 
 
 @MIDDLEWARE.before_app_request
 def handle_incoming_request():
+    # ── Logging context ──────────────────────────────────────────────
+    # X-Request-Id from the caller is honoured (round-trips across our
+    # axios client, which generates one per call) so client + server
+    # log lines correlate. Falls back to a fresh uuid4 for ad-hoc curls.
+    incoming = request.headers.get("X-Request-Id")
+    request_id = incoming.strip() if incoming else uuid4().hex
+    set_request_id(request_id)
+    set_user_id(session.get("user_id"))
+    g.request_started_at = time.perf_counter()
+    g.request_id = request_id
+
+    if _Logger.isEnabledFor(logging.INFO):
+        _Logger.info(
+            "→ %s %s",
+            request.method,
+            request.path,
+        )
     if _Logger.isEnabledFor(logging.DEBUG):
         audit_incoming_request()
 
@@ -51,6 +74,41 @@ def handle_incoming_request():
         return deserialise_web_request(request.endpoint.split(".")[-1])
 
     return
+
+
+@MIDDLEWARE.after_app_request
+def emit_audit_event(response):
+    """Best-effort audit emit for mutating routes. Runs before
+    `stamp_request_id` so the audit row already has `request_id` from
+    contextvars. Never raises."""
+    return auto_audit_after_request(response)
+
+
+@MIDDLEWARE.after_app_request
+def stamp_request_id(response):
+    """Echo X-Request-Id on every response so the SPA can correlate its
+    own log lines with the server's, and log the request-end summary."""
+    started = getattr(g, "request_started_at", None)
+    request_id = getattr(g, "request_id", None)
+    if request_id:
+        response.headers["X-Request-Id"] = request_id
+    if started is not None and _Logger.isEnabledFor(logging.INFO):
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        _Logger.info(
+            "← %d %s %s (%.1fms)",
+            response.status_code,
+            request.method,
+            request.path,
+            duration_ms,
+        )
+    return response
+
+
+@MIDDLEWARE.teardown_app_request
+def clear_context(_exc):
+    # Reset contextvars so APScheduler / cleanup logs after the request
+    # don't get tagged with the previous user's id.
+    reset_context()
 
 
 def require_auth_if_protected(endpoint_name: str):

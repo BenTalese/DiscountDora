@@ -6,7 +6,10 @@ Flask_Migrate==4.0.5
 flask_sqlalchemy==3.1.1
 Flask[Async]==3.0.2
 fuzzywuzzy==0.18.0
+ijson==3.2.3
 Jinja2==3.1.2
+openpyxl==3.1.2
+qrcode[pil]==7.4.2
 pydantic==2.6.0
 pytest-asyncio==0.25.3
 pytest==8.3.4

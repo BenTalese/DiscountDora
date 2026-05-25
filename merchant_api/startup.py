@@ -1,5 +1,4 @@
 import logging
-from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -7,6 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from flask import Flask
 from flask_cors import CORS
 
+from dora_api.infrastructure.logging_setup import configure_logging
 from dora_api.infrastructure.utils import get_attributes_ending_with
 from merchant_api.infrastructure.configuration_manager import CONFIGURATION_MANAGER
 from merchant_api.infrastructure.merchant_data_providers import MERCHANT_DATA_PROVIDERS
@@ -37,7 +37,11 @@ def startup():
         'supports_credentials': True,
     }})
 
-    configure_logger(CONFIGURATION_MANAGER.get_log_level())
+    configure_logging(
+        "mapi",
+        Path().resolve() / "data" / "logs" / "mapi",
+        debug=CONFIGURATION_MANAGER.is_debug_mode_enabled(),
+    )
     register_routers(_App)
 
     scheduler = BackgroundScheduler()
@@ -50,18 +54,6 @@ def startup():
         CONFIGURATION_MANAGER.is_debug_mode_enabled(),
         use_reloader = CONFIGURATION_MANAGER.is_reloader_enabled()
     )
-
-
-def configure_logger(log_level: int):
-    _LogFolder = Path() / 'data' / 'logs' / 'mapi'
-    Path.mkdir(_LogFolder, parents=True, exist_ok=True)
-
-    _Logger = logging.getLogger()
-    _LogFilename = _LogFolder / 'log.txt'
-    _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)
-    _FileHandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
-    _Logger.setLevel(log_level)
-    _Logger.addHandler(_FileHandler)
 
 
 def register_routers(app: Flask):

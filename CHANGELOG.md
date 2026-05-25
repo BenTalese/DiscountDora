@@ -5,6 +5,238 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Audit log + admin viewer** (I2 round B). A new `AuditEvent` table
+  (migration `e9a2c4b1f7d8`) captures every mutating API request,
+  every login success/failure, every client-side `warn`/`error` shipped
+  via `/api/client-logs`, and any explicit `audit.emit(...)` from
+  service code. Rows carry `occurred_at`, `source` (`dapi` / `mapi` /
+  `emailer` / `web` / `system`), `actor_user_id`, `actor_ip`, `action`
+  (verb-noun, e.g. `stock_item.created`, `auth.login.failed`),
+  `entity_type` + `entity_id`, `request_id` (matches the existing
+  X-Request-Id correlation), JSON `payload`, and `severity`. Indexed
+  on `occurred_at` plus per-actor / per-entity / per-action compound
+  indexes for the admin filters. An `audit.scrub(payload)` pass strips
+  any key matching the privacy deny-list (`password`, `token`,
+  `api_key`, …) before persistence. Nightly `BackgroundScheduler` job
+  prunes events older than `DORA_AUDIT_RETENTION_DAYS` (default 365).
+  Admin-only `GET /api/audit/events` (filter by source / severity /
+  actor / action / entity / request id / time range, paginated up to
+  500 per page) plus `GET /api/audit/events/<id>`. New
+  **Settings → Admin → Audit log** page with a filter strip, paginated
+  table with severity chips, click-to-open detail dialog (pretty-printed
+  payload, "Find related" button that pivots the filter to the same
+  `request_id`), and **Export CSV** of the current page.
+- **Structured logging across every service** (I1 round A). All three
+  services (dora_api, merchant_api, emailer) now route through a single
+  `configure_logging(service_name, log_dir, debug=...)` helper that
+  wires a stdout `StreamHandler` (for `docker logs`-style aggregation)
+  plus a `RotatingFileHandler` (10 MB × 5 backups, e.g.
+  `data/logs/dapi/dapi.log`). The shared formatter is
+  `%(asctime)s %(levelname)s [%(name)s] [req=…] [user=…] %(message)s`,
+  with `request_id` and `user_id` injected from `contextvars` by a
+  `LogContextFilter` so every line in a request emits with the same
+  IDs without any caller plumbing. The dora_api middleware now
+  generates a `request_id` (or honours an incoming `X-Request-Id`),
+  binds the session user, logs `→ GET /api/...` at start +
+  `← 200 GET /api/... (12.3ms)` at end, and echoes `X-Request-Id` on
+  every response so the SPA's axios correlation id round-trips. The
+  per-service old `configure_logger` helpers are gone; `sqlalchemy.engine`
+  is pinned to WARNING regardless of root so SQL echo doesn't drown
+  the stream, and Werkzeug's per-request INFO line is silenced (the
+  middleware already emits a richer equivalent).
+- **Client-side logger + `/api/client-logs`.** A new
+  `useClientLogger` composable mirrors the standard levels and ships
+  `warn` / `error` to the new `POST /api/client-logs` endpoint
+  (rate-limited at 10 events / 60 s per session, server-side and
+  client-side). The existing `boot/globalErrorHandler.ts` is hooked
+  up to it, so Vue render errors, `window.onerror`, and unhandled
+  promise rejections all land in the server's log stream now —
+  including pre-login crashes (the endpoint is in `PUBLIC_ENDPOINTS`).
+  Payload includes URL, user-agent, stack excerpt; capped at 2 KB.
+  Audit-table persistence lands in the next round.
+- **Export & Print: stock overview + meal plans.** Two new sections in
+  Data → Export & print:
+  - **Stock overview** — install-wide CSV (`location, name, level,
+    expiry, is_flagged, is_open, auto_add_when_low, barcode, notes`,
+    grouped by location) and a stocktake-friendly print view with
+    checkbox column per item.
+  - **Meal plans** — per-plan CSV (`scheduled_for, slot, meal, servings`)
+    and a weekly-calendar print view with days as rows and slots
+    (Breakfast / Lunch / Dinner / Snack + any custom ones) as columns.
+  Both surface as `GET …/export?format=csv` and `…/print-view` to match
+  the existing N4 endpoints. New "Export" dropdown on the Stock Overview
+  toolbar (CSV / Print) and new CSV / Print buttons in the Meal Plans
+  toolbar. The bulk-action banner on Stock Overview also gains a
+  **Print QRs** action that opens the QR sheet for the current
+  selection.
+- **Scan polish.** The ScanOverlay shows a fading "Decoded: <value>"
+  banner on a successful read, and a new `close-on-decode` prop closes
+  the overlay automatically after the first valid scan (used by the
+  Stock Overview Scan and the StockItemDetail "Register barcode" flows,
+  where the user only ever wants one scan). The Data → Barcodes & QR
+  Scan tab keeps the default continuous-scan behaviour.
+- **Camera setup notes.** `web_app/README.md` calls out the HTTPS
+  requirement for `getUserMedia` outside `localhost` so phone / LAN
+  testing doesn't silently fail.
+- **Backup uploader refactor.** Data → Backup & restore now uses the
+  shared `useChunkedUpload` composable that powers DataImport, so the
+  start/chunk/finish/abort plumbing has a single home. Behaviour is
+  unchanged.
+- **Barcodes & QR.** Data → Barcodes & QR is now live with three tabs:
+  - **Scan** — fullscreen `@zxing/browser` camera overlay with a
+    crosshair box, dim mask, debounced repeat-decodes (2 s window),
+    torch toggle on supporting cameras, and a manual-entry escape
+    hatch. On decode, hits `GET /api/data/barcodes/lookup?value=...`
+    which resolves either a `dora://stock-item/<uuid>` link, a raw
+    `StockItem.barcode` match, or a `ProductBarcode` (returning the
+    linked stock item if any). Unknown values prompt
+    "Register against a stock item" with a typeahead.
+  - **Print sheets** — pick stock items (filter box, virtualised
+    list), choose a layout (A4 21-up or Avery 5160), open a printable
+    HTML grid in a new tab. PDF via the browser's Save-as-PDF, same as
+    N4. A "Print all stock items" shortcut covers the stocktake case.
+  - **Manage** — inline edit / clear / "Print one" QR per item.
+  Stock-item detail page gets two new toolbar buttons: **Show QR**
+  (modal with a big QR + Print One) and **Register barcode** (opens
+  the scan overlay focused on the current item). Stock overview gets
+  a **Scan** button that jumps straight to the matched item's detail
+  page on a successful decode.
+  Backend additions: a new `barcode` column on `StockItem` (globally
+  unique per install), a new `ProductBarcode` table for many-to-one
+  product↔barcode links, plus four endpoints:
+  - `GET /api/stock-items/<id>/qr?size=...` — PNG, 64-1024 px range.
+  - `GET /api/stock-items/qr/sheet?ids=&layout=` — printable HTML
+    label sheet; missing `ids` falls back to all stock items.
+  - `POST /api/stock-items/<id>/barcode` — 409 on collision.
+  - `DELETE /api/stock-items/<id>/barcode` — clear.
+  - `POST /api/data/barcodes/register-against-product` — wire an
+    unknown scanned code to a saved product.
+  QR encoding is `dora://stock-item/<uuid>` so a printed QR scanned
+  back through the overlay round-trips to the item. ProductBarcode
+  rows ride along in backups by default (new section in
+  `restore_shared.SECTIONS`). Migration `d7f4a2c98e15`.
+- **Export & Print.** Data → Export & print now lists every shopping list
+  (filterable Active / Archived / All, primary pinned to the top) and
+  every recipe (with name-filter), each row carrying **CSV** and
+  **Print** buttons. New backend endpoints:
+  - `GET /api/shopping-lists/<id>/export?format=csv` — columns
+    `location, item, quantity, merchant, unit_price, total, picked_up,
+    notes`, grouped by location and alphabetised within each group.
+  - `GET /api/shopping-lists/<id>/print-view` — server-rendered HTML
+    with a printer-friendly stylesheet (`@media print` strips the
+    floating toolbar; big tap-friendly checkboxes; sections per
+    location; totals strip showing remaining / picked-up / estimated
+    total).
+  - `GET /api/recipes/<id>/export?format=csv` — ingredient list
+    (`ingredient, quantity, unit, notes, location`).
+  - `GET /api/recipes/<id>/print-view` — recipe card with ingredient
+    list + instructions + nutrition, sized for a fridge magnet pin.
+  PDF generation is **browser-side** (Save as PDF from the print
+  dialog) — no new server dependencies. Download filenames are
+  slugified to e.g. `shopping-list-weekly-shop-2026-05-21.csv`. A new
+  shared `useShoppingListExport` composable powers both ExportPrint and
+  a new "Export as CSV" / "Print / Save as PDF" pair on the
+  ShoppingListDetail overflow menu; a sibling `useRecipeExport` does
+  the same for recipes.
+- **Spreadsheet import.** Data → Import now accepts `.xlsx` and `.csv`
+  files and turns them into stock items. The file is staged via the
+  existing chunked-upload stack, then `POST /api/data/import/spreadsheet/inspect`
+  reads its sheets, shows a five-row preview, and auto-picks the most
+  likely column for each Dora field (Name [required], Stock level,
+  Location, Group, Expiry, Is essential). The mapping is editable per
+  sheet; the preview re-renders live as the user reassigns columns.
+  `POST /api/data/import/spreadsheet/commit` walks every row in a
+  single transaction with row-level error reporting — bad stock-level
+  text becomes "Stock level 'foo' isn't recognised. Valid options:
+  Well-Stocked, Sufficient Stock, Low Stock, Out of Stock", missing
+  Location / Group can be auto-created via toggles, and
+  **Halt on first error** rolls the whole import back. After commit the
+  result dialog lists each row with a coloured chip (`ok` / `dup` / `err`)
+  and a one-click **Download error rows (CSV)** so the user can fix
+  problem rows offline and re-import only those. `is_essential` maps
+  to `StockItem.is_flagged` (the closest existing flag in the schema).
+- **Data Management shell** (backup/restore, import, export & print, barcodes —
+  sections to follow). New top-level **Data** entry in the nav and command
+  palette opens `/data`, with a left rail listing the four sub-sections and a
+  breadcrumb crumbed `Data › <section>`. The sub-pages are placeholders for
+  now; subsequent rounds wire up the actual backup, import, export and
+  barcode tooling.
+- **Backup export.** Data → Backup & restore now offers a one-click
+  **Download backup** that streams a single JSON snapshot
+  (`dora-backup-<date>.json`) of every in-scope entity — stock groups,
+  levels, locations and items (including substitutes and product links),
+  saved products, shopping lists and templates, recipe collections,
+  recipes and ingredients, meals and meal plans. Images round-trip via
+  base64. Cached merchant data (merchants, offer history, change log,
+  notifications, app settings) and user credentials are intentionally
+  excluded. Backed by a new `GET /api/data/backup` endpoint that records
+  `exported_by` for provenance.
+- **Chunked-resumable backup uploads.** New endpoints
+  `POST /api/data/uploads/{start,chunk,finish}` and
+  `DELETE /api/data/uploads/<id>` stage backup files under
+  `data/uploads/` 8 MB at a time; a failed chunk retries up to three
+  times without restarting the whole upload. Total cap is now **2 GB**.
+  The SPA no longer parses backup files client-side at all — picking a
+  file streams it via chunks, shows an upload progress bar, then calls
+  `inspect` with the `upload_id`. `restore` likewise accepts
+  `upload_id` (still backwards-compatible with inline `backup` bodies).
+  Stale uploads older than an hour are swept on every new `start`, and
+  cancelling the file picker issues `DELETE` proactively.
+- **Stream-parsed inspect.** The backup preview now uses `ijson` to
+  walk the staged file without ever instantiating the full document in
+  server memory. Counts, duplicate-flagged names, and per-section
+  sample rows (capped at 500 per section with an overflow indicator)
+  are streamed out — multi-GB backups can be inspected on modest
+  hardware. The tree view in the SPA renders straight from the
+  inspect response.
+- **Last-backup timestamp + restore report + bigger uploads.** The
+  Create-backup card now shows "Last backup: N min/hr/days ago" using a
+  new `User.last_backup_at` column (migration `c5e8f3a91b07`) that the
+  backup endpoint stamps on every successful download. `/api/auth/me`
+  carries the value so the card updates without a separate round-trip.
+  After a restore lands, the page now opens a results dialog with a
+  per-section "+N created · M skipped" breakdown plus an expandable
+  warnings list, and a **Reload now** button to swap to a fresh app
+  state on the user's own pace (no more silent auto-reload). Upload cap
+  raised from 50 MB to **500 MB** on both client and server; the inspect
+  endpoint streams multipart uploads to a temp file 8 MB at a time
+  instead of holding them in memory. (True chunked-resumable uploads
+  are still future work — flaky network mid-upload still requires a
+  restart.)
+- **Backup section toggles + more sections.** The Create-backup card now
+  shows per-section checkboxes grouped into "Core data" (on by default —
+  stock, lists, recipes, meals, etc.) and "Optional" (off by default).
+  Three new optional sections are wired up: **System settings** (the
+  install-wide AppSetting row), **User accounts** (every user row minus
+  `password_hash` — restoring leaves the hash null so an admin reset is
+  required for those accounts to log in), and **Historic product offers**.
+  Each group has _All / None_ shortcuts and an "X of Y selected" caption.
+  Under the hood the section catalogue is declared once in
+  `restore_shared.SECTIONS` — adding a new section is a single entry there
+  plus its FK classification, and both the export filter and the restore
+  iterator pick it up automatically. `GET /api/data/backup` now accepts
+  `?sections=a,b,c` to narrow the dump (unknown keys → 400) and records
+  the included list in the payload's `sections` field.
+- **Backup inspect + restore.** Picking a backup file in
+  Data → Backup & restore now uploads it to a new `POST /api/data/backup/inspect`
+  endpoint and renders a preview tree: counts per section, one branch per
+  entity type, leaves checkbox-tickable. Rows whose natural key (name for
+  most entities, name+parent for locations, merchant+stockcode for
+  products) already exists locally are flagged with a `duplicate` chip and
+  greyed out. A header counter reports "X of Y items selected, Z
+  duplicates skipped" alongside select-all / clear-selection actions. Two
+  commit buttons hit `POST /api/data/backup/restore`: **Restore selection**
+  (partial mode) and **Restore all (skip duplicates)**. A confirm dialog
+  precedes either. The restore is single-transaction; on failure the
+  whole thing rolls back. Hard-FK targets (stock locations including
+  parents, stock groups, recipe collections, stock levels) are pulled in
+  transparently when partial mode would have orphaned them; soft FKs
+  (preferred / selected product) null out with a warning if the target
+  isn't being imported; required FKs that can't resolve skip the row
+  with a warning. On success the page reloads so every store reflects
+  the new data.
+
 ### Changed
 - **Command palette anywhere with Cmd/Ctrl-K.** A top-of-screen palette opens
   from any page (even when an input is focused) and searches across stock

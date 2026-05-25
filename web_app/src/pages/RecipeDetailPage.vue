@@ -38,6 +38,34 @@
                     :label="recipe.is_favourite ? 'Favourited' : 'Favourite'"
                     @click="onToggleFavourite"
                 />
+                <q-btn flat round dense icon="more_vert" class="q-ml-sm">
+                    <q-menu anchor="bottom right" self="top right">
+                        <q-list dense style="min-width: 220px">
+                            <q-item clickable v-close-popup @click="onExportCsv">
+                                <q-item-section avatar>
+                                    <q-icon name="file_download" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Export as CSV</q-item-label>
+                                    <q-item-label caption>
+                                        Ingredient list as a spreadsheet
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-item clickable v-close-popup @click="onPrint">
+                                <q-item-section avatar>
+                                    <q-icon name="print" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Print / Save as PDF</q-item-label>
+                                    <q-item-label caption>
+                                        Opens a printable recipe card in a new tab
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-menu>
+                </q-btn>
                 <q-btn
                     color="primary"
                     no-caps
@@ -579,6 +607,7 @@
 <script lang="ts" setup>
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import { useRecipeExport } from 'src/composables/useRecipeExport';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
@@ -618,6 +647,18 @@
 
     const recipeId = computed(() => String(route.params.id ?? ''));
     const recipe = ref<Recipe | null>(null);
+
+    // Export actions — shared with the Data → Export & Print page so URL
+    // shape and filename slug stay in lockstep.
+    const recipeExport = useRecipeExport();
+    function onExportCsv() {
+        if (!recipeId.value) return;
+        void recipeExport.downloadCsv(recipeId.value);
+    }
+    function onPrint() {
+        if (!recipeId.value) return;
+        recipeExport.openPrintView(recipeId.value);
+    }
     const loading = ref(false);
     const loadError = ref<string | null>(null);
     const saving = ref(false);

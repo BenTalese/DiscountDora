@@ -31,6 +31,22 @@
                     <div class="text-subtitle1">Week of {{ formatDate(selectedPlan.start_date) }}</div>
                     <q-space />
                     <q-btn flat dense no-caps icon="edit" label="Edit entries" @click="onEditEntries" />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        icon="file_download"
+                        label="CSV"
+                        @click="planExport.downloadCsv(selectedPlan.meal_plan_id)"
+                    />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        icon="print"
+                        label="Print"
+                        @click="planExport.openPrintView(selectedPlan.meal_plan_id)"
+                    />
                     <q-btn flat dense no-caps icon="delete" color="negative" label="Delete plan" @click="confirmDeletePlan" />
                 </div>
 
@@ -239,6 +255,7 @@
     import MealPlanEditDialog from 'components/MealPlanEditDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import { useMealPlanExport } from 'src/composables/useMealPlanExport';
     import type { MealPlan, MealPlanIngredient } from 'src/models/meal';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
@@ -253,6 +270,7 @@
 
     const $q = useQuasar();
     const router = useRouter();
+    const planExport = useMealPlanExport();
     const mealStore = useMealStore();
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();

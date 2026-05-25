@@ -23,4 +23,8 @@ export type AuthenticatedUser = {
     // wizard. The router guard reads this to bounce incomplete users to
     // /welcome.
     onboarding_completed_at: string | null;
+    // ISO timestamp of this user's last successful GET /api/data/backup,
+    // surfaced in Data → Backup & restore. Null until the user has taken
+    // their first backup.
+    last_backup_at: string | null;
 };

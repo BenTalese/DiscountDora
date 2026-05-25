@@ -135,6 +135,12 @@
             label: 'System',
             caption: 'Install-wide toggles',
             icon: 'settings_applications'
+        },
+        {
+            path: '/settings/admin/audit-log',
+            label: 'Audit log',
+            caption: 'Every mutation, login, and client crash',
+            icon: 'fact_check'
         }
     ];
 

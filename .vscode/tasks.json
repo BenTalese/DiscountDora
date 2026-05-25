@@ -15,11 +15,17 @@
             }
         },
         {
-            "type": "npm",
-            "script": "dev",
-            "path": "web_app",
-            "problemMatcher": [],
+            "type": "shell",
             "label": "quasar:dev",
+            "command": "npm run dev",
+            "options": {
+                "cwd": "${workspaceFolder}/web_app",
+                "shell": {
+                    "executable": "bash",
+                    "args": ["-lc"]
+                }
+            },
+            "problemMatcher": [],
             "isBackground": true,
             "group": {
                 "kind": "build",

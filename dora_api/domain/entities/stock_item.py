@@ -33,6 +33,11 @@ class StockItem(BaseEntity):
     # True; flipping back to False clears it.
     is_open: bool = False
     opened_on: date | None = None
+    # Optional barcode the user has registered against this item. Globally
+    # unique across the install (the schema isn't user-scoped); used by
+    # the camera-scan flow to jump straight to the item. None = no
+    # registered barcode yet.
+    barcode: str | None = None
     # Merchant products linked to this stock item, used by the product-search
     # flow to surface deals and by the detail view to show "what merchant
     # SKUs are tracked here". Default empty so callers that don't care about
@@ -64,3 +69,4 @@ class StockItem(BaseEntity):
         STOCK_LEVEL_LAST_UPDATED = "stock_level_last_updated"
         STOCK_LOCATION = "stock_location"
         STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
+        BARCODE = "barcode"

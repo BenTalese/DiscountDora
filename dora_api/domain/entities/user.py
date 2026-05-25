@@ -52,6 +52,10 @@ class User(BaseEntity):
     # to bounce them to /welcome. Cleared by the Settings → Account
     # "Restart onboarding" entry.
     onboarding_completed_at: datetime | None = None
+    # Stamped every time the user successfully downloads a backup via
+    # GET /api/data/backup. Surfaced in the Data → Backup & restore card
+    # so the user can see when they last took a snapshot.
+    last_backup_at: datetime | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -66,3 +70,4 @@ class User(BaseEntity):
         FONT_FAMILY = "font_family"
         FONT_SIZE = "font_size"
         ONBOARDING_COMPLETED_AT = "onboarding_completed_at"
+        LAST_BACKUP_AT = "last_backup_at"

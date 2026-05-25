@@ -69,6 +69,37 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('pages/errors/ErrorServer.vue'),
                 meta: { title: 'Server error' }
             },
+            // Data Management shell. Greenfield section (N1) — placeholder
+            // sub-pages for now; N2-N5 fill them with backup/import/export
+            // /barcode functionality. Pattern mirrors SettingsShell.
+            {
+                path: 'data',
+                component: () => import('pages/DataManagement.vue'),
+                redirect: '/data/backup',
+                meta: { title: 'Data' },
+                children: [
+                    {
+                        path: 'backup',
+                        component: () => import('pages/data/BackupRestore.vue'),
+                        meta: { title: 'Backup & restore' }
+                    },
+                    {
+                        path: 'import',
+                        component: () => import('pages/data/DataImport.vue'),
+                        meta: { title: 'Import' }
+                    },
+                    {
+                        path: 'export',
+                        component: () => import('pages/data/ExportPrint.vue'),
+                        meta: { title: 'Export & print' }
+                    },
+                    {
+                        path: 'barcodes',
+                        component: () => import('pages/data/BarcodesQR.vue'),
+                        meta: { title: 'Barcodes & QR' }
+                    }
+                ]
+            },
             // Settings shell hosts sub-routes via its own <router-view>.
             // Personal sections live at /settings/*, admin/global sections at
             // /settings/admin/* (gated by the global router guard).
@@ -117,6 +148,11 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/system',
                         component: () => import('pages/settings/SystemSettings.vue'),
                         meta: { title: 'System' }
+                    },
+                    {
+                        path: 'admin/audit-log',
+                        component: () => import('pages/settings/AuditLogSettings.vue'),
+                        meta: { title: 'Audit log' }
                     }
                 ]
             }

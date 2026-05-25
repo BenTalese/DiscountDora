@@ -310,6 +310,7 @@
         { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: 'calendar_month', section: 'Navigate', action: () => router.push('/meal-plans') },
         { id: 'nav.products', label: 'Go to Product Search', icon: 'local_offer', section: 'Navigate', action: () => router.push('/product-search') },
         { id: 'nav.my-products', label: 'Go to My Products', icon: 'favorite', section: 'Navigate', action: () => router.push('/my-products') },
+        { id: 'nav.data', label: 'Go to Data Management', icon: 'storage', section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
         { id: 'nav.settings', label: 'Go to Settings', icon: 'settings', section: 'Navigate', action: () => router.push('/settings') },
         { id: 'nav.help', label: 'Go to Help', icon: 'help_outline', section: 'Navigate', action: () => router.push('/help') },
 
@@ -331,6 +332,7 @@
         { label: 'Meals', icon: 'restaurant', link: '/meals' },
         { label: 'Meal Plans', icon: 'calendar_month', link: '/meal-plans' },
         { label: 'Shopping Lists', icon: 'shopping_cart', link: '/shopping-lists' },
+        { label: 'Data', icon: 'storage', link: '/data' },
         { label: 'Settings', icon: 'settings', link: '/settings' },
     ];
 

@@ -21,6 +21,7 @@ class StockItemDto:
     name: str
     stock_item_id: UUID
     stock_level_id: UUID
+    stock_level_name: str | None
     stock_location_id: UUID | None
     stock_group_id: UUID | None
     stock_level_last_updated: datetime
@@ -28,6 +29,7 @@ class StockItemDto:
     is_flagged: bool
     is_open: bool
     opened_on: date | None
+    barcode: str | None
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
@@ -35,6 +37,7 @@ class StockItemDto:
             name = stock_item.name,
             stock_item_id = stock_item.id,
             stock_level_id = stock_item.stock_level.id,
+            stock_level_name = stock_item.stock_level.name if stock_item.stock_level else None,
             stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,
             stock_group_id = stock_item.stock_group.id if stock_item.stock_group else None,
             stock_level_last_updated = stock_item.stock_level_last_updated,
@@ -42,6 +45,7 @@ class StockItemDto:
             is_flagged = bool(stock_item.is_flagged),
             is_open = bool(stock_item.is_open),
             opened_on = stock_item.opened_on,
+            barcode = stock_item.barcode,
         )
 
 

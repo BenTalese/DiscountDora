@@ -51,6 +51,9 @@ class AuthenticatedUserDto:
     # whether to bounce the user to /welcome without an extra round-trip
     # per navigation.
     onboarding_completed_at: str | None
+    # Last successful GET /api/data/backup. Used by the Data → Backup &
+    # restore card to show "last backup N ago".
+    last_backup_at: str | None
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -68,6 +71,11 @@ class AuthenticatedUserDto:
             onboarding_completed_at = (
                 user.onboarding_completed_at.isoformat()
                 if user.onboarding_completed_at is not None
+                else None
+            ),
+            last_backup_at = (
+                user.last_backup_at.isoformat()
+                if user.last_backup_at is not None
                 else None
             ),
         )
@@ -133,5 +141,6 @@ def register_user():
         theme = "system",
         font_family = "default",
         font_size = "md",
-        onboarding_completed_at= None
+        onboarding_completed_at= None,
+        last_backup_at = None,
     ))

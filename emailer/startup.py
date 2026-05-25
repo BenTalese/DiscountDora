@@ -2,13 +2,13 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from uuid import uuid4
 
 import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from dora_api.infrastructure.logging_setup import configure_logging
 from emailer.delivery import send_email
 from emailer.product_model import ProductModel
 from emailer.user_model import UserModel
@@ -30,7 +30,11 @@ TODO:
 
 
 def startup():
-    configure_logger(logging.INFO)  # TODO: Use config manager
+    configure_logging(
+        "emailer",
+        Path().resolve() / "data" / "logs" / "emailer",
+        debug=False,
+    )
     asyncio.run(process())
     # logger = configure_logger() # TODO: This should be part of service collection (but size of this app might not require it)
     # scheduler = AsyncIOScheduler()
@@ -86,18 +90,6 @@ async def process():
     except Exception as e:
         logging.getLogger(__name__).exception("An exception occurred:")
         raise e
-
-
-def configure_logger(log_level: int):
-    _LogFolder = Path().resolve() / 'data' / 'logs' / 'emailer'
-    Path.mkdir(_LogFolder, parents=True, exist_ok=True)
-
-    _Logger = logging.getLogger()
-    _LogFilename = _LogFolder / 'log.txt'
-    _FileHandler = TimedRotatingFileHandler(_LogFilename, when="midnight", interval=1, backupCount=30)
-    _FileHandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(lineno)04d | %(message)s'))
-    _Logger.setLevel(log_level)
-    _Logger.addHandler(_FileHandler)
 
 
 if __name__ == "__main__":

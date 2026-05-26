@@ -149,14 +149,14 @@
 
 <style scoped>
     .settings-section-active {
-        background: rgba(245, 196, 98, 0.18);
+        background: var(--brand-primary-soft);
         font-weight: 600;
     }
     .settings-group-header {
         font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #888;
+        color: var(--text-muted);
         padding-top: 12px;
     }
 </style>

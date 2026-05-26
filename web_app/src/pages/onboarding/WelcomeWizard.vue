@@ -781,7 +781,7 @@
     }
     .seed-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 14px var(--overlay-active);
     }
     .seed-card--picked {
         outline-color: var(--q-primary);

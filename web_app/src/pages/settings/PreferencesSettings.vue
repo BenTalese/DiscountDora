@@ -18,37 +18,90 @@
             </q-card-section>
             <q-separator />
 
-            <q-card-section class="row q-col-gutter-md items-center">
-                <div class="col-12 col-sm-4 text-subtitle2">Theme</div>
-                <div class="col-12 col-sm-8">
-                    <q-btn-toggle
-                        v-model="themeDraft"
-                        no-caps
-                        spread
-                        toggle-color="primary"
-                        :options="[
-                            { label: 'System', value: 'system', slot: 'system' },
-                            { label: 'Light', value: 'light', slot: 'light' },
-                            { label: 'Dark', value: 'dark', slot: 'dark' }
-                        ]"
-                        @update:model-value="onThemeChange"
+            <q-card-section class="q-pb-none">
+                <div class="text-subtitle2">Theme</div>
+                <div class="text-caption text-grey q-mb-md">
+                    Pick a palette for the app. <strong>System</strong>
+                    follows your browser's <code>prefers-color-scheme</code>
+                    and flips between Pesto and Pesto Dark. Every other
+                    family ships a Light and Dark variant — pick whichever
+                    you prefer.
+                </div>
+                <div class="theme-grid">
+                    <!-- System card stays separate — it's a meta-option. -->
+                    <button
+                        type="button"
+                        class="theme-card theme-card--system"
+                        :class="{ 'theme-card--active': themeDraft === 'system' }"
+                        @click="onThemeChange('system')"
                     >
-                        <template #system>
-                            <q-icon name="brightness_auto" class="q-mr-xs" />
-                            System
-                        </template>
-                        <template #light>
-                            <q-icon name="light_mode" class="q-mr-xs" />
-                            Light
-                        </template>
-                        <template #dark>
-                            <q-icon name="dark_mode" class="q-mr-xs" />
-                            Dark
-                        </template>
-                    </q-btn-toggle>
-                    <div class="text-caption text-grey q-mt-xs">
-                        System follows your browser's
-                        <code>prefers-color-scheme</code>.
+                        <div class="theme-swatch theme-swatch--system">
+                            <q-icon name="brightness_auto" size="28px" />
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-label">System</div>
+                            <div class="theme-card-blurb">
+                                Follows your OS — Pesto by day, Pesto
+                                Dark at night.
+                            </div>
+                        </div>
+                    </button>
+
+                    <!-- One card per family, with Light + Dark toggle inside. -->
+                    <div
+                        v-for="family in themeFamilies"
+                        :key="family.key"
+                        class="theme-card theme-card--family"
+                        :class="{
+                            'theme-card--active': themeDraft === family.light || themeDraft === family.dark,
+                        }"
+                    >
+                        <div class="theme-swatch-pair">
+                            <div class="theme-swatch theme-swatch--half">
+                                <span
+                                    v-for="(hex, i) in lightSwatch(family)"
+                                    :key="`l-${i}`"
+                                    class="theme-swatch-strip"
+                                    :style="{ background: hex }"
+                                />
+                            </div>
+                            <div class="theme-swatch theme-swatch--half theme-swatch--half-dark">
+                                <span
+                                    v-for="(hex, i) in darkSwatch(family)"
+                                    :key="`d-${i}`"
+                                    class="theme-swatch-strip"
+                                    :style="{ background: hex }"
+                                />
+                            </div>
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-label">{{ family.label }}</div>
+                            <div class="theme-card-blurb">{{ family.blurb }}</div>
+                            <div class="theme-variant-toggle">
+                                <q-btn
+                                    no-caps
+                                    dense
+                                    flat
+                                    size="sm"
+                                    icon="light_mode"
+                                    label="Light"
+                                    class="theme-variant-btn"
+                                    :class="{ 'theme-variant-btn--active': themeDraft === family.light }"
+                                    @click="onThemeChange(family.light as ThemePreference)"
+                                />
+                                <q-btn
+                                    no-caps
+                                    dense
+                                    flat
+                                    size="sm"
+                                    icon="dark_mode"
+                                    label="Dark"
+                                    class="theme-variant-btn"
+                                    :class="{ 'theme-variant-btn--active': themeDraft === family.dark }"
+                                    @click="onThemeChange(family.dark as ThemePreference)"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </q-card-section>
@@ -273,6 +326,7 @@
         FontSizePreference,
         ThemePreference
     } from 'src/models/auth';
+    import { THEMES, THEME_FAMILIES, type ThemeFamily } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -295,6 +349,17 @@
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
     const sendDealsOnDay = ref<number>(currentUser.value?.send_deals_on_day ?? 0);
+    // Theme catalogue surfaced by the picker. `system` is rendered
+    // manually (meta-option), then one card per family — each family
+    // has paired Light + Dark variant buttons inside.
+    const themeFamilies = computed(() => THEME_FAMILIES);
+    function lightSwatch(family: ThemeFamily): string[] {
+        return THEMES[family.light]?.swatch ?? [];
+    }
+    function darkSwatch(family: ThemeFamily): string[] {
+        return THEMES[family.dark]?.swatch ?? [];
+    }
+
     const themeDraft = ref<ThemePreference>(currentUser.value?.theme ?? 'system');
     const fontFamilyDraft = ref<FontFamilyPreference>(
         currentUser.value?.font_family ?? 'default'
@@ -454,3 +519,108 @@
         }
     }
 </script>
+
+<style scoped>
+    /* Theme picker — one card per family, each with paired Light/Dark
+       buttons inside. System (a meta-option) renders as its own card. */
+    .theme-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+    }
+    .theme-card {
+        appearance: none;
+        background: var(--surface-component);
+        border: 1.5px solid var(--border-default);
+        border-radius: var(--radius-lg, 10px);
+        padding: 12px;
+        text-align: left;
+        transition: border-color 120ms ease, box-shadow 120ms ease;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .theme-card--system {
+        cursor: pointer;
+        flex-direction: row;
+        align-items: center;
+    }
+    .theme-card:hover {
+        border-color: var(--border-strong);
+        box-shadow: var(--elevation-1);
+    }
+    .theme-card--active {
+        border-color: var(--brand-primary);
+        box-shadow: 0 0 0 3px var(--ring-focus);
+    }
+    .theme-swatch {
+        display: flex;
+        gap: 4px;
+        height: 44px;
+        border-radius: var(--radius-sm, 4px);
+        overflow: hidden;
+        align-items: stretch;
+        justify-content: center;
+        background: var(--surface-sunken);
+    }
+    .theme-swatch--system {
+        width: 56px;
+        height: 56px;
+        flex: 0 0 56px;
+        background: var(--brand-primary-soft);
+        color: var(--brand-primary);
+    }
+    .theme-swatch-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        height: 44px;
+    }
+    .theme-swatch--half {
+        height: 100%;
+        margin-bottom: 0;
+    }
+    .theme-swatch--half-dark {
+        outline: 1px solid var(--border-default);
+        outline-offset: -1px;
+    }
+    .theme-swatch-strip {
+        flex: 1 1 0;
+        height: 100%;
+    }
+    .theme-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .theme-card-label {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .theme-card-blurb {
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.35;
+    }
+    .theme-variant-toggle {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+    }
+    .theme-variant-btn {
+        flex: 1 1 0;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md, 6px);
+        color: var(--text-secondary);
+        transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+    .theme-variant-btn:hover {
+        border-color: var(--border-strong);
+        color: var(--text-primary);
+    }
+    .theme-variant-btn--active {
+        background: var(--brand-primary);
+        color: var(--text-on-primary);
+        border-color: var(--brand-primary);
+    }
+</style>

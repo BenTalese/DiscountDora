@@ -397,10 +397,10 @@
         font-family: monospace;
         font-size: 0.7rem;
         padding: 2px 6px;
-        border: 1px solid var(--q-grey-5, #bdbdbd);
+        border: 1px solid var(--q-grey-5, var(--border-strong));
         border-bottom-width: 2px;
         border-radius: 4px;
-        background: rgba(0, 0, 0, 0.03);
+        background: var(--overlay-hover);
     }
     .body--dark .cp-kbd {
         background: rgba(255, 255, 255, 0.05);
@@ -413,7 +413,7 @@
         font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #888;
+        color: var(--text-muted);
         padding: 10px 16px 4px;
     }
     .cp-row {
@@ -431,7 +431,7 @@
     }
     .cp-row__icon {
         flex-shrink: 0;
-        color: var(--q-grey-8, #555);
+        color: var(--q-grey-8, var(--text-secondary));
     }
     .cp-row__text {
         flex: 1;
@@ -446,7 +446,7 @@
     }
     .cp-row__subtitle {
         font-size: 0.78rem;
-        color: #888;
+        color: var(--text-muted);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;

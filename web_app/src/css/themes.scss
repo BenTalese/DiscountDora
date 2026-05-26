@@ -1,0 +1,563 @@
+/*
+ * Themes — five families, each with paired light + dark variants.
+ *
+ * Family pairing (key naming convention):
+ *   pesto         /  pesto-dark
+ *   lemon-tart    /  lemon-tart-dark      (absorbs former Midnight Snack)
+ *   blueberry     /  blueberry-dark
+ *   cherry-cola   /  cherry-cola-dark
+ *   sourdough     /  sourdough-dark
+ *
+ * Dark variants lean on a set of user-chosen palette inspirations:
+ *   Group 1 (cool muted teals + lavender) → Blueberry Dark
+ *   Group 2 (deep purple-red + olive/sage) → Cherry Cola Dark
+ *   Group 3 (forest teal + bright lime) → Pesto Dark
+ *   Group 4 (charcoal + golden + sunset orange) → Lemon Tart Dark
+ *   Sourdough Dark hand-designed: warm browns + amber on dark crust.
+ *
+ * Each theme owns:
+ *   Brand: primary, secondary, accent (+ soft variants)
+ *   Surfaces: page, component, elevated, sunken, toolbar, on-toolbar
+ *   Hero gradient: 3 stops — Dashboard hero band reads --hero-gradient
+ *   Text: primary, secondary, muted, on-primary, on-accent
+ *   Borders: default, strong, divider
+ *   Chart palette: 6 categorical hues for data-vis
+ *   Overlays: hover / active / scrim
+ *   color-scheme: light | dark
+ *
+ * Semantic colours (positive/warning/negative/info) stay close to
+ * defaults across themes — they encode meaning, not aesthetics.
+ *
+ * Activated by setting `data-theme="<name>"` on <html>. The defaults
+ * on :root in tokens.scss mirror Pesto so a no-attribute paint still
+ * looks right.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Pesto (default light — fresh garden green + teal + golden) ──── */
+/* ═══════════════════════════════════════════════════════════════════ */
+[data-theme="pesto"] {
+    --brand-primary: hsl(150 76% 39%);
+    --brand-primary-soft: hsl(150 70% 92%);
+    --brand-secondary: hsl(189 100% 26%);
+    --brand-secondary-soft: hsl(189 35% 88%);
+    --brand-accent: hsl(50 99% 56%);
+    --brand-accent-soft: hsl(50 95% 92%);
+
+    --surface-page: hsl(168 38% 94%);
+    --surface-component: hsl(0 0% 100%);
+    --surface-elevated: hsl(168 30% 97%);
+    --surface-sunken: hsl(168 25% 90%);
+    /* Pesto-specific override: the brand-green (#17b073) reads better
+       as the toolbar bg than the deep teal secondary. Other themes
+       stick with secondary (defined in tokens.scss). */
+    --surface-toolbar: var(--brand-primary);
+    --text-on-toolbar: var(--text-on-primary);
+
+    --hero-stop-1: hsl(168 40% 92%);
+    --hero-stop-2: hsl(50 85% 90%);
+    --hero-stop-3: hsl(150 50% 86%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(168 28% 12%);
+    --text-secondary: hsl(168 12% 32%);
+    --text-muted: hsl(168 8% 50%);
+    --text-on-primary: hsl(0 0% 100%);
+    --text-on-accent: hsl(168 28% 12%);
+
+    --border-default: hsl(168 18% 84%);
+    --border-strong: hsl(168 18% 72%);
+    --divider: hsl(168 14% 86%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(150, 76%, 39%, 0.35);
+
+    --chart-1: hsl(150 76% 39%);
+    --chart-2: hsl(189 100% 32%);
+    --chart-3: hsl(50 95% 50%);
+    --chart-4: hsl(20 85% 60%);
+    --chart-5: hsl(280 50% 58%);
+    --chart-6: hsl(218 70% 55%);
+
+    color-scheme: light;
+}
+
+/* ─── Pesto Dark (Group 3: forest teal + bright lime) ─────────────── */
+[data-theme="pesto-dark"] {
+    --brand-primary: hsl(150 75% 55%);            /* lifted from #31E981 */
+    --brand-primary-soft: hsla(150, 75%, 55%, 0.18);
+    --brand-secondary: hsl(170 28% 30%);          /* #35605A */
+    --brand-secondary-soft: hsla(170, 28%, 30%, 0.3);
+    --brand-accent: hsl(150 75% 55%);
+    --brand-accent-soft: hsla(150, 75%, 55%, 0.18);
+
+    --surface-page: hsl(165 60% 5%);              /* #00120B */
+    --surface-component: hsl(170 28% 12%);
+    --surface-elevated: hsl(170 24% 16%);
+    --surface-sunken: hsl(165 60% 3%);
+    --surface-toolbar: hsl(170 28% 18%);
+    --text-on-toolbar: hsl(225 100% 93%);         /* #D8E4FF */
+
+    --hero-stop-1: hsl(165 60% 5%);
+    --hero-stop-2: hsl(170 28% 18%);
+    --hero-stop-3: hsl(150 65% 18%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(225 100% 93%);            /* #D8E4FF */
+    --text-secondary: hsl(205 12% 67%);           /* #6B818C lifted */
+    --text-muted: hsl(205 10% 55%);
+    --text-on-primary: hsl(165 60% 5%);
+    --text-on-accent: hsl(165 60% 5%);
+
+    --border-default: hsl(205 12% 28%);
+    --border-strong: hsl(205 12% 40%);
+    --divider: hsl(205 12% 24%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(150, 75%, 55%, 0.45);
+
+    --semantic-positive: hsl(150 75% 55%);
+    --semantic-positive-soft: hsla(150, 75%, 55%, 0.16);
+    --semantic-warning: hsl(33 95% 65%);
+    --semantic-warning-soft: hsla(33, 95%, 65%, 0.16);
+    --semantic-negative: hsl(7 78% 65%);
+    --semantic-negative-soft: hsla(7, 78%, 65%, 0.16);
+    --semantic-info: hsl(218 80% 70%);
+    --semantic-info-soft: hsla(218, 80%, 70%, 0.16);
+
+    --chart-1: hsl(150 75% 55%);
+    --chart-2: hsl(180 50% 50%);
+    --chart-3: hsl(225 100% 80%);
+    --chart-4: hsl(50 95% 62%);
+    --chart-5: hsl(280 60% 70%);
+    --chart-6: hsl(7 78% 65%);
+
+    --overlay-hover: hsla(225, 100%, 93%, 0.06);
+    --overlay-active: hsla(225, 100%, 93%, 0.10);
+    --overlay-scrim: hsla(0, 0%, 0%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Lemon Tart (warm yellow on cream) ───────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+[data-theme="lemon-tart"] {
+    --brand-primary: hsl(40 88% 67%);
+    --brand-primary-soft: hsl(40 95% 92%);
+    --brand-secondary: hsl(189 100% 26%);
+    --brand-secondary-soft: hsl(189 35% 88%);
+    --brand-accent: hsl(48 99% 56%);
+    --brand-accent-soft: hsl(48 95% 92%);
+
+    --surface-page: hsl(40 33% 96%);
+    --surface-component: hsl(0 0% 100%);
+    --surface-elevated: hsl(40 28% 98%);
+    --surface-sunken: hsl(40 22% 91%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    --hero-stop-1: hsl(38 56% 95%);
+    --hero-stop-2: hsl(40 92% 86%);
+    --hero-stop-3: hsl(22 78% 88%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(28 26% 14%);
+    --text-secondary: hsl(28 16% 32%);
+    --text-muted: hsl(28 10% 50%);
+    --text-on-primary: hsl(28 26% 14%);
+    --text-on-accent: hsl(28 26% 14%);
+
+    --border-default: hsl(40 22% 86%);
+    --border-strong: hsl(40 22% 74%);
+    --divider: hsl(40 18% 88%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(40, 88%, 67%, 0.4);
+
+    --chart-1: hsl(40 88% 55%);
+    --chart-2: hsl(189 100% 32%);
+    --chart-3: hsl(20 85% 58%);
+    --chart-4: hsl(150 60% 42%);
+    --chart-5: hsl(280 50% 58%);
+    --chart-6: hsl(218 70% 55%);
+
+    color-scheme: light;
+}
+
+/* ─── Lemon Tart Dark (Group 4: charcoal + golden + orange) ───────── */
+/* Absorbs the former Midnight Snack — warm late-night raid feel. */
+[data-theme="lemon-tart-dark"] {
+    --brand-primary: hsl(46 100% 50%);            /* #FFC800 */
+    --brand-primary-soft: hsla(46, 100%, 50%, 0.18);
+    --brand-secondary: hsl(105 47% 36%);          /* #4D8B31 */
+    --brand-secondary-soft: hsla(105, 47%, 36%, 0.25);
+    --brand-accent: hsl(23 100% 57%);             /* #FF8427 */
+    --brand-accent-soft: hsla(23, 100%, 57%, 0.18);
+
+    --surface-page: hsl(225 16% 14%);             /* #1E212B */
+    --surface-component: hsl(225 14% 19%);
+    --surface-elevated: hsl(225 12% 23%);
+    --surface-sunken: hsl(225 18% 10%);
+    --surface-toolbar: hsl(225 18% 10%);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    --hero-stop-1: hsl(225 18% 10%);
+    --hero-stop-2: hsl(23 60% 24%);
+    --hero-stop-3: hsl(46 70% 26%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(0 0% 100%);               /* #FFFFFF */
+    --text-secondary: hsl(40 15% 78%);
+    --text-muted: hsl(40 10% 60%);
+    --text-on-primary: hsl(225 30% 10%);
+    --text-on-accent: hsl(225 30% 10%);
+
+    --border-default: hsl(225 12% 30%);
+    --border-strong: hsl(225 12% 42%);
+    --divider: hsl(225 12% 26%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(46, 100%, 50%, 0.45);
+
+    --semantic-positive: hsl(105 47% 50%);
+    --semantic-positive-soft: hsla(105, 47%, 50%, 0.16);
+    --semantic-warning: hsl(46 100% 55%);
+    --semantic-warning-soft: hsla(46, 100%, 55%, 0.16);
+    --semantic-negative: hsl(7 85% 65%);
+    --semantic-negative-soft: hsla(7, 85%, 65%, 0.16);
+    --semantic-info: hsl(218 80% 70%);
+    --semantic-info-soft: hsla(218, 80%, 70%, 0.16);
+
+    --chart-1: hsl(46 100% 50%);
+    --chart-2: hsl(23 100% 57%);
+    --chart-3: hsl(105 47% 50%);
+    --chart-4: hsl(195 70% 65%);
+    --chart-5: hsl(280 65% 70%);
+    --chart-6: hsl(352 70% 65%);
+
+    --overlay-hover: hsla(0, 0%, 100%, 0.06);
+    --overlay-active: hsla(0, 0%, 100%, 0.10);
+    --overlay-scrim: hsla(0, 0%, 0%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Blueberry (cool cobalt + navy + sky) ────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+[data-theme="blueberry"] {
+    --brand-primary: hsl(218 76% 56%);
+    --brand-primary-soft: hsl(218 76% 92%);
+    --brand-secondary: hsl(220 60% 22%);
+    --brand-secondary-soft: hsl(220 30% 86%);
+    --brand-accent: hsl(195 90% 60%);
+    --brand-accent-soft: hsl(195 80% 92%);
+
+    --surface-page: hsl(218 35% 95%);
+    --surface-component: hsl(218 30% 98%);
+    --surface-elevated: hsl(218 35% 97%);
+    --surface-sunken: hsl(218 30% 90%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    --hero-stop-1: hsl(220 50% 92%);
+    --hero-stop-2: hsl(218 76% 80%);
+    --hero-stop-3: hsl(195 85% 85%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(220 32% 14%);
+    --text-secondary: hsl(220 22% 32%);
+    --text-muted: hsl(220 14% 50%);
+    --text-on-primary: hsl(0 0% 100%);
+    --text-on-accent: hsl(220 32% 14%);
+
+    --border-default: hsl(218 22% 84%);
+    --border-strong: hsl(218 22% 70%);
+    --divider: hsl(218 18% 86%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(218, 76%, 56%, 0.4);
+
+    --chart-1: hsl(218 76% 56%);
+    --chart-2: hsl(195 90% 50%);
+    --chart-3: hsl(160 60% 45%);
+    --chart-4: hsl(280 60% 60%);
+    --chart-5: hsl(40 90% 58%);
+    --chart-6: hsl(7 75% 60%);
+
+    color-scheme: light;
+}
+
+/* ─── Blueberry Dark (Group 1: muted teals + lavender) ────────────── */
+[data-theme="blueberry-dark"] {
+    --brand-primary: hsl(193 25% 66%);            /* #82AEB1 */
+    --brand-primary-soft: hsla(193, 25%, 66%, 0.2);
+    --brand-secondary: hsl(184 14% 47%);          /* #668586 */
+    --brand-secondary-soft: hsla(184, 14%, 47%, 0.25);
+    --brand-accent: hsl(232 41% 75%);             /* #A7ACD9 */
+    --brand-accent-soft: hsla(232, 41%, 75%, 0.18);
+
+    --surface-page: hsl(220 18% 11%);
+    --surface-component: hsl(220 16% 16%);
+    --surface-elevated: hsl(220 14% 20%);
+    --surface-sunken: hsl(220 20% 8%);
+    --surface-toolbar: hsl(184 14% 22%);
+    --text-on-toolbar: hsl(232 41% 90%);
+
+    --hero-stop-1: hsl(220 20% 10%);
+    --hero-stop-2: hsl(184 14% 25%);
+    --hero-stop-3: hsl(279 24% 32%);              /* #9E8FB2 deepened */
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(196 47% 71%);             /* #93C6D6 */
+    --text-secondary: hsl(193 25% 66%);
+    --text-muted: hsl(193 18% 56%);
+    --text-on-primary: hsl(220 30% 10%);
+    --text-on-accent: hsl(220 30% 10%);
+
+    --border-default: hsl(184 14% 30%);
+    --border-strong: hsl(184 14% 42%);
+    --divider: hsl(184 14% 26%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(193, 25%, 66%, 0.45);
+
+    --semantic-positive: hsl(150 50% 60%);
+    --semantic-positive-soft: hsla(150, 50%, 60%, 0.16);
+    --semantic-warning: hsl(40 80% 65%);
+    --semantic-warning-soft: hsla(40, 80%, 65%, 0.16);
+    --semantic-negative: hsl(7 70% 65%);
+    --semantic-negative-soft: hsla(7, 70%, 65%, 0.16);
+    --semantic-info: hsl(196 60% 65%);
+    --semantic-info-soft: hsla(196, 60%, 65%, 0.16);
+
+    --chart-1: hsl(196 47% 71%);
+    --chart-2: hsl(193 25% 66%);
+    --chart-3: hsl(232 41% 75%);
+    --chart-4: hsl(279 22% 64%);                  /* #9E8FB2 */
+    --chart-5: hsl(40 80% 65%);
+    --chart-6: hsl(7 70% 65%);
+
+    --overlay-hover: hsla(196, 47%, 71%, 0.06);
+    --overlay-active: hsla(196, 47%, 71%, 0.10);
+    --overlay-scrim: hsla(220, 30%, 4%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Cherry Cola (bold cherry + cocoa + caramel) ─────────────────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+[data-theme="cherry-cola"] {
+    --brand-primary: hsl(352 65% 50%);
+    --brand-primary-soft: hsl(352 60% 92%);
+    --brand-secondary: hsl(355 50% 18%);
+    --brand-secondary-soft: hsl(355 25% 86%);
+    --brand-accent: hsl(36 85% 56%);
+    --brand-accent-soft: hsl(36 80% 92%);
+
+    --surface-page: hsl(20 35% 95%);
+    --surface-component: hsl(20 30% 98%);
+    --surface-elevated: hsl(20 32% 97%);
+    --surface-sunken: hsl(20 28% 90%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    --hero-stop-1: hsl(20 50% 94%);
+    --hero-stop-2: hsl(355 60% 86%);
+    --hero-stop-3: hsl(36 80% 86%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(355 35% 16%);
+    --text-secondary: hsl(355 22% 32%);
+    --text-muted: hsl(355 12% 50%);
+    --text-on-primary: hsl(0 0% 100%);
+    --text-on-accent: hsl(355 35% 16%);
+
+    --border-default: hsl(20 22% 86%);
+    --border-strong: hsl(20 22% 72%);
+    --divider: hsl(20 18% 88%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(352, 65%, 50%, 0.4);
+
+    --chart-1: hsl(352 65% 50%);
+    --chart-2: hsl(36 85% 50%);
+    --chart-3: hsl(180 50% 38%);
+    --chart-4: hsl(280 45% 50%);
+    --chart-5: hsl(140 50% 40%);
+    --chart-6: hsl(218 65% 55%);
+
+    color-scheme: light;
+}
+
+/* ─── Cherry Cola Dark (Group 2: deep purple-red + olive/sage) ───── */
+[data-theme="cherry-cola-dark"] {
+    --brand-primary: hsl(98 60% 70%);             /* lifted B0CA87 */
+    --brand-primary-soft: hsla(98, 60%, 70%, 0.18);
+    --brand-secondary: hsl(2 16% 19%);            /* #442220 */
+    --brand-secondary-soft: hsla(2, 16%, 19%, 0.3);
+    --brand-accent: hsl(74 36% 44%);              /* #809848 */
+    --brand-accent-soft: hsla(74, 36%, 44%, 0.18);
+
+    --surface-page: hsl(335 100% 9%);             /* #2E0014 */
+    --surface-component: hsl(2 16% 16%);
+    --surface-elevated: hsl(2 16% 20%);
+    --surface-sunken: hsl(335 100% 5%);
+    --surface-toolbar: hsl(335 60% 12%);
+    --text-on-toolbar: hsl(103 50% 88%);          /* #B5DEAD */
+
+    --hero-stop-1: hsl(335 100% 7%);
+    --hero-stop-2: hsl(2 16% 20%);
+    --hero-stop-3: hsl(74 36% 24%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(103 50% 88%);             /* #B5DEAD */
+    --text-secondary: hsl(83 38% 67%);            /* #B0CA87 lifted */
+    --text-muted: hsl(83 22% 55%);
+    --text-on-primary: hsl(335 100% 9%);
+    --text-on-accent: hsl(335 100% 9%);
+
+    --border-default: hsl(2 16% 28%);
+    --border-strong: hsl(2 16% 40%);
+    --divider: hsl(2 16% 24%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(98, 60%, 70%, 0.45);
+
+    --semantic-positive: hsl(98 60% 60%);
+    --semantic-positive-soft: hsla(98, 60%, 60%, 0.16);
+    --semantic-warning: hsl(40 85% 60%);
+    --semantic-warning-soft: hsla(40, 85%, 60%, 0.16);
+    --semantic-negative: hsl(352 65% 65%);
+    --semantic-negative-soft: hsla(352, 65%, 65%, 0.16);
+    --semantic-info: hsl(218 70% 70%);
+    --semantic-info-soft: hsla(218, 70%, 70%, 0.16);
+
+    --chart-1: hsl(98 60% 70%);
+    --chart-2: hsl(74 36% 50%);
+    --chart-3: hsl(352 65% 65%);
+    --chart-4: hsl(36 85% 60%);
+    --chart-5: hsl(218 70% 70%);
+    --chart-6: hsl(280 50% 65%);
+
+    --overlay-hover: hsla(103, 50%, 88%, 0.06);
+    --overlay-active: hsla(103, 50%, 88%, 0.10);
+    --overlay-scrim: hsla(335, 100%, 3%, 0.75);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.8);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.9);
+
+    color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Sourdough (toasty amber + brown crust on proofed cream) ─────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+[data-theme="sourdough"] {
+    --brand-primary: hsl(33 72% 55%);
+    --brand-primary-soft: hsl(33 65% 92%);
+    --brand-secondary: hsl(28 36% 28%);
+    --brand-secondary-soft: hsl(28 22% 86%);
+    --brand-accent: hsl(45 88% 60%);
+    --brand-accent-soft: hsl(45 80% 92%);
+
+    --surface-page: hsl(36 36% 92%);
+    --surface-component: hsl(36 32% 97%);
+    --surface-elevated: hsl(36 34% 95%);
+    --surface-sunken: hsl(36 28% 87%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(40 50% 95%);
+
+    --hero-stop-1: hsl(36 40% 92%);
+    --hero-stop-2: hsl(33 72% 80%);
+    --hero-stop-3: hsl(28 50% 78%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(28 32% 16%);
+    --text-secondary: hsl(28 22% 32%);
+    --text-muted: hsl(28 14% 48%);
+    --text-on-primary: hsl(28 32% 16%);
+    --text-on-accent: hsl(28 32% 16%);
+
+    --border-default: hsl(33 22% 82%);
+    --border-strong: hsl(33 22% 68%);
+    --divider: hsl(33 18% 84%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(33, 72%, 55%, 0.4);
+
+    --chart-1: hsl(33 72% 50%);
+    --chart-2: hsl(28 50% 36%);
+    --chart-3: hsl(140 45% 42%);
+    --chart-4: hsl(218 60% 55%);
+    --chart-5: hsl(352 60% 55%);
+    --chart-6: hsl(280 50% 55%);
+
+    color-scheme: light;
+}
+
+/* ─── Sourdough Dark (warm browns + amber on dark crust) ──────────── */
+[data-theme="sourdough-dark"] {
+    --brand-primary: hsl(33 80% 60%);             /* lifted baked amber */
+    --brand-primary-soft: hsla(33, 80%, 60%, 0.18);
+    --brand-secondary: hsl(28 30% 40%);
+    --brand-secondary-soft: hsla(28, 30%, 40%, 0.25);
+    --brand-accent: hsl(45 90% 65%);
+    --brand-accent-soft: hsla(45, 90%, 65%, 0.18);
+
+    --surface-page: hsl(28 35% 8%);               /* dark crust */
+    --surface-component: hsl(28 28% 13%);
+    --surface-elevated: hsl(28 24% 17%);
+    --surface-sunken: hsl(28 38% 5%);
+    --surface-toolbar: hsl(28 32% 16%);
+    --text-on-toolbar: hsl(36 50% 92%);
+
+    --hero-stop-1: hsl(28 38% 7%);
+    --hero-stop-2: hsl(33 60% 22%);
+    --hero-stop-3: hsl(45 70% 22%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(36 50% 92%);
+    --text-secondary: hsl(36 22% 75%);
+    --text-muted: hsl(28 14% 58%);
+    --text-on-primary: hsl(28 38% 8%);
+    --text-on-accent: hsl(28 38% 8%);
+
+    --border-default: hsl(28 18% 28%);
+    --border-strong: hsl(28 18% 40%);
+    --divider: hsl(28 18% 24%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(33, 80%, 60%, 0.45);
+
+    --semantic-positive: hsl(140 55% 60%);
+    --semantic-positive-soft: hsla(140, 55%, 60%, 0.16);
+    --semantic-warning: hsl(33 90% 65%);
+    --semantic-warning-soft: hsla(33, 90%, 65%, 0.16);
+    --semantic-negative: hsl(7 78% 65%);
+    --semantic-negative-soft: hsla(7, 78%, 65%, 0.16);
+    --semantic-info: hsl(218 80% 70%);
+    --semantic-info-soft: hsla(218, 80%, 70%, 0.16);
+
+    --chart-1: hsl(33 80% 60%);
+    --chart-2: hsl(45 90% 65%);
+    --chart-3: hsl(140 55% 60%);
+    --chart-4: hsl(7 78% 65%);
+    --chart-5: hsl(218 80% 70%);
+    --chart-6: hsl(280 50% 65%);
+
+    --overlay-hover: hsla(36, 50%, 92%, 0.06);
+    --overlay-active: hsla(36, 50%, 92%, 0.10);
+    --overlay-scrim: hsla(28, 38%, 3%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+}

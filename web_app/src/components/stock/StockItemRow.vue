@@ -372,7 +372,7 @@
         transition: box-shadow 0.15s ease;
     }
     .stock-row:hover {
-        box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 6px 18px -14px var(--overlay-dim);
     }
     .stock-row-dim {
         opacity: 0.62;

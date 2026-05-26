@@ -275,23 +275,67 @@
         return pair.a === me ? pair.b : pair.a;
     }
 
+    // Resolve theme tokens once per build; cytoscape doesn't react to CSS
+    // var changes inside its inline style, so we read them at element-build
+    // time and rebuild on theme switch.
+    //
+    // Critically, getPropertyValue returns the *literal* CSS value, which
+    // for our tokens is modern hsl(h s% l%) syntax (no commas). Cytoscape's
+    // colour parser doesn't accept that form and silently falls back to
+    // black — that was the "black highlight on black text" bug. We
+    // normalise every value through a hidden canvas, which gets us a
+    // canonical "#rrggbb"/"rgba(...)" cytoscape can parse reliably.
+    const colourCanvas = typeof document === 'undefined'
+        ? null : document.createElement('canvas').getContext('2d');
+    function normaliseColour(raw: string): string {
+        if (!colourCanvas) return raw;
+        try {
+            colourCanvas.fillStyle = '#000';     // reset so a bad value can't carry over
+            colourCanvas.fillStyle = raw;
+            return colourCanvas.fillStyle as string;
+        } catch {
+            return raw;
+        }
+    }
+    function themeTokens() {
+        const cs = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement);
+        const read = (name: string, fallback: string) =>
+            normaliseColour((cs?.getPropertyValue(name).trim() || fallback));
+        return {
+            negative: read('--semantic-negative', '#c85a4f'),
+            warning: read('--semantic-warning', '#e89a45'),
+            borderMuted: read('--border-strong', '#ddd5bd'),
+            surfaceSunken: read('--surface-sunken', '#dccfae'),
+            edge: read('--border-strong', '#bcae8d'),
+            accent: read('--brand-primary', '#f4b740'),
+            textPrimary: read('--text-primary', '#2e2820'),
+            surfacePage: read('--surface-page', '#fdfaf3'),
+            chart: [
+                read('--chart-1', '#17b073'),
+                read('--chart-2', '#006a80'),
+                read('--chart-3', '#fed224'),
+                read('--chart-4', '#e89a45'),
+                read('--chart-5', '#5b8db8'),
+                read('--chart-6', '#a07cc8'),
+            ],
+        };
+    }
+    let themeCache = themeTokens();
+
     function levelColour(level: string | null): string {
-        // Border ring colour by level. Out → red, Low → amber, otherwise muted.
         const l = (level ?? '').toLowerCase();
-        if (l.includes('out')) return '#c85a4f';
-        if (l.includes('low')) return '#e89a45';
-        return '#ddd5bd';
+        if (l.includes('out')) return themeCache.negative;
+        if (l.includes('low')) return themeCache.warning;
+        return themeCache.borderMuted;
     }
 
     function groupColour(groupId: string | null | undefined): string {
-        if (!groupId) return '#dccfae';
-        // Stable hash → palette index.
+        if (!groupId) return themeCache.surfaceSunken;
         let hash = 0;
         for (let i = 0; i < groupId.length; i++) {
             hash = (hash * 31 + groupId.charCodeAt(i)) | 0;
         }
-        const palette = ['#f4b740', '#6ba368', '#5b8db8', '#a07cc8', '#c85a4f', '#e89a45', '#7fb285'];
-        return palette[Math.abs(hash) % palette.length]!;
+        return themeCache.chart[Math.abs(hash) % themeCache.chart.length]!;
     }
 
     // ── Build cytoscape elements from the (filtered) graph + toggles ────
@@ -366,6 +410,11 @@
 
     function rebuildElements() {
         if (!cy) return;
+        // Re-read theme tokens — themeCache is consumed by buildElements()
+        // for node group + level colours, and getting it fresh here means
+        // a theme switch reflects on the next rebuild (e.g. when the user
+        // returns to the page or toggles a filter).
+        themeCache = themeTokens();
         const positions = new Map<string, { x: number; y: number }>();
         cy.nodes().forEach((n) => positions.set(n.id(), { ...n.position() }));
         cy.elements().remove();
@@ -385,6 +434,7 @@
 
     function initCytoscape() {
         if (!graphContainer.value) return;
+        themeCache = themeTokens();
         cy = cytoscape({
             container: graphContainer.value,
             elements: buildElements(),
@@ -398,10 +448,10 @@
                         'border-width': 3,
                         label: 'data(label)',
                         'font-size': 11,
-                        color: '#2e2820',
+                        color: themeCache.textPrimary,
                         'text-valign': 'bottom',
                         'text-margin-y': 6,
-                        'text-background-color': '#fdfaf3',
+                        'text-background-color': themeCache.surfacePage,
                         'text-background-opacity': 0.85,
                         'text-background-padding': '2px',
                         width: 28,
@@ -415,18 +465,18 @@
                 {
                     selector: 'edge',
                     style: {
-                        'line-color': '#bcae8d',
+                        'line-color': themeCache.edge,
                         width: 1.6,
                         'curve-style': 'bezier',
                     },
                 },
                 {
                     selector: 'edge:selected',
-                    style: { 'line-color': '#f4b740', width: 3 },
+                    style: { 'line-color': themeCache.accent, width: 3 },
                 },
                 {
                     selector: 'node:selected',
-                    style: { 'border-color': '#f4b740', 'border-width': 5 },
+                    style: { 'border-color': themeCache.accent, 'border-width': 5 },
                 },
             ],
             layout: layoutOpts(),
@@ -619,14 +669,15 @@
 <style scoped>
     .subs-page {
         padding: 24px 24px 96px;
-        background: linear-gradient(160deg, #fdfaf3 0%, #f4ecdc 100%);
+        background: var(--surface-page);
+        color: var(--text-primary);
         min-height: 100%;
     }
     .subs-header { margin-bottom: 16px; }
     .subs-title { margin: 0; font-size: 1.6rem; font-weight: 700; }
     .subs-sub {
         margin: 4px 0 0;
-        color: #76695a;
+        color: var(--text-secondary);
         font-size: 0.92rem;
         max-width: 60ch;
     }
@@ -636,8 +687,8 @@
         align-items: center;
         gap: 12px;
         padding: 12px 14px;
-        background: #ffffff;
-        border: 1px solid #ece1c9;
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
         border-radius: 14px;
         margin-bottom: 16px;
     }
@@ -653,15 +704,15 @@
         .subs-body { grid-template-columns: 1fr; }
     }
     .subs-graph {
-        background: #ffffff;
-        border: 1px solid #ece1c9;
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
         border-radius: 14px;
         min-height: 540px;
         height: 60vh;
     }
     .subs-side {
-        background: #ffffff;
-        border: 1px solid #ece1c9;
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
         border-radius: 14px;
         padding: 14px 16px;
         align-self: start;
@@ -678,7 +729,7 @@
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #76695a;
+        color: var(--text-secondary);
     }
     .subs-side-list { list-style: none; margin: 0; padding: 0; }
     .subs-side-list li {
@@ -687,7 +738,7 @@
         gap: 6px;
         align-items: center;
         padding: 6px 0;
-        border-bottom: 1px solid #f4ecdc;
+        border-bottom: 1px solid var(--surface-sunken);
     }
     .subs-side-other {
         font-weight: 500;
@@ -696,7 +747,7 @@
         white-space: nowrap;
     }
     .subs-side-note {
-        color: #76695a;
+        color: var(--text-secondary);
         font-size: 0.78rem;
         text-align: right;
     }
@@ -708,15 +759,15 @@
     .subs-side-pair-name {
         font-weight: 600;
         cursor: pointer;
-        color: #2e2820;
+        color: var(--text-primary);
     }
-    .subs-side-pair-name:hover { color: #f4b740; text-decoration: underline; }
-    .subs-empty-inline { color: #76695a; font-size: 0.88rem; padding: 8px 0; }
+    .subs-side-pair-name:hover { color: var(--brand-primary); text-decoration: underline; }
+    .subs-empty-inline { color: var(--text-secondary); font-size: 0.88rem; padding: 8px 0; }
     .subs-empty {
         margin-top: 16px;
         padding: 18px 22px;
-        background: #ffffff;
-        border: 1px dashed #d9c98f;
+        background: var(--surface-component);
+        border: 1px dashed var(--border-strong);
         border-radius: 14px;
         text-align: center;
     }

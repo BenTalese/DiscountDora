@@ -2,7 +2,7 @@
     <q-layout view="hHh LpR lFf">
         <q-header
             bordered
-            class="bg-primary text-white"
+            class="dora-toolbar-surface"
             :reveal="$q.screen.lt.md"
         >
             <q-toolbar class="dora-titlebar">
@@ -317,9 +317,11 @@
         { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: 'calendar_month', section: 'Navigate', action: () => router.push('/meal-plans') },
         { id: 'nav.products', label: 'Go to Product Search', icon: 'local_offer', section: 'Navigate', action: () => router.push('/product-search') },
         { id: 'nav.my-products', label: 'Go to My Products', icon: 'favorite', section: 'Navigate', action: () => router.push('/my-products') },
+        { id: 'nav.price-history', label: 'Go to Price History', icon: 'show_chart', section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
         { id: 'nav.data', label: 'Go to Data Management', icon: 'storage', section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
         { id: 'nav.reports', label: 'Go to Reports', icon: 'insights', section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
         { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: 'hub', section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
+        { id: 'nav.map', label: 'Go to Stock map', icon: 'map', section: 'Navigate', tags: ['pantry', 'layout', 'canvas'], action: () => router.push('/map') },
         { id: 'nav.settings', label: 'Go to Settings', icon: 'settings', section: 'Navigate', action: () => router.push('/settings') },
         { id: 'nav.help', label: 'Go to Help', icon: 'help_outline', section: 'Navigate', action: () => router.push('/help') },
 
@@ -360,6 +362,14 @@
 </script>
 
 <style scoped lang="scss">
+    /* Toolbar reads its own surface + text tokens (not brand-primary)
+       so themes with a yellow primary (Lemon Tart) don't render
+       yellow-on-yellow Dora text or invisible active-nav links. Each
+       theme controls --surface-toolbar in themes.scss. */
+    .dora-toolbar-surface {
+        background: var(--surface-toolbar);
+        color: var(--text-on-toolbar);
+    }
     .dora-titlebar {
         height: 64px;
         gap: 8px;

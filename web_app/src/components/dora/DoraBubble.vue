@@ -365,7 +365,7 @@
             rgba(247, 243, 234, 0.75) 65%,
             rgba(247, 243, 234, 0) 100%
         );
-        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 6px 22px var(--overlay-dim);
         opacity: 0;
         transform: scale(0.6);
         transition:
@@ -450,11 +450,11 @@
     }
     .dora-bubble-hint {
         background: white;
-        color: #333;
+        color: var(--text-primary);
         padding: 10px 14px;
         border-radius: 12px;
         max-width: 260px;
-        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 6px 22px var(--overlay-dim);
         position: relative;
         font-size: 0.85em;
         display: flex;

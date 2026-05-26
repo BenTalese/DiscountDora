@@ -492,6 +492,6 @@
     }
     .drop-target-active {
         outline-color: var(--q-primary);
-        background-color: rgba(23, 176, 115, 0.08);
+        background-color: var(--brand-primary-soft);
     }
 </style>

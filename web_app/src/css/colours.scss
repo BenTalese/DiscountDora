@@ -1,13 +1,16 @@
-// Colour variables defined here and set via themeService.ts
-// These colours are outside the predefined Quasar colours (primary, accent, etc...)
+// Pre-DS1 shim: `--q-*` custom properties + helper utility classes
+// still referenced by older components + Quasar plugins. themeService
+// re-writes these at runtime via setCssVar. The fallback values now
+// point at the DS1 semantic tokens so a no-theme paint still looks
+// sensible (was hard-coded #000000 before).
 :root {
-    --q-page: #000000;
-    --q-component: #000000;
-    --q-text: #000000;
-    --q-disabled: #000000;
-    --q-border: #000000;
-    --q-divider: #000000;
-    --q-focus: #000000;
+    --q-page: var(--surface-page);
+    --q-component: var(--surface-component);
+    --q-text: var(--text-primary);
+    --q-disabled: var(--text-muted);
+    --q-border: var(--border-default);
+    --q-divider: var(--divider);
+    --q-focus: var(--focus-ring);
 }
 
 // Define text + bg classes for usage on Quasar components via color prop

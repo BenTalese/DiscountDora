@@ -686,7 +686,7 @@
 <style scoped>
     .stock-summary-banner {
         padding: 12px 16px;
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--overlay-hover);
         border-radius: 8px;
     }
     .stock-summary-stat {
@@ -704,10 +704,10 @@
        user notices it at a glance from the overview. */
     .stocktake-glow {
         animation: stocktake-pulse 2s ease-in-out infinite;
-        border-color: #f5c462 !important;
+        border-color: var(--brand-primary) !important;
     }
     @keyframes stocktake-pulse {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(245, 196, 98, 0.55); }
+        0%, 100% { box-shadow: 0 0 0 0 var(--ring-focus); }
         50%      { box-shadow: 0 0 0 8px rgba(245, 196, 98, 0); }
     }
 </style>

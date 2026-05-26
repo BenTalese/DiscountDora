@@ -73,12 +73,12 @@
         min-width: 22px;
         text-align: center;
         padding: 2px 6px;
-        border: 1px solid var(--q-grey-5, #bdbdbd);
+        border: 1px solid var(--q-grey-5, var(--border-strong));
         border-bottom-width: 2px;
         border-radius: 4px;
         font-family: monospace;
         font-size: 0.8rem;
-        background: rgba(0, 0, 0, 0.03);
+        background: var(--overlay-hover);
     }
     .body--dark .shortcut-key {
         background: rgba(255, 255, 255, 0.06);

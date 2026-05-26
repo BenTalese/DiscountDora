@@ -1,0 +1,380 @@
+<template>
+    <div class="q-pa-md row q-col-gutter-md">
+        <!-- ── Left rail: picker + selected chips ─────────────────── -->
+        <div class="col-12 col-md-3">
+            <q-card flat bordered>
+                <q-card-section>
+                    <div class="text-subtitle1">Pick products</div>
+                    <div class="text-caption text-grey">
+                        Compare up to 5 products' price history side by side.
+                    </div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                    <q-input
+                        v-model="filter"
+                        outlined
+                        dense
+                        clearable
+                        placeholder="Search saved products"
+                    >
+                        <template #prepend>
+                            <q-icon name="search" size="16px" />
+                        </template>
+                    </q-input>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                    <div class="text-caption text-grey-7 q-mb-xs">Selected</div>
+                    <div v-if="selectedIds.length === 0" class="text-caption text-grey-5">
+                        Pick from the list below.
+                    </div>
+                    <div v-else>
+                        <q-chip
+                            v-for="(p, i) in selectedProducts"
+                            :key="p.product_id"
+                            removable
+                            dense
+                            :color="seriesColour(i)"
+                            text-color="white"
+                            @remove="toggleSelect(p.product_id)"
+                        >
+                            {{ p.name }}
+                        </q-chip>
+                    </div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section class="q-pt-none" style="max-height: 360px; overflow: auto">
+                    <q-list dense>
+                        <q-item
+                            v-for="p in filteredCandidates"
+                            :key="p.product_id"
+                            clickable
+                            :active="selectedIds.includes(p.product_id)"
+                            active-class="active-product-row"
+                            @click="toggleSelect(p.product_id)"
+                        >
+                            <q-item-section avatar>
+                                <q-checkbox
+                                    :model-value="selectedIds.includes(p.product_id)"
+                                    :disable="
+                                        !selectedIds.includes(p.product_id)
+                                        && selectedIds.length >= 5
+                                    "
+                                    @update:model-value="toggleSelect(p.product_id)"
+                                    @click.stop
+                                />
+                            </q-item-section>
+                            <q-item-section>
+                                <q-item-label>{{ p.name }}</q-item-label>
+                                <q-item-label caption>
+                                    {{ p.merchant?.name ?? '' }}
+                                </q-item-label>
+                            </q-item-section>
+                        </q-item>
+                        <q-item v-if="filteredCandidates.length === 0">
+                            <q-item-section class="text-grey-5 text-caption">
+                                No products match.
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-card-section>
+            </q-card>
+        </div>
+
+        <!-- ── Chart + range + comparison strip ──────────────────── -->
+        <div class="col-12 col-md-9">
+            <div class="row items-center q-mb-sm">
+                <div class="text-h5">Price history</div>
+                <q-space />
+                <q-btn-toggle
+                    v-model="range"
+                    :options="rangeOptions"
+                    dense
+                    flat
+                    no-caps
+                    color="grey-7"
+                    toggle-color="primary"
+                />
+                <q-btn
+                    flat
+                    no-caps
+                    icon="notifications"
+                    label="Manage alerts"
+                    class="q-ml-md"
+                    @click="alertsOpen = true"
+                />
+            </div>
+
+            <q-card flat bordered>
+                <q-card-section class="q-pa-sm">
+                    <PriceHistoryChart :series="series" :width="chartWidth" :height="320" />
+                </q-card-section>
+            </q-card>
+
+            <!-- Per-product comparison strip -->
+            <div class="row q-col-gutter-sm q-mt-sm">
+                <div
+                    v-for="(s, i) in series"
+                    :key="s.product_id"
+                    class="col-12 col-sm-6 col-md-4"
+                >
+                    <q-card flat bordered>
+                        <q-card-section>
+                            <div class="row items-center q-gutter-sm">
+                                <span
+                                    class="series-swatch"
+                                    :style="{ background: seriesColour(i) }"
+                                />
+                                <div class="col">
+                                    <div class="text-subtitle2">{{ s.name }}</div>
+                                    <div class="text-caption text-grey-7">
+                                        {{ s.merchant }}
+                                    </div>
+                                </div>
+                            </div>
+                        </q-card-section>
+                        <q-card-section v-if="s.current" class="q-pt-none">
+                            <div class="text-h6">
+                                ${{ s.current.unit_price?.toFixed(2) ?? '—' }}
+                                <q-chip
+                                    v-if="s.current.deal_pct"
+                                    dense
+                                    size="sm"
+                                    color="positive"
+                                    text-color="white"
+                                    class="q-ml-xs"
+                                >
+                                    -{{ s.current.deal_pct }}%
+                                </q-chip>
+                            </div>
+                            <div v-if="s.all_time_low" class="text-caption text-grey-7">
+                                All-time low:
+                                <strong>${{ s.all_time_low.unit_price.toFixed(2) }}</strong>
+                                <span v-if="aboveLowPct(s) !== null">
+                                    · currently {{ aboveLowPct(s) }}% above
+                                </span>
+                            </div>
+                        </q-card-section>
+                        <q-card-section v-else class="text-caption text-grey-5">
+                            No data yet.
+                        </q-card-section>
+                        <q-separator />
+                        <q-card-section class="q-pt-sm">
+                            <div class="row items-end q-gutter-sm">
+                                <q-input
+                                    v-model.number="alertInputs[s.product_id]"
+                                    outlined
+                                    dense
+                                    type="number"
+                                    step="0.01"
+                                    label="Notify me below ($)"
+                                    class="col"
+                                />
+                                <q-btn
+                                    color="primary"
+                                    no-caps
+                                    icon="notifications_active"
+                                    label="Set alert"
+                                    :disable="!alertInputs[s.product_id] || alertInputs[s.product_id]! <= 0"
+                                    @click="onSetAlert(s.product_id)"
+                                />
+                            </div>
+                        </q-card-section>
+                    </q-card>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Alerts modal ──────────────────────────────────────── -->
+        <q-dialog v-model="alertsOpen">
+            <q-card style="min-width: 420px">
+                <q-card-section class="row items-center">
+                    <div class="text-h6">Price alerts</div>
+                    <q-space />
+                    <q-btn flat dense round icon="close" v-close-popup />
+                </q-card-section>
+                <q-separator />
+                <q-card-section v-if="alerts.length === 0" class="text-grey-7">
+                    No active alerts yet.
+                </q-card-section>
+                <q-list v-else separator>
+                    <q-item v-for="a in alerts" :key="a.price_alert_id">
+                        <q-item-section>
+                            <q-item-label>{{ a.product_name }}</q-item-label>
+                            <q-item-label caption>
+                                {{ a.merchant_name }} ·
+                                notify below
+                                <strong>${{ a.threshold_unit_price.toFixed(2) }}</strong>
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                            <q-btn
+                                flat
+                                dense
+                                icon="delete"
+                                color="negative"
+                                no-caps
+                                label="Remove"
+                                @click="onDeleteAlert(a.price_alert_id)"
+                            />
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </q-card>
+        </q-dialog>
+    </div>
+</template>
+
+<script lang="ts" setup>
+    import { useQuasar } from 'quasar';
+    import { computed, onMounted, ref, watch, reactive } from 'vue';
+    import { useRoute } from 'vue-router';
+    import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
+    import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import ProductApiService from 'src/services/api/productApiService';
+    import type { Product } from 'src/models/product';
+    import PriceHistoryApiService, {
+        type PriceAlert, type PriceHistorySeries, type PriceRange,
+    } from 'src/services/api/priceHistoryApiService';
+
+    const $q = useQuasar();
+    const route = useRoute();
+    const productApi = new ProductApiService();
+    const historyApi = new PriceHistoryApiService();
+
+    const candidates = ref<Product[]>([]);
+    const selectedIds = ref<string[]>([]);
+    const filter = ref('');
+    const range = ref<PriceRange>('90d');
+    const rangeOptions = [
+        { label: '30d', value: '30d' },
+        { label: '90d', value: '90d' },
+        { label: '1y', value: '1y' },
+        { label: 'All', value: 'all' },
+    ];
+
+    const series = ref<PriceHistorySeries[]>([]);
+    const alerts = ref<PriceAlert[]>([]);
+    const alertsOpen = ref(false);
+    const alertInputs = reactive<Record<string, number | null>>({});
+
+    const chartWidth = ref(720);
+
+    const filteredCandidates = computed(() => {
+        const needle = filter.value.trim().toLowerCase();
+        const all = candidates.value;
+        if (!needle) return all.slice(0, 100);
+        return all
+            .filter((p) =>
+                p.name.toLowerCase().includes(needle)
+                || (p.merchant?.name ?? '').toLowerCase().includes(needle),
+            )
+            .slice(0, 100);
+    });
+
+    const selectedProducts = computed(() =>
+        selectedIds.value
+            .map((id) => candidates.value.find((p) => p.product_id === id))
+            .filter((p): p is Product => Boolean(p)),
+    );
+
+    function toggleSelect(productId: string) {
+        const idx = selectedIds.value.indexOf(productId);
+        if (idx >= 0) {
+            selectedIds.value.splice(idx, 1);
+        } else {
+            if (selectedIds.value.length >= 5) {
+                $q.notify({
+                    type: 'warning', position: 'bottom-right',
+                    message: 'Up to 5 products at a time.',
+                });
+                return;
+            }
+            selectedIds.value.push(productId);
+        }
+    }
+
+    function aboveLowPct(s: PriceHistorySeries): number | null {
+        if (!s.current?.unit_price || !s.all_time_low?.unit_price) return null;
+        if (s.all_time_low.unit_price === 0) return null;
+        const pct = ((s.current.unit_price - s.all_time_low.unit_price) / s.all_time_low.unit_price) * 100;
+        return Math.max(0, Math.round(pct));
+    }
+
+    async function refreshSeries() {
+        if (selectedIds.value.length === 0) { series.value = []; return; }
+        try {
+            const result = await historyApi.seriesAsync(selectedIds.value, range.value);
+            series.value = result.series;
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: "Couldn't load price history.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    async function refreshAlerts() {
+        try {
+            const result = await historyApi.listAlertsAsync();
+            alerts.value = result.items;
+        } catch { /* alerts list is non-critical */ }
+    }
+
+    async function onSetAlert(productId: string) {
+        const value = alertInputs[productId];
+        if (!value || value <= 0) return;
+        try {
+            await historyApi.createAlertAsync(productId, value);
+            await refreshAlerts();
+            alertInputs[productId] = null;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: "We'll notify you when it drops.",
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: "Couldn't set the alert.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    async function onDeleteAlert(alertId: string) {
+        try {
+            await historyApi.deleteAlertAsync(alertId);
+            await refreshAlerts();
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: "Couldn't remove the alert.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    watch([selectedIds, range], () => { void refreshSeries(); });
+
+    onMounted(async () => {
+        const page = await productApi.getAllAsync();
+        candidates.value = page.items ?? [];
+        // Deep-link: ?product_id=<id> pre-selects.
+        const preselect = (route.query.product_id as string | undefined) ?? null;
+        if (preselect && candidates.value.find((p) => p.product_id === preselect)) {
+            selectedIds.value = [preselect];
+        }
+        void refreshSeries();
+        void refreshAlerts();
+    });
+</script>
+
+<style scoped>
+    .series-swatch {
+        width: 12px; height: 12px; border-radius: 3px;
+        display: inline-block;
+    }
+    .active-product-row {
+        background: var(--brand-primary-soft);
+    }
+</style>

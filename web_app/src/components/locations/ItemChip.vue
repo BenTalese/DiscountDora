@@ -164,7 +164,7 @@
 
 <style scoped>
     .item-chip {
-        border: 1px solid rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--overlay-active);
         cursor: grab;
     }
     .item-chip:active {

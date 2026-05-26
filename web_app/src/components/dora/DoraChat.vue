@@ -1306,18 +1306,19 @@
     .dora-help-btn:hover {
         opacity: 1;
     }
-    /* Bot name + accent-style buttons. The Dora yellow is gorgeous on the
-       dark background but vanishes against the light card; flip to black in
-       light mode for legibility, keep the accent pop in dark mode. */
+    /* Bot name + accent-style buttons. The brand accent is gorgeous on
+       dark backdrops but vanishes against light cards; in light themes
+       we fall back to the standard text colour for legibility, in dark
+       themes the accent shines. */
     .dora-bot-name {
         font-weight: 700;
-        color: #000;
+        color: var(--text-primary);
     }
     .body--dark .dora-bot-name {
         color: var(--q-accent);
     }
     .dora-accent-btn {
-        color: #000;
+        color: var(--text-primary);
     }
     .body--dark .dora-accent-btn {
         color: var(--q-accent);
@@ -1337,7 +1338,7 @@
         .dora-chat-caret { animation: none; }
     }
     .dora-action-card {
-        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        border-top: 1px solid var(--overlay-active);
         padding-top: 8px;
     }
     .dora-action-item + .dora-action-item {

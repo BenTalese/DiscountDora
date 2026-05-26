@@ -1991,7 +1991,7 @@
 
 <style scoped>
     .shopping-line-ticked {
-        background-color: rgba(0, 0, 0, 0.02);
+        background-color: var(--overlay-hover);
     }
     .shopping-line-focused {
         outline: 2px dashed var(--q-accent);
@@ -2011,7 +2011,7 @@
         cursor: grabbing;
     }
     .bulk-bar {
-        background: rgba(0, 0, 0, 0.03);
+        background: var(--overlay-hover);
     }
     .bulk-bar-active {
         background: rgba(23, 176, 115, 0.12);

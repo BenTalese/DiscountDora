@@ -1,3 +1,17 @@
-// Quasar SCSS variable overrides, available out of the box in .vue/.scss/.sass files
-// https://quasar.dev/style/sass-scss-variables#variables-list
-// ----------------------------------------------------------------------------------
+// Quasar SCSS variable overrides — compile-time defaults.
+//
+// DS1 note: themeService.ts re-applies the active theme's `$primary`,
+// `$secondary`, etc. via setCssVar() at runtime, so the SCSS values
+// here only matter for the first paint before Pinia hydrates. We pick
+// the Lemon Tart palette as the build-time default to keep that first
+// frame on-brand even before the user's preference loads.
+$primary:   #f5c462;
+$secondary: #006a80;
+$accent:    #fed224;
+$dark:      #1c1f23;
+$dark-page: #14171a;
+
+$positive:  hsl(140, 50%, 50%);
+$negative:  hsl(7, 75%, 56%);
+$info:      hsl(218, 76%, 56%);
+$warning:   hsl(20, 95%, 55%);

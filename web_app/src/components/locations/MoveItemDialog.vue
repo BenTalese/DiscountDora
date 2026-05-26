@@ -277,7 +277,7 @@
         font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: #888;
+        color: var(--text-muted);
         padding-top: 12px;
     }
 </style>

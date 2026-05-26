@@ -138,7 +138,7 @@
 <style scoped>
     .auth-shell {
         min-height: 100vh; display: flex; align-items: center; justify-content: center;
-        padding: 24px; background: #f9f6f0;
+        padding: 24px; background: var(--surface-page);
     }
     .auth-card { max-width: 420px; width: 100%; padding: 16px; }
 </style>

@@ -10,6 +10,8 @@ from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.price_alert import PriceAlert
+from dora_api.domain.entities.stock_map import StockMap
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_barcode import ProductBarcode
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
@@ -142,6 +144,23 @@ def configure_mappings(db: SQLAlchemy):
             nullable=False,
         ),
         Column("barcode", String(255), nullable=False, unique=True),
+    )
+
+    stock_map_table = Table(
+        "StockMap", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("layout", String, nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
+
+    price_alert_table = Table(
+        "PriceAlert", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, ForeignKey("User.id", ondelete="CASCADE"), nullable=False),
+        Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), nullable=False),
+        Column("threshold_unit_price", Float, nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("last_fired_at", DateTime(timezone=True), nullable=True),
     )
 
     audit_event_table = Table(
@@ -416,8 +435,17 @@ def configure_mappings(db: SQLAlchemy):
 
     _mapper_registry.map_imperatively(AuthToken, auth_token_table, properties={
         "_id_col": auth_token_table.c.id,
-        "_user_id": auth_token_table.c.user_id,
         "id": auth_token_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(PriceAlert, price_alert_table, properties={
+        "_id_col": price_alert_table.c.id,
+        "id": price_alert_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(StockMap, stock_map_table, properties={
+        "_id_col": stock_map_table.c.id,
+        "id": stock_map_table.c.id,
     })
 
     _mapper_registry.map_imperatively(RecipeCollection, recipe_collection_table, properties={

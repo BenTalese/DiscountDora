@@ -26,6 +26,8 @@
         "axios": "^1.2.1",
         "cytoscape": "^3.33.4",
         "echarts": "^6.1.0",
+        "konva": "^9.3.16",
+        "vue-konva": "^3.2.0",
         "pinia": "^3.0.1",
         "prettier-plugin-organize-attributes": "^1.0.0",
         "quasar": "^2.16.0",

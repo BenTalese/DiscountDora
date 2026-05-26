@@ -416,7 +416,7 @@
 
 <style scoped>
     .audit-payload {
-        background: #f4f4f4;
+        background: var(--surface-sunken);
         border-radius: 4px;
         padding: 12px;
         font-size: 12px;

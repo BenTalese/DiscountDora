@@ -99,8 +99,8 @@
         justify-content: center;
         gap: 20px;
         padding: 24px;
-        background: var(--q-page, #fff);
-        color: var(--q-text, #222);
+        background: var(--q-page, var(--surface-component));
+        color: var(--q-text, var(--text-primary));
         z-index: 9000;
     }
 

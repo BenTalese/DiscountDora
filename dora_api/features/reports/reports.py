@@ -177,7 +177,7 @@ class StockValueOverTimeHandler:
         # Bucket boundaries.
         now = datetime.now(timezone.utc)
         bucket_days = _bucket_size_days(since)
-        start = since or _earliest_change(level_rows) or (now - timedelta(days=90))
+        start = since or _as_utc(_earliest_change(level_rows)) or (now - timedelta(days=90))
         if start > now:
             start = now - timedelta(days=30)
         # Snap start to a midnight UTC boundary so points line up across reloads.
@@ -220,6 +220,14 @@ def _earliest_change(level_rows) -> datetime | None:
     return level_rows[0][1]
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _rank_as_of(
     item_id: UUID,
     cursor: datetime,
@@ -232,6 +240,7 @@ def _rank_as_of(
         return rank_by_current_level.get(item_id, 0)
     last_level_id = None
     for changed_at, level_id in history:
+        changed_at = _as_utc(changed_at)
         if changed_at and changed_at > cursor:
             break
         last_level_id = level_id
@@ -250,6 +259,7 @@ def _price_as_of(
         return None
     last_price = None
     for offered_on, price in series:
+        offered_on = _as_utc(offered_on)
         if offered_on > cursor:
             break
         last_price = price

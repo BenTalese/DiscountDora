@@ -1,0 +1,154 @@
+/*
+ * Design tokens — every colour, surface, spacing, radius, and font-size
+ * the app paints with traces back here. themes.scss overrides the
+ * SEMANTIC tokens only; raw palette + scales stay constant.
+ *
+ * Each theme is expected to define its OWN brand + surface + text +
+ * chart palette via `[data-theme="..."]` blocks in themes.scss. The
+ * defaults declared on :root are the Pesto brand palette so a SPA
+ * without an applied data-theme attribute still paints sensibly.
+ *
+ * Colour values are HSL so themes can shift hue / saturation without
+ * recomputing hex codes. We stay in sRGB on purpose (no oklch / lab /
+ * wide-gamut) — fixes the Chrome-vs-Firefox drift the taskboard called
+ * out and keeps `setCssVar` parsing predictable.
+ */
+
+:root {
+    color-scheme: light;
+
+    /* ────────────────────────────── Neutrals ─────────────────────── */
+    /* Single neutral ladder shared across themes. Themes layer their
+       own surface tints over the top via semantic tokens. */
+    --palette-neutral-0:   hsl(0 0% 100%);
+    --palette-neutral-50:  hsl(0 0% 98%);
+    --palette-neutral-100: hsl(0 0% 95%);
+    --palette-neutral-200: hsl(0 0% 90%);
+    --palette-neutral-300: hsl(0 0% 83%);
+    --palette-neutral-400: hsl(0 0% 65%);
+    --palette-neutral-500: hsl(0 0% 50%);
+    --palette-neutral-600: hsl(0 0% 38%);
+    --palette-neutral-700: hsl(0 0% 27%);
+    --palette-neutral-800: hsl(0 0% 17%);
+    --palette-neutral-900: hsl(0 0% 9%);
+
+    /* ────────────────────────────── Semantic primitives ──────────── */
+    /* Meaning-carrying colours (success/warn/danger/info). Themes can
+       override them but typically don't — these shouldn't shift much
+       per theme because they encode meaning, not aesthetics. */
+    --semantic-positive: hsl(140 50% 45%);
+    --semantic-positive-soft: hsl(140 50% 92%);
+    --semantic-warning: hsl(33 95% 55%);
+    --semantic-warning-soft: hsl(40 95% 92%);
+    --semantic-negative: hsl(7 75% 56%);
+    --semantic-negative-soft: hsl(7 75% 94%);
+    --semantic-info: hsl(218 76% 56%);
+    --semantic-info-soft: hsl(218 76% 94%);
+
+    /* ────────────────────────────── Brand defaults (Pesto) ───────── */
+    --brand-primary: hsl(150 76% 39%);            /* #17b073 */
+    --brand-primary-soft: hsl(150 70% 92%);
+    --brand-secondary: hsl(189 100% 26%);         /* #006a80 */
+    --brand-secondary-soft: hsl(189 35% 88%);
+    --brand-accent: hsl(50 99% 56%);              /* #fed224 */
+    --brand-accent-soft: hsl(50 95% 92%);
+
+    /* ────────────────────────────── Surface ladder ───────────────── */
+    --surface-page: hsl(168 38% 94%);             /* #e8f6f3 */
+    --surface-component: var(--palette-neutral-0);
+    --surface-elevated: hsl(168 30% 97%);
+    --surface-sunken: hsl(168 25% 90%);
+    /* Toolbar (top header) gets its own surface token so it can stay
+       high-contrast against the brand accent regardless of which colour
+       the brand-primary lands on. Defaults to the brand-secondary
+       (typically a deep teal/navy/cocoa) with light text; themes can
+       override per-variant. */
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    /* Hero gradient — Dashboard hero band and other "signature"
+       surfaces consume this. Each theme owns three stops so we can
+       blend mid-tones. */
+    --hero-stop-1: hsl(168 40% 92%);
+    --hero-stop-2: hsl(50 85% 90%);
+    --hero-stop-3: hsl(150 50% 86%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%,
+        var(--hero-stop-2) 50%,
+        var(--hero-stop-3) 100%);
+
+    /* ────────────────────────────── Text ─────────────────────────── */
+    --text-primary: hsl(168 28% 12%);
+    --text-secondary: hsl(168 12% 32%);
+    --text-muted: hsl(168 8% 50%);
+    --text-inverse: var(--palette-neutral-0);
+    --text-on-primary: var(--palette-neutral-0);
+    --text-on-accent: hsl(168 28% 12%);
+
+    /* ────────────────────────────── Borders ──────────────────────── */
+    --border-default: hsl(168 18% 84%);
+    --border-strong: hsl(168 18% 72%);
+    --divider: hsl(168 14% 86%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: hsla(150, 76%, 39%, 0.35);
+
+    /* ────────────────────────────── Overlays ─────────────────────── */
+    --overlay-scrim: hsla(168, 30%, 10%, 0.55);
+    --overlay-dim: hsla(168, 30%, 10%, 0.18);
+    --overlay-hover: hsla(168, 30%, 10%, 0.04);
+    --overlay-active: hsla(168, 30%, 10%, 0.08);
+
+    /* ────────────────────────────── Chart palette ────────────────── */
+    /* Six categorical hues per theme. Used by ECharts series (Reports
+       page), cytoscape group colouring (Substitutes), and any future
+       data-vis surface that needs distinguishable accents. Keep them
+       distinct hue-wise within each theme — values shouldn't be too
+       close in luminance or they get hard to read against the page. */
+    --chart-1: hsl(150 76% 39%);   /* primary */
+    --chart-2: hsl(189 100% 26%);  /* secondary */
+    --chart-3: hsl(50 95% 50%);    /* accent (a touch darker) */
+    --chart-4: hsl(20 90% 60%);    /* warm tertiary */
+    --chart-5: hsl(218 70% 55%);   /* cool tertiary */
+    --chart-6: hsl(300 50% 55%);   /* magenta tertiary */
+
+    /* ────────────────────────────── Spacing scale ────────────────── */
+    /* 4 px base, doubling pattern. Quasar's q-pa-xs/sm/md/lg/xl
+       roughly aligns to space-2/3/4/6/8. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ────────────────────────────── Radius scale ─────────────────── */
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    --radius-xl: 16px;
+    --radius-2xl: 22px;
+    --radius-pill: 999px;
+    --radius-full: 50%;
+
+    /* ────────────────────────────── Font-size scale ──────────────── */
+    /* Unitless ratios against --dora-base-font-size (set by
+       themeService.ts based on the user's font_size preference). */
+    --font-size-xs: 0.75;
+    --font-size-sm: 0.875;
+    --font-size-md: 1;
+    --font-size-lg: 1.125;
+    --font-size-xl: 1.25;
+    --font-size-2xl: 1.5;
+    --font-size-3xl: 1.875;
+
+    /* ────────────────────────────── Elevation ────────────────────── */
+    --elevation-1: 0 1px 2px hsla(0, 0%, 0%, 0.06);
+    --elevation-2: 0 2px 6px hsla(0, 0%, 0%, 0.08);
+    --elevation-3: 0 6px 18px hsla(0, 0%, 0%, 0.10);
+    --elevation-card: 0 6px 18px -16px hsla(168, 30%, 10%, 0.4);
+    --elevation-card-hover: 0 14px 32px -18px hsla(168, 30%, 10%, 0.45);
+}

@@ -24,6 +24,12 @@ export default defineConfig((ctx) => {
 
         // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
         css: [
+            // DS1: tokens.scss declares the full design-token system,
+            // themes.scss overrides per-theme via [data-theme=…]. They
+            // must load before app.scss / colours.scss so the legacy
+            // styles can reference the new custom properties.
+            'tokens.scss',
+            'themes.scss',
             'app.scss',
             'colours.scss'
         ],

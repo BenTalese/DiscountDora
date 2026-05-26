@@ -1,4 +1,26 @@
-export type ThemePreference = 'system' | 'light' | 'dark';
+// Named-theme catalogue lives in services/themeService.ts. `light` and
+// `dark` stay in the type for legacy values that may still be in the
+// database; themeService maps them onto `pesto` and `midnight-snack`
+// at apply time. `avocado` is similarly legacy — was retired when
+// `pesto` (a fresher green) took over as the brand default.
+export type ThemePreference =
+    | 'system'
+    | 'pesto'
+    | 'pesto-dark'
+    | 'lemon-tart'
+    | 'lemon-tart-dark'
+    | 'blueberry'
+    | 'blueberry-dark'
+    | 'cherry-cola'
+    | 'cherry-cola-dark'
+    | 'sourdough'
+    | 'sourdough-dark'
+    // Legacy — themeService maps these forward at apply time.
+    | 'pesto-noir'      // → pesto-dark
+    | 'midnight-snack'  // → lemon-tart-dark
+    | 'avocado'         // → pesto
+    | 'light'           // → pesto
+    | 'dark';           // → pesto-dark
 export type FontFamilyPreference =
     | 'default'
     | 'urbanist'

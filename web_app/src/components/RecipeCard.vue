@@ -283,7 +283,7 @@
         height: 100%;
     }
     .recipe-card:hover {
-        box-shadow: 0 6px 18px -14px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 6px 18px -14px var(--overlay-dim);
     }
     .recipe-card--dim {
         opacity: 0.55;

@@ -7,9 +7,46 @@ from dora_api.domain.entities.base_entity import BaseEntity
 # Preference enum-like constants. Kept here so handlers and DTOs share one
 # source of truth and the frontend can validate against these values too.
 THEME_SYSTEM = "system"
+# Named themes — five families with paired light + dark variants. See
+# web_app/src/services/themeService.ts THEME_FAMILIES for the source-
+# of-truth palette + label metadata. `system` resolves on the client to
+# `pesto` (OS light) / `pesto-dark` (OS dark).
+THEME_PESTO = "pesto"
+THEME_PESTO_DARK = "pesto-dark"
+THEME_LEMON_TART = "lemon-tart"
+THEME_LEMON_TART_DARK = "lemon-tart-dark"
+THEME_BLUEBERRY = "blueberry"
+THEME_BLUEBERRY_DARK = "blueberry-dark"
+THEME_CHERRY_COLA = "cherry-cola"
+THEME_CHERRY_COLA_DARK = "cherry-cola-dark"
+THEME_SOURDOUGH = "sourdough"
+THEME_SOURDOUGH_DARK = "sourdough-dark"
+# Legacy values accepted on the wire so existing rows don't fail
+# validation; the SPA's themeService maps each to a current key at
+# apply time:
+#   pesto-noir       → pesto-dark
+#   midnight-snack   → lemon-tart-dark   (absorbed into Lemon Tart family)
+#   light, avocado   → pesto
+#   dark             → pesto-dark
+THEME_PESTO_NOIR = "pesto-noir"
+THEME_MIDNIGHT_SNACK = "midnight-snack"
 THEME_LIGHT = "light"
 THEME_DARK = "dark"
-ALLOWED_THEMES = (THEME_SYSTEM, THEME_LIGHT, THEME_DARK)
+THEME_AVOCADO = "avocado"
+ALLOWED_THEMES = (
+    THEME_SYSTEM,
+    THEME_PESTO, THEME_PESTO_DARK,
+    THEME_LEMON_TART, THEME_LEMON_TART_DARK,
+    THEME_BLUEBERRY, THEME_BLUEBERRY_DARK,
+    THEME_CHERRY_COLA, THEME_CHERRY_COLA_DARK,
+    THEME_SOURDOUGH, THEME_SOURDOUGH_DARK,
+    # Legacy
+    THEME_PESTO_NOIR,
+    THEME_MIDNIGHT_SNACK,
+    THEME_LIGHT,
+    THEME_DARK,
+    THEME_AVOCADO,
+)
 
 FONT_FAMILY_DEFAULT = "default"
 FONT_FAMILY_URBANIST = "urbanist"

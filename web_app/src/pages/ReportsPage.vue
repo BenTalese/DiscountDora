@@ -298,6 +298,52 @@
     }
 
     // ── Chart options ────────────────────────────────────────────────────
+    // Pull the active theme's chart palette + brand colours from the
+    // document so charts re-paint when the user switches theme. Recomputes
+    // on `themeTick` bumps (triggered by the route nav + manual reload).
+    //
+    // CSS custom properties return their literal stored value — modern
+    // `hsl(h s% l%)` syntax for our tokens. Normalise through a canvas
+    // so chart libraries always see a canonical hex/rgba string.
+    const themeTick = ref(0);
+    const colourCanvas = typeof document === 'undefined'
+        ? null : document.createElement('canvas').getContext('2d');
+    function normaliseColour(raw: string): string {
+        if (!colourCanvas) return raw;
+        try {
+            colourCanvas.fillStyle = '#000';
+            colourCanvas.fillStyle = raw;
+            return colourCanvas.fillStyle as string;
+        } catch {
+            return raw;
+        }
+    }
+    const chartPalette = computed(() => {
+        void themeTick.value;
+        const cs = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement);
+        const read = (name: string, fallback: string) =>
+            normaliseColour(cs?.getPropertyValue(name).trim() || fallback);
+        return {
+            primary: read('--brand-primary', '#17b073'),
+            positive: read('--semantic-positive', '#6ba368'),
+            series: [
+                read('--chart-1', '#17b073'),
+                read('--chart-2', '#006a80'),
+                read('--chart-3', '#fed224'),
+                read('--chart-4', '#e89a45'),
+                read('--chart-5', '#5b8db8'),
+                read('--chart-6', '#a07cc8'),
+            ],
+        };
+    });
+
+    function colourFor(key: string): string {
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+        const series = chartPalette.value.series;
+        return series[Math.abs(hash) % series.length]!;
+    }
+
     const stockValueOption = computed(() => ({
         tooltip: { trigger: 'axis', valueFormatter: (v: number) => `$${v.toFixed(2)}` },
         grid: { left: 50, right: 16, top: 24, bottom: 32 },
@@ -314,16 +360,9 @@
             areaStyle: { opacity: 0.15 },
             lineStyle: { width: 2 },
             data: stockValue.value?.points.map((p) => p.value) ?? [],
-            color: '#f4b740',
+            color: chartPalette.value.primary,
         }],
     }));
-
-    const PALETTE = ['#6ba368', '#e89a45', '#c85a4f', '#5b8db8', '#a07cc8', '#d9a45f', '#7fb285'];
-    function colourFor(key: string): string {
-        let hash = 0;
-        for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
-        return PALETTE[Math.abs(hash) % PALETTE.length]!;
-    }
 
     const merchantSpendOption = computed(() => ({
         tooltip: { trigger: 'item', valueFormatter: (v: number) => `$${v.toFixed(2)}` },
@@ -351,7 +390,7 @@
             symbol: 'none',
             areaStyle: { opacity: 0.2 },
             lineStyle: { width: 2 },
-            color: '#6ba368',
+            color: chartPalette.value.positive,
             data: savings.value?.lists.map((l) => l.savings) ?? [],
         }],
     }));
@@ -486,7 +525,8 @@
 <style scoped>
     .reports-page {
         padding: 24px 24px 96px;
-        background: linear-gradient(160deg, #fdfaf3 0%, #f4ecdc 100%);
+        background: var(--surface-page);
+        color: var(--text-primary);
         min-height: 100%;
     }
     .reports-header {
@@ -500,7 +540,7 @@
     .reports-title { margin: 0; font-size: 1.6rem; font-weight: 700; }
     .reports-sub {
         margin: 4px 0 0;
-        color: #76695a;
+        color: var(--text-secondary);
         font-size: 0.92rem;
         max-width: 60ch;
     }
@@ -513,11 +553,11 @@
         .reports-grid { grid-template-columns: 1fr; }
     }
     .report-card {
-        background: #ffffff;
-        border: 1px solid #ece1c9;
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
         border-radius: 18px;
         padding: 18px 20px 20px;
-        box-shadow: 0 6px 18px -16px rgba(74, 56, 26, 0.4);
+        box-shadow: var(--elevation-card);
         min-height: 240px;
         display: flex;
         flex-direction: column;
@@ -529,7 +569,7 @@
         gap: 8px;
         margin-bottom: 14px;
     }
-    .report-card-icon { color: #f4b740; }
+    .report-card-icon { color: var(--brand-primary); }
     .report-card-title {
         margin: 0;
         font-size: 1.05rem;
@@ -538,7 +578,7 @@
     }
     .report-card-note {
         font-size: 0.72rem;
-        color: #76695a;
+        color: var(--text-secondary);
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -549,7 +589,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #76695a;
+        color: var(--text-secondary);
         font-size: 0.9rem;
         text-align: center;
         padding: 24px;
@@ -596,7 +636,7 @@
         white-space: nowrap;
     }
     .merchant-spend { font-weight: 600; }
-    .merchant-count { color: #76695a; font-size: 0.78rem; }
+    .merchant-count { color: var(--text-secondary); font-size: 0.78rem; }
     .report-list {
         list-style: none;
         margin: 0;
@@ -611,11 +651,11 @@
         align-items: center;
         gap: 12px;
         padding: 8px 10px;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         border-radius: 10px;
     }
     .report-list-name {
-        color: #2e2820;
+        color: var(--text-primary);
         font-weight: 500;
         cursor: pointer;
         text-decoration: none;
@@ -623,9 +663,9 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .report-list-name:hover { text-decoration: underline; color: #f4b740; }
+    .report-list-name:hover { text-decoration: underline; color: var(--brand-primary); }
     .report-list-count {
-        color: #76695a;
+        color: var(--text-secondary);
         font-size: 0.85rem;
         font-variant-numeric: tabular-nums;
     }
@@ -639,10 +679,10 @@
     .savings-number {
         font-size: 2.4rem;
         font-weight: 700;
-        color: #345f31;
+        color: var(--semantic-positive);
         letter-spacing: -0.02em;
     }
-    .savings-sub { color: #76695a; font-size: 0.88rem; }
+    .savings-sub { color: var(--text-secondary); font-size: 0.88rem; }
     .report-sparkline {
         width: 100%;
         height: 60px;

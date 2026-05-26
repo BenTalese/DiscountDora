@@ -754,9 +754,15 @@
             // Negative offsets walk clockwise around the circle.
             cursor = (cursor - p + 100) % 100;
         };
-        push('in stock', inStock, '#6ba368');
-        push('low', low, '#e89a45');
-        push('out', out, '#c85a4f');
+        // Read the semantic-* tokens off the document so the donut
+        // recolours when the user switches theme without a full reload.
+        const cs = getComputedStyle(document.documentElement);
+        const okColour = cs.getPropertyValue('--semantic-positive').trim() || '#6ba368';
+        const warnColour = cs.getPropertyValue('--semantic-warning').trim() || '#e89a45';
+        const badColour = cs.getPropertyValue('--semantic-negative').trim() || '#c85a4f';
+        push('in stock', inStock, okColour);
+        push('low', low, warnColour);
+        push('out', out, badColour);
         return segs;
     });
 
@@ -1053,25 +1059,30 @@
        the root .dora-dash element so every descendant can reference them.
     */
     .dora-dash {
-        --c-bg-1: #fdfaf3;
-        --c-bg-2: #f4ecdc;
-        --c-surface: #ffffff;
-        --c-ink: #2e2820;
-        --c-ink-mute: #76695a;
-        --c-line: #ece1c9;
-        --c-accent: #f4b740;
-        --c-accent-soft: #fef3d8;
-        --c-ok: #6ba368;
-        --c-ok-soft: #e9f3e6;
-        --c-warn: #e89a45;
-        --c-warn-soft: #fdedd6;
-        --c-bad: #c85a4f;
-        --c-bad-soft: #fbe2de;
-        --c-pink-soft: #fbe7ee;
+        /* Dashboard reads the active theme's signature hero gradient as
+           its page background — this is the "special touch" per theme.
+           Every other surface reference here goes through the global
+           tokens so the dashboard reskins automatically with the rest
+           of the app. */
+        --c-bg-1: var(--surface-elevated);
+        --c-bg-2: var(--surface-sunken);
+        --c-surface: var(--surface-component);
+        --c-ink: var(--text-primary);
+        --c-ink-mute: var(--text-secondary);
+        --c-line: var(--border-default);
+        --c-accent: var(--brand-primary);
+        --c-accent-soft: var(--brand-primary-soft);
+        --c-ok: var(--semantic-positive);
+        --c-ok-soft: var(--semantic-positive-soft);
+        --c-warn: var(--semantic-warning);
+        --c-warn-soft: var(--semantic-warning-soft);
+        --c-bad: var(--semantic-negative);
+        --c-bad-soft: var(--semantic-negative-soft);
+        --c-pink-soft: var(--brand-secondary-soft);
 
         min-height: 100%;
         padding: 24px 24px 96px;
-        background: linear-gradient(160deg, var(--c-bg-1) 0%, var(--c-bg-2) 100%);
+        background: var(--hero-gradient);
         color: var(--c-ink);
     }
 
@@ -1133,8 +1144,8 @@
     }
     .dora-card-clickable:hover {
         transform: translateY(-2px);
-        box-shadow: 0 14px 32px -18px rgba(74, 56, 26, 0.45);
-        border-color: #e5d5b1;
+        box-shadow: var(--elevation-card-hover);
+        border-color: var(--border-strong);
     }
     .dora-card-head {
         display: flex;
@@ -1173,7 +1184,7 @@
         flex: 1 1 0;
         min-width: 0;
         padding: 14px 16px;
-        background: #f9f4e8;
+        background: var(--surface-elevated);
         border-radius: 12px;
     }
     .dora-stat-num {
@@ -1196,13 +1207,13 @@
         background: var(--c-ok-soft);
     }
     .dora-stat-ok .dora-stat-num {
-        color: #345f31;
+        color: var(--semantic-positive);
     }
     .dora-stat-accent {
         background: var(--c-pink-soft);
     }
     .dora-stat-accent .dora-stat-num {
-        color: #8a3556;
+        color: var(--brand-secondary);
     }
 
     /* ───── Stock donut ──────────────────────────────────────────────── */
@@ -1219,7 +1230,7 @@
     }
     .dora-donut-track {
         fill: none;
-        stroke: #f0e6d0;
+        stroke: var(--surface-sunken);
         stroke-width: 4;
     }
     .dora-donut-seg {
@@ -1291,7 +1302,7 @@
         font-size: 1.25rem;
         font-weight: 700;
         letter-spacing: -0.01em;
-        color: #6a4a08;
+        color: var(--brand-secondary);
     }
     .dora-next-up-meta {
         margin-top: 2px;
@@ -1303,7 +1314,7 @@
         margin-bottom: 16px;
         color: var(--c-ink-mute);
         font-size: 0.9rem;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         border-radius: 12px;
     }
     .dora-empty-cta {
@@ -1319,7 +1330,7 @@
         position: relative;
         padding: 10px 6px 8px;
         border-radius: 10px;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         text-align: center;
         transition: background 0.15s ease, transform 0.15s ease;
         min-height: 76px;
@@ -1332,10 +1343,10 @@
     }
     .dora-strip-day.is-today {
         background: var(--c-ink);
-        color: var(--c-bg-1);
+        color: var(--text-inverse);
     }
     .dora-strip-day.is-today.has-meals {
-        background: linear-gradient(180deg, var(--c-ink) 0%, #4a3b27 100%);
+        background: linear-gradient(180deg, var(--c-ink) 0%, var(--brand-secondary) 100%);
     }
     .dora-strip-dow {
         font-size: 0.7rem;
@@ -1393,7 +1404,7 @@
         align-items: center;
         gap: 8px;
         padding: 8px 10px;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         border-radius: 10px;
     }
     .dora-attn-dot {
@@ -1452,7 +1463,7 @@
         align-items: center;
         gap: 10px;
         padding: 8px 10px;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         border-radius: 10px;
     }
     .dora-cook-name {
@@ -1487,7 +1498,7 @@
         align-items: center;
         gap: 10px;
         padding: 8px 10px;
-        background: #faf6eb;
+        background: var(--surface-elevated);
         border-radius: 10px;
     }
     .dora-deal-img img {

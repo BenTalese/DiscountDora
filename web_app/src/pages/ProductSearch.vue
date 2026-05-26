@@ -662,14 +662,14 @@
     }
     .dora-empty-mascot {
         border-radius: 16px;
-        background: #fef3d8;
+        background: var(--surface-elevated);
         padding: 8px;
         flex-shrink: 0;
     }
     .dora-empty-text {
         font-size: 1.15rem;
         line-height: 1.5;
-        color: #2e2820;
+        color: var(--text-primary);
     }
     @media (max-width: 600px) {
         .dora-empty {

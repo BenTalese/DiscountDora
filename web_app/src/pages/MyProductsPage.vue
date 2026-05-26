@@ -384,6 +384,16 @@
                                             {{ product.is_active ? 'Mark inactive' : 'Mark active' }}
                                         </q-item-section>
                                     </q-item>
+                                    <q-separator />
+                                    <q-item
+                                        clickable
+                                        @click="onViewPriceHistory(product.product_id)"
+                                    >
+                                        <q-item-section avatar>
+                                            <q-icon name="show_chart" />
+                                        </q-item-section>
+                                        <q-item-section>View price history</q-item-section>
+                                    </q-item>
                                 </q-list>
                             </q-menu>
                         </q-btn>
@@ -945,6 +955,10 @@
         void router.push(`/stock/${stockItemId}`);
     }
 
+    function onViewPriceHistory(productId: string) {
+        void router.push({ path: '/price-history', query: { product_id: productId } });
+    }
+
     // ── Link-to-stock-item dialog ───────────────────────────────────
     // We don't have a "link" endpoint exposed yet, so this is wired up to
     // delegate to the stock item page where linking happens today. Future
@@ -1037,7 +1051,7 @@
         outline-offset: -2px;
     }
     .my-product-card:hover {
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 14px var(--overlay-active);
     }
     .my-product-card--selected {
         outline-color: var(--q-primary);
@@ -1049,10 +1063,10 @@
         text-decoration: line-through;
     }
     .bulk-bar {
-        background: rgba(0, 0, 0, 0.03);
+        background: var(--overlay-hover);
     }
     .bulk-bar-active {
-        background: rgba(23, 176, 115, 0.12);
+        background: var(--brand-primary-soft);
     }
     .ellipsis-2-lines {
         display: -webkit-box;

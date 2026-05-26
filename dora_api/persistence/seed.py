@@ -252,8 +252,6 @@ def seed_dev_data():
     repo.save_changes()  # items need ids before substitutes / history / lines
 
     # ---------------- SUBSTITUTES (undirected pairs) ---------------- #
-    from datetime import datetime, timezone as _tz
-
     from dora_api.features.substitutes.canonical import canonical_pair
     assoc = db.metadata.tables["StockItemSubstitute"]
     raw_pairs = [
@@ -262,7 +260,7 @@ def seed_dev_data():
         (parmesan.id, butter.id, None),
         (milk.id, butter.id, None),
     ]
-    now = datetime.now(_tz.utc)
+    now = datetime.now(UTC)
     seen: set[tuple] = set()
     rows: list[dict] = []
     for x, y, notes in raw_pairs:

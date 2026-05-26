@@ -234,14 +234,18 @@
 </script>
 
 <style scoped>
+    /* X1: fullscreen focus mode. Stays dark across every theme — the
+       contrast is part of the "you're concentrating" affordance — so we
+       use raw palette tokens rather than the semantic surface ones. */
     .runner-shell {
         min-height: 100vh;
-        background: #1a1a1a; color: #fff;
+        background: var(--palette-neutral-900);
+        color: var(--text-inverse);
         display: flex; flex-direction: column;
     }
     .runner-topbar {
         display: flex; align-items: center; padding: 12px;
-        background: #111;
+        background: var(--palette-neutral-900);
     }
     .runner-card-wrap {
         flex: 1; display: flex; align-items: center; justify-content: center;
@@ -249,7 +253,7 @@
     }
     .runner-card {
         max-width: 480px; width: 100%;
-        background: #fff; color: #222;
+        background: var(--surface-component); color: var(--text-primary);
         border-radius: 12px;
     }
 </style>

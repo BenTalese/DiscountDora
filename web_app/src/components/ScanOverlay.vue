@@ -317,7 +317,7 @@
             ellipse 38% 28% at center,
             transparent 0%,
             transparent 60%,
-            rgba(0, 0, 0, 0.55) 60%
+            var(--overlay-scrim) 60%
         );
         pointer-events: none;
     }
@@ -347,8 +347,8 @@
         justify-content: space-between;
         align-items: center;
         gap: 8px;
-        color: #fff;
-        background: linear-gradient(rgba(0, 0, 0, 0.45), transparent);
+        color: var(--text-inverse);
+        background: linear-gradient(var(--overlay-scrim), transparent);
     }
     .scan-status {
         font-size: 14px;
@@ -362,7 +362,7 @@
         left: 0;
         right: 0;
         padding: 12px;
-        background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+        background: linear-gradient(transparent, var(--overlay-scrim));
     }
     .scan-banner {
         position: absolute;
@@ -371,7 +371,7 @@
         transform: translateX(-50%);
         padding: 6px 14px;
         background: rgba(76, 175, 80, 0.92);
-        color: #fff;
+        color: var(--text-inverse);
         border-radius: 999px;
         font-size: 13px;
         display: flex;

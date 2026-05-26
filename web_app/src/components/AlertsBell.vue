@@ -451,20 +451,20 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--q-grey-7);
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--overlay-hover);
     }
     .alerts-group-head--high {
         color: var(--q-negative);
-        background: rgba(244, 67, 54, 0.06);
+        background: var(--semantic-negative-soft);
     }
     .alerts-group-head--medium {
         color: var(--q-warning);
-        background: rgba(255, 152, 0, 0.06);
+        background: var(--semantic-warning-soft);
     }
     .alerts-group-head--low {
         color: var(--q-grey-7);
     }
     .alerts-snoozed-section {
-        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        border-top: 1px solid var(--overlay-active);
     }
 </style>

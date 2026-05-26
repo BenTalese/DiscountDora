@@ -25,7 +25,7 @@
 <style scoped lang="scss">
     .dora-sideMenuButton-active {
         background: var(--q-accent);
-        color: #851b1b;
+        color: var(--text-on-accent);
         font-weight: 600;
     }
 </style>

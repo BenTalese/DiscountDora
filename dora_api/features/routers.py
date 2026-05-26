@@ -26,3 +26,6 @@ ONBOARDING_ROUTER = Blueprint("ONBOARDING_ROUTER", __name__, url_prefix="/api/on
 DATA_ROUTER = Blueprint("DATA_ROUTER", __name__, url_prefix="/api/data")
 CLIENT_LOGS_ROUTER = Blueprint("CLIENT_LOGS_ROUTER", __name__, url_prefix="/api/client-logs")
 AUDIT_ROUTER = Blueprint("AUDIT_ROUTER", __name__, url_prefix="/api/audit")
+STOCKTAKE_ROUTER = Blueprint("STOCKTAKE_ROUTER", __name__, url_prefix="/api/stocktake")
+REPORTS_ROUTER = Blueprint("REPORTS_ROUTER", __name__, url_prefix="/api/reports")
+SUBSTITUTES_ROUTER = Blueprint("SUBSTITUTES_ROUTER", __name__, url_prefix="/api/substitutes")

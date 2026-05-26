@@ -5,6 +5,7 @@ from uuid import UUID
 from dora_api.app import db
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
+from dora_api.features.substitutes.canonical import canonical_pair
 from dora_api.infrastructure.api_response import no_content, not_found
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -24,11 +25,14 @@ class RemoveSubstituteHandler:
         if not self.repository.get(StockItem).exists(stock_item_id):
             return RemoveSubstituteResponse(stock_item_not_found=True)
 
+        if stock_item_id == substitute_id:
+            return RemoveSubstituteResponse(link_not_found=True)
+        a_id, b_id = canonical_pair(stock_item_id, substitute_id)
         _Assoc = db.metadata.tables["StockItemSubstitute"]
         _Result = db.session.execute(
             _Assoc.delete().where(
-                (_Assoc.c.stock_item_id == stock_item_id)
-                & (_Assoc.c.substitute_id == substitute_id)
+                (_Assoc.c.stock_item_a_id == a_id)
+                & (_Assoc.c.stock_item_b_id == b_id)
             )
         )
         if _Result.rowcount == 0:

@@ -30,6 +30,17 @@
                             </q-item-label>
                         </q-item-section>
                     </q-item>
+                    <q-item clickable v-close-popup @click="openAdvancedAutogen">
+                        <q-item-section avatar>
+                            <q-icon name="tune" color="primary" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>Advanced auto-generate…</q-item-label>
+                            <q-item-label caption>
+                                Pick exactly which sources to draw from.
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
                     <q-item clickable v-close-popup @click="onAutogenerateNew('low_or_out')">
                         <q-item-section avatar>
                             <q-icon name="warning" color="warning" />
@@ -352,6 +363,72 @@
                 </q-card>
             </div>
         </div>
+
+        <q-dialog v-model="advancedOpen">
+            <q-card style="min-width: 360px; max-width: 480px">
+                <q-card-section>
+                    <div class="text-h6">Auto-generate shopping list</div>
+                    <div class="text-caption text-grey">
+                        Pick which sources to draw from. Items are deduped so
+                        nothing gets added twice.
+                    </div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                    <q-checkbox
+                        v-model="advanced.low_stock"
+                        label="Low-stock items"
+                    />
+                    <q-checkbox
+                        v-model="advanced.out_of_stock"
+                        label="Out-of-stock items"
+                    />
+                    <q-checkbox
+                        v-model="advanced.essentials_only_for_low"
+                        label="Essentials only for the low/out picks"
+                    />
+                    <q-checkbox
+                        v-model="advanced.flagged"
+                        label="Items flagged as always-include"
+                    />
+                    <q-checkbox
+                        v-model="advanced.frequently_added"
+                        label="Frequently added in past lists"
+                    />
+                    <q-separator class="q-my-md" />
+                    <div class="text-caption text-grey q-mb-xs">Target</div>
+                    <q-select
+                        v-model="advanced.merge_into_list_id"
+                        :options="mergeOptions"
+                        emit-value
+                        map-options
+                        outlined
+                        dense
+                        label="Merge into list"
+                        hint="Leave blank to create a fresh list."
+                    />
+                </q-card-section>
+                <q-card-actions align="right">
+                    <q-btn flat label="Cancel" no-caps v-close-popup />
+                    <q-btn
+                        flat
+                        no-caps
+                        label="Create new list"
+                        color="primary"
+                        :loading="autogenerating"
+                        @click="runAdvancedAutogen(true)"
+                    />
+                    <q-btn
+                        no-caps
+                        unelevated
+                        label="Merge into selected"
+                        color="primary"
+                        :disable="!advanced.merge_into_list_id"
+                        :loading="autogenerating"
+                        @click="runAdvancedAutogen(false)"
+                    />
+                </q-card-actions>
+            </q-card>
+        </q-dialog>
     </q-page>
 </template>
 
@@ -370,7 +447,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { computed, onMounted, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -513,15 +590,23 @@
     ) {
         autogenerating.value = true;
         try {
-            const result = await api.autogenerateAsync({
-                target_shopping_list_id: targetListId,
-                source,
+            // X5 — map the legacy two-source quick-pick to the new
+            // multi-source endpoint. 'flagged' = essential-and-low;
+            // 'low_or_out' = every item that's low or out, regardless.
+            const result = await api.autoGenerateAsync({
+                merge_into_list_id: targetListId,
+                sources:
+                    source === 'flagged'
+                        ? {
+                              low_stock: true,
+                              out_of_stock: true,
+                              essentials_only_for_low: true,
+                              flagged: true,
+                          }
+                        : { low_stock: true, out_of_stock: true },
             });
             await Promise.all([store.refreshAsync(), loadPrimaryStats()]);
-            if (result.nothing_flagged) {
-                // Backend reuses `nothing_flagged` for both sources — for
-                // low/out we phrase it differently so the user gets useful
-                // guidance instead of a misleading "flag essentials" hint.
+            if (result.nothing_to_add) {
                 $q.notify({
                     type: 'info',
                     position: 'bottom-right',
@@ -563,6 +648,82 @@
     function onAutogenerateOntoPrimary() {
         if (!primarySummary.value) return;
         void runAutogen(primarySummary.value.shopping_list_id, 'flagged');
+    }
+
+    // X5 advanced modal — full multi-source picker.
+    const advancedOpen = ref(false);
+    const mergeOptions = computed(() => [
+        { label: 'Create a fresh list', value: null },
+        ...summaries.value
+            .filter((s) => !s.is_archived)
+            .map((s) => ({
+                label: s.is_primary ? `${s.name} (primary)` : s.name,
+                value: s.shopping_list_id,
+            })),
+    ]);
+    const advanced = reactive({
+        low_stock: true,
+        out_of_stock: true,
+        essentials_only_for_low: false,
+        flagged: false,
+        frequently_added: false,
+        merge_into_list_id: null as string | null,
+    });
+    function openAdvancedAutogen() {
+        advanced.low_stock = true;
+        advanced.out_of_stock = true;
+        advanced.essentials_only_for_low = false;
+        advanced.flagged = false;
+        advanced.frequently_added = false;
+        advanced.merge_into_list_id =
+            primarySummary.value?.shopping_list_id ?? null;
+        advancedOpen.value = true;
+    }
+    async function runAdvancedAutogen(asNew: boolean) {
+        autogenerating.value = true;
+        try {
+            const result = await api.autoGenerateAsync({
+                merge_into_list_id: asNew ? null : advanced.merge_into_list_id,
+                sources: {
+                    low_stock: advanced.low_stock,
+                    out_of_stock: advanced.out_of_stock,
+                    essentials_only_for_low: advanced.essentials_only_for_low,
+                    flagged: advanced.flagged,
+                    frequently_added: advanced.frequently_added,
+                },
+            });
+            advancedOpen.value = false;
+            await Promise.all([store.refreshAsync(), loadPrimaryStats()]);
+            if (result.nothing_to_add) {
+                $q.notify({
+                    type: 'info',
+                    position: 'bottom-right',
+                    message: 'Nothing matched the selected sources.',
+                });
+                return;
+            }
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message:
+                    `Auto-generated: ${result.added_count} added` +
+                    (result.skipped_already_on_list > 0
+                        ? `, ${result.skipped_already_on_list} already on list`
+                        : ''),
+            });
+            if (result.shopping_list_id) {
+                void router.push(`/shopping-lists/${result.shopping_list_id}`);
+            }
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not auto-generate.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            autogenerating.value = false;
+        }
     }
 
     // ── Generate from a recipe ───────────────────────────────────────

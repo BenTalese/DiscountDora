@@ -23,8 +23,14 @@ MIDDLEWARE = Blueprint('MIDDLEWARE', __name__)
 PUBLIC_ENDPOINTS = frozenset({
     "login",
     "register_user",
-    "health_check",        # health probes must not require auth (used by container orchestrators)
-    "submit_client_log",   # the SPA may need to ship errors before login completes
+    "health_check",            # health probes must not require auth (used by container orchestrators)
+    "submit_client_log",       # the SPA may need to ship errors before login completes
+    # ── A1 out-of-band auth flows; reached from email links + login screen ──
+    "verify_email",
+    "resend_verification",
+    "forgot_password",
+    "reset_password",
+    "confirm_email_change",
 })
 
 

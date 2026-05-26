@@ -182,10 +182,16 @@ class GetStockItemDetailHandler:
         # repository can't self-join StockItem). Level names come from a small
         # lookup so we avoid a join.
         _LevelLookup = {lvl.id: lvl.name for lvl in self.repository.get(StockLevel).all()}
+        # Undirected pairs: the "other side" is whichever column is *not*
+        # the current item. We fetch each direction separately and union.
         _Assoc = db.metadata.tables["StockItemSubstitute"]
-        _SubIds = list(_Session.execute(
-            select(_Assoc.c.substitute_id).where(_Assoc.c.stock_item_id == stock_item_id)
+        _SubIds = set(_Session.execute(
+            select(_Assoc.c.stock_item_b_id).where(_Assoc.c.stock_item_a_id == stock_item_id)
         ).scalars())
+        _SubIds.update(_Session.execute(
+            select(_Assoc.c.stock_item_a_id).where(_Assoc.c.stock_item_b_id == stock_item_id)
+        ).scalars())
+        _SubIds = list(_SubIds)
         _Substitutes: List[SubstituteDto] = []
         if _SubIds:
             _SubItems = list(_Session.execute(

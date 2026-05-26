@@ -284,8 +284,15 @@
     // authenticated session). Page-specific commands register themselves via
     // useCommands() with their own lifecycle.
     async function autogenerateFromLowStock() {
-        const result = await shoppingListApi.autogenerateAsync({});
-        if (result.shopping_list_id) {
+        const result = await shoppingListApi.autoGenerateAsync({
+            sources: {
+                low_stock: true,
+                out_of_stock: true,
+                essentials_only_for_low: true,
+                flagged: true,
+            },
+        });
+        if (result.shopping_list_id && !result.nothing_to_add) {
             void shoppingListStore.refreshAsync();
             void router.push(`/shopping-lists/${result.shopping_list_id}`);
         } else {
@@ -311,6 +318,8 @@
         { id: 'nav.products', label: 'Go to Product Search', icon: 'local_offer', section: 'Navigate', action: () => router.push('/product-search') },
         { id: 'nav.my-products', label: 'Go to My Products', icon: 'favorite', section: 'Navigate', action: () => router.push('/my-products') },
         { id: 'nav.data', label: 'Go to Data Management', icon: 'storage', section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
+        { id: 'nav.reports', label: 'Go to Reports', icon: 'insights', section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
+        { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: 'hub', section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
         { id: 'nav.settings', label: 'Go to Settings', icon: 'settings', section: 'Navigate', action: () => router.push('/settings') },
         { id: 'nav.help', label: 'Go to Help', icon: 'help_outline', section: 'Navigate', action: () => router.push('/help') },
 
@@ -333,6 +342,8 @@
         { label: 'Meal Plans', icon: 'calendar_month', link: '/meal-plans' },
         { label: 'Shopping Lists', icon: 'shopping_cart', link: '/shopping-lists' },
         { label: 'Data', icon: 'storage', link: '/data' },
+        { label: 'Reports', icon: 'insights', link: '/reports' },
+        { label: 'Substitutes', icon: 'hub', link: '/substitutes' },
         { label: 'Settings', icon: 'settings', link: '/settings' },
     ];
 

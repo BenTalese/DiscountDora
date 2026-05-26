@@ -27,4 +27,8 @@ export type AuthenticatedUser = {
     // surfaced in Data → Backup & restore. Null until the user has taken
     // their first backup.
     last_backup_at: string | null;
+    // A1: false until the user clicks the verification link in the email
+    // sent on registration. Drives the verify-banner on LoginPage and
+    // the Settings → Account hint. First-user-is-admin auto-verifies.
+    email_verified: boolean;
 };

@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from dora_api.app import db
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
+from dora_api.features.substitutes.canonical import canonical_pair
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   entity_existence_failure,
                                                   no_content, not_found)
@@ -44,14 +46,14 @@ class AddSubstituteHandler:
         if not self.repository.get(StockItem).exists(request.substitute_id):
             return AddSubstituteResponse(substitute_not_found=True)
 
-        # Directed self-referential m2m operated on directly — the generic
-        # repository can't self-join StockItem. Idempotent: a duplicate (PK
-        # collision) is reported as already-linked rather than an error.
+        # Undirected pair stored canonically (a_id < b_id). Idempotent: a
+        # duplicate is reported as already-linked rather than an error.
+        a_id, b_id = canonical_pair(stock_item_id, request.substitute_id)
         _Assoc = db.metadata.tables["StockItemSubstitute"]
         _Existing = db.session.execute(
-            select(_Assoc.c.substitute_id).where(
-                (_Assoc.c.stock_item_id == stock_item_id)
-                & (_Assoc.c.substitute_id == request.substitute_id)
+            select(_Assoc.c.stock_item_a_id).where(
+                (_Assoc.c.stock_item_a_id == a_id)
+                & (_Assoc.c.stock_item_b_id == b_id)
             )
         ).first()
         if _Existing is not None:
@@ -59,7 +61,10 @@ class AddSubstituteHandler:
 
         db.session.execute(
             _Assoc.insert().values(
-                stock_item_id=stock_item_id, substitute_id=request.substitute_id
+                stock_item_a_id=a_id,
+                stock_item_b_id=b_id,
+                notes=None,
+                created_at=datetime.now(timezone.utc),
             )
         )
         self.repository.save_changes()

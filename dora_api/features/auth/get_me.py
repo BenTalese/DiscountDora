@@ -4,6 +4,7 @@ from flask import session
 
 from dora_api.domain.entities.user import User
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
+                                                  SESSION_PWD_V_KEY,
                                                   SESSION_USER_ID_KEY)
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
@@ -15,9 +16,8 @@ class GetMeHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, user_id: UUID) -> AuthenticatedUserDto | None:
-        entity = self.repository.get(User).by_id(user_id)
-        return AuthenticatedUserDto.from_entity(entity) if entity else None
+    def handle(self, user_id: UUID) -> User | None:
+        return self.repository.get(User).by_id(user_id)
 
 
 @AUTH_ROUTER.route("/me")
@@ -31,9 +31,23 @@ def get_me():
         session.clear()
         return unauthorized()
 
-    _Dto = get_container().inject(GetMeHandler).handle(_UserId)
-    if _Dto is None:
+    user = get_container().inject(GetMeHandler).handle(_UserId)
+    if user is None:
         # User row disappeared (deleted while logged in). Treat session as invalid.
         session.clear()
         return unauthorized()
-    return ok(_Dto)
+
+    # A1: session-staleness check. If this user's password was changed
+    # after the session was minted, the cookie is invalid — covers reset
+    # (which invalidates everyone) and self-serve change-password
+    # invalidating other-device sessions.
+    stamped = session.get(SESSION_PWD_V_KEY)
+    if (
+        user.password_changed_at is not None
+        and stamped
+        and stamped < user.password_changed_at.isoformat()
+    ):
+        session.clear()
+        return unauthorized()
+
+    return ok(AuthenticatedUserDto.from_entity(user))

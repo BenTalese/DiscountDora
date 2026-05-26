@@ -38,6 +38,12 @@ class StockItem(BaseEntity):
     # the camera-scan flow to jump straight to the item. None = no
     # registered barcode yet.
     barcode: str | None = None
+    # X1: distinct from stock_level_last_updated. A "check" is the user
+    # confirming the current level is correct without changing it.
+    # Updating the level updates BOTH timestamps; clicking "Still
+    # correct" in stocktake mode only moves this one. None = never
+    # checked (treated as maximally overdue by the stocktake queue).
+    last_checked_at: datetime | None = None
     # Merchant products linked to this stock item, used by the product-search
     # flow to surface deals and by the detail view to show "what merchant
     # SKUs are tracked here". Default empty so callers that don't care about
@@ -70,3 +76,4 @@ class StockItem(BaseEntity):
         STOCK_LOCATION = "stock_location"
         STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
         BARCODE = "barcode"
+        LAST_CHECKED_AT = "last_checked_at"

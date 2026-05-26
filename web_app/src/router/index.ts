@@ -5,7 +5,15 @@ import { createMemoryHistory, createRouter, createWebHashHistory, createWebHisto
 
 import routes from './routes';
 
-const PUBLIC_ROUTES = new Set<string>(['/login']);
+const PUBLIC_ROUTES = new Set<string>([
+    '/login',
+    // A1 out-of-band auth surfaces — reachable from email links without
+    // an existing session.
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password',
+    '/confirm-email-change',
+]);
 // Routes we allow incomplete-onboarding users to visit without the redirect.
 // /welcome is the wizard itself; the rest are safety hatches (sign out,
 // error pages so a crash mid-wizard doesn't lock the user out).

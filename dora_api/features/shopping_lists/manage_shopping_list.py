@@ -209,6 +209,17 @@ class FinishShoppingListHandler:
             & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
         )
 
+        # N6: ensure every ticked line has a price snapshot. Normally
+        # captured at tick time, but a line ticked before this feature
+        # existed (or in a flow that bypasses the standard update path)
+        # would arrive here without one. Snapshot now so reports include
+        # the list.
+        from dora_api.features.shopping_lists.manage_shopping_list_lines import \
+            snapshot_offer_price
+        for line in ticked_lines:
+            if line.picked_offer_price is None:
+                snapshot_offer_price(self.repository, line)
+
         # Look up the "Well-Stocked" level once.
         well_stocked: StockLevel | None = self.repository.get(StockLevel).one(
             EntityField(StockLevel, StockLevel.Fields.NAME).eq("Well-Stocked")

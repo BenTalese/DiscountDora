@@ -321,6 +321,7 @@
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe } from 'src/models/recipe';
     import RecipeApiService from 'src/services/api/recipeApiService';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -336,6 +337,7 @@
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
+    const shoppingListApi = new ShoppingListApiService();
     const recipeApi = new RecipeApiService();
     const { addItems } = useShoppingListActions();
 
@@ -652,6 +654,10 @@
     const addMissingPayload = ref<{
         recipeName: string;
         stockItemIds: string[];
+        // X5 — when set, the confirm path routes through /auto-generate
+        // with sources.recipes=[id] so the line lands with
+        // added_via=auto_recipe and the recipe name as the chip detail.
+        recipeId?: string;
     } | null>(null);
     const addMissingTargetListId = ref<string | null>(null);
     const addingMissing = ref(false);
@@ -665,7 +671,7 @@
             })),
     );
 
-    function openAddDialog(recipeName: string, ids: string[]) {
+    function openAddDialog(recipeName: string, ids: string[], recipeId?: string) {
         if (ids.length === 0) {
             $q.notify({
                 type: 'info',
@@ -674,7 +680,7 @@
             });
             return;
         }
-        addMissingPayload.value = { recipeName, stockItemIds: ids };
+        addMissingPayload.value = { recipeName, stockItemIds: ids, recipeId };
         addMissingTargetListId.value =
             shoppingListStore.primaryListId ?? activeListOptions.value[0]?.value ?? null;
         if (!addMissingTargetListId.value) {
@@ -691,7 +697,7 @@
 
     function onAddMissing(recipeId: string, stockItemIds: string[]) {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
-        openAddDialog(recipe?.name ?? 'recipe', stockItemIds);
+        openAddDialog(recipe?.name ?? 'recipe', stockItemIds, recipeId);
     }
 
     function onAddAllToList(recipeId: string) {
@@ -711,12 +717,40 @@
         if (!addMissingPayload.value || !addMissingTargetListId.value) return;
         addingMissing.value = true;
         try {
-            await addItems(
-                addMissingTargetListId.value,
-                addMissingPayload.value.stockItemIds.map((id) => ({
-                    stock_item_id: id,
-                })),
-            );
+            const payload = addMissingPayload.value;
+            // X5: when we know the recipe, delegate to /auto-generate so the
+            // lines land with added_via=auto_recipe + the recipe name as the
+            // chip detail. The endpoint also re-checks "well-stocked" itself
+            // so the subset matches the server's view of stock.
+            if (payload.recipeId) {
+                const result = await shoppingListApi.autoGenerateAsync({
+                    merge_into_list_id: addMissingTargetListId.value,
+                    sources: { recipes: [payload.recipeId] },
+                });
+                if (result.nothing_to_add) {
+                    $q.notify({
+                        type: 'info',
+                        position: 'bottom-right',
+                        message: `Nothing missing for "${payload.recipeName}".`,
+                    });
+                } else {
+                    $q.notify({
+                        type: 'positive',
+                        position: 'bottom-right',
+                        message: `Added ${result.added_count} item${
+                            result.added_count === 1 ? '' : 's'
+                        } from "${payload.recipeName}".`,
+                    });
+                }
+                await shoppingListStore.refreshAsync();
+            } else {
+                await addItems(
+                    addMissingTargetListId.value,
+                    payload.stockItemIds.map((id) => ({
+                        stock_item_id: id,
+                    })),
+                );
+            }
             addMissingOpen.value = false;
             addMissingPayload.value = null;
         } finally {

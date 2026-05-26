@@ -251,19 +251,32 @@ def seed_dev_data():
 
     repo.save_changes()  # items need ids before substitutes / history / lines
 
-    # ---------------- SUBSTITUTES (self-referential m2m) ---------------- #
+    # ---------------- SUBSTITUTES (undirected pairs) ---------------- #
+    from datetime import datetime, timezone as _tz
+
+    from dora_api.features.substitutes.canonical import canonical_pair
     assoc = db.metadata.tables["StockItemSubstitute"]
-    substitute_pairs = [
-        (olive_oil.id, butter.id),   # cooking fat
-        (butter.id, olive_oil.id),
-        (pasta.id, rice.id),         # carb base
-        (parmesan.id, butter.id),    # weak, but demonstrates the graph
-        (milk.id, butter.id),
+    raw_pairs = [
+        (olive_oil.id, butter.id, "Cooking fat"),
+        (pasta.id, rice.id, "Carb base"),
+        (parmesan.id, butter.id, None),
+        (milk.id, butter.id, None),
     ]
-    db.session.execute(
-        assoc.insert(),
-        [{"stock_item_id": a, "substitute_id": b} for a, b in substitute_pairs],
-    )
+    now = datetime.now(_tz.utc)
+    seen: set[tuple] = set()
+    rows: list[dict] = []
+    for x, y, notes in raw_pairs:
+        a, b = canonical_pair(x, y)
+        if (a, b) in seen:
+            continue
+        seen.add((a, b))
+        rows.append({
+            "stock_item_a_id": a,
+            "stock_item_b_id": b,
+            "notes": notes,
+            "created_at": now,
+        })
+    db.session.execute(assoc.insert(), rows)
 
     # ---------------- STOCK-LEVEL HISTORY ---------------- #
     def level_change(item, level, days_ago):

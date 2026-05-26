@@ -1,10 +1,11 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table
 from sqlalchemy.orm import registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
 from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.audit_event import AuditEvent
+from dora_api.domain.entities.auth_token import AuthToken
 from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
@@ -129,6 +130,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("stocktake_alerts_are_enabled", Boolean),
         Column("preferred_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         Column("barcode", String(255), nullable=True, unique=True),
+        Column("last_checked_at", DateTime(timezone=True), nullable=True),
     )
 
     product_barcode_table = Table(
@@ -177,6 +179,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("is_ticked", Boolean, nullable=False, server_default="0"),
         Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("added_via", String(32), nullable=False, server_default="manual"),
+        Column("added_at", DateTime(timezone=True), nullable=True),
+        Column("picked_offer_price", Float, nullable=True),
+        Column("list_price_at_pick", Float, nullable=True),
     )
 
     shopping_list_template_table = Table(
@@ -202,13 +208,18 @@ def configure_mappings(db: SQLAlchemy):
         Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), primary_key=True),
     )
 
-    # Self-referential m2m: a stock item's substitutes. Directed — the row
-    # (A, B) means "B can stand in for A". CASCADE both FKs so deleting either
-    # item cleans up its links.
+    # Self-referential m2m: a stock item's substitutes. Undirected — pairs
+    # are stored in canonical order (a_id < b_id) so each unordered pair has
+    # exactly one row. Callers must canonicalise via `canonical_pair()` from
+    # dora_api.features.substitutes.canonical before insert/delete/query.
+    # CASCADE both FKs so deleting an item cleans up its pairs.
     stock_item_substitute_table = Table(
         "StockItemSubstitute", metadata,
-        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
-        Column("substitute_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
+        Column("stock_item_a_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
+        Column("stock_item_b_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
+        Column("notes", String, nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        CheckConstraint("stock_item_a_id < stock_item_b_id", name="ck_substitute_canonical"),
     )
 
     stock_level_change_table = Table(
@@ -300,6 +311,20 @@ def configure_mappings(db: SQLAlchemy):
         Column("font_size", String(2), nullable=False, server_default="md"),
         Column("onboarding_completed_at", DateTime, nullable=True),
         Column("last_backup_at", DateTime(timezone=True), nullable=True),
+        Column("email_verified", Boolean, nullable=False, server_default="0"),
+        Column("password_changed_at", DateTime(timezone=True), nullable=True),
+    )
+
+    auth_token_table = Table(
+        "AuthToken", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, ForeignKey("User.id", ondelete="CASCADE"), nullable=False),
+        Column("token_hash", String(64), nullable=False, unique=True),
+        Column("purpose", String(32), nullable=False),
+        Column("payload", String(255), nullable=True),
+        Column("expires_at", DateTime(timezone=True), nullable=False),
+        Column("consumed_at", DateTime(timezone=True), nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
     # ── Mappings ──────────────────────────────────────────────────────────────
@@ -387,6 +412,12 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(AuditEvent, audit_event_table, properties={
         "_id_col": audit_event_table.c.id,
         "id": audit_event_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(AuthToken, auth_token_table, properties={
+        "_id_col": auth_token_table.c.id,
+        "_user_id": auth_token_table.c.user_id,
+        "id": auth_token_table.c.id,
     })
 
     _mapper_registry.map_imperatively(RecipeCollection, recipe_collection_table, properties={

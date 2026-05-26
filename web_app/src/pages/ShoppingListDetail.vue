@@ -98,6 +98,23 @@
                             <q-item
                                 clickable
                                 v-close-popup
+                                :disable="detail.is_archived"
+                                @click="onAppendLowEssentials"
+                            >
+                                <q-item-section avatar>
+                                    <q-icon name="bolt" color="primary" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Append low + essentials</q-item-label>
+                                    <q-item-label caption>
+                                        Top up this list with essential items
+                                        that are low or out of stock.
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-item
+                                clickable
+                                v-close-popup
                                 :disable="
                                     untickedCount === 0 || otherActiveLists.length === 0
                                 "
@@ -138,6 +155,23 @@
                                 </q-item-section>
                             </q-item>
                             <q-separator />
+                            <q-item
+                                clickable
+                                v-close-popup
+                                :disable="tickedCount === 0"
+                                @click="onReviewComplete"
+                            >
+                                <q-item-section avatar>
+                                    <q-icon name="fact_check" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>Finish review</q-item-label>
+                                    <q-item-label caption>
+                                        Mark every ticked item as Well-Stocked
+                                        (and stamp them as checked)
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
                             <q-item
                                 clickable
                                 v-close-popup
@@ -455,6 +489,17 @@
                                     </q-chip>
                                 </div>
                                 <q-item-label caption class="q-mt-xs">
+                                    <q-chip
+                                        v-if="line.added_via && line.added_via !== 'manual'"
+                                        dense
+                                        size="sm"
+                                        color="blue-grey-2"
+                                        text-color="blue-grey-10"
+                                        icon="auto_awesome"
+                                        class="q-mr-sm"
+                                    >
+                                        {{ addedViaLabel(line.added_via) }}
+                                    </q-chip>
                                     <span
                                         v-if="line.stock_location_breadcrumb.length > 0"
                                         class="q-mr-sm"
@@ -714,6 +759,7 @@
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
+    import StocktakeApiService from 'src/services/api/stocktakeApiService';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { register as registerUndo } from 'src/composables/useUndo';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
@@ -1645,6 +1691,57 @@
         )
     );
 
+    // X5 — "Append low + essentials" routes through the dedicated endpoint
+    // so the list grows with the same dedupe semantics as auto-generate.
+    async function onAppendLowEssentials() {
+        try {
+            const result = await api.appendLowStockEssentialsAsync(listId.value);
+            await load();
+            if (result.nothing_to_add) {
+                $q.notify({
+                    type: 'info',
+                    position: 'bottom-right',
+                    message:
+                        'Nothing to append — no essentials are low or out of stock.',
+                });
+                return;
+            }
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Appended ${result.added_count} item${
+                    result.added_count === 1 ? '' : 's'
+                }.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not append items.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    function addedViaLabel(via: string): string {
+        switch (via) {
+            case 'auto_low_stock':
+                return 'auto: low stock';
+            case 'auto_essential':
+                return 'auto: essential';
+            case 'auto_flagged':
+                return 'auto: flagged';
+            case 'auto_recipe':
+                return 'auto: recipe';
+            case 'auto_meal_plan':
+                return 'auto: meal plan';
+            case 'auto_frequently_added':
+                return 'auto: often added';
+            default:
+                return via;
+        }
+    }
+
     async function onRefreshDeals() {
         try {
             const result = await api.refreshDealsAsync(listId.value);
@@ -1674,6 +1771,40 @@
     // Export actions — both pull from the shared composable so this page
     // and ExportPrint.vue stay in lockstep on URL shape and filename.
     const exportActions = useShoppingListExport();
+
+    // X1: "Finish review" — bulk-mark ticked items as Well-Stocked.
+    const stocktakeApi = new StocktakeApiService();
+    async function onReviewComplete() {
+        if (tickedCount.value === 0) return;
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: 'Finish review?',
+                message:
+                    `Mark all ${tickedCount.value} ticked item(s) as `
+                    + `Well-Stocked and stamp them as checked?`,
+                ok: { label: 'Finish', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+                persistent: true,
+            }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        try {
+            const result = await stocktakeApi.reviewCompleteAsync(listId.value, true);
+            await refreshAll();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Marked ${result.set_well_stocked} item(s) as Well-Stocked.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: "Couldn't finish review.",
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
 
     function onExportCsv() {
         void exportActions.downloadCsv(listId.value);

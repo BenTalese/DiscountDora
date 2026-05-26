@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>You're offline · Discount Dora</title>
+  <link rel="icon" href="/icons/favicon.svg" />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; padding: 32px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f9f6f0; color: #222;
+      min-height: 100vh; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      max-width: 480px; width: 100%;
+      background: #fff; border-radius: 12px; padding: 32px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { color: #555; line-height: 1.5; }
+    .pill {
+      display: inline-block; padding: 8px 16px;
+      background: #f5c462; color: #222; border-radius: 999px;
+      text-decoration: none; font-weight: 600; margin-top: 12px;
+    }
+    .small { font-size: 13px; color: #888; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>You're offline</h1>
+    <p>
+      Discount Dora can't reach the server right now. The app stays
+      usable for browsing — open Dora once you're back online and any
+      queued changes will sync automatically.
+    </p>
+    <a class="pill" href="/" onclick="window.location.reload(); return false;">Retry</a>
+    <p class="small">
+      Ticks, stock-level bumps, restock marks and expiry pushes that you
+      make while offline are held locally and replayed on reconnect.
+    </p>
+  </div>
+</body>
+</html>

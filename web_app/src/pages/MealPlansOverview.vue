@@ -456,21 +456,36 @@
 
     // ── Generate shopping list for the week ───────────────────────────────
     async function generateListForWeek() {
-        if (!selectedPlan.value || needToBuy.value.length === 0) return;
+        if (!selectedPlan.value) return;
         generating.value = true;
         try {
-            const { shopping_list_id } = await shoppingListApi.createAsync({
+            // X5: route through /auto-generate with the week start so the
+            // backend pulls the entries, subtracts well-stocked items, and
+            // tags every line as added_via=auto_meal_plan.
+            const startIso = toIso(selectedPlan.value.start_date);
+            const result = await shoppingListApi.autoGenerateAsync({
                 name: `Meals: ${selectedPlan.value.name}`,
+                sources: { meal_plan_week: startIso },
             });
-            for (const ing of needToBuy.value) {
-                await shoppingListApi.addLineAsync(shopping_list_id, {
-                    stock_item_id: ing.stock_item_id,
-                    quantity: 1,
-                });
-            }
             await shoppingListStore.refreshAsync();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Shopping list created.' });
-            void router.push(`/shopping-lists/${shopping_list_id}`);
+            if (result.nothing_to_add) {
+                $q.notify({
+                    type: 'info',
+                    position: 'bottom-right',
+                    message: 'Nothing to add — you have everything for this week already.',
+                });
+                return;
+            }
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Shopping list created with ${result.added_count} item${
+                    result.added_count === 1 ? '' : 's'
+                }.`,
+            });
+            if (result.shopping_list_id) {
+                void router.push(`/shopping-lists/${result.shopping_list_id}`);
+            }
         } catch (err) {
             $q.notify({
                 type: 'negative',

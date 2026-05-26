@@ -180,10 +180,39 @@
                                     label="Location"
                                 />
                                 <q-input v-model="form.notes" outlined dense type="textarea" autogrow label="Notes" />
-                                <q-toggle
-                                    v-model="form.auto_add_when_low"
-                                    label="Auto-add to primary list when low or out"
-                                />
+                                <div class="row items-center q-gutter-sm">
+                                    <q-toggle
+                                        v-model="form.auto_add_when_low"
+                                        label="Auto-add when low or out"
+                                    />
+                                    <q-icon name="info_outline" size="18px" color="grey-7">
+                                        <q-tooltip max-width="320px">
+                                            Drops this item onto your primary
+                                            shopping list the moment its level
+                                            falls to Low or Out — silent, with
+                                            an undoable toast. Use for
+                                            essentials you never want to run
+                                            out of.
+                                        </q-tooltip>
+                                    </q-icon>
+                                </div>
+                                <div class="row items-center q-gutter-sm">
+                                    <q-toggle
+                                        v-model="form.is_flagged"
+                                        label="Always include in auto-generated lists"
+                                    />
+                                    <q-icon name="info_outline" size="18px" color="grey-7">
+                                        <q-tooltip max-width="320px">
+                                            Flagged items show up in the
+                                            "essentials" auto-generate sources
+                                            even when they're well-stocked.
+                                            Different from auto-add: this one
+                                            only matters when you explicitly
+                                            run an auto-generate, not on every
+                                            stock change.
+                                        </q-tooltip>
+                                    </q-icon>
+                                </div>
                                 <div class="row justify-end q-gutter-sm">
                                     <q-btn flat label="Reset" :disable="!isDirty || savingBasics" @click="resetBasicsForm" />
                                     <q-btn type="submit" color="primary" label="Save" :disable="!isDirty" :loading="savingBasics" />
@@ -588,8 +617,9 @@
         notes: string;
         stock_location_id: string | null;
         auto_add_when_low: boolean;
+        is_flagged: boolean;
     };
-    const emptyBasics = (): BasicsForm => ({ name: '', notes: '', stock_location_id: null, auto_add_when_low: false });
+    const emptyBasics = (): BasicsForm => ({ name: '', notes: '', stock_location_id: null, auto_add_when_low: false, is_flagged: false });
     const form = reactive<BasicsForm>(emptyBasics());
     const savingBasics = ref(false);
 
@@ -598,6 +628,7 @@
         form.notes = d.notes ?? '';
         form.stock_location_id = d.stock_location_id;
         form.auto_add_when_low = d.auto_add_when_low;
+        form.is_flagged = d.is_flagged;
     }
     function resetBasicsForm() {
         if (detail.value) hydrateForm(detail.value);
@@ -608,7 +639,8 @@
             form.name !== detail.value.name ||
             (form.notes ?? '') !== (detail.value.notes ?? '') ||
             form.stock_location_id !== detail.value.stock_location_id ||
-            form.auto_add_when_low !== detail.value.auto_add_when_low
+            form.auto_add_when_low !== detail.value.auto_add_when_low ||
+            form.is_flagged !== detail.value.is_flagged
         );
     });
     async function onSaveBasics() {
@@ -621,6 +653,7 @@
                 notes: form.notes.length > 0 ? form.notes : null,
                 stock_location_id: form.stock_location_id,
                 auto_add_when_low: form.auto_add_when_low,
+                is_flagged: form.is_flagged,
             });
             await loadDetail();
             $q.notify({ type: 'positive', message: 'Saved.', position: 'bottom-right' });

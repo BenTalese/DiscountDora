@@ -6,10 +6,6 @@ each into its own file would just spread the same imports five ways.
 
 Endpoints:
 
-  POST /api/shopping-lists/autogenerate
-      Build a new list (or top up an existing one) from stock items that
-      are flagged AND low-or-out.
-
   POST /api/shopping-lists/<id>/move-unticked-to/<target_id>
       Move every unticked line from the source list onto a target list.
       The source list keeps its ticked lines. Duplicates on the target
@@ -23,185 +19,23 @@ Endpoints:
 
   POST /api/shopping-lists/<id>/clear
       Deletes every line on the list. The list itself stays.
+
+(X5 auto-generate moved to its own module — see auto_generate.py.)
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import List, Literal
+from typing import List
 from uuid import UUID
-
-from pydantic import BaseModel, ConfigDict
 
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
-from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
-
-
-# Stock levels that the auto-generator treats as "needs restocking".
-# Matches the attention-engine constants but kept local so changes here
-# don't accidentally retune the heatmap.
-LOW_OR_OUT_SEQUENCES = (2, 3)
-
-
-# ───── Auto-generate ──────────────────────────────────────────────────────
-
-class AutogenerateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    # If set, lines are appended to this list. If null, a fresh list is
-    # created (and made primary when there's no current primary).
-    target_shopping_list_id: UUID | None = None
-    # Optional override for the new list's name. Ignored when targeting an
-    # existing list.
-    name: str | None = None
-    # If True, *all* flagged items go onto the list, not just the low/out
-    # ones. Useful for "shop the staples" lists. Only honoured when
-    # source='flagged'.
-    include_well_stocked: bool = False
-    # Which catalogue of items to pull from.
-    #   flagged    — essentials marked is_flagged (current behaviour).
-    #   low_or_out — every item whose level is Low or Out, flagged or not.
-    # The latter is for "fill the trolley with whatever's run down" runs;
-    # the former for "shop the staples I care about most".
-    source: Literal["flagged", "low_or_out"] = "flagged"
-
-
-@dataclass(slots=True)
-class AutogenerateResponse:
-    target_shopping_list_id: UUID | None = None
-    target_not_found: bool = False
-    nothing_flagged: bool = False
-    added_count: int = 0
-    skipped_already_on_list: int = 0
-
-
-class AutogenerateHandler:
-    """Builds (or tops up) a shopping list from flagged-and-low items.
-
-    Resolution order:
-      1. Find every StockItem with `is_flagged=True`.
-      2. (Default) Keep only those whose stock_level.sequence is in
-         LOW_OR_OUT_SEQUENCES.
-      3. Append to the target list (existing or freshly-created), skipping
-         items already on that list so the call is idempotent.
-    """
-
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
-
-    def handle(self, request: AutogenerateRequest) -> AutogenerateResponse:
-        # ── Pick / create the target list ─────────────────────────────────
-        target: ShoppingList | None = None
-        if request.target_shopping_list_id is not None:
-            target = self.repository.get(ShoppingList).by_id(
-                request.target_shopping_list_id
-            )
-            if target is None or target.is_archived:
-                return AutogenerateResponse(target_not_found=True)
-        else:
-            now = datetime.now(timezone.utc)
-            target = ShoppingList(
-                name=(request.name or "").strip() or f"Auto · {now.strftime('%a %d %b')}",
-                created_at=now,
-            )
-            # If there's no current primary list, the auto-generated one
-            # becomes primary so cart buttons work immediately.
-            current_primary = self.repository.get(ShoppingList).one(
-                EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-                & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
-            )
-            if current_primary is None:
-                target.is_primary = True
-            self.repository.add(target)
-            self.repository.save_changes()
-
-        # ── Select source items ──────────────────────────────────────────
-        # 'flagged'  → essentials, optionally filtered to low/out.
-        # 'low_or_out' → every item that's low or out, regardless of flag.
-        if request.source == "low_or_out":
-            candidate_items: List[StockItem] = (
-                self.repository.get(StockItem)
-                .include(StockItem.Fields.STOCK_LEVEL)
-                .all()
-            )
-            candidate_items = [
-                i for i in candidate_items
-                if i.stock_level is not None
-                and getattr(i.stock_level, "sequence", -1) in LOW_OR_OUT_SEQUENCES
-            ]
-        else:
-            candidate_items = (
-                self.repository.get(StockItem)
-                .include(StockItem.Fields.STOCK_LEVEL)
-                .all(EntityField(StockItem, StockItem.Fields.IS_FLAGGED).eq(True))
-            )
-            if not request.include_well_stocked:
-                candidate_items = [
-                    i for i in candidate_items
-                    if i.stock_level is not None
-                    and getattr(i.stock_level, "sequence", -1) in LOW_OR_OUT_SEQUENCES
-                ]
-
-        if not candidate_items:
-            return AutogenerateResponse(
-                target_shopping_list_id=target.id, nothing_flagged=True
-            )
-
-        # ── Find existing line stock_item_ids so we don't double-add ─────
-        existing_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
-        )
-        existing_item_ids = {l.stock_item_id for l in existing_lines}
-        next_sequence = (max((l.sequence for l in existing_lines), default=-1)) + 1
-
-        added = 0
-        skipped = 0
-        for item in candidate_items:
-            if item.id in existing_item_ids:
-                skipped += 1
-                continue
-            self.repository.add(ShoppingListLine(
-                shopping_list_id=target.id,
-                stock_item_id=item.id,
-                quantity=1,
-                sequence=next_sequence,
-            ))
-            next_sequence += 1
-            added += 1
-
-        self.repository.save_changes()
-        return AutogenerateResponse(
-            target_shopping_list_id=target.id,
-            added_count=added,
-            skipped_already_on_list=skipped,
-        )
-
-
-@SHOPPING_LIST_ROUTER.route("/autogenerate", methods=["POST"])
-@has_request_body(AutogenerateRequest)
-def autogenerate():
-    _Logger = logging.getLogger(__name__)
-    _Request: AutogenerateRequest = get_request_body()
-    _Response = get_container().inject(AutogenerateHandler).handle(_Request)
-    if _Response.target_not_found:
-        return not_found("ShoppingList", _Request.target_shopping_list_id or "?")
-    _Logger.info(
-        f"Auto-generated onto list {_Response.target_shopping_list_id}: "
-        f"+{_Response.added_count} added, {_Response.skipped_already_on_list} already on list"
-    )
-    return ok({
-        "shopping_list_id": _Response.target_shopping_list_id,
-        "added_count": _Response.added_count,
-        "skipped_already_on_list": _Response.skipped_already_on_list,
-        "nothing_flagged": _Response.nothing_flagged,
-    })
 
 
 # ───── Move unticked → existing list ──────────────────────────────────────

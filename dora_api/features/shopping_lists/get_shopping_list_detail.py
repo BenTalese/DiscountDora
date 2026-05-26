@@ -49,6 +49,12 @@ class ShoppingListLineDto:
     is_ticked: bool
     selected_product_id: UUID | None
     sequence: int
+    # X5 — line provenance ("manual" by default; one of the auto_* values
+    # when X5 auto-generate or the auto-add-on-low trigger placed it here).
+    # Drives the "auto: low stock" / "auto: recipe Tomato Soup" chip in
+    # ShoppingListDetail.
+    added_via: str
+    added_at: datetime | None
     offers: List[LineProductOfferDto] = field(default_factory=list)
 
 
@@ -163,6 +169,8 @@ class GetShoppingListDetailHandler:
                 is_ticked = bool(line.is_ticked),
                 selected_product_id = line.selected_product_id,
                 sequence = line.sequence,
+                added_via = line.added_via,
+                added_at = line.added_at,
                 offers = offers,
             ))
 

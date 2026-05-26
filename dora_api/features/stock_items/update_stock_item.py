@@ -54,6 +54,11 @@ class UpdateStockItemResponse:  # noqa: D401
     stock_level_not_found: bool = False
     stock_location_not_found: bool = False
     stock_group_not_found: bool = False
+    # X5: when the auto_add_when_low trigger fires, the API needs to know
+    # so it can surface an undoable "Tomato Soup auto-added to <list>"
+    # notification. None when no auto-add happened.
+    auto_added_line_id: UUID | None = None
+    auto_added_to_list_id: UUID | None = None
 
 
 class UpdateStockItemHandler:
@@ -81,8 +86,12 @@ class UpdateStockItemHandler:
                 return UpdateStockItemResponse(stock_level_not_found=True)
             _StockItem.stock_level = _StockLevel
             # Stock-level changes always touch the last-updated timestamp so
-            # the overview can show "updated X ago" honestly.
-            _StockItem.stock_level_last_updated = datetime.now(UTC)
+            # the overview can show "updated X ago" honestly. X1: also bump
+            # last_checked_at — a level change is implicitly a check of the
+            # current state too.
+            _Now = datetime.now(UTC)
+            _StockItem.stock_level_last_updated = _Now
+            _StockItem.last_checked_at = _Now
             # Append to the level-change history when the level actually moves.
             if _StockLevel.id != _PreviousLevelId:
                 self.repository.add(StockLevelChange(
@@ -164,58 +173,77 @@ class UpdateStockItemHandler:
 
         # Auto-add hook: if this update transitioned the item from "ok" to
         # low-or-out and `auto_add_when_low` is set, drop it onto the
-        # current primary list. Skipped silently if there's no primary or
-        # the item is already on it — the hook is a convenience, not a
-        # contract.
+        # current primary list. Skipped silently if there's no primary,
+        # or if the item is already on ANY non-archived list — the user
+        # already knows; double-add would be annoying.
         _NewLevelSeq: int | None = (
             _StockItem.stock_level.sequence if _StockItem.stock_level else None
         )
+        _AutoAddResult: tuple[UUID, UUID] | None = None
         if (
             _StockItem.auto_add_when_low
             and _NewLevelSeq is not None
             and _NewLevelSeq >= 2  # 2 = Low, 3 = Out (see seed)
             and (_PreviousLevelSeq is None or _PreviousLevelSeq < 2)
         ):
-            self._try_quick_add_to_primary(_StockItem)
+            _AutoAddResult = self._try_auto_add(_StockItem)
 
         self.repository.save_changes()
+        if _AutoAddResult is not None:
+            line_id, list_id = _AutoAddResult
+            return UpdateStockItemResponse(
+                auto_added_line_id=line_id,
+                auto_added_to_list_id=list_id,
+            )
         return UpdateStockItemResponse()
 
-    def _try_quick_add_to_primary(self, stock_item: StockItem) -> None:
-        """Adds the stock item to the current primary shopping list.
+    def _try_auto_add(self, stock_item: StockItem) -> tuple[UUID, UUID] | None:
+        """Adds the stock item to the primary shopping list, X5-style.
 
-        Imported locally because pulling the shopping-list entities at
-        module import time would create an import cycle (the shopping list
-        handlers already depend on StockItem).
+        Returns (line_id, list_id) on a successful add; None when skipped
+        (no primary, already on any active list, etc). Imported locally
+        because pulling shopping-list entities at module import time
+        creates a cycle.
         """
         from dora_api.domain.entities.shopping_list import (
-            ShoppingList, ShoppingListLine,
+            ADDED_VIA_AUTO_LOW_STOCK,
+            ShoppingList,
+            ShoppingListLine,
         )
 
-        primary: ShoppingList | None = self.repository.get(ShoppingList).one(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+        # Already on ANY active list? Skip — the user already knows.
+        active_lists: list[ShoppingList] = self.repository.get(ShoppingList).all(
+            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+        )
+        active_ids = [l.id for l in active_lists]
+        if active_ids:
+            on_any = self.repository.get(ShoppingListLine).one(
+                EntityField(ShoppingListLine, "stock_item_id").eq(stock_item.id)
+                & EntityField(ShoppingListLine, "shopping_list_id").in_(active_ids)
+            )
+            if on_any is not None:
+                return None
+
+        primary: ShoppingList | None = next(
+            (l for l in active_lists if l.is_primary), None
         )
         if primary is None:
-            return
-
-        existing = self.repository.get(ShoppingListLine).one(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(primary.id)
-            & EntityField(ShoppingListLine, "stock_item_id").eq(stock_item.id)
-        )
-        if existing is not None:
-            return
+            return None
 
         siblings = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, "shopping_list_id").eq(primary.id)
         )
         next_sequence = (max((l.sequence for l in siblings), default=-1)) + 1
-        self.repository.add(ShoppingListLine(
-            shopping_list_id = primary.id,
-            stock_item_id = stock_item.id,
-            quantity = 1,
-            sequence = next_sequence,
-        ))
+        line = ShoppingListLine(
+            shopping_list_id=primary.id,
+            stock_item_id=stock_item.id,
+            quantity=1,
+            sequence=next_sequence,
+            added_via=ADDED_VIA_AUTO_LOW_STOCK,
+            added_at=datetime.now(UTC),
+        )
+        self.repository.add(line)
+        return (line.id, primary.id)
 
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["PATCH"])
@@ -251,4 +279,15 @@ def update_stock_item(stock_item_id: UUID):
         )
 
     _Logger.info(f"Successfully updated stock item with ID: {stock_item_id}")
+    # X5: if the auto_add_when_low trigger fired, return a 200 with a
+    # minimal body so the UI can pop the undoable "auto-added to <list>"
+    # toast. No trigger → keep the original 204 for simplicity.
+    if _Response.auto_added_line_id is not None:
+        from dora_api.infrastructure.api_response import ok
+        return ok({
+            "auto_added": {
+                "line_id": _Response.auto_added_line_id,
+                "shopping_list_id": _Response.auto_added_to_list_id,
+            },
+        })
     return no_content()

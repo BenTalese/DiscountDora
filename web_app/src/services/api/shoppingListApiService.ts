@@ -46,19 +46,50 @@ export type QuickAddResult = {
     already_on_list: boolean;
 };
 
-export type AutogenerateCommand = {
-    target_shopping_list_id?: string | null;
-    name?: string;
-    include_well_stocked?: boolean;
-    /** Which item set to pull from. Defaults to 'flagged'. */
-    source?: 'flagged' | 'low_or_out';
+/** X5 — auto-generated shopping list provenance values. Mirrors the
+ *  backend ADDED_VIA_* constants. A line on a shopping list always
+ *  carries one of these so the UI can render a "why is this here?"
+ *  chip; "manual" is the default and means no chip. */
+export type AddedVia =
+    | 'manual'
+    | 'auto_low_stock'
+    | 'auto_essential'
+    | 'auto_flagged'
+    | 'auto_recipe'
+    | 'auto_meal_plan'
+    | 'auto_frequently_added';
+
+export type AutoGenerateSources = {
+    low_stock?: boolean;
+    out_of_stock?: boolean;
+    essentials_only_for_low?: boolean;
+    flagged?: boolean;
+    frequently_added?: boolean;
+    frequently_added_limit?: number;
+    /** ISO date (YYYY-MM-DD) marking the start of the meal-plan week. */
+    meal_plan_week?: string | null;
+    recipes?: string[];
 };
 
-export type AutogenerateResult = {
+export type AutoGenerateCommand = {
+    name?: string | null;
+    sources: AutoGenerateSources;
+    merge_into_list_id?: string | null;
+};
+
+export type AutoGenerateLine = {
+    line_id: string;
+    stock_item_id: string;
+    added_via: AddedVia;
+    detail: string | null;
+};
+
+export type AutoGenerateResult = {
     shopping_list_id: string | null;
     added_count: number;
     skipped_already_on_list: number;
-    nothing_flagged: boolean;
+    nothing_to_add: boolean;
+    lines: AutoGenerateLine[];
 };
 
 export type MoveUntickedResult = {
@@ -170,12 +201,20 @@ export default class ShoppingListApiService {
             { stock_item_id: stockItemId },
         );
 
-    autogenerateAsync = async (
-        command: AutogenerateCommand,
-    ): Promise<AutogenerateResult> =>
-        await this.httpClient.post<AutogenerateResult, AutogenerateCommand>(
-            '/shopping-lists/autogenerate',
+    autoGenerateAsync = async (
+        command: AutoGenerateCommand,
+    ): Promise<AutoGenerateResult> =>
+        await this.httpClient.post<AutoGenerateResult, AutoGenerateCommand>(
+            '/shopping-lists/auto-generate',
             command,
+        );
+
+    appendLowStockEssentialsAsync = async (
+        listId: string,
+    ): Promise<AutoGenerateResult> =>
+        await this.httpClient.post<AutoGenerateResult, Record<string, never>>(
+            `/shopping-lists/${listId}/append-low-stock-essentials`,
+            {},
         );
 
     moveUntickedToAsync = async (

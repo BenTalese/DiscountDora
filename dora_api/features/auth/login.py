@@ -10,8 +10,11 @@ from dora_api.features.auth.register_user import (AuthenticatedUserDto,
                                                   SESSION_USER_ID_KEY)
 from dora_api.features.routers import AUTH_ROUTER
 from dora_api.domain.entities.audit_event import SEVERITY_AUDIT, SEVERITY_WARN
-from dora_api.infrastructure.api_response import ok, unauthorized
+from dora_api.infrastructure.api_response import ok, ProblemDetails, unauthorized
 from dora_api.infrastructure.audit import emit as audit_emit
+from dora_api.infrastructure.auth_helpers import (
+    rate_limit, rate_limit_remaining_seconds,
+)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.field import EntityField
@@ -48,6 +51,20 @@ class LoginHandler:
 @has_request_body(LoginRequest)
 def login():
     _Logger = logging.getLogger(__name__)
+    if not rate_limit("auth.login", max_per_minute=5):
+        from flask import jsonify
+        from http.client import TOO_MANY_REQUESTS
+        response = jsonify(ProblemDetails(
+            detail="Too many login attempts. Try again shortly.",
+            errors={}, status=TOO_MANY_REQUESTS, title="Rate limit exceeded.",
+            type="https://datatracker.ietf.org/doc/html/rfc6585#section-4",
+        ))
+        response.content_type = "application/problem+json"
+        response.status_code = TOO_MANY_REQUESTS
+        response.headers["Retry-After"] = str(
+            max(1, rate_limit_remaining_seconds("auth.login", 5)),
+        )
+        return response
     _Handler = get_container().inject(LoginHandler)
     _Request: LoginRequest = get_request_body()
     _Response = _Handler.handle(_Request)
@@ -62,8 +79,13 @@ def login():
         # Intentionally generic so we don't leak whether the user exists.
         return unauthorized("Invalid username or password.")
 
+    from dora_api.features.auth.register_user import SESSION_PWD_V_KEY
     session.clear()
     session[SESSION_USER_ID_KEY] = str(_Response.user.id)
+    # Snapshot the user's current password_changed_at into the session
+    # so get_me can detect a stale cookie after a reset.
+    if _Response.user.password_changed_at is not None:
+        session[SESSION_PWD_V_KEY] = _Response.user.password_changed_at.isoformat()
     session.permanent = True
 
     _Logger.info(f"Login success for {_Response.user.username} ({_Response.user.id})")

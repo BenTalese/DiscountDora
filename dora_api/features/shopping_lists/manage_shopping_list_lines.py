@@ -12,12 +12,15 @@ need to know which list is primary; the server resolves it.
 """
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.product_offer import ProductOffer
+from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
@@ -81,6 +84,8 @@ class AddLineHandler:
             quantity = request.quantity,
             selected_product_id = request.selected_product_id,
             sequence = next_sequence,
+            added_via = ADDED_VIA_MANUAL,
+            added_at = datetime.now(timezone.utc),
         )
         self.repository.add(line)
         self.repository.save_changes()
@@ -105,6 +110,29 @@ def add_line(shopping_list_id: UUID):
         "line_id": _Response.line_id,
         "already_on_list": _Response.already_on_list,
     })
+
+
+# ───── Price snapshot helper (N6) ─────────────────────────────────────────
+
+def snapshot_offer_price(repository: SqlAlchemyRepository, line: ShoppingListLine) -> None:
+    """Freeze the current offer of `line.selected_product_id` onto the line.
+    No-op when the line has no selection, or no current offer exists for
+    that product. Designed to be called once, when the line first ticks.
+    """
+    if line.selected_product_id is None:
+        return
+    offer: ProductOffer | None = repository.get(ProductOffer).one(
+        EntityField(ProductOffer, "_product_id").eq(line.selected_product_id)
+    )
+    if offer is None:
+        return
+    line.picked_offer_price = float(offer.price_now)
+    line.list_price_at_pick = float(offer.price_was) if offer.price_was else None
+
+
+# Internal alias used by the update path; exposed name above is what other
+# modules (e.g. finish-list) import.
+_snapshot_offer_price = snapshot_offer_price
 
 
 # ───── Update line (tick, quantity, selected_product) ─────────────────────
@@ -140,16 +168,38 @@ class UpdateLineHandler:
             return UpdateLineResponse(line_not_found=True)
 
         set_fields = request.model_fields_set
+        # Track whether the user is editing substantive fields — qty or
+        # selected_product. If so, an auto_ provenance flips back to
+        # "manual" (the user has taken ownership of the line). Ticking
+        # alone doesn't count: it's a shopping-mode action, not editing.
+        user_edited = False
         if "quantity" in set_fields:
             line.quantity = request.quantity
+            user_edited = True
         if "is_ticked" in set_fields and request.is_ticked is not None:
+            # N6: snapshot the selected offer's price the first time a line
+            # transitions to ticked. Re-ticking after an untick doesn't
+            # re-snapshot — the original moment-of-pick wins so reports
+            # stay stable. Untick clears the snapshot so a future tick can
+            # capture a fresh one.
+            became_ticked = request.is_ticked and not line.is_ticked
             line.is_ticked = request.is_ticked
+            if became_ticked and line.picked_offer_price is None:
+                _snapshot_offer_price(self.repository, line)
+            elif not request.is_ticked:
+                line.picked_offer_price = None
+                line.list_price_at_pick = None
         if "sequence" in set_fields and request.sequence is not None:
             line.sequence = request.sequence
         if request.clear_selected_product:
             line.selected_product_id = None
+            user_edited = True
         elif "selected_product_id" in set_fields and request.selected_product_id is not None:
             line.selected_product_id = request.selected_product_id
+            user_edited = True
+
+        if user_edited and line.added_via != ADDED_VIA_MANUAL:
+            line.added_via = ADDED_VIA_MANUAL
 
         self.repository.save_changes()
         return UpdateLineResponse()
@@ -305,6 +355,8 @@ class QuickAddToPrimaryHandler:
             stock_item_id = request.stock_item_id,
             quantity = 1,
             sequence = next_sequence,
+            added_via = ADDED_VIA_MANUAL,
+            added_at = datetime.now(timezone.utc),
         )
         self.repository.add(line)
         self.repository.save_changes()

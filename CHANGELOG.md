@@ -6,6 +6,192 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Substitutes graph** (N7). New `/substitutes` route with a
+  force-directed cytoscape.js view of every stock item and which
+  items can stand in for which. Search dims non-matching nodes;
+  stock-group chips filter; "Show isolated" toggles loners; layout
+  picker (force / concentric / breadth-first). Tap a node for a side
+  panel with current substitutes, an autocomplete to add a new one,
+  and a deep-link to the stock detail page. Tap an edge to edit notes
+  or remove the pair. Layout stays stable across single-edge
+  mutations.
+  - **Schema refactor**. Migration `c8a1d3b6e9f4` rebuilds
+    `StockItemSubstitute` as an undirected pair table — columns
+    `stock_item_a_id`, `stock_item_b_id`, `notes`, `created_at`, with
+    a CHECK enforcing canonical (a < b) ordering so each unordered
+    pair has exactly one row. Pre-release destructive migration; dev
+    DB re-seeds with canonical pairs. Existing per-stock-item add /
+    remove endpoints canonicalise transparently; the stock detail
+    page now reads pairs in both directions and the backup/restore
+    pipeline tracks the new column names.
+  - **`/api/substitutes` endpoints**. `GET /graph` returns nodes
+    (every stock item) + edges (every pair). `POST` upserts an
+    undirected pair with optional notes (idempotent on the unordered
+    pair). `DELETE` removes a pair via `?a=&b=` query params.
+
+- **Reports / Analytics page** (N6). New `/reports` route with six
+  cards backed by `/api/reports/*` endpoints — stock value over time,
+  spend by merchant, top 10 most-bought, items that keep running out,
+  savings captured, and multi-product price trends. Range selector
+  (30d / 90d / 1y / all). Charts rendered with ECharts via
+  `vue-echarts`. Every item chip deep-links to the matching stock
+  detail page; "Mark all essential" on the keeps-running-out card
+  flags items in one click.
+  - **Price snapshot on shopping list lines**. Migration
+    `c6e9f4a82d15` adds `picked_offer_price` + `list_price_at_pick` to
+    `ShoppingListLine`. Captured when a line is first ticked (cleared
+    on untick); finishing a list backfills any ticked-without-snapshot
+    rows so reports stay honest after future price moves.
+
+- **Auto-generated shopping lists** (X5). The "build me a list" path is
+  now one endpoint with seven sources you can mix-and-match.
+  - `POST /api/shopping-lists/auto-generate` replaces the older single-
+    source `/autogenerate`. Body shape:
+    `{ name?, merge_into_list_id?, sources: { low_stock?, out_of_stock?,
+      essentials_only_for_low?, flagged?, frequently_added?,
+      frequently_added_limit?, meal_plan_week?, recipes?[] } }`.
+    Items collected by more than one source are deduped, keeping the
+    highest-priority provenance — order is
+    `auto_recipe > auto_meal_plan > auto_flagged > auto_essential >
+     auto_low_stock > auto_frequently_added`. Recipe and meal-plan
+    sources subtract anything already at "Well-Stocked".
+  - `POST /api/shopping-lists/<id>/append-low-stock-essentials` —
+    one-click convenience wrapper that tops up an existing list with
+    essentials that are low or out.
+  - **Per-line provenance**. New `ShoppingListLine.added_via` (enum:
+    `manual` / `auto_low_stock` / `auto_essential` / `auto_flagged` /
+    `auto_recipe` / `auto_meal_plan` / `auto_frequently_added`) and
+    `added_at` (timestamp) columns — migration `b5d8e2f3c14a`. Drives a
+    chip on every non-manual line in **Shopping List detail** so the
+    user can see *why* something landed on the list. Manual edits to
+    quantity or merchant selection flip the line back to `manual`
+    automatically.
+  - **Silent auto-add on low**. The existing `StockItem.auto_add_when_low`
+    trigger (which fires when a level drops to Low or Out) now lands
+    the line with `added_via=auto_low_stock` and skips the silent add
+    if the item is already on **any** non-archived list (not just the
+    primary). `PATCH /api/stock-items/<id>` returns
+    `{ auto_added: { line_id, shopping_list_id } }` when it fires, so
+    the frontend can surface an undoable "Tomato Soup auto-added to
+    <list>" toast.
+  - **Stock item detail** gains the "Always include in auto-generated
+    lists" toggle (`is_flagged`) alongside the existing "Auto-add when
+    low or out" (`auto_add_when_low`); both have explanatory tooltips
+    spelling out the difference.
+  - **Stock Overview** filter chips: "Flagged for auto" and the new
+    "Will auto-add on low".
+  - **Shopping Lists overview** "New list" dropdown gains **Advanced
+    auto-generate…** — a modal with checkboxes for every source plus a
+    merge-into picker.
+  - **Recipes overview** "Add missing to list" routes through
+    `/auto-generate` with `sources.recipes=[id]`, so the lines land
+    tagged `auto_recipe` with the recipe name as the chip detail.
+  - **Meal Plans overview** "Generate shopping list for this week" now
+    routes through `/auto-generate` with `sources.meal_plan_week=<start>`
+    — well-stocked ingredients are subtracted server-side and every
+    line is tagged `auto_meal_plan`.
+- **Stocktake / focused review** (X1). New `StockItem.last_checked_at`
+  column (migration `a4c7e1d9b832`, indexed) — distinct from
+  `stock_level_last_updated` so a user confirming "yes, the level is
+  still correct" stamps a check without rewriting the level history.
+  Updating the level still bumps both timestamps.
+  - `GET /api/stocktake/queue?limit=` — items past their per-item
+    `days_until_stocktake_alert` window, ordered most-overdue-first;
+    never-checked items surface ahead of everyone else (with an
+    `overdue_days = -1` sentinel for the UI).
+  - `POST /api/stock-items/<id>/check` — idempotent, only touches
+    `last_checked_at`.
+  - `POST /api/stocktake/bulk-check` — bulk variant.
+  - `POST /api/shopping-lists/<id>/review/complete` — for the
+    shopping-list review-mode flow; bulk-sets ticked items to
+    Well-Stocked and stamps `last_checked_at`.
+  - New `/stocktake` overview page (top-of-queue preview + "Start
+    review" CTA) and `/stocktake/run` fullscreen focus mode: one item
+    at a time, big "Still correct (1) / Change level (2) / Out of
+    stock (3) / Skip (s)" buttons with keyboard shortcuts, "Add to
+    list" secondary action, session-complete summary card.
+  - **Stock Overview** toolbar gains a **Stocktake (N)** button that
+    pulses with a brand-coloured glow when the overdue count is
+    positive.
+  - **Shopping List detail** menu gains **Finish review** —
+    bulk-marks every ticked item as Well-Stocked + stamps the check
+    (the spiritual sibling of the existing finish-shopping flow).
+- **PWA mode** (M1). Discount Dora is now installable on every
+  major surface. Quasar's `pwa` config block is fully wired:
+  - **Manifest** — `name`, `short_name=Dora`, `description`,
+    `theme_color` + `background_color` matching the brand swatches,
+    `display: standalone`, `orientation: portrait-primary` (kitchen-
+    phone use), icon set spanning 192/512 px (with the 512 doubling
+    as the maskable), and three launcher shortcuts: **Primary list**
+    (`/shopping-lists?open=primary`), **Scan**
+    (`/data/barcodes?action=scan`), and **Add item**
+    (`/stock?new=1`).
+  - **Service worker** — Workbox `GenerateSW` with
+    `skipWaiting + clientsClaim + cleanupOutdatedCaches`. Runtime
+    caching: `/api/*` → NetworkFirst with a 5 s timeout (keeps the
+    UI snappy when the backend lags), stock-item images → CacheFirst
+    (30 days × 200 entries), merchant product images → CacheFirst
+    (7 days × 500 entries). Navigation failures fall through to
+    `index.html`; `/api/*` is on the navigate-fallback denylist so a
+    backend outage doesn't silently swap a JSON response for HTML.
+  - **Offline page** — `public/offline.html` (branded, mentions the
+    F3 offline queue so the user knows their ticks aren't lost).
+  - **Install prompt** — new `composables/usePwaLifecycle.ts` defers
+    `beforeinstallprompt`; a `<PwaInstallPrompt />` component
+    surfaces an "Install Dora" button in Settings → About. iOS
+    Safari (which doesn't fire the event) gets a tailored
+    "Share → Add to Home Screen" hint.
+  - **Update flow** — `controllerchange` on `navigator.serviceWorker`
+    pops a "New version available · Reload / Later" Notify (zero
+    timeout — the user opts in to the reload).
+  - **Per-mode dev ports** — SPA stays on 5174; PWA dev runs on
+    5175, SSR on 5176, so all three can be served side-by-side
+    during development.
+- **Self-serve auth surface** (A1). The full out-of-band flow lands:
+  - `POST /api/auth/register` enforces password rules (≥10 chars + a
+    letter + a digit), email-format validation, and case-insensitive
+    email uniqueness. First user still auto-becomes admin AND
+    auto-verifies (so a fresh install without SMTP isn't locked out).
+    Every other registration emails a verification link with a 24 h
+    SHA-256-hashed token.
+  - `POST /api/auth/verify-email`, `POST /api/auth/resend-verification`
+    (anti-enumeration + 1/min/IP-email).
+  - `POST /api/auth/forgot-password` (anti-enumeration, 5/min/IP-email)
+    issues a single-use 1 h reset token; `POST /api/auth/reset-password`
+    consumes it, applies the new password, bumps `password_changed_at`,
+    revokes any still-live reset tokens, and emails a notification.
+  - `POST /api/auth/me/password` extended with the same password rules
+    + notification email; bumping `password_changed_at` invalidates
+    every other-device session on its next `/me` probe via a new
+    session-staleness check.
+  - `POST /api/auth/me/email` (request) + `POST /api/auth/email-change/confirm`
+    confirm a new address before it swaps (anti-account-takeover).
+  - Login is rate-limited (5/min/IP) with proper `Retry-After`.
+  - Every auth event audits via I2's `audit.emit`
+    (`auth.user.registered`, `auth.email.verified`,
+    `auth.password.reset_requested`, `auth.password.reset`,
+    `auth.password.changed`, `auth.email.changed`,
+    `auth.login.success`, `auth.login.failed`).
+- **Deployment-aware email links.** A new `DORA_PUBLIC_URL` env var is
+  the canonical home for the SPA across PWA, mobile-shell, and
+  self-hosted-desktop deploys — verify / reset links are built off it
+  (falls back to the request's `Origin` header, then
+  `http://localhost:5174` for dev).
+- **Transactional email helper.** New `dora_api/infrastructure/email_sender.py`
+  drives SMTP from `DORA_SMTP_*` env vars with a Jinja-template loader at
+  `dora_api/email_templates/` (`verify_email.html`, `reset_password.html`,
+  `password_changed.html`, shared `_layout.html`). **Dry-run** mode
+  kicks in when `DORA_SMTP_USERNAME` is unset — the email body lands
+  in the regular log stream instead of being sent, so self-hosted
+  desktop installs without SMTP can still copy-paste verification
+  links.
+- **Frontend auth pages.** `/verify-email`, `/forgot-password`,
+  `/reset-password`, `/confirm-email-change` all land outside the
+  main layout (no nav chrome for someone clicking a link in a fresh
+  browser). LoginPage gains a **Forgot password?** link, a
+  password-rule hint in register mode, and a "Email verified" toast
+  on arrival from `?verified=1`. Frontend `AuthApiService` exposes
+  every new endpoint with typed wrappers.
 - **Audit log + admin viewer** (I2 round B). A new `AuditEvent` table
   (migration `e9a2c4b1f7d8`) captures every mutating API request,
   every login success/failure, every client-side `warn`/`error` shipped

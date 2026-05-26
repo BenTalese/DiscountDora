@@ -84,22 +84,49 @@
                     :label="mode === 'login' ? 'Need an account? Register' : 'Have an account? Sign in'"
                     @click="toggleMode"
                 />
+                <div v-if="mode === 'login'" class="q-mt-xs">
+                    <router-link
+                        to="/forgot-password"
+                        class="text-caption text-primary"
+                        style="text-decoration: none;"
+                    >
+                        Forgot password?
+                    </router-link>
+                </div>
+                <div v-else class="text-caption text-grey-7 q-mt-sm">
+                    Passwords must be at least 10 characters and include
+                    a letter and a digit.
+                </div>
             </q-card-section>
         </q-card>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import { useQuasar } from 'quasar';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useAuthStore } from 'src/stores/authStore';
-    import { reactive, ref } from 'vue';
+    import { onMounted, reactive, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
+    const $q = useQuasar();
     const authStore = useAuthStore();
     const router = useRouter();
     const route = useRoute();
+
+    onMounted(() => {
+        // A1: surface a toast when arriving from /verify-email so the user
+        // sees confirmation of the click-through.
+        if (route.query.verified === '1') {
+            $q.notify({
+                type: 'positive', position: 'top',
+                message: 'Email verified. Sign in to continue.',
+                timeout: 4000,
+            });
+        }
+    });
 
     const mode = ref<'login' | 'register'>('login');
     const showPassword = ref(false);

@@ -25,6 +25,15 @@ export type LineProductOffer = {
     is_preferred: boolean;
 };
 
+export type AddedVia =
+    | 'manual'
+    | 'auto_low_stock'
+    | 'auto_essential'
+    | 'auto_flagged'
+    | 'auto_recipe'
+    | 'auto_meal_plan'
+    | 'auto_frequently_added';
+
 export type ShoppingListLine = {
     line_id: string;
     stock_item_id: string;
@@ -36,6 +45,10 @@ export type ShoppingListLine = {
     is_ticked: boolean;
     selected_product_id: string | null;
     sequence: number;
+    /** X5 — provenance of how this line landed on the list. */
+    added_via: AddedVia;
+    /** ISO timestamp when the line was added. */
+    added_at: string | null;
     offers: LineProductOffer[];
 };
 

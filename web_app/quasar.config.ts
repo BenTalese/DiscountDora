@@ -17,6 +17,7 @@ export default defineConfig((ctx) => {
             'globalErrorHandler',
             'i18n',
             'notifyTypeRegistration',
+            'pwaLifecycle',
             'stores',
             'theme'
         ],
@@ -107,9 +108,14 @@ export default defineConfig((ctx) => {
         },
 
         // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
+        // Per-mode port so SSR / PWA / SPA can run side-by-side during
+        // dev (matches taskboard guidance about explicit dev ports per mode).
         devServer: {
             // https: true,
-            port: 5174,
+            port:
+                ctx.modeName === 'pwa' ? 5175 :
+                ctx.modeName === 'ssr' ? 5176 :
+                5174,
             open: false // opens browser window automatically
         },
 
@@ -186,16 +192,119 @@ export default defineConfig((ctx) => {
         },
 
         // https://v2.quasar.dev/quasar-cli-vite/developing-pwa/configuring-pwa
+        // M1 — Discount Dora as a real PWA. GenerateSW (Workbox builds the
+        // service worker for us at build time) is the lower-friction
+        // route since we only need standard runtime-caching rules.
         pwa: {
-            workboxMode: 'GenerateSW' // 'GenerateSW' or 'InjectManifest'
-            // swFilename: 'sw.js',
-            // manifestFilename: 'manifest.json',
-            // extendManifestJson (json) {},
-            // useCredentialsForManifestTag: true,
-            // injectPwaMetaTags: false,
-            // extendPWACustomSWConf (esbuildConf) {},
-            // extendGenerateSWOptions (cfg) {},
-            // extendInjectManifestOptions (cfg) {}
+            workboxMode: 'GenerateSW',
+            swFilename: 'sw.js',
+            manifestFilename: 'manifest.json',
+            injectPwaMetaTags: true,
+            useCredentialsForManifestTag: false,
+            extendManifestJson(json: Record<string, unknown>) {
+                json.name = 'Discount Dora';
+                json.short_name = 'Dora';
+                json.description = 'Your pantry at your fingertips.';
+                json.theme_color = '#f5c462';        // matches DS1's primary swatch
+                json.background_color = '#f9f6f0';
+                json.display = 'standalone';
+                json.orientation = 'portrait-primary';
+                json.start_url = '.';
+                json.scope = '/';
+                json.icons = [
+                    {
+                        src: 'icons/web-app-manifest-192x192.png',
+                        sizes: '192x192', type: 'image/png', purpose: 'any',
+                    },
+                    {
+                        src: 'icons/web-app-manifest-512x512.png',
+                        sizes: '512x512', type: 'image/png', purpose: 'any',
+                    },
+                    {
+                        // The same 512 also serves as the maskable icon
+                        // until a dedicated safe-area-padded asset exists.
+                        // Browsers that need a strict maskable will crop
+                        // gracefully; the Dora mascot is centered.
+                        src: 'icons/web-app-manifest-512x512.png',
+                        sizes: '512x512', type: 'image/png', purpose: 'maskable',
+                    },
+                ];
+                json.shortcuts = [
+                    {
+                        name: 'Primary shopping list',
+                        short_name: 'Primary list',
+                        url: '/shopping-lists?open=primary',
+                        icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
+                    },
+                    {
+                        name: 'Scan a barcode',
+                        short_name: 'Scan',
+                        url: '/data/barcodes?action=scan',
+                        icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
+                    },
+                    {
+                        name: 'Add a stock item',
+                        short_name: 'Add item',
+                        url: '/stock?new=1',
+                        icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
+                    },
+                ];
+            },
+            extendGenerateSWOptions(cfg: Record<string, unknown>) {
+                // Snappy upgrades: a new SW activates immediately and
+                // claims open tabs so the user sees the new version on
+                // their next navigation (the "New version" toast then
+                // offers a quick reload).
+                cfg.skipWaiting = true;
+                cfg.clientsClaim = true;
+                cfg.cleanupOutdatedCaches = true;
+
+                // Anything not precached: fall back to /offline.html on
+                // navigation failure (the SPA shell is still the source
+                // of truth — this just stops a bare browser error.)
+                cfg.navigateFallback = 'index.html';
+                cfg.navigateFallbackDenylist = [/^\/api\//];
+
+                cfg.runtimeCaching = [
+                    {
+                        // Dora API — NetworkFirst with a 5 s timeout so a
+                        // slow backend doesn't pin the UI; falls back to
+                        // the cached GET response when offline.
+                        urlPattern: ({ url }: { url: URL }) =>
+                            url.pathname.startsWith('/api/'),
+                        handler: 'NetworkFirst',
+                        method: 'GET',
+                        options: {
+                            cacheName: 'dora-api',
+                            networkTimeoutSeconds: 5,
+                            expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                    {
+                        // Merchant product images — CacheFirst, generous
+                        // TTL since SKU images are basically immutable.
+                        urlPattern: /\/products\/.*\/image|merchant-images/,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'dora-merchant-images',
+                            expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                    {
+                        // Stock-item images served back by dora_api —
+                        // longer TTL.
+                        urlPattern: /\/stock-items\/.*\/image|\/data\/images\//,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'dora-stock-images',
+                            expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                ];
+            },
         },
 
         // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-cordova-apps/configuring-cordova

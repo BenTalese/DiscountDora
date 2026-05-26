@@ -1,0 +1,22 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <p>Hi {{ username }},</p>
+  <p>
+    Welcome to Discount Dora! Please verify your email address to finish
+    setting up your account:
+  </p>
+  <p style="text-align:center;margin:24px 0;">
+    <a href="{{ verify_url }}"
+       style="display:inline-block;background:#f5c462;color:#222;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600;">
+      Verify email
+    </a>
+  </p>
+  <p style="color:#666;font-size:13px;">
+    This link expires in 24 hours. If the button doesn't work, paste
+    this link into your browser:<br />
+    <a href="{{ verify_url }}">{{ verify_url }}</a>
+  </p>
+  <p style="color:#666;font-size:13px;">
+    If you didn't sign up, you can safely ignore this email.
+  </p>
+{% endblock %}

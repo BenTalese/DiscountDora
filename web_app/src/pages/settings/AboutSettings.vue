@@ -28,6 +28,20 @@
 
                 <q-item>
                     <q-item-section>
+                        <q-item-label>Install as an app</q-item-label>
+                        <q-item-label caption>
+                            Adds a Dora icon to your home screen / launcher
+                            and runs in its own window. iOS Safari uses
+                            "Add to Home Screen" instead.
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <PwaInstallPrompt />
+                    </q-item-section>
+                </q-item>
+
+                <q-item>
+                    <q-item-section>
                         <q-item-label>Web client</q-item-label>
                         <q-item-label caption>
                             Quasar 2 / Vue 3, talks to two Flask APIs over CORS.
@@ -92,6 +106,7 @@
 </template>
 
 <script lang="ts" setup>
+    import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
     import { computed } from 'vue';
 
     // Reflects what AxiosHttpClient will actually use — keeps this section

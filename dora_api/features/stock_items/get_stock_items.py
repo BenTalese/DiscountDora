@@ -27,9 +27,11 @@ class StockItemDto:
     stock_level_last_updated: datetime
     expiry_date: date | None
     is_flagged: bool
+    auto_add_when_low: bool
     is_open: bool
     opened_on: date | None
     barcode: str | None
+    last_checked_at: datetime | None
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
@@ -43,9 +45,11 @@ class StockItemDto:
             stock_level_last_updated = stock_item.stock_level_last_updated,
             expiry_date = stock_item.expiry_date,
             is_flagged = bool(stock_item.is_flagged),
+            auto_add_when_low = bool(stock_item.auto_add_when_low),
             is_open = bool(stock_item.is_open),
             opened_on = stock_item.opened_on,
             barcode = stock_item.barcode,
+            last_checked_at = stock_item.last_checked_at,
         )
 
 

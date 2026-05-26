@@ -10,6 +10,14 @@
                 no-caps
                 @click="overviewScanOpen = true"
             />
+            <q-btn
+                outline
+                no-caps
+                icon="fact_check"
+                :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
+                :class="stocktakeOverdue > 0 ? 'stocktake-glow' : ''"
+                to="/stocktake"
+            />
             <q-btn-dropdown flat no-caps icon="more_horiz" label="Export">
                 <q-list dense style="min-width: 200px">
                     <q-item clickable v-close-popup @click="overviewExport.downloadCsv()">
@@ -107,7 +115,11 @@
             <q-separator vertical class="q-mx-sm" />
 
             <FilterChip v-model="filters.essentialsOnly.value" icon="flag" active-color="amber-9">
-                Essentials only
+                Flagged for auto
+            </FilterChip>
+
+            <FilterChip v-model="filters.autoAddOnly.value" icon="bolt" active-color="primary">
+                Will auto-add on low
             </FilterChip>
 
             <FilterChip v-model="filters.openOnly.value" icon="lock_open" active-color="secondary">
@@ -359,6 +371,7 @@
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import StocktakeApiService from 'src/services/api/stocktakeApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -374,6 +387,17 @@
     const stockItemApi = new StockItemApiService();
     const barcodeApi = new BarcodeApiService();
     const overviewExport = useStockOverviewExport();
+    const stocktakeApi = new StocktakeApiService();
+    const stocktakeOverdue = ref(0);
+
+    async function loadStocktakeCount() {
+        try {
+            const result = await stocktakeApi.queueAsync(1);
+            stocktakeOverdue.value = result.total;
+        } catch {
+            stocktakeOverdue.value = 0;
+        }
+    }
 
     const router = useRouter();
     const route = useRoute();
@@ -650,6 +674,7 @@
             shoppingListStore.refreshAsync(),
             recipeStore.getRecipesAsync(),
             loadStockGroups(),
+            loadStocktakeCount(),
         ]);
         // Apply *after* the supporting data is loaded so the filter chips
         // visibly snap to the linked-from state on the first render.
@@ -674,5 +699,15 @@
     .stock-peek {
         max-height: 80vh;
         overflow-y: auto;
+    }
+    /* X1: glow the Stocktake button when items need attention so the
+       user notices it at a glance from the overview. */
+    .stocktake-glow {
+        animation: stocktake-pulse 2s ease-in-out infinite;
+        border-color: #f5c462 !important;
+    }
+    @keyframes stocktake-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(245, 196, 98, 0.55); }
+        50%      { box-shadow: 0 0 0 8px rgba(245, 196, 98, 0); }
     }
 </style>

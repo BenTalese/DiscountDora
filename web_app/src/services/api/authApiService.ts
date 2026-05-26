@@ -49,6 +49,31 @@ export default class AuthApiService {
     changePasswordAsync = async (command: ChangePasswordCommand): Promise<void> =>
         await this.httpClient.post<void, ChangePasswordCommand>('/auth/me/password', command);
 
+    // ── A1 out-of-band flows ───────────────────────────────────────
+    verifyEmailAsync = async (token: string): Promise<void> =>
+        await this.httpClient.post<void, { token: string }>('/auth/verify-email', { token });
+
+    resendVerificationAsync = async (email: string): Promise<void> =>
+        await this.httpClient.post<void, { email: string }>('/auth/resend-verification', { email });
+
+    forgotPasswordAsync = async (email: string): Promise<void> =>
+        await this.httpClient.post<void, { email: string }>('/auth/forgot-password', { email });
+
+    resetPasswordAsync = async (token: string, newPassword: string): Promise<void> =>
+        await this.httpClient.post<void, { token: string; new_password: string }>(
+            '/auth/reset-password', { token, new_password: newPassword },
+        );
+
+    requestEmailChangeAsync = async (newEmail: string): Promise<void> =>
+        await this.httpClient.post<void, { new_email: string }>(
+            '/auth/me/email', { new_email: newEmail },
+        );
+
+    confirmEmailChangeAsync = async (token: string): Promise<void> =>
+        await this.httpClient.post<void, { token: string }>(
+            '/auth/email-change/confirm', { token },
+        );
+
     getMeAsync = async (): Promise<AuthenticatedUser | null> => {
         try {
             return await this.httpClient.get<AuthenticatedUser>('/auth/me');

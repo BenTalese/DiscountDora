@@ -53,6 +53,9 @@ export function useStockFilters(sources: {
     const openOnly = ref(false);
     const hasAlertOnly = ref(false);
     const usedInRecipeOnly = ref(false);
+    // X5 — "items that will silently jump onto my list when low". Surfaced
+    // as its own chip so users can audit / find auto-add-prone items.
+    const autoAddOnly = ref(false);
     const cartFilter = ref<StockCartFilter>('all');
     const sortBy = ref<StockSortKey>('name_asc');
 
@@ -172,6 +175,7 @@ export function useStockFilters(sources: {
                 return false;
             if (groupFilter.value && item.stock_group_id !== groupFilter.value) return false;
             if (essentialsOnly.value && !item.is_flagged) return false;
+            if (autoAddOnly.value && !item.auto_add_when_low) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
             if (
@@ -245,6 +249,7 @@ export function useStockFilters(sources: {
         locationFilter.value = null;
         groupFilter.value = null;
         essentialsOnly.value = false;
+        autoAddOnly.value = false;
         openOnly.value = false;
         hasAlertOnly.value = false;
         usedInRecipeOnly.value = false;
@@ -258,6 +263,7 @@ export function useStockFilters(sources: {
         locationFilter,
         groupFilter,
         essentialsOnly,
+        autoAddOnly,
         openOnly,
         hasAlertOnly,
         usedInRecipeOnly,

@@ -1,3 +1,4 @@
+import { ICONS } from 'src/style/icons';
 // Screen-aware quick actions for the Dora assistant (P14).
 //
 // `contextualActionsFor` returns a list of actions tailored to the current
@@ -43,20 +44,20 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: 'Find cheaper alternatives',
-                icon: 'price_check',
+                icon: ICONS.price_check,
                 path: '/product-search',
                 query: { stock_item_id: id },
             },
             {
                 kind: 'add_to_list',
                 label: 'Add to my list',
-                icon: 'add_shopping_cart',
+                icon: ICONS.add_shopping_cart,
                 stockItemId: id,
             },
             {
                 kind: 'navigate',
                 label: 'Find substitutes',
-                icon: 'swap_horiz',
+                icon: ICONS.swap_horiz,
                 path: `/stock/${id}`,
                 query: { section: 'substitutes' },
             },
@@ -74,20 +75,20 @@ export function contextualActionsFor(
             {
                 kind: 'whats_missing',
                 label: "What's missing?",
-                icon: 'fact_check',
+                icon: ICONS.fact_check,
                 recipeId: id,
             },
             {
                 kind: 'navigate',
                 label: 'Plan this for a day',
-                icon: 'event_note',
+                icon: ICONS.event_note,
                 path: '/meal-plans',
                 query: { recipe_id: id },
             },
             {
                 kind: 'add_missing',
                 label: 'Add missing to a list',
-                icon: 'add_shopping_cart',
+                icon: ICONS.add_shopping_cart,
                 recipeId: id,
             },
         ];
@@ -99,14 +100,14 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: "Items needing attention",
-                icon: 'priority_high',
+                icon: ICONS.priority_high,
                 path: '/stock',
                 query: { attention: 'true' },
             },
             {
                 kind: 'quick_add',
                 label: 'Quick-add to my list',
-                icon: 'add_shopping_cart',
+                icon: ICONS.add_shopping_cart,
             },
         ];
     }
@@ -117,7 +118,7 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: 'Cookable now',
-                icon: 'check_circle',
+                icon: ICONS.check_circle,
                 path: '/recipes',
                 query: { cookable: 'true' },
             },
@@ -130,7 +131,7 @@ export function contextualActionsFor(
             {
                 kind: 'quick_add',
                 label: 'Quick-add an item',
-                icon: 'add',
+                icon: ICONS.add,
                 listId: params.id,
             },
         ];
@@ -142,7 +143,7 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: 'Find a recipe to cook',
-                icon: 'menu_book',
+                icon: ICONS.menu_book,
                 path: '/recipes',
                 query: { cookable: 'true' },
             },
@@ -155,7 +156,7 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: 'Hunt for fresh deals',
-                icon: 'search',
+                icon: ICONS.search,
                 path: '/product-search',
             },
         ];
@@ -179,7 +180,7 @@ export function contextualActionsFor(
             {
                 kind: 'navigate',
                 label: 'See what needs attention',
-                icon: 'priority_high',
+                icon: ICONS.priority_high,
                 path: '/stock',
                 query: { attention: 'true' },
             },

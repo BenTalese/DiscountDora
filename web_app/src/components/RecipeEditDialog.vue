@@ -140,12 +140,12 @@
                             flat
                             round
                             dense
-                            icon="delete"
+                            :icon="ICONS.delete"
                             color="negative"
                             @click="removeIngredient(idx)"
                         />
                     </div>
-                    <q-btn flat icon="add" label="Add ingredient" @click="addIngredient" />
+                    <q-btn flat :icon="ICONS.add" label="Add ingredient" @click="addIngredient" />
 
                     <q-card-actions align="right">
                         <q-btn flat label="Cancel" @click="$emit('update:modelValue', false)" />
@@ -158,6 +158,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { Recipe } from 'src/models/recipe';

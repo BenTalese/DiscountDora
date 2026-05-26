@@ -1,3 +1,4 @@
+import { ICONS } from 'src/style/icons';
 // Mirrors AlertDto/AlertsDto from dora_api/features/alerts/get_alerts.py.
 
 export type AlertSeverity = 'high' | 'medium' | 'low';
@@ -38,17 +39,17 @@ export type AlertAction =
 export function iconFor(kind: AlertKind): string {
     switch (kind) {
         case 'expired':
-            return 'event_busy';
+            return ICONS.event_busy;
         case 'expiring_soon':
-            return 'schedule';
+            return ICONS.schedule;
         case 'out_of_stock':
-            return 'remove_shopping_cart';
+            return ICONS.remove_shopping_cart;
         case 'low_stock':
-            return 'trending_down';
+            return ICONS.trending_down;
         case 'stocktake_overdue':
-            return 'fact_check';
+            return ICONS.fact_check;
         case 'essential_low':
-            return 'priority_high';
+            return ICONS.priority_high;
     }
 }
 
@@ -65,18 +66,18 @@ export function actionsFor(kind: AlertKind): { action: AlertAction; label: strin
         case 'expired':
         case 'expiring_soon':
             return [
-                { action: 'extend_expiry', label: 'Push 7 days', icon: 'event_repeat' },
-                { action: 'reset_expiry', label: 'Clear expiry', icon: 'event_busy' },
+                { action: 'extend_expiry', label: 'Push 7 days', icon: ICONS.event_repeat },
+                { action: 'reset_expiry', label: 'Clear expiry', icon: ICONS.event_busy },
             ];
         case 'out_of_stock':
         case 'low_stock':
         case 'essential_low':
             return [
-                { action: 'mark_restocked', label: 'Mark restocked', icon: 'inventory' },
+                { action: 'mark_restocked', label: 'Mark restocked', icon: ICONS.inventory },
             ];
         case 'stocktake_overdue':
             return [
-                { action: 'acknowledge_stocktake', label: 'Looks fine', icon: 'check' },
+                { action: 'acknowledge_stocktake', label: 'Looks fine', icon: ICONS.check },
             ];
     }
 }

@@ -71,7 +71,7 @@
                     rel="noopener"
                 >
                     <q-item-section avatar>
-                        <q-icon name="open_in_new" />
+                        <q-icon :name="ICONS.open_in_new" />
                     </q-item-section>
                     <q-item-section>
                         <q-item-label>Project repository</q-item-label>
@@ -87,7 +87,7 @@
                     rel="noopener"
                 >
                     <q-item-section avatar>
-                        <q-icon name="bug_report" />
+                        <q-icon :name="ICONS.bug_report" />
                     </q-item-section>
                     <q-item-section>
                         <q-item-label>Report a bug</q-item-label>
@@ -106,6 +106,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
     import { computed } from 'vue';
 

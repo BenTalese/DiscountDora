@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <q-btn flat round dense icon="arrow_back" @click="goBack" />
+            <q-btn flat round dense :icon="ICONS.arrow_back" @click="goBack" />
             <div class="q-ml-sm col">
                 <div class="text-h5">
                     <span v-if="!editingName">{{ detail?.name ?? 'Loading…' }}</span>
@@ -21,7 +21,7 @@
                         round
                         dense
                         size="sm"
-                        icon="edit"
+                        :icon="ICONS.edit"
                         @click="startNameEdit"
                     >
                         <q-tooltip>Rename</q-tooltip>
@@ -40,7 +40,7 @@
                     v-if="!detail.is_primary"
                     flat
                     no-caps
-                    icon="star_outline"
+                    :icon="ICONS.star_outline"
                     label="Set primary"
                     @click="setPrimary"
                 />
@@ -49,7 +49,7 @@
                     dense
                     color="primary"
                     text-color="white"
-                    icon="star"
+                    :icon="ICONS.star"
                 >
                     Primary
                 </q-chip>
@@ -57,7 +57,7 @@
                     flat
                     round
                     dense
-                    icon="more_vert"
+                    :icon="ICONS.more_vert"
                 >
                     <q-menu anchor="bottom right" self="top right">
                         <q-list dense style="min-width: 220px">
@@ -86,7 +86,7 @@
                                 @click="onRefreshDeals"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="refresh" />
+                                    <q-icon :name="ICONS.refresh" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Refresh deals</q-item-label>
@@ -102,7 +102,7 @@
                                 @click="onAppendLowEssentials"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="bolt" color="primary" />
+                                    <q-icon :name="ICONS.bolt" color="primary" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Append low + essentials</q-item-label>
@@ -121,7 +121,7 @@
                                 @click="onMoveUnticked"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="drive_file_move" />
+                                    <q-icon :name="ICONS.drive_file_move" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>
@@ -145,7 +145,7 @@
                                 @click="onSaveAsTemplate"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="bookmark_add" />
+                                    <q-icon :name="ICONS.bookmark_add" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Save as template</q-item-label>
@@ -162,7 +162,7 @@
                                 @click="onReviewComplete"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="fact_check" />
+                                    <q-icon :name="ICONS.fact_check" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Finish review</q-item-label>
@@ -179,7 +179,7 @@
                                 @click="onExportCsv"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="file_download" />
+                                    <q-icon :name="ICONS.file_download" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Export as CSV</q-item-label>
@@ -195,7 +195,7 @@
                                 @click="onPrint"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="print" />
+                                    <q-icon :name="ICONS.print" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Print / Save as PDF</q-item-label>
@@ -212,7 +212,7 @@
                                 @click="onClearAll"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="playlist_remove" color="negative" />
+                                    <q-icon :name="ICONS.playlist_remove" color="negative" />
                                 </q-item-section>
                                 <q-item-section class="text-negative">
                                     Clear all items
@@ -238,7 +238,7 @@
                     v-if="!detail.is_in_progress"
                     color="primary"
                     no-caps
-                    icon="play_arrow"
+                    :icon="ICONS.play_arrow"
                     label="Start shopping"
                     :loading="togglingProgress"
                     @click="onStartShopping"
@@ -247,7 +247,7 @@
                     v-else
                     flat
                     no-caps
-                    icon="pause"
+                    :icon="ICONS.pause"
                     label="Stop shopping"
                     :loading="togglingProgress"
                     @click="onStopShopping"
@@ -255,7 +255,7 @@
                 <q-btn
                     color="positive"
                     no-caps
-                    icon="check_circle"
+                    :icon="ICONS.check_circle"
                     label="Finish shopping"
                     :loading="finishing"
                     @click="onFinish"
@@ -265,7 +265,7 @@
                 <q-btn
                     flat
                     no-caps
-                    icon="content_copy"
+                    :icon="ICONS.content_copy"
                     label="Copy to new list"
                     @click="copyAll"
                 />
@@ -289,7 +289,7 @@
                 rounded
             >
                 <template #avatar>
-                    <q-icon name="shopping_cart_checkout" size="24px" />
+                    <q-icon :name="ICONS.shopping_cart_checkout" size="24px" />
                 </template>
                 <strong>Shopping in progress.</strong>
                 Tick items off as you grab them. The list is locked from edits.
@@ -298,7 +298,7 @@
                         flat
                         no-caps
                         color="white"
-                        icon="pause"
+                        :icon="ICONS.pause"
                         label="Stop shopping"
                         :loading="togglingProgress"
                         @click="onStopShopping"
@@ -320,7 +320,7 @@
                     <q-btn
                         color="primary"
                         no-caps
-                        icon="add"
+                        :icon="ICONS.add"
                         label="Quick add an item"
                         :disable="detail.is_archived"
                         @click="onOpenQuickAdd"
@@ -361,7 +361,7 @@
                         <q-btn
                             flat
                             no-caps
-                            icon="checklist"
+                            :icon="ICONS.checklist"
                             label="Select"
                             @click="enterBulkMode"
                         />
@@ -376,7 +376,7 @@
                         <q-btn
                             flat
                             no-caps
-                            icon="check_box"
+                            :icon="ICONS.check_box"
                             label="Tick selected"
                             :disable="bulkSelection.size === 0"
                             :loading="bulkBusy"
@@ -385,7 +385,7 @@
                         <q-btn
                             flat
                             no-caps
-                            icon="check_box_outline_blank"
+                            :icon="ICONS.check_box_outline_blank"
                             label="Untick"
                             :disable="bulkSelection.size === 0"
                             :loading="bulkBusy"
@@ -448,7 +448,7 @@
                                 top
                                 class="shopping-line-drag-handle"
                             >
-                                <q-icon name="drag_indicator" color="grey-5" />
+                                <q-icon :name="ICONS.drag_indicator" color="grey-5" />
                                 <q-tooltip>Drag to reorder</q-tooltip>
                             </q-item-section>
                             <q-item-section v-if="bulkMode" side top>
@@ -495,7 +495,7 @@
                                         size="sm"
                                         color="blue-grey-2"
                                         text-color="blue-grey-10"
-                                        icon="auto_awesome"
+                                        :icon="ICONS.auto_awesome"
                                         class="q-mr-sm"
                                     >
                                         {{ addedViaLabel(line.added_via) }}
@@ -504,7 +504,7 @@
                                         v-if="line.stock_location_breadcrumb.length > 0"
                                         class="q-mr-sm"
                                     >
-                                        <q-icon name="place" size="14px" />
+                                        <q-icon :name="ICONS.place" size="14px" />
                                         {{ line.stock_location_breadcrumb.join(' › ') }}
                                     </span>
                                     <span v-if="line.offers.length > 0">
@@ -585,7 +585,7 @@
                                         round
                                         dense
                                         size="sm"
-                                        icon="remove"
+                                        :icon="ICONS.remove"
                                         :disable="detail.is_archived || (line.quantity ?? 0) <= 0"
                                         @click="onAdjustQuantity(line, -1)"
                                     />
@@ -609,7 +609,7 @@
                                         round
                                         dense
                                         size="sm"
-                                        icon="add"
+                                        :icon="ICONS.add"
                                         :disable="detail.is_archived"
                                         @click="onAdjustQuantity(line, 1)"
                                     />
@@ -628,7 +628,7 @@
                                     flat
                                     round
                                     dense
-                                    icon="more_vert"
+                                    :icon="ICONS.more_vert"
                                     :disable="detail.is_archived"
                                 >
                                     <q-menu auto-close>
@@ -638,7 +638,7 @@
                                                 @click="onSwapSubstitute(line)"
                                             >
                                                 <q-item-section avatar>
-                                                    <q-icon name="swap_horiz" />
+                                                    <q-icon :name="ICONS.swap_horiz" />
                                                 </q-item-section>
                                                 <q-item-section>
                                                     Swap with substitute…
@@ -650,7 +650,7 @@
                                                 @click="onMoveLine(line)"
                                             >
                                                 <q-item-section avatar>
-                                                    <q-icon name="drive_file_move" />
+                                                    <q-icon :name="ICONS.drive_file_move" />
                                                 </q-item-section>
                                                 <q-item-section>
                                                     <q-item-label>Move to another list…</q-item-label>
@@ -668,7 +668,7 @@
                                                 @click="onRemoveLine(line.line_id)"
                                             >
                                                 <q-item-section avatar>
-                                                    <q-icon name="delete_outline" color="negative" />
+                                                    <q-icon :name="ICONS.delete_outline" color="negative" />
                                                 </q-item-section>
                                                 <q-item-section class="text-negative">
                                                     Remove from list
@@ -693,7 +693,7 @@
             >
                 <q-card-section>
                     <div class="row items-center q-mb-sm">
-                        <q-icon name="preview" class="q-mr-sm" />
+                        <q-icon :name="ICONS.preview" class="q-mr-sm" />
                         <div class="text-subtitle1">
                             Review — {{ tickedCount }} item{{ tickedCount === 1 ? '' : 's' }} ready to finish
                         </div>
@@ -753,6 +753,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { notifyUndoable } from 'src/composables/useNotifyUndoable';

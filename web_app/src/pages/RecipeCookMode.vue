@@ -7,7 +7,7 @@
 
         <template v-else>
             <div class="row items-center q-mb-md">
-                <q-btn flat icon="arrow_back" label="Exit" @click="exitCookMode" />
+                <q-btn flat :icon="ICONS.arrow_back" label="Exit" @click="exitCookMode" />
                 <q-space />
                 <div class="text-h5 ellipsis">{{ recipe.name }}</div>
                 <q-space />
@@ -51,7 +51,7 @@
 
                 <q-card-section v-if="detectedTimerMinutes !== null" class="bg-grey-2">
                     <div class="row items-center q-gutter-sm">
-                        <q-icon name="timer" size="32px" color="primary" />
+                        <q-icon :name="ICONS.timer" size="32px" color="primary" />
                         <div class="text-h6">
                             {{ formatTimer(timerRemaining ?? detectedTimerMinutes * 60) }}
                         </div>
@@ -59,21 +59,21 @@
                         <q-btn
                             v-if="!timerRunning"
                             color="primary"
-                            icon="play_arrow"
+                            :icon="ICONS.play_arrow"
                             label="Start"
                             @click="startTimer(detectedTimerMinutes * 60)"
                         />
                         <q-btn
                             v-else
                             color="warning"
-                            icon="pause"
+                            :icon="ICONS.pause"
                             label="Pause"
                             @click="pauseTimer"
                         />
                         <q-btn
                             v-if="timerRemaining !== null"
                             flat
-                            icon="restart_alt"
+                            :icon="ICONS.restart_alt"
                             label="Reset"
                             @click="resetTimer"
                         />
@@ -84,14 +84,14 @@
             <div class="row q-gutter-sm justify-center q-mb-lg">
                 <q-btn
                     size="lg"
-                    icon="arrow_back"
+                    :icon="ICONS.arrow_back"
                     label="Previous"
                     :disable="currentStepIndex === 0"
                     @click="prevStep"
                 />
                 <q-btn
                     size="lg"
-                    icon="replay"
+                    :icon="ICONS.replay"
                     label="Repeat"
                     @click="speakCurrent"
                     :disable="!speechEnabled"
@@ -107,11 +107,11 @@
 
             <q-expansion-item
                 default-opened
-                icon="kitchen"
+                :icon="ICONS.kitchen"
                 header-class="text-subtitle1"
             >
                 <template #header>
-                    <q-item-section avatar><q-icon name="kitchen" /></q-item-section>
+                    <q-item-section avatar><q-icon :name="ICONS.kitchen" /></q-item-section>
                     <q-item-section>Ingredients</q-item-section>
                     <q-item-section side>
                         <span class="text-caption text-grey">
@@ -149,7 +149,7 @@
                                 v-if="row.ingredient.stock_location_id"
                                 caption
                             >
-                                <q-icon name="place" size="14px" />
+                                <q-icon :name="ICONS.place" size="14px" />
                                 {{ breadcrumbFor(row.ingredient.stock_location_id).join(' › ') }}
                             </q-item-label>
                         </q-item-section>
@@ -157,7 +157,7 @@
                 </q-list>
             </q-expansion-item>
 
-            <q-expansion-item label="All steps" icon="list" header-class="text-subtitle1">
+            <q-expansion-item label="All steps" :icon="ICONS.list" header-class="text-subtitle1">
                 <q-list>
                     <q-item
                         v-for="(step, idx) in steps"
@@ -201,6 +201,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
@@ -338,7 +339,7 @@
             if (timerRemaining.value <= 0) {
                 timerRemaining.value = 0;
                 pauseTimer();
-                $q.notify({ type: 'positive', message: 'Timer finished!', icon: 'timer' });
+                $q.notify({ type: 'positive', message: 'Timer finished!', icon: ICONS.timer });
                 if (speechEnabled.value) speak('Timer finished');
             }
         }, 1000);
@@ -471,7 +472,7 @@
                 }
             }
 
-            $q.notify({ type: 'positive', message: 'Nice cooking!', icon: 'check_circle' });
+            $q.notify({ type: 'positive', message: 'Nice cooking!', icon: ICONS.check_circle });
             finishDialogOpen.value = false;
             exitCookMode();
         } finally {

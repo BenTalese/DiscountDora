@@ -8,7 +8,7 @@
     >
         <q-card class="command-palette">
             <div class="row items-center q-px-md q-pt-md q-pb-sm">
-                <q-icon name="search" size="20px" class="q-mr-sm text-grey-7" />
+                <q-icon :name="ICONS.search" size="20px" class="q-mr-sm text-grey-7" />
                 <q-input
                     ref="inputRef"
                     v-model="query"
@@ -63,6 +63,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';

@@ -31,7 +31,7 @@
                 <q-btn
                     color="primary"
                     no-caps
-                    icon="add"
+                    :icon="ICONS.add"
                     label="Add"
                     :disable="!newNodeLocationId"
                     @click="onAddNode"
@@ -45,7 +45,7 @@
                     flat
                     round
                     dense
-                    icon="undo"
+                    :icon="ICONS.undo"
                     :disable="undoStack.length === 0"
                     @click="undo"
                 >
@@ -55,7 +55,7 @@
                     flat
                     round
                     dense
-                    icon="redo"
+                    :icon="ICONS.redo"
                     :disable="redoStack.length === 0"
                     @click="redo"
                 >
@@ -64,7 +64,7 @@
                 <q-btn
                     flat
                     no-caps
-                    icon="save"
+                    :icon="ICONS.save"
                     label="Save"
                     :loading="saving"
                     @click="saveNow"
@@ -73,7 +73,7 @@
                     flat
                     no-caps
                     color="negative"
-                    icon="restart_alt"
+                    :icon="ICONS.restart_alt"
                     label="Reset"
                     @click="onReset"
                 />
@@ -83,7 +83,7 @@
         <!-- ── Mobile read-only view ────────────────────────────────── -->
         <div v-if="isMobile" class="q-gutter-md">
             <q-banner class="bg-grey-2 text-grey-9" dense rounded>
-                <template #avatar><q-icon name="phone_iphone" /></template>
+                <template #avatar><q-icon :name="ICONS.phone_iphone" /></template>
                 Read-only view on mobile. Open Dora on a larger screen to
                 edit your pantry layout.
             </q-banner>
@@ -145,7 +145,7 @@
                                 </q-item-label>
                             </q-item-section>
                             <q-item-section side>
-                                <q-icon name="drag_indicator" color="grey-6" />
+                                <q-icon :name="ICONS.drag_indicator" color="grey-6" />
                             </q-item-section>
                         </q-item>
                     </q-list>
@@ -205,11 +205,11 @@
         >
             <q-list dense style="min-width: 200px">
                 <q-item clickable @click="onRenameNode">
-                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section avatar><q-icon :name="ICONS.edit" /></q-item-section>
                     <q-item-section>Rename label</q-item-section>
                 </q-item>
                 <q-item clickable @click="onChangeColour">
-                    <q-item-section avatar><q-icon name="palette" /></q-item-section>
+                    <q-item-section avatar><q-icon :name="ICONS.palette" /></q-item-section>
                     <q-item-section>Change colour…</q-item-section>
                 </q-item>
                 <q-item clickable @click="onToggleShape">
@@ -222,7 +222,7 @@
                 </q-item>
                 <q-separator />
                 <q-item clickable @click="onRemoveNode">
-                    <q-item-section avatar><q-icon name="close" color="negative" /></q-item-section>
+                    <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
                     <q-item-section class="text-negative">Remove from map</q-item-section>
                 </q-item>
             </q-list>
@@ -231,6 +231,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import Konva from 'konva';
     import { storeToRefs } from 'pinia';

@@ -6,6 +6,22 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **DS2 — icon set standardised on Material Design Icons (mdi-v7).**
+  Quasar `iconSet` switched to `mdi-v7`; the previous `material-icons`
+  font is kept loaded as a safety net for any straggler. New
+  [`web_app/src/style/icons.ts`](web_app/src/style/icons.ts) is the
+  single source of truth — every icon used by the app has a key in
+  this map. Keys are the historic Material Icons names (so swept
+  call sites read as `ICONS.add`, `ICONS.shopping_cart` etc.), with
+  a block of semantic aliases at the bottom (`ICONS.cartAdd`,
+  `ICONS.expiry`, `ICONS.essential`) that new code should prefer.
+  Mechanical sweep: ~287 static template `icon="x"` attrs, ~50
+  `<q-icon name="x">` static names, and every JS object literal
+  `{ icon: 'x' }` across 70+ files now route through `ICONS.x`.
+  `iconFor()` in [alert.ts](web_app/src/models/alert.ts) returns
+  `ICONS.*` values too. Grep `icon="[a-z_]+"` in `web_app/src/`
+  returns no hits.
+
 - **Theme families — five palettes, each in Light + Dark**.
   Restructure of the named-theme catalogue: instead of seven loose
   themes, the picker now shows five *families*, each with a Light and

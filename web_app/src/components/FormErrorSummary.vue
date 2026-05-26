@@ -7,13 +7,14 @@
         role="alert"
     >
         <template v-slot:avatar>
-            <q-icon name="error" color="negative" />
+            <q-icon :name="ICONS.error" color="negative" />
         </template>
         {{ message }}
     </q-banner>
 </template>
 
 <script setup lang="ts">
+    import { ICONS } from 'src/style/icons';
     defineProps<{
         message?: string | null;
     }>();

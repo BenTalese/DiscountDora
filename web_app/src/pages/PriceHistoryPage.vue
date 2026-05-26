@@ -18,7 +18,7 @@
                         placeholder="Search saved products"
                     >
                         <template #prepend>
-                            <q-icon name="search" size="16px" />
+                            <q-icon :name="ICONS.search" size="16px" />
                         </template>
                     </q-input>
                 </q-card-section>
@@ -97,7 +97,7 @@
                 <q-btn
                     flat
                     no-caps
-                    icon="notifications"
+                    :icon="ICONS.notifications"
                     label="Manage alerts"
                     class="q-ml-md"
                     @click="alertsOpen = true"
@@ -172,7 +172,7 @@
                                 <q-btn
                                     color="primary"
                                     no-caps
-                                    icon="notifications_active"
+                                    :icon="ICONS.notifications_active"
                                     label="Set alert"
                                     :disable="!alertInputs[s.product_id] || alertInputs[s.product_id]! <= 0"
                                     @click="onSetAlert(s.product_id)"
@@ -190,7 +190,7 @@
                 <q-card-section class="row items-center">
                     <div class="text-h6">Price alerts</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-separator />
                 <q-card-section v-if="alerts.length === 0" class="text-grey-7">
@@ -210,7 +210,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="delete"
+                                :icon="ICONS.delete"
                                 color="negative"
                                 no-caps
                                 label="Remove"
@@ -225,6 +225,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';

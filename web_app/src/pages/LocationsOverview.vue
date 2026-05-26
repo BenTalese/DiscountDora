@@ -8,7 +8,7 @@
             <q-btn
                 flat
                 no-caps
-                icon="search"
+                :icon="ICONS.search"
                 label="Search"
                 @click="searchOpen = true"
             />
@@ -16,7 +16,7 @@
                 flat
                 round
                 dense
-                icon="refresh"
+                :icon="ICONS.refresh"
                 :loading="loading"
                 @click="locationStore.refreshAsync"
             >
@@ -25,7 +25,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 label="New zone"
                 class="q-ml-sm"
                 @click="onCreateZone"
@@ -46,7 +46,7 @@
         </div>
 
         <div v-else-if="tree.length === 0" class="text-center text-grey q-py-xl">
-            <q-icon name="inbox" size="60px" class="q-mb-sm" />
+            <q-icon :name="ICONS.inbox" size="60px" class="q-mb-sm" />
             <div>No zones yet. Create one to get started.</div>
         </div>
 
@@ -143,7 +143,7 @@
                             </span>
                         </div>
                     </div>
-                    <q-btn flat round dense icon="close" v-close-popup />
+                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
 
                 <q-card-section class="q-py-sm">
@@ -151,7 +151,7 @@
                         <q-btn
                             color="primary"
                             no-caps
-                            icon="open_in_new"
+                            :icon="ICONS.open_in_new"
                             label="Open zone page"
                             size="sm"
                             @click="onOpenPanelZonePage"
@@ -159,7 +159,7 @@
                         <q-btn
                             outline
                             no-caps
-                            icon="priority_high"
+                            :icon="ICONS.priority_high"
                             label="Needs attention here"
                             size="sm"
                             :disable="(panelZone?.attention_score ?? 0) === 0"
@@ -168,7 +168,7 @@
                         <q-btn
                             outline
                             no-caps
-                            icon="auto_awesome"
+                            :icon="ICONS.auto_awesome"
                             :label="
                                 lowOrOutSubtreeIds.length > 0
                                     ? `Shopping list (${lowOrOutSubtreeIds.length})`
@@ -216,6 +216,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import ItemChip from 'src/components/locations/ItemChip.vue';
     import MoveItemDialog from 'src/components/locations/MoveItemDialog.vue';

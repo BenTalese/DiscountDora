@@ -17,7 +17,7 @@
                 v-if="showReload"
                 color="primary"
                 no-caps
-                icon="refresh"
+                :icon="ICONS.refresh"
                 label="Reload page"
                 @click="onReload"
             />
@@ -25,7 +25,7 @@
                 v-if="showDashboard"
                 outline
                 no-caps
-                icon="home"
+                :icon="ICONS.home"
                 label="Go to dashboard"
                 to="/"
             />
@@ -33,7 +33,7 @@
                 v-if="showReport"
                 flat
                 no-caps
-                icon="bug_report"
+                :icon="ICONS.bug_report"
                 label="Report this"
                 type="a"
                 :href="reportUrl"
@@ -45,6 +45,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
 
     const props = withDefaults(

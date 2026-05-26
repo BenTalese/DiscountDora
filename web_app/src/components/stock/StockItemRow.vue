@@ -26,7 +26,7 @@
                 v-if="item.stock_location_id"
                 dense
                 clickable
-                icon="place"
+                :icon="ICONS.place"
                 color="grey-3"
                 text-color="grey-9"
                 @click.stop="emit('filter-location', item.stock_location_id!)"
@@ -40,7 +40,7 @@
                 v-if="onLists.length > 0"
                 dense
                 clickable
-                icon="shopping_cart"
+                :icon="ICONS.shopping_cart"
                 color="primary"
                 text-color="white"
                 @click.stop
@@ -60,7 +60,7 @@
                                 <span v-if="l.is_primary"> (primary)</span>
                             </q-item-section>
                             <q-item-section side>
-                                <q-icon name="open_in_new" size="16px" />
+                                <q-icon :name="ICONS.open_in_new" size="16px" />
                             </q-item-section>
                         </q-item>
                     </q-list>
@@ -104,7 +104,7 @@
                 dense
                 round
                 size="sm"
-                icon="menu_book"
+                :icon="ICONS.menu_book"
                 color="primary"
                 @click.stop="actions.seeRecipesUsing(item.stock_item_id)"
             >
@@ -184,6 +184,7 @@
 </template>
 
 <script setup lang="ts">
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
@@ -269,7 +270,7 @@
         const date = props.item.expiry_date;
         if (!date) {
             return {
-                icon: 'event_available',
+                icon: ICONS.event_available,
                 colour: 'grey-5',
                 tooltip: 'No expiry set — click to push or set one',
             };
@@ -277,10 +278,10 @@
         const ms = new Date(date).getTime();
         const expired = ms < Date.now();
         const soon = (ms - Date.now()) / 86_400_000 <= 7;
-        if (expired) return { icon: 'error', colour: 'negative', tooltip: `Expired ${date}` };
+        if (expired) return { icon: ICONS.error, colour: 'negative', tooltip: `Expired ${date}` };
         if (soon)
-            return { icon: 'event_busy', colour: 'orange-9', tooltip: `Expires ${date}` };
-        return { icon: 'event_available', colour: 'positive', tooltip: `Expires ${date}` };
+            return { icon: ICONS.event_busy, colour: 'orange-9', tooltip: `Expires ${date}` };
+        return { icon: ICONS.event_available, colour: 'positive', tooltip: `Expires ${date}` };
     });
 
     async function clearExpiry() {
@@ -307,13 +308,13 @@
             shoppingListStore.membership as Membership | null,
         );
         if (state === 'none')
-            return { icon: 'add_shopping_cart', colour: undefined, tooltip: 'Add to primary list' };
+            return { icon: ICONS.add_shopping_cart, colour: undefined, tooltip: 'Add to primary list' };
         if (state === 'on_primary')
-            return { icon: 'shopping_cart', colour: 'primary', tooltip: 'On your primary list' };
+            return { icon: ICONS.shopping_cart, colour: 'primary', tooltip: 'On your primary list' };
         if (state === 'on_other')
-            return { icon: 'shopping_cart', colour: 'accent', tooltip: 'On a non-primary list' };
+            return { icon: ICONS.shopping_cart, colour: 'accent', tooltip: 'On a non-primary list' };
         return {
-            icon: 'shopping_cart_checkout',
+            icon: ICONS.shopping_cart_checkout,
             colour: 'amber-9',
             tooltip: 'On multiple lists',
         };

@@ -11,7 +11,7 @@
             <q-btn-dropdown
                 color="primary"
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 label="New list"
                 :loading="creating || autogenerating"
                 split
@@ -21,7 +21,7 @@
                     <q-item-label header class="q-pb-none">From your stock</q-item-label>
                     <q-item clickable v-close-popup @click="onAutogenerateNew('flagged')">
                         <q-item-section avatar>
-                            <q-icon name="auto_awesome" color="primary" />
+                            <q-icon :name="ICONS.auto_awesome" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>From flagged items</q-item-label>
@@ -32,7 +32,7 @@
                     </q-item>
                     <q-item clickable v-close-popup @click="openAdvancedAutogen">
                         <q-item-section avatar>
-                            <q-icon name="tune" color="primary" />
+                            <q-icon :name="ICONS.tune" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>Advanced auto-generate…</q-item-label>
@@ -43,7 +43,7 @@
                     </q-item>
                     <q-item clickable v-close-popup @click="onAutogenerateNew('low_or_out')">
                         <q-item-section avatar>
-                            <q-icon name="warning" color="warning" />
+                            <q-icon :name="ICONS.warning" color="warning" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>
@@ -69,7 +69,7 @@
                         @click="onAutogenerateOntoPrimary"
                     >
                         <q-item-section avatar>
-                            <q-icon name="playlist_add" color="primary" />
+                            <q-icon :name="ICONS.playlist_add" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>Top up the primary list</q-item-label>
@@ -83,7 +83,7 @@
                     <q-item-label header class="q-pb-none">From your cooking</q-item-label>
                     <q-item clickable v-close-popup @click="onPickRecipe">
                         <q-item-section avatar>
-                            <q-icon name="menu_book" color="primary" />
+                            <q-icon :name="ICONS.menu_book" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>From a recipe…</q-item-label>
@@ -94,7 +94,7 @@
                     </q-item>
                     <q-item clickable v-close-popup @click="onPickMealPlan">
                         <q-item-section avatar>
-                            <q-icon name="event_note" color="primary" />
+                            <q-icon :name="ICONS.event_note" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>From a meal plan…</q-item-label>
@@ -107,7 +107,7 @@
                     <q-item-label header class="q-pb-none">Other</q-item-label>
                     <q-item clickable v-close-popup @click="onPickTemplate">
                         <q-item-section avatar>
-                            <q-icon name="bookmarks" color="primary" />
+                            <q-icon :name="ICONS.bookmarks" color="primary" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>From a template…</q-item-label>
@@ -118,7 +118,7 @@
                     </q-item>
                     <q-item clickable v-close-popup to="/shopping-lists/templates">
                         <q-item-section avatar>
-                            <q-icon name="settings" />
+                            <q-icon :name="ICONS.settings" />
                         </q-item-section>
                         <q-item-section>Manage templates…</q-item-section>
                     </q-item>
@@ -154,7 +154,7 @@
         </div>
 
         <div v-else-if="visibleLists.length === 0" class="text-center text-grey q-py-xl">
-            <q-icon name="shopping_cart" size="60px" class="q-mb-sm" />
+            <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
             <template v-if="tab === 'active'">
                 <div class="text-h6">No active shopping lists yet.</div>
                 <div
@@ -167,7 +167,7 @@
                         <q-btn
                             color="primary"
                             no-caps
-                            icon="auto_awesome"
+                            :icon="ICONS.auto_awesome"
                             :label="`Auto-generate from low/out (${lowOrOutCount})`"
                             :loading="autogenerating"
                             @click="onAutogenerateNew('low_or_out')"
@@ -175,7 +175,7 @@
                         <q-btn
                             outline
                             no-caps
-                            icon="add"
+                            :icon="ICONS.add"
                             label="Empty list"
                             :loading="creating"
                             @click="onCreate"
@@ -227,11 +227,11 @@
                             </div>
                         </div>
 
-                        <q-btn flat round dense icon="more_vert" @click.stop>
+                        <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
                             <q-menu>
                                 <q-list dense style="min-width: 220px">
                                     <q-item clickable v-close-popup @click.stop="openList(list.shopping_list_id)">
-                                        <q-item-section avatar><q-icon name="open_in_new" /></q-item-section>
+                                        <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
                                         <q-item-section>Open</q-item-section>
                                     </q-item>
                                     <q-item
@@ -240,7 +240,7 @@
                                         v-close-popup
                                         @click.stop="setPrimary(list.shopping_list_id)"
                                     >
-                                        <q-item-section avatar><q-icon name="star" /></q-item-section>
+                                        <q-item-section avatar><q-icon :name="ICONS.star" /></q-item-section>
                                         <q-item-section>Set as primary</q-item-section>
                                     </q-item>
                                     <q-item
@@ -253,7 +253,7 @@
                                         @click.stop="copyList(list.shopping_list_id, 'unticked')"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="content_copy" />
+                                            <q-icon :name="ICONS.content_copy" />
                                         </q-item-section>
                                         <q-item-section>
                                             <q-item-label>Copy unticked → new list</q-item-label>
@@ -271,7 +271,7 @@
                                         v-close-popup
                                         @click.stop="copyList(list.shopping_list_id, 'all')"
                                     >
-                                        <q-item-section avatar><q-icon name="content_copy" /></q-item-section>
+                                        <q-item-section avatar><q-icon :name="ICONS.content_copy" /></q-item-section>
                                         <q-item-section>Copy archived → new list</q-item-section>
                                     </q-item>
                                     <q-separator />
@@ -281,7 +281,7 @@
                                         v-close-popup
                                         @click.stop="archiveList(list)"
                                     >
-                                        <q-item-section avatar><q-icon name="archive" /></q-item-section>
+                                        <q-item-section avatar><q-icon :name="ICONS.archive" /></q-item-section>
                                         <q-item-section>Archive list</q-item-section>
                                     </q-item>
                                     <q-item
@@ -290,7 +290,7 @@
                                         @click.stop="onDelete(list)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="delete" color="negative" />
+                                            <q-icon :name="ICONS.delete" color="negative" />
                                         </q-item-section>
                                         <q-item-section class="text-negative">
                                             Delete list
@@ -433,6 +433,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import {

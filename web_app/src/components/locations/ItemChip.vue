@@ -12,9 +12,9 @@
         @dragend="onDragEnd"
     >
         <q-avatar v-if="item.is_flagged" color="amber-10" text-color="white">
-            <q-icon name="flag" size="14px" />
+            <q-icon :name="ICONS.flag" size="14px" />
         </q-avatar>
-        <q-icon name="drag_indicator" size="14px" class="q-mr-xs drag-handle" />
+        <q-icon :name="ICONS.drag_indicator" size="14px" class="q-mr-xs drag-handle" />
         <span>{{ item.name }}</span>
         <q-badge
             v-if="item.attention_score > 0"
@@ -27,7 +27,7 @@
             flat
             round
             dense
-            icon="drive_file_move"
+            :icon="ICONS.drive_file_move"
             size="sm"
             class="q-ml-xs"
             @click.stop="emit('move')"
@@ -38,7 +38,7 @@
             flat
             round
             dense
-            icon="more_vert"
+            :icon="ICONS.more_vert"
             size="sm"
             class="q-ml-xs"
             @click.stop
@@ -50,7 +50,7 @@
                         @click="actions.addToList(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="add_shopping_cart" />
+                            <q-icon :name="ICONS.add_shopping_cart" />
                         </q-item-section>
                         <q-item-section>Add to primary list</q-item-section>
                     </q-item>
@@ -59,7 +59,7 @@
                         @click="actions.markRestocked(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="refresh" />
+                            <q-icon :name="ICONS.refresh" />
                         </q-item-section>
                         <q-item-section>Mark restocked</q-item-section>
                     </q-item>
@@ -68,7 +68,7 @@
                         @click="actions.pushExpiry(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="event" />
+                            <q-icon :name="ICONS.event" />
                         </q-item-section>
                         <q-item-section>Push expiry +7 days</q-item-section>
                     </q-item>
@@ -78,7 +78,7 @@
                         @click="actions.findSubstitutes(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="swap_horiz" />
+                            <q-icon :name="ICONS.swap_horiz" />
                         </q-item-section>
                         <q-item-section>Find substitutes</q-item-section>
                     </q-item>
@@ -87,7 +87,7 @@
                         @click="actions.seeRecipesUsing(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="menu_book" />
+                            <q-icon :name="ICONS.menu_book" />
                         </q-item-section>
                         <q-item-section>See recipes using this</q-item-section>
                     </q-item>
@@ -97,7 +97,7 @@
                         @click="actions.openDetail(item.stock_item_id)"
                     >
                         <q-item-section avatar>
-                            <q-icon name="open_in_new" />
+                            <q-icon :name="ICONS.open_in_new" />
                         </q-item-section>
                         <q-item-section>Open detail</q-item-section>
                     </q-item>
@@ -111,6 +111,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { attentionColor, summarizeReasons, type LocationItem } from 'src/models/location';
     import { computed, ref } from 'vue';

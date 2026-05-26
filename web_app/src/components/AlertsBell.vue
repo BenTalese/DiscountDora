@@ -22,7 +22,7 @@
         <q-dialog v-model="open" position="right" full-height seamless>
             <q-card class="alerts-panel column no-wrap" flat>
                 <q-card-section class="row items-center q-pb-none">
-                    <q-icon name="notifications" size="22px" class="q-mr-sm" />
+                    <q-icon :name="ICONS.notifications" size="22px" class="q-mr-sm" />
                     <div class="col">
                         <div class="text-h6">What needs your attention</div>
                         <div class="text-caption text-grey">
@@ -39,8 +39,8 @@
                             </span>
                         </div>
                     </div>
-                    <q-btn flat round dense icon="refresh" :loading="loading" @click="refresh" />
-                    <q-btn flat round dense icon="close" @click="open = false" />
+                    <q-btn flat round dense :icon="ICONS.refresh" :loading="loading" @click="refresh" />
+                    <q-btn flat round dense :icon="ICONS.close" @click="open = false" />
                 </q-card-section>
 
                 <q-separator class="q-mt-sm" />
@@ -117,7 +117,7 @@
                                                 dense
                                                 outline
                                                 no-caps
-                                                icon="filter_list"
+                                                :icon="ICONS.filter_list"
                                                 label="View in context"
                                                 @click.stop="viewInContext(alert)"
                                             />
@@ -129,7 +129,7 @@
                                                 dense
                                                 flat
                                                 no-caps
-                                                icon="snooze"
+                                                :icon="ICONS.snooze"
                                                 label="Snooze 7d"
                                                 @click.stop="snooze(alert)"
                                             >
@@ -149,7 +149,7 @@
                     <q-expansion-item
                         v-if="snoozedCount > 0"
                         class="alerts-snoozed-section"
-                        icon="snooze"
+                        :icon="ICONS.snooze"
                         :label="`Snoozed (${snoozedCount})`"
                         header-class="text-grey-7"
                     >
@@ -181,7 +181,7 @@
                                         dense
                                         no-caps
                                         size="sm"
-                                        icon="undo"
+                                        :icon="ICONS.undo"
                                         label="Unsnooze"
                                         @click.stop="unsnooze(alert)"
                                     />
@@ -192,7 +192,7 @@
 
                     <q-item v-if="!loading && totalCount === 0 && snoozedCount === 0">
                         <q-item-section class="text-center text-grey q-py-lg">
-                            <q-icon name="check_circle" size="48px" color="positive" />
+                            <q-icon :name="ICONS.check_circle" size="48px" color="positive" />
                             <div class="q-mt-sm">Nothing to do right now.</div>
                         </q-item-section>
                     </q-item>
@@ -208,7 +208,7 @@
                         unelevated
                         color="primary"
                         no-caps
-                        icon="add_shopping_cart"
+                        :icon="ICONS.add_shopping_cart"
                         :label="`Add ${lowOrOutStockItemIds.length} low/out item${
                             lowOrOutStockItemIds.length === 1 ? '' : 's'
                         } to primary list`"
@@ -226,6 +226,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import {
@@ -285,9 +286,9 @@
             buckets[a.severity].push(a);
         }
         return [
-            { severity: 'high', label: 'High priority', icon: 'priority_high', items: buckets.high },
-            { severity: 'medium', label: 'Medium', icon: 'warning', items: buckets.medium },
-            { severity: 'low', label: 'Low / FYI', icon: 'info', items: buckets.low },
+            { severity: 'high', label: 'High priority', icon: ICONS.priority_high, items: buckets.high },
+            { severity: 'medium', label: 'Medium', icon: ICONS.warning, items: buckets.medium },
+            { severity: 'low', label: 'Low / FYI', icon: ICONS.info, items: buckets.low },
         ];
     });
 

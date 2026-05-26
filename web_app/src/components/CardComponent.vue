@@ -37,7 +37,7 @@
                 <q-btn
                     class="absolute dorascoped-top-right-offset"
                     :class="iconClass"
-                    :icon="icon"
+                    ::icon="ICONS.icon"
                     @click="emit('icon-click')"
                     color="white"
                     fab
@@ -56,6 +56,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     //#region Props & Emits
 
     interface ICardComponentProps {

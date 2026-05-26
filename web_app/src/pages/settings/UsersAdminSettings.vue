@@ -3,7 +3,7 @@
         <q-card-section class="row items-center">
             <div>
                 <div class="text-h6">
-                    <q-icon name="group" size="20px" class="q-mr-xs" />
+                    <q-icon :name="ICONS.group" size="20px" class="q-mr-xs" />
                     Users
                 </div>
                 <div class="text-caption text-grey">
@@ -15,7 +15,7 @@
                 flat
                 round
                 dense
-                icon="refresh"
+                :icon="ICONS.refresh"
                 :loading="loading"
                 @click="loadUsers"
             >
@@ -92,7 +92,7 @@
                             flat
                             dense
                             no-caps
-                            icon="edit"
+                            :icon="ICONS.edit"
                             label="Edit"
                             @click="onEdit(user)"
                         />
@@ -100,7 +100,7 @@
                             flat
                             dense
                             no-caps
-                            icon="lock_reset"
+                            :icon="ICONS.lock_reset"
                             label="Reset pwd"
                             :loading="resettingId === user.user_id"
                             @click="onResetPassword(user)"
@@ -126,7 +126,7 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Edit {{ editingUser?.username }}</div>
                     <q-space />
-                    <q-btn flat round dense icon="close" v-close-popup />
+                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <q-input
@@ -181,7 +181,7 @@
                                 flat
                                 round
                                 dense
-                                icon="content_copy"
+                                :icon="ICONS.content_copy"
                                 @click="copyReset"
                             />
                         </template>
@@ -196,6 +196,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { copyToClipboard, useQuasar } from 'quasar';
     import UserAdminApiService, {

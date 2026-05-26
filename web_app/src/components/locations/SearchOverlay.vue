@@ -2,7 +2,7 @@
     <q-dialog v-model="open" maximized-on-mobile transition-show="fade" transition-hide="fade">
         <q-card style="min-width: 380px; max-width: 720px; width: 100%">
             <q-card-section class="row items-center q-pb-none">
-                <q-icon name="search" size="22px" class="q-mr-sm" />
+                <q-icon :name="ICONS.search" size="22px" class="q-mr-sm" />
                 <q-input
                     v-model="query"
                     borderless
@@ -12,7 +12,7 @@
                     placeholder="Search items and locations…"
                     @update:model-value="onQueryChange"
                 />
-                <q-btn flat round dense icon="close" v-close-popup />
+                <q-btn flat round dense :icon="ICONS.close" v-close-popup />
             </q-card-section>
 
             <q-separator />
@@ -46,7 +46,7 @@
                         clickable
                         @click="onSelectLocation(hit.id)"
                     >
-                        <q-item-section avatar><q-icon name="place" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.place" /></q-item-section>
                         <q-item-section>
                             <q-item-label>{{ hit.title }}</q-item-label>
                             <q-item-label caption>{{ hit.subtitle ?? '' }}</q-item-label>
@@ -78,6 +78,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import SearchApiService, { type SearchResult } from 'src/services/api/searchApiService';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';

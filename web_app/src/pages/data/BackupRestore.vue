@@ -2,7 +2,7 @@
     <div class="q-gutter-md">
         <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
             <template #avatar>
-                <q-icon name="info" size="18px" />
+                <q-icon :name="ICONS.info" size="18px" />
             </template>
             Backups capture your stock, lists, recipes, meals and saved products
             by default. Optional sections (system settings, user accounts,
@@ -15,7 +15,7 @@
             <div class="col-12 col-md-6">
                 <q-card flat bordered>
                     <q-card-section class="row items-center q-gutter-md">
-                        <q-icon name="cloud_download" size="32px" class="text-primary" />
+                        <q-icon :name="ICONS.cloud_download" size="32px" class="text-primary" />
                         <div>
                             <div class="text-h6">Create backup</div>
                             <div class="text-caption text-grey">
@@ -25,7 +25,7 @@
                                 v-if="lastBackupLabel"
                                 class="text-caption text-grey-7 q-mt-xs"
                             >
-                                <q-icon name="schedule" size="14px" class="q-mr-xs" />
+                                <q-icon :name="ICONS.schedule" size="14px" class="q-mr-xs" />
                                 Last backup: {{ lastBackupLabel }}
                             </div>
                         </div>
@@ -73,7 +73,7 @@
                     <q-card-section>
                         <q-btn
                             color="primary"
-                            icon="download"
+                            :icon="ICONS.download"
                             label="Download backup"
                             :loading="downloading"
                             :disable="downloading || selectedBackupKeys.length === 0"
@@ -88,7 +88,7 @@
             <div class="col-12 col-md-6">
                 <q-card flat bordered>
                     <q-card-section class="row items-center q-gutter-md">
-                        <q-icon name="cloud_upload" size="32px" class="text-primary" />
+                        <q-icon :name="ICONS.cloud_upload" size="32px" class="text-primary" />
                         <div>
                             <div class="text-h6">Restore from backup</div>
                             <div class="text-caption text-grey">
@@ -108,7 +108,7 @@
                             @update:model-value="onFilePicked"
                         >
                             <template #prepend>
-                                <q-icon name="attach_file" />
+                                <q-icon :name="ICONS.attach_file" />
                             </template>
                             <template #append>
                                 <q-btn
@@ -116,7 +116,7 @@
                                     flat
                                     dense
                                     round
-                                    icon="close"
+                                    :icon="ICONS.close"
                                     @click.stop="onClearPick"
                                 />
                             </template>
@@ -212,7 +212,7 @@
                 <q-btn flat label="Cancel" @click="onClearPick" />
                 <q-btn
                     color="grey-7"
-                    icon="done_all"
+                    :icon="ICONS.done_all"
                     label="Restore all (skip duplicates)"
                     :loading="restoring"
                     :disable="restoring"
@@ -220,7 +220,7 @@
                 />
                 <q-btn
                     color="primary"
-                    icon="check"
+                    :icon="ICONS.check"
                     label="Restore selection"
                     :loading="restoring"
                     :disable="restoring || selectedCount === 0"
@@ -266,7 +266,7 @@
                 <q-card-section v-if="report?.warnings.length" class="q-pt-sm">
                     <q-expansion-item
                         :label="`${report.warnings.length} warning(s)`"
-                        icon="warning"
+                        :icon="ICONS.warning"
                         dense
                     >
                         <q-list dense>
@@ -281,7 +281,7 @@
                     <q-btn
                         v-if="report?.ok"
                         color="primary"
-                        icon="refresh"
+                        :icon="ICONS.refresh"
                         label="Reload now"
                         @click="reloadNow"
                     />
@@ -292,6 +292,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
     import { computed, ref } from 'vue';

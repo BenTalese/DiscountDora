@@ -9,10 +9,10 @@
         :options="options"
         @update:model-value="onUpdateModelValue"
         bg-color="white"
-        clear-icon="cancel"
+        clear-:icon="ICONS.cancel"
         color="black"
         dense
-        dropdown-icon="expand_more"
+        dropdown-:icon="ICONS.expand_more"
         label-color="black"
         square
         standout="bg-teal"
@@ -49,6 +49,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     //#region Props & Emits
 
     interface ISelectComponentProps {

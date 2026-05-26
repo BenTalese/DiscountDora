@@ -12,7 +12,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="health_and_safety"
+                :icon="ICONS.health_and_safety"
                 label="Run health check"
                 :loading="checking"
                 @click="onRunHealthCheck"
@@ -23,7 +23,7 @@
                 flat
                 round
                 dense
-                icon="refresh"
+                :icon="ICONS.refresh"
                 :loading="loading"
                 @click="loadAll"
             >
@@ -135,6 +135,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import MerchantManagementApiService, {
         type DataProviderHealth,

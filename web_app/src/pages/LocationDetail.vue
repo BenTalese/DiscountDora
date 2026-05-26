@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <q-btn flat round dense icon="arrow_back" @click="onBack" />
+            <q-btn flat round dense :icon="ICONS.arrow_back" @click="onBack" />
             <div class="q-ml-sm">
                 <div class="text-h5">{{ zone?.name ?? 'Loading…' }}</div>
                 <div class="text-caption text-grey">
@@ -14,7 +14,7 @@
                 v-if="zone"
                 flat
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 :label="`Add ${childKind(zone.kind)}`"
                 @click="onAddChild(zone)"
             />
@@ -22,7 +22,7 @@
                 v-if="zone"
                 outline
                 no-caps
-                icon="priority_high"
+                :icon="ICONS.priority_high"
                 label="Needs attention here"
                 class="q-ml-sm"
                 :disable="(zone.attention_score ?? 0) === 0"
@@ -36,7 +36,7 @@
                 v-if="zone"
                 color="primary"
                 no-caps
-                icon="auto_awesome"
+                :icon="ICONS.auto_awesome"
                 :label="
                     lowOrOutSubtreeIds.length > 0
                         ? `Shopping list (${lowOrOutSubtreeIds.length})`
@@ -61,7 +61,7 @@
             rounded
         >
             <template #avatar>
-                <q-icon name="local_fire_department" />
+                <q-icon :name="ICONS.local_fire_department" />
             </template>
             <div class="text-weight-medium">
                 {{ zone.primary_reason ?? 'All quiet.' }}
@@ -165,7 +165,7 @@
                             flat
                             round
                             dense
-                            icon="add"
+                            :icon="ICONS.add"
                             class="q-ml-sm"
                             @click.stop="onAddChild(area)"
                         >
@@ -213,7 +213,7 @@
                                 @drop.stop="onDrop($event, section.location_id)"
                             >
                                 <div class="row items-center q-mb-xs">
-                                    <q-icon name="splitscreen" size="14px" />
+                                    <q-icon :name="ICONS.splitscreen" size="14px" />
                                     <div class="q-ml-xs text-weight-medium">
                                         {{ section.name }}
                                     </div>
@@ -275,6 +275,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import ItemChip from 'src/components/locations/ItemChip.vue';
     import MoveItemDialog from 'src/components/locations/MoveItemDialog.vue';

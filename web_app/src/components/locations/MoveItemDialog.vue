@@ -10,7 +10,7 @@
                     </div>
                 </div>
                 <q-space />
-                <q-btn flat round dense icon="close" v-close-popup />
+                <q-btn flat round dense :icon="ICONS.close" v-close-popup />
             </q-card-section>
 
             <q-separator class="q-mt-md" />
@@ -28,7 +28,7 @@
                     clearable
                     autofocus
                 >
-                    <template #prepend><q-icon name="search" /></template>
+                    <template #prepend><q-icon :name="ICONS.search" /></template>
                 </q-input>
 
                 <q-list class="q-mt-sm move-picker-list" separator>
@@ -39,7 +39,7 @@
                         @click="selectedId = currentZoneNode.location_id"
                     >
                         <q-item-section avatar>
-                            <q-icon name="home_pin" />
+                            <q-icon :name="ICONS.home_pin" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label class="text-weight-medium">
@@ -109,7 +109,7 @@
                         @click="selectedId = '__unassigned__'"
                     >
                         <q-item-section avatar>
-                            <q-icon name="inbox" />
+                            <q-icon :name="ICONS.inbox" />
                         </q-item-section>
                         <q-item-section>
                             <q-item-label>Unassigned</q-item-label>
@@ -139,6 +139,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import type { LocationNode } from 'src/models/location';
     import StockItemApiService from 'src/services/api/stockItemApiService';

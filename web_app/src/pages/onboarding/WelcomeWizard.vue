@@ -14,7 +14,7 @@
                     flat
                     no-caps
                     color="grey-7"
-                    icon="skip_next"
+                    :icon="ICONS.skip_next"
                     label="Skip everything"
                     :loading="completing"
                     @click="onSkipEverything"
@@ -110,7 +110,7 @@
                     <q-list bordered class="rounded-borders">
                         <q-item>
                             <q-item-section avatar>
-                                <q-icon name="storefront" color="primary" />
+                                <q-icon :name="ICONS.storefront" color="primary" />
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>Pick which merchants to scrape</q-item-label>
@@ -122,7 +122,7 @@
                         </q-item>
                         <q-item>
                             <q-item-section avatar>
-                                <q-icon name="people" color="primary" />
+                                <q-icon :name="ICONS.people" color="primary" />
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>Invite teammates later</q-item-label>
@@ -150,7 +150,7 @@
                         @click="form.seedGroups = !form.seedGroups"
                     >
                         <q-card-section class="row items-center">
-                            <q-icon name="category" size="28px" class="q-mr-sm" color="primary" />
+                            <q-icon :name="ICONS.category" size="28px" class="q-mr-sm" color="primary" />
                             <div class="col">
                                 <div class="text-subtitle1">Use Dora's default stock groups</div>
                                 <div class="text-caption text-grey">
@@ -183,7 +183,7 @@
                         @click="form.seedLocations = !form.seedLocations"
                     >
                         <q-card-section class="row items-center">
-                            <q-icon name="place" size="28px" class="q-mr-sm" color="primary" />
+                            <q-icon :name="ICONS.place" size="28px" class="q-mr-sm" color="primary" />
                             <div class="col">
                                 <div class="text-subtitle1">Use Dora's default locations</div>
                                 <div class="text-caption text-grey">
@@ -284,7 +284,7 @@
                                 unelevated
                                 no-caps
                                 color="primary"
-                                icon="add"
+                                :icon="ICONS.add"
                                 :label="firstItemsAdded > 0
                                     ? `Add another (${firstItemsAdded} added)`
                                     : 'Add stock item'"
@@ -338,7 +338,7 @@
                 <q-btn
                     flat
                     no-caps
-                    icon="arrow_back"
+                    :icon="ICONS.arrow_back"
                     label="Back"
                     :disable="stepIndex === 0"
                     @click="onBack"
@@ -359,6 +359,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type { OnboardingState } from 'src/models/onboarding';
@@ -423,7 +424,7 @@
             shortTitle: 'Shopping',
             description:
                 'Auto-generate from low/out, finish a shop and your stock auto-bumps to Well-Stocked. Set a primary list so quick-adds know where to go.',
-            icon: 'shopping_cart',
+            icon: ICONS.shopping_cart,
         },
         {
             path: '/stock?attention=true',
@@ -431,7 +432,7 @@
             shortTitle: 'Alerts',
             description:
                 'The bell in the header. Expired, expiring soon, low/out, essentials low — with inline actions to push expiry, mark restocked, snooze.',
-            icon: 'notifications_active',
+            icon: ICONS.notifications_active,
         },
         {
             path: '/help',
@@ -439,7 +440,7 @@
             shortTitle: 'Help',
             description:
                 'The floating chat bubble follows you everywhere with context-aware actions for the screen you\'re on. Hit me up any time.',
-            icon: 'help',
+            icon: ICONS.help,
         },
     ];
 

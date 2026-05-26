@@ -1,3 +1,4 @@
+import { ICONS } from 'src/style/icons';
 import { Notify } from 'quasar';
 
 // See possible options: https://quasar.dev/quasar-plugins/notify/
@@ -9,7 +10,7 @@ Notify.registerType('info', {
     textColor: 'white',
     message: 'Hey did you know...',
     caption: "I'm a notification!",
-    icon: 'announcement',
+    icon: ICONS.announcement,
     iconColor: 'amber',
     iconSize: '30px',
     progress: true,
@@ -19,7 +20,7 @@ Notify.registerType('info', {
 Notify.registerType('oopsie', {
     color: 'red-5',
     message: 'Oops, something went wrong...',
-    icon: 'error',
+    icon: ICONS.error,
     iconColor: 'white',
     iconSize: '30px',
     progress: true,

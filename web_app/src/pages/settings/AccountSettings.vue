@@ -47,7 +47,7 @@
             <q-btn
                 outline
                 no-caps
-                icon="restart_alt"
+                :icon="ICONS.restart_alt"
                 label="Restart onboarding"
                 :loading="restartingOnboarding"
                 @click="onRestartOnboarding"
@@ -64,7 +64,7 @@
             <q-btn
                 color="negative"
                 no-caps
-                icon="logout"
+                :icon="ICONS.logout"
                 label="Sign out"
                 :loading="signingOut"
                 @click="onSignOut"
@@ -74,6 +74,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import OnboardingApiService from 'src/services/api/onboardingApiService';

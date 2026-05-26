@@ -12,7 +12,7 @@
         <q-separator />
 
         <q-card-section class="row items-center q-gutter-md">
-            <q-icon name="info" size="32px" color="primary" />
+            <q-icon :name="ICONS.info" size="32px" color="primary" />
             <div class="col">
                 Manage zones and their areas/sections from the new
                 <strong>Locations</strong> page.
@@ -20,7 +20,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="open_in_new"
+                :icon="ICONS.open_in_new"
                 label="Open Locations"
                 to="/locations"
             />

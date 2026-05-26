@@ -11,7 +11,7 @@
                 flat
                 no-caps
                 color="accent"
-                icon="smart_toy"
+                :icon="ICONS.smart_toy"
                 label="Meet DoraBot"
                 :to="{ path: '/help/dora' }"
                 class="q-mr-sm"
@@ -19,7 +19,7 @@
             <q-btn
                 flat
                 no-caps
-                icon="open_in_new"
+                :icon="ICONS.open_in_new"
                 label="Report a bug"
                 type="a"
                 href="https://github.com/BenTalese/DiscountDora/issues/new"
@@ -34,7 +34,7 @@
             rounded
         >
             <template #avatar>
-                <q-icon name="system_update" />
+                <q-icon :name="ICONS.system_update" />
             </template>
             <div class="text-weight-medium">
                 A newer version of Discount Dora is available
@@ -57,7 +57,7 @@
 
         <q-card v-if="foodFact" flat bordered class="q-mb-md food-fact-card">
             <q-card-section class="row items-start">
-                <q-icon name="restaurant" size="22px" color="primary" />
+                <q-icon :name="ICONS.restaurant" size="22px" color="primary" />
                 <div class="q-ml-md col">
                     <div class="text-caption text-grey">Food fact</div>
                     <div>{{ foodFact }}</div>
@@ -66,7 +66,7 @@
                     flat
                     round
                     dense
-                    icon="refresh"
+                    :icon="ICONS.refresh"
                     :loading="loadingFact"
                     @click="loadFoodFact"
                 >
@@ -83,9 +83,9 @@
             indicator-color="primary"
             align="left"
         >
-            <q-tab name="guides" icon="menu_book" label="Guides" no-caps />
-            <q-tab name="changelog" icon="new_releases" label="What's new" no-caps />
-            <q-tab name="about" icon="info" label="About" no-caps />
+            <q-tab name="guides" :icon="ICONS.menu_book" label="Guides" no-caps />
+            <q-tab name="changelog" :icon="ICONS.new_releases" label="What's new" no-caps />
+            <q-tab name="about" :icon="ICONS.info" label="About" no-caps />
         </q-tabs>
 
         <q-separator />
@@ -101,7 +101,7 @@
                     placeholder="Filter guides…"
                     class="q-mb-md"
                 >
-                    <template #prepend><q-icon name="search" /></template>
+                    <template #prepend><q-icon :name="ICONS.search" /></template>
                 </q-input>
 
                 <div class="row q-col-gutter-md">
@@ -130,7 +130,7 @@
                                         </q-item-label>
                                     </q-item-section>
                                     <q-item-section side v-if="entry.path">
-                                        <q-icon name="arrow_forward" />
+                                        <q-icon :name="ICONS.arrow_forward" />
                                     </q-item-section>
                                 </q-item>
                             </q-list>
@@ -206,7 +206,7 @@
                             target="_blank"
                             rel="noopener"
                         >
-                            <q-item-section avatar><q-icon name="code" /></q-item-section>
+                            <q-item-section avatar><q-icon :name="ICONS.code" /></q-item-section>
                             <q-item-section>
                                 <q-item-label>Project repository</q-item-label>
                                 <q-item-label caption>github.com/BenTalese/DiscountDora</q-item-label>
@@ -220,7 +220,7 @@
                             rel="noopener"
                         >
                             <q-item-section avatar>
-                                <q-icon name="bug_report" />
+                                <q-icon :name="ICONS.bug_report" />
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>Report a bug or request a feature</q-item-label>
@@ -235,6 +235,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import HelpApiService, {
@@ -275,7 +276,7 @@
         },
         {
             title: 'Locations',
-            icon: 'place',
+            icon: ICONS.place,
             entries: [
                 {
                     title: 'Zones, areas and sections',
@@ -299,7 +300,7 @@
         },
         {
             title: 'Recipes & meals',
-            icon: 'menu_book',
+            icon: ICONS.menu_book,
             entries: [
                 {
                     title: 'Cook mode',
@@ -317,7 +318,7 @@
         },
         {
             title: 'Shopping & deals',
-            icon: 'shopping_cart',
+            icon: ICONS.shopping_cart,
             entries: [
                 {
                     title: 'Search for products',
@@ -329,7 +330,7 @@
         },
         {
             title: 'Settings & admin',
-            icon: 'settings',
+            icon: ICONS.settings,
             entries: [
                 {
                     title: 'Theme, font, and text size',
@@ -353,7 +354,7 @@
         },
         {
             title: 'Dora itself',
-            icon: 'mood',
+            icon: ICONS.mood,
             entries: [
                 {
                     title: 'How does Dora know what page I\'m on?',

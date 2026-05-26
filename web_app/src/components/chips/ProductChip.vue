@@ -7,7 +7,7 @@
     >
         <q-avatar rounded size="24px" class="q-mr-xs product-chip__img">
             <img v-if="product.image" :src="product.image" :alt="product.name" />
-            <q-icon v-else name="shopping_bag" size="16px" />
+            <q-icon v-else :name="ICONS.shopping_bag" size="16px" />
         </q-avatar>
 
         <div class="column no-wrap product-chip__text">
@@ -48,22 +48,22 @@
             round
             dense
             size="xs"
-            icon="more_vert"
+            :icon="ICONS.more_vert"
             class="q-ml-xs"
             @click.stop
         >
             <q-menu auto-close>
                 <q-list dense style="min-width: 180px">
                     <q-item v-if="product.web_url" clickable @click="openLink">
-                        <q-item-section avatar><q-icon name="open_in_new" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
                         <q-item-section>Open at merchant</q-item-section>
                     </q-item>
                     <q-item clickable @click="emit('add-to-list', product.product_id)">
-                        <q-item-section avatar><q-icon name="add_shopping_cart" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.add_shopping_cart" /></q-item-section>
                         <q-item-section>Add to list</q-item-section>
                     </q-item>
                     <q-item clickable @click="emit('link-stock-item', product.product_id)">
-                        <q-item-section avatar><q-icon name="link" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
                         <q-item-section>Link to stock item</q-item-section>
                     </q-item>
                 </q-list>
@@ -73,6 +73,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
     import { computed } from 'vue';
 

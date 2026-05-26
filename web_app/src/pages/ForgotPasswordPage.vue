@@ -2,7 +2,7 @@
     <div class="auth-shell">
         <q-card class="auth-card" flat bordered>
             <q-card-section class="text-center">
-                <q-icon name="lock_reset" size="56px" class="text-primary" />
+                <q-icon :name="ICONS.lock_reset" size="56px" class="text-primary" />
                 <div class="text-h6 q-mt-md">Forgot password</div>
                 <div class="text-caption text-grey q-mt-xs">
                     Enter your account email and we'll send a reset link.
@@ -31,7 +31,7 @@
             </q-card-section>
             <q-card-section v-else>
                 <q-banner class="bg-grey-2 text-grey-9" rounded>
-                    <template #avatar><q-icon name="mark_email_read" /></template>
+                    <template #avatar><q-icon :name="ICONS.mark_email_read" /></template>
                     If that address is registered, a reset link is on its way.
                     Check your inbox (and spam folder).
                 </q-banner>
@@ -44,6 +44,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { ref } from 'vue';
     import AuthApiService from 'src/services/api/authApiService';
 

@@ -18,7 +18,7 @@
             <!-- ── Recent-decode banner (auto-fades) ────────────────── -->
             <transition name="fade">
                 <div v-if="lastDecodeBanner" class="scan-banner">
-                    <q-icon name="check_circle" size="18px" class="q-mr-xs" />
+                    <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
                     Decoded
                     <code class="q-ml-xs">{{ truncate(lastDecodeBanner) }}</code>
                 </div>
@@ -43,7 +43,7 @@
                     <q-btn
                         flat
                         round
-                        icon="close"
+                        :icon="ICONS.close"
                         color="white"
                         @click="onClose"
                     />
@@ -79,6 +79,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { ref, watch, onBeforeUnmount, computed } from 'vue';
 
     interface Props {

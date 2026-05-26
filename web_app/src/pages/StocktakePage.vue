@@ -1,10 +1,10 @@
 <template>
     <div class="q-pa-md q-gutter-md">
         <div class="row items-center q-gutter-sm">
-            <q-btn flat dense round icon="arrow_back" :to="'/stock'" />
+            <q-btn flat dense round :icon="ICONS.arrow_back" :to="'/stock'" />
             <div class="text-h5">Stocktake</div>
             <q-space />
-            <q-btn flat dense no-caps icon="refresh" label="Refresh" @click="loadQueue" />
+            <q-btn flat dense no-caps :icon="ICONS.refresh" label="Refresh" @click="loadQueue" />
         </div>
 
         <q-card flat bordered>
@@ -38,7 +38,7 @@
                     color="primary"
                     size="lg"
                     no-caps
-                    icon="play_arrow"
+                    :icon="ICONS.play_arrow"
                     label="Start review"
                     :disable="overdueCount === 0 || loading"
                     @click="onStart"
@@ -83,6 +83,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import StocktakeApiService, { type StocktakeQueueItem } from 'src/services/api/stocktakeApiService';

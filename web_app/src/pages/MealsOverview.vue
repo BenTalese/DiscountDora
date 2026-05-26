@@ -1,7 +1,7 @@
 <template>
     <div class="q-pa-md">
         <div class="row items-center q-mb-md">
-            <q-btn color="positive" icon="add" label="New Meal" @click="onCreate" />
+            <q-btn color="positive" :icon="ICONS.add" label="New Meal" @click="onCreate" />
             <q-space />
             <div class="text-subtitle1">
                 Total meals in stock: <strong>{{ totalInStock }}</strong>
@@ -34,7 +34,7 @@
                             flat
                             round
                             dense
-                            icon="remove"
+                            :icon="ICONS.remove"
                             :disable="meal.quantity_in_stock <= 0"
                             @click="mealStore.adjustStockAsync(meal.meal_id, -1)"
                         />
@@ -42,12 +42,12 @@
                             flat
                             round
                             dense
-                            icon="add"
+                            :icon="ICONS.add"
                             @click="mealStore.adjustStockAsync(meal.meal_id, 1)"
                         />
                         <q-space />
                         <q-btn flat label="Edit" color="primary" @click="onEdit(meal)" />
-                        <q-btn flat icon="delete" color="negative" @click="confirmDelete(meal)" />
+                        <q-btn flat :icon="ICONS.delete" color="negative" @click="confirmDelete(meal)" />
                     </q-card-actions>
                 </q-card>
             </div>
@@ -99,6 +99,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type { Meal } from 'src/models/meal';

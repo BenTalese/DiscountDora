@@ -31,7 +31,7 @@
                     flat
                     dense
                     round
-                    icon="undo"
+                    :icon="ICONS.undo"
                     :disable="!canUndo"
                     @click="onUndoClick"
                     class="q-mr-xs"
@@ -48,7 +48,7 @@
                     no-caps
                     round
                     dense
-                    icon="account_circle"
+                    :icon="ICONS.account_circle"
                     v-if="currentUser"
                 >
                     <q-menu anchor="bottom right" self="top right">
@@ -66,19 +66,19 @@
                             <q-separator />
                             <q-item clickable v-close-popup to="/settings/account">
                                 <q-item-section avatar>
-                                    <q-icon name="settings" />
+                                    <q-icon :name="ICONS.settings" />
                                 </q-item-section>
                                 <q-item-section>Settings</q-item-section>
                             </q-item>
                             <q-item clickable v-close-popup to="/help">
                                 <q-item-section avatar>
-                                    <q-icon name="help_outline" />
+                                    <q-icon :name="ICONS.help_outline" />
                                 </q-item-section>
                                 <q-item-section>Help & guides</q-item-section>
                             </q-item>
                             <q-item clickable @click="onLogout">
                                 <q-item-section avatar>
-                                    <q-icon name="logout" />
+                                    <q-icon :name="ICONS.logout" />
                                 </q-item-section>
                                 <q-item-section>Sign out</q-item-section>
                             </q-item>
@@ -129,6 +129,7 @@
 </template>
 
 <script setup lang="ts">
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AlertsBell from 'src/components/AlertsBell.vue';
@@ -309,44 +310,46 @@
         else void router.push('/shopping-lists');
     }
     useCommands([
-        { id: 'nav.dashboard', label: 'Go to Dashboard', icon: 'dashboard', section: 'Navigate', action: () => router.push('/') },
+        { id: 'nav.dashboard', label: 'Go to Dashboard', icon: ICONS.dashboard, section: 'Navigate', action: () => router.push('/') },
         { id: 'nav.stock', label: 'Go to Stock', icon: 'inventory_2', section: 'Navigate', action: () => router.push('/stock') },
-        { id: 'nav.lists', label: 'Go to Shopping Lists', icon: 'shopping_cart', section: 'Navigate', action: () => router.push('/shopping-lists') },
-        { id: 'nav.recipes', label: 'Go to Recipes', icon: 'menu_book', section: 'Navigate', action: () => router.push('/recipes') },
-        { id: 'nav.meals', label: 'Go to Meals', icon: 'restaurant', section: 'Navigate', action: () => router.push('/meals') },
-        { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: 'calendar_month', section: 'Navigate', action: () => router.push('/meal-plans') },
-        { id: 'nav.products', label: 'Go to Product Search', icon: 'local_offer', section: 'Navigate', action: () => router.push('/product-search') },
-        { id: 'nav.my-products', label: 'Go to My Products', icon: 'favorite', section: 'Navigate', action: () => router.push('/my-products') },
-        { id: 'nav.price-history', label: 'Go to Price History', icon: 'show_chart', section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
-        { id: 'nav.data', label: 'Go to Data Management', icon: 'storage', section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
-        { id: 'nav.reports', label: 'Go to Reports', icon: 'insights', section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
-        { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: 'hub', section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
-        { id: 'nav.map', label: 'Go to Stock map', icon: 'map', section: 'Navigate', tags: ['pantry', 'layout', 'canvas'], action: () => router.push('/map') },
-        { id: 'nav.settings', label: 'Go to Settings', icon: 'settings', section: 'Navigate', action: () => router.push('/settings') },
-        { id: 'nav.help', label: 'Go to Help', icon: 'help_outline', section: 'Navigate', action: () => router.push('/help') },
+        { id: 'nav.lists', label: 'Go to Shopping Lists', icon: ICONS.shopping_cart, section: 'Navigate', action: () => router.push('/shopping-lists') },
+        { id: 'nav.recipes', label: 'Go to Recipes', icon: ICONS.menu_book, section: 'Navigate', action: () => router.push('/recipes') },
+        { id: 'nav.meals', label: 'Go to Meals', icon: ICONS.restaurant, section: 'Navigate', action: () => router.push('/meals') },
+        { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: ICONS.calendar_month, section: 'Navigate', action: () => router.push('/meal-plans') },
+        { id: 'nav.products', label: 'Go to Product Search', icon: ICONS.local_offer, section: 'Navigate', action: () => router.push('/product-search') },
+        { id: 'nav.my-products', label: 'Go to My Products', icon: ICONS.favorite, section: 'Navigate', action: () => router.push('/my-products') },
+        { id: 'nav.price-history', label: 'Go to Price History', icon: ICONS.show_chart, section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
+        { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
+        { id: 'nav.reports', label: 'Go to Reports', icon: ICONS.insights, section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
+        { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: ICONS.hub, section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
+        { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['layout', 'pantry', 'floor plan'], action: () => router.push('/map') },
+        { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['pantry', 'layout', 'canvas'], action: () => router.push('/map') },
+        { id: 'nav.settings', label: 'Go to Settings', icon: ICONS.settings, section: 'Navigate', action: () => router.push('/settings') },
+        { id: 'nav.help', label: 'Go to Help', icon: ICONS.help_outline, section: 'Navigate', action: () => router.push('/help') },
 
-        { id: 'create.stock-item', label: 'Create stock item', icon: 'add_box', section: 'Create', tags: ['new item', 'add item'], action: () => router.push({ path: '/stock', query: { create: '1' } }) },
-        { id: 'lists.open-primary', label: 'Open primary shopping list', icon: 'shopping_cart', section: 'Shopping lists', action: openPrimaryList },
-        { id: 'lists.autogenerate-low', label: 'Auto-generate shopping list from low stock', icon: 'auto_awesome', section: 'Shopping lists', tags: ['generate', 'restock'], action: autogenerateFromLowStock },
+        { id: 'create.stock-item', label: 'Create stock item', icon: ICONS.add_box, section: 'Create', tags: ['new item', 'add item'], action: () => router.push({ path: '/stock', query: { create: '1' } }) },
+        { id: 'lists.open-primary', label: 'Open primary shopping list', icon: ICONS.shopping_cart, section: 'Shopping lists', action: openPrimaryList },
+        { id: 'lists.autogenerate-low', label: 'Auto-generate shopping list from low stock', icon: ICONS.auto_awesome, section: 'Shopping lists', tags: ['generate', 'restock'], action: autogenerateFromLowStock },
 
-        { id: 'ui.toggle-dark', label: 'Toggle dark mode', icon: 'dark_mode', section: 'View', tags: ['theme', 'light'], action: () => $q.dark.toggle() },
-        { id: 'help.shortcuts', label: 'Show keyboard shortcuts', icon: 'keyboard', section: 'Help', tags: ['cheatsheet'], action: openCheatsheet },
-        { id: 'help.restart-onboarding', label: 'Restart onboarding', icon: 'play_circle', section: 'Help', action: () => router.push('/welcome') },
+        { id: 'ui.toggle-dark', label: 'Toggle dark mode', icon: ICONS.dark_mode, section: 'View', tags: ['theme', 'light'], action: () => $q.dark.toggle() },
+        { id: 'help.shortcuts', label: 'Show keyboard shortcuts', icon: ICONS.keyboard, section: 'Help', tags: ['cheatsheet'], action: openCheatsheet },
+        { id: 'help.restart-onboarding', label: 'Restart onboarding', icon: ICONS.play_circle, section: 'Help', action: () => router.push('/welcome') },
     ]);
 
     const linksList: MenuButtonProps[] = [
         { label: 'Stock', icon: 'inventory_2', link: '/stock' },
-        { label: 'Locations', icon: 'place', link: '/locations' },
-        { label: 'Product Search', icon: 'search', link: '/product-search' },
-        { label: 'My Products', icon: 'shopping_bag', link: '/my-products' },
-        { label: 'Recipes', icon: 'menu_book', link: '/recipes' },
-        { label: 'Meals', icon: 'restaurant', link: '/meals' },
-        { label: 'Meal Plans', icon: 'calendar_month', link: '/meal-plans' },
-        { label: 'Shopping Lists', icon: 'shopping_cart', link: '/shopping-lists' },
-        { label: 'Data', icon: 'storage', link: '/data' },
-        { label: 'Reports', icon: 'insights', link: '/reports' },
-        { label: 'Substitutes', icon: 'hub', link: '/substitutes' },
-        { label: 'Settings', icon: 'settings', link: '/settings' },
+        { label: 'Locations', icon: ICONS.place, link: '/locations' },
+        { label: 'Product Search', icon: ICONS.search, link: '/product-search' },
+        { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
+        { label: 'Recipes', icon: ICONS.menu_book, link: '/recipes' },
+        { label: 'Meals', icon: ICONS.restaurant, link: '/meals' },
+        { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
+        { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
+        { label: 'Data', icon: ICONS.storage, link: '/data' },
+        { label: 'Reports', icon: ICONS.insights, link: '/reports' },
+        { label: 'Substitutes', icon: ICONS.hub, link: '/substitutes' },
+        { label: 'Stock Map', icon: ICONS.map, link: '/map' },
+        { label: 'Settings', icon: ICONS.settings, link: '/settings' },
     ];
 
     const leftDrawerOpen = ref(false);

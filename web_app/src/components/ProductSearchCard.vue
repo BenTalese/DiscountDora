@@ -10,7 +10,7 @@
             >
                 <template #error>
                     <div class="absolute-full flex flex-center bg-grey-2 text-grey">
-                        <q-icon name="image_not_supported" size="32px" />
+                        <q-icon :name="ICONS.image_not_supported" size="32px" />
                     </div>
                 </template>
             </q-img>
@@ -75,15 +75,15 @@
             <q-space />
             <q-btn
                 v-if="offer.web_url"
-                flat dense round size="sm" icon="open_in_new"
+                flat dense round size="sm" :icon="ICONS.open_in_new"
                 :href="offer.web_url" target="_blank" rel="noopener"
             >
                 <q-tooltip>Open on {{ offer.merchant_name }}</q-tooltip>
             </q-btn>
-            <q-btn flat dense round size="sm" icon="link" @click="emit('link')">
+            <q-btn flat dense round size="sm" :icon="ICONS.link" @click="emit('link')">
                 <q-tooltip>Link to a stock item</q-tooltip>
             </q-btn>
-            <q-btn flat dense round size="sm" icon="add_shopping_cart" color="primary" @click="emit('quick-add')">
+            <q-btn flat dense round size="sm" :icon="ICONS.add_shopping_cart" color="primary" @click="emit('quick-add')">
                 <q-tooltip>Quick-add: track it + add to your list</q-tooltip>
             </q-btn>
         </q-card-actions>
@@ -91,6 +91,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import {

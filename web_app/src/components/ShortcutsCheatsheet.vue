@@ -2,10 +2,10 @@
     <q-dialog v-model="cheatsheetOpen">
         <q-card style="width: 560px; max-width: 95vw">
             <q-card-section class="row items-center q-pb-none">
-                <q-icon name="keyboard" size="24px" class="q-mr-sm" />
+                <q-icon :name="ICONS.keyboard" size="24px" class="q-mr-sm" />
                 <div class="text-h6">Keyboard shortcuts</div>
                 <q-space />
-                <q-btn flat dense round icon="close" v-close-popup />
+                <q-btn flat dense round :icon="ICONS.close" v-close-popup />
             </q-card-section>
 
             <q-card-section style="max-height: 70vh; overflow-y: auto">
@@ -33,6 +33,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useShortcutRegistry } from 'src/composables/useShortcut';
     import { computed } from 'vue';
 

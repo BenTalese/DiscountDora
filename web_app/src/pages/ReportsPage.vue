@@ -30,10 +30,10 @@
             <!-- Stock value over time -->
             <article class="report-card report-card-wide">
                 <header class="report-card-head">
-                    <q-icon name="show_chart" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.show_chart" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Stock value over time</h3>
                     <span v-if="stockValue?.estimate_note" class="report-card-note">
-                        <q-icon name="info" size="14px" />
+                        <q-icon :name="ICONS.info" size="14px" />
                         {{ stockValue.estimate_note }}
                     </span>
                 </header>
@@ -55,7 +55,7 @@
             <!-- Spend by merchant (donut) -->
             <article class="report-card">
                 <header class="report-card-head">
-                    <q-icon name="donut_large" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.donut_large" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Spend by merchant</h3>
                 </header>
                 <div v-if="loading.merchantSpend" class="report-card-loading">
@@ -85,7 +85,7 @@
             <!-- Most bought -->
             <article class="report-card">
                 <header class="report-card-head">
-                    <q-icon name="trending_up" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.trending_up" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Top 10 most-bought</h3>
                 </header>
                 <div v-if="loading.mostBought" class="report-card-loading">
@@ -107,7 +107,7 @@
             <!-- Keeps running out -->
             <article class="report-card">
                 <header class="report-card-head">
-                    <q-icon name="warning_amber" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.warning_amber" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">You keep running out of these</h3>
                     <q-btn
                         v-if="(keepsOut?.rows.length ?? 0) > 0"
@@ -115,7 +115,7 @@
                         dense
                         no-caps
                         size="sm"
-                        icon="bookmark"
+                        :icon="ICONS.bookmark"
                         label="Mark all essential"
                         @click="markAllEssential"
                     />
@@ -139,7 +139,7 @@
             <!-- Savings captured -->
             <article class="report-card">
                 <header class="report-card-head">
-                    <q-icon name="savings" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.savings" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Savings captured</h3>
                 </header>
                 <div v-if="loading.savings" class="report-card-loading">
@@ -169,7 +169,7 @@
             <!-- Price trends -->
             <article class="report-card report-card-wide">
                 <header class="report-card-head">
-                    <q-icon name="query_stats" size="22px" class="report-card-icon" />
+                    <q-icon :name="ICONS.query_stats" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Price trends</h3>
                 </header>
                 <div class="price-picker">
@@ -210,6 +210,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { LineChart, PieChart } from 'echarts/charts';
     import {
         GridComponent,

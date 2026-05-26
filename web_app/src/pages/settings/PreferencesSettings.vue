@@ -36,7 +36,7 @@
                         @click="onThemeChange('system')"
                     >
                         <div class="theme-swatch theme-swatch--system">
-                            <q-icon name="brightness_auto" size="28px" />
+                            <q-icon :name="ICONS.brightness_auto" size="28px" />
                         </div>
                         <div class="theme-card-body">
                             <div class="theme-card-label">System</div>
@@ -83,7 +83,7 @@
                                     dense
                                     flat
                                     size="sm"
-                                    icon="light_mode"
+                                    :icon="ICONS.light_mode"
                                     label="Light"
                                     class="theme-variant-btn"
                                     :class="{ 'theme-variant-btn--active': themeDraft === family.light }"
@@ -94,7 +94,7 @@
                                     dense
                                     flat
                                     size="sm"
-                                    icon="dark_mode"
+                                    :icon="ICONS.dark_mode"
                                     label="Dark"
                                     class="theme-variant-btn"
                                     :class="{ 'theme-variant-btn--active': themeDraft === family.dark }"
@@ -225,7 +225,7 @@
                 <q-btn
                     color="primary"
                     no-caps
-                    icon="save"
+                    :icon="ICONS.save"
                     label="Save username"
                     :loading="savingUsername"
                     :disable="usernameUnchanged || !usernameDraft.trim()"
@@ -249,7 +249,7 @@
                 <q-btn
                     color="primary"
                     no-caps
-                    icon="save"
+                    :icon="ICONS.save"
                     label="Save email"
                     :loading="savingEmail"
                     :disable="emailUnchanged"
@@ -306,7 +306,7 @@
                     <q-btn
                         color="primary"
                         no-caps
-                        icon="lock_reset"
+                        :icon="ICONS.lock_reset"
                         label="Change password"
                         :loading="savingPassword"
                         :disable="!canChangePassword"
@@ -319,6 +319,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type {

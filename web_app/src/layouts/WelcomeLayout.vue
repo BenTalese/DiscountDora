@@ -16,7 +16,7 @@
                     flat
                     no-caps
                     dense
-                    icon="logout"
+                    :icon="ICONS.logout"
                     label="Sign out"
                     @click="onSignOut"
                 />
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+    import { ICONS } from 'src/style/icons';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { useRouter } from 'vue-router';

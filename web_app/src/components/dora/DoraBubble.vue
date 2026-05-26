@@ -25,7 +25,7 @@
                     round
                     dense
                     size="sm"
-                    icon="close"
+                    :icon="ICONS.close"
                     @click.stop="dismissHint"
                 />
             </div>
@@ -67,6 +67,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import DoraChat from 'src/components/dora/DoraChat.vue';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';

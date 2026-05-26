@@ -12,7 +12,7 @@
                 :outline="!compareMode"
                 :color="compareMode ? 'primary' : undefined"
                 :label="compareMode ? `Comparing (${selectedIds.size}/3)` : 'Compare'"
-                icon="compare"
+                :icon="ICONS.compare"
                 class="q-mr-sm"
                 @click="toggleCompareMode"
             />
@@ -21,7 +21,7 @@
                 color="primary"
                 no-caps
                 label="Show comparison"
-                icon="open_in_new"
+                :icon="ICONS.open_in_new"
                 class="q-mr-sm"
                 :disable="selectedIds.size < 2"
                 @click="showComparison = true"
@@ -35,11 +35,11 @@
                 outlined
                 class="q-mr-sm"
             >
-                <template #append><q-icon name="search" /></template>
+                <template #append><q-icon :name="ICONS.search" /></template>
             </q-input>
             <q-btn
                 color="positive"
-                icon="add"
+                :icon="ICONS.add"
                 no-caps
                 label="New recipe"
                 @click="onCreateClick"
@@ -101,7 +101,7 @@
                 v-if="hasAnyFilter"
                 flat
                 no-caps
-                icon="filter_alt_off"
+                :icon="ICONS.filter_alt_off"
                 label="Clear"
                 @click="clearFilters"
             />
@@ -116,7 +116,7 @@
                 v-if="filteredRecipes.length === 0"
                 class="text-center text-grey q-py-xl"
             >
-                <q-icon name="menu_book" size="60px" class="q-mb-sm" />
+                <q-icon :name="ICONS.menu_book" size="60px" class="q-mb-sm" />
                 <div>No recipes match the current filters.</div>
                 <q-btn
                     v-if="hasAnyFilter"
@@ -135,7 +135,7 @@
                 class="q-mb-lg"
             >
                 <div class="row items-center q-mb-sm">
-                    <q-icon name="folder" size="18px" class="q-mr-xs" />
+                    <q-icon :name="ICONS.folder" size="18px" class="q-mr-xs" />
                     <div class="text-subtitle1">{{ group.label }}</div>
                     <q-chip dense outline size="sm" class="q-ml-sm">
                         {{ group.recipes.length }}
@@ -225,7 +225,7 @@
                         }}
                     </div>
                     <q-space />
-                    <q-btn flat round dense icon="close" v-close-popup />
+                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-separator />
                 <q-card-section class="col scroll">
@@ -314,6 +314,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import RecipeCard from 'src/components/RecipeCard.vue';

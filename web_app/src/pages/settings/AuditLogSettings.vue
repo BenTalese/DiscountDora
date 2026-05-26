@@ -1,7 +1,7 @@
 <template>
     <q-card flat bordered>
         <q-card-section class="row items-center q-gutter-md">
-            <q-icon name="fact_check" size="32px" class="text-primary" />
+            <q-icon :name="ICONS.fact_check" size="32px" class="text-primary" />
             <div class="col">
                 <div class="text-h6">Audit log</div>
                 <div class="text-caption text-grey">
@@ -13,7 +13,7 @@
             <q-btn
                 outline
                 no-caps
-                icon="file_download"
+                :icon="ICONS.file_download"
                 label="Export CSV"
                 :disable="rows.length === 0"
                 @click="exportCsv"
@@ -111,7 +111,7 @@
                 <q-btn
                     color="primary"
                     no-caps
-                    icon="search"
+                    :icon="ICONS.search"
                     label="Apply filters"
                     :loading="loading"
                     @click="reload(1)"
@@ -167,7 +167,7 @@
             <q-btn
                 flat
                 dense
-                icon="chevron_left"
+                :icon="ICONS.chevron_left"
                 label="Previous"
                 no-caps
                 :disable="page <= 1 || loading"
@@ -214,7 +214,7 @@
                             {{ detail.severity }}
                         </q-chip>
                     </q-toolbar-title>
-                    <q-btn flat round icon="close" v-close-popup />
+                    <q-btn flat round :icon="ICONS.close" v-close-popup />
                 </q-toolbar>
                 <q-separator />
                 <q-card-section v-if="detail">
@@ -239,7 +239,7 @@
                         flat
                         no-caps
                         color="primary"
-                        icon="link"
+                        :icon="ICONS.link"
                         label="Find related"
                         @click="findRelated(detail.request_id)"
                     />
@@ -251,6 +251,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref } from 'vue';
     import AuditApiService, { type AuditEvent, type AuditFilters } from 'src/services/api/auditApiService';

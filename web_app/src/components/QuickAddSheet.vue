@@ -4,7 +4,7 @@
             <q-card-section class="row items-center q-pb-none">
                 <div class="text-h6">Quick add to list</div>
                 <q-space />
-                <q-btn flat round dense icon="close" v-close-popup />
+                <q-btn flat round dense :icon="ICONS.close" v-close-popup />
             </q-card-section>
 
             <q-card-section>
@@ -30,7 +30,7 @@
                         clearable
                         debounce="150"
                         label="Search stock items"
-                        prepend-icon="search"
+                        prepend-:icon="ICONS.search"
                     />
                     <q-list separator class="q-mt-sm quick-add-sheet__results">
                         <q-item
@@ -62,7 +62,7 @@
                                 </div>
                             </q-item-section>
                             <q-item-section side>
-                                <q-icon name="chevron_right" />
+                                <q-icon :name="ICONS.chevron_right" />
                             </q-item-section>
                         </q-item>
                         <q-item v-if="results.length === 0">
@@ -83,7 +83,7 @@
                 <!-- Step 2: pick quantity + merchant offer -->
                 <template v-else>
                     <div class="row items-center q-mb-sm">
-                        <q-btn flat dense round icon="arrow_back" @click="clearSelection" />
+                        <q-btn flat dense round :icon="ICONS.arrow_back" @click="clearSelection" />
                         <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
                     </div>
 
@@ -131,6 +131,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';

@@ -3,7 +3,7 @@
         <q-card-section class="row items-center">
             <div>
                 <div class="text-h6">
-                    <q-icon name="shield" size="20px" class="q-mr-xs" />
+                    <q-icon :name="ICONS.shield" size="20px" class="q-mr-xs" />
                     System
                 </div>
                 <div class="text-caption text-grey">
@@ -24,7 +24,7 @@
             <!-- AI assistant ─────────────────────────────────────────── -->
             <q-card-section>
                 <div class="text-subtitle1 text-weight-medium">
-                    <q-icon name="smart_toy" size="20px" class="q-mr-xs" />
+                    <q-icon :name="ICONS.smart_toy" size="20px" class="q-mr-xs" />
                     AI assistant
                 </div>
                 <div class="text-caption text-grey">
@@ -69,7 +69,7 @@
                             color="secondary"
                             no-caps
                             outline
-                            icon="wifi_tethering"
+                            :icon="ICONS.wifi_tethering"
                             label="Test connection"
                             :loading="probing"
                             :disable="saving || !enabledDraft || !baseUrlDraft.trim()"
@@ -138,7 +138,7 @@
                     <q-btn
                         color="primary"
                         no-caps
-                        icon="save"
+                        :icon="ICONS.save"
                         label="Save AI settings"
                         :loading="saving"
                         :disable="!canSave"
@@ -156,7 +156,7 @@
                 <q-card-section>
                     <q-banner class="bg-blue-1 text-blue-9" dense rounded>
                         <template #avatar>
-                            <q-icon name="info" size="20px" />
+                            <q-icon :name="ICONS.info" size="20px" />
                         </template>
                         <div class="text-weight-medium q-mb-xs">Setting up your own LLM</div>
                         <ol class="q-my-none q-pl-md">
@@ -238,6 +238,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';

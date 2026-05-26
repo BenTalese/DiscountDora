@@ -5,7 +5,7 @@
         :color="color"
         :text-color="color"
         size="sm"
-        :icon="icon"
+        ::icon="ICONS.icon"
     >
         {{ label }}
         <q-tooltip>{{ tooltip }}</q-tooltip>
@@ -13,6 +13,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import type { DataProviderHealth } from 'src/services/api/merchantManagementApiService';
     import { computed } from 'vue';
 

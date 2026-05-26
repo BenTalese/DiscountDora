@@ -2,8 +2,8 @@
     <div :class="embedded ? 'q-pa-sm' : 'q-pa-md'">
         <!-- Header + toolbar ──────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn v-if="!embedded" flat dense round icon="arrow_back" @click="goBack" />
-            <q-btn v-else flat dense round icon="close" @click="emit('close')">
+            <q-btn v-if="!embedded" flat dense round :icon="ICONS.arrow_back" @click="goBack" />
+            <q-btn v-else flat dense round :icon="ICONS.close" @click="emit('close')">
                 <q-tooltip>Close panel</q-tooltip>
             </q-btn>
             <div class="text-h5 q-mr-sm">{{ detail?.name || 'Stock item' }}</div>
@@ -38,20 +38,20 @@
                     :loading="busy"
                     @click="onToggleOpen"
                 />
-                <q-btn outline no-caps icon="refresh" label="Restock" :loading="busy" @click="onRestock" />
-                <q-btn outline no-caps icon="event" label="Set expiry" @click="expiryDialogOpen = true" />
-                <q-btn outline no-caps icon="local_offer" label="Find deals" @click="onFindDeals" />
-                <q-btn color="primary" no-caps icon="add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
+                <q-btn outline no-caps :icon="ICONS.refresh" label="Restock" :loading="busy" @click="onRestock" />
+                <q-btn outline no-caps :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
+                <q-btn outline no-caps :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
+                <q-btn color="primary" no-caps :icon="ICONS.add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
                 <q-space />
                 <q-btn outline no-caps icon="qr_code_2" label="Show QR" @click="showQrOpen = true" />
                 <q-btn
                     outline
                     no-caps
-                    icon="qr_code_scanner"
+                    :icon="ICONS.qr_code_scanner"
                     label="Register barcode"
                     @click="registerScanOpen = true"
                 />
-                <q-btn flat icon="delete" color="negative" no-caps label="Delete" @click="confirmDelete" />
+                <q-btn flat :icon="ICONS.delete" color="negative" no-caps label="Delete" @click="confirmDelete" />
             </div>
 
             <!-- ── QR / scan overlays (N5) ──────────────────────────── -->
@@ -76,7 +76,7 @@
                         <q-btn
                             color="primary"
                             no-caps
-                            icon="print"
+                            :icon="ICONS.print"
                             label="Print one"
                             @click="openSingleQrSheet"
                         />
@@ -91,12 +91,12 @@
             />
 
             <q-tabs v-model="tab" dense align="left" class="text-grey-8 q-mb-sm" no-caps>
-                <q-tab name="overview" icon="info" label="Overview" />
-                <q-tab name="products" icon="local_offer" :label="`Products (${detail.products.length})`" />
-                <q-tab name="recipes" icon="menu_book" :label="`Recipes (${detail.recipes.length})`" />
-                <q-tab name="substitutes" icon="swap_horiz" :label="`Substitutes (${detail.substitutes.length})`" />
-                <q-tab name="lists" icon="shopping_cart" :label="`Lists (${onLists.length})`" />
-                <q-tab name="history" icon="history" label="History" />
+                <q-tab name="overview" :icon="ICONS.info" label="Overview" />
+                <q-tab name="products" :icon="ICONS.local_offer" :label="`Products (${detail.products.length})`" />
+                <q-tab name="recipes" :icon="ICONS.menu_book" :label="`Recipes (${detail.recipes.length})`" />
+                <q-tab name="substitutes" :icon="ICONS.swap_horiz" :label="`Substitutes (${detail.substitutes.length})`" />
+                <q-tab name="lists" :icon="ICONS.shopping_cart" :label="`Lists (${onLists.length})`" />
+                <q-tab name="history" :icon="ICONS.history" label="History" />
             </q-tabs>
             <q-separator />
 
@@ -185,7 +185,7 @@
                                         v-model="form.auto_add_when_low"
                                         label="Auto-add when low or out"
                                     />
-                                    <q-icon name="info_outline" size="18px" color="grey-7">
+                                    <q-icon :name="ICONS.info_outline" size="18px" color="grey-7">
                                         <q-tooltip max-width="320px">
                                             Drops this item onto your primary
                                             shopping list the moment its level
@@ -201,7 +201,7 @@
                                         v-model="form.is_flagged"
                                         label="Always include in auto-generated lists"
                                     />
-                                    <q-icon name="info_outline" size="18px" color="grey-7">
+                                    <q-icon :name="ICONS.info_outline" size="18px" color="grey-7">
                                         <q-tooltip max-width="320px">
                                             Flagged items show up in the
                                             "essentials" auto-generate sources
@@ -227,7 +227,7 @@
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Linked products</div>
                         <q-space />
-                        <q-btn color="primary" dense no-caps icon="add" label="Link product" @click="openProductPicker" />
+                        <q-btn color="primary" dense no-caps :icon="ICONS.add" label="Link product" @click="openProductPicker" />
                     </div>
 
                     <div v-if="detail.products.length === 0" class="text-grey text-caption q-pa-md">
@@ -296,14 +296,14 @@
                                         flat
                                         dense
                                         round
-                                        icon="open_in_new"
+                                        :icon="ICONS.open_in_new"
                                         :href="prod.web_url"
                                         target="_blank"
                                         rel="noopener"
                                     >
                                         <q-tooltip>Open on {{ prod.merchant_name }}</q-tooltip>
                                     </q-btn>
-                                    <q-btn flat dense round icon="link_off" color="negative" @click="onUnlink(prod.product_id)">
+                                    <q-btn flat dense round :icon="ICONS.link_off" color="negative" @click="onUnlink(prod.product_id)">
                                         <q-tooltip>Unlink</q-tooltip>
                                     </q-btn>
                                 </q-card-actions>
@@ -315,7 +315,7 @@
                         <q-btn
                             color="primary"
                             no-caps
-                            icon="add_shopping_cart"
+                            :icon="ICONS.add_shopping_cart"
                             :label="`Add cheapest to list ($${cheapestProduct.price_now?.toFixed(2)} · ${cheapestProduct.merchant_name})`"
                             :loading="busy"
                             @click="onAddCheapest"
@@ -350,7 +350,7 @@
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Substitutes</div>
                         <q-space />
-                        <q-btn color="primary" dense no-caps icon="add" label="Add substitute" @click="openSubstitutePicker" />
+                        <q-btn color="primary" dense no-caps :icon="ICONS.add" label="Add substitute" @click="openSubstitutePicker" />
                     </div>
 
                     <div v-if="detail.substitutes.length === 0" class="text-grey text-caption q-pa-md">
@@ -368,12 +368,12 @@
                                         flat
                                         dense
                                         no-caps
-                                        icon="swap_horiz"
+                                        :icon="ICONS.swap_horiz"
                                         label="Swap into list"
                                         :loading="busy"
                                         @click="onSwapSubstitute(sub.stock_item_id)"
                                     />
-                                    <q-btn flat dense round icon="link_off" color="negative" @click="onRemoveSubstitute(sub.stock_item_id)">
+                                    <q-btn flat dense round :icon="ICONS.link_off" color="negative" @click="onRemoveSubstitute(sub.stock_item_id)">
                                         <q-tooltip>Remove substitute</q-tooltip>
                                     </q-btn>
                                 </div>
@@ -395,11 +395,11 @@
                             clickable
                             @click="goToList(l.shopping_list_id)"
                         >
-                            <q-item-section avatar><q-icon name="shopping_cart" /></q-item-section>
+                            <q-item-section avatar><q-icon :name="ICONS.shopping_cart" /></q-item-section>
                             <q-item-section>
                                 {{ l.name }}<span v-if="l.is_primary"> (primary)</span>
                             </q-item-section>
-                            <q-item-section side><q-icon name="open_in_new" size="16px" /></q-item-section>
+                            <q-item-section side><q-icon :name="ICONS.open_in_new" size="16px" /></q-item-section>
                         </q-item>
                     </q-list>
                 </q-tab-panel>
@@ -442,11 +442,11 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Link a product</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <q-input v-model="pickerSearch" outlined dense debounce="150" placeholder="Search saved products" clearable>
-                        <template #prepend><q-icon name="search" /></template>
+                        <template #prepend><q-icon :name="ICONS.search" /></template>
                     </q-input>
                 </q-card-section>
                 <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
@@ -465,7 +465,7 @@
                                 <q-item-label class="ellipsis">{{ prod.name }}</q-item-label>
                                 <q-item-label caption>{{ prod.merchant_name }}<span v-if="prod.size"> · {{ prod.size }}</span></q-item-label>
                             </q-item-section>
-                            <q-item-section side><q-btn flat round dense icon="add_link" color="primary" /></q-item-section>
+                            <q-item-section side><q-btn flat round dense :icon="ICONS.add_link" color="primary" /></q-item-section>
                         </q-item>
                     </q-list>
                 </q-card-section>
@@ -478,11 +478,11 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Add a substitute</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <q-input v-model="subSearch" outlined dense autofocus debounce="150" placeholder="Search stock items" clearable>
-                        <template #prepend><q-icon name="search" /></template>
+                        <template #prepend><q-icon :name="ICONS.search" /></template>
                     </q-input>
                 </q-card-section>
                 <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
@@ -490,7 +490,7 @@
                         <q-item v-for="si in substituteCandidates" :key="si.stock_item_id" clickable @click="onAddSubstitute(si.stock_item_id)">
                             <q-item-section avatar><q-icon name="inventory_2" /></q-item-section>
                             <q-item-section>{{ si.name }}</q-item-section>
-                            <q-item-section side><q-btn flat round dense icon="add" color="primary" /></q-item-section>
+                            <q-item-section side><q-btn flat round dense :icon="ICONS.add" color="primary" /></q-item-section>
                         </q-item>
                         <q-item v-if="substituteCandidates.length === 0">
                             <q-item-section class="text-grey">No matching items.</q-item-section>
@@ -503,6 +503,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';

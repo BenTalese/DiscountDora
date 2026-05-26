@@ -1,7 +1,7 @@
 <template>
     <div class="data-shell q-pa-md">
         <q-breadcrumbs class="q-mb-sm" active-color="grey-9">
-            <q-breadcrumbs-el label="Data" icon="storage" />
+            <q-breadcrumbs-el label="Data" :icon="ICONS.storage" />
             <q-breadcrumbs-el :label="activeLabel" />
         </q-breadcrumbs>
 
@@ -48,6 +48,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
     import { useRoute } from 'vue-router';
 
@@ -58,19 +59,19 @@
             path: '/data/backup',
             label: 'Backup & restore',
             caption: 'Export everything to JSON; restore on demand',
-            icon: 'cloud_download'
+            icon: ICONS.cloud_download
         },
         {
             path: '/data/import',
             label: 'Import',
             caption: 'Bring in stock, recipes, or shopping lists',
-            icon: 'file_upload'
+            icon: ICONS.file_upload
         },
         {
             path: '/data/export',
             label: 'Export & print',
             caption: 'Printable views and CSV exports',
-            icon: 'print'
+            icon: ICONS.print
         },
         {
             path: '/data/barcodes',

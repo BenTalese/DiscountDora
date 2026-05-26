@@ -12,9 +12,9 @@
                 :disable="isSearching"
                 @keydown.enter="onSearch"
             >
-                <template #prepend><q-icon name="search" /></template>
+                <template #prepend><q-icon :name="ICONS.search" /></template>
                 <template #append>
-                    <q-btn v-if="searchTerm" flat dense round icon="close" @click="searchTerm = ''" />
+                    <q-btn v-if="searchTerm" flat dense round :icon="ICONS.close" @click="searchTerm = ''" />
                 </template>
             </q-input>
 
@@ -22,14 +22,14 @@
                 v-if="!isSearching"
                 color="primary"
                 no-caps
-                icon="search"
+                :icon="ICONS.search"
                 label="Search"
                 :disable="!searchTerm.trim() || enabledMerchantsSelected.length === 0"
                 @click="onSearch"
             />
-            <q-btn v-else color="negative" no-caps icon="close" label="Cancel" @click="onCancelSearch" />
+            <q-btn v-else color="negative" no-caps :icon="ICONS.close" label="Cancel" @click="onCancelSearch" />
 
-            <q-btn flat round dense icon="tune" :color="showFilters ? 'primary' : undefined" @click="showFilters = !showFilters">
+            <q-btn flat round dense :icon="ICONS.tune" :color="showFilters ? 'primary' : undefined" @click="showFilters = !showFilters">
                 <q-tooltip>Toggle filters</q-tooltip>
             </q-btn>
         </div>
@@ -144,7 +144,7 @@
         </q-banner>
 
         <q-banner v-if="!isSearching && searchError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
-            <template #avatar><q-icon name="cloud_off" /></template>
+            <template #avatar><q-icon :name="ICONS.cloud_off" /></template>
             We couldn't reach one or more merchant scrapers. Check your connection or the merchant API status, then try again.
             <template #action>
                 <q-btn flat no-caps label="Retry" @click="onSearch" />
@@ -153,7 +153,7 @@
         </q-banner>
 
         <q-banner v-if="!isSearching && unhealthyEnabledMerchants.length > 0" class="bg-amber-1 text-amber-10 q-mb-md" dense rounded>
-            <template #avatar><q-icon name="warning" /></template>
+            <template #avatar><q-icon :name="ICONS.warning" /></template>
             {{ unhealthyMerchantWarning }}
             <template #action><q-btn flat no-caps icon-right="open_in_new" label="Check providers" to="/settings/admin/merchants" /></template>
         </q-banner>
@@ -198,14 +198,14 @@
                 <img src="../assets/logo-mascot.png" alt="Discount Dora" />
             </q-avatar>
             <div class="dora-empty-text">
-                Type a product name above and hit <q-icon name="search" /> to search across enabled merchants.
+                Type a product name above and hit <q-icon :name="ICONS.search" /> to search across enabled merchants.
             </div>
         </div>
 
         <!-- ─── Comparison tray ────────────────────────────────────────── -->
         <q-page-sticky v-if="comparison.length > 0" position="bottom" :offset="[0, 16]">
             <q-card class="bg-primary text-white row items-center q-px-md q-py-sm q-gutter-sm shadow-4">
-                <q-icon name="compare_arrows" />
+                <q-icon :name="ICONS.compare_arrows" />
                 <span>{{ comparison.length }} selected for comparison</span>
                 <q-btn dense no-caps color="white" text-color="primary" label="Compare" :disable="comparison.length < 2" @click="compareOpen = true" />
                 <q-btn dense flat no-caps label="Clear" @click="comparison = []" />
@@ -218,7 +218,7 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Compare products</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <q-markup-table flat bordered dense>
@@ -265,7 +265,7 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Link to a stock item</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <div class="text-caption text-grey q-mb-sm" v-if="linkTargetOffer">
@@ -291,6 +291,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import ProductSearchCard from 'src/components/ProductSearchCard.vue';

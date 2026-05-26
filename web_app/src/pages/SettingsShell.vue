@@ -34,7 +34,7 @@
                         <template v-if="isAdmin">
                             <q-separator class="q-my-sm" />
                             <q-item-label header class="settings-group-header">
-                                <q-icon name="shield" size="14px" class="q-mr-xs" />
+                                <q-icon :name="ICONS.shield" size="14px" class="q-mr-xs" />
                                 Admin · global
                             </q-item-label>
                             <q-item
@@ -64,7 +64,7 @@
                     rounded
                 >
                     <template #avatar>
-                        <q-icon name="lock" size="18px" />
+                        <q-icon :name="ICONS.lock" size="18px" />
                     </template>
                     Admin (global) settings are only visible to admin accounts.
                 </q-banner>
@@ -79,6 +79,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
 
@@ -89,31 +90,31 @@
             path: '/settings/preferences',
             label: 'Preferences',
             caption: 'Email schedule and personal toggles',
-            icon: 'tune'
+            icon: ICONS.tune
         },
         {
             path: '/settings/stock-locations',
             label: 'Stock locations',
             caption: 'Pantry, Fridge, Freezer…',
-            icon: 'place'
+            icon: ICONS.place
         },
         {
             path: '/settings/stock-groups',
             label: 'Stock groups',
             caption: 'Tag items for filtering',
-            icon: 'label'
+            icon: ICONS.label
         },
         {
             path: '/settings/account',
             label: 'Account',
             caption: 'Your profile and sign-out',
-            icon: 'person'
+            icon: ICONS.person
         },
         {
             path: '/settings/about',
             label: 'About',
             caption: 'Version + project info',
-            icon: 'info'
+            icon: ICONS.info
         }
     ];
 
@@ -122,25 +123,25 @@
             path: '/settings/admin/merchants',
             label: 'Merchants',
             caption: 'Enable/disable scrapers, health',
-            icon: 'storefront'
+            icon: ICONS.storefront
         },
         {
             path: '/settings/admin/users',
             label: 'Users',
             caption: 'Accounts, admin role, deals subs',
-            icon: 'group'
+            icon: ICONS.group
         },
         {
             path: '/settings/admin/system',
             label: 'System',
             caption: 'Install-wide toggles',
-            icon: 'settings_applications'
+            icon: ICONS.settings_applications
         },
         {
             path: '/settings/admin/audit-log',
             label: 'Audit log',
             caption: 'Every mutation, login, and client crash',
-            icon: 'fact_check'
+            icon: ICONS.fact_check
         }
     ];
 

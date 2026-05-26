@@ -20,7 +20,7 @@
                     @click.stop
                     @update:model-value="emit('toggle-select', recipe.recipe_id)"
                 />
-                <q-icon v-else name="menu_book" size="20px" class="q-mr-xs q-mt-xs" />
+                <q-icon v-else :name="ICONS.menu_book" size="20px" class="q-mr-xs q-mt-xs" />
                 <div class="col">
                     <div class="text-subtitle1 ellipsis-2-lines">
                         {{ recipe.name }}
@@ -49,13 +49,13 @@
 
         <q-card-section class="q-pt-none">
             <div class="row q-gutter-xs items-center">
-                <q-chip v-if="totalTime !== null" dense icon="schedule">
+                <q-chip v-if="totalTime !== null" dense :icon="ICONS.schedule">
                     {{ totalTime }}m
                 </q-chip>
-                <q-chip v-if="recipe.servings" dense icon="restaurant">
+                <q-chip v-if="recipe.servings" dense :icon="ICONS.restaurant">
                     Serves {{ recipe.servings }}
                 </q-chip>
-                <q-chip v-if="recipe.difficulty" dense icon="star_outline">
+                <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
                     {{ recipe.difficulty }}
                 </q-chip>
             </div>
@@ -67,7 +67,7 @@
                 dense
                 color="positive"
                 text-color="white"
-                icon="check_circle"
+                :icon="ICONS.check_circle"
             >
                 Cookable now
             </q-chip>
@@ -77,7 +77,7 @@
                 clickable
                 color="orange-9"
                 text-color="white"
-                icon="remove_shopping_cart"
+                :icon="ICONS.remove_shopping_cart"
                 @click.stop="emit('add-missing', recipe.recipe_id, missingIds)"
             >
                 Missing {{ missingIds.length }}
@@ -88,7 +88,7 @@
                 dense
                 outline
                 color="warning"
-                icon="warning"
+                :icon="ICONS.warning"
                 class="q-ml-xs"
             >
                 {{ lowCount }} low
@@ -101,29 +101,29 @@
                 flat
                 dense
                 no-caps
-                icon="restaurant"
+                :icon="ICONS.restaurant"
                 label="Cook"
                 color="primary"
                 @click.stop="emit('cook', recipe.recipe_id)"
             />
-            <q-btn flat round dense icon="more_vert" @click.stop>
+            <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
                 <q-menu auto-close>
                     <q-list dense style="min-width: 220px">
                         <q-item clickable @click="emit('edit', recipe.recipe_id)">
                             <q-item-section avatar>
-                                <q-icon name="edit" />
+                                <q-icon :name="ICONS.edit" />
                             </q-item-section>
                             <q-item-section>Edit</q-item-section>
                         </q-item>
                         <q-item clickable @click="emit('duplicate', recipe.recipe_id)">
                             <q-item-section avatar>
-                                <q-icon name="content_copy" />
+                                <q-icon :name="ICONS.content_copy" />
                             </q-item-section>
                             <q-item-section>Duplicate</q-item-section>
                         </q-item>
                         <q-item clickable @click="emit('mark-made', recipe.recipe_id)">
                             <q-item-section avatar>
-                                <q-icon name="check" />
+                                <q-icon :name="ICONS.check" />
                             </q-item-section>
                             <q-item-section>Mark made</q-item-section>
                         </q-item>
@@ -134,7 +134,7 @@
                             @click="emit('add-all-to-list', recipe.recipe_id)"
                         >
                             <q-item-section avatar>
-                                <q-icon name="add_shopping_cart" />
+                                <q-icon :name="ICONS.add_shopping_cart" />
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>Add all ingredients to a list</q-item-label>
@@ -151,14 +151,14 @@
                             @click="emit('add-to-meal-plan', recipe.recipe_id)"
                         >
                             <q-item-section avatar>
-                                <q-icon name="event_note" />
+                                <q-icon :name="ICONS.event_note" />
                             </q-item-section>
                             <q-item-section>Add to a meal plan…</q-item-section>
                         </q-item>
                         <q-separator />
                         <q-item clickable @click="emit('delete', recipe.recipe_id)">
                             <q-item-section avatar>
-                                <q-icon name="delete" color="negative" />
+                                <q-icon :name="ICONS.delete" color="negative" />
                             </q-item-section>
                             <q-item-section class="text-negative">
                                 Delete recipe
@@ -172,6 +172,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { Recipe } from 'src/models/recipe';
     import { useStockItemStore } from 'src/stores/stockItemStore';

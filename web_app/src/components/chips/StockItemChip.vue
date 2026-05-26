@@ -50,36 +50,36 @@
             round
             dense
             size="xs"
-            icon="more_vert"
+            :icon="ICONS.more_vert"
             class="q-ml-xs"
             @click.stop
         >
             <q-menu auto-close>
                 <q-list dense style="min-width: 200px">
                     <q-item clickable @click="actions.addToList(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="add_shopping_cart" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.add_shopping_cart" /></q-item-section>
                         <q-item-section>Add to primary list</q-item-section>
                     </q-item>
                     <q-item clickable @click="actions.markRestocked(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="refresh" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.refresh" /></q-item-section>
                         <q-item-section>Mark restocked</q-item-section>
                     </q-item>
                     <q-item clickable @click="actions.pushExpiry(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="event" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.event" /></q-item-section>
                         <q-item-section>Push expiry +7 days</q-item-section>
                     </q-item>
                     <q-separator />
                     <q-item clickable @click="actions.findSubstitutes(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="swap_horiz" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.swap_horiz" /></q-item-section>
                         <q-item-section>Find substitutes</q-item-section>
                     </q-item>
                     <q-item clickable @click="actions.seeRecipesUsing(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="menu_book" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.menu_book" /></q-item-section>
                         <q-item-section>See recipes using this</q-item-section>
                     </q-item>
                     <q-separator />
                     <q-item clickable @click="actions.openDetail(stockItem.stock_item_id)">
-                        <q-item-section avatar><q-icon name="open_in_new" /></q-item-section>
+                        <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
                         <q-item-section>Open detail</q-item-section>
                     </q-item>
                 </q-list>
@@ -89,6 +89,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';

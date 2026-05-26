@@ -19,13 +19,13 @@
                     flat
                     round
                     dense
-                    icon="refresh"
+                    :icon="ICONS.refresh"
                     :loading="loading"
                     @click="loadAll"
                 >
                     <q-tooltip>Refresh dashboard</q-tooltip>
                 </q-btn>
-                <q-btn flat dense no-caps icon="tune" label="Cards">
+                <q-btn flat dense no-caps :icon="ICONS.tune" label="Cards">
                     <q-menu anchor="bottom right" self="top right">
                         <q-list dense style="min-width: 240px">
                             <q-item-label header>Show on dashboard</q-item-label>
@@ -68,14 +68,14 @@
             dense
         >
             <template #avatar>
-                <q-icon name="auto_awesome" size="20px" color="amber-9" />
+                <q-icon :name="ICONS.auto_awesome" size="20px" color="amber-9" />
             </template>
             <strong>Welcome —</strong>
             you skipped the setup wizard. Finish in two minutes whenever
             you're ready.
             <template #action>
-                <q-btn flat no-caps icon="east" label="Continue" to="/welcome" />
-                <q-btn flat no-caps icon="close" label="Hide" @click="dismissSkipReminder" />
+                <q-btn flat no-caps :icon="ICONS.east" label="Continue" to="/welcome" />
+                <q-btn flat no-caps :icon="ICONS.close" label="Hide" @click="dismissSkipReminder" />
             </template>
         </q-banner>
 
@@ -91,7 +91,7 @@
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
-                        <q-icon name="notifications_active" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.notifications_active" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Needs your attention</h3>
                         <a
                             class="dora-card-action dora-card-link"
@@ -152,7 +152,7 @@
                     @click="goTo(`/shopping-lists/${primarySummary.shopping_list_id}`)"
                 >
                     <header class="dora-card-head">
-                        <q-icon name="shopping_cart" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Primary shopping list</h3>
                         <span class="dora-card-action">Open list →</span>
                     </header>
@@ -191,7 +191,7 @@
             >
                 <article class="dora-card dora-card-clickable" @click="goTo('/shopping-lists')">
                     <header class="dora-card-head">
-                        <q-icon name="shopping_cart" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Primary shopping list</h3>
                         <span class="dora-card-action">Pick one →</span>
                     </header>
@@ -208,7 +208,7 @@
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
-                        <q-icon name="restaurant_menu" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.restaurant_menu" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Cookable tonight</h3>
                         <a
                             class="dora-card-action dora-card-link"
@@ -251,7 +251,7 @@
                                 dense
                                 no-caps
                                 size="sm"
-                                icon="restaurant"
+                                :icon="ICONS.restaurant"
                                 label="Cook"
                                 color="primary"
                                 @click="goTo(`/recipes/${r.recipe_id}/cook`)"
@@ -276,7 +276,7 @@
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
-                        <q-icon name="local_offer" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Best deals on your saved products</h3>
                         <a
                             class="dora-card-action dora-card-link"
@@ -294,7 +294,7 @@
                         >
                             <q-avatar rounded size="36px" class="bg-grey-2 dora-deal-img">
                                 <img v-if="p.image" :src="p.image" :alt="p.name" />
-                                <q-icon v-else name="shopping_bag" size="18px" />
+                                <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
                             </q-avatar>
                             <div class="dora-deal-text">
                                 <div class="dora-deal-name">{{ p.name }}</div>
@@ -395,7 +395,7 @@
             <div v-if="isCardVisible('meal_plan')" class="col-12 col-lg-8">
                 <article class="dora-card dora-card-clickable" @click="goTo('/meal-plans')">
                     <header class="dora-card-head">
-                        <q-icon name="calendar_month" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">The week ahead</h3>
                         <span class="dora-card-action">Plan →</span>
                     </header>
@@ -442,7 +442,7 @@
             <div v-if="isCardVisible('recipes')" class="col-12 col-sm-6 col-lg-4">
                 <article class="dora-card dora-card-clickable" @click="goTo('/recipes')">
                     <header class="dora-card-head">
-                        <q-icon name="menu_book" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.menu_book" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Recipes</h3>
                         <span class="dora-card-action">Browse →</span>
                     </header>
@@ -453,7 +453,7 @@
                         </div>
                         <div class="dora-stat dora-stat-accent">
                             <div class="dora-stat-num">
-                                <q-icon name="favorite" size="18px" class="q-mr-xs" />
+                                <q-icon :name="ICONS.favorite" size="18px" class="q-mr-xs" />
                                 {{ summary.recipes.favourites }}
                             </div>
                             <div class="dora-stat-label">favourites</div>
@@ -466,7 +466,7 @@
             <div v-if="isCardVisible('meals')" class="col-12 col-sm-6 col-lg-4">
                 <article class="dora-card dora-card-clickable" @click="goTo('/meals')">
                     <header class="dora-card-head">
-                        <q-icon name="restaurant" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.restaurant" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Meals</h3>
                         <span class="dora-card-action">Adjust →</span>
                     </header>
@@ -487,7 +487,7 @@
             <div v-if="isCardVisible('shopping_lists')" class="col-12 col-sm-6 col-lg-4">
                 <article class="dora-card">
                     <header class="dora-card-head">
-                        <q-icon name="shopping_cart" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Shopping</h3>
                     </header>
                     <div class="dora-stat-grid">
@@ -507,7 +507,7 @@
             <div v-if="isCardVisible('products')" class="col-12 col-sm-6 col-lg-4">
                 <article class="dora-card dora-card-clickable" @click="goTo('/product-search')">
                     <header class="dora-card-head">
-                        <q-icon name="local_offer" size="22px" class="dora-card-icon" />
+                        <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Products</h3>
                         <span class="dora-card-action">Search →</span>
                     </header>
@@ -522,7 +522,7 @@
 
             <div v-if="visibleCardCount === 0" class="col-12">
                 <q-banner class="bg-grey-2">
-                    All cards are hidden. Use the <q-icon name="tune" /> Cards menu above to show some.
+                    All cards are hidden. Use the <q-icon :name="ICONS.tune" /> Cards menu above to show some.
                 </q-banner>
             </div>
         </div>
@@ -541,7 +541,7 @@
                 <div class="dora-tip-body">
                     <strong>Dora says</strong> · {{ tip }}
                 </div>
-                <q-btn flat round dense size="sm" icon="close" @click="tipDismissed = true">
+                <q-btn flat round dense size="sm" :icon="ICONS.close" @click="tipDismissed = true">
                     <q-tooltip>Hide for today</q-tooltip>
                 </q-btn>
             </aside>
@@ -550,6 +550,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import {
         actionsFor as alertActionsFor,
@@ -593,16 +594,16 @@
     // and the default render order on first visit. Newer P12 cards lead so
     // first-time users land on the actionable stuff before the totals.
     const CARD_DEFS: CardDef[] = [
-        { id: 'attention', label: 'Needs your attention', icon: 'notifications_active' },
-        { id: 'primary_list', label: 'Primary shopping list', icon: 'shopping_cart' },
-        { id: 'cookable', label: 'Cookable tonight', icon: 'restaurant_menu' },
-        { id: 'best_deals', label: 'Best deals on saved products', icon: 'local_offer' },
-        { id: 'meal_plan', label: 'The week ahead', icon: 'calendar_month' },
+        { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active },
+        { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart },
+        { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu },
+        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer },
+        { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month },
         { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' },
-        { id: 'recipes', label: 'Recipes', icon: 'menu_book' },
-        { id: 'meals', label: 'Meals', icon: 'restaurant' },
-        { id: 'shopping_lists', label: 'Shopping', icon: 'shopping_cart' },
-        { id: 'products', label: 'Products', icon: 'local_offer' }
+        { id: 'recipes', label: 'Recipes', icon: ICONS.menu_book },
+        { id: 'meals', label: 'Meals', icon: ICONS.restaurant },
+        { id: 'shopping_lists', label: 'Shopping', icon: ICONS.shopping_cart },
+        { id: 'products', label: 'Products', icon: ICONS.local_offer }
     ];
 
     // Tip pool. One is picked deterministically per calendar day so the user

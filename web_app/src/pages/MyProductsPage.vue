@@ -13,7 +13,7 @@
             <q-btn
                 outline
                 no-caps
-                icon="link_off"
+                :icon="ICONS.link_off"
                 :label="`Stock items without products (${stockItemsMissingProducts.length})`"
                 class="q-mr-sm"
                 :disable="stockItemsMissingProducts.length === 0"
@@ -22,7 +22,7 @@
             <q-btn
                 outline
                 no-caps
-                icon="refresh"
+                :icon="ICONS.refresh"
                 label="Refresh"
                 :loading="loading"
                 @click="loadAll"
@@ -51,7 +51,7 @@
                     <q-btn
                         flat
                         no-caps
-                        icon="checklist"
+                        :icon="ICONS.checklist"
                         label="Select"
                         @click="enterBulkMode"
                     />
@@ -72,7 +72,7 @@
                     <q-btn
                         flat
                         no-caps
-                        icon="add_shopping_cart"
+                        :icon="ICONS.add_shopping_cart"
                         :label="`Add ${onDealSelectedCount} on-deal to list`"
                         color="primary"
                         :disable="onDealSelectedCount === 0"
@@ -82,7 +82,7 @@
                     <q-btn
                         flat
                         no-caps
-                        icon="link_off"
+                        :icon="ICONS.link_off"
                         label="Unlink"
                         :disable="selectedIds.size === 0"
                         :loading="bulkBusy"
@@ -91,7 +91,7 @@
                     <q-btn
                         flat
                         no-caps
-                        icon="visibility_off"
+                        :icon="ICONS.visibility_off"
                         label="Mark inactive"
                         :disable="selectedIds.size === 0"
                         :loading="bulkBusy"
@@ -113,7 +113,7 @@
                 placeholder="Search products"
                 style="min-width: 220px"
             >
-                <template #append><q-icon name="search" /></template>
+                <template #append><q-icon :name="ICONS.search" /></template>
             </q-input>
             <q-toggle v-model="onDealOnly" label="On deal now" dense />
             <q-toggle v-model="includeInactive" label="Show inactive" dense />
@@ -146,7 +146,7 @@
                 v-if="hasAnyFilter"
                 flat
                 no-caps
-                icon="filter_alt_off"
+                :icon="ICONS.filter_alt_off"
                 label="Clear"
                 @click="clearFilters"
             />
@@ -168,7 +168,7 @@
             v-else-if="filteredProducts.length === 0"
             class="text-center text-grey q-py-xl"
         >
-            <q-icon name="shopping_bag" size="60px" class="q-mb-sm" />
+            <q-icon :name="ICONS.shopping_bag" size="60px" class="q-mb-sm" />
             <div v-if="products.length === 0">
                 You haven't saved any products yet. Use Product Search to find and
                 save deals.
@@ -178,7 +178,7 @@
                 v-if="products.length === 0"
                 color="primary"
                 no-caps
-                icon="search"
+                :icon="ICONS.search"
                 label="Open Product Search"
                 class="q-mt-md"
                 to="/product-search"
@@ -220,7 +220,7 @@
                         />
                         <q-avatar v-else rounded size="40px" class="bg-grey-2">
                             <img v-if="product.image" :src="product.image" :alt="product.name" />
-                            <q-icon v-else name="shopping_bag" size="20px" />
+                            <q-icon v-else :name="ICONS.shopping_bag" size="20px" />
                         </q-avatar>
                         <div class="col">
                             <div class="text-subtitle2 ellipsis-2-lines">
@@ -273,7 +273,7 @@
                                 clickable
                                 color="primary"
                                 text-color="white"
-                                icon="link"
+                                :icon="ICONS.link"
                                 @click.stop="goToStockItem(product.linked_stock_item_id!)"
                             >
                                 {{ product.linked_stock_item_name ?? 'Stock item' }}
@@ -281,7 +281,7 @@
                             </q-chip>
                         </div>
                         <div v-else class="text-caption text-grey">
-                            <q-icon name="link_off" size="14px" />
+                            <q-icon :name="ICONS.link_off" size="14px" />
                             Not linked to any stock item.
                             <a
                                 href="#"
@@ -316,7 +316,7 @@
                             flat
                             dense
                             no-caps
-                            icon="open_in_new"
+                            :icon="ICONS.open_in_new"
                             :href="product.web_url"
                             target="_blank"
                             rel="noopener"
@@ -328,7 +328,7 @@
                             flat
                             dense
                             no-caps
-                            icon="add_shopping_cart"
+                            :icon="ICONS.add_shopping_cart"
                             color="primary"
                             :disable="!product.linked_stock_item_id"
                             @click.stop="onAddSingle(product)"
@@ -340,7 +340,7 @@
                                 }}
                             </q-tooltip>
                         </q-btn>
-                        <q-btn flat round dense icon="more_vert" @click.stop>
+                        <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
                             <q-menu auto-close>
                                 <q-list dense style="min-width: 200px">
                                     <q-item
@@ -359,7 +359,7 @@
                                         @click="onUnlinkSingle(product)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="link_off" />
+                                            <q-icon :name="ICONS.link_off" />
                                         </q-item-section>
                                         <q-item-section>Unlink</q-item-section>
                                     </q-item>
@@ -369,7 +369,7 @@
                                         @click="openLinkDialog(product)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="link" />
+                                            <q-icon :name="ICONS.link" />
                                         </q-item-section>
                                         <q-item-section>Link to stock item…</q-item-section>
                                     </q-item>
@@ -390,7 +390,7 @@
                                         @click="onViewPriceHistory(product.product_id)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="show_chart" />
+                                            <q-icon :name="ICONS.show_chart" />
                                         </q-item-section>
                                         <q-item-section>View price history</q-item-section>
                                     </q-item>
@@ -453,7 +453,7 @@
                         </div>
                     </div>
                     <q-space />
-                    <q-btn flat round dense icon="close" v-close-popup />
+                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-separator />
                 <q-card-section class="col scroll">
@@ -479,7 +479,7 @@
                                         flat
                                         round
                                         dense
-                                        icon="search"
+                                        :icon="ICONS.search"
                                         color="primary"
                                         @click="searchForOrphan(item)"
                                     >
@@ -489,7 +489,7 @@
                                         flat
                                         round
                                         dense
-                                        icon="open_in_new"
+                                        :icon="ICONS.open_in_new"
                                         @click="goToStockItem(item.stock_item_id)"
                                     >
                                         <q-tooltip>Open stock item</q-tooltip>
@@ -544,6 +544,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';

@@ -12,7 +12,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 label="New group"
                 :loading="creating"
                 @click="onCreate"
@@ -28,7 +28,7 @@
         <q-list separator>
             <q-item v-for="group in groups" :key="group.stock_group_id" class="q-py-sm">
                 <q-item-section avatar>
-                    <q-icon name="label" />
+                    <q-icon :name="ICONS.label" />
                 </q-item-section>
                 <q-item-section>
                     <q-item-label v-if="editingId !== group.stock_group_id">
@@ -56,7 +56,7 @@
                             flat
                             dense
                             round
-                            icon="edit"
+                            :icon="ICONS.edit"
                             @click="startRename(group)"
                         >
                             <q-tooltip>Rename</q-tooltip>
@@ -65,7 +65,7 @@
                             flat
                             dense
                             round
-                            icon="delete_outline"
+                            :icon="ICONS.delete_outline"
                             @click="onDelete(group)"
                         >
                             <q-tooltip>Delete</q-tooltip>
@@ -87,6 +87,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';

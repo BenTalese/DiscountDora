@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <q-btn flat round dense icon="arrow_back" @click="goBack" />
+            <q-btn flat round dense :icon="ICONS.arrow_back" @click="goBack" />
             <div class="q-ml-sm col text-caption text-grey">
                 Saved list shapes you can drop into a new shop in one click.
                 {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
@@ -9,7 +9,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 label="New template"
                 @click="onCreate"
             />
@@ -24,7 +24,7 @@
         </div>
 
         <div v-else-if="templates.length === 0" class="text-center text-grey q-py-xl">
-            <q-icon name="bookmarks" size="60px" class="q-mb-sm" />
+            <q-icon :name="ICONS.bookmarks" size="60px" class="q-mb-sm" />
             <div>
                 No templates yet. Create one to capture a recurring shop pattern
                 (e.g. "Weekly essentials").
@@ -60,7 +60,7 @@
                                 · updated {{ formatDate(template.updated_at) }}
                             </div>
                         </div>
-                        <q-btn flat round dense icon="more_vert">
+                        <q-btn flat round dense :icon="ICONS.more_vert">
                             <q-menu>
                                 <q-list dense style="min-width: 200px">
                                     <q-item
@@ -69,7 +69,7 @@
                                         @click="onUse(template, false)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="playlist_add_check" color="primary" />
+                                            <q-icon :name="ICONS.playlist_add_check" color="primary" />
                                         </q-item-section>
                                         <q-item-section>
                                             <q-item-label>Use template</q-item-label>
@@ -82,7 +82,7 @@
                                         @click="onUse(template, true)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="star" color="amber-9" />
+                                            <q-icon :name="ICONS.star" color="amber-9" />
                                         </q-item-section>
                                         <q-item-section>
                                             <q-item-label>Use as primary</q-item-label>
@@ -98,7 +98,7 @@
                                         @click="startRename(template)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="edit" />
+                                            <q-icon :name="ICONS.edit" />
                                         </q-item-section>
                                         <q-item-section>Rename</q-item-section>
                                     </q-item>
@@ -108,7 +108,7 @@
                                         @click="onView(template)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="open_in_new" />
+                                            <q-icon :name="ICONS.open_in_new" />
                                         </q-item-section>
                                         <q-item-section>Edit items</q-item-section>
                                     </q-item>
@@ -118,7 +118,7 @@
                                         @click="onDelete(template)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon name="delete" color="negative" />
+                                            <q-icon :name="ICONS.delete" color="negative" />
                                         </q-item-section>
                                         <q-item-section class="text-negative">
                                             Delete template
@@ -144,7 +144,7 @@
                             }}
                         </div>
                     </div>
-                    <q-btn flat round dense icon="close" v-close-popup />
+                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
 
                 <q-separator />
@@ -190,7 +190,7 @@
                                         round
                                         dense
                                         size="sm"
-                                        icon="remove"
+                                        :icon="ICONS.remove"
                                         :disable="(line.quantity ?? 0) <= 0"
                                         @click="adjustLineQuantity(line, -1)"
                                     />
@@ -213,7 +213,7 @@
                                         round
                                         dense
                                         size="sm"
-                                        icon="add"
+                                        :icon="ICONS.add"
                                         @click="adjustLineQuantity(line, 1)"
                                     />
                                 </div>
@@ -223,7 +223,7 @@
                                     flat
                                     round
                                     dense
-                                    icon="delete_outline"
+                                    :icon="ICONS.delete_outline"
                                     @click="onRemoveLine(line.line_id)"
                                 />
                             </q-item-section>
@@ -247,6 +247,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import type {
         TemplateDetail,

@@ -2,7 +2,7 @@
     <div class="runner-shell">
         <!-- ── Top progress strip ──────────────────────────────────── -->
         <div class="runner-topbar">
-            <q-btn flat round icon="close" color="white" :to="'/stocktake'" />
+            <q-btn flat round :icon="ICONS.close" color="white" :to="'/stocktake'" />
             <q-linear-progress
                 :value="progress"
                 rounded
@@ -43,7 +43,7 @@
                         size="lg"
                         class="full-width"
                         no-caps
-                        icon="check"
+                        :icon="ICONS.check"
                         label="Still correct (1)"
                         :loading="busy"
                         @click="onStillCorrect"
@@ -53,7 +53,7 @@
                         size="lg"
                         class="full-width"
                         no-caps
-                        icon="tune"
+                        :icon="ICONS.tune"
                         label="Change level (2)"
                         :loading="busy"
                         @click="changeOpen = true"
@@ -63,7 +63,7 @@
                         size="lg"
                         class="full-width"
                         no-caps
-                        icon="remove_shopping_cart"
+                        :icon="ICONS.remove_shopping_cart"
                         label="Out of stock (3)"
                         :loading="busy"
                         @click="onOutOfStock"
@@ -75,7 +75,7 @@
                         flat
                         no-caps
                         color="primary"
-                        icon="add_shopping_cart"
+                        :icon="ICONS.add_shopping_cart"
                         label="Add to list"
                         @click="onAddToList"
                     />
@@ -87,7 +87,7 @@
         <div v-else class="runner-card-wrap">
             <q-card class="runner-card" flat>
                 <q-card-section class="text-center">
-                    <q-icon name="check_circle" color="positive" size="64px" />
+                    <q-icon :name="ICONS.check_circle" color="positive" size="64px" />
                     <div class="text-h5 q-mt-sm">Stocktake complete</div>
                     <div class="text-caption text-grey-7">
                         Checked {{ summary.checked }} ·
@@ -124,6 +124,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
     import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';

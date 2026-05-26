@@ -2,7 +2,7 @@
     <div class="auth-shell">
         <q-card class="auth-card" flat bordered>
             <q-card-section class="text-center">
-                <q-icon name="password" size="56px" class="text-primary" />
+                <q-icon :name="ICONS.password" size="56px" class="text-primary" />
                 <div class="text-h6 q-mt-md">Choose a new password</div>
                 <div class="text-caption text-grey q-mt-xs">
                     Must be at least 10 characters and include a letter and a digit.
@@ -50,7 +50,7 @@
             </q-card-section>
             <q-card-section v-else>
                 <q-banner class="bg-green-1 text-green-9" rounded>
-                    <template #avatar><q-icon name="check_circle" /></template>
+                    <template #avatar><q-icon :name="ICONS.check_circle" /></template>
                     Password reset. Sign in with your new password.
                 </q-banner>
             </q-card-section>
@@ -69,6 +69,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, ref } from 'vue';
     import { useRoute } from 'vue-router';

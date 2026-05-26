@@ -1,7 +1,7 @@
 <template>
     <div v-if="installed">
         <q-item-label caption class="text-positive">
-            <q-icon name="check_circle" size="14px" class="q-mr-xs" />
+            <q-icon :name="ICONS.check_circle" size="14px" class="q-mr-xs" />
             Dora is installed on this device.
         </q-item-label>
     </div>
@@ -10,7 +10,7 @@
         unelevated
         color="primary"
         no-caps
-        icon="install_desktop"
+        :icon="ICONS.install_desktop"
         label="Install Dora as an app"
         @click="onInstall"
     />
@@ -21,10 +21,10 @@
         rounded
     >
         <template #avatar>
-            <q-icon name="phone_iphone" />
+            <q-icon :name="ICONS.phone_iphone" />
         </template>
         On iOS, tap the
-        <q-icon name="ios_share" size="16px" class="q-mx-xs" />
+        <q-icon :name="ICONS.ios_share" size="16px" class="q-mx-xs" />
         <strong>Share</strong> button in Safari, then
         <strong>Add to Home Screen</strong>.
     </q-banner>
@@ -35,6 +35,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import {
         installPromptAvailable, isInstalled, isIosSafari, showInstallPrompt,

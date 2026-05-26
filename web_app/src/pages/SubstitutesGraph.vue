@@ -25,7 +25,7 @@
                 label="Search nodes"
                 class="subs-search"
             >
-                <template #prepend><q-icon name="search" /></template>
+                <template #prepend><q-icon :name="ICONS.search" /></template>
             </q-input>
 
             <div class="subs-group-chips">
@@ -69,7 +69,7 @@
                         <q-icon name="inventory_2" size="20px" class="q-mr-xs" />
                         <strong class="subs-side-name">{{ selectedNode.name }}</strong>
                         <q-space />
-                        <q-btn flat round dense icon="close" @click="clearSelection" />
+                        <q-btn flat round dense :icon="ICONS.close" @click="clearSelection" />
                     </header>
                     <div class="subs-side-meta">
                         <q-chip v-if="selectedNode.level" dense color="grey-3">{{ selectedNode.level }}</q-chip>
@@ -89,7 +89,7 @@
                                 flat
                                 dense
                                 size="sm"
-                                icon="close"
+                                :icon="ICONS.close"
                                 @click="removePair(selectedNode.id, otherId(pair, selectedNode.id))"
                             >
                                 <q-tooltip>Remove substitute</q-tooltip>
@@ -127,7 +127,7 @@
                     <q-btn
                         color="primary"
                         no-caps
-                        icon="add"
+                        :icon="ICONS.add"
                         label="Add"
                         :disable="!newSubstituteId"
                         class="q-mt-sm"
@@ -137,7 +137,7 @@
                     <q-btn
                         flat
                         no-caps
-                        icon="open_in_new"
+                        :icon="ICONS.open_in_new"
                         label="Open in stock detail"
                         class="q-mt-md"
                         @click="goToStock(selectedNode.id)"
@@ -146,16 +146,16 @@
 
                 <div v-else-if="selectedKind === 'edge' && selectedEdge" class="subs-side-block">
                     <header class="subs-side-head">
-                        <q-icon name="link" size="20px" class="q-mr-xs" />
+                        <q-icon :name="ICONS.link" size="20px" class="q-mr-xs" />
                         <strong class="subs-side-name">Pair</strong>
                         <q-space />
-                        <q-btn flat round dense icon="close" @click="clearSelection" />
+                        <q-btn flat round dense :icon="ICONS.close" @click="clearSelection" />
                     </header>
                     <div class="subs-side-pair">
                         <a class="subs-side-pair-name" @click="goToStock(selectedEdge.a)">
                             {{ nameById[selectedEdge.a] ?? '—' }}
                         </a>
-                        <q-icon name="swap_horiz" size="18px" class="q-mx-sm" />
+                        <q-icon :name="ICONS.swap_horiz" size="18px" class="q-mx-sm" />
                         <a class="subs-side-pair-name" @click="goToStock(selectedEdge.b)">
                             {{ nameById[selectedEdge.b] ?? '—' }}
                         </a>
@@ -170,12 +170,12 @@
                         label="Optional notes"
                     />
                     <div class="row q-gutter-sm q-mt-sm">
-                        <q-btn color="primary" no-caps icon="save" label="Save" @click="saveEdgeNotes" />
+                        <q-btn color="primary" no-caps :icon="ICONS.save" label="Save" @click="saveEdgeNotes" />
                         <q-btn
                             flat
                             color="negative"
                             no-caps
-                            icon="delete"
+                            :icon="ICONS.delete"
                             label="Remove pair"
                             @click="removePair(selectedEdge.a, selectedEdge.b)"
                         />
@@ -191,7 +191,7 @@
             <q-btn
                 color="primary"
                 no-caps
-                icon="add"
+                :icon="ICONS.add"
                 label="Add your first substitute"
                 @click="openFirstSubstituteFlow"
             />
@@ -200,6 +200,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import cytoscape, { type Core, type ElementDefinition, type LayoutOptions } from 'cytoscape';
     import { storeToRefs } from 'pinia';
     import { Notify } from 'quasar';

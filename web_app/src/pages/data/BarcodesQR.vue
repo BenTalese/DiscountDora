@@ -2,7 +2,7 @@
     <div class="q-gutter-md">
         <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
             <template #avatar>
-                <q-icon name="info" size="18px" />
+                <q-icon :name="ICONS.info" size="18px" />
             </template>
             Scan barcodes with your camera, print QR sheets for pantry items,
             or manage registered barcodes. Camera access requires HTTPS in
@@ -18,9 +18,9 @@
             indicator-color="primary"
             active-color="primary"
         >
-            <q-tab name="scan" icon="qr_code_scanner" label="Scan" />
-            <q-tab name="sheets" icon="print" label="Print sheets" />
-            <q-tab name="manage" icon="list_alt" label="Manage" />
+            <q-tab name="scan" :icon="ICONS.qr_code_scanner" label="Scan" />
+            <q-tab name="sheets" :icon="ICONS.print" label="Print sheets" />
+            <q-tab name="manage" :icon="ICONS.list_alt" label="Manage" />
         </q-tabs>
         <q-separator />
 
@@ -28,7 +28,7 @@
         <div v-if="tab === 'scan'">
             <q-card flat bordered>
                 <q-card-section class="row items-center q-gutter-md">
-                    <q-icon name="qr_code_scanner" size="32px" class="text-primary" />
+                    <q-icon :name="ICONS.qr_code_scanner" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Scan a barcode</div>
                         <div class="text-caption text-grey">
@@ -42,7 +42,7 @@
                 <q-card-section>
                     <q-btn
                         color="primary"
-                        icon="photo_camera"
+                        :icon="ICONS.photo_camera"
                         label="Open camera"
                         unelevated
                         @click="scanOpen = true"
@@ -55,7 +55,7 @@
         <div v-else-if="tab === 'sheets'">
             <q-card flat bordered>
                 <q-card-section class="row items-center q-gutter-md">
-                    <q-icon name="print" size="32px" class="text-primary" />
+                    <q-icon :name="ICONS.print" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Print QR sheets</div>
                         <div class="text-caption text-grey">
@@ -135,13 +135,13 @@
                         flat
                         no-caps
                         label="Print all items"
-                        icon="print"
+                        :icon="ICONS.print"
                         @click="openSheet({ allItems: true })"
                     />
                     <q-btn
                         color="primary"
                         no-caps
-                        icon="picture_as_pdf"
+                        :icon="ICONS.picture_as_pdf"
                         :label="`Open sheet (${selectedItemIds.length})`"
                         :disable="selectedItemIds.length === 0"
                         @click="openSheet({ allItems: false })"
@@ -154,7 +154,7 @@
         <div v-else-if="tab === 'manage'">
             <q-card flat bordered>
                 <q-card-section class="row items-center q-gutter-md">
-                    <q-icon name="list_alt" size="32px" class="text-primary" />
+                    <q-icon :name="ICONS.list_alt" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Manage barcodes</div>
                         <div class="text-caption text-grey">
@@ -204,7 +204,7 @@
                                     dense
                                     no-caps
                                     color="primary"
-                                    icon="check"
+                                    :icon="ICONS.check"
                                     label="Save"
                                     @click="commitEdit(item.stock_item_id)"
                                 />
@@ -221,7 +221,7 @@
                                     flat
                                     dense
                                     no-caps
-                                    icon="edit"
+                                    :icon="ICONS.edit"
                                     label="Edit"
                                     @click="startEdit(item)"
                                 />
@@ -231,7 +231,7 @@
                                     dense
                                     no-caps
                                     color="negative"
-                                    icon="clear"
+                                    :icon="ICONS.clear"
                                     label="Clear"
                                     @click="clearBarcode(item)"
                                 />
@@ -239,7 +239,7 @@
                                     flat
                                     dense
                                     no-caps
-                                    icon="print"
+                                    :icon="ICONS.print"
                                     label="Print one"
                                     @click="openSingleSheet(item.stock_item_id)"
                                 />
@@ -296,7 +296,7 @@
                         v-if="resultKind === 'stock_item' && matchedItem"
                         flat
                         no-caps
-                        icon="open_in_new"
+                        :icon="ICONS.open_in_new"
                         label="Open detail"
                         color="primary"
                         @click="openDetail(matchedItem.stock_item_id)"
@@ -305,7 +305,7 @@
                         v-if="resultKind === 'unknown'"
                         color="primary"
                         no-caps
-                        icon="check"
+                        :icon="ICONS.check"
                         label="Register"
                         :disable="!registerTarget"
                         @click="registerUnknownBarcode"
@@ -317,6 +317,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';

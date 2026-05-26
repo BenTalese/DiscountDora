@@ -2,7 +2,7 @@
     <div class="q-gutter-md">
         <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
             <template #avatar>
-                <q-icon name="info" size="18px" />
+                <q-icon :name="ICONS.info" size="18px" />
             </template>
             Import stock items from a spreadsheet (.xlsx or .csv). Map your
             columns to Dora's fields, preview the result, then commit. Errors
@@ -12,7 +12,7 @@
         <!-- ── File picker ────────────────────────────────────────── -->
         <q-card flat bordered>
             <q-card-section class="row items-center q-gutter-md">
-                <q-icon name="upload_file" size="32px" class="text-primary" />
+                <q-icon :name="ICONS.upload_file" size="32px" class="text-primary" />
                 <div>
                     <div class="text-h6">Spreadsheet import</div>
                     <div class="text-caption text-grey">
@@ -33,7 +33,7 @@
                     @update:model-value="onFilePicked"
                 >
                     <template #prepend>
-                        <q-icon name="attach_file" />
+                        <q-icon :name="ICONS.attach_file" />
                     </template>
                     <template #append>
                         <q-btn
@@ -41,7 +41,7 @@
                             flat
                             dense
                             round
-                            icon="close"
+                            :icon="ICONS.close"
                             @click.stop="onClearPick"
                         />
                     </template>
@@ -88,7 +88,7 @@
             rounded
         >
             <template #avatar>
-                <q-icon name="warning" />
+                <q-icon :name="ICONS.warning" />
             </template>
             <ul class="q-my-none q-pl-md">
                 <li v-for="(w, i) in inspect.warnings" :key="i">{{ w }}</li>
@@ -189,7 +189,7 @@
                 <q-btn flat label="Cancel" @click="onClearPick" />
                 <q-btn
                     color="primary"
-                    icon="check"
+                    :icon="ICONS.check"
                     label="Import"
                     :loading="committing"
                     :disable="committing || !columnMap.name"
@@ -255,7 +255,7 @@
                         v-if="errorRows.length"
                         flat
                         label="Download error rows (CSV)"
-                        icon="download"
+                        :icon="ICONS.download"
                         @click="downloadErrorRows"
                     />
                     <q-btn flat label="Close" @click="onResultClose" />
@@ -266,6 +266,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, reactive, ref, watch } from 'vue';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';

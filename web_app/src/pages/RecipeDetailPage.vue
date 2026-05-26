@@ -12,13 +12,13 @@
         <template v-else-if="recipe">
             <!-- ── Header ─────────────────────────────────────────── -->
             <div class="row items-center q-mb-md">
-                <q-btn flat round dense icon="arrow_back" @click="onBack" />
+                <q-btn flat round dense :icon="ICONS.arrow_back" @click="onBack" />
                 <div class="q-ml-sm col">
                     <div class="text-caption text-grey">
                         <router-link to="/recipes" class="text-grey">
                             Recipes
                         </router-link>
-                        <q-icon name="chevron_right" size="14px" />
+                        <q-icon :name="ICONS.chevron_right" size="14px" />
                         {{ form.name || 'Untitled recipe' }}
                     </div>
                     <q-input
@@ -38,12 +38,12 @@
                     :label="recipe.is_favourite ? 'Favourited' : 'Favourite'"
                     @click="onToggleFavourite"
                 />
-                <q-btn flat round dense icon="more_vert" class="q-ml-sm">
+                <q-btn flat round dense :icon="ICONS.more_vert" class="q-ml-sm">
                     <q-menu anchor="bottom right" self="top right">
                         <q-list dense style="min-width: 220px">
                             <q-item clickable v-close-popup @click="onExportCsv">
                                 <q-item-section avatar>
-                                    <q-icon name="file_download" />
+                                    <q-icon :name="ICONS.file_download" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Export as CSV</q-item-label>
@@ -54,7 +54,7 @@
                             </q-item>
                             <q-item clickable v-close-popup @click="onPrint">
                                 <q-item-section avatar>
-                                    <q-icon name="print" />
+                                    <q-icon :name="ICONS.print" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Print / Save as PDF</q-item-label>
@@ -69,7 +69,7 @@
                 <q-btn
                     color="primary"
                     no-caps
-                    icon="save"
+                    :icon="ICONS.save"
                     label="Save"
                     class="q-ml-sm"
                     :disable="!isDirty"
@@ -180,7 +180,7 @@
                                 flat
                                 dense
                                 no-caps
-                                icon="add"
+                                :icon="ICONS.add"
                                 label="Add ingredient"
                                 @click="addIngredient"
                             />
@@ -228,7 +228,7 @@
                                                 @click="createInlineStockItem(idx, ingredientFilter)"
                                             >
                                                 <q-item-section avatar>
-                                                    <q-icon name="add" color="primary" />
+                                                    <q-icon :name="ICONS.add" color="primary" />
                                                 </q-item-section>
                                                 <q-item-section class="text-primary">
                                                     Create "{{ ingredientFilter }}"
@@ -253,7 +253,7 @@
                                             dense
                                             outline
                                             color="negative"
-                                            icon="report"
+                                            :icon="ICONS.report"
                                             class="q-mt-xs"
                                         >
                                             Missing
@@ -296,7 +296,7 @@
                                             flat
                                             round
                                             dense
-                                            icon="add_shopping_cart"
+                                            :icon="ICONS.add_shopping_cart"
                                             color="primary"
                                             :disable="!ing.stock_item_id"
                                             @click="onAddRowToList(ing)"
@@ -307,7 +307,7 @@
                                             flat
                                             round
                                             dense
-                                            icon="delete"
+                                            :icon="ICONS.delete"
                                             color="negative"
                                             @click="removeIngredient(idx)"
                                         />
@@ -348,7 +348,7 @@
                     <q-card flat bordered>
                         <q-expansion-item
                             label="Nutrition (optional)"
-                            icon="monitor_heart"
+                            :icon="ICONS.monitor_heart"
                             :default-opened="!!form.nutrition"
                         >
                             <q-card-section>
@@ -403,7 +403,7 @@
                                 @click="onStartCookMode"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="restaurant" color="primary" />
+                                    <q-icon :name="ICONS.restaurant" color="primary" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Start cook mode</q-item-label>
@@ -418,7 +418,7 @@
                                 @click="onAddMissingToList"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="add_shopping_cart" color="primary" />
+                                    <q-icon :name="ICONS.add_shopping_cart" color="primary" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>
@@ -438,7 +438,7 @@
                                 @click="onFindSubstitutes"
                             >
                                 <q-item-section avatar>
-                                    <q-icon name="swap_horiz" color="primary" />
+                                    <q-icon :name="ICONS.swap_horiz" color="primary" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>
@@ -456,7 +456,7 @@
                         <q-list dense separator>
                             <q-item clickable @click="onImportFromUrl">
                                 <q-item-section avatar>
-                                    <q-icon name="link" />
+                                    <q-icon :name="ICONS.link" />
                                 </q-item-section>
                                 <q-item-section>
                                     <q-item-label>Import from URL…</q-item-label>
@@ -467,13 +467,13 @@
                             </q-item>
                             <q-item clickable @click="onMarkMade">
                                 <q-item-section avatar>
-                                    <q-icon name="check" />
+                                    <q-icon :name="ICONS.check" />
                                 </q-item-section>
                                 <q-item-section>Mark made</q-item-section>
                             </q-item>
                             <q-item clickable @click="onDelete">
                                 <q-item-section avatar>
-                                    <q-icon name="delete" color="negative" />
+                                    <q-icon :name="ICONS.delete" color="negative" />
                                 </q-item-section>
                                 <q-item-section class="text-negative">
                                     Delete recipe
@@ -505,7 +505,7 @@
                         class="q-mb-md"
                     >
                         <div class="text-subtitle2">
-                            <q-icon name="report" color="negative" size="16px" />
+                            <q-icon :name="ICONS.report" color="negative" size="16px" />
                             {{ entry.name }}
                         </div>
                         <div v-if="entry.substitutes.length === 0" class="text-caption text-grey">
@@ -605,6 +605,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';

@@ -2,10 +2,10 @@
     <div class="q-pa-md">
         <!-- Header bar ───────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn color="positive" icon="add" label="New item" no-caps @click="onCreateClick" />
+            <q-btn color="positive" :icon="ICONS.add" label="New item" no-caps @click="onCreateClick" />
             <q-btn
                 outline
-                icon="qr_code_scanner"
+                :icon="ICONS.qr_code_scanner"
                 label="Scan"
                 no-caps
                 @click="overviewScanOpen = true"
@@ -13,22 +13,22 @@
             <q-btn
                 outline
                 no-caps
-                icon="fact_check"
+                :icon="ICONS.fact_check"
                 :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
                 :class="stocktakeOverdue > 0 ? 'stocktake-glow' : ''"
                 to="/stocktake"
             />
-            <q-btn-dropdown flat no-caps icon="more_horiz" label="Export">
+            <q-btn-dropdown flat no-caps :icon="ICONS.more_horiz" label="Export">
                 <q-list dense style="min-width: 200px">
                     <q-item clickable v-close-popup @click="overviewExport.downloadCsv()">
                         <q-item-section avatar>
-                            <q-icon name="file_download" />
+                            <q-icon :name="ICONS.file_download" />
                         </q-item-section>
                         <q-item-section>Export as CSV</q-item-section>
                     </q-item>
                     <q-item clickable v-close-popup @click="overviewExport.openPrintView()">
                         <q-item-section avatar>
-                            <q-icon name="print" />
+                            <q-icon :name="ICONS.print" />
                         </q-item-section>
                         <q-item-section>Print / Save as PDF</q-item-section>
                     </q-item>
@@ -47,7 +47,7 @@
                 style="min-width: 280px"
             >
                 <template #prepend>
-                    <q-icon name="search" />
+                    <q-icon :name="ICONS.search" />
                 </template>
             </q-input>
         </div>
@@ -114,23 +114,23 @@
 
             <q-separator vertical class="q-mx-sm" />
 
-            <FilterChip v-model="filters.essentialsOnly.value" icon="flag" active-color="amber-9">
+            <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="amber-9">
                 Flagged for auto
             </FilterChip>
 
-            <FilterChip v-model="filters.autoAddOnly.value" icon="bolt" active-color="primary">
+            <FilterChip v-model="filters.autoAddOnly.value" :icon="ICONS.bolt" active-color="primary">
                 Will auto-add on low
             </FilterChip>
 
-            <FilterChip v-model="filters.openOnly.value" icon="lock_open" active-color="secondary">
+            <FilterChip v-model="filters.openOnly.value" :icon="ICONS.lock_open" active-color="secondary">
                 Open / in-use
             </FilterChip>
 
-            <FilterChip v-model="filters.hasAlertOnly.value" icon="warning" active-color="negative">
+            <FilterChip v-model="filters.hasAlertOnly.value" :icon="ICONS.warning" active-color="negative">
                 Needs attention
             </FilterChip>
 
-            <FilterChip v-model="filters.usedInRecipeOnly.value" icon="menu_book" active-color="primary">
+            <FilterChip v-model="filters.usedInRecipeOnly.value" :icon="ICONS.menu_book" active-color="primary">
                 Used in a recipe
             </FilterChip>
 
@@ -142,7 +142,7 @@
                 removable
                 @remove="filters.cartFilter.value = 'all'"
             >
-                <q-icon name="shopping_cart" size="14px" class="q-mr-xs" />
+                <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
                 {{ filters.cartFilter.value === 'on_list' ? 'On a list' : 'Not on any list' }}
             </q-chip>
 
@@ -189,7 +189,7 @@
                 v-if="bulkMode"
                 flat
                 no-caps
-                icon="close"
+                :icon="ICONS.close"
                 label="Cancel"
                 @click="cancelBulk"
             />
@@ -197,7 +197,7 @@
                 v-else
                 flat
                 no-caps
-                icon="checklist"
+                :icon="ICONS.checklist"
                 label="Bulk select"
                 @click="bulkMode = true"
             />
@@ -206,7 +206,7 @@
         <!-- Bulk action bar ───────────────────────────────────────────── -->
         <q-banner v-if="bulkMode" class="bg-primary text-white q-mb-md" dense rounded>
             <template #avatar>
-                <q-icon name="checklist" />
+                <q-icon :name="ICONS.checklist" />
             </template>
             {{ bulkSelection.size }} selected
             <template #action>
@@ -295,12 +295,12 @@
                                 already track elsewhere.
                             </div>
                             <div class="q-gutter-sm">
-                                <q-btn color="positive" icon="add" no-caps label="New item" @click="onCreateClick" />
+                                <q-btn color="positive" :icon="ICONS.add" no-caps label="New item" @click="onCreateClick" />
                                 <q-btn
                                     outline
                                     color="primary"
                                     no-caps
-                                    icon="menu_book"
+                                    :icon="ICONS.menu_book"
                                     label="Create from a recipe's ingredients"
                                     @click="goToRecipes"
                                 />
@@ -308,7 +308,7 @@
                                     outline
                                     color="primary"
                                     no-caps
-                                    icon="shopping_cart"
+                                    :icon="ICONS.shopping_cart"
                                     label="Import from a shopping list"
                                     @click="goToLists"
                                 />
@@ -353,6 +353,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';

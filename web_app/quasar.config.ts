@@ -44,8 +44,13 @@ export default defineConfig((ctx) => {
             // 'line-awesome',
             // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
 
-            'roboto-font', // optional, you are not bound to it
-            'material-icons' // optional, you are not bound to it
+            'roboto-font',
+            // DS2: single icon set across the app — Material Design Icons
+            // (mdi-v7). 'material-icons' kept loaded as a fallback so any
+            // legacy code paths we missed in the sweep still render rather
+            // than showing the icon name as a text glyph.
+            'mdi-v7',
+            'material-icons'
         ],
 
         // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
@@ -138,7 +143,7 @@ export default defineConfig((ctx) => {
                 },
             },
 
-            iconSet: 'material-icons', // Quasar icon set
+            iconSet: 'mdi-v7', // DS2: app standardised on Material Design Icons.
             lang: 'en-US', // Quasar language pack
 
             // For special cases outside of where the auto-import strategy can have an impact

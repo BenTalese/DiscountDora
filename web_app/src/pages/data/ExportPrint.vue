@@ -2,7 +2,7 @@
     <div class="q-gutter-md">
         <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
             <template #avatar>
-                <q-icon name="info" size="18px" />
+                <q-icon :name="ICONS.info" size="18px" />
             </template>
             Print a printable view of a shopping list or recipe — your browser's
             print dialog lets you "Save as PDF" too. CSV exports give you the
@@ -13,7 +13,7 @@
         <q-card flat bordered>
             <q-card-section class="row items-center justify-between q-gutter-sm">
                 <div class="row items-center q-gutter-sm">
-                    <q-icon name="shopping_cart" size="24px" class="text-primary" />
+                    <q-icon :name="ICONS.shopping_cart" size="24px" class="text-primary" />
                     <div class="text-h6">Shopping lists</div>
                 </div>
                 <q-btn-toggle
@@ -82,7 +82,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="file_download"
+                                :icon="ICONS.file_download"
                                 label="CSV"
                                 no-caps
                                 @click="shoppingExport.downloadCsv(list.shopping_list_id)"
@@ -90,7 +90,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="print"
+                                :icon="ICONS.print"
                                 label="Print"
                                 no-caps
                                 color="primary"
@@ -106,7 +106,7 @@
         <q-card flat bordered>
             <q-card-section class="row items-center justify-between q-gutter-sm">
                 <div class="row items-center q-gutter-sm">
-                    <q-icon name="menu_book" size="24px" class="text-primary" />
+                    <q-icon :name="ICONS.menu_book" size="24px" class="text-primary" />
                     <div class="text-h6">Recipes</div>
                 </div>
                 <q-input
@@ -118,7 +118,7 @@
                     style="width: 240px"
                 >
                     <template #prepend>
-                        <q-icon name="search" size="16px" />
+                        <q-icon :name="ICONS.search" size="16px" />
                     </template>
                 </q-input>
             </q-card-section>
@@ -170,7 +170,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="file_download"
+                                :icon="ICONS.file_download"
                                 label="CSV"
                                 no-caps
                                 @click="recipeExport.downloadCsv(recipe.recipe_id)"
@@ -178,7 +178,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="print"
+                                :icon="ICONS.print"
                                 label="Print"
                                 no-caps
                                 color="primary"
@@ -207,7 +207,7 @@
                     <q-btn
                         flat
                         dense
-                        icon="file_download"
+                        :icon="ICONS.file_download"
                         label="CSV"
                         no-caps
                         @click="overviewExport.downloadCsv()"
@@ -215,7 +215,7 @@
                     <q-btn
                         flat
                         dense
-                        icon="print"
+                        :icon="ICONS.print"
                         label="Print"
                         no-caps
                         color="primary"
@@ -228,7 +228,7 @@
         <!-- ── Meal plans ────────────────────────────────────────────── -->
         <q-card flat bordered>
             <q-card-section class="row items-center q-gutter-sm">
-                <q-icon name="calendar_month" size="24px" class="text-primary" />
+                <q-icon :name="ICONS.calendar_month" size="24px" class="text-primary" />
                 <div class="text-h6">Meal plans</div>
             </q-card-section>
             <q-separator />
@@ -256,7 +256,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="file_download"
+                                :icon="ICONS.file_download"
                                 label="CSV"
                                 no-caps
                                 @click="mealPlanExport.downloadCsv(plan.meal_plan_id)"
@@ -264,7 +264,7 @@
                             <q-btn
                                 flat
                                 dense
-                                icon="print"
+                                :icon="ICONS.print"
                                 label="Print"
                                 no-caps
                                 color="primary"
@@ -279,6 +279,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { computed, onMounted, ref } from 'vue';
     import { useMealStore } from 'src/stores/mealStore';
     import { useRecipeStore } from 'src/stores/recipeStore';

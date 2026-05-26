@@ -24,13 +24,13 @@
                     flat
                     round
                     dense
-                    icon="help_outline"
+                    :icon="ICONS.help_outline"
                     class="dora-accent-btn"
                     @click="openDoraHelp"
                 >
                     <q-tooltip>What can DoraBot do?</q-tooltip>
                 </q-btn>
-                <q-btn flat round dense icon="close" @click="emit('close')" />
+                <q-btn flat round dense :icon="ICONS.close" @click="emit('close')" />
             </div>
             <div class="text-caption text-grey">
                 Your in-app helper. {{ pageHintForHeader }}
@@ -102,7 +102,7 @@
                                 no-caps
                                 unelevated
                                 color="primary"
-                                icon="check"
+                                :icon="ICONS.check"
                                 label="Confirm"
                                 @click="confirmAction(message)"
                             />
@@ -203,7 +203,7 @@
                 class="dora-context-row q-mb-sm"
             >
                 <div class="text-caption text-grey q-mb-xs">
-                    <q-icon name="adjust" size="12px" />
+                    <q-icon :name="ICONS.adjust" size="12px" />
                     On this page
                 </div>
                 <div class="row q-gutter-xs">
@@ -242,7 +242,7 @@
                     dense
                     round
                     size="sm"
-                    icon="refresh"
+                    :icon="ICONS.refresh"
                     class="dora-help-btn q-ml-xs"
                     @click="rotateChips"
                 >
@@ -263,7 +263,7 @@
                         flat
                         round
                         dense
-                        icon="send"
+                        :icon="ICONS.send"
                         :class="draft.trim() ? 'dora-accent-btn' : ''"
                         :disable="!draft.trim()"
                         @click="onSubmit"
@@ -275,6 +275,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { DoraMood } from 'src/components/dora/doraTypes';
     import { useQuickAdd } from 'src/composables/useQuickAdd';

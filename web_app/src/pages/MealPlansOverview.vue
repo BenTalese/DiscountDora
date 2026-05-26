@@ -1,12 +1,12 @@
 <template>
     <div class="q-pa-md">
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn color="positive" icon="add" no-caps label="New plan" @click="onCreatePlan" />
+            <q-btn color="positive" :icon="ICONS.add" no-caps label="New plan" @click="onCreatePlan" />
             <q-btn
                 outline
                 color="primary"
                 no-caps
-                icon="lightbulb"
+                :icon="ICONS.lightbulb"
                 label="Suggest meals I can cook now"
                 @click="suggestOpen = true"
             />
@@ -30,12 +30,12 @@
                 <div class="row items-center q-mb-sm">
                     <div class="text-subtitle1">Week of {{ formatDate(selectedPlan.start_date) }}</div>
                     <q-space />
-                    <q-btn flat dense no-caps icon="edit" label="Edit entries" @click="onEditEntries" />
+                    <q-btn flat dense no-caps :icon="ICONS.edit" label="Edit entries" @click="onEditEntries" />
                     <q-btn
                         flat
                         dense
                         no-caps
-                        icon="file_download"
+                        :icon="ICONS.file_download"
                         label="CSV"
                         @click="planExport.downloadCsv(selectedPlan.meal_plan_id)"
                     />
@@ -43,17 +43,17 @@
                         flat
                         dense
                         no-caps
-                        icon="print"
+                        :icon="ICONS.print"
                         label="Print"
                         @click="planExport.openPrintView(selectedPlan.meal_plan_id)"
                     />
-                    <q-btn flat dense no-caps icon="delete" color="negative" label="Delete plan" @click="confirmDeletePlan" />
+                    <q-btn flat dense no-caps :icon="ICONS.delete" color="negative" label="Delete plan" @click="confirmDeletePlan" />
                 </div>
 
                 <!-- Draggable meal palette -->
                 <q-card flat bordered class="q-pa-sm q-mb-md">
                     <div class="text-caption text-grey q-mb-xs">
-                        <q-icon name="drag_indicator" /> Drag a meal onto a day to plan it
+                        <q-icon :name="ICONS.drag_indicator" /> Drag a meal onto a day to plan it
                     </div>
                     <div class="row q-gutter-xs">
                         <div
@@ -116,17 +116,17 @@
                                                 <q-item-label header>{{ entry.meal_name }}</q-item-label>
                                                 <template v-for="r in recipesForMeal(entry.meal_id)" :key="r.recipe_id">
                                                     <q-item clickable v-close-popup @click="goToRecipe(r.recipe_id)">
-                                                        <q-item-section avatar><q-icon name="open_in_new" /></q-item-section>
+                                                        <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
                                                         <q-item-section>View {{ r.name }}</q-item-section>
                                                     </q-item>
                                                     <q-item clickable v-close-popup @click="cookRecipe(r.recipe_id)">
-                                                        <q-item-section avatar><q-icon name="restaurant" /></q-item-section>
+                                                        <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
                                                         <q-item-section>Cook {{ r.name }}</q-item-section>
                                                     </q-item>
                                                 </template>
                                                 <q-separator />
                                                 <q-item clickable v-close-popup @click="removeEntry(entry)">
-                                                    <q-item-section avatar><q-icon name="close" color="negative" /></q-item-section>
+                                                    <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
                                                     <q-item-section>Remove from plan</q-item-section>
                                                 </q-item>
                                             </q-list>
@@ -177,7 +177,7 @@
                             color="primary"
                             no-caps
                             class="full-width"
-                            icon="shopping_cart"
+                            :icon="ICONS.shopping_cart"
                             label="Generate shopping list for this week"
                             :loading="generating"
                             :disable="needToBuy.length === 0"
@@ -188,7 +188,7 @@
 
                 <q-expansion-item
                     v-if="ingredients.length"
-                    icon="receipt_long"
+                    :icon="ICONS.receipt_long"
                     label="Full ingredient demand"
                     class="q-mt-sm"
                 >
@@ -216,7 +216,7 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Meals you can cook now</div>
                     <q-space />
-                    <q-btn flat dense round icon="close" v-close-popup />
+                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <div v-if="cookableMeals.length === 0" class="text-grey">
@@ -225,7 +225,7 @@
                     </div>
                     <q-list v-else separator>
                         <q-item v-for="meal in cookableMeals" :key="meal.meal_id">
-                            <q-item-section avatar><q-icon name="check_circle" color="positive" /></q-item-section>
+                            <q-item-section avatar><q-icon :name="ICONS.check_circle" color="positive" /></q-item-section>
                             <q-item-section>{{ meal.name }}</q-item-section>
                             <q-item-section side>
                                 <div class="row q-gutter-xs">
@@ -252,6 +252,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { ICONS } from 'src/style/icons';
     import MealPlanEditDialog from 'components/MealPlanEditDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

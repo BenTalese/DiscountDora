@@ -50,11 +50,12 @@ STAGE_TTL_SECONDS = 60 * 60
 
 
 def upload_dir() -> Path:
-    """Where staged uploads live. Created lazily so dev installs without
-    a prior `data/` folder don't fall over on first upload."""
-    base = Path("data") / "uploads"
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+    """Where staged uploads live. Routes through DORA_CONFIG so the
+    data dir honours DORA_DATA_DIR / container volume mounts; the
+    config helper creates the dir lazily so first-upload-on-fresh-
+    install still works."""
+    from dora_api.infrastructure.configuration_manager import DORA_CONFIG
+    return DORA_CONFIG.get_uploads_dir()
 
 
 def staged_path(upload_id: str) -> Path:

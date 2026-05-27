@@ -1,35 +1,103 @@
+# DiscountDora — monolithic-container compose file.
+#
+# All three Python services (dora_api, merchant_api, emailer) run
+# inside one container alongside nginx serving the built SPA. See
+# Dockerfile + startup.sh for the runtime story.
+#
+# ── Overrides (host customisations without editing this file) ─────────
+# Drop a `compose.override.yml` next to this file. Compose merges it
+# automatically. Common reasons to override:
+#   - bind-mount a local source tree for dev edits
+#   - swap the image tag
+#   - widen exposed ports
+#   - bump healthcheck intervals
+#
+# ── Email service (off by default) ────────────────────────────────────
+# Set DORA_EMAIL_ENABLED=true in your .env to have startup.sh spin up
+# the emailer process alongside the APIs. Configure SMTP via the
+# DORA_SMTP_* vars in .env.example.
+
 services:
   discount_dora:
     container_name: discount_dora
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Sydney
-      # Override these in a sibling .env file. The repo's .env.example lists
-      # every supported var. The defaults below keep dev running without
-      # any extra setup; production should set DORA_SECRET_KEY explicitly.
-      - DORA_SECRET_KEY=${DORA_SECRET_KEY:-}
-      - DORA_SECURE_COOKIES=${DORA_SECURE_COOKIES:-false}
-      - DORA_ALLOW_DESTRUCTIVE=${DORA_ALLOW_DESTRUCTIVE:-false}
-    # image: <IMAGE HOSTING SERVICE>/discountdora:latest # TODO: Once the image is uploaded to somewhere, use this instead of "build"
+    # image: <IMAGE HOSTING SERVICE>/discountdora:latest
+    # ↑ Once the image lives in a registry, drop the `build:` block and
+    # use this instead.
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
+
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-Australia/Sydney}
+
+      # ── Profile (D3) ───────────────────────────────────────────────
+      # Containers default to `production` so a `docker compose up`
+      # behaves prod-strict out of the box (fails fast on missing
+      # required vars). Set DORA_ENV=development in your local .env
+      # for the open-CORS / debug-log / seed-allowed dev defaults.
+      - DORA_ENV=${DORA_ENV:-production}
+
+      # ── Secrets / auth ─────────────────────────────────────────────
+      - DORA_SECRET_KEY=${DORA_SECRET_KEY:-}
+      - DORA_CORS_ORIGINS=${DORA_CORS_ORIGINS:-}
+      - DORA_SECURE_COOKIES=${DORA_SECURE_COOKIES:-false}
+      - DORA_ALLOW_DESTRUCTIVE=${DORA_ALLOW_DESTRUCTIVE:-false}
+
+      # ── Storage paths (match the volume mounts below) ──────────────
+      - DORA_DATA_DIR=${DORA_DATA_DIR:-/app/data}
+      - DORA_CACHE_DIR=${DORA_CACHE_DIR:-/app/cache}
+      - DORA_LOG_DIR=${DORA_LOG_DIR:-/app/logs}
+      - DORA_DB_PATH=${DORA_DB_PATH:-}
+
+      # ── API tuning (optional; defaults baked into appsettings) ─────
+      - DORA_API_PORT=${DORA_API_PORT:-5170}
+      - DORA_LOG_LEVEL=${DORA_LOG_LEVEL:-ERROR}
+      - DORA_DEBUG=${DORA_DEBUG:-}
+      - MAPI_API_PORT=${MAPI_API_PORT:-5172}
+      - MAPI_LOG_LEVEL=${MAPI_LOG_LEVEL:-ERROR}
+
+      # ── Email (opt-in) ─────────────────────────────────────────────
+      - DORA_EMAIL_ENABLED=${DORA_EMAIL_ENABLED:-false}
+      - DORA_SMTP_HOST=${DORA_SMTP_HOST:-}
+      - DORA_SMTP_PORT=${DORA_SMTP_PORT:-587}
+      - DORA_SMTP_USER=${DORA_SMTP_USER:-}
+      - DORA_SMTP_PASSWORD=${DORA_SMTP_PASSWORD:-}
+      - DORA_SMTP_FROM=${DORA_SMTP_FROM:-}
+
+      # ── Bootstrap admin ────────────────────────────────────────────
+      - ADMIN_BOOTSTRAP_EMAIL=${ADMIN_BOOTSTRAP_EMAIL:-}
+
     ports:
-      - 5170:5170
-      - 5172:5172
-      - 5174:5174
-    # Named volumes so the container has stable, host-managed storage without
-    # forcing users to invent host paths. The previous compose used literal
-    # `/path/to/cache` placeholders that fail to mount on every fresh checkout.
-    # `docker compose down -v` clears these.
+      - "5170:5170"   # dora_api
+      - "5172:5172"   # merchant_api
+      - "5174:5174"   # nginx (SPA)
+
+    # Named volumes per data type so backups / migrations can target
+    # one without dragging the others along. `docker compose down -v`
+    # clears them all; `docker compose down` keeps them.
     volumes:
-      - dora_cache:/app/cache
-      - dora_data:/app/data
-      - dora_config:/app/config
+      - dora_data:/app/data       # sqlite + uploads
+      - dora_cache:/app/cache     # image cache + scraped json
+      - dora_logs:/app/logs       # application logs
+      - dora_config:/app/config   # appsettings JSON (legacy fallback for un-env'd vars)
+
+    # Container-level healthcheck — hits nginx's lightweight /healthz
+    # so a wedged Python API doesn't take down the whole container
+    # (the SPA + nginx stay up while you debug). The Dockerfile sets
+    # the same default; declaring it here too means a future image
+    # without HEALTHCHECK still gets one in this deployment.
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:5174/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
-  dora_cache:
   dora_data:
+  dora_cache:
+  dora_logs:
   dora_config:

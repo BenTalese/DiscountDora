@@ -3,6 +3,8 @@ from base64 import b64encode
 from pathlib import Path
 from typing import Dict
 
+from merchant_api.infrastructure.configuration_manager import \
+    CONFIGURATION_MANAGER
 from merchant_api.infrastructure.session import get_cached_session
 
 
@@ -10,7 +12,7 @@ class ProductImageProvider:
 
     #region ---------------- Fields ----------------
 
-    _cache_folder: Path = Path() / ".image_cache"
+    _cache_folder: Path
     _image_cache: Dict[str, str] = {}
     _logger: logging.Logger
 
@@ -20,15 +22,17 @@ class ProductImageProvider:
 
     def __init__(self):
         self._logger = logging.getLogger(__name__)
-
-        if not Path.exists(self._cache_folder):
-            Path.mkdir(self._cache_folder)
+        # D2: the image cache lives under CACHE_DIR/images so it
+        # survives container rebuilds (named volume). The legacy
+        # `.image_cache` in the repo root is migrated by
+        # path_migration.migrate_legacy_image_cache() on boot.
+        self._cache_folder = CONFIGURATION_MANAGER.get_image_cache_dir()
 
         for _Filename in Path.iterdir(self._cache_folder):
             _Filepath = self._cache_folder / _Filename
             if Path.is_file(_Filepath):
                 _ImageUri = self._get_image_uri_from_filename(_Filename)
-                with open(_Filename, "rb") as _File:
+                with open(_Filepath, "rb") as _File:
                     self._image_cache[_ImageUri] = b64encode(_File.read()).decode('utf-8')
 
     #endregion Constructors

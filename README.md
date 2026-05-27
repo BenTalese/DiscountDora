@@ -68,6 +68,16 @@ As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is 
 - List endpoints accept standard query params: `?filter=name:ct:pasta&filter=is_favourite:eq:true&sort=name:asc&page=1&limit=50`. Responses are `{ items, total, page, limit }`.
 - **AI assistant (optional, bring-your-own-LLM):** Dora's chat can be backed by a language model you host yourself. It's off by default and falls back to a rule-based helper. Dora does **not** bundle, download, or dictate a model. To turn it on: (1) run an OpenAI-compatible LLM server that supports tool-calling — [Ollama](https://ollama.com) is the easy option: `ollama pull qwen2.5:7b` then `ollama serve`; (2) sign in as an admin and go to **Settings → System → AI assistant**; (3) enable it and enter your server's base URL (e.g. `http://localhost:11434`) and model name (e.g. `qwen2.5:7b`), then save. The model must be tool-capable (qwen2.5, llama3.1, etc.). The LLM runs wherever you host it (a desktop/home server); other devices reach Dora over the network as usual.
 
+### Releasing (manual, push-the-button)
+
+CI runs automatically on every push and PR ([.github/workflows/ci.yml](.github/workflows/ci.yml)) — frontend lint + typecheck + build, dora_api pytest, merchant + emailer compile-check. **CI never publishes anything.** Releases are explicit:
+
+1. Land your changes on `main` and confirm CI is green for that SHA.
+2. Update the `## [Unreleased]` block in `CHANGELOG.md` — whatever sits there becomes the GitHub Release body.
+3. Go to **Actions → Release → Run workflow**, type a version like `v0.3.0`, and run it.
+4. The workflow validates the version, refuses if the tag already exists, builds the Docker image, pushes to `ghcr.io/bentalese/discountdora:vX.Y.Z` **and** `:latest`, then cuts the GitHub Release. Tick **dry_run** to preview build + tags without publishing.
+5. After the release lands, move the `[Unreleased]` heading down and start a fresh empty section for the next cycle.
+
 <!-- TODO: Offer both docker and manual install options -->
 <br/>
 

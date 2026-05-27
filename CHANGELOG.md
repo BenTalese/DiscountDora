@@ -6,6 +6,115 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **D4 — manual-release CI/CD.** Two workflows replacing the old
+  single-stage `build-and-test.yml`:
+  - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs
+    automatically on every push and PR. Parallel jobs: frontend
+    (lint + typecheck + build), dora_api (pytest against
+    `tests/e2e/dora_api`), merchant_api + emailer (compileall smoke
+    check). Concurrency guard cancels superseded runs. **Never
+    publishes anything.**
+  - [`.github/workflows/release.yml`](.github/workflows/release.yml)
+    — `workflow_dispatch` only. Takes a `version` input
+    (`vMAJOR.MINOR.PATCH` with optional pre-release suffix);
+    validates it, refuses if the tag already exists, builds the
+    monolithic Docker image, pushes to
+    `ghcr.io/bentalese/discountdora` tagged both `vX.Y.Z` and
+    `latest`, and cuts a GitHub Release with the `[Unreleased]`
+    CHANGELOG block as the body. `dry_run` flag builds + tags
+    without pushing or releasing.
+  - README gains a **Releasing** section walking through the
+    button-push flow.
+
+- **D3 — production / development profile split.** New `DORA_ENV` env
+  var (values: `development` / `production` / `test`, aliases
+  accepted) selects a runtime profile that drives sensible defaults
+  for every "is this dev or prod?" decision. Layering order is now
+  env var → JSON appsettings → profile default.
+  - New [`dora_api/infrastructure/profile.py`](dora_api/infrastructure/profile.py)
+    is the single source of truth — exposes `current_profile()`,
+    `is_production()`, and a boot-time gate
+    `validate_production_requirements()` that **refuses to start in
+    production** when `DORA_SECRET_KEY`, `DORA_CORS_ORIGINS`, or
+    `ADMIN_BOOTSTRAP_EMAIL` is missing. Prints a friendly multi-line
+    error listing what's missing, then exits non-zero so compose
+    marks the container failed.
+  - Per-profile defaults: log level (`DEBUG` in dev / `INFO` in
+    prod), debug mode flag, CORS origins (open localhost list in dev
+    / required-pinned list in prod), seed-allowed flag (always false
+    in prod regardless of `DORA_ALLOW_DESTRUCTIVE`).
+  - **CORS now configurable.** Both API startups read
+    `DORA_CORS_ORIGINS` (comma-separated) via the new
+    `get_cors_origins()` method instead of the hardcoded localhost
+    list. Merchant API also honours `MAPI_CORS_ORIGINS` if set
+    separately.
+  - **Appsettings JSON relocated** to `<DATA_DIR>/config/{dapi,mapi}.appsettings.json`
+    so the operator's persistent overrides ride the data volume.
+    Migration helpers
+    ([`dora_api/.../path_migration.py`](dora_api/infrastructure/path_migration.py),
+    [`merchant_api/.../path_migration.py`](merchant_api/infrastructure/path_migration.py))
+    move an existing legacy `./config/*.appsettings.json` once on
+    first boot.
+  - Compose defaults `DORA_ENV=production` so `docker compose up`
+    behaves prod-strict; dev installs set `DORA_ENV=development`
+    in their `.env`. `.env.example` documents the profile + every
+    required var.
+
+- **D2 — runtime state moved out of the source tree.** Every disk
+  write now routes through the per-service config helpers
+  (`get_data_dir()`, `get_cache_dir()`, `get_log_dir()`,
+  `get_uploads_dir()`, `get_image_cache_dir()`) so paths honour the
+  `DORA_*` / `MAPI_*` env vars and the named volumes in compose.
+  - Replaced hardcoded paths: `dora_api/startup.py` log dir,
+    `merchant_api/startup.py` log dir, `emailer/startup.py` log dir,
+    `dora_api/features/data/uploads.py` upload dir,
+    `merchant_api/.../product_image_provider.py` `.image_cache`,
+    `merchant_api/.../aldi_provider.py` category-seed JSON.
+  - **One-time migrations** on boot (idempotent, non-destructive):
+    [`dora_api/infrastructure/path_migration.py`](dora_api/infrastructure/path_migration.py)
+    moves a legacy `./data/dora.data.db` + `./data/uploads/*` into
+    the new locations when the operator relocates the data dir;
+    [`merchant_api/infrastructure/path_migration.py`](merchant_api/infrastructure/path_migration.py)
+    relocates the repo-root `.image_cache/*` into
+    `<CACHE_DIR>/images/` and seeds the bundled
+    `aldi_products_by_category.json` into `<CACHE_DIR>/` so operators
+    can curate it without forking.
+  - `.gitignore` cleaned: retired `.image_cache`, ignored
+    `data/`, `cache/`, `logs/` instead of the old ad-hoc patterns.
+  - Latent bug fixed in `ProductImageProvider.__init__` — it was
+    `open(_Filename, "rb")` (a relative name) instead of the full
+    `_Filepath`, which would have errored on cold-cache load outside
+    the right CWD.
+
+- **D1 — Docker compose finalised (monolithic image, env-first
+  config).** Single-container deployment, but the runtime is now
+  proper:
+  - `Dockerfile` installs nginx + curl; nginx serves the built SPA
+    on :5174 instead of `quasar serve`. New
+    [`nginx.conf`](nginx.conf) ships with gzip, cache headers,
+    SPA-fallback for vue-router, and a `/healthz` probe. Commented-
+    out `/api/` + `/mapi/` proxy blocks are the migration path to a
+    single-port deployment later.
+  - `Dockerfile` declares a `HEALTHCHECK` against `/healthz` so the
+    container reports unhealthy when nginx is wedged (a stuck Python
+    API leaves the SPA up while you debug).
+  - `startup.sh` boots dora_api + merchant_api in the background,
+    optionally boots the emailer when `DORA_EMAIL_ENABLED=true`, then
+    runs nginx in the foreground so the container lifecycle matches
+    nginx's.
+  - `compose.yml` splits the named volumes into `dora_data`,
+    `dora_cache`, `dora_logs`, `dora_config` (was `dora_cache` /
+    `dora_data` / `dora_config`) and declares a healthcheck stanza.
+    Documents `compose.override.yml` for host customisations.
+  - Both Python config managers
+    ([`dora_api/.../configuration_manager.py`](dora_api/infrastructure/configuration_manager.py),
+    [`merchant_api/.../configuration_manager.py`](merchant_api/infrastructure/configuration_manager.py))
+    now read env vars first and fall back to the JSON appsettings.
+    New getters: `get_log_dir()`, `get_cache_dir()`.
+  - `.env.example` overhauled — every variable grouped by purpose
+    (storage paths, API tuning, email, bootstrap admin) with inline
+    docs.
+
 - **DS2 — icon set standardised on Material Design Icons (mdi-v7).**
   Quasar `iconSet` switched to `mdi-v7`; the previous `material-icons`
   font is kept loaded as a safety net for any straggler. New

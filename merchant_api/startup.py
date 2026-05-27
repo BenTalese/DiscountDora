@@ -14,32 +14,35 @@ from merchant_api.infrastructure.middleware import MIDDLEWARE
 
 
 def startup():
+    # D3: refuse to boot in production without the required env vars.
+    # Shares the same gate as dora_api so a misconfigured deploy fails
+    # the same way regardless of which container starts first.
+    from dora_api.infrastructure.profile import \
+        validate_production_requirements
+    validate_production_requirements()
+
     _App = Flask(__name__)
 
-    WEB_APP_HOST = CONFIGURATION_MANAGER.get_web_app_host()
-    WEB_APP_PORT = CONFIGURATION_MANAGER.get_web_app_port()
-
-    # The web client uses axios `withCredentials: true` for every request
-    # (shared with the dora_api so the session cookie rides along), so the
-    # merchant_api must also reply with Access-Control-Allow-Credentials: true.
-    # Without supports_credentials=True the browser blocks the response and
-    # the product-search page fails instantly on first call. Origins must
-    # be an explicit list — wildcard origins are forbidden when credentials
-    # are enabled.
+    # D3: profile-aware CORS pinning, same pattern as dora_api. The
+    # web client uses `withCredentials: true` so the cross-origin
+    # session cookie rides along — origins MUST be an explicit list
+    # (never '*') when credentials are enabled.
     CORS(_App, resources={r'/api/*': {
-        'origins': [
-            f'http://{WEB_APP_HOST}:{WEB_APP_PORT}',
-            f'http://127.0.0.1:{WEB_APP_PORT}',
-            f'http://localhost:{WEB_APP_PORT}',
-            f'http://172.17.0.1:{WEB_APP_PORT}',
-        ],
+        'origins': CONFIGURATION_MANAGER.get_cors_origins(),
         'allow_headers': ['Content-Type', 'X-Request-Id'],
         'supports_credentials': True,
     }})
 
+    # D2: migrate the repo-root .image_cache (and seed the aldi
+    # categories file) before any provider boots and reaches for
+    # them.
+    from merchant_api.infrastructure.path_migration import \
+        migrate_legacy_image_cache
+    migrate_legacy_image_cache(CONFIGURATION_MANAGER.get_cache_dir())
+
     configure_logging(
         "mapi",
-        Path().resolve() / "data" / "logs" / "mapi",
+        CONFIGURATION_MANAGER.get_log_dir(),
         debug=CONFIGURATION_MANAGER.is_debug_mode_enabled(),
     )
     register_routers(_App)

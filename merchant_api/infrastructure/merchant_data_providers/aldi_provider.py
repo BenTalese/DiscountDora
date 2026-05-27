@@ -40,7 +40,17 @@ class AldiProvider(MerchantDataProvider):
     #region ---------------- Constructors ----------------
 
     def __init__(self):
-        _CategoriesJson = Path(__file__).parent / 'aldi_products_by_category.json'
+        # D2: the category seed file used to be read straight from the
+        # source tree, which meant operators couldn't curate it without
+        # forking. Now we seed it into CACHE_DIR on first boot and
+        # read from there so a named volume persists edits across
+        # container rebuilds.
+        from merchant_api.infrastructure.configuration_manager import \
+            CONFIGURATION_MANAGER
+        from merchant_api.infrastructure.path_migration import seed_cache_file
+        _Bundled = Path(__file__).parent / 'aldi_products_by_category.json'
+        _CategoriesJson = CONFIGURATION_MANAGER.get_cache_dir() / 'aldi_products_by_category.json'
+        seed_cache_file(_Bundled, _CategoriesJson)
         with _CategoriesJson.open('r') as _File:
             self._aldi_product_names_by_category = json.load(_File)
 

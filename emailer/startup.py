@@ -30,9 +30,23 @@ TODO:
 
 
 def startup():
+    # D2: log dir derived from the same DORA_DATA_DIR / DORA_LOG_DIR
+    # vars as the other two services so a single mount captures
+    # everything. Explicit EMAILER_LOG_DIR wins if set.
+    import os
+    log_dir = os.environ.get("EMAILER_LOG_DIR")
+    if log_dir:
+        log_dir_path = Path(log_dir).expanduser().resolve()
+    else:
+        explicit = os.environ.get("DORA_LOG_DIR")
+        if explicit:
+            log_dir_path = Path(explicit).expanduser().resolve() / "emailer"
+        else:
+            data_dir = os.environ.get("DORA_DATA_DIR", "data")
+            log_dir_path = Path(data_dir).expanduser().resolve() / "logs" / "emailer"
     configure_logging(
         "emailer",
-        Path().resolve() / "data" / "logs" / "emailer",
+        log_dir_path,
         debug=False,
     )
     asyncio.run(process())

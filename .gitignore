@@ -1,16 +1,25 @@
 __pycache__
 !.vscode/launch.json
 !.vscode/tasks.json
+# aldi_products_by_category.json is bundled as a seed; on first boot
+# it's copied into <CACHE_DIR>/ where operators can edit a persistent
+# copy without touching the bundled file. Keep the seed in git.
 !aldi_products_by_category.json
 .DS_Store
 .env
 .env.local*
-data/.secret_key
 .idea
-.image_cache
+# D2: legacy paths retired — runtime state now lives under data/,
+# cache/, and logs/ (configurable via DORA_DATA_DIR / DORA_CACHE_DIR /
+# DORA_LOG_DIR). Keep the directory ignores so a `docker compose run`
+# that bind-mounts ./data into the container doesn't pollute git.
+data/
+cache/
+logs/
 .quasar
 .thumbs.db
 .venv
+.image_cache
 .vscode
 .vscode/*
 *.cjs
@@ -27,7 +36,6 @@ data/.secret_key
 **/*.db
 **/appsettings.json
 **/bin
-**/logs
 *appsettings.json
 /cypress/screenshots/
 /cypress/videos/

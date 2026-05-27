@@ -1,12 +1,18 @@
-# Single-stage dev image. The build/runtime split (gunicorn + nginx) is left
-# commented at the bottom as a starting point for a future prod image.
+# Monolithic dev/prod image. All three Python services (dora_api,
+# merchant_api, emailer) run inside one container alongside nginx
+# serving the built SPA. See compose.yml for the runtime story +
+# nginx.conf for the SPA host config.
 FROM python:3.11-slim AS develop-stage
 
-# Node is needed for the frontend build (Quasar/Vite). The Debian Bookworm
-# `nodejs` package is Node 18, which is the minimum Quasar 2 supports — it
-# works but ages quickly; bump to NodeSource Node 20+ when you next touch this.
+# System packages:
+#   nodejs + npm  — frontend build (Quasar/Vite). Debian Bookworm ships
+#                   Node 18, the minimum Quasar 2 supports; bump to
+#                   NodeSource Node 20+ when you next touch this.
+#   nginx         — D1: replaces `quasar serve` for serving the static
+#                   SPA in the runtime container.
+#   curl          — used by the HEALTHCHECK directive below.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm \
+    && apt-get install -y --no-install-recommends nodejs npm nginx curl \
     && npm install -g @quasar/cli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -33,17 +39,22 @@ COPY . .
 WORKDIR /app/web_app
 RUN quasar build
 
+# ── nginx site config + drop the stock default ─────────────────────────────
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && rm -f /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/dora.conf
+
 # ── Runtime ────────────────────────────────────────────────────────────────
 WORKDIR /app
 EXPOSE 5170 5172 5174
 
+# D1: container-level healthcheck. Hits nginx's lightweight /healthz
+# (doesn't exercise the Python APIs, so a wedged API doesn't fail the
+# whole container — the SPA still serves while you debug). Tweak with
+# `compose.yml > healthcheck:` for stricter probes.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl --fail --silent http://localhost:5174/healthz || exit 1
+
 COPY startup.sh /usr/local/bin/startup.sh
 RUN chmod +x /usr/local/bin/startup.sh
 CMD ["bash", "/usr/local/bin/startup.sh"]
-
-# ── Production image notes (switch to multi-stage when ready) ───────────────
-# FROM nginx:stable-alpine AS production-stage
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-# COPY --from=develop-stage /app/web_app/dist/spa /usr/share/nginx/html
-# Use gunicorn for the API processes and `nginx -g "daemon off;"` for the
-# reverse proxy. Update startup.sh's PROD section in tandem.

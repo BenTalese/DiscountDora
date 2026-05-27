@@ -32,7 +32,7 @@
     const caughtError = ref<Error | null>(null);
 
     onErrorCaptured((err, _instance, info) => {
-        // eslint-disable-next-line no-console
+         
         console.error('[ErrorBoundary] caught', info, err);
         caughtError.value = err instanceof Error ? err : new Error(String(err));
         // Returning false stops the error from propagating further; the

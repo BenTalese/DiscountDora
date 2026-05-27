@@ -18,7 +18,10 @@ export interface CommandDef {
     tags?: string[];
     /** Hide the command when this returns false at render time. */
     when?: () => boolean;
-    action: () => void | Promise<void>;
+    // Return type is intentionally loose: actions are fire-and-forget and
+    // commonly delegate to router.push() (returns a NavigationFailure promise)
+    // or toggles that return a value. The runner ignores the return.
+    action: () => unknown;
 }
 
 interface RegisteredCommand extends CommandDef {

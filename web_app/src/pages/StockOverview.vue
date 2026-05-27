@@ -267,9 +267,10 @@
         >
             <template #before>
                 <div class="q-pr-md">
-                    <q-list
+                    <ListTransition
                         v-if="filters.filteredStockItems.value.length > 0"
-                        class="q-gutter-y-sm"
+                        tag="div"
+                        class="q-list q-gutter-y-sm"
                     >
                         <StockItemRow
                             v-for="(item, idx) in filters.filteredStockItems.value"
@@ -284,7 +285,7 @@
                             @filter-location="filters.locationFilter.value = $event"
                             @go-to-list="goToList"
                         />
-                    </q-list>
+                    </ListTransition>
 
                     <!-- Empty state ───────────────────────────────────── -->
                     <q-banner v-else class="bg-grey-2 q-mt-md" rounded>
@@ -362,6 +363,7 @@
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
+    import ListTransition from 'src/components/transitions/ListTransition.vue';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
     import { useStockItemActions } from 'src/composables/useStockItemActions';

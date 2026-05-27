@@ -83,7 +83,9 @@ export const useRecipeStore = defineStore('recipe', () => {
     };
 
     return {
-        recipes: readonly(recipes),
+        // Exposed as a plain ref (not readonly): consumers pass recipes into
+        // display components and filter helpers typed as mutable Recipe[].
+        recipes,
         recipeCollections: readonly(recipeCollections),
         getRecipesAsync,
         getRecipeCollectionsAsync,

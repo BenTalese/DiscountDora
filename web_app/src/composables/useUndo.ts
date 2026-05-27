@@ -110,11 +110,10 @@ export async function undo(): Promise<boolean> {
         // Push onto redo so Ctrl-Shift-Z brings it back.
         redoStack.value = [...redoStack.value, entry].slice(-MAX_STACK);
         return true;
-    } catch (err) {
-        // Re-throw so the caller can toast; leave the entry in place so
-        // the user can retry once they've fixed the underlying issue.
-        throw err;
     } finally {
+        // On failure the error propagates to the caller (who toasts); the
+        // entry stays in place so the user can retry once they've fixed the
+        // underlying issue. `finally` only resets the in-flight flag.
         undoing.value = false;
     }
 }

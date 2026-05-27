@@ -295,7 +295,6 @@
         type ContextualAction,
     } from 'src/services/doraContextualActions';
     import {
-        QUICK_ACTIONS,
         detectIntent,
         labelFor,
         runIntent,
@@ -320,9 +319,9 @@
         // something visible to sync against. User messages skip it.
         displayText?: string;
         mood?: DoraMood;
-        navigateTo?: { path: string; label: string };
-        externalLink?: { url: string; label: string };
-        suggestions?: DoraIntentId[];
+        navigateTo?: { path: string; label: string } | undefined;
+        externalLink?: { url: string; label: string } | undefined;
+        suggestions?: DoraIntentId[] | undefined;
         // Proposed shopping-list addition awaiting the user's confirmation /
         // disambiguation. `selections` maps an ambiguous item index to the
         // chosen candidate id; `done` disables the card after committing.

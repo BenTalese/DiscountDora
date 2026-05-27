@@ -26,7 +26,7 @@
                     <q-tooltip>Refresh dashboard</q-tooltip>
                 </q-btn>
                 <q-btn flat dense no-caps :icon="ICONS.tune" label="Cards">
-                    <q-menu anchor="bottom right" self="top right">
+                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 240px">
                             <q-item-label header>Show on dashboard</q-item-label>
                             <q-item
@@ -79,11 +79,12 @@
             </template>
         </q-banner>
 
-        <div v-if="loading && !summary" class="row justify-center q-pa-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && !summary" key="dash-loading" class="row justify-center q-pa-xl">
             <q-spinner size="48px" color="primary" />
         </div>
 
-        <div v-else-if="summary" class="row q-col-gutter-md dora-cards">
+        <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
             <!-- ───── Needs your attention (P12) ─────────────────────────── -->
             <div
                 v-if="isCardVisible('attention') && topAlerts.length > 0"
@@ -161,12 +162,14 @@
                     </div>
                     <div v-if="primaryListStats" class="dora-stat-grid q-mt-sm">
                         <div class="dora-stat">
-                            <div class="dora-stat-num">{{ primaryListStats.unticked }}</div>
+                            <div class="dora-stat-num">
+                                <AnimatedNumber :value="primaryListStats.unticked" />
+                            </div>
                             <div class="dora-stat-label">to grab</div>
                         </div>
                         <div class="dora-stat">
                             <div class="dora-stat-num">
-                                ${{ primaryListStats.remaining.toFixed(0) }}
+                                <AnimatedNumber :value="primaryListStats.remaining" prefix="$" />
                             </div>
                             <div class="dora-stat-label">remaining</div>
                         </div>
@@ -175,7 +178,7 @@
                             class="dora-stat dora-stat-ok"
                         >
                             <div class="dora-stat-num">
-                                ${{ primaryListStats.savings.toFixed(0) }}
+                                <AnimatedNumber :value="primaryListStats.savings" prefix="$" />
                             </div>
                             <div class="dora-stat-label">saves vs rrp</div>
                         </div>
@@ -448,13 +451,15 @@
                     </header>
                     <div class="dora-stat-grid">
                         <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.recipes.total }}</div>
+                            <div class="dora-stat-num">
+                                <AnimatedNumber :value="summary.recipes.total" />
+                            </div>
                             <div class="dora-stat-label">in your book</div>
                         </div>
                         <div class="dora-stat dora-stat-accent">
                             <div class="dora-stat-num">
                                 <q-icon :name="ICONS.favorite" size="18px" class="q-mr-xs" />
-                                {{ summary.recipes.favourites }}
+                                <AnimatedNumber :value="summary.recipes.favourites" />
                             </div>
                             <div class="dora-stat-label">favourites</div>
                         </div>
@@ -526,6 +531,7 @@
                 </q-banner>
             </div>
         </div>
+        </FadeTransition>
 
         <!-- ───── Dora tip footer ───────────────────────────────────────── -->
         <transition name="fade">
@@ -551,6 +557,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
+    import AnimatedNumber from 'src/components/AnimatedNumber.vue';
     import { storeToRefs } from 'pinia';
     import {
         actionsFor as alertActionsFor,
@@ -1018,7 +1026,7 @@
             summary.value = await dashboardApiService.getSummaryAsync();
         } catch (err) {
             loadError.value = 'Could not load the dashboard. Try refreshing.';
-            // eslint-disable-next-line no-console
+             
             console.warn('dashboard summary failed', err);
         } finally {
             loading.value = false;

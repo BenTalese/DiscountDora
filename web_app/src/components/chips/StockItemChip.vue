@@ -54,7 +54,7 @@
             class="q-ml-xs"
             @click.stop
         >
-            <q-menu auto-close>
+            <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                 <q-list dense style="min-width: 200px">
                     <q-item clickable @click="actions.addToList(stockItem.stock_item_id)">
                         <q-item-section avatar><q-icon :name="ICONS.add_shopping_cart" /></q-item-section>

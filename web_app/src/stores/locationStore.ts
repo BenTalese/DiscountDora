@@ -78,7 +78,9 @@ export const useLocationStore = defineStore('location', () => {
     };
 
     return {
-        tree: readonly(tree),
+        // Plain ref (not readonly): consumers walk the tree through helpers
+        // typed as mutable LocationNode.
+        tree,
         loading: readonly(loading),
         loadError: readonly(loadError),
         refreshAsync,

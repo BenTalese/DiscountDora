@@ -1,15 +1,16 @@
 <template>
     <q-page padding>
         <!-- Loading shell -->
-        <div v-if="loading && !recipe" class="text-center q-py-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && !recipe" key="rd-loading" class="text-center q-py-xl">
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <q-banner v-else-if="loadError" class="bg-red-1 text-red-9" dense rounded>
+        <q-banner v-else-if="loadError" key="rd-error" class="bg-red-1 text-red-9" dense rounded>
             {{ loadError }}
         </q-banner>
 
-        <template v-else-if="recipe">
+        <div v-else-if="recipe" key="rd-content">
             <!-- ── Header ─────────────────────────────────────────── -->
             <div class="row items-center q-mb-md">
                 <q-btn flat round dense :icon="ICONS.arrow_back" @click="onBack" />
@@ -39,7 +40,7 @@
                     @click="onToggleFavourite"
                 />
                 <q-btn flat round dense :icon="ICONS.more_vert" class="q-ml-sm">
-                    <q-menu anchor="bottom right" self="top right">
+                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 220px">
                             <q-item clickable v-close-popup @click="onExportCsv">
                                 <q-item-section avatar>
@@ -483,7 +484,8 @@
                     </q-card>
                 </div>
             </div>
-        </template>
+        </div>
+        </FadeTransition>
 
         <!-- ── Substitutes dialog ───────────────────────────────── -->
         <q-dialog v-model="substitutesOpen">
@@ -606,6 +608,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
@@ -732,7 +735,7 @@
         const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
         if (!item) return null;
         const level = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id);
-        return (level?.name as StockLevelName | undefined) ?? null;
+        return (level?.name) ?? null;
     }
     function levelColourFor(stockItemId: string): string | null {
         const name = levelNameFor(stockItemId);
@@ -931,11 +934,13 @@
                 ok: { label: 'Save and cook', color: 'primary', noCaps: true },
                 cancel: { label: 'Cook without saving', noCaps: true },
             })
-                .onOk(async () => {
-                    await onSave();
-                    void router.push(`/recipes/${recipeId.value}/cook`);
+                .onOk(() => {
+                    void (async () => {
+                        await onSave();
+                        void router.push(`/recipes/${recipeId.value}/cook`);
+                    })();
                 })
-                .onCancel(() => router.push(`/recipes/${recipeId.value}/cook`));
+                .onCancel(() => { void router.push(`/recipes/${recipeId.value}/cook`); });
             return;
         }
         void router.push(`/recipes/${recipeId.value}/cook`);
@@ -970,7 +975,7 @@
                 message: 'Create or unarchive one first.',
                 ok: { label: 'Open lists', color: 'primary', noCaps: true },
                 cancel: { noCaps: true },
-            }).onOk(() => router.push('/shopping-lists'));
+            }).onOk(() => { void router.push('/shopping-lists'); });
             return;
         }
         targetListOpen.value = true;
@@ -1127,7 +1132,7 @@
         } catch (err) {
             importError.value =
                 'Could not import. The URL might not publish structured recipe data.';
-            // eslint-disable-next-line no-console
+             
             console.warn('Import failed', err);
         } finally {
             importing.value = false;
@@ -1190,7 +1195,7 @@
                 ok: { label: 'Discard', color: 'negative', noCaps: true },
                 cancel: { noCaps: true },
                 persistent: true,
-            }).onOk(() => router.push('/recipes'));
+            }).onOk(() => { void router.push('/recipes'); });
             return;
         }
         void router.push('/recipes');

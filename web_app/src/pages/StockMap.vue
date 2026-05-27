@@ -202,6 +202,8 @@
             :anchor="contextAnchor"
             self="top left"
             no-parent-event
+            transition-show="jump-down"
+            transition-hide="jump-up"
         >
             <q-list dense style="min-width: 200px">
                 <q-item clickable @click="onRenameNode">
@@ -335,7 +337,7 @@
 
     // Right-click context menu.
     const contextOpen = ref(false);
-    const contextAnchor = ref<`${number}:${number}`>('0:0' as any);
+    const contextAnchor = ref<`${number}:${number}`>('0:0');
     const contextLocationIdRef = ref<string | null>(null);
     let contextLocationId: string | null = null;
 
@@ -406,7 +408,7 @@
         const target = event.target as HTMLElement | null;
         const tag = (target?.tagName || '').toLowerCase();
         // Don't steal Cmd-Z while the user is editing the rename prompt.
-        if (tag === 'input' || tag === 'textarea' || (target as HTMLElement | null)?.isContentEditable) return;
+        if (tag === 'input' || tag === 'textarea' || (target)?.isContentEditable) return;
         const mod = event.ctrlKey || event.metaKey;
         if (!mod) return;
         const k = event.key.toLowerCase();
@@ -584,7 +586,7 @@
             const pointer = stage!.getPointerPosition();
             if (!pointer || !hostRef.value) return;
             const bounds = hostRef.value.getBoundingClientRect();
-            contextAnchor.value = `${Math.round(bounds.top + pointer.y)}:${Math.round(bounds.left + pointer.x)}` as any;
+            contextAnchor.value = `${Math.round(bounds.top + pointer.y)}:${Math.round(bounds.left + pointer.x)}`;
             contextLocationId = node.location_id;
             contextLocationIdRef.value = node.location_id;
             contextOpen.value = true;

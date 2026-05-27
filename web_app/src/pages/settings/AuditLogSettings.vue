@@ -319,7 +319,7 @@
         try {
             return JSON.stringify(payload, null, 2);
         } catch {
-            return String(payload);
+            return typeof payload === 'bigint' ? String(payload) : '[unserialisable]';
         }
     }
 
@@ -378,7 +378,12 @@
             'payload',
         ];
         const escape = (value: unknown) => {
-            const s = value === null || value === undefined ? '' : String(value);
+            let s: string;
+            if (value === null || value === undefined) s = '';
+            else if (typeof value === 'string') s = value;
+            else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+                s = String(value);
+            else s = JSON.stringify(value) ?? '';
             return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         };
         const lines = [header.join(',')];

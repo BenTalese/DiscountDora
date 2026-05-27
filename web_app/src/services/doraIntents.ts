@@ -98,7 +98,7 @@ export type MealPlanSnapshot = {
 
 export type DoraContext = {
     currentPath: string;
-    username?: string;
+    username?: string | undefined;
     // Hooks for handlers that need async data — set up by the chat panel.
     fetchFoodFact?: () => Promise<string>;
     fetchVersion?: () => Promise<{
@@ -1123,7 +1123,7 @@ export async function runIntent(
             const stock = context.getStock?.() ?? [];
             const expiring = stock
                 .map((s) => ({ s, d: daysUntil(s.expiryDate) }))
-                .filter((x) => x.d !== null && x.d! <= EXPIRY_HORIZON_DAYS)
+                .filter((x) => x.d !== null && x.d <= EXPIRY_HORIZON_DAYS)
                 .sort((a, b) => (a.d! - b.d!));
             if (expiring.length === 0) {
                 return {

@@ -41,16 +41,17 @@
             {{ loadError }}
         </q-banner>
 
-        <div v-if="loading && tree.length === 0" class="text-center q-py-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && tree.length === 0" key="loc-loading" class="text-center q-py-xl">
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <div v-else-if="tree.length === 0" class="text-center text-grey q-py-xl">
+        <div v-else-if="tree.length === 0" key="loc-empty" class="text-center text-grey q-py-xl">
             <q-icon :name="ICONS.inbox" size="60px" class="q-mb-sm" />
             <div>No zones yet. Create one to get started.</div>
         </div>
 
-        <div v-else class="row q-col-gutter-md">
+        <div v-else key="loc-content" class="row q-col-gutter-md">
             <div
                 v-for="zone in sortedZones"
                 :key="zone.location_id"
@@ -114,6 +115,7 @@
                 </q-card>
             </div>
         </div>
+        </FadeTransition>
 
         <SearchOverlay v-model="searchOpen" />
 
@@ -217,6 +219,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useQuasar } from 'quasar';
     import ItemChip from 'src/components/locations/ItemChip.vue';
     import MoveItemDialog from 'src/components/locations/MoveItemDialog.vue';
@@ -387,7 +390,7 @@
                     {
                         label: 'Open',
                         color: 'white',
-                        handler: () => router.push(`/shopping-lists/${shopping_list_id}`),
+                        handler: () => { void router.push(`/shopping-lists/${shopping_list_id}`); },
                     },
                 ],
             });

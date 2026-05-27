@@ -66,20 +66,20 @@ async function ship(level: Level, message: string, context?: Record<string, unkn
 
 export const clientLog = {
     debug(message: string, context?: Record<string, unknown>) {
-        // eslint-disable-next-line no-console
+         
         console.debug('[dora]', message, context ?? '');
     },
     info(message: string, context?: Record<string, unknown>) {
-        // eslint-disable-next-line no-console
+         
         console.info('[dora]', message, context ?? '');
     },
     warn(message: string, context?: Record<string, unknown>) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[dora]', message, context ?? '');
         void ship('warn', message, context);
     },
     error(message: string, context?: Record<string, unknown>) {
-        // eslint-disable-next-line no-console
+         
         console.error('[dora]', message, context ?? '');
         void ship('error', message, context);
     },

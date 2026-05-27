@@ -36,22 +36,24 @@ export function notifyUndoable(args: UndoableNotifyArgs): string {
                 label: 'Undo',
                 color: 'white',
                 noDismiss: true,
-                handler: async () => {
+                handler: () => {
                     // Route through the stack so the entry moves to redo
                     // and stays consistent with Ctrl-Z / the header button.
                     // If for some reason it's not at the top of the stack
                     // anymore (the user fired another action since), fall
                     // back to direct inverse + discard so the toast button
                     // still does what it says it does.
-                    try {
-                        const undid = await runUndo();
-                        if (!undid) {
-                            await args.undo.inverse();
-                            discardEntry(entryId);
+                    void (async () => {
+                        try {
+                            const undid = await runUndo();
+                            if (!undid) {
+                                await args.undo.inverse();
+                                discardEntry(entryId);
+                            }
+                        } catch {
+                            // Surfaced by the global handler.
                         }
-                    } catch {
-                        // Surfaced by the global handler.
-                    }
+                    })();
                 },
             },
         ],

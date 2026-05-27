@@ -440,8 +440,8 @@
 
     onMounted(async () => {
         // Fire everything in parallel — none of them block the page render.
-        loadChangelog();
-        loadFoodFact();
+        void loadChangelog();
+        void loadFoodFact();
         try {
             versionInfo.value = await helpApi.getVersionAsync();
         } catch {

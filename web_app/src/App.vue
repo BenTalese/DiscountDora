@@ -39,7 +39,7 @@
 
 <style>
     .splash-fade-leave-active {
-        transition: opacity 320ms ease;
+        transition: opacity var(--motion-slow) var(--motion-ease);
     }
     .splash-fade-leave-to {
         opacity: 0;

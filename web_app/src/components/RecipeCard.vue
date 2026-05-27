@@ -107,7 +107,7 @@
                 @click.stop="emit('cook', recipe.recipe_id)"
             />
             <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
-                <q-menu auto-close>
+                <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                     <q-list dense style="min-width: 220px">
                         <q-item clickable @click="emit('edit', recipe.recipe_id)">
                             <q-item-section avatar>
@@ -278,13 +278,16 @@
 
 <style scoped>
     .recipe-card {
-        transition: box-shadow 0.15s ease, outline-color 0.15s ease;
+        transition: box-shadow var(--motion-fast) var(--motion-ease),
+            outline-color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
         outline: 2px solid transparent;
         outline-offset: -2px;
         height: 100%;
     }
     .recipe-card:hover {
-        box-shadow: 0 6px 18px -14px var(--overlay-dim);
+        box-shadow: var(--elevation-card-hover);
+        transform: translateY(-1px);
     }
     .recipe-card--dim {
         opacity: 0.55;

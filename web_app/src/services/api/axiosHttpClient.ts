@@ -264,10 +264,12 @@ export default class AxiosHttpClient implements HttpClient {
                     type: 'negative',
                     position: 'top',
                     message: 'Something on the server tripped. We logged the error.',
-                    caption: correlationId ? `Ref: ${correlationId.slice(0, 8)}` : undefined,
+                    ...(correlationId
+                        ? { caption: `Ref: ${correlationId.slice(0, 8)}` }
+                        : {}),
                     timeout: 5000,
                 });
-                // eslint-disable-next-line no-console
+                 
                 console.warn(
                     `[api] ${method} ${path} → ${status} ${code} (${correlationId})`,
                     details,

@@ -394,7 +394,7 @@
                     {
                         label: 'Open',
                         color: 'white',
-                        handler: () => router.push(`/shopping-lists/${shopping_list_id}`),
+                        handler: () => { void router.push(`/shopping-lists/${shopping_list_id}`); },
                     },
                 ],
             });

@@ -1,0 +1,87 @@
+/*
+ * Motion tokens (DS4) — every transition and animation in DiscountDora
+ * reads its duration and easing from here, the same way tokens.scss owns
+ * colour/spacing/radius. Keeping them in one place is what lets the
+ * prefers-reduced-motion block below switch the whole app off at once.
+ *
+ * Philosophy:
+ *   - fast (120ms)   hovers, button presses, chip toggles — feedback that
+ *                    must feel instant.
+ *   - normal (200ms) the default. Modals, menus, toasts, list enter/leave.
+ *   - slow (320ms)   large surfaces / route transitions where a longer
+ *                    glide reads as deliberate, not laggy.
+ *   - Standard easing is Material's cubic-bezier(0.4, 0, 0.2, 1): quick to
+ *     start, gentle to settle. `-out` decelerates (entering elements),
+ *     `-in` accelerates (leaving elements).
+ *
+ * When to animate: discrete state changes (open/close, route change, list
+ * reorder, value settle). When NOT to: high-frequency churn (per-keystroke
+ * filtering, scroll-driven repaint) — animating those reads as lag.
+ */
+
+:root {
+    --motion-fast: 120ms;
+    --motion-normal: 200ms;
+    --motion-slow: 320ms;
+
+    --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Distance a SlideUp/scale travels on enter. Kept small so motion feels
+       like a settle, not a fly-in. */
+    --motion-slide-distance: 12px;
+    --motion-scale-from: 0.96;
+}
+
+/*
+ * Quasar dialog/menu/popup timing. Quasar applies its built-in transitions
+ * (scale on dialogs, jump/fade on menus) with a hardcoded 300ms duration set
+ * inline. We can't feed CSS vars to its `transition-duration` prop without
+ * touching all 31 dialog call sites, so we override the duration here in one
+ * place to land on our --motion-normal token. !important is required to beat
+ * Quasar's inline style.
+ *
+ * Because this resolves the token (not a literal), the prefers-reduced-motion
+ * block below — which redefines --motion-normal to ~0 — automatically wins
+ * even though these class selectors out-specify its `*` rule.
+ */
+.q-transition--scale-enter-active,
+.q-transition--scale-leave-active,
+.q-transition--fade-enter-active,
+.q-transition--fade-leave-active,
+.q-transition--jump-down-enter-active,
+.q-transition--jump-down-leave-active,
+.q-transition--jump-up-enter-active,
+.q-transition--jump-up-leave-active {
+    animation-duration: var(--motion-normal) !important;
+}
+
+/*
+ * Accessibility kill-switch. When the OS requests reduced motion we collapse
+ * every duration to a near-zero value (not 0 — Vue's <transition> needs a
+ * non-zero transitionend/animationend to fire its done hooks) and neutralise
+ * the travel/scale so wrappers resolve to a plain instant swap.
+ *
+ * The blanket `!important` rules below are a safety net for any hand-rolled
+ * transition/animation that forgot to consume the tokens.
+ */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-fast: 0.01ms;
+        --motion-normal: 0.01ms;
+        --motion-slow: 0.01ms;
+        --motion-slide-distance: 0px;
+        --motion-scale-from: 1;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

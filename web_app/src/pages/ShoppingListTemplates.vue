@@ -61,7 +61,7 @@
                             </div>
                         </div>
                         <q-btn flat round dense :icon="ICONS.more_vert">
-                            <q-menu>
+                            <q-menu transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
                                     <q-item
                                         clickable

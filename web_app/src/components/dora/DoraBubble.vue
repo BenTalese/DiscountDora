@@ -346,6 +346,11 @@
         display: inline-block;
         transform-origin: center bottom;
         will-change: transform;
+        /* One-time entrance: Dora pops in with a small spring overshoot the
+           first time the launcher mounts (login / app load). Hover and wiggle
+           rules are more specific, so they take over once the user interacts.
+           Disabled under prefers-reduced-motion (see the media query below). */
+        animation: dora-entrance var(--motion-slow) var(--motion-ease-spring) 300ms both;
     }
     /* Translucent disc behind the mascot — only shown when the chat is open,
        so Dora reads clearly against any page colour while she's the active
@@ -428,6 +433,10 @@
     @keyframes dora-attention-pulse {
         0%, 100% { opacity: 0.55; }
         50%      { opacity: 0.95; }
+    }
+    @keyframes dora-entrance {
+        0%   { transform: scale(0) translateY(16px); opacity: 0; }
+        100% { transform: scale(1) translateY(0);    opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
         .dora-bubble-launcher,

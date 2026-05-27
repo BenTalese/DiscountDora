@@ -59,7 +59,7 @@
                     dense
                     :icon="ICONS.more_vert"
                 >
-                    <q-menu anchor="bottom right" self="top right">
+                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 220px">
                             <q-item-label header class="q-pb-none">Group by</q-item-label>
                             <q-item
@@ -276,11 +276,12 @@
             {{ loadError }}
         </q-banner>
 
-        <div v-if="loading && !detail" class="text-center q-py-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && !detail" key="sld-loading" class="text-center q-py-xl">
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <template v-else-if="detail">
+        <div v-else-if="detail" key="sld-content">
             <!-- In-progress banner — emphasises tick-mode + offers
                  a one-click stop. The picker hides while in progress. -->
             <q-banner
@@ -631,7 +632,7 @@
                                     :icon="ICONS.more_vert"
                                     :disable="detail.is_archived"
                                 >
-                                    <q-menu auto-close>
+                                    <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                                         <q-list dense style="min-width: 220px">
                                             <q-item
                                                 clickable
@@ -748,12 +749,14 @@
                     </div>
                 </q-card-section>
             </q-card>
-        </template>
+        </div>
+        </FadeTransition>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { notifyUndoable } from 'src/composables/useNotifyUndoable';
@@ -1651,7 +1654,7 @@
                         {
                             label: 'Open new list',
                             color: 'white',
-                            handler: () => router.push(`/shopping-lists/${copiedListId}`),
+                            handler: () => { void router.push(`/shopping-lists/${copiedListId}`); },
                         },
                     ],
                 });
@@ -1901,7 +1904,7 @@
                     {
                         label: 'Open',
                         color: 'white',
-                        handler: () => router.push('/shopping-lists/templates'),
+                        handler: () => { void router.push('/shopping-lists/templates'); },
                     },
                 ],
             });

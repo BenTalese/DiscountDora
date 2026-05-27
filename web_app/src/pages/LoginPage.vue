@@ -209,7 +209,7 @@
                         ? 'Sign-in failed. Please try again.'
                         : 'Registration failed. Please review the form and try again.');
             }
-            // eslint-disable-next-line no-console
+             
             console.warn('auth submit failed', err);
         } finally {
             submitting.value = false;

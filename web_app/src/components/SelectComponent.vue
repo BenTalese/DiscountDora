@@ -49,7 +49,6 @@
 </template>
 
 <script lang="ts" setup>
-    import { ICONS } from 'src/style/icons';
     //#region Props & Emits
 
     interface ISelectComponentProps {

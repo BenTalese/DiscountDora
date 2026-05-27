@@ -169,8 +169,8 @@
             message: `Delete "${meal.name}"?`,
             cancel: true,
             persistent: true
-        }).onOk(async () => {
-            await mealStore.deleteMealAsync(meal.meal_id);
+        }).onOk(() => {
+            void mealStore.deleteMealAsync(meal.meal_id);
         });
     }
 

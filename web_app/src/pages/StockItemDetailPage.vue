@@ -22,11 +22,12 @@
             {{ loadError }}
         </q-banner>
 
-        <div v-if="loading && !detail" class="row justify-center q-pa-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && !detail" key="sid-loading" class="row justify-center q-pa-xl">
             <q-spinner size="48px" color="primary" />
         </div>
 
-        <template v-else-if="detail">
+        <div v-else-if="detail" key="sid-content">
             <!-- Toolbar actions ─────────────────────────────────────────── -->
             <div class="row q-gutter-sm q-mb-md items-center">
                 <q-btn
@@ -419,7 +420,8 @@
                     </q-timeline>
                 </q-tab-panel>
             </q-tab-panels>
-        </template>
+        </div>
+        </FadeTransition>
 
         <!-- ── Set-expiry dialog ──────────────────────────────────────── -->
         <q-dialog v-model="expiryDialogOpen">
@@ -504,6 +506,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';

@@ -35,7 +35,7 @@ export type ContextualAction =
 // `useRoute` object here, which keeps this testable.
 export function contextualActionsFor(
     path: string,
-    params: { id?: string },
+    params: { id?: string | undefined },
 ): ContextualAction[] {
     // ── Stock item detail ───────────────────────────────────────────
     if (path.startsWith('/stock/') && params.id) {

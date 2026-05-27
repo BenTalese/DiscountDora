@@ -52,7 +52,7 @@
             class="q-ml-xs"
             @click.stop
         >
-            <q-menu auto-close>
+            <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                 <q-list dense style="min-width: 180px">
                     <q-item v-if="product.web_url" clickable @click="openLink">
                         <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>

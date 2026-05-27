@@ -153,19 +153,22 @@
         </div>
 
         <!-- ── Grid ───────────────────────────────────────────────── -->
+        <FadeTransition mode="out-in">
         <div
             v-if="loading && products.length === 0"
+            key="prod-loading"
             class="text-center q-py-xl"
         >
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <q-banner v-else-if="loadError" class="bg-red-1 text-red-9" dense rounded>
+        <q-banner v-else-if="loadError" key="prod-error" class="bg-red-1 text-red-9" dense rounded>
             {{ loadError }}
         </q-banner>
 
         <div
             v-else-if="filteredProducts.length === 0"
+            key="prod-empty"
             class="text-center text-grey q-py-xl"
         >
             <q-icon :name="ICONS.shopping_bag" size="60px" class="q-mb-sm" />
@@ -194,7 +197,7 @@
             />
         </div>
 
-        <div v-else class="row q-col-gutter-md">
+        <div v-else key="prod-content" class="row q-col-gutter-md">
             <div
                 v-for="product in filteredProducts"
                 :key="product.product_id"
@@ -341,7 +344,7 @@
                             </q-tooltip>
                         </q-btn>
                         <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
-                            <q-menu auto-close>
+                            <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
                                     <q-item
                                         v-if="product.linked_stock_item_id"
@@ -401,6 +404,7 @@
                 </q-card>
             </div>
         </div>
+        </FadeTransition>
 
         <!-- ── Bulk-add target-list picker ────────────────────────── -->
         <q-dialog v-model="bulkAddOpen">
@@ -545,6 +549,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
@@ -771,7 +776,7 @@
                 message: 'Create or unarchive one first.',
                 ok: { label: 'Open lists', color: 'primary', noCaps: true },
                 cancel: { noCaps: true },
-            }).onOk(() => router.push('/shopping-lists'));
+            }).onOk(() => { void router.push('/shopping-lists'); });
             return;
         }
         bulkAddOpen.value = true;
@@ -901,7 +906,7 @@
                 message: 'Set a primary shopping list to use the cart shortcut.',
                 ok: { label: 'Open lists', color: 'primary', noCaps: true },
                 cancel: { noCaps: true },
-            }).onOk(() => router.push('/shopping-lists'));
+            }).onOk(() => { void router.push('/shopping-lists'); });
             return;
         }
         await addItems(primary, [
@@ -991,7 +996,7 @@
         linkOpen.value = true;
     }
 
-    async function confirmLink() {
+    function confirmLink() {
         if (!linkTarget.value || !linkChoiceStockItemId.value) return;
         linkBusy.value = true;
         try {
@@ -1025,7 +1030,7 @@
     function levelNameFor(item: StockItem): StockLevelName | null {
         return (
             (stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)
-                ?.name as StockLevelName | undefined) ?? null
+                ?.name) ?? null
         );
     }
     function levelColourFor(item: StockItem): string {

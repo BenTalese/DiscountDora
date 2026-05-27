@@ -77,7 +77,9 @@ export const useMealStore = defineStore('meal', () => {
         mealPlanApiService.getIngredientsAsync(mealPlanId);
 
     return {
-        meals: readonly(meals),
+        // Plain ref (not readonly): consumers pass meals into display
+        // components and helpers typed as mutable Meal[].
+        meals,
         mealPlans: readonly(mealPlans),
         getMealsAsync,
         getMealPlansAsync,

@@ -80,6 +80,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
     import { ref, watch, onBeforeUnmount, computed } from 'vue';
 
     interface Props {
@@ -116,8 +117,8 @@
 
     // The active reader + media stream so we can clean them up on close.
     // Lazy-loaded so the chunk only ships when the dialog opens.
-    let codeReader: any = null;
-    let controls: any = null;
+    let codeReader: BrowserMultiFormatReader | null = null;
+    let controls: IScannerControls | null = null;
     let stream: MediaStream | null = null;
     let audioCtx: AudioContext | null = null;
 
@@ -131,7 +132,7 @@
         if (open) {
             await startScanner();
         } else {
-            await stopScanner();
+            stopScanner();
         }
     });
 
@@ -159,8 +160,8 @@
 
             controls = await codeReader.decodeFromVideoDevice(
                 preferred?.deviceId,
-                videoRef.value,
-                (result: any) => {
+                videoRef.value ?? undefined,
+                (result) => {
                     if (!result) return;
                     const text = result.getText?.() ?? String(result);
                     handleDecoded(text);
@@ -171,7 +172,9 @@
             // for torch capability.
             stream = (videoRef.value?.srcObject as MediaStream) ?? null;
             const track = stream?.getVideoTracks?.()[0];
-            const caps = (track as any)?.getCapabilities?.();
+            const caps = track?.getCapabilities?.() as
+                | (MediaTrackCapabilities & { torch?: boolean })
+                | undefined;
             torchSupported.value = Boolean(caps?.torch);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -189,7 +192,7 @@
         }
     }
 
-    async function stopScanner() {
+    function stopScanner() {
         try {
             controls?.stop?.();
         } catch { /* ignore */ }
@@ -239,17 +242,19 @@
 
     /** Short visual + audio cue. Tone uses Web Audio so we don't ship a
      *  bundled .wav. `kind` picks pitch (good = high, bad = low). */
-    async function flashAndChime(kind: 'good' | 'bad') {
+    function flashAndChime(kind: 'good' | 'bad') {
         flashKind.value = kind;
         setTimeout(() => { flashKind.value = ''; }, 250);
         try {
             if (!audioCtx) {
                 const Ctor =
-                    (window as any).AudioContext ?? (window as any).webkitAudioContext;
+                    window.AudioContext ??
+                    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+                        .webkitAudioContext;
                 if (!Ctor) return;
                 audioCtx = new Ctor();
             }
-            const ctx = audioCtx!;
+            const ctx = audioCtx;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
@@ -274,11 +279,13 @@
 
     async function toggleTorch() {
         if (!torchSupported.value || !stream) return;
-        const track = stream.getVideoTracks?.()[0] as any;
+        const track = stream.getVideoTracks?.()[0];
         if (!track) return;
         try {
             torchOn.value = !torchOn.value;
-            await track.applyConstraints({ advanced: [{ torch: torchOn.value }] });
+            await track.applyConstraints({
+                advanced: [{ torch: torchOn.value }],
+            } as unknown as MediaTrackConstraints);
         } catch {
             // Some Android cameras lie about torch capability. Don't fail
             // the whole overlay; just flip the toggle back.

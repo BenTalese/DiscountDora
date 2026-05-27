@@ -564,7 +564,7 @@
     );
 
     // ── Navigation ───────────────────────────────────────────────────
-    async function onBack() {
+    function onBack() {
         if (stepIndex.value === 0) return;
         stepIndex.value--;
     }

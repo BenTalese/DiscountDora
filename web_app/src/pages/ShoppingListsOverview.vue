@@ -149,11 +149,12 @@
         </q-tabs>
         <q-separator />
 
-        <div v-if="loading && summaries.length === 0" class="text-center q-py-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && summaries.length === 0" key="sl-loading" class="text-center q-py-xl">
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <div v-else-if="visibleLists.length === 0" class="text-center text-grey q-py-xl">
+        <div v-else-if="visibleLists.length === 0" key="sl-empty" class="text-center text-grey q-py-xl">
             <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
             <template v-if="tab === 'active'">
                 <div class="text-h6">No active shopping lists yet.</div>
@@ -190,7 +191,7 @@
             <div v-else>No archived lists yet — finished lists show up here.</div>
         </div>
 
-        <div v-else class="row q-col-gutter-md q-mt-sm">
+        <div v-else key="sl-content" class="row q-col-gutter-md q-mt-sm">
             <div
                 v-for="list in visibleLists"
                 :key="list.shopping_list_id"
@@ -228,7 +229,7 @@
                         </div>
 
                         <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
-                            <q-menu>
+                            <q-menu transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 220px">
                                     <q-item clickable v-close-popup @click.stop="openList(list.shopping_list_id)">
                                         <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
@@ -363,6 +364,7 @@
                 </q-card>
             </div>
         </div>
+        </FadeTransition>
 
         <q-dialog v-model="advancedOpen">
             <q-card style="min-width: 360px; max-width: 480px">
@@ -434,6 +436,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import {
@@ -751,7 +754,7 @@
                 position: 'bottom-right',
                 message: 'No recipes saved yet.',
                 actions: [
-                    { label: 'Go to Recipes', color: 'white', handler: () => router.push('/recipes') },
+                    { label: 'Go to Recipes', color: 'white', handler: () => { void router.push('/recipes'); } },
                 ],
             });
             return;
@@ -819,7 +822,7 @@
                 position: 'bottom-right',
                 message: 'No meal plans yet.',
                 actions: [
-                    { label: 'Go to Meal Plans', color: 'white', handler: () => router.push('/meal-plans') },
+                    { label: 'Go to Meal Plans', color: 'white', handler: () => { void router.push('/meal-plans'); } },
                 ],
             });
             return;
@@ -973,7 +976,7 @@
                 message: 'Save a list as a template first (from any list\'s menu), or use the Manage templates page.',
                 ok: { label: 'Open templates', noCaps: true, color: 'primary' },
                 cancel: { noCaps: true },
-            }).onOk(() => router.push('/shopping-lists/templates'));
+            }).onOk(() => { void router.push('/shopping-lists/templates'); });
             return;
         }
         const templateId = await new Promise<string | null>((resolve) => {

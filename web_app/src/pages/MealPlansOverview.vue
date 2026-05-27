@@ -111,7 +111,7 @@
                                             <div class="text-caption text-italic">{{ entry.slot }}</div>
                                             <div>{{ entry.meal_name }} ×{{ entry.servings }}</div>
                                         </div>
-                                        <q-menu>
+                                        <q-menu transition-show="jump-down" transition-hide="jump-up">
                                             <q-list dense style="min-width: 200px">
                                                 <q-item-label header>{{ entry.meal_name }}</q-item-label>
                                                 <template v-for="r in recipesForMeal(entry.meal_id)" :key="r.recipe_id">

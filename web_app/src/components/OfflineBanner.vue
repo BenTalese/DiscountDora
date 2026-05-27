@@ -79,7 +79,8 @@
     }
     .offline-banner-enter-active,
     .offline-banner-leave-active {
-        transition: opacity 200ms ease, transform 200ms ease;
+        transition: opacity var(--motion-normal) var(--motion-ease),
+            transform var(--motion-normal) var(--motion-ease);
     }
     .offline-banner-enter-from,
     .offline-banner-leave-to {

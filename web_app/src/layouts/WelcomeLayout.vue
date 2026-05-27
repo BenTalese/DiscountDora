@@ -25,7 +25,11 @@
 
         <q-page-container>
             <OfflineBanner />
-            <router-view />
+            <router-view v-slot="{ Component }">
+                <FadeTransition mode="out-in">
+                    <component :is="Component" />
+                </FadeTransition>
+            </router-view>
         </q-page-container>
     </q-layout>
 </template>
@@ -33,6 +37,7 @@
 <script setup lang="ts">
     import { ICONS } from 'src/style/icons';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { useRouter } from 'vue-router';
 

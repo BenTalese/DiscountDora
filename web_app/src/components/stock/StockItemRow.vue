@@ -46,7 +46,7 @@
                 @click.stop
             >
                 On {{ onLists.length }} {{ onLists.length === 1 ? 'list' : 'lists' }}
-                <q-menu auto-close>
+                <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                     <q-list dense style="min-width: 200px">
                         <q-item-label header>On these lists</q-item-label>
                         <q-item
@@ -78,7 +78,7 @@
                 @click.stop
             >
                 <q-tooltip>{{ expiry.tooltip }}</q-tooltip>
-                <q-menu auto-close>
+                <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                     <q-list dense style="min-width: 180px">
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 7)">
                             <q-item-section>Push expiry +7 days</q-item-section>
@@ -370,10 +370,12 @@
 
 <style scoped>
     .stock-row {
-        transition: box-shadow 0.15s ease;
+        transition: box-shadow var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
     }
     .stock-row:hover {
-        box-shadow: 0 6px 18px -14px var(--overlay-dim);
+        box-shadow: var(--elevation-card-hover);
+        transform: translateY(-1px);
     }
     .stock-row-dim {
         opacity: 0.62;

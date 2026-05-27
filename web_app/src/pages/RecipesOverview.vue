@@ -108,10 +108,11 @@
         </div>
 
         <!-- ── Grid grouped by collection ─────────────────────────── -->
-        <div v-if="loading && recipes.length === 0" class="text-center q-py-xl">
+        <FadeTransition mode="out-in">
+        <div v-if="loading && recipes.length === 0" key="rec-loading" class="text-center q-py-xl">
             <q-spinner color="primary" size="48px" />
         </div>
-        <template v-else>
+        <div v-else key="rec-content">
             <div
                 v-if="filteredRecipes.length === 0"
                 class="text-center text-grey q-py-xl"
@@ -167,7 +168,8 @@
                     </div>
                 </div>
             </div>
-        </template>
+        </div>
+        </FadeTransition>
 
         <!-- ── Edit dialog ────────────────────────────────────────── -->
         <RecipeEditDialog
@@ -315,6 +317,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import RecipeCard from 'src/components/RecipeCard.vue';
@@ -645,8 +648,8 @@
             message: `Delete "${recipe.name}"? This cannot be undone.`,
             cancel: true,
             persistent: true,
-        }).onOk(async () => {
-            await recipeStore.deleteRecipeAsync(recipeId);
+        }).onOk(() => {
+            void recipeStore.deleteRecipeAsync(recipeId);
         });
     }
 
@@ -681,7 +684,11 @@
             });
             return;
         }
-        addMissingPayload.value = { recipeName, stockItemIds: ids, recipeId };
+        addMissingPayload.value = {
+            recipeName,
+            stockItemIds: ids,
+            ...(recipeId !== undefined ? { recipeId } : {}),
+        };
         addMissingTargetListId.value =
             shoppingListStore.primaryListId ?? activeListOptions.value[0]?.value ?? null;
         if (!addMissingTargetListId.value) {
@@ -690,7 +697,7 @@
                 message: 'Create one first to add ingredients to it.',
                 ok: { label: 'Open lists', noCaps: true, color: 'primary' },
                 cancel: { noCaps: true },
-            }).onOk(() => router.push('/shopping-lists'));
+            }).onOk(() => { void router.push('/shopping-lists'); });
             return;
         }
         addMissingOpen.value = true;

@@ -30,6 +30,9 @@ export default defineConfig((ctx) => {
             // styles can reference the new custom properties.
             'tokens.scss',
             'themes.scss',
+            // DS4: motion tokens (duration/easing) + the prefers-reduced-motion
+            // kill-switch. Loads after the design tokens, before component css.
+            'motion.scss',
             'app.scss',
             'colours.scss'
         ],

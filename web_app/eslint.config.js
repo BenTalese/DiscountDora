@@ -67,6 +67,18 @@ export default defineConfigWithVueTs(
     rules: {
       'prefer-promise-reject-errors': 'off',
 
+      // Treat a leading underscore as "intentionally unused" — for function
+      // params kept for signature/positional reasons, destructured values
+      // we skip, and caught errors we deliberately swallow.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ],
+
       // allow debugger during development only
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
     }

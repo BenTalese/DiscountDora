@@ -293,7 +293,7 @@
         try {
             colourCanvas.fillStyle = '#000';     // reset so a bad value can't carry over
             colourCanvas.fillStyle = raw;
-            return colourCanvas.fillStyle as string;
+            return colourCanvas.fillStyle;
         } catch {
             return raw;
         }

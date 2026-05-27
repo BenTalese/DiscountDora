@@ -24,11 +24,6 @@
         return props.health.is_healthy ? 'positive' : 'negative';
     });
 
-    const icon = computed(() => {
-        if (props.health.skipped) return 'help_outline';
-        return props.health.is_healthy ? 'check_circle' : 'cancel';
-    });
-
     const label = computed(() => {
         if (props.health.skipped) return 'Not probed';
         return props.health.is_healthy ? 'Healthy' : 'Unhealthy';

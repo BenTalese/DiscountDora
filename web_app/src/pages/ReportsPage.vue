@@ -314,7 +314,7 @@
         try {
             colourCanvas.fillStyle = '#000';
             colourCanvas.fillStyle = raw;
-            return colourCanvas.fillStyle as string;
+            return colourCanvas.fillStyle;
         } catch {
             return raw;
         }

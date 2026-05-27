@@ -561,7 +561,12 @@
         if (!rows.length) return;
         const header = ['row_number', 'name', 'reason'];
         const escape = (v: unknown) => {
-            const s = v === null || v === undefined ? '' : String(v);
+            let s: string;
+            if (v === null || v === undefined) s = '';
+            else if (typeof v === 'string') s = v;
+            else if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint')
+                s = String(v);
+            else s = JSON.stringify(v) ?? '';
             // RFC4180-ish: wrap in quotes, double internal quotes.
             if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
             return s;

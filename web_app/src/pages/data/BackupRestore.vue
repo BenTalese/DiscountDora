@@ -612,7 +612,7 @@
     function parseFilename(header: string | null): string | null {
         if (!header) return null;
         const match = /filename="?([^";]+)"?/i.exec(header);
-        return match ? match[1] : null;
+        return match?.[1] ?? null;
     }
 
     function defaultFilename(): string {
@@ -737,9 +737,11 @@
                 html: true,
                 ok: { label: 'Restore', color: 'primary' },
                 cancel: { label: 'Cancel', flat: true },
-            }).onOk(async () => {
-                await doRestore(mode);
-                resolve();
+            }).onOk(() => {
+                void (async () => {
+                    await doRestore(mode);
+                    resolve();
+                })();
             }).onCancel(() => resolve());
         });
     }

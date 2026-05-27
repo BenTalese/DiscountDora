@@ -51,7 +51,7 @@
                     :icon="ICONS.account_circle"
                     v-if="currentUser"
                 >
-                    <q-menu anchor="bottom right" self="top right">
+                    <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 200px">
                             <q-item>
                                 <q-item-section>
@@ -108,7 +108,11 @@
                  browser says we're offline). Sticky so it stays visible
                  while the user keeps scrolling/working. -->
             <OfflineBanner />
-            <router-view />
+            <router-view v-slot="{ Component }">
+                <FadeTransition mode="out-in">
+                    <component :is="Component" />
+                </FadeTransition>
+            </router-view>
         </q-page-container>
 
         <!-- Dora help assistant. Lives inside the authenticated layout so
@@ -135,6 +139,7 @@
     import AlertsBell from 'src/components/AlertsBell.vue';
     import DoraBubble from 'src/components/dora/DoraBubble.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
+    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
     import CommandPalette from 'src/components/CommandPalette.vue';
     import ShortcutsCheatsheet from 'src/components/ShortcutsCheatsheet.vue';
@@ -187,11 +192,11 @@
         if (!t) return false;
         const tag = (t.tagName || '').toLowerCase();
         if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-        if ((t as HTMLElement).isContentEditable) return true;
+        if ((t).isContentEditable) return true;
         return false;
     }
 
-    async function onKeyDown(event: KeyboardEvent) {
+    function onKeyDown(event: KeyboardEvent) {
         if (!currentUser.value) return;
         if (isTypingTarget(event)) return;
         const isMod = event.ctrlKey || event.metaKey;
@@ -205,16 +210,14 @@
         } else if ((key === 'z' && event.shiftKey) || key === 'y') {
             if (!canRedo.value) return;
             event.preventDefault();
-            try {
-                await redo();
-            } catch (err) {
+            void redo().catch((err) => {
                 $q.notify({
                     type: 'negative',
                     position: 'bottom-right',
                     message: "Couldn't redo.",
                     caption: describeApiError(err) || '',
                 });
-            }
+            });
         }
     }
 

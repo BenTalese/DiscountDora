@@ -14,9 +14,15 @@ from merchant_api.domain.enumerations.supported_merchant import \
 
 _MAPI_PROFILE_DEFAULTS = {
     Profile.DEVELOPMENT: {"log_level": "INFO", "debug": True,
+                          # capacitor:// + http://localhost included
+                          # so the mobile client (Capacitor) talks to
+                          # the dev merchant_api without CORS surgery.
                           "cors_origins": ["http://localhost:5174",
                                            "http://127.0.0.1:5174",
-                                           "http://172.17.0.1:5174"]},
+                                           "http://172.17.0.1:5174",
+                                           "capacitor://localhost",
+                                           "ionic://localhost",
+                                           "http://localhost"]},
     Profile.PRODUCTION:  {"log_level": "INFO", "debug": False,
                           "cors_origins": []},
     Profile.TEST:        {"log_level": "WARNING", "debug": True,

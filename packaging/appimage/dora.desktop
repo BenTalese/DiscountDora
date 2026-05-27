@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Discount Dora
+GenericName=Pantry & shopping tracker
+Comment=Track your pantry, hunt deals, plan meals.
+Exec=Dora
+Icon=dora
+Terminal=false
+Categories=Office;Utility;Database;
+Keywords=pantry;groceries;shopping;recipes;meals;deals;
+StartupWMClass=Dora

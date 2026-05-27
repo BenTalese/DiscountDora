@@ -27,3 +27,7 @@
         </q-card-section>
     </q-card>
 </template>
+
+<script setup lang="ts">
+    import { ICONS } from 'src/style/icons';
+</script>

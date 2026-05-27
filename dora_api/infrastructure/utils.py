@@ -1,6 +1,7 @@
 import importlib
 import inspect
 import os
+import pkgutil
 import re
 from pathlib import Path
 from typing import Any, List
@@ -36,44 +37,53 @@ def apply_exclusion_filter(collection: List[str], exclusion_patterns: List[str])
         collection[:] = [_Item for _Item in collection if not re.match(_ExclusionPattern, _Item)]
 
 
+def _to_package_name(path_to_search: Path | str) -> str:
+    """Accept either a package dotted name ("merchant_api.features")
+    or a path-like value (legacy callers pass `Path() / 'merchant_api'
+    / 'features'`). Returns the dotted package name either way."""
+    s = str(path_to_search).strip()
+    s = s.replace("\\", "/").strip("/")
+    return s.replace("/", ".")
+
+
+def _iter_submodules(package_name: str):
+    """pkgutil-based recursive walk of a package. Works in both
+    source-tree and PyInstaller-frozen contexts (the on-disk
+    `os.walk` approach the previous implementation used silently
+    returned nothing in a frozen bundle because the source tree
+    wasn't on disk)."""
+    pkg = importlib.import_module(package_name)
+    if not hasattr(pkg, "__path__"):
+        return
+    for info in pkgutil.walk_packages(pkg.__path__, prefix=f"{package_name}."):
+        # Skip the package's own __init__ modules — they're already
+        # imported as part of `import_module(package_name)`. Modules
+        # with a name ending in `.__init__` don't show up via
+        # walk_packages anyway, so the only thing to skip explicitly
+        # is sub-packages we'll recurse into (info.ispkg=True).
+        if info.ispkg:
+            continue
+        yield importlib.import_module(info.name)
+
+
 def get_classes_ending_with(term: str, path_to_search: Path | str):
-    _Classes = []
-
-    for _Root, _Directories, _Files in os.walk(path_to_search):
-
-        DIR_EXCLUSIONS = [r"__pycache__"]
-        FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
-        apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
-        apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
-
-        _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
-        for _File in _Files:
-            _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
-            [_Classes.append(_Class)
-                for _, _Class
-                in inspect.getmembers(_Module, inspect.isclass)
-                if _Class.__name__.lower().endswith(term.lower())
-                and _Class.__module__ == _Module.__name__]
-
+    _Classes: list = []
+    for _Module in _iter_submodules(_to_package_name(path_to_search)):
+        for _, _Class in inspect.getmembers(_Module, inspect.isclass):
+            if (_Class.__name__.lower().endswith(term.lower())
+                    and _Class.__module__ == _Module.__name__):
+                _Classes.append(_Class)
     return _Classes
 
 
 def get_attributes_ending_with(term: str, path_to_search: Path | str):
-    _Attributes = []
-
-    for _Root, _Directories, _Files in os.walk(path_to_search):
-
-        DIR_EXCLUSIONS = [r"__pycache__"]
-        FILE_EXCLUSIONS = [r".*__init__\.py", r"^.*(?<!\.py)$"]
-        apply_exclusion_filter(_Directories, DIR_EXCLUSIONS)
-        apply_exclusion_filter(_Files, FILE_EXCLUSIONS)
-
-        _Namespace = _Root.replace('/', '.').replace('\\', '.').lstrip(".")
-        for _File in _Files:
-            _Module = importlib.import_module(f"{_Namespace}.{_File[:-3]}", package=None)
-            for _AttributeName, _AttributeValue in inspect.getmembers(_Module):
-                if _AttributeName.lower().endswith(term.lower()) and _AttributeValue not in _Attributes:
-                    _Attributes.append((_AttributeValue))
+    _Attributes: list = []
+    for _Module in _iter_submodules(_to_package_name(path_to_search)):
+        for _AttributeName, _AttributeValue in inspect.getmembers(_Module):
+            if (_AttributeName.lower().endswith(term.lower())
+                    and _AttributeValue not in _Attributes):
+                _Attributes.append(_AttributeValue)
+    return _Attributes
 
     return _Attributes
 

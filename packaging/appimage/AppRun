@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# AppRun — entry point invoked by the AppImage runtime.
+#
+# $APPDIR is set by the AppImage runtime to the squashfs mount point
+# where our AppDir tree lives. We exec the PyInstaller binary from
+# inside it, pointing LD_LIBRARY_PATH at the bundled .so files so
+# WebKitGTK + glib + cairo resolve to OUR copies rather than whatever
+# the host system has installed (which may be the wrong version).
+#
+# Everything user-facing (data dir, cache, logs) is resolved by
+# desktop_app.py via platformdirs — nothing the AppImage runtime
+# does affects that.
+
+set -e
+
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="${APPDIR:-$HERE}"
+
+# PyInstaller puts the binary + its sibling shared libs under
+# usr/bin in our AppDir layout (see build-appimage.sh).
+export LD_LIBRARY_PATH="${APPDIR}/usr/bin:${LD_LIBRARY_PATH:-}"
+# GI typelib lookup so pywebview's GTK backend can find its
+# repository when running outside a normal install.
+export GI_TYPELIB_PATH="${APPDIR}/usr/lib/girepository-1.0:${GI_TYPELIB_PATH:-}"
+
+exec "${APPDIR}/usr/bin/Dora" "$@"

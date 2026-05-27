@@ -5,7 +5,74 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Desktop bundle — Phase 4 (AppImage packaging).** Wraps the
+  PyInstaller one-folder output into a single
+  `Dora-vX.Y.Z-x86_64.AppImage` distributable. AppImages run
+  unchanged on any modern Linux desktop with `fuse` installed —
+  copy the file, `chmod +x`, double-click.
+  - [`packaging/appimage/AppRun`](packaging/appimage/AppRun) —
+    entry stub that exports `LD_LIBRARY_PATH` + `GI_TYPELIB_PATH`
+    so WebKitGTK / glib / cairo resolve to bundled copies, then
+    execs the Dora binary.
+  - [`packaging/appimage/dora.desktop`](packaging/appimage/dora.desktop)
+    — desktop entry. Categories + Keywords picked so the file
+    manager + menu searches surface it on terms like "pantry",
+    "groceries", "deals".
+  - [`packaging/appimage/build-appimage.sh`](packaging/appimage/build-appimage.sh)
+    — builds the AppDir tree, fetches `appimagetool` on first run
+    (cached in `packaging/.cache/`), packs to
+    `dist/Dora-vX.Y.Z-x86_64.AppImage`. Version pulled live from
+    `dora_api.features.help.version_info.CURRENT_VERSION`.
+  - `packaging/build-linux.sh` learns `--appimage` to chain into
+    the AppImage step automatically.
+  - `.gitignore` adds `packaging/.cache/` for the cached
+    appimagetool.
+
+### Added
+- **Desktop bundle — Phase 3 (PyInstaller spec + build script).**
+  Produces a self-contained `dist/Dora/Dora` binary on Linux that
+  bundles the Python runtime, both Flask APIs, the built SPA, all
+  alembic migrations, the seed JSONs, and the email templates.
+  - [`dora.spec`](dora.spec) — PyInstaller one-folder spec. Explicit
+    hidden imports for sqlite dialect, alembic runtime, apscheduler
+    triggers, pywebview's GTK backend, dependency_injector wiring.
+    `collect_submodules()` for the dynamically-discovered `features/`
+    packages so PyInstaller doesn't miss them. Data files bundled:
+    `web_app/dist/spa`, `dora_api/persistence/migrations`,
+    `dora_api/email_templates`, `emailer/templates`, the bundled
+    seed JSONs. Bundle's icon is `packaging/icons/dora.png`.
+  - [`packaging/build-linux.sh`](packaging/build-linux.sh) —
+    one-button build script. Defaults: install npm deps if missing
+    → `quasar build` → `pyinstaller dora.spec`. Flags
+    (`--skip-spa`, `--skip-pyinstaller`, `--clean`) for iteration.
+    Prints final bundle size + smoke-check instructions.
+  - `requirements.txt` adds `pyinstaller==6.10.0` so the toolchain
+    is one `pip install -r requirements.txt` away.
+  - `.gitignore` ignores `build/` + `*.AppImage` (Phase 4 output).
+
 ### Changed
+- **Distribution prereqs (desktop + mobile clients).** Backend
+  prep that unblocks both deliverables in the
+  `Distribution Spec - Desktop App & Mobile Client.md`.
+  - **`/api/health` now returns a JSON object** with `ok`, `version`
+    (`CURRENT_VERSION`), `schema_version` (alembic head, resolved
+    once at module load), `profile` (`DORA_ENV`), and a `features`
+    map (`auth`, `audit`, `barcodes`, `multi_user`, `email`,
+    `assistant`). Mobile and desktop clients use this for
+    compatibility + feature-gating decisions. The boot-time boolean
+    health probe still works because any 2xx counts as healthy.
+  - **Mobile CORS origins baked into dev defaults.** Development
+    profile now includes `capacitor://localhost`, `ionic://localhost`,
+    and `http://localhost` alongside the web SPA origins, so a
+    Capacitor mobile build pointed at a local dev backend works
+    without surgery. Documented in `.env.example`.
+  - `HealthApiService` on the frontend exposes a typed `HealthInfo`
+    + `getInfoAsync()` for clients that want the rich payload.
+  - Distribution spec §0 snapshot refreshed to reflect what D1–D4
+    actually shipped; original snapshot preserved in a collapsible
+    block.
+
 - **D4 — manual-release CI/CD.** Two workflows replacing the old
   single-stage `build-and-test.yml`:
   - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs

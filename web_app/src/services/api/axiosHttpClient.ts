@@ -90,7 +90,32 @@ export interface HttpClient {
  *  dev port fallback without knowing URLs. */
 export type ApiBackend = 'dora' | 'merchant';
 
+// Desktop bundle (`desktop_app.py`) runs both Flask APIs on random
+// localhost ports and passes the merchant URL via the SPA's URL
+// query string (`?desktop_mapi=...`). We cache it once at module
+// load so every axios client reuses the same value — re-reading
+// `window.location.search` would be free, but caching guards against
+// later code that mutates the URL.
+const _desktopMerchantBaseURL: string | null = (() => {
+    if (typeof window === 'undefined' || !window.location?.search) return null;
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('desktop_mapi');
+        if (!raw) return null;
+        return raw.replace(/\/+$/, '');
+    } catch {
+        return null;
+    }
+})();
+
 export function resolveBaseURL(backend: ApiBackend): string {
+    // Desktop bundle: query-string-driven merchant URL wins. Only
+    // applies to the merchant backend; the dora backend lives on the
+    // same origin as the SPA (Flask serving both).
+    if (backend === 'merchant' && _desktopMerchantBaseURL) {
+        return _desktopMerchantBaseURL;
+    }
+
     const envValue =
         backend === 'merchant'
             ? import.meta.env.VITE_MERCHANT_API_BASE_URL

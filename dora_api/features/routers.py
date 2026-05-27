@@ -27,6 +27,13 @@ DATA_ROUTER = Blueprint("DATA_ROUTER", __name__, url_prefix="/api/data")
 CLIENT_LOGS_ROUTER = Blueprint("CLIENT_LOGS_ROUTER", __name__, url_prefix="/api/client-logs")
 AUDIT_ROUTER = Blueprint("AUDIT_ROUTER", __name__, url_prefix="/api/audit")
 STOCKTAKE_ROUTER = Blueprint("STOCKTAKE_ROUTER", __name__, url_prefix="/api/stocktake")
+# Desktop A: pywebview's window points at Flask, so Flask itself has
+# to serve the built SPA. Registered without a url_prefix so the
+# catch-all in features/spa.py can fall back to index.html for any
+# unmatched path (vue-router history mode). The Docker deployment is
+# unaffected because nginx intercepts every non-/api/ request before
+# Flask ever sees it.
+SPA_ROUTER = Blueprint("SPA_ROUTER", __name__)
 PRICE_HISTORY_ROUTER = Blueprint("PRICE_HISTORY_ROUTER", __name__, url_prefix="/api/price-history")
 REPORTS_ROUTER = Blueprint("REPORTS_ROUTER", __name__, url_prefix="/api/reports")
 SUBSTITUTES_ROUTER = Blueprint("SUBSTITUTES_ROUTER", __name__, url_prefix="/api/substitutes")

@@ -131,6 +131,7 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService, { type StocktakeQueueItem } from 'src/services/api/stocktakeApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
 
     const $q = useQuasar();
@@ -139,6 +140,7 @@
     const stockLevelStore = useStockLevelStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { addItems } = useShoppingListActions();
+    const shoppingListStore = useShoppingListStore();
 
     const session = ref<StocktakeQueueItem[]>([]);
     const index = ref(0);
@@ -204,8 +206,16 @@
 
     async function onAddToList() {
         if (!current.value) return;
+        const primaryId = shoppingListStore.primaryListId;
+        if (!primaryId) {
+            $q.notify({
+                type: 'warning', position: 'bottom-right',
+                message: 'No primary shopping list. Set one to quick-add from stocktake.',
+            });
+            return;
+        }
         try {
-            await addItems({ stockItemIds: [current.value.stock_item_id] });
+            await addItems(primaryId, [{ stock_item_id: current.value.stock_item_id }]);
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: `${current.value.name} added to primary list.`,

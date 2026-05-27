@@ -199,7 +199,7 @@
         <!-- ── Per-node right-click menu ────────────────────────────── -->
         <q-menu
             v-model="contextOpen"
-            :anchor="contextAnchor"
+            :anchor="(contextAnchor as never)"
             self="top left"
             no-parent-event
             transition-show="jump-down"
@@ -307,7 +307,9 @@
     watch(unplacedOptionsBase, (next) => { unplacedLocationOptions.value = next; });
 
     const itemsByLocation = computed(() => {
-        const out: Record<string, typeof stockItems.value> = {};
+        // The store types stockItems as readonly[]; we accumulate into a
+        // mutable map, so strip readonly here.
+        const out: Record<string, Array<typeof stockItems.value[number]>> = {};
         for (const item of stockItems.value ?? []) {
             const loc = item.stock_location_id ?? '';
             if (!loc) continue;
@@ -429,7 +431,7 @@
     function buildStage() {
         if (!hostRef.value) return;
         stage = new Konva.Stage({
-            container: hostRef.value,
+            container: hostRef.value as HTMLDivElement,
             width: layout.canvas.w,
             height: layout.canvas.h,
         });

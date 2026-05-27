@@ -82,8 +82,15 @@ def validate_production_requirements(extra: Sequence[str] = ()) -> None:
     touching the shared list (e.g. merchant_api could demand an
     IGA_STORE_ID, or a future SMTP fan-in could require SMTP_HOST when
     DORA_EMAIL_ENABLED=true).
+
+    Bypassed when DORA_SKIP_PROD_VALIDATION=true — the desktop bundle
+    sets this because its required-vars story is different (no public
+    CORS host, no bootstrap admin email, SECRET_KEY is auto-generated
+    to the user-data dir). Never set this in a server deployment.
     """
     if not is_production():
+        return
+    if (os.environ.get("DORA_SKIP_PROD_VALIDATION") or "").lower() in {"1", "true", "yes", "on"}:
         return
 
     required = list(PRODUCTION_REQUIRED_VARS) + list(extra)

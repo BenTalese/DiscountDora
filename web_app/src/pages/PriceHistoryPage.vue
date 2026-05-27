@@ -66,7 +66,7 @@
                             <q-item-section>
                                 <q-item-label>{{ p.name }}</q-item-label>
                                 <q-item-label caption>
-                                    {{ p.merchant?.name ?? '' }}
+                                    {{ p.merchant_name ?? '' }}
                                 </q-item-label>
                             </q-item-section>
                         </q-item>
@@ -267,7 +267,7 @@
         return all
             .filter((p) =>
                 p.name.toLowerCase().includes(needle)
-                || (p.merchant?.name ?? '').toLowerCase().includes(needle),
+                || (p.merchant_name ?? '').toLowerCase().includes(needle),
             )
             .slice(0, 100);
     });

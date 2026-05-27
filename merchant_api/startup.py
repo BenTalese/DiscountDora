@@ -13,10 +13,20 @@ from merchant_api.infrastructure.merchant_data_providers import MERCHANT_DATA_PR
 from merchant_api.infrastructure.middleware import MIDDLEWARE
 
 
-def startup():
+def build_app() -> Flask:
+    """Construct + wire the merchant Flask app, but DO NOT run it.
+
+    Split from `startup()` so the desktop bundle can embed the same
+    app object inside its own thread via `werkzeug.serving.make_server`,
+    without having merchant_api take control of process lifecycle.
+    Idempotent on side effects (CORS, blueprints, scheduler) — calling
+    twice would double-register them, so don't.
+    """
     # D3: refuse to boot in production without the required env vars.
     # Shares the same gate as dora_api so a misconfigured deploy fails
-    # the same way regardless of which container starts first.
+    # the same way regardless of which container starts first. The
+    # desktop bundle sets DORA_SKIP_PROD_VALIDATION=true so this is a
+    # no-op there.
     from dora_api.infrastructure.profile import \
         validate_production_requirements
     validate_production_requirements()
@@ -51,6 +61,14 @@ def startup():
     scheduler.add_job(data_provider_cron_health_check, IntervalTrigger(days = 1))
     scheduler.start()
 
+    return _App
+
+
+def startup():
+    """Stand-alone runner: builds the Flask app and calls .run().
+    Used by `python -m merchant_api.startup` and by startup.sh in
+    the Docker container."""
+    _App = build_app()
     _App.run(
         CONFIGURATION_MANAGER.get_api_host(),
         CONFIGURATION_MANAGER.get_api_port(),

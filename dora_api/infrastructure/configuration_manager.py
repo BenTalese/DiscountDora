@@ -27,11 +27,18 @@ _PROFILE_DEFAULTS = {
         "debug": True,
         # Dev SPA runs on localhost ports; permissive list to cover
         # `quasar dev` (5174) and the various ways a browser might
-        # reach it on a dev machine.
+        # reach it on a dev machine. The `capacitor://localhost` /
+        # `http://localhost` origins are for the Capacitor mobile
+        # client (Quasar `-m capacitor`) talking to a dev backend on
+        # the same machine; iOS uses `capacitor://`, Android uses
+        # `http://localhost`. Pin via DORA_CORS_ORIGINS in prod.
         "cors_origins": [
             "http://localhost:5174",
             "http://127.0.0.1:5174",
             "http://172.17.0.1:5174",
+            "capacitor://localhost",
+            "ionic://localhost",
+            "http://localhost",
         ],
     },
     Profile.PRODUCTION: {

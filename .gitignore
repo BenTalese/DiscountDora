@@ -50,6 +50,12 @@ logs/
 coverage
 dist
 dist-ssr
+# Desktop bundle artefacts (PyInstaller writes to dist/ + build/ at
+# the repo root; Phase 4 produces *.AppImage in dist/ and caches
+# appimagetool under packaging/.cache/).
+build/
+*.AppImage
+packaging/.cache/
 web_app_old/.vscode/*
 web_app/.vscode/*
 lerna-debug.log*

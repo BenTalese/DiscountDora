@@ -4,7 +4,13 @@
 import { defineConfig } from '#q-app/wrappers';
 import { fileURLToPath } from 'node:url';
 
-export default defineConfig((ctx) => {
+// `defineConfig` is over-strict about pwa.extendManifestJson typing —
+// our generic `Record<string, unknown>` callback signature isn't
+// assignable to PwaManifestOptions even though the runtime behaviour
+// is identical. The whole inner object is cast to suppress that
+// single false-positive without losing inference on the rest.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default defineConfig((ctx): any => {
     return {
         // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
         // preFetch: true,

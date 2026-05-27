@@ -417,7 +417,7 @@
         // returns to the page or toggles a filter).
         themeCache = themeTokens();
         const positions = new Map<string, { x: number; y: number }>();
-        cy.nodes().forEach((n) => positions.set(n.id(), { ...n.position() }));
+        cy.nodes().forEach((n) => { positions.set(n.id(), { ...n.position() }); });
         cy.elements().remove();
         cy.add(buildElements());
         // Restore positions so the layout stays stable when toggling filters

@@ -576,7 +576,7 @@
                 await recipeStore.getRecipesAsync();
             }
             const fromStore = recipeStore.recipes.find((r) => r.recipe_id === recipeId);
-            recipe.value = (fromStore ?? (await recipeApiService.getAsync(recipeId))) as Recipe;
+            recipe.value = fromStore ?? (await recipeApiService.getAsync(recipeId));
         } catch {
             recipe.value = null;
         } finally {

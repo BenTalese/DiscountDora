@@ -2606,7 +2606,7 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "recipe_detail": {"path": "/recipes", "label": "Browse recipes"},
     "shopping_list_contents": {"path": "/shopping-lists", "label": "Open Shopping Lists"},
     "meal_detail": {"path": "/meals", "label": "Open Meals"},
-    "find_location": {"path": "/locations", "label": "Open Locations"},
+    "find_location": {"path": "/stock", "label": "See it on the Stock page"},
     "compare_prices": {"path": "/product-search", "label": "Open product search"},
     "purchase_price_stats": {"path": "/reports", "label": "Open Reports"},
     "budget_status": {"path": "/settings/preferences", "label": "Adjust budget"},

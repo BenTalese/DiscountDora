@@ -154,18 +154,6 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
         mood: 'searching',
     },
     {
-        match: (p) => p === '/locations',
-        summary:
-            "Zones, sorted by attention score — red means 'oi, look here'. Drag items between zones, or hit search to teleport.",
-        mood: 'searching',
-    },
-    {
-        match: (p) => p.startsWith('/locations/'),
-        summary:
-            "Zone detail. Areas expand into sections; badges shout if something's expired, low, or flagged. Drag chips around or use the Move button on each item.",
-        mood: 'searching',
-    },
-    {
         match: (p) => p === '/recipes',
         summary:
             "All your recipes. Open one to see ingredients (with their pantry homes), instructions, and cook time. Hit 'Cook' for step-by-step mode.",

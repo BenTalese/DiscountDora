@@ -66,9 +66,6 @@ const routes: RouteRecordRaw[] = [
             { path: 'stocktake', component: () => import('pages/StocktakePage.vue'), meta: { title: 'Stocktake' } },
             { path: 'stocktake/run', component: () => import('pages/StocktakeRunner.vue'), meta: { title: 'Stocktake · running' } },
             { path: 'stock/:id', component: () => import('pages/StockItemDetailPage.vue'), meta: { title: 'Stock item' } },
-            { path: 'locations', component: () => import('pages/LocationsOverview.vue'), meta: { title: 'Locations' } },
-            { path: 'locations/:id', component: () => import('pages/LocationDetail.vue'), meta: { title: 'Location' } },
-            { path: 'map', component: () => import('pages/StockMap.vue'), meta: { title: 'Stock map' } },
             { path: 'product-search', component: () => import('pages/ProductSearch.vue'), meta: { title: 'Product search' } },
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
@@ -88,7 +85,6 @@ const routes: RouteRecordRaw[] = [
             // stub; see pages/ShopNowRedirect.vue.
             { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
             { path: 'reports', component: () => import('pages/ReportsPage.vue'), meta: { title: 'Reports' } },
-            { path: 'substitutes', component: () => import('pages/SubstitutesGraph.vue'), meta: { title: 'Substitutes' } },
             { path: 'waste', component: () => import('pages/WastePage.vue'), meta: { title: 'Waste' } },
             // In-layout error pages (F3). These keep the header/drawer
             // around so the user can navigate away without a full reload.

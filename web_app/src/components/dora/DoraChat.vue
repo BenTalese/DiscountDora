@@ -856,7 +856,6 @@
     function iconForNav(path: string): string {
         if (path === '/help') return 'help';
         if (path.startsWith('/stock')) return 'inventory_2';
-        if (path.startsWith('/locations')) return 'place';
         if (path.startsWith('/recipes')) return 'menu_book';
         return 'arrow_forward';
     }

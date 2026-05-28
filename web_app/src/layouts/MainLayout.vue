@@ -333,9 +333,6 @@
         { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
         { id: 'nav.reports', label: 'Go to Reports', icon: ICONS.insights, section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
         { id: 'nav.waste', label: 'Go to Waste', icon: ICONS.expiry, section: 'Navigate', tags: ['expiring', 'rescue', 'wasted', 'use soon'], action: () => router.push('/waste') },
-        { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: ICONS.hub, section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
-        { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['layout', 'pantry', 'floor plan'], action: () => router.push('/map') },
-        { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['pantry', 'layout', 'canvas'], action: () => router.push('/map') },
         { id: 'nav.settings', label: 'Go to Settings', icon: ICONS.settings, section: 'Navigate', action: () => router.push('/settings') },
         { id: 'nav.help', label: 'Go to Help', icon: ICONS.help_outline, section: 'Navigate', action: () => router.push('/help') },
 
@@ -351,7 +348,6 @@
 
     const linksList: MenuButtonProps[] = [
         { label: 'Stock', icon: 'inventory_2', link: '/stock' },
-        { label: 'Locations', icon: ICONS.place, link: '/locations' },
         { label: 'Product Search', icon: ICONS.search, link: '/product-search' },
         { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
         { label: 'Recipes', icon: ICONS.menu_book, link: '/recipes' },
@@ -361,8 +357,6 @@
         { label: 'Data', icon: ICONS.storage, link: '/data' },
         { label: 'Reports', icon: ICONS.insights, link: '/reports' },
         { label: 'Waste', icon: ICONS.expiry, link: '/waste' },
-        { label: 'Substitutes', icon: ICONS.hub, link: '/substitutes' },
-        { label: 'Stock Map', icon: ICONS.map, link: '/map' },
         { label: 'Settings', icon: ICONS.settings, link: '/settings' },
     ];
 

@@ -17,9 +17,6 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
   the list; click an item for its detail page (adjust stock level, link merchant
   products, see which recipes use it, set expiry, mark as opened, push expiry).
   Each row has a cart button to add the item to the primary shopping list.
-- Locations: storage as hierarchical zones > areas > sections, shown as a
-  heatmap by how much attention each needs (red = needs you most). Drag items
-  between zones to move them. Add new zones in Settings → Locations.
 - Product Search: search for products across configured merchants (Coles,
   Woolworths, IGA, Aldi). Filter to specials only, narrow by merchant. Link a
   product to a stock item so its deal price tracks alongside the pantry.
@@ -39,7 +36,8 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
   expired, expiring soon, low/out of stock, stocktake overdue — with inline
   actions to fix them.
 - Settings: preferences (theme, font, density), account (change password /
-  username), locations (zone/area/section editor), and version info. Admins
+  username), stock locations (zone/area/section tree editor — items reference
+  these locations from Stock), stock groups, and version info. Admins
   also get Merchants (toggle scrapers per merchant), Users (manage accounts),
   and System (configure the AI assistant — that's the BYO-LLM panel).
 - Help: guides by area, the changelog, the assistant.

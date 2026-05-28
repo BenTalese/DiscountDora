@@ -36,8 +36,6 @@ STOCKTAKE_ROUTER = Blueprint("STOCKTAKE_ROUTER", __name__, url_prefix="/api/stoc
 SPA_ROUTER = Blueprint("SPA_ROUTER", __name__)
 PRICE_HISTORY_ROUTER = Blueprint("PRICE_HISTORY_ROUTER", __name__, url_prefix="/api/price-history")
 REPORTS_ROUTER = Blueprint("REPORTS_ROUTER", __name__, url_prefix="/api/reports")
-SUBSTITUTES_ROUTER = Blueprint("SUBSTITUTES_ROUTER", __name__, url_prefix="/api/substitutes")
-STOCK_MAP_ROUTER = Blueprint("STOCK_MAP_ROUTER", __name__, url_prefix="/api/stock-map")
 BUDGET_ROUTER = Blueprint("BUDGET_ROUTER", __name__, url_prefix="/api/budget")
 WASTE_ROUTER = Blueprint("WASTE_ROUTER", __name__, url_prefix="/api/waste")
 SUGGESTIONS_ROUTER = Blueprint("SUGGESTIONS_ROUTER", __name__, url_prefix="/api/suggestions")

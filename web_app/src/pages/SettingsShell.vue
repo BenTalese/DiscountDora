@@ -95,7 +95,7 @@
         {
             path: '/settings/stock-locations',
             label: 'Stock locations',
-            caption: 'Pantry, Fridge, Freezer…',
+            caption: 'Zones, areas and sections',
             icon: ICONS.place
         },
         {

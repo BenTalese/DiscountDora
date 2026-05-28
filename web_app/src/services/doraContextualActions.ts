@@ -162,18 +162,6 @@ export function contextualActionsFor(
         ];
     }
 
-    // ── Locations overview / detail ─────────────────────────────────
-    if (path === '/locations' || path.startsWith('/locations/')) {
-        return [
-            {
-                kind: 'navigate',
-                label: 'Open the pantry',
-                icon: 'inventory_2',
-                path: '/stock',
-            },
-        ];
-    }
-
     // ── Dashboard ───────────────────────────────────────────────────
     if (path === '/' || path === '') {
         return [

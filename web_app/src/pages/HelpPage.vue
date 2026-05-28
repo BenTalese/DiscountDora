@@ -275,30 +275,6 @@
             ],
         },
         {
-            title: 'Locations',
-            icon: ICONS.place,
-            entries: [
-                {
-                    title: 'Zones, areas and sections',
-                    summary:
-                        'Locations is a tree: Zone (e.g. Pantry) > Area (e.g. Middle shelf) > Section (e.g. Left side). Drill down or skip levels — items can attach at any depth.',
-                    path: '/locations',
-                },
-                {
-                    title: 'Read the heatmap',
-                    summary:
-                        'Each location gets a 0-100 attention score, coloured green > teal > yellow > orange > red. Reasons explain it: "2 expired, 4 low stock, 1 flagged".',
-                    path: '/locations',
-                },
-                {
-                    title: 'Move items between locations',
-                    summary:
-                        'Drag a chip onto any zone, area or section to move it. On mobile, tap the move icon for the hierarchical picker.',
-                    path: '/locations',
-                },
-            ],
-        },
-        {
             title: 'Recipes & meals',
             icon: ICONS.menu_book,
             entries: [

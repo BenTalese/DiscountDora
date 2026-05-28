@@ -125,7 +125,7 @@
             case 'stock_item': return `/stock/${id}`;
             case 'shopping_list': return `/shopping-lists/${id}`;
             case 'recipe': return `/recipes/${id}`;
-            case 'location': return `/locations/${id}`;
+            case 'location': return `/stock?location_id=${id}`;
             case 'product': return '/my-products';
             case 'meal': return '/meals';
             case 'meal_plan': return '/meal-plans';

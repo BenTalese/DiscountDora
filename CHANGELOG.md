@@ -429,13 +429,6 @@ semver — major bumps signal schema or breaking-config changes.
   brand-secondary (a deep teal/navy/cocoa) with light text, so the
   active main-nav button and the "Discount Dora" wordmark stay
   legible in every theme.
-- **Substitutes graph black-on-black labels fixed.** Cytoscape's
-  colour parser doesn't accept modern `hsl(h s% l%)` syntax (the form
-  CSS custom properties return literally), which made it silently
-  fall back to black for both label text *and* its background pill.
-  Theme colours now route through a hidden `<canvas>` normaliser
-  before reaching cytoscape — same fix applied to ECharts on the
-  Reports page for consistency.
 - **Backend theme allowlist** updated for all 10 family variants;
   legacy values still accepted.
 
@@ -466,13 +459,13 @@ semver — major bumps signal schema or breaking-config changes.
     - **Midnight Snack** — warm-tinted dark mode (unchanged scope,
       refreshed surfaces).
     Avocado was retired; persisted preferences migrate to Pesto.
-  - **Chart + graph colours theme-aware.** Reports' ECharts series
-    and Substitutes' cytoscape node palette read the `--chart-1..6`
-    tokens off the active theme instead of hardcoded swatches.
+  - **Chart colours theme-aware.** Reports' ECharts series read the
+    `--chart-1..6` tokens off the active theme instead of hardcoded
+    swatches.
   - **Coverage pass.** Brand-coloured washes (`rgba(245,196,98,…)`,
     `rgba(23,176,115,…)`) on DataManagement, SettingsShell,
-    PriceHistory, MyProducts, LocationDetail now read
-    `--brand-primary-soft`. AlertsBell high/medium washes read the
+    PriceHistory, MyProducts now read `--brand-primary-soft`.
+    AlertsBell high/medium washes read the
     semantic-soft tokens. Side menu active state uses
     `--text-on-accent`. DoraChat name + accent button reference
     `--text-primary` instead of hard `#000`.
@@ -509,62 +502,16 @@ semver — major bumps signal schema or breaking-config changes.
   - **Per-component sweep** done: 103 hex/rgba replacements across
     31 .vue / .scss files map every surface, text, border, overlay,
     scrim and ring to a token. Brand-identity values (merchant
-    logos, data-viz palettes in Dashboard / Reports / Substitutes
-    graph / Stock Map, the explicit colour-per-series palette in
-    Price History) intentionally stay literal — they aren't theme
-    surfaces. `colours.scss` shim points `--q-*` fallbacks at the
+    logos, data-viz palettes in Dashboard / Reports, the explicit
+    colour-per-series palette in Price History) intentionally stay
+    literal — they aren't theme surfaces. `colours.scss` shim points
+    `--q-*` fallbacks at the
     matching DS1 token (was hard-coded `#000000` placeholders).
   - Two extra overlay tokens added on the way in:
     `--overlay-scrim` / `--overlay-dim` / `--overlay-hover` /
     `--overlay-active` / `--ring-focus`. Midnight Snack flips the
     hover/active overlays from black-on-light to white-on-dark so
     the press-state contrast still reads.
-- **Stock Map polish.** Round-2 follow-ups on N9's canvas:
-  - **Undo / redo** wired with a 20-step stack. Snapshots are taken
-    immediately before every layout mutation (drag, resize, rename,
-    colour change, shape toggle, add, remove, reset). `Ctrl/Cmd-Z`
-    undoes; `Ctrl/Cmd-Shift-Z` or `Ctrl-Y` redoes. Toolbar gains two
-    icon buttons that disable when the stack is empty. Input fields
-    don't steal the shortcut (e.g. while typing in the rename
-    prompt).
-  - **Circle shape** support: context menu now offers
-    **Switch to circle / rectangle** per-node. Backed by `Konva.Ellipse`
-    so the existing `w`/`h` semantics map cleanly without forcing a
-    square aspect ratio.
-  - **Custom hex colour picker** — context menu's "Change colour…"
-    opens a `q-color` dialog (default palette view) with a quick-swatch
-    row across the bottom that applies one-click. The old single-click
-    palette cycle moves into the swatch row.
-  - **Internal**: child shapes are now named (`body`, `label`, `chips`)
-    so all `findOne` lookups use stable `.name` selectors instead of
-    the brittle `Text:first-child` / `:not()` ones from the first cut.
-  Drag-item-from-side-panel intentionally stays outside the undo
-  stack — that path commits a server-side move and isn't a pure
-  layout edit.
-- **Stock Map** (N9). New `/map` route — a 2D canvas where you draw
-  your pantry layout and pin items to zones / areas / sections. Each
-  rectangle is a location: drag to move (snap-to-grid toggle), resize
-  via the corner handles, right-click for **Rename**, **Change colour**
-  (cycles through a 6-colour palette), or **Remove from map**. The
-  rectangle body shows up to six pinned items at a glance with an
-  "and N more" overflow. A side panel lists every stock item — drag
-  one onto a rectangle to move it to that location (calls the
-  existing move-item endpoint, refreshes the chip preview). Auto-save
-  with a 2 s debounce + a manual **Save** button; **Reset** clears
-  every placed rectangle (locations + items are untouched). Konva is
-  the canvas library; HTML5 drag-and-drop bridges the side panel
-  into the Konva stage via hit-testing.
-  - Mobile (`<md` screens) renders a **read-only** card list grouped
-    by placed location — viewing works everywhere, editing is
-    desktop-only by design.
-  - Backend: single-row `StockMap` table (migration `e4f9c2a18d3b`)
-    holds the layout JSON. `GET /api/stock-map` returns the saved
-    blob (or the empty default for a fresh install);
-    `PUT /api/stock-map` replaces it (256 KiB cap). The schema is
-    owned by the SPA — backend stores the blob verbatim so iteration
-    doesn't bounce through a migration every time a node attribute
-    lands.
-  - Command palette gains **Go to Stock map**.
 - **Price History Explorer** (N8). New `/price-history` route lets the
   user compare up to **5** products' price curves side-by-side. Backend
   endpoints:
@@ -593,28 +540,15 @@ semver — major bumps signal schema or breaking-config changes.
   input wired to the alerts endpoint), and a "Manage alerts" modal.
   Deep-link via `?product_id=<id>` pre-selects that product. Command
   palette gains a **Go to Price History** entry.
-- **Substitutes graph** (N7). New `/substitutes` route with a
-  force-directed cytoscape.js view of every stock item and which
-  items can stand in for which. Search dims non-matching nodes;
-  stock-group chips filter; "Show isolated" toggles loners; layout
-  picker (force / concentric / breadth-first). Tap a node for a side
-  panel with current substitutes, an autocomplete to add a new one,
-  and a deep-link to the stock detail page. Tap an edge to edit notes
-  or remove the pair. Layout stays stable across single-edge
-  mutations.
-  - **Schema refactor**. Migration `c8a1d3b6e9f4` rebuilds
-    `StockItemSubstitute` as an undirected pair table — columns
-    `stock_item_a_id`, `stock_item_b_id`, `notes`, `created_at`, with
-    a CHECK enforcing canonical (a < b) ordering so each unordered
-    pair has exactly one row. Pre-release destructive migration; dev
-    DB re-seeds with canonical pairs. Existing per-stock-item add /
-    remove endpoints canonicalise transparently; the stock detail
-    page now reads pairs in both directions and the backup/restore
-    pipeline tracks the new column names.
-  - **`/api/substitutes` endpoints**. `GET /graph` returns nodes
-    (every stock item) + edges (every pair). `POST` upserts an
-    undirected pair with optional notes (idempotent on the unordered
-    pair). `DELETE` removes a pair via `?a=&b=` query params.
+- **Undirected substitute pairs.** Migration `c8a1d3b6e9f4` rebuilds
+  `StockItemSubstitute` as an undirected pair table — columns
+  `stock_item_a_id`, `stock_item_b_id`, `notes`, `created_at`, with
+  a CHECK enforcing canonical (a < b) ordering so each unordered
+  pair has exactly one row. Pre-release destructive migration; dev
+  DB re-seeds with canonical pairs. Existing per-stock-item add /
+  remove endpoints canonicalise transparently; the stock detail
+  page reads pairs in both directions and the backup/restore
+  pipeline tracks the new column names.
 
 - **Reports / Analytics page** (N6). New `/reports` route with six
   cards backed by `/api/reports/*` endpoints — stock value over time,
@@ -1157,17 +1091,9 @@ semver — major bumps signal schema or breaking-config changes.
   lets you pick 2–3 recipes and pop them open side-by-side — ingredients,
   times, difficulty and what's missing right now — so you can decide what
   to cook tonight at a glance.
-- **Locations are wired into the rest of the app.** Clicking a zone on the
-  heatmap now opens a side panel that lists every item stored anywhere
-  under it (rolled up across descendants), with each chip carrying the same
-  cross-feature menu the rest of the app uses — add to a list, mark
-  restocked, push expiry, find substitutes, see recipes using it. Two new
-  per-zone shortcuts: **Needs attention here** jumps to the Stock screen
-  pre-filtered to that location's attention items, and **Shopping list**
-  spins up a fresh list from every low/out item in the zone (named "Restock
-  &lt;zone&gt;"). The same two actions live in the header of the zone detail
-  page. The Stock screen now reads `?location_id=…&attention=true&level_id=…`
-  query params so other screens can deep-link straight into a filtered view.
+- **Stock screen reads location + attention deep-links.** The Stock
+  screen now accepts `?location_id=…&attention=true&level_id=…` query
+  params so other screens can link straight into a filtered view.
 - **Shopping lists overview is the launchpad for every kind of list.** The
   "New list" menu now bundles every starting point in one place: from
   flagged essentials, from every low-or-out item (with a live count of how
@@ -1244,8 +1170,8 @@ semver — major bumps signal schema or breaking-config changes.
   out of stock or untracked, and a per-row "add to primary list" button.
   A sidebar carries the cooking shortcuts: **Start cook mode**, **Add all
   missing to a shopping list**, and **Find substitutes for missing
-  ingredients** (uses the substitutes graph from each stock item's detail
-  page — click a substitute chip to swap it straight into the recipe).
+  ingredients** (uses each stock item's recorded substitutes — click a
+  chip to swap it straight into the recipe).
   Secondary actions (mark made, delete, mark favourite) are one click away.
 - **Import a recipe from a URL.** Paste any recipe page that publishes
   schema.org/Recipe JSON-LD (which is most major recipe sites) and Dora
@@ -1343,12 +1269,8 @@ semver — major bumps signal schema or breaking-config changes.
 
 ### Added
 - **Hierarchical locations.** Zones → Areas → Sections replace the old flat
-  Stock Locations list. New **Locations** page with per-node heatmap
-  attention scores (rolled up from descendants), reason chips ("2 expired,
-  4 low stock, 1 flagged"), and a global search overlay.
-- **Move items by drag-and-drop.** Drop a stock item chip onto a zone, area
-  or section to move it. Click-to-move via a hierarchical picker dialog
-  remains the touch/mobile path.
+  Stock Locations list. Managed from Settings → Stock locations as a tree
+  editor; stock items reference any node in the tree.
 - **`is_admin` flag** on users; admin-only routes gated server-side.
 
 ### Changed

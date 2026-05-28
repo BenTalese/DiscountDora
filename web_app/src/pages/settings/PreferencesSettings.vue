@@ -202,6 +202,101 @@
             </q-card-section>
         </q-card>
 
+        <!-- Grocery budget (P2-05) ─────────────────────────────────── -->
+        <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Grocery budget</div>
+                <div class="text-caption text-grey">
+                    Optional. Set a weekly or monthly target and Dora will
+                    track how much you've spent across every finished
+                    shopping list in the period.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="budgetEnabledDraft"
+                    label="Track a grocery budget"
+                    :disable="saving"
+                    @update:model-value="onBudgetEnabledChange"
+                />
+            </q-card-section>
+
+            <q-card-section
+                v-if="budgetEnabledDraft"
+                class="row q-col-gutter-md items-end"
+            >
+                <q-input
+                    v-model.number="budgetAmountDraft"
+                    label="Amount"
+                    type="number"
+                    step="1"
+                    min="0"
+                    prefix="$"
+                    outlined
+                    dense
+                    class="col-12 col-sm-4"
+                    :disable="saving"
+                    @blur="onBudgetAmountBlur"
+                    @keydown.enter.prevent="onBudgetAmountBlur"
+                />
+                <div class="col-12 col-sm-8">
+                    <q-btn-toggle
+                        v-model="budgetPeriodDraft"
+                        no-caps
+                        spread
+                        toggle-color="primary"
+                        :options="[
+                            { label: 'Weekly (Mon–Sun)', value: 'weekly' },
+                            { label: 'Monthly', value: 'monthly' }
+                        ]"
+                        @update:model-value="onBudgetPeriodChange"
+                    />
+                </div>
+            </q-card-section>
+        </q-card>
+
+        <!-- Voice (P2-13) ──────────────────────────────────────────── -->
+        <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Voice</div>
+                <div class="text-caption text-grey">
+                    Talk to Dora and let her talk back. Voice features
+                    use your browser's built-in speech recognition and
+                    synthesis — they only work where the browser
+                    supports them, and your browser will ask for
+                    microphone permission the first time you tap the mic.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="currentUser.voice_input_enabled"
+                    :disable="!voiceInputAvailable || saving"
+                    label="Enable voice input (microphone)"
+                    @update:model-value="onVoiceInputChange"
+                />
+                <div v-if="!voiceInputAvailable" class="text-caption text-grey q-mt-xs">
+                    Your browser doesn't expose the Web Speech API for
+                    recognition. Try Chrome or Edge.
+                </div>
+            </q-card-section>
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="currentUser.voice_output_enabled"
+                    :disable="!voiceOutputAvailable || saving"
+                    label="Let Dora speak her replies"
+                    @update:model-value="onVoiceOutputChange"
+                />
+                <div v-if="!voiceOutputAvailable" class="text-caption text-grey q-mt-xs">
+                    Your browser doesn't expose SpeechSynthesis.
+                </div>
+            </q-card-section>
+        </q-card>
+
         <!-- Account ────────────────────────────────────────────────── -->
         <q-card flat bordered>
             <q-card-section>
@@ -323,12 +418,15 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type {
+        BudgetPeriod,
         FontFamilyPreference,
         FontSizePreference,
         ThemePreference
     } from 'src/models/auth';
     import { THEMES, THEME_FAMILIES, type ThemeFamily } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useSpeechOutput } from 'src/composables/useSpeechOutput';
+    import { useVoiceInput } from 'src/composables/useVoiceInput';
     import { computed, ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -367,6 +465,16 @@
     );
     const fontSizeDraft = ref<FontSizePreference>(currentUser.value?.font_size ?? 'md');
 
+    // P2-05 — budget drafts. `enabled` is derived from amount-being-set;
+    // we keep it as a separate draft so toggling off doesn't blow away
+    // the user's amount typing (we restore it if they toggle back on
+    // without saving).
+    const budgetAmountDraft = ref<number | null>(currentUser.value?.budget_amount ?? null);
+    const budgetPeriodDraft = ref<BudgetPeriod>(currentUser.value?.budget_period ?? 'weekly');
+    const budgetEnabledDraft = ref<boolean>(
+        currentUser.value?.budget_amount != null && currentUser.value.budget_amount > 0
+    );
+
     const currentPassword = ref('');
     const newPassword = ref('');
     const confirmPassword = ref('');
@@ -385,6 +493,9 @@
         themeDraft.value = u.theme;
         fontFamilyDraft.value = u.font_family;
         fontSizeDraft.value = u.font_size;
+        budgetAmountDraft.value = u.budget_amount ?? null;
+        budgetPeriodDraft.value = u.budget_period ?? 'weekly';
+        budgetEnabledDraft.value = u.budget_amount != null && u.budget_amount > 0;
     });
 
     const usernameUnchanged = computed(
@@ -470,6 +581,88 @@
     async function onDealsCompactChange(value: boolean) {
         await update('Deals email format updated.', () =>
             authStore.updateMeAsync({ deals_email_compact: value })
+        );
+    }
+
+    // P2-05 — budget handlers.
+    async function onBudgetEnabledChange(value: boolean) {
+        budgetEnabledDraft.value = value;
+        if (!value) {
+            // Toggling off clears the persisted amount but keeps the draft
+            // so a quick "actually, keep tracking" toggle restores it.
+            const result = await update('Budget tracking turned off.', () =>
+                authStore.updateMeAsync({ clear_budget_amount: true })
+            );
+            if (result === null) budgetEnabledDraft.value = true;
+            return;
+        }
+        // Turning on without a number is a no-op until the user types one
+        // and blurs — keeps the wire calm.
+        if (
+            budgetAmountDraft.value != null
+            && budgetAmountDraft.value > 0
+            && currentUser.value?.budget_amount !== budgetAmountDraft.value
+        ) {
+            const result = await update('Budget enabled.', () =>
+                authStore.updateMeAsync({
+                    budget_amount: budgetAmountDraft.value!,
+                    budget_period: budgetPeriodDraft.value,
+                })
+            );
+            if (result === null) budgetEnabledDraft.value = false;
+        }
+    }
+
+    async function onBudgetAmountBlur() {
+        if (!budgetEnabledDraft.value) return;
+        const value = budgetAmountDraft.value;
+        if (value == null || Number.isNaN(value) || value <= 0) {
+            // Empty / zero input is treated as "turn this off" — saves the
+            // user a trip back to the toggle.
+            budgetEnabledDraft.value = false;
+            await update('Budget tracking turned off.', () =>
+                authStore.updateMeAsync({ clear_budget_amount: true })
+            );
+            return;
+        }
+        if (currentUser.value?.budget_amount === value) return;
+        const previous = currentUser.value?.budget_amount ?? null;
+        const result = await update('Budget updated.', () =>
+            authStore.updateMeAsync({ budget_amount: value })
+        );
+        if (result === null) budgetAmountDraft.value = previous;
+    }
+
+    async function onBudgetPeriodChange(value: BudgetPeriod) {
+        const previous = currentUser.value?.budget_period ?? 'weekly';
+        const result = await update('Budget period updated.', () =>
+            authStore.updateMeAsync({ budget_period: value })
+        );
+        if (result === null) budgetPeriodDraft.value = previous;
+    }
+
+    // P2-13 — voice prefs. Availability flags come from cheap probes
+    // against the browser's globals; they don't actually start a
+    // recognition session, so the user can flip the toggle without
+    // a microphone prompt firing here.
+    const voiceProbeInput = useVoiceInput();
+    const voiceProbeOutput = useSpeechOutput();
+    const voiceInputAvailable = computed(() => voiceProbeInput.available.value);
+    const voiceOutputAvailable = computed(() => voiceProbeOutput.available.value);
+
+    async function onVoiceInputChange(value: boolean) {
+        await update(
+            value ? 'Voice input enabled.' : 'Voice input disabled.',
+            () => authStore.updateMeAsync({ voice_input_enabled: value }),
+        );
+    }
+    async function onVoiceOutputChange(value: boolean) {
+        // Cancel any in-flight utterance when the user opts out so the
+        // toggle's effect is immediate.
+        if (!value) voiceProbeOutput.cancel();
+        await update(
+            value ? 'Dora will speak her replies.' : 'Dora\'s voice muted.',
+            () => authStore.updateMeAsync({ voice_output_enabled: value }),
         );
     }
 

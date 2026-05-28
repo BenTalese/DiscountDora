@@ -204,6 +204,185 @@
                 </article>
             </div>
 
+            <!-- ───── Grocery budget (P2-05) ──────────────────────────────── -->
+            <div
+                v-if="isCardVisible('budget') && budgetStatus"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article
+                    class="dora-card dora-card-clickable"
+                    @click="goTo('/settings/preferences')"
+                >
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">
+                            {{ budgetStatus.enabled ? 'Grocery budget' : 'Grocery spend this ' + budgetStatus.period.replace('ly', '') }}
+                        </h3>
+                        <span class="dora-card-action">
+                            {{ budgetStatus.enabled ? 'Settings →' : 'Set a budget →' }}
+                        </span>
+                    </header>
+                    <div v-if="budgetStatus.enabled" class="dora-budget-body">
+                        <div class="dora-budget-headline">
+                            <span
+                                class="dora-budget-spent"
+                                :class="{ 'text-negative': budgetStatus.over_budget }"
+                            >
+                                ${{ budgetStatus.spent.toFixed(2) }}
+                            </span>
+                            <span class="dora-budget-of">
+                                of ${{ budgetStatus.amount!.toFixed(2) }}
+                            </span>
+                            <span
+                                class="dora-budget-remaining"
+                                :class="budgetStatus.over_budget ? 'text-negative' : 'text-grey'"
+                            >
+                                {{
+                                    budgetStatus.over_budget
+                                        ? `$${Math.abs(budgetStatus.remaining ?? 0).toFixed(2)} over`
+                                        : `$${(budgetStatus.remaining ?? 0).toFixed(2)} left`
+                                }}
+                            </span>
+                        </div>
+                        <q-linear-progress
+                            :value="Math.min(1, budgetStatus.spent / (budgetStatus.amount || 1))"
+                            :color="budgetStatus.over_budget ? 'negative' : 'primary'"
+                            class="q-mt-sm"
+                            size="8px"
+                            rounded
+                        />
+                        <div
+                            v-if="budgetStatus.projected_active > 0"
+                            class="text-caption text-grey q-mt-xs"
+                        >
+                            +${{ budgetStatus.projected_active.toFixed(2) }} in active lists
+                        </div>
+                    </div>
+                    <div v-else class="dora-empty">
+                        ${{ budgetStatus.spent.toFixed(2) }} spent so far. Set a target
+                        in Settings to see how you're tracking.
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
+            <div
+                v-if="isCardVisible('suggestions') && suggestionStore.count > 0"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon name="auto_awesome" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Dora suggests</h3>
+                        <span
+                            v-if="suggestionStore.count > 2"
+                            class="dora-card-action"
+                        >
+                            +{{ suggestionStore.count - 2 }} more in chat
+                        </span>
+                    </header>
+                    <div class="dora-suggest-list">
+                        <div
+                            v-for="suggestion in suggestionStore.suggestions.slice(0, 2)"
+                            :key="`${suggestion.kind}:${suggestion.dedup_key}`"
+                            class="dora-suggest-row"
+                            :class="`dora-suggest-${suggestion.severity}`"
+                        >
+                            <div class="dora-suggest-title">
+                                {{ suggestion.title }}
+                            </div>
+                            <div class="dora-suggest-body">
+                                {{ suggestion.body }}
+                            </div>
+                            <div class="row q-gutter-xs q-mt-xs">
+                                <q-btn
+                                    v-if="suggestion.primary_action"
+                                    dense
+                                    no-caps
+                                    size="sm"
+                                    unelevated
+                                    color="primary"
+                                    :label="suggestion.primary_action.label"
+                                    @click="acceptSuggestion(suggestion)"
+                                />
+                                <q-btn
+                                    dense
+                                    no-caps
+                                    size="sm"
+                                    flat
+                                    color="grey-7"
+                                    label="Dismiss"
+                                    @click="dismissSuggestion(suggestion)"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Use soon (P2-06) ────────────────────────────────────── -->
+            <div
+                v-if="isCardVisible('use_soon') && wasteRescue && wasteRescue.items.length > 0"
+                class="col-12 col-sm-6 col-lg-6"
+            >
+                <article
+                    class="dora-card dora-card-clickable"
+                    @click="goTo('/waste')"
+                >
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.expiry" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Use soon</h3>
+                        <span class="dora-card-action">Rescue ideas →</span>
+                    </header>
+                    <ul class="dora-attn-list">
+                        <li
+                            v-for="item in wasteRescue.items.slice(0, 4)"
+                            :key="item.stock_item_id"
+                            class="dora-attn-row"
+                        >
+                            <span
+                                class="dora-attn-dot"
+                                :class="item.is_expired
+                                    ? 'dora-attn-dot-high'
+                                    : item.days_until_expiry <= 2
+                                        ? 'dora-attn-dot-medium'
+                                        : 'dora-attn-dot-low'"
+                            />
+                            <a
+                                href="#"
+                                class="dora-attn-name"
+                                @click.prevent.stop="goTo(`/stock/${item.stock_item_id}`)"
+                            >
+                                {{ item.name }}
+                            </a>
+                            <span class="dora-attn-msg">
+                                {{
+                                    item.is_expired
+                                        ? `expired ${Math.abs(item.days_until_expiry)}d ago`
+                                        : item.days_until_expiry === 0
+                                            ? 'today'
+                                            : item.days_until_expiry === 1
+                                                ? 'tomorrow'
+                                                : `in ${item.days_until_expiry}d`
+                                }}
+                            </span>
+                        </li>
+                    </ul>
+                    <div
+                        v-if="wasteRescue.recipes.length > 0"
+                        class="text-caption text-grey q-mt-xs"
+                    >
+                        {{ wasteRescue.recipes[0]!.matching_count }} can go into
+                        <em>{{ wasteRescue.recipes[0]!.name }}</em>
+                        <span v-if="wasteRescue.recipes.length > 1">
+                            (+{{ wasteRescue.recipes.length - 1 }} more idea{{
+                                wasteRescue.recipes.length === 2 ? '' : 's'
+                            }})
+                        </span>
+                    </div>
+                </article>
+            </div>
+
             <!-- ───── Cookable tonight (P12) ──────────────────────────────── -->
             <div
                 v-if="isCardVisible('cookable')"
@@ -573,6 +752,14 @@
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import { priceOfLine, savingsOfLine } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
+    import BudgetApiService, {
+        type BudgetStatus,
+    } from 'src/services/api/budgetApiService';
+    import WasteApiService, {
+        type WasteRescue,
+    } from 'src/services/api/wasteApiService';
+    import { useSuggestionStore } from 'src/stores/suggestionStore';
+    import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
     import ProductApiService from 'src/services/api/productApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -587,6 +774,9 @@
     type CardId =
         | 'attention'
         | 'primary_list'
+        | 'budget'
+        | 'use_soon'
+        | 'suggestions'
         | 'cookable'
         | 'best_deals'
         | 'stock_items'
@@ -604,6 +794,9 @@
     const CARD_DEFS: CardDef[] = [
         { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active },
         { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart },
+        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings },
+        { id: 'use_soon', label: 'Use soon', icon: ICONS.expiry },
+        { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome' },
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu },
         { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month },
@@ -635,6 +828,11 @@
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
     const productApi = new ProductApiService();
+    const budgetApi = new BudgetApiService();
+    const wasteApi = new WasteApiService();
+    // P2-04 — suggestion store shared with the Dora launcher badge and
+    // the chat panel so dismiss/snooze here propagates everywhere.
+    const suggestionStore = useSuggestionStore();
     const shoppingListApi = new ShoppingListApiService();
 
     const recipeStore = useRecipeStore();
@@ -681,6 +879,15 @@
     const alerts = ref<Alert[]>([]);
     const products = ref<Product[]>([]);
     const primaryListDetail = ref<ShoppingListDetail | null>(null);
+    // P2-05 — grocery budget card. Always loads (so the passive "spent
+    // this week" state works for users who haven't opted in), but the
+    // card is hidden when the loader errors so we never block dashboard
+    // render on this slot.
+    const budgetStatus = ref<BudgetStatus | null>(null);
+    // P2-06 — expiry rescue. Surfaces the top few at-risk items as a
+    // peek; the full picture (plus log/freeze/used actions) lives on the
+    // /waste page.
+    const wasteRescue = ref<WasteRescue | null>(null);
 
     const firstName = computed(() => currentUser.value?.username ?? '');
 
@@ -705,7 +912,13 @@
             if (!raw) return new Set(CARD_DEFS.map((c) => c.id));
             const parsed = JSON.parse(raw) as string[];
             const known = new Set(CARD_DEFS.map((c) => c.id) as string[]);
-            return new Set(parsed.filter((id) => known.has(id)) as CardId[]);
+            const result = new Set(parsed.filter((id) => known.has(id)) as CardId[]);
+            // Default newly-introduced cards to visible — otherwise users
+            // with stored state never see them until they open the menu.
+            for (const def of CARD_DEFS) {
+                if (!parsed.includes(def.id)) result.add(def.id);
+            }
+            return result;
         } catch {
             return new Set(CARD_DEFS.map((c) => c.id));
         }
@@ -1033,6 +1246,42 @@
         }
     }
 
+    async function loadBudget() {
+        try {
+            budgetStatus.value = await budgetApi.getStatusAsync();
+        } catch {
+            // The card is non-essential — if the backend is too old to
+            // serve /api/budget/status, just hide the card.
+            budgetStatus.value = null;
+        }
+    }
+
+    async function loadWasteRescue() {
+        try {
+            wasteRescue.value = await wasteApi.getRescueAsync(7);
+        } catch {
+            wasteRescue.value = null;
+        }
+    }
+
+    async function acceptSuggestion(suggestion: DoraSuggestion) {
+        if (!suggestion.primary_action) return;
+        try {
+            await suggestionStore.snoozeAsync(suggestion, 1);
+        } catch {
+            // Non-fatal — navigate anyway.
+        }
+        void router.push(suggestion.primary_action.path);
+    }
+
+    async function dismissSuggestion(suggestion: DoraSuggestion) {
+        try {
+            await suggestionStore.dismissAsync(suggestion);
+        } catch (err) {
+            console.error('Failed to dismiss suggestion', err);
+        }
+    }
+
     async function loadAll() {
         // Fire everything in parallel — the hero/card shells render off the
         // bulk summary, the four P12 cards each have their own slot loader.
@@ -1042,6 +1291,9 @@
             loadSummary(),
             loadAlerts(),
             loadProducts(),
+            loadBudget(),
+            loadWasteRescue(),
+            suggestionStore.refreshAsync(),
             stockItems.value.length === 0
                 ? stockItemStore.getStockItemsAsync()
                 : Promise.resolve(),
@@ -1325,6 +1577,57 @@
         font-size: 0.9rem;
         background: var(--surface-elevated);
         border-radius: 12px;
+    }
+    /* P2-05 budget card — visual hierarchy matches the existing P12
+       cards: a single big number, a muted denominator, and a small
+       remainder chip on the right. */
+    .dora-budget-body {
+        padding: 4px 4px 8px;
+    }
+    .dora-budget-headline {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .dora-budget-spent {
+        font-size: 1.6rem;
+        font-weight: 700;
+    }
+    .dora-budget-of {
+        font-size: 0.95rem;
+        color: var(--c-ink-mute);
+    }
+    .dora-budget-remaining {
+        margin-left: auto;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    /* P2-04 — suggestion rows on the dashboard card. Severity drives
+       the left border; the rest of the visual weight is on the title
+       and the primary action button. */
+    .dora-suggest-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .dora-suggest-row {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: var(--surface-elevated);
+        border-left: 3px solid var(--c-accent);
+    }
+    .dora-suggest-row.dora-suggest-high { border-left-color: #c10015; }
+    .dora-suggest-row.dora-suggest-medium { border-left-color: #f2c037; }
+    .dora-suggest-row.dora-suggest-low { border-left-color: var(--c-accent); }
+    .dora-suggest-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+    .dora-suggest-body {
+        font-size: 0.85rem;
+        color: var(--c-ink-mute);
+        margin-top: 2px;
     }
     .dora-empty-cta {
         color: var(--c-accent);

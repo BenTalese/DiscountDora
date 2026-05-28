@@ -28,6 +28,14 @@ export type UpdateLineCommand = {
     selected_product_id?: string | null;
     clear_selected_product?: boolean;
     sequence?: number;
+    /** P2-02 — what the shopper actually paid per unit. Use
+     *  `clear_actual_unit_price` to wipe a prior override (passing `null`
+     *  here is treated as "leave alone" by the backend). */
+    actual_unit_price?: number | null;
+    clear_actual_unit_price?: boolean;
+    /** P2-02 — merchant the shopper actually bought from. */
+    purchased_merchant_id?: string | null;
+    clear_purchased_merchant?: boolean;
 };
 
 export type CopyShoppingListCommand = {

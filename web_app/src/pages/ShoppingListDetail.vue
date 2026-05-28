@@ -36,6 +36,20 @@
             </div>
 
             <div v-if="detail && !detail.is_archived" class="row q-gutter-sm items-center">
+                <!-- P2-11 — drop into shop mode (mobile-first fullscreen
+                     view with big tap targets). Disabled on an empty
+                     list because there'd be nothing to step through. -->
+                <q-btn
+                    unelevated
+                    no-caps
+                    color="primary"
+                    :icon="ICONS.shopping_cart"
+                    label="Shop mode"
+                    :disable="detail.lines.length === 0"
+                    @click="openShopMode"
+                >
+                    <q-tooltip>Big-button, one-item-at-a-time view for in-store use</q-tooltip>
+                </q-btn>
                 <q-btn
                     v-if="!detail.is_primary"
                     flat
@@ -615,12 +629,117 @@
                                         @click="onAdjustQuantity(line, 1)"
                                     />
                                 </div>
-                                <div class="text-caption text-grey text-right">
-                                    {{
-                                        priceForLine(line) > 0
-                                            ? `$${priceForLine(line).toFixed(2)}`
-                                            : '—'
-                                    }}
+                                <div class="row items-center justify-end no-wrap q-gutter-xs">
+                                    <q-icon
+                                        v-if="line.actual_unit_price != null"
+                                        :name="ICONS.edit"
+                                        size="12px"
+                                        color="primary"
+                                    >
+                                        <q-tooltip>
+                                            You entered ${{ line.actual_unit_price.toFixed(2) }} per unit
+                                            <span v-if="line.purchased_merchant_name">
+                                                at {{ line.purchased_merchant_name }}
+                                            </span>
+                                        </q-tooltip>
+                                    </q-icon>
+                                    <q-btn
+                                        flat
+                                        dense
+                                        no-caps
+                                        size="sm"
+                                        :disable="detail.is_archived"
+                                        class="line-price-btn"
+                                        :class="{
+                                            'text-primary text-weight-medium':
+                                                line.actual_unit_price != null,
+                                            'text-grey': line.actual_unit_price == null,
+                                        }"
+                                        :label="
+                                            priceForLine(line) > 0
+                                                ? `$${priceForLine(line).toFixed(2)}`
+                                                : 'Set price'
+                                        "
+                                    >
+                                        <q-tooltip v-if="!detail.is_archived">
+                                            Enter the price you actually paid
+                                        </q-tooltip>
+                                        <q-popup-proxy
+                                            v-if="!detail.is_archived"
+                                            @before-show="onOpenPriceEditor(line)"
+                                            cover
+                                            transition-show="scale"
+                                            transition-hide="scale"
+                                        >
+                                            <q-card style="min-width: 260px">
+                                                <q-card-section class="q-pb-none">
+                                                    <div class="text-subtitle2">
+                                                        Actual price paid
+                                                    </div>
+                                                    <div class="text-caption text-grey">
+                                                        Overrides the offer price for totals
+                                                        and feeds Dora's purchase history.
+                                                    </div>
+                                                </q-card-section>
+                                                <q-card-section class="q-gutter-sm">
+                                                    <q-input
+                                                        v-model.number="priceEditorDraft.price"
+                                                        autofocus
+                                                        dense
+                                                        outlined
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        label="Unit price"
+                                                        prefix="$"
+                                                        @keydown.enter.prevent="savePriceEditor(line)"
+                                                    />
+                                                    <q-select
+                                                        v-if="merchantOptionsFor(line).length > 0"
+                                                        v-model="priceEditorDraft.merchant_id"
+                                                        :options="merchantOptionsFor(line)"
+                                                        dense
+                                                        outlined
+                                                        emit-value
+                                                        map-options
+                                                        clearable
+                                                        label="Bought from (optional)"
+                                                    />
+                                                </q-card-section>
+                                                <q-card-actions align="right">
+                                                    <q-btn
+                                                        v-if="line.actual_unit_price != null"
+                                                        flat
+                                                        no-caps
+                                                        color="negative"
+                                                        label="Clear"
+                                                        v-close-popup
+                                                        @click="clearPriceOverride(line)"
+                                                    />
+                                                    <q-btn
+                                                        flat
+                                                        no-caps
+                                                        label="Cancel"
+                                                        v-close-popup
+                                                    />
+                                                    <q-btn
+                                                        unelevated
+                                                        no-caps
+                                                        color="primary"
+                                                        label="Save"
+                                                        v-close-popup
+                                                        @click="savePriceEditor(line)"
+                                                    />
+                                                </q-card-actions>
+                                            </q-card>
+                                        </q-popup-proxy>
+                                    </q-btn>
+                                </div>
+                                <div
+                                    v-if="line.purchased_merchant_name"
+                                    class="text-caption text-grey text-right"
+                                >
+                                    {{ line.purchased_merchant_name }}
                                 </div>
                             </q-item-section>
 
@@ -782,7 +901,7 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { computed, onMounted, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -1184,6 +1303,13 @@
         openQuickAdd({ listId: listId.value });
     }
 
+    // P2-11 — drop into shop mode. Just a router push; the shop-mode
+    // page loads its own copy of the detail so the user can hit it
+    // directly from a PWA shortcut without bouncing through here.
+    function openShopMode() {
+        void router.push(`/shopping-lists/${listId.value}/shop`);
+    }
+
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
     const orderedLines = computed(() => lineGroups.value.flatMap((g) => g.lines));
     const focusedLineId = ref<string | null>(null);
@@ -1389,6 +1515,110 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update line.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    // ── P2-02: actual price + merchant override ─────────────────────────
+    // A small popover sits behind the price chip on each line. Users tap it
+    // mid-shop or at finish time to type what the till actually charged and
+    // (optionally) confirm which merchant they bought from. Both flow into
+    // the assistant's purchase-history stats.
+    const priceEditorDraft = reactive<{
+        line_id: string | null;
+        price: number | null;
+        merchant_id: string | null;
+    }>({ line_id: null, price: null, merchant_id: null });
+
+    function onOpenPriceEditor(line: ShoppingListLine) {
+        priceEditorDraft.line_id = line.line_id;
+        // Seed with the existing override, or the chosen offer's price as a
+        // helpful starting point (most edits are small tweaks from "what
+        // the app said it'd be").
+        if (line.actual_unit_price != null) {
+            priceEditorDraft.price = line.actual_unit_price;
+        } else {
+            const offer = chosenOfferFor(line);
+            priceEditorDraft.price = offer?.price_now ?? null;
+        }
+        if (line.purchased_merchant_id) {
+            priceEditorDraft.merchant_id = line.purchased_merchant_id;
+        } else {
+            const offer = chosenOfferFor(line);
+            priceEditorDraft.merchant_id = offer?.merchant_id ?? null;
+        }
+    }
+
+    function merchantOptionsFor(line: ShoppingListLine) {
+        const seen = new Map<string, string>();
+        for (const offer of line.offers) {
+            if (!seen.has(offer.merchant_id)) {
+                seen.set(offer.merchant_id, offer.merchant_name);
+            }
+        }
+        return Array.from(seen, ([value, label]) => ({ value, label }));
+    }
+
+    async function savePriceEditor(line: ShoppingListLine) {
+        if (priceEditorDraft.line_id !== line.line_id) return;
+        const nextPrice = priceEditorDraft.price;
+        const nextMerchant = priceEditorDraft.merchant_id;
+        // Empty/zero/negative input clears the override rather than storing
+        // a meaningless number. The backend rejects negatives anyway; this
+        // saves the round-trip.
+        if (nextPrice == null || Number.isNaN(nextPrice) || nextPrice <= 0) {
+            await clearPriceOverride(line);
+            return;
+        }
+        const previousPrice = line.actual_unit_price;
+        const previousMerchant = line.purchased_merchant_id;
+        const previousMerchantName = line.purchased_merchant_name;
+        line.actual_unit_price = nextPrice;
+        line.purchased_merchant_id = nextMerchant ?? null;
+        line.purchased_merchant_name =
+            merchantOptionsFor(line).find((o) => o.value === nextMerchant)?.label ?? null;
+        try {
+            await api.updateLineAsync(listId.value, line.line_id, {
+                actual_unit_price: nextPrice,
+                ...(nextMerchant
+                    ? { purchased_merchant_id: nextMerchant }
+                    : { clear_purchased_merchant: true }),
+            });
+        } catch (err) {
+            line.actual_unit_price = previousPrice;
+            line.purchased_merchant_id = previousMerchant;
+            line.purchased_merchant_name = previousMerchantName;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save the price.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    async function clearPriceOverride(line: ShoppingListLine) {
+        const previousPrice = line.actual_unit_price;
+        const previousMerchant = line.purchased_merchant_id;
+        const previousMerchantName = line.purchased_merchant_name;
+        if (previousPrice == null && previousMerchant == null) return;
+        line.actual_unit_price = null;
+        line.purchased_merchant_id = null;
+        line.purchased_merchant_name = null;
+        try {
+            await api.updateLineAsync(listId.value, line.line_id, {
+                clear_actual_unit_price: true,
+                clear_purchased_merchant: true,
+            });
+        } catch (err) {
+            line.actual_unit_price = previousPrice;
+            line.purchased_merchant_id = previousMerchant;
+            line.purchased_merchant_name = previousMerchantName;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not clear the price.',
                 caption: describeApiError(err) || '',
             });
         }

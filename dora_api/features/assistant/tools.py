@@ -12,8 +12,11 @@ list, etc.) are intentionally absent.
 import functools
 import logging
 import re
+import statistics
+from collections import Counter
 from datetime import date, datetime, timedelta
 from typing import Any, Callable
+from uuid import UUID
 
 from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
@@ -137,7 +140,11 @@ TOOL_SCHEMAS: list[dict] = [
                 "Recommend what to cook — use for ideas, recommendations, or a "
                 "mood/craving ('something spicy', 'something light', 'what can I "
                 "make with what I have'). Translate moods into concrete recipe "
-                "terms in keywords (e.g. light -> 'salad soup', spicy -> 'curry chilli')."
+                "terms in keywords (e.g. light -> 'salad soup', spicy -> 'curry chilli'). "
+                "Dietary asks like 'vegan dinner', 'gluten-free pasta', or 'free "
+                "from egg' map onto the tag/ingredient filter arguments — not "
+                "keywords. Tags reflect what the recipe was tagged with by the "
+                "user, not a safety guarantee."
             ),
             "parameters": {
                 "type": "object",
@@ -148,6 +155,32 @@ TOOL_SCHEMAS: list[dict] = [
                     "max_cook_time_minutes": {"type": "integer"},
                     "favourite_only": {"type": "boolean"},
                     "based_on_stock": {"type": "boolean", "description": "True when the user wants ideas from what they already have in stock."},
+                    "tags_include": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Recipe must carry ALL of these curated tags. Valid "
+                            "values: vegetarian, vegan, pescatarian, gluten-free, "
+                            "dairy-free, nut-free, egg-free, soy-free, "
+                            "shellfish-free, low-carb, low-fat, low-sugar, "
+                            "low-sodium, keto, paleo, whole-30, halal, kosher."
+                        ),
+                    },
+                    "tags_exclude": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Recipe must carry NONE of these tags. Same vocabulary as tags_include.",
+                    },
+                    "ingredient_exclude": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Recipe must not have an ingredient whose stock-item "
+                            "name contains any of these substrings (case-"
+                            "insensitive). Use for 'free from egg', 'without "
+                            "mushrooms', etc."
+                        ),
+                    },
                 },
                 "required": [],
             },
@@ -488,6 +521,106 @@ TOOL_SCHEMAS: list[dict] = [
                     "month": {"type": "string", "description": "Optional month name (e.g. 'march') or number 1-12. Defaults to the current month."},
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_suggestions",
+            "description": (
+                "Dora's current proposals for this user — generated from "
+                "pantry, budget, purchase cadence, and waste data. Use "
+                "for 'what do you suggest?', 'anything I should do?', "
+                "'review your suggestions'. Each item has a `kind` "
+                "(use_soon / over_budget / likely_due / frequent_waster), "
+                "a plain-English reason, and an optional `primary_action` "
+                "the SPA can route the user to. Suggestions the user has "
+                "dismissed or snoozed are pre-filtered out."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "expiry_rescue",
+            "description": (
+                "What's about to spoil, and which recipes would use the "
+                "most of it. Use for 'what should I use before it goes "
+                "off?', 'help me not waste food this week', 'what's a "
+                "good recipe for stuff that's expiring?'. Ranks recipes "
+                "by how many at-risk items they'd use, so the suggestion "
+                "is actionable, not just 'cook anything'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "horizon_days": {"type": "integer", "description": "Days ahead to consider. Default 7."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "waste_insights",
+            "description": (
+                "How often the user has been throwing food out, by item — "
+                "use for 'what am I wasting often?', 'what should I stop "
+                "buying?', 'where am I losing money?'. Sourced from "
+                "voluntary 'Log as wasted' taps on the Waste page; will "
+                "report no data when the user hasn't logged anything."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "window_days": {"type": "integer", "description": "Look-back window in days. Default 90."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "budget_status",
+            "description": (
+                "Show the user's current grocery budget status across all "
+                "their shopping lists — spent this week/month, remaining, "
+                "and whether they're tracking over or under. Returns "
+                "`enabled=false` when the user hasn't opted in to budget "
+                "tracking; the assistant should then point them at "
+                "Settings → Preferences. Use for 'what's left in my "
+                "budget?', 'how much have I spent this week?', 'am I over "
+                "budget?'."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "purchase_price_stats",
+            "description": (
+                "Purchase history for a stock item across the user's "
+                "finished shopping lists — price stats (average / min / "
+                "max / last paid, per-merchant breakdown) AND cadence "
+                "stats (how often they buy it, usual quantity, usual "
+                "merchant, days since last purchase). Use for 'what's the "
+                "average price for broccoli?', 'how much do I usually pay "
+                "for milk?', 'how often do I buy bread?', 'when did I last "
+                "buy eggs?', 'where do I usually shop for cheese?'. "
+                "Prefers the user-entered actual price; falls back to the "
+                "offer price snapshotted when the line was ticked."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_name": {"type": "string", "description": "Stock item name (or partial)."},
+                },
+                "required": ["item_name"],
             },
         },
     },
@@ -854,8 +987,60 @@ def suggest_recipes(args: dict) -> list[dict]:
     if _truthy(args.get("favourite_only")):
         conditions.append(EntityField(Recipe, Recipe.Fields.IS_FAVOURITE).eq(True))
 
+    # P2-08 — tag / ingredient filters. We compute an allowed recipe-id
+    # set up front (when any filter is set) and add it as an `id IN
+    # (...)` constraint, which composes naturally with the existing
+    # `conditions` list. Empty result short-circuits before the DB hit.
+    from dora_api.features.recipes.recipe_tag_access import (
+        find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
+        get_tags_for_recipes,
+    )
+
+    def _coerce_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [t.strip() for t in value.split(",") if t.strip()]
+        if isinstance(value, (list, tuple)):
+            return [str(v).strip() for v in value if str(v).strip()]
+        return []
+
+    tags_include = _coerce_list(args.get("tags_include"))
+    tags_exclude = _coerce_list(args.get("tags_exclude"))
+    ingredient_exclude = [s.lower() for s in _coerce_list(args.get("ingredient_exclude"))]
+
+    if tags_include or tags_exclude or ingredient_exclude:
+        allowed: set[UUID] = {r.id for r in repo.get(Recipe).all()}
+        if tags_include:
+            allowed &= find_recipe_ids_with_all_tags(tags_include)
+        if tags_exclude:
+            allowed -= find_recipe_ids_with_any_tags(tags_exclude)
+        if not allowed:
+            return [{
+                "status": "no_matches",
+                "note": "No recipes match those dietary filters.",
+            }]
+        conditions.append(EntityField(Recipe, "id").in_(list(allowed)))
+
     recipes: list[Recipe] = query.all(_combine_and(conditions))
     based_on_stock = _truthy(args.get("based_on_stock"))
+
+    # If the user excluded ingredients, drop recipes that contain any
+    # matching ingredient name (case-insensitive substring).
+    if ingredient_exclude:
+        recipes = [
+            r for r in recipes
+            if not any(
+                term in (ing.stock_item.name or "").lower()
+                for ing in (r.ingredients or [])
+                if ing.stock_item is not None
+                for term in ingredient_exclude
+            )
+        ]
+
+    # Tag lookup for the response. Bulk-fetch once so each row can
+    # surface its tags without N round-trips.
+    tag_map = get_tags_for_recipes([r.id for r in recipes]) if recipes else {}
 
     rows: list[dict] = []
     for recipe in recipes:
@@ -872,6 +1057,7 @@ def suggest_recipes(args: dict) -> list[dict]:
             "in_stock_count": in_stock,
             "can_make_now": total > 0 and in_stock == total,
             "missing_ingredients": missing,
+            "tags": tag_map.get(recipe.id, []),
             "_coverage": coverage,
         })
 
@@ -1800,6 +1986,446 @@ def seasonal_picks(args: dict) -> list[dict]:
     }]
 
 
+# ── Suggestions inbox (P2-04) ───────────────────────────────────────────
+# Same handler as GET /api/suggestions. Flattened to plain dicts so the
+# model doesn't have to learn the wrapper shape; suppression filtering
+# happens server-side, so the model only ever sees live suggestions.
+
+def list_suggestions(_args: dict) -> list[dict]:
+    from flask import session
+    from dora_api.features.suggestions.suggestions import GetSuggestionsHandler
+
+    raw = session.get("user_id")
+    user_id: UUID | None = None
+    if raw:
+        try:
+            user_id = UUID(raw)
+        except (ValueError, TypeError):
+            user_id = None
+    rows = GetSuggestionsHandler().handle(user_id)
+    if not rows:
+        return [{
+            "status": "no_suggestions",
+            "note": "Nothing to surface right now — pantry looks settled.",
+        }]
+    return [{
+        "status": "ok",
+        "count": len(rows),
+        "suggestions": [
+            {
+                "kind": r.kind,
+                "severity": r.severity,
+                "title": r.title,
+                "body": r.body,
+                "reason": r.reason,
+                "primary_action": r.primary_action,
+                "payload": r.payload,
+            }
+            for r in rows
+        ],
+    }]
+
+
+# ── Expiry rescue + waste insights (P2-06) ──────────────────────────────
+# Thin wrappers around the waste handler. They both share the same data
+# source so the model can chain "what's expiring?" → "what recipe uses
+# them?" → "did I waste a lot of this last month?" without three
+# different tool calls.
+
+def expiry_rescue(args: dict) -> list[dict]:
+    from dora_api.features.waste.waste import GetWasteRescueHandler
+
+    try:
+        horizon = int(args.get("horizon_days", 7))
+    except (TypeError, ValueError):
+        horizon = 7
+    dto = GetWasteRescueHandler().handle(horizon)
+    items = [
+        {
+            "name": i.name,
+            "expiry_date": i.expiry_date,
+            "days_until_expiry": i.days_until_expiry,
+            "is_expired": i.is_expired,
+            "stock_level": i.stock_level_name,
+            "estimated_value": i.estimated_value,
+        }
+        for i in dto.items
+    ]
+    recipes = [
+        {
+            "name": r.name,
+            "cook_time_minutes": r.cook_time_minutes,
+            "difficulty": r.difficulty,
+            "uses_expiring": r.matching_expiring_items,
+            "missing_ingredients": r.missing_ingredients,
+            "is_favourite": r.is_favourite,
+        }
+        for r in dto.recipes
+    ]
+    if not items:
+        return [{
+            "horizon_days": dto.horizon_days,
+            "status": "nothing_at_risk",
+            "note": "No items are within the horizon — your fridge is safe.",
+        }]
+    return [{
+        "horizon_days": dto.horizon_days,
+        "status": "ok",
+        "items": items,
+        "recipes": recipes,
+    }]
+
+
+def waste_insights(args: dict) -> list[dict]:
+    # Same DB walk as GET /api/waste/insights but plain dict output so
+    # the model doesn't have to learn the wrapper shape.
+    try:
+        window_days = int(args.get("window_days", 90))
+    except (TypeError, ValueError):
+        window_days = 90
+    window_days = max(7, min(window_days, 365))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+
+    from dora_api.domain.entities.stock_item_waste_event import (
+        StockItemWasteEvent,
+    )
+    repo = SqlAlchemyRepository()
+    events: list[StockItemWasteEvent] = repo.get(StockItemWasteEvent).all(
+        EntityField(
+            StockItemWasteEvent, StockItemWasteEvent.Fields.OCCURRED_AT
+        ).gte(cutoff)
+    )
+    if not events:
+        return [{
+            "window_days": window_days,
+            "status": "no_data",
+            "note": (
+                "No waste events have been logged in this window. The "
+                "user logs them via the Waste page when they have to "
+                "throw something out."
+            ),
+        }]
+
+    buckets: dict[tuple, dict] = {}
+    total_value = 0.0
+    for event in events:
+        key = (event.stock_item_id, event.stock_item_name)
+        bucket = buckets.setdefault(key, {
+            "name": event.stock_item_name,
+            "events": 0,
+            "estimated_value": 0.0,
+            "reasons": {},
+        })
+        bucket["events"] += 1
+        if event.estimated_value:
+            bucket["estimated_value"] += float(event.estimated_value)
+            total_value += float(event.estimated_value)
+        bucket["reasons"][event.reason] = bucket["reasons"].get(event.reason, 0) + 1
+
+    rows = sorted(
+        buckets.values(),
+        key=lambda b: (-b["events"], -b["estimated_value"], b["name"]),
+    )
+    for row in rows:
+        row["estimated_value"] = round(row["estimated_value"], 2)
+    return [{
+        "window_days": window_days,
+        "status": "ok",
+        "total_events": len(events),
+        "total_estimated_value": round(total_value, 2),
+        "by_item": rows[:_MAX_ROWS],
+    }]
+
+
+# ── Budget status (P2-05) ───────────────────────────────────────────────
+# Thin wrapper around the budget handler so Dora can answer "what's left
+# in my budget?" without the SPA having to forward the user's query.
+# Resolves the current user from the Flask session — same pattern the
+# action tools use for shopping-list mutations.
+
+def budget_status(_args: dict) -> list[dict]:
+    from flask import session
+    from dora_api.features.budget.budget import GetBudgetStatusHandler
+
+    raw = session.get("user_id")
+    if not raw:
+        return [{"error": "not signed in"}]
+    try:
+        user_id = UUID(raw)
+    except (ValueError, TypeError):
+        return [{"error": "not signed in"}]
+
+    dto = GetBudgetStatusHandler().handle(user_id)
+    if dto is None:
+        return [{"error": "user not found"}]
+    if not dto.enabled:
+        return [{
+            "status": "disabled",
+            "note": (
+                "The user hasn't opted in to budget tracking. They can "
+                "enable it in Settings → Preferences → Grocery budget."
+            ),
+            "period": dto.period,
+            "period_start": dto.period_start,
+            "period_end": dto.period_end,
+            "spent_this_period": dto.spent,
+            "projected_active": dto.projected_active,
+        }]
+    return [{
+        "status": "ok",
+        "period": dto.period,
+        "period_start": dto.period_start,
+        "period_end": dto.period_end,
+        "budget_amount": dto.amount,
+        "spent": dto.spent,
+        "projected_from_active_lists": dto.projected_active,
+        "remaining": dto.remaining,
+        "over_budget": dto.over_budget,
+    }]
+
+
+# ── Purchase price stats (P2-02) ────────────────────────────────────────
+# Pulls historical paid prices out of finished shopping lists. The captured
+# price per line is, in priority order:
+#   1. actual_unit_price — what the user explicitly entered in shop mode
+#      or at finish time (a till-receipt override).
+#   2. picked_offer_price — the offer snapshot taken when the line was
+#      first ticked (legacy / no-override path).
+# Lines without either are skipped: we have nothing trustworthy to report.
+
+def purchase_price_stats(args: dict) -> list[dict]:
+    raw_name = str(args.get("item_name") or "").strip()
+    if not raw_name:
+        return [{"error": "item_name is required"}]
+    repo = SqlAlchemyRepository()
+
+    # Resolve the stock item by exact then substring match. Multiple
+    # matches → ask the model to disambiguate rather than averaging
+    # across distinct items.
+    field = EntityField(StockItem, StockItem.Fields.NAME)
+    matches: list[StockItem] = repo.get(StockItem).all(field.eq(raw_name))
+    if not matches:
+        matches = repo.get(StockItem).all(field.contains(raw_name))
+    if not matches:
+        return [{"query": raw_name, "status": "not_found"}]
+    if len(matches) > 1:
+        return [{
+            "query": raw_name,
+            "status": "ambiguous",
+            "candidates": [{"name": m.name} for m in matches[:_MAX_CANDIDATES]],
+        }]
+    item = matches[0]
+
+    # Walk ticked lines on archived lists for this item. We deliberately
+    # include unticked lines on archived lists too — the user may have
+    # entered a price without ticking — by gating on "has a usable price"
+    # instead of is_ticked.
+    lines: list[ShoppingListLine] = repo.get(ShoppingListLine).all(
+        EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(item.id)
+    )
+    if not lines:
+        return [{
+            "item_name": item.name,
+            "status": "no_purchases",
+            "note": "No finished shopping lists reference this item yet.",
+        }]
+
+    # Restrict to lines whose parent list is archived (= a completed shop).
+    list_ids = list({l.shopping_list_id for l in lines})
+    archived_ids: set[UUID] = set()
+    if list_ids:
+        lists = repo.get(ShoppingList).all(
+            EntityField(ShoppingList, "id").in_(list_ids)
+            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(True)
+        )
+        archived_ids = {l.id for l in lists}
+
+    # Collect (unit_price, merchant_id_or_None, completed_at) per usable line.
+    # Pre-load completed_at + linked merchants in bulk to avoid N+1.
+    completed_lookup: dict[UUID, datetime | None] = {}
+    if archived_ids:
+        for l in repo.get(ShoppingList).all(
+            EntityField(ShoppingList, "id").in_(list(archived_ids))
+        ):
+            completed_lookup[l.id] = l.completed_at
+
+    # Selected-product → merchant lookup, for lines that didn't override
+    # `purchased_merchant_id` but did pick an offer.
+    product_merchant_lookup: dict[UUID, tuple[UUID, str]] = {}
+    product_ids = list({
+        l.selected_product_id for l in lines
+        if l.shopping_list_id in archived_ids and l.selected_product_id
+    })
+    if product_ids:
+        products = (
+            repo.get(Product)
+            .include(Product.Fields.MERCHANT)
+            .all(EntityField(Product, "id").in_(product_ids))
+        )
+        for p in products:
+            if p.merchant:
+                product_merchant_lookup[p.id] = (p.merchant.id, p.merchant.name)
+
+    # Merchant-name lookup for any purchased_merchant_id overrides on the
+    # lines we're about to summarise.
+    purchased_merchant_ids = list({
+        l.purchased_merchant_id for l in lines
+        if l.shopping_list_id in archived_ids and l.purchased_merchant_id
+    })
+    merchant_name_lookup: dict[UUID, str] = {}
+    if purchased_merchant_ids:
+        for m in repo.get(Merchant).all(
+            EntityField(Merchant, "id").in_(purchased_merchant_ids)
+        ):
+            merchant_name_lookup[m.id] = m.name
+
+    samples: list[
+        tuple[float, UUID | None, str | None, datetime | None, str, int | None]
+    ] = []
+    for line in lines:
+        if line.shopping_list_id not in archived_ids:
+            continue
+        if line.actual_unit_price is not None:
+            price = float(line.actual_unit_price)
+            source = "actual"
+        elif line.picked_offer_price is not None:
+            price = float(line.picked_offer_price)
+            source = "offer_snapshot"
+        else:
+            continue
+        merchant_id: UUID | None = None
+        merchant_name: str | None = None
+        if line.purchased_merchant_id:
+            merchant_id = line.purchased_merchant_id
+            merchant_name = merchant_name_lookup.get(merchant_id)
+        elif line.selected_product_id and line.selected_product_id in product_merchant_lookup:
+            merchant_id, merchant_name = product_merchant_lookup[line.selected_product_id]
+        samples.append((
+            price, merchant_id, merchant_name,
+            completed_lookup.get(line.shopping_list_id), source,
+            line.quantity,
+        ))
+
+    if not samples:
+        return [{
+            "item_name": item.name,
+            "status": "no_purchases",
+            "note": "No finished lists for this item have a captured price.",
+        }]
+
+    prices = [s[0] for s in samples]
+    avg = sum(prices) / len(prices)
+    samples_sorted_by_date = sorted(
+        samples, key=lambda s: (s[3] or datetime.min), reverse=True,
+    )
+    last_price, _, last_merchant_name, last_completed_at, last_source, _ = (
+        samples_sorted_by_date[0]
+    )
+
+    # Per-merchant breakdown — only emit a row when we know the merchant.
+    by_merchant: dict[UUID, dict[str, Any]] = {}
+    for price, merchant_id, merchant_name, _, _, _ in samples:
+        if not merchant_id:
+            continue
+        bucket = by_merchant.setdefault(merchant_id, {
+            "merchant": merchant_name,
+            "samples": 0,
+            "_sum": 0.0,
+            "min": price,
+            "max": price,
+        })
+        bucket["samples"] += 1
+        bucket["_sum"] += price
+        bucket["min"] = min(bucket["min"], price)
+        bucket["max"] = max(bucket["max"], price)
+    merchant_rows = []
+    for bucket in by_merchant.values():
+        merchant_rows.append({
+            "merchant": bucket["merchant"],
+            "samples": bucket["samples"],
+            "average_price": round(bucket["_sum"] / bucket["samples"], 2),
+            "min_price": round(bucket["min"], 2),
+            "max_price": round(bucket["max"], 2),
+        })
+    merchant_rows.sort(key=lambda r: r["average_price"])
+
+    unknown_merchant_samples = sum(1 for s in samples if s[1] is None)
+
+    # ── Cadence stats ────────────────────────────────────────────────
+    # Same archived-list walk as the price stats; we just look at the
+    # *spacing* between completed shops rather than the prices. Multiple
+    # purchases on the same shop (which shouldn't happen for one stock
+    # item, but be defensive) collapse to one cadence event so a single
+    # busy shop doesn't poison the average.
+    unique_dates = sorted({
+        s[3].date() for s in samples if s[3] is not None
+    })
+    average_days_between_purchase: float | None = None
+    if len(unique_dates) >= 2:
+        gaps = [
+            (unique_dates[i] - unique_dates[i - 1]).days
+            for i in range(1, len(unique_dates))
+            if (unique_dates[i] - unique_dates[i - 1]).days > 0
+        ]
+        if gaps:
+            average_days_between_purchase = round(sum(gaps) / len(gaps), 1)
+
+    days_since_last_purchase: int | None = None
+    if last_completed_at is not None:
+        days_since_last_purchase = max(0, (date.today() - last_completed_at.date()).days)
+
+    quantities = [s[5] for s in samples if s[5] is not None]
+    average_quantity: float | None = None
+    if quantities:
+        average_quantity = round(sum(quantities) / len(quantities), 2)
+
+    # Usual merchant = the one the user has bought from the most. Tie-
+    # broken implicitly by Counter's first-seen order (≈ scan order); on a
+    # genuine tie we leave the field as "no clear pattern" via low
+    # confidence.
+    merchant_counter: Counter[tuple[UUID, str | None]] = Counter()
+    for _, mid, mname, _, _, _ in samples:
+        if mid is not None:
+            merchant_counter[(mid, mname)] += 1
+    usual_merchant: str | None = None
+    usual_merchant_share: float | None = None
+    if merchant_counter:
+        (_top_id, top_name), top_count = merchant_counter.most_common(1)[0]
+        usual_merchant = top_name
+        usual_merchant_share = round(top_count / len(samples), 2)
+
+    # Price volatility — stdev when we have ≥2 samples, otherwise None.
+    # Spread is a quick sanity-check; stdev is the honest statistic.
+    price_stdev: float | None = None
+    if len(prices) >= 2:
+        price_stdev = round(statistics.stdev(prices), 2)
+    price_spread = round(max(prices) - min(prices), 2) if prices else 0
+
+    return [{
+        "item_name": item.name,
+        "status": "ok",
+        "samples": len(samples),
+        "average_price": round(avg, 2),
+        "min_price": round(min(prices), 2),
+        "max_price": round(max(prices), 2),
+        "price_stdev": price_stdev,
+        "price_spread": price_spread,
+        "last_paid_price": round(last_price, 2),
+        "last_paid_at": (
+            last_completed_at.isoformat() if last_completed_at else None
+        ),
+        "last_paid_merchant": last_merchant_name,
+        "last_paid_source": last_source,
+        "days_since_last_purchase": days_since_last_purchase,
+        "average_days_between_purchase": average_days_between_purchase,
+        "average_quantity": average_quantity,
+        "usual_merchant": usual_merchant,
+        "usual_merchant_share": usual_merchant_share,
+        "by_merchant": merchant_rows,
+        "unknown_merchant_samples": unknown_merchant_samples,
+    }]
+
+
 def compare_prices(args: dict) -> list[dict]:
     name = str(args.get("item_name") or "").strip()
     if not name:
@@ -1956,6 +2582,11 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "find_location": find_location,
     "seasonal_picks": seasonal_picks,
     "compare_prices": compare_prices,
+    "purchase_price_stats": purchase_price_stats,
+    "budget_status": budget_status,
+    "expiry_rescue": expiry_rescue,
+    "waste_insights": waste_insights,
+    "list_suggestions": list_suggestions,
     "recipe_for_occasion": recipe_for_occasion,
 }
 
@@ -1977,6 +2608,12 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "meal_detail": {"path": "/meals", "label": "Open Meals"},
     "find_location": {"path": "/locations", "label": "Open Locations"},
     "compare_prices": {"path": "/product-search", "label": "Open product search"},
+    "purchase_price_stats": {"path": "/reports", "label": "Open Reports"},
+    "budget_status": {"path": "/settings/preferences", "label": "Adjust budget"},
+    "expiry_rescue": {"path": "/waste", "label": "Open Waste page"},
+    "waste_insights": {"path": "/waste", "label": "Open Waste page"},
+    # list_suggestions intentionally has no nav target — the SPA reads
+    # primary_action off each suggestion and routes from there.
     "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},
     # convert_measurement / suggest_substitution / seasonal_picks need no nav.
 }

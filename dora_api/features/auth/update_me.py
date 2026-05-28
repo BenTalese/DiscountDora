@@ -4,7 +4,8 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.user import (ALLOWED_FONT_FAMILIES,
+from dora_api.domain.entities.user import (ALLOWED_BUDGET_PERIODS,
+                                           ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES, ALLOWED_THEMES,
                                            User)
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
@@ -31,6 +32,18 @@ class UpdateMeRequest(BaseModel):
     theme: str | None = None
     font_family: str | None = None
     font_size: str | None = None
+    # P2-05 — grocery budget controls. `budget_amount` is the opt-in:
+    # sending a positive number turns the feature on, sending
+    # `clear_budget_amount: true` turns it off. Period change without
+    # an amount change is allowed (lets the user re-pick weekly vs
+    # monthly without resetting their number).
+    budget_amount: float | None = Field(default=None, ge=0)
+    clear_budget_amount: bool = False
+    budget_period: str | None = None
+    # P2-13 — voice opt-in toggles. Booleans only (no clear variant);
+    # the feature is two-state per setting.
+    voice_input_enabled: bool | None = None
+    voice_output_enabled: bool | None = None
 
 
 class UpdateMeHandler:
@@ -85,6 +98,28 @@ class UpdateMeHandler:
             if request.font_size not in ALLOWED_FONT_SIZES:
                 return None, f"Invalid font size '{request.font_size}'."
             _User.font_size = request.font_size
+
+        # P2-05 — budget. `clear_budget_amount` wins over any amount set
+        # in the same payload so a clear+set in one request is unambiguous
+        # (we treat clear as the user's primary intent).
+        if request.clear_budget_amount:
+            _User.budget_amount = None
+        elif "budget_amount" in _SetFields and request.budget_amount is not None:
+            # Zero is treated the same as "off" — there's nothing
+            # meaningful to track against a $0 budget. Saves the
+            # frontend from sending the clear flag separately.
+            _User.budget_amount = request.budget_amount if request.budget_amount > 0 else None
+
+        if "budget_period" in _SetFields and request.budget_period is not None:
+            if request.budget_period not in ALLOWED_BUDGET_PERIODS:
+                return None, f"Invalid budget period '{request.budget_period}'."
+            _User.budget_period = request.budget_period
+
+        # P2-13 — voice prefs. Plain bool fields; null is ignored.
+        if "voice_input_enabled" in _SetFields and request.voice_input_enabled is not None:
+            _User.voice_input_enabled = request.voice_input_enabled
+        if "voice_output_enabled" in _SetFields and request.voice_output_enabled is not None:
+            _User.voice_output_enabled = request.voice_output_enabled
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

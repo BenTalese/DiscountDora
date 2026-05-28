@@ -257,6 +257,17 @@ export default defineConfig((ctx): any => {
                         icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
                     },
                     {
+                        // P2-11 — one-handed in-store mode. Lands on the
+                        // /shop-now stub which resolves the primary list
+                        // id and replaces the URL with the actual shop
+                        // route, falling back to the lists overview if
+                        // no primary is configured.
+                        name: 'Shop now (primary)',
+                        short_name: 'Shop now',
+                        url: '/shop-now',
+                        icons: [{ src: 'icons/web-app-manifest-192x192.png', sizes: '192x192' }],
+                    },
+                    {
                         name: 'Scan a barcode',
                         short_name: 'Scan',
                         url: '/data/barcodes?action=scan',

@@ -49,6 +49,15 @@ export type ShoppingListLine = {
     added_via: AddedVia;
     /** ISO timestamp when the line was added. */
     added_at: string | null;
+    /** P2-02 — actual unit price the shopper typed in (override of the
+     *  picked offer's price). `null` = no override; use the offer instead. */
+    actual_unit_price: number | null;
+    /** P2-02 — merchant the shopper actually bought from. `null` = use the
+     *  selected_product's merchant (if any). */
+    purchased_merchant_id: string | null;
+    /** Resolved name for `purchased_merchant_id`, populated by the detail
+     *  endpoint. */
+    purchased_merchant_name: string | null;
     offers: LineProductOffer[];
 };
 
@@ -107,19 +116,29 @@ export function chosenOfferFor(line: ShoppingListLine): LineProductOffer | null 
 }
 
 export function priceOfLine(line: ShoppingListLine): number {
+    const qty = line.quantity ?? 1;
+    // P2-02 — a user-entered actual price overrides any merchant offer.
+    if (line.actual_unit_price != null) {
+        return line.actual_unit_price * qty;
+    }
     const offer = chosenOfferFor(line);
     if (!offer || offer.price_now == null) return 0;
-    const qty = line.quantity ?? 1;
     return offer.price_now * qty;
 }
 
 // Savings vs the line's chosen offer's RRP (price_was). Zero when the offer
 // has no `price_was` recorded or isn't currently discounted. Multiplied by
 // quantity so list-level totals work without re-doing the math.
+//
+// If the user has entered an actual paid price, we use that against the
+// offer's RRP — i.e. they could have saved more (or less) than the offer
+// implied. Falls back to offer.price_now when no override is set.
 export function savingsOfLine(line: ShoppingListLine): number {
     const offer = chosenOfferFor(line);
-    if (!offer || offer.price_now == null || offer.price_was == null) return 0;
-    const diff = offer.price_was - offer.price_now;
+    if (!offer || offer.price_was == null) return 0;
+    const paid = line.actual_unit_price ?? offer.price_now;
+    if (paid == null) return 0;
+    const diff = offer.price_was - paid;
     if (diff <= 0) return 0;
     const qty = line.quantity ?? 1;
     return diff * qty;

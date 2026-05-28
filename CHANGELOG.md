@@ -6,6 +6,208 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **P2-13 — Voice-first Dora + hands-free cook mode.** Extracted the
+  ad-hoc voice handling from `RecipeCookMode.vue` into two reusable
+  composables and wired voice into the Dora chat panel.
+  - `web_app/src/composables/useVoiceInput.ts` — Web SpeechRecognition
+    wrapper. Supports both push-to-talk (Dora chat) and continuous
+    (Cook mode) modes through one `continuous` option. Auto-restarts
+    on browser-side `onend` in continuous mode, surfaces permission /
+    capability failures through `available` and `error` refs.
+  - `web_app/src/composables/useSpeechOutput.ts` — SpeechSynthesis
+    wrapper. Cancels prior utterances before speaking the next so
+    rapid commands ("next" → "next") don't queue up.
+  - Dora chat header gains a **🔊 / 🔇** toggle (when the browser
+    supports SpeechSynthesis) — Dora speaks her reply alongside the
+    typewriter animation when enabled. The Dora input row gains a
+    mic button (push-to-talk) when SpeechRecognition is available;
+    the transcript fills the draft so the user reviews and presses
+    Send — the spec's "confirm before mutating" without a separate
+    confirmation step.
+  - Cook mode picks up new voice commands beyond next / previous /
+    repeat / stop: **start timer / pause timer / reset timer** (uses
+    the auto-detected duration from the current step, falls back to
+    5 minutes) and **mark done** (toggles the current step's checkbox
+    without auto-advancing).
+  - `User` gains `voice_input_enabled` + `voice_output_enabled`
+    booleans (alembic `e7c4b8a1d2f9`). Off by default — the SPA seeds
+    the per-page toggles from the user's saved preference and writes
+    flips back through `PATCH /api/auth/me`. New **Voice** card in
+    Settings → Preferences exposes both toggles, with explanatory
+    captions when the browser doesn't support the underlying API.
+- **P2-11 — One-handed shop mode.** Fullscreen mobile-first view for
+  in-store use. One item at a time as a big card; tap "Got it" (or
+  press Space / Enter) to mark picked and advance. Secondary actions
+  on each item: quantity stepper, **Price** (opens the P2-02 actual-
+  paid editor inline), **Substitute** (swap merchant from the line's
+  known offers), **Skip** (locally re-order to the end of the queue —
+  comes back later in the shop). **Undo** (ArrowUp / "u") un-ticks the
+  last pick. Esc exits back to the full list view.
+  - New route `/shopping-lists/:id/shop` and `ShoppingListShopMode.vue`.
+    Reuses the existing offline queue (`tryWithQueue`,
+    `shopping_list_line_tick` kind) so ticks survive flaky reception.
+  - Items grouped by their stock-location breadcrumb so the natural
+    pantry/store route reads as a sequence of sections; "Up next"
+    preview shows the next two items so the shopper can anticipate.
+  - Progress strip + footer totals (picked count, estimated total)
+    sticky to top and bottom; **Finish** CTA appears once everything
+    is ticked.
+  - Big tap targets (≥56px), keyboard shortcuts with a focusable
+    root, `<q-linear-progress>` for accessibility-friendly progress.
+  - Entry point: "Shop mode" button on `ShoppingListDetail` toolbar
+    (disabled when the list is empty); command palette entry
+    "Shop mode on primary list"; new PWA shortcut **Shop now** that
+    lands on `/shop-now` and resolves to the primary list's shop view
+    (falls back to the lists overview when no primary is set).
+- **P2-08 — Recipe dietary tags + tag-aware filtering.** Reframed
+  from the spec's "per-user dietary profile" model into recipe-level
+  metadata that's useful when cooking *for* people — household guests
+  with allergies, dietary preferences, etc.
+  - New `RecipeTag` association table (alembic `d3a5e8c1f9b2`).
+    Composite PK + index on `tag` for the "find recipes with X" hot
+    path. Pure association table — no entity, accessed via
+    `dora_api/features/recipes/recipe_tag_access.py`.
+  - Canonical curated vocabulary in `dora_api/domain/recipe_tags.py`:
+    20 tags across dietary patterns, allergen-free, nutritional,
+    diet patterns, religious. Server validates writes against this
+    catalogue; the SPA pulls it from `GET /api/recipes/tags`
+    (catalogue + plain-English disclaimer) so picker UIs stay in sync.
+  - `POST /api/recipes` + `PATCH /api/recipes/<id>` accept `tags: []`.
+    Invalid tags surface as 400 with the offending value.
+  - `GET /api/recipes` accepts three composable filter axes via
+    repeated/comma-separated query params:
+    - `tags_include` — recipe must carry every tag (AND semantics).
+    - `tags_exclude` — recipe must carry none of the tags.
+    - `ingredient_exclude` — recipe must not have an ingredient whose
+      stock-item name contains any of the substrings (case-insensitive),
+      so "free from egg" / "no mushrooms" work without an allergen
+      taxonomy.
+  - Recipe edit dialog gains a multi-select tag picker grouped by
+    category, with the catalogue's disclaimer surfaced underneath.
+  - Recipes overview gets three new filters (must have / must not have
+    / free from ingredient) wired client-side off the loaded recipe
+    list. Disclaimer surfaces whenever any dietary filter is active.
+  - Recipe cards render tag chips when present.
+  - Meals derive an effective tag set by intersecting the tags of every
+    constituent recipe — a meal is honestly "vegan" only if every
+    recipe in it is. A single untagged recipe blanks the intersection
+    so we don't imply unsubstantiated dietary claims.
+  - `suggest_recipes` Dora tool extended with `tags_include`,
+    `tags_exclude`, `ingredient_exclude` parameters. Tool description
+    explicitly steers dietary asks ("vegan dinner", "gluten-free
+    pasta", "free from egg") to the filter args rather than keywords,
+    and repeats the planning-aid framing so the model doesn't claim
+    food-safety guarantees.
+- **P2-04 — Dora suggestion inbox (deterministic, no LLM-generated
+  facts).** Surfaces actionable proposals as a small badge on the Dora
+  launcher and a "Dora suggests" dashboard card. Opening the chat shows
+  the same suggestions as cards above the conversation, each with
+  **Accept** (deep-links to the relevant page + auto-snoozes 1h so it
+  doesn't immediately re-surface), **Snooze 1d**, **Dismiss**, and a
+  **Why?** expander.
+  - Generated suggestions are *not* persisted. Generators recompute
+    fresh each call so the list always matches current pantry state.
+    Only *negative* decisions land in storage as
+    `DoraSuggestionSuppression` rows (alembic `c9f2d6b3e8a1`, composite
+    index on `kind + dedup_key`). Elapsed snoozes self-clean on the
+    read path.
+  - Four generators wired up, each piggy-backing on data we already
+    capture: `use_soon` (≤3 day expiry — uses P2-06), `over_budget`
+    (current period spend exceeds target — uses P2-05),
+    `likely_due` (purchase cadence says they're past their usual gap —
+    uses P2-02 cadence; needs ≥3 priced archived buys to fire),
+    `frequent_waster` (3+ waste events for the same item in 90 days —
+    uses P2-06's log).
+  - `GET /api/suggestions` returns the filtered, ranked list (high →
+    medium → low). `POST /api/suggestions/dismiss`,
+    `POST /api/suggestions/snooze` (hours, clamped 1–168),
+    `POST /api/suggestions/unsuppress` (undo).
+  - New Pinia `suggestionStore` shared by `DoraBubble`, `DoraChat`, and
+    `DashboardPage` so dismiss/snooze in one place propagates to all
+    three. Store swallows endpoint errors so older backends just keep
+    the badge hidden.
+  - New assistant tool `list_suggestions` returning the same rows so
+    Dora can answer "what do you suggest?" / "anything I should do?".
+    Each suggestion includes its plain-English `reason` so the model
+    can repeat it back without re-deriving the fact.
+- **P2-06 — Expiry rescue + (optional) waste log.** Closes the
+  "what's about to spoil and what can I do about it?" loop without
+  asking the user to enter shelf-life metadata up-front.
+  - New `StockItemWasteEvent` table (alembic `b8d4e1c7a2f3`). FK to
+    StockItem is SET NULL with a denormalised `stock_item_name` so
+    waste history survives renames and deletions.
+  - `GET /api/waste/rescue?horizon_days=N` returns at-risk items
+    (existing `expiry_date` ≤ horizon) and the recipes from the user's
+    library ranked by how many at-risk items they'd use. Pre-fills
+    `estimated_value` from the most recent captured price (P2-02)
+    so the rescue page can put a dollar figure on what's on the line.
+  - `POST /api/waste/events` + `GET /api/waste/events` for the log,
+    `GET /api/waste/insights?window_days=N` for the aggregated view.
+    Logging an event optionally bumps the level to Out of Stock so the
+    common "throw it out → pantry's empty" case is one tap.
+  - New `/waste` page: at-risk items with one-tap **Used** (clear
+    expiry + mark Out of Stock), **Freeze** (clear expiry), **Wasted**
+    (open log dialog with reason / value / note). A side panel ranks
+    recipes by rescue coverage; an insights strip at the bottom shows
+    what's been wasted in the last 90 days.
+  - New dashboard card **Use soon** — peek-only, hidden when nothing
+    is at risk, deep-links to `/waste`.
+  - Two new Dora tools: `expiry_rescue` ("what should I use before it
+    goes off?") and `waste_insights` ("what am I wasting often?"). The
+    insights tool returns `status: no_data` cleanly when the user
+    hasn't logged anything, so Dora can suggest the Waste page rather
+    than hallucinate stats.
+- **P2-05 — Optional grocery budget (cross-shopping-list).** Users opt
+  in from Settings → Preferences → Grocery budget; the dashboard then
+  shows spent / remaining for the current rolling period (weekly or
+  monthly) and Dora can answer "what's left in my budget?".
+  - `User` gains `budget_amount` (nullable; NULL = feature off) and
+    `budget_period` (default `weekly`) — alembic `a6e3b5d2c8f1`.
+    Surfaced on `AuthenticatedUserDto` and mutated through the existing
+    `PATCH /api/auth/me` with `clear_budget_amount` to opt back out.
+  - `GET /api/budget/status` returns `{ enabled, amount, period,
+    period_start, period_end, spent, projected_active, remaining,
+    over_budget }`. Spent = sum across every *archived* shopping list
+    whose `completed_at` falls inside the period, using the
+    actual_unit_price / picked_offer_price ladder from P2-02. Projected
+    = same calc for active lists at current offer prices (never counted
+    as spent, but shown as "+X in active lists").
+  - `GET /api/budget/history?periods=N` for a trailing window — clamped
+    1–26.
+  - New dashboard card "Grocery budget" — degrades to a passive
+    "spend this period" line for users who haven't opted in.
+  - New read-only assistant tool `budget_status` answering "what's
+    left?", "how much have I spent this week?", "am I over budget?".
+    Reports `enabled=false` cleanly when the user hasn't opted in so
+    Dora can nudge them to Settings.
+- **P2-02 — Actual price + merchant capture per line, and a Dora
+  purchase-price-stats tool.** Closes the planned-vs-paid loop without
+  asking the user to scan receipts: a tap on the price chip in
+  ShoppingListDetail opens an inline editor for the unit price the till
+  actually charged and (optionally) the merchant they bought from.
+  - `ShoppingListLine` gains `actual_unit_price` and
+    `purchased_merchant_id` (alembic `f5c2a7e91b08`). Both NULL by
+    default; reports + the assistant fall back to the existing
+    `picked_offer_price` snapshot when no override is set.
+  - `PATCH /api/shopping-lists/<id>/lines/<lid>` accepts the new fields
+    plus `clear_actual_unit_price` / `clear_purchased_merchant` to wipe
+    a prior override. Editing these does NOT flip `added_via` back to
+    `manual` — it's a shopping-mode capture, not a re-curation.
+  - Frontend `priceOfLine` + `savingsOfLine` now prefer
+    `actual_unit_price` over the offer price; list totals reflect what
+    the user actually paid.
+  - New read-only assistant tool `purchase_price_stats(item_name)`
+    answering "what's the average price for broccoli?" and similar.
+    Walks finished (archived) shopping lists, prefers
+    `actual_unit_price`, falls back to `picked_offer_price`. Returns
+    samples / avg / min / max / stdev / last-paid plus a per-merchant
+    breakdown derived from `purchased_merchant_id` (or the chosen
+    offer's merchant when not overridden). Also surfaces cadence stats
+    from the same walk — `days_since_last_purchase`,
+    `average_days_between_purchase`, `average_quantity`,
+    `usual_merchant` (+ share) — so Dora can answer "how often do I
+    buy bread?" and "where do I usually shop for cheese?" without a
+    second tool call.
 - **Desktop bundle — Phase 4 (AppImage packaging).** Wraps the
   PyInstaller one-folder output into a single
   `Dora-vX.Y.Z-x86_64.AppImage` distributable. AppImages run

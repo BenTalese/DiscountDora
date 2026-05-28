@@ -1,4 +1,4 @@
-import type { Recipe } from 'src/models/recipe';
+import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
 import { createQueryString, FilterOperator, type Page } from './queryStringBuilder';
@@ -23,6 +23,9 @@ export type CreateRecipeCommand = {
     servings: number | null;
     time_of_day: string | null;
     ingredients: CreateRecipeIngredientCommand[];
+    /** P2-08 — curated dietary / allergen-free / nutritional tags.
+     *  Validated server-side against the canonical catalogue. */
+    tags?: string[];
 };
 
 export type UpdateRecipeCommand = {
@@ -40,6 +43,20 @@ export type UpdateRecipeCommand = {
     servings?: number | null;
     time_of_day?: string | null;
     ingredients?: CreateRecipeIngredientCommand[];
+    /** P2-08 — when present, replaces the full tag set on the recipe.
+     *  Empty array clears all tags; omit the field to leave tags
+     *  untouched. */
+    tags?: string[];
+};
+
+/** P2-08 — query filters for the recipes endpoint. Mirrors the
+ *  `tags_include / tags_exclude / ingredient_exclude` query params the
+ *  backend accepts; each is an array that's URL-encoded as repeated
+ *  params. */
+export type RecipeFilterArgs = {
+    tags_include?: string[];
+    tags_exclude?: string[];
+    ingredient_exclude?: string[];
 };
 
 export default class RecipeApiService {
@@ -63,8 +80,16 @@ export default class RecipeApiService {
         return page.items[0]!;
     };
 
-    getAllAsync = async (): Promise<Page<Recipe>> =>
-        await this.httpClient.get<Page<Recipe>>('/recipes');
+    getAllAsync = async (filters?: RecipeFilterArgs): Promise<Page<Recipe>> => {
+        const qs = encodeFilterQueryString(filters);
+        return await this.httpClient.get<Page<Recipe>>(`/recipes${qs}`);
+    };
+
+    /** P2-08 — pulls the canonical tag catalogue + disclaimer. The
+     *  SPA caches this for the session; the picker re-renders on
+     *  change but the list itself is stable across requests. */
+    getTagCatalogueAsync = async (): Promise<RecipeTagCatalogue> =>
+        await this.httpClient.get<RecipeTagCatalogue>('/recipes/tags');
 
     updateAsync = async (recipeToUpdate: UpdateRecipeCommand): Promise<void> => {
         const { recipe_id, ...payload } = recipeToUpdate;
@@ -92,6 +117,22 @@ export type ImportedIngredient = {
     unit: string | null;
     notes: string | null;
 };
+
+function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
+    if (!filters) return '';
+    const params = new URLSearchParams();
+    for (const tag of filters.tags_include ?? []) {
+        if (tag) params.append('tags_include', tag);
+    }
+    for (const tag of filters.tags_exclude ?? []) {
+        if (tag) params.append('tags_exclude', tag);
+    }
+    for (const term of filters.ingredient_exclude ?? []) {
+        if (term) params.append('ingredient_exclude', term);
+    }
+    const out = params.toString();
+    return out ? `?${out}` : '';
+}
 
 export type ImportedRecipe = {
     name: string;

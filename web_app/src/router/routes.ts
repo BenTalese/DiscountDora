@@ -82,8 +82,14 @@ const routes: RouteRecordRaw[] = [
             { path: 'shopping-lists', component: () => import('pages/ShoppingListsOverview.vue'), meta: { title: 'Shopping lists' } },
             { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping list templates' } },
             { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping list' } },
+            { path: 'shopping-lists/:id/shop', component: () => import('pages/ShoppingListShopMode.vue'), meta: { title: 'Shop mode' } },
+            // P2-11 — PWA-shortcut landing page that redirects into shop
+            // mode for whichever list is currently primary. Lightweight
+            // stub; see pages/ShopNowRedirect.vue.
+            { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
             { path: 'reports', component: () => import('pages/ReportsPage.vue'), meta: { title: 'Reports' } },
             { path: 'substitutes', component: () => import('pages/SubstitutesGraph.vue'), meta: { title: 'Substitutes' } },
+            { path: 'waste', component: () => import('pages/WastePage.vue'), meta: { title: 'Waste' } },
             // In-layout error pages (F3). These keep the header/drawer
             // around so the user can navigate away without a full reload.
             // The bare-URL catch-all at the bottom of this file still

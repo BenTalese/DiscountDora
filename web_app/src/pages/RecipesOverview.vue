@@ -97,6 +97,47 @@
                 @filter="onStockItemFilter"
                 label="Uses stock item"
             />
+            <!-- P2-08 — dietary tag filters. The "must have", "must not
+                 have", and "free from ingredient" axes combine with AND,
+                 mirroring how the backend reads the query string. -->
+            <q-select
+                dense
+                outlined
+                style="min-width: 220px"
+                multiple
+                use-chips
+                emit-value
+                map-options
+                v-model="dietaryTagsInclude"
+                :options="dietaryTagOptionsForInclude"
+                label="Must have these tags"
+            />
+            <q-select
+                dense
+                outlined
+                style="min-width: 220px"
+                multiple
+                use-chips
+                emit-value
+                map-options
+                v-model="dietaryTagsExclude"
+                :options="dietaryTagOptionsForExclude"
+                label="Must NOT have these tags"
+            />
+            <q-select
+                dense
+                outlined
+                use-input
+                multiple
+                use-chips
+                new-value-mode="add-unique"
+                hide-dropdown-icon
+                style="min-width: 220px"
+                v-model="ingredientExclude"
+                :options="[]"
+                label="Free from ingredient(s)"
+                hint="Type and press Enter"
+            />
             <q-btn
                 v-if="hasAnyFilter"
                 flat
@@ -105,6 +146,16 @@
                 label="Clear"
                 @click="clearFilters"
             />
+        </div>
+        <!-- P2-08 — disclaimer surfaced when any dietary filter is on.
+             Pulled from the backend so the wording stays consistent
+             between the SPA and Dora. -->
+        <div
+            v-if="(dietaryTagsInclude.length > 0 || dietaryTagsExclude.length > 0 || ingredientExclude.length > 0) && tagCatalogue?.disclaimer"
+            class="text-caption text-grey q-mb-md"
+        >
+            <q-icon name="info" size="14px" class="q-mr-xs" />
+            {{ tagCatalogue.disclaimer }}
         </div>
 
         <!-- ── Grid grouped by collection ─────────────────────────── -->
@@ -323,7 +374,7 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import type { Recipe } from 'src/models/recipe';
+    import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService from 'src/services/api/recipeApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -362,6 +413,27 @@
     // Set via the "Uses stock item" picker OR via `?usesStockItem=` query
     // (deep-linked from the stock item detail screen).
     const usesStockItemId = ref<string | null>(null);
+
+    // P2-08 — dietary filter state. All three combine with AND; the
+    // include set is "must have all of these" and the exclude set is
+    // "must have none of these". `ingredientExclude` is free-text (so
+    // the user can type "egg yolks" or "shellfish"), matched as a
+    // case-insensitive substring against the recipe's ingredient
+    // stock-item names server-side.
+    const dietaryTagsInclude = ref<string[]>([]);
+    const dietaryTagsExclude = ref<string[]>([]);
+    const ingredientExclude = ref<string[]>([]);
+    const tagCatalogue = ref<RecipeTagCatalogue | null>(null);
+
+    // Group tag options by their `category` so the dropdown reads as
+    // small clustered sections instead of one long alphabetical list.
+    const dietaryTagOptionsForInclude = computed(() =>
+        (tagCatalogue.value?.tags ?? []).map((t) => ({
+            label: `${t.category}: ${t.label}`,
+            value: t.value,
+        })),
+    );
+    const dietaryTagOptionsForExclude = computed(() => dietaryTagOptionsForInclude.value);
 
     // ── Cookable / missing helpers ──────────────────────────────────
     // Same definition as RecipeCard: missing = not tracked OR out of stock.
@@ -475,6 +547,30 @@
                 const q = searchText.value.toLowerCase();
                 if (!r.name.toLowerCase().includes(q)) return false;
             }
+            // P2-08 — dietary tag filters. `tags` is a recipe-level
+            // array; we filter client-side because all recipes are
+            // already loaded into the store. The server endpoint
+            // honours the same axes for the Dora tool path.
+            if (dietaryTagsInclude.value.length > 0) {
+                const has = new Set(r.tags ?? []);
+                if (!dietaryTagsInclude.value.every((t) => has.has(t))) return false;
+            }
+            if (dietaryTagsExclude.value.length > 0) {
+                const has = new Set(r.tags ?? []);
+                if (dietaryTagsExclude.value.some((t) => has.has(t))) return false;
+            }
+            if (ingredientExclude.value.length > 0) {
+                const terms = ingredientExclude.value
+                    .map((t) => t.trim().toLowerCase())
+                    .filter(Boolean);
+                if (terms.length > 0) {
+                    const hit = r.ingredients.some((ing) => {
+                        const name = (ing.stock_item_name ?? '').toLowerCase();
+                        return terms.some((term) => name.includes(term));
+                    });
+                    if (hit) return false;
+                }
+            }
             return true;
         }),
     );
@@ -507,7 +603,10 @@
             || missingMax.value !== null
             || collectionFilter.value !== null
             || tagFilter.value.length > 0
-            || usesStockItemId.value !== null,
+            || usesStockItemId.value !== null
+            || dietaryTagsInclude.value.length > 0
+            || dietaryTagsExclude.value.length > 0
+            || ingredientExclude.value.length > 0,
     );
 
     function clearFilters() {
@@ -518,6 +617,9 @@
         collectionFilter.value = null;
         tagFilter.value = [];
         usesStockItemId.value = null;
+        dietaryTagsInclude.value = [];
+        dietaryTagsExclude.value = [];
+        ingredientExclude.value = [];
     }
 
     // ── Comparison mode ─────────────────────────────────────────────
@@ -819,6 +921,12 @@
                 stockItemStore.getStockItemsAsync(),
                 stockLevelStore.getStockLevelsAsync(),
                 shoppingListStore.refreshAsync(),
+                // P2-08 — load the curated dietary-tag catalogue. Cached
+                // for the session; errors are non-fatal (the tag pickers
+                // simply render empty).
+                recipeApi.getTagCatalogueAsync()
+                    .then((c) => { tagCatalogue.value = c; })
+                    .catch(() => { tagCatalogue.value = null; }),
             ]);
         } finally {
             loading.value = false;

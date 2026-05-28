@@ -146,6 +146,14 @@ class UpdateLineRequest(BaseModel):
     # explicit flag to clear an existing selection.
     clear_selected_product: bool = False
     sequence: int | None = None
+    # P2-02 purchase memory overrides. Same clear-vs-unset story as the
+    # selected_product fields: clients send the explicit clear_* flag to
+    # blank a previously-recorded actual price/merchant, otherwise omitted
+    # fields are left untouched.
+    actual_unit_price: float | None = Field(default=None, ge=0)
+    clear_actual_unit_price: bool = False
+    purchased_merchant_id: UUID | None = None
+    clear_purchased_merchant: bool = False
 
 
 @dataclass(slots=True)
@@ -197,6 +205,18 @@ class UpdateLineHandler:
         elif "selected_product_id" in set_fields and request.selected_product_id is not None:
             line.selected_product_id = request.selected_product_id
             user_edited = True
+
+        # P2-02 — actual paid price / merchant. Editing these doesn't flip
+        # added_via back to manual: they're a shopping-mode capture, not a
+        # re-curation of how the line came to be on the list.
+        if request.clear_actual_unit_price:
+            line.actual_unit_price = None
+        elif "actual_unit_price" in set_fields and request.actual_unit_price is not None:
+            line.actual_unit_price = float(request.actual_unit_price)
+        if request.clear_purchased_merchant:
+            line.purchased_merchant_id = None
+        elif "purchased_merchant_id" in set_fields and request.purchased_merchant_id is not None:
+            line.purchased_merchant_id = request.purchased_merchant_id
 
         if user_edited and line.added_via != ADDED_VIA_MANUAL:
             line.added_via = ADDED_VIA_MANUAL

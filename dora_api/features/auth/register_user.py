@@ -59,6 +59,15 @@ class AuthenticatedUserDto:
     onboarding_completed_at: str | None
     last_backup_at: str | None
     email_verified: bool
+    # P2-05 — grocery budget. `budget_amount` is None when the user
+    # hasn't opted in; a positive number turns on the dashboard / Dora
+    # budget surfaces. Period is one of "weekly" / "monthly".
+    budget_amount: float | None
+    budget_period: str
+    # P2-13 — voice opt-ins. Both default False; the SPA reads them on
+    # boot to seed the per-page mic / volume toggles.
+    voice_input_enabled: bool
+    voice_output_enabled: bool
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -82,6 +91,12 @@ class AuthenticatedUserDto:
                 if user.last_backup_at is not None else None
             ),
             email_verified=bool(user.email_verified),
+            budget_amount=(
+                float(user.budget_amount) if user.budget_amount is not None else None
+            ),
+            budget_period=user.budget_period,
+            voice_input_enabled=bool(user.voice_input_enabled),
+            voice_output_enabled=bool(user.voice_output_enabled),
         )
 
 

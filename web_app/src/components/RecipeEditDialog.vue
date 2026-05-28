@@ -94,6 +94,30 @@
                         v-model="form.nutrition"
                     />
 
+                    <!-- P2-08 — dietary / allergen-free / nutritional tag
+                         editor. Multi-select chips drawn from the canonical
+                         catalogue. Surfaced disclaimer keeps the framing
+                         honest: tags are a planning aid, not a safety claim. -->
+                    <div>
+                        <q-select
+                            outlined
+                            multiple
+                            use-chips
+                            emit-value
+                            map-options
+                            v-model="form.tags"
+                            :options="tagOptionsByCategory"
+                            label="Dietary tags (optional)"
+                        />
+                        <div
+                            v-if="tagCatalogue?.disclaimer"
+                            class="text-caption text-grey q-mt-xs"
+                        >
+                            <q-icon name="info" size="14px" class="q-mr-xs" />
+                            {{ tagCatalogue.disclaimer }}
+                        </div>
+                    </div>
+
                     <q-separator />
 
                     <div class="text-subtitle1">Ingredients</div>
@@ -161,12 +185,14 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
-    import type { Recipe } from 'src/models/recipe';
-    import type { CreateRecipeIngredientCommand } from 'src/services/api/recipeApiService';
+    import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
+    import RecipeApiService, {
+        type CreateRecipeIngredientCommand,
+    } from 'src/services/api/recipeApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { computed, reactive, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
 
     const props = defineProps<{ modelValue: boolean; recipe: Recipe | null }>();
     const emit = defineEmits<{
@@ -194,6 +220,7 @@
         servings: number | null;
         time_of_day: string | null;
         ingredients: IngredientForm[];
+        tags: string[];
     };
 
     const emptyForm = (): RecipeForm => ({
@@ -208,7 +235,8 @@
         recipe_collection_id: null,
         servings: null,
         time_of_day: null,
-        ingredients: []
+        ingredients: [],
+        tags: [],
     });
 
     const form = reactive<RecipeForm>(emptyForm());
@@ -230,6 +258,29 @@
     const collectionOptions = computed(() =>
         recipeCollections.value.map((c) => ({ label: c.name, value: c.recipe_collection_id }))
     );
+
+    // P2-08 — tag catalogue is fetched once per dialog open. Labels are
+    // prefixed with the category so a flat single-list q-select still
+    // reads as grouped ("Dietary pattern: Vegan", "Allergen-free:
+    // Gluten-free", …).
+    const recipeApi = new RecipeApiService();
+    const tagCatalogue = ref<RecipeTagCatalogue | null>(null);
+    const tagOptionsByCategory = computed(() =>
+        (tagCatalogue.value?.tags ?? []).map((t) => ({
+            label: `${t.category}: ${t.label}`,
+            value: t.value,
+        })),
+    );
+
+    onMounted(async () => {
+        try {
+            tagCatalogue.value = await recipeApi.getTagCatalogueAsync();
+        } catch {
+            // Non-fatal — the picker just renders empty if the
+            // catalogue endpoint isn't available.
+            tagCatalogue.value = null;
+        }
+    });
 
     watch(
         () => props.modelValue,
@@ -256,6 +307,7 @@
                     unit: i.unit,
                     notes: i.notes
                 }));
+                form.tags = [...(props.recipe.tags ?? [])];
             }
         }
     );
@@ -288,7 +340,8 @@
                     recipe_collection_id: form.recipe_collection_id,
                     servings: form.servings,
                     time_of_day: form.time_of_day,
-                    ingredients
+                    ingredients,
+                    tags: form.tags,
                 });
             } else {
                 await recipeStore.createRecipeAsync({
@@ -303,7 +356,8 @@
                     recipe_collection_id: form.recipe_collection_id,
                     servings: form.servings,
                     time_of_day: form.time_of_day,
-                    ingredients
+                    ingredients,
+                    tags: form.tags,
                 });
             }
             emit('saved');

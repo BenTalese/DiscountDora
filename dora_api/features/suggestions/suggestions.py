@@ -1,0 +1,243 @@
+"""P2-04 — Dora Suggestion endpoints.
+
+  GET  /api/suggestions                — current proposals (filtered by
+                                          suppressions)
+  POST /api/suggestions/dismiss        — body { kind, dedup_key }
+  POST /api/suggestions/snooze         — body { kind, dedup_key, hours }
+  DELETE /api/suggestions/suppression  — body { kind, dedup_key }  — undo
+
+The endpoint deliberately doesn't expose an "accept" action: accepting
+runs an existing domain endpoint (open the route, add to list, mark Out
+of Stock, …) and the next /api/suggestions call observes that the
+underlying condition is no longer true. This keeps mutation paths
+auditable and centralised in their feature handlers, with no
+"suggestion-says-do-this" indirection.
+"""
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any
+from uuid import UUID
+
+from flask import session
+from pydantic import BaseModel, ConfigDict, Field
+
+from dora_api.domain.entities.dora_suggestion_suppression import (
+    DoraSuggestionSuppression, SUPPRESSION_DECISION_DISMISSED,
+    SUPPRESSION_DECISION_SNOOZED,
+)
+from dora_api.features.routers import SUGGESTIONS_ROUTER
+from dora_api.features.suggestions.generators import generate_all, Suggestion
+from dora_api.infrastructure.api_response import no_content, ok
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+
+# Cap the surfaced count — the dashboard card + chat panel are designed
+# for a glance, not a queue. The full firehose is available via
+# /api/waste, /api/budget, etc.
+_MAX_SUGGESTIONS = 8
+
+# Severity → sort weight. Higher numbers mean more urgent.
+_SEVERITY_RANK = {"high": 2, "medium": 1, "low": 0}
+
+
+def _current_user_id() -> UUID | None:
+    raw = session.get("user_id")
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_suppressed_now(suppression: DoraSuggestionSuppression, now: datetime) -> bool:
+    if suppression.decision == SUPPRESSION_DECISION_DISMISSED:
+        return True
+    if suppression.decision == SUPPRESSION_DECISION_SNOOZED:
+        return suppression.snoozed_until is None or suppression.snoozed_until > now
+    return False
+
+
+# ── GET /api/suggestions ────────────────────────────────────────────────
+
+@dataclass(frozen=True, slots=True)
+class SuggestionDto:
+    kind: str
+    dedup_key: str
+    severity: str
+    title: str
+    body: str
+    reason: str
+    primary_action: dict[str, str] | None
+    payload: dict[str, Any]
+
+
+class GetSuggestionsHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, user_id: UUID | None) -> list[SuggestionDto]:
+        suggestions: list[Suggestion] = generate_all(self.repository, user_id)
+        if not suggestions:
+            return []
+
+        # Active suppressions for the (kind, dedup_key)s we just
+        # generated. We fetch the whole table and filter in Python — the
+        # row count is bounded by user decisions and a composite index
+        # exists on (kind, dedup_key) for the lookup pattern.
+        now = datetime.now(timezone.utc)
+        suppressions = self.repository.get(DoraSuggestionSuppression).all()
+        active_suppressions = {
+            (s.kind, s.dedup_key)
+            for s in suppressions
+            if _is_suppressed_now(s, now)
+        }
+        # Opportunistic cleanup: snoozes that have elapsed get removed
+        # so the table doesn't accrete stale rows. Done here rather than
+        # via a cron job because the read path is hot enough that doing
+        # the housekeeping inline is cheaper than another scheduled task.
+        for s in suppressions:
+            if (
+                s.decision == SUPPRESSION_DECISION_SNOOZED
+                and s.snoozed_until is not None
+                and s.snoozed_until <= now
+            ):
+                self.repository.remove(s)
+        self.repository.save_changes()
+
+        filtered = [
+            sugg for sugg in suggestions
+            if (sugg.kind, sugg.dedup_key) not in active_suppressions
+        ]
+        filtered.sort(
+            key=lambda s: (-_SEVERITY_RANK.get(s.severity, 0), s.title.lower()),
+        )
+
+        return [
+            SuggestionDto(
+                kind=s.kind,
+                dedup_key=s.dedup_key,
+                severity=s.severity,
+                title=s.title,
+                body=s.body,
+                reason=s.reason,
+                primary_action=s.primary_action,
+                payload=s.payload,
+            )
+            for s in filtered[:_MAX_SUGGESTIONS]
+        ]
+
+
+@SUGGESTIONS_ROUTER.route("", methods=["GET"])
+def get_suggestions():
+    _Logger = logging.getLogger(__name__)
+    user_id = _current_user_id()
+    rows = get_container().inject(GetSuggestionsHandler).handle(user_id)
+    _Logger.debug("Generated %d suggestions for user=%s", len(rows), user_id)
+    return ok({"suggestions": rows, "count": len(rows)})
+
+
+# ── POST /api/suggestions/dismiss ───────────────────────────────────────
+
+class DismissSuggestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=64)
+    dedup_key: str = Field(min_length=1, max_length=255)
+
+
+@SUGGESTIONS_ROUTER.route("/dismiss", methods=["POST"])
+@has_request_body(DismissSuggestionRequest)
+def dismiss_suggestion():
+    body: DismissSuggestionRequest = get_request_body()
+    repo = SqlAlchemyRepository()
+    # If the user previously snoozed the same key, replace that row with
+    # a dismiss — dismissing is a strictly stronger signal.
+    existing = repo.get(DoraSuggestionSuppression).one(
+        EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.KIND).eq(body.kind)
+        & EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.DEDUP_KEY).eq(body.dedup_key)
+    )
+    if existing is not None:
+        existing.decision = SUPPRESSION_DECISION_DISMISSED
+        existing.snoozed_until = None
+    else:
+        repo.add(DoraSuggestionSuppression(
+            kind=body.kind,
+            dedup_key=body.dedup_key,
+            decision=SUPPRESSION_DECISION_DISMISSED,
+            snoozed_until=None,
+            created_at=datetime.now(timezone.utc),
+        ))
+    repo.save_changes()
+    return no_content()
+
+
+# ── POST /api/suggestions/snooze ────────────────────────────────────────
+
+class SnoozeSuggestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=64)
+    dedup_key: str = Field(min_length=1, max_length=255)
+    # Hours rather than a wall-clock until so the SPA doesn't have to
+    # think about timezones. Clamped to a week — long-term snoozes
+    # should be a dismiss in practice.
+    hours: int = Field(ge=1, le=24 * 7)
+
+
+@SUGGESTIONS_ROUTER.route("/snooze", methods=["POST"])
+@has_request_body(SnoozeSuggestionRequest)
+def snooze_suggestion():
+    body: SnoozeSuggestionRequest = get_request_body()
+    repo = SqlAlchemyRepository()
+    until = datetime.now(timezone.utc) + timedelta(hours=body.hours)
+    existing = repo.get(DoraSuggestionSuppression).one(
+        EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.KIND).eq(body.kind)
+        & EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.DEDUP_KEY).eq(body.dedup_key)
+    )
+    if existing is not None:
+        # Don't downgrade a dismiss to a snooze. A user who already said
+        # "never" presumably doesn't want a snooze to revive the prompt.
+        if existing.decision == SUPPRESSION_DECISION_DISMISSED:
+            return no_content()
+        existing.decision = SUPPRESSION_DECISION_SNOOZED
+        existing.snoozed_until = until
+    else:
+        repo.add(DoraSuggestionSuppression(
+            kind=body.kind,
+            dedup_key=body.dedup_key,
+            decision=SUPPRESSION_DECISION_SNOOZED,
+            snoozed_until=until,
+            created_at=datetime.now(timezone.utc),
+        ))
+    repo.save_changes()
+    return no_content()
+
+
+# ── DELETE /api/suggestions/suppression ─────────────────────────────────
+# Undo a previous dismiss/snooze. Powers "actually, please remind me
+# again" from Settings (or the chat) — not surfaced inline on the card.
+
+class UnsuppressSuggestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=64)
+    dedup_key: str = Field(min_length=1, max_length=255)
+
+
+@SUGGESTIONS_ROUTER.route("/unsuppress", methods=["POST"])
+@has_request_body(UnsuppressSuggestionRequest)
+def remove_suppression():
+    body: UnsuppressSuggestionRequest = get_request_body()
+    repo = SqlAlchemyRepository()
+    existing = repo.get(DoraSuggestionSuppression).one(
+        EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.KIND).eq(body.kind)
+        & EntityField(DoraSuggestionSuppression, DoraSuggestionSuppression.Fields.DEDUP_KEY).eq(body.dedup_key)
+    )
+    if existing is None:
+        # Idempotent — no row, no error.
+        return no_content()
+    repo.remove(existing)
+    repo.save_changes()
+    return no_content()

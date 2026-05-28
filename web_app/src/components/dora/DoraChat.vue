@@ -20,6 +20,24 @@
                     </q-tooltip>
                 </q-chip>
                 <q-space />
+                <!-- P2-13 — speak Dora's replies. Hidden when the browser
+                     has no SpeechSynthesis support. The toggle persists
+                     across reloads via the user's saved preference; the
+                     in-page click only flips the session-local view. -->
+                <q-btn
+                    v-if="voiceOutputAvailable"
+                    flat
+                    round
+                    dense
+                    :icon="voiceOutputEnabled ? 'volume_up' : 'volume_off'"
+                    :color="voiceOutputEnabled ? 'primary' : undefined"
+                    :aria-label="voiceOutputEnabled ? 'Mute Dora\'s voice' : 'Enable Dora\'s voice'"
+                    @click="toggleVoiceOutput"
+                >
+                    <q-tooltip>
+                        {{ voiceOutputEnabled ? 'Mute Dora\'s replies' : 'Have Dora speak her replies' }}
+                    </q-tooltip>
+                </q-btn>
                 <q-btn
                     flat
                     round
@@ -47,6 +65,72 @@
             visible
         >
             <div class="dora-chat-messages">
+            <!-- P2-04 — suggestion cards. Render at the top of the
+                 scroll area, above any chat history, so the user sees
+                 them on open without scrolling. Each card has Accept
+                 (navigates via primary_action), Dismiss, Snooze 1d,
+                 and a Why? expander. -->
+            <div
+                v-if="suggestionStore.count > 0"
+                class="dora-suggestion-panel"
+            >
+                <div class="text-caption text-grey q-mb-xs">
+                    <q-icon name="auto_awesome" size="14px" class="q-mr-xs" />
+                    Suggestions
+                </div>
+                <div
+                    v-for="suggestion in suggestionStore.suggestions"
+                    :key="`${suggestion.kind}:${suggestion.dedup_key}`"
+                    class="dora-suggestion-card"
+                    :class="`dora-suggestion-${suggestion.severity}`"
+                >
+                    <div class="dora-suggestion-title">
+                        {{ suggestion.title }}
+                    </div>
+                    <div class="dora-suggestion-body">
+                        {{ suggestion.body }}
+                    </div>
+                    <q-expansion-item
+                        dense
+                        label="Why?"
+                        header-class="dora-suggestion-why-header"
+                        class="dora-suggestion-why"
+                    >
+                        <div class="text-caption text-grey q-px-sm q-pb-xs">
+                            {{ suggestion.reason }}
+                        </div>
+                    </q-expansion-item>
+                    <div class="row q-gutter-xs q-mt-xs">
+                        <q-btn
+                            v-if="suggestion.primary_action"
+                            dense
+                            no-caps
+                            size="sm"
+                            unelevated
+                            color="primary"
+                            :label="suggestion.primary_action.label"
+                            @click="onAcceptSuggestion(suggestion)"
+                        />
+                        <q-btn
+                            dense
+                            no-caps
+                            size="sm"
+                            flat
+                            label="Snooze 1d"
+                            @click="onSnoozeSuggestion(suggestion)"
+                        />
+                        <q-btn
+                            dense
+                            no-caps
+                            size="sm"
+                            flat
+                            color="grey-7"
+                            label="Dismiss"
+                            @click="onDismissSuggestion(suggestion)"
+                        />
+                    </div>
+                </div>
+            </div>
             <div
                 v-for="(message, idx) in messages"
                 :key="idx"
@@ -252,13 +336,33 @@
 
             <q-input
                 v-model="draft"
-                placeholder="Ask Dora anything…"
+                :placeholder="voiceListening ? (voiceTranscript || 'Listening…') : 'Ask Dora anything…'"
                 outlined
                 dense
                 autogrow
                 @keydown.enter.prevent="onSubmit"
             >
                 <template #append>
+                    <!-- P2-13 — mic button. Push-to-talk: tap to start,
+                         tap again (or wait for a final result) to stop.
+                         Hidden when the browser doesn't expose the Web
+                         Speech API. Disabled while Dora is sending so
+                         we don't overwrite the user's draft mid-flight. -->
+                    <q-btn
+                        v-if="voiceInputAvailable"
+                        flat
+                        round
+                        dense
+                        :icon="voiceListening ? 'mic' : 'mic_none'"
+                        :color="voiceListening ? 'negative' : undefined"
+                        :class="voiceListening ? 'dora-mic-listening' : ''"
+                        :aria-label="voiceListening ? 'Stop listening' : 'Start voice input'"
+                        @click="toggleVoiceInput"
+                    >
+                        <q-tooltip>
+                            {{ voiceListening ? 'Stop listening' : 'Voice input' }}
+                        </q-tooltip>
+                    </q-btn>
                     <q-btn
                         flat
                         round
@@ -306,6 +410,11 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useSuggestionStore } from 'src/stores/suggestionStore';
+    import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
+    import { useAuthStore } from 'src/stores/authStore';
+    import { useVoiceInput } from 'src/composables/useVoiceInput';
+    import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import type { QScrollArea } from 'quasar';
     import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -362,6 +471,43 @@
     const helpApi = new HelpApiService();
     const alertApi = new AlertApiService();
     const assistantApi = new AssistantApiService();
+    // P2-04 — suggestion panel reads from the same store as the
+    // launcher badge, so dismissing here updates the badge instantly.
+    const suggestionStore = useSuggestionStore();
+
+    async function onAcceptSuggestion(suggestion: DoraSuggestion) {
+        // "Accept" = navigate to the suggestion's primary action and
+        // let the existing domain flow take it from there. We also
+        // snooze for 1 hour so the suggestion doesn't immediately
+        // re-surface while the user is mid-task; if the underlying
+        // condition truly resolves the next refresh will skip it
+        // organically.
+        if (!suggestion.primary_action) return;
+        try {
+            await suggestionStore.snoozeAsync(suggestion, 1);
+        } catch {
+            // Non-fatal — still navigate even if the snooze write
+            // failed; the worst case is the suggestion reappears.
+        }
+        emit('close');
+        void router.push(suggestion.primary_action.path);
+    }
+
+    async function onDismissSuggestion(suggestion: DoraSuggestion) {
+        try {
+            await suggestionStore.dismissAsync(suggestion);
+        } catch (err) {
+            console.error('Failed to dismiss suggestion', err);
+        }
+    }
+
+    async function onSnoozeSuggestion(suggestion: DoraSuggestion) {
+        try {
+            await suggestionStore.snoozeAsync(suggestion, 24);
+        } catch (err) {
+            console.error('Failed to snooze suggestion', err);
+        }
+    }
 
     // ── Cross-feature composables used by the contextual actions (P14).
     // Reaching for the same composables every other screen uses keeps
@@ -383,6 +529,62 @@
     const draft = ref('');
     const thinking = ref(false);
     const messagesScrollEl = ref<QScrollArea | null>(null);
+
+    // ── P2-13 voice ─────────────────────────────────────────────────────
+    // Voice input: push-to-talk. Tap the mic, speak, tap again (or wait
+    // for the final result). The transcript replaces the draft so the
+    // user can still review / edit before pressing Send — that's the
+    // spec's "confirmation before mutating actions" without needing
+    // an explicit confirm step.
+    const authStore = useAuthStore();
+    const speechOut = useSpeechOutput();
+    const voiceOutputEnabled = ref<boolean>(
+        authStore.currentUser?.voice_output_enabled ?? false,
+    );
+    const voiceOutputAvailable = computed(() => speechOut.available.value);
+
+    const voiceInput = useVoiceInput({
+        continuous: false,
+        onFinal(text) {
+            // Append to whatever the user had typed; clearing would be
+            // surprising mid-edit. Trim and space-join so multi-burst
+            // dictation reads naturally.
+            const existing = draft.value.trim();
+            draft.value = existing ? `${existing} ${text}` : text;
+        },
+    });
+    const voiceInputAvailable = computed(() => voiceInput.available.value);
+    const voiceListening = computed(() => voiceInput.listening.value);
+    const voiceTranscript = computed(() => voiceInput.transcript.value);
+
+    function toggleVoiceInput() {
+        voiceInput.toggle();
+    }
+
+    async function toggleVoiceOutput() {
+        const next = !voiceOutputEnabled.value;
+        voiceOutputEnabled.value = next;
+        if (!next) speechOut.cancel();
+        // Persist the change to the user's profile — silent failure is
+        // fine because the toggle still applies for the current session
+        // even if the backend write didn't land.
+        try {
+            await authStore.updateMeAsync({ voice_output_enabled: next });
+        } catch {
+            /* leave the local state as-is */
+        }
+    }
+
+    // Re-seed the local toggle when the auth store reloads (e.g. login,
+    // refresh, multi-tab) so two tabs don't drift.
+    watch(
+        () => authStore.currentUser?.voice_output_enabled,
+        (saved) => {
+            if (saved !== undefined && saved !== voiceOutputEnabled.value) {
+                voiceOutputEnabled.value = saved;
+            }
+        },
+    );
 
     // Bubble up thinking-state changes so the launcher mascot can flip to
     // the thinking face while a backend round-trip is in flight.
@@ -833,6 +1035,12 @@
         // trigger re-renders and the bubble stays empty until something
         // else nudges reactivity.
         startTypewriter(messages.value[messages.value.length - 1]!);
+        // P2-13 — speak the reply when the user has opted in. Runs in
+        // parallel with the typewriter so the audio and on-screen text
+        // start at roughly the same moment.
+        if (voiceOutputEnabled.value) {
+            speechOut.speak(reply.text);
+        }
     }
 
     function qtyLabel(quantity: number | null): string {
@@ -1343,6 +1551,55 @@
     }
     .dora-action-item + .dora-action-item {
         margin-top: 6px;
+    }
+    /* P2-13 — mic button pulses while listening so the user has a
+       constant indicator that the page is actively capturing audio. */
+    .dora-mic-listening {
+        animation: dora-mic-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes dora-mic-pulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.12); }
+    }
+
+    /* P2-04 — suggestion panel that prepends the chat scroll area.
+       Each card carries a severity-tinted left border so high vs low
+       priority is readable at a glance without needing colour to
+       carry meaning alone (the title + button text reinforce it). */
+    .dora-suggestion-panel {
+        padding: 8px 4px 12px;
+        border-bottom: 1px dashed var(--overlay-active);
+        margin-bottom: 8px;
+    }
+    .dora-suggestion-card {
+        background: var(--surface-elevated, rgba(0, 0, 0, 0.02));
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-top: 6px;
+        border-left: 3px solid var(--c-accent, #17b073);
+    }
+    .dora-suggestion-card.dora-suggestion-high {
+        border-left-color: var(--q-negative, #c10015);
+    }
+    .dora-suggestion-card.dora-suggestion-medium {
+        border-left-color: var(--q-warning, #f2c037);
+    }
+    .dora-suggestion-card.dora-suggestion-low {
+        border-left-color: var(--q-primary, #17b073);
+    }
+    .dora-suggestion-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .dora-suggestion-body {
+        font-size: 0.85rem;
+        color: var(--c-ink-mute, rgba(0, 0, 0, 0.65));
+        margin-top: 2px;
+    }
+    .dora-suggestion-why :deep(.dora-suggestion-why-header) {
+        min-height: 24px;
+        padding: 0;
+        font-size: 0.75rem;
     }
     /* P14: contextual "on this page" chip row — a slightly warmer band so
        the eye picks the page-specific actions out of the generic ones. */

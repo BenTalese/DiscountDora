@@ -68,6 +68,13 @@ FONT_SIZE_MD = "md"
 FONT_SIZE_LG = "lg"
 ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG)
 
+# P2-05 — grocery-budget period. `weekly` rolls from Monday; `monthly`
+# from the 1st (local-civil-date for simplicity; the home use-case
+# doesn't justify timezone gymnastics).
+BUDGET_PERIOD_WEEKLY = "weekly"
+BUDGET_PERIOD_MONTHLY = "monthly"
+ALLOWED_BUDGET_PERIODS = (BUDGET_PERIOD_WEEKLY, BUDGET_PERIOD_MONTHLY)
+
 
 @dataclass
 class User(BaseEntity):
@@ -101,6 +108,19 @@ class User(BaseEntity):
     # the cutoff a session cookie's issued-at must beat, so resetting a
     # password effectively invalidates every existing session.
     password_changed_at: datetime | None = None
+    # P2-05 — optional grocery budget. `budget_amount` NULL means the
+    # feature is disabled (the user hasn't opted in); a positive value
+    # turns on dashboard + assistant budget surfaces. `budget_period`
+    # picks the rolling window. We deliberately don't store the period
+    # *start* — it's derived from the current date so it can't go stale.
+    budget_amount: float | None = None
+    budget_period: str = BUDGET_PERIOD_WEEKLY
+    # P2-13 — voice opt-ins. Off by default because the Web Speech APIs
+    # are permission-gated and behaviour varies by browser; we never
+    # silently activate a microphone or speaker. The SPA reads these on
+    # boot to seed the per-page toggles.
+    voice_input_enabled: bool = False
+    voice_output_enabled: bool = False
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -118,3 +138,7 @@ class User(BaseEntity):
         LAST_BACKUP_AT = "last_backup_at"
         EMAIL_VERIFIED = "email_verified"
         PASSWORD_CHANGED_AT = "password_changed_at"
+        BUDGET_AMOUNT = "budget_amount"
+        BUDGET_PERIOD = "budget_period"
+        VOICE_INPUT_ENABLED = "voice_input_enabled"
+        VOICE_OUTPUT_ENABLED = "voice_output_enabled"

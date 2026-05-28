@@ -29,6 +29,7 @@ export type FontFamilyPreference =
     | 'lexend'
     | 'plus_jakarta_sans';
 export type FontSizePreference = 'sm' | 'md' | 'lg';
+export type BudgetPeriod = 'weekly' | 'monthly';
 
 export type AuthenticatedUser = {
     user_id: string;
@@ -53,4 +54,12 @@ export type AuthenticatedUser = {
     // sent on registration. Drives the verify-banner on LoginPage and
     // the Settings → Account hint. First-user-is-admin auto-verifies.
     email_verified: boolean;
+    // P2-05 — optional grocery budget. `null` amount = feature off
+    // (the user hasn't opted in). Period chooses the rolling window.
+    budget_amount: number | null;
+    budget_period: BudgetPeriod;
+    // P2-13 — voice opt-ins. Both default false; the SPA seeds its
+    // per-page mic / volume toggles from these on boot.
+    voice_input_enabled: boolean;
+    voice_output_enabled: boolean;
 };

@@ -9,8 +9,10 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.recipes.recipe_tag_access import set_tags_for_recipe
 from dora_api.features.routers import RECIPE_ROUTER
-from dora_api.infrastructure.api_response import (business_rule_violation,
+from dora_api.infrastructure.api_response import (bad_request,
+                                                  business_rule_violation,
                                                   entity_existence_failure,
                                                   entity_existence_failures,
                                                   no_content, not_found)
@@ -51,6 +53,9 @@ class UpdateRecipeRequest(BaseModel):
     servings: int | None = None
     time_of_day: str | None = None
     ingredients: List[UpdateRecipeIngredientRequest] | None = None
+    # P2-08 — when present (even as an empty list), the full tag set is
+    # replaced. Omit the field to leave existing tags untouched.
+    tags: List[str] | None = None
 
 
 @dataclass(slots=True)
@@ -59,6 +64,7 @@ class UpdateRecipeResponse:
     recipe_already_exists: bool = False
     recipe_collection_not_found: bool = False
     missing_stock_item_ids: tuple[UUID, ...] = ()
+    invalid_tag_message: str | None = None
 
 
 # Attributes that may safely be assigned from the request as-is, including
@@ -132,6 +138,14 @@ class UpdateRecipeHandler:
         if "is_favourite" in _SetFields and request.is_favourite is not None:
             _Recipe.is_favourite = request.is_favourite
 
+        # P2-08 — replace the tag set when explicitly provided. Empty
+        # list clears all tags; omitted field leaves them untouched.
+        if "tags" in _SetFields and request.tags is not None:
+            try:
+                set_tags_for_recipe(recipe_id, request.tags)
+            except ValueError as exc:
+                return UpdateRecipeResponse(invalid_tag_message=str(exc))
+
         self.repository.save_changes()
         return UpdateRecipeResponse()
 
@@ -170,6 +184,10 @@ def update_recipe(recipe_id: UUID):
             field_of(UpdateRecipeRequest, 'ingredients'),
             *_Response.missing_stock_item_ids,
         )
+
+    if _Response.invalid_tag_message:
+        _Logger.warning(f"Invalid recipe tag on update: {_Response.invalid_tag_message}")
+        return bad_request(_Response.invalid_tag_message)
 
     _Logger.info(f"Successfully updated recipe with ID: {recipe_id}")
     return no_content()

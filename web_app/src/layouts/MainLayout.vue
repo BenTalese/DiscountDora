@@ -312,6 +312,14 @@
         if (id) void router.push(`/shopping-lists/${id}`);
         else void router.push('/shopping-lists');
     }
+    // P2-11 — jump straight into shop mode for the primary list. Falls
+    // back to the list overview when there's no primary set, mirroring
+    // the existing openPrimaryList behaviour.
+    function openPrimaryShopMode() {
+        const id = shoppingListStore.primaryListId;
+        if (id) void router.push(`/shopping-lists/${id}/shop`);
+        else void router.push('/shopping-lists');
+    }
     useCommands([
         { id: 'nav.dashboard', label: 'Go to Dashboard', icon: ICONS.dashboard, section: 'Navigate', action: () => router.push('/') },
         { id: 'nav.stock', label: 'Go to Stock', icon: 'inventory_2', section: 'Navigate', action: () => router.push('/stock') },
@@ -324,6 +332,7 @@
         { id: 'nav.price-history', label: 'Go to Price History', icon: ICONS.show_chart, section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
         { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
         { id: 'nav.reports', label: 'Go to Reports', icon: ICONS.insights, section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
+        { id: 'nav.waste', label: 'Go to Waste', icon: ICONS.expiry, section: 'Navigate', tags: ['expiring', 'rescue', 'wasted', 'use soon'], action: () => router.push('/waste') },
         { id: 'nav.substitutes', label: 'Go to Substitutes graph', icon: ICONS.hub, section: 'Navigate', tags: ['alternatives', 'swap'], action: () => router.push('/substitutes') },
         { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['layout', 'pantry', 'floor plan'], action: () => router.push('/map') },
         { id: 'nav.map', label: 'Go to Stock map', icon: ICONS.map, section: 'Navigate', tags: ['pantry', 'layout', 'canvas'], action: () => router.push('/map') },
@@ -332,6 +341,7 @@
 
         { id: 'create.stock-item', label: 'Create stock item', icon: ICONS.add_box, section: 'Create', tags: ['new item', 'add item'], action: () => router.push({ path: '/stock', query: { create: '1' } }) },
         { id: 'lists.open-primary', label: 'Open primary shopping list', icon: ICONS.shopping_cart, section: 'Shopping lists', action: openPrimaryList },
+        { id: 'lists.shop-mode', label: 'Shop mode on primary list', icon: ICONS.shopping_cart, section: 'Shopping lists', tags: ['in store', 'mobile', 'big buttons'], action: openPrimaryShopMode },
         { id: 'lists.autogenerate-low', label: 'Auto-generate shopping list from low stock', icon: ICONS.auto_awesome, section: 'Shopping lists', tags: ['generate', 'restock'], action: autogenerateFromLowStock },
 
         { id: 'ui.toggle-dark', label: 'Toggle dark mode', icon: ICONS.dark_mode, section: 'View', tags: ['theme', 'light'], action: () => $q.dark.toggle() },
@@ -350,6 +360,7 @@
         { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
         { label: 'Data', icon: ICONS.storage, link: '/data' },
         { label: 'Reports', icon: ICONS.insights, link: '/reports' },
+        { label: 'Waste', icon: ICONS.expiry, link: '/waste' },
         { label: 'Substitutes', icon: ICONS.hub, link: '/substitutes' },
         { label: 'Stock Map', icon: ICONS.map, link: '/map' },
         { label: 'Settings', icon: ICONS.settings, link: '/settings' },

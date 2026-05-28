@@ -1,5 +1,6 @@
 import type {
     AuthenticatedUser,
+    BudgetPeriod,
     FontFamilyPreference,
     FontSizePreference,
     ThemePreference
@@ -21,6 +22,15 @@ export type UpdateMeCommand = {
     theme?: ThemePreference;
     font_family?: FontFamilyPreference;
     font_size?: FontSizePreference;
+    /** P2-05 — grocery budget. Sending a positive number opts in;
+     *  `clear_budget_amount: true` opts out. `0` is also treated as opt-out
+     *  by the backend. */
+    budget_amount?: number | null;
+    clear_budget_amount?: boolean;
+    budget_period?: BudgetPeriod;
+    /** P2-13 — voice opt-in toggles. Saved per user. */
+    voice_input_enabled?: boolean;
+    voice_output_enabled?: boolean;
 };
 export type ChangePasswordCommand = {
     current_password: string;

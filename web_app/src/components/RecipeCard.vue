@@ -61,6 +61,28 @@
             </div>
         </q-card-section>
 
+        <!-- P2-08 — dietary tag chips. Render only when the recipe is
+             tagged; muted styling so they sit alongside the time /
+             serves / difficulty chips without competing visually. -->
+        <q-card-section
+            v-if="recipe.tags && recipe.tags.length > 0"
+            class="q-pt-none"
+        >
+            <div class="row q-gutter-xs">
+                <q-chip
+                    v-for="tag in recipe.tags"
+                    :key="tag"
+                    dense
+                    outline
+                    color="primary"
+                    size="sm"
+                    class="recipe-card-tag"
+                >
+                    {{ tag }}
+                </q-chip>
+            </div>
+        </q-card-section>
+
         <q-card-section class="q-pt-none">
             <q-chip
                 v-if="cookableNow"

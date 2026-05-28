@@ -11,8 +11,10 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.recipes.get_recipes import get_recipes
+from dora_api.features.recipes.recipe_tag_access import set_tags_for_recipe
 from dora_api.features.routers import RECIPE_ROUTER
-from dora_api.infrastructure.api_response import (business_rule_violation,
+from dora_api.infrastructure.api_response import (bad_request,
+                                                  business_rule_violation,
                                                   created,
                                                   entity_existence_failure,
                                                   entity_existence_failures)
@@ -47,6 +49,10 @@ class CreateRecipeRequest(BaseModel):
     servings: int | None = Field(default = None, ge = 1)
     time_of_day: str | None = Field(default = None, max_length = 50)
     ingredients: List[CreateRecipeIngredientRequest] = Field(default_factory = list)
+    # P2-08 — curated tags (see `dora_api/domain/recipe_tags.py`).
+    # Validated server-side against the canonical catalogue; invalid
+    # values surface as a 400 with the offending tag.
+    tags: List[str] = Field(default_factory = list)
 
 
 @dataclass(slots=True)
@@ -55,6 +61,7 @@ class CreateRecipeResponse:
     recipe_already_exists: bool = False
     recipe_collection_not_found: bool = False
     missing_stock_item_ids: tuple[UUID, ...] = ()
+    invalid_tag_message: str | None = None
 
 
 class CreateRecipeHandler:
@@ -116,7 +123,23 @@ class CreateRecipeHandler:
         )
 
         self.repository.add(_NewRecipe)
+        # Save first so the recipe row exists before the tag FK insert.
         self.repository.save_changes()
+
+        if request.tags:
+            try:
+                set_tags_for_recipe(_NewRecipe.id, request.tags)
+            except ValueError as exc:
+                # Roll back the assoc inserts (none yet committed) and
+                # surface the bad tag to the caller. The recipe row
+                # stays — invalid tag input shouldn't fail the whole
+                # create after a clean validation pass would have
+                # caught it earlier in the request lifecycle.
+                return CreateRecipeResponse(
+                    new_recipe_id=_NewRecipe.id,
+                    invalid_tag_message=str(exc),
+                )
+            self.repository.save_changes()
 
         return CreateRecipeResponse(new_recipe_id = _NewRecipe.id)
 
@@ -149,6 +172,10 @@ def create_recipe():
             field_of(CreateRecipeRequest, 'ingredients'),
             *_Response.missing_stock_item_ids,
         )
+
+    if _Response.invalid_tag_message:
+        _Logger.warning(f"Invalid recipe tag: {_Response.invalid_tag_message}")
+        return bad_request(_Response.invalid_tag_message)
 
     _Logger.info(f"Successfully created recipe with ID: {_Response.new_recipe_id}")
     from dora_api.features.recipes.get_recipes import GetRecipesHandler

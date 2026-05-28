@@ -50,6 +50,15 @@ class ShoppingListLine(BaseEntity):
     # lines that were never ticked (e.g. archived without finishing).
     picked_offer_price: float | None = None
     list_price_at_pick: float | None = None
+    # P2-02 purchase memory: what the shopper *actually* paid (per unit) and
+    # who they actually bought it from, when those differ from the planned
+    # offer. Either may be set independently — a user might confirm the
+    # merchant on the chip but type a different till-receipt price, or vice
+    # versa. Both NULL = use the picked_offer_price snapshot as the historic
+    # paid price (the previous behaviour). When set, actual_unit_price wins
+    # for totals and for the assistant's price-history queries.
+    actual_unit_price: float | None = None
+    purchased_merchant_id: UUID | None = None
 
     class Fields(BaseEntity.Fields):
         SHOPPING_LIST_ID = "shopping_list_id"
@@ -62,6 +71,8 @@ class ShoppingListLine(BaseEntity):
         ADDED_AT = "added_at"
         PICKED_OFFER_PRICE = "picked_offer_price"
         LIST_PRICE_AT_PICK = "list_price_at_pick"
+        ACTUAL_UNIT_PRICE = "actual_unit_price"
+        PURCHASED_MERCHANT_ID = "purchased_merchant_id"
 
 
 @dataclass

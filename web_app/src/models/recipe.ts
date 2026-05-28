@@ -26,6 +26,21 @@ export type Recipe = {
     servings: number | null;
     time_of_day: string | null;
     ingredients: RecipeIngredient[];
+    /** P2-08 — canonical dietary / allergen-free / nutritional tags
+     *  the recipe has been tagged with. Empty array when untagged. */
+    tags: string[];
+};
+
+export type RecipeTagDefinition = {
+    value: string;
+    label: string;
+    category: string;
+};
+
+export type RecipeTagCatalogue = {
+    tags: RecipeTagDefinition[];
+    /** Plain-English disclaimer to surface alongside any tag-based UI. */
+    disclaimer: string;
 };
 
 export type RecipeCollection = {

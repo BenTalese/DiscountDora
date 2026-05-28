@@ -25,6 +25,9 @@ from dora_api.domain.entities.shopping_list_template import (
 )
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.dora_suggestion_suppression import \
+    DoraSuggestionSuppression
+from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
@@ -202,6 +205,15 @@ def configure_mappings(db: SQLAlchemy):
         Column("added_at", DateTime(timezone=True), nullable=True),
         Column("picked_offer_price", Float, nullable=True),
         Column("list_price_at_pick", Float, nullable=True),
+        # P2-02 purchase memory — what the shopper actually paid / where
+        # they bought it. NULL when the user didn't override the planned
+        # offer; reports & the assistant fall back to picked_offer_price.
+        Column("actual_unit_price", Float, nullable=True),
+        Column(
+            "purchased_merchant_id", UUIDType,
+            ForeignKey("Merchant.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
     )
 
     shopping_list_template_table = Table(
@@ -250,6 +262,34 @@ def configure_mappings(db: SQLAlchemy):
         Column("changed_at", DateTime(timezone=True), nullable=False),
     )
 
+    # P2-04 — user's negative decisions on Dora suggestions. One row per
+    # (kind, dedup_key) the user has dismissed or snoozed. The generator
+    # filters proposed suggestions against this table on every call.
+    dora_suggestion_suppression_table = Table(
+        "DoraSuggestionSuppression", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("kind", String(64), nullable=False),
+        Column("dedup_key", String(255), nullable=False),
+        Column("decision", String(16), nullable=False),
+        Column("snoozed_until", DateTime(timezone=True), nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # P2-06 — append-only log of discarded food. FK is SET NULL (not
+    # CASCADE) so deleting a stock item doesn't wipe waste history; the
+    # denormalised name on the row keeps insights readable.
+    stock_item_waste_event_table = Table(
+        "StockItemWasteEvent", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="SET NULL"), nullable=True),
+        Column("stock_item_name", String(255), nullable=False),
+        Column("reason", String(32), nullable=False),
+        Column("quantity", Integer, nullable=True),
+        Column("estimated_value", Float, nullable=True),
+        Column("note", String, nullable=True),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+    )
+
     recipe_collection_table = Table(
         "RecipeCollection", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -273,6 +313,18 @@ def configure_mappings(db: SQLAlchemy):
         Column("recipe_collection_id", UUIDType, ForeignKey("RecipeCollection.id", ondelete="SET NULL"), nullable=True),
         Column("servings", Integer, nullable=True),
         Column("time_of_day", String(50), nullable=True),
+    )
+
+    # P2-08 — recipe → tag association. Tags themselves are not entities:
+    # the canonical catalogue lives in `dora_api/domain/recipe_tags.py`,
+    # and this table simply pins which curated tag(s) belong to a recipe.
+    # No standalone mapping is registered (matching the
+    # StockItemProduct/StockItemSubstitute pattern); handlers read/write
+    # rows directly via the SQLAlchemy core API or repository helpers.
+    recipe_tag_table = Table(
+        "RecipeTag", metadata,
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), primary_key=True),
+        Column("tag", String(64), primary_key=True),
     )
 
     recipe_ingredient_table = Table(
@@ -332,6 +384,13 @@ def configure_mappings(db: SQLAlchemy):
         Column("last_backup_at", DateTime(timezone=True), nullable=True),
         Column("email_verified", Boolean, nullable=False, server_default="0"),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),
+        # P2-05 — grocery budget. NULL amount = feature off.
+        Column("budget_amount", Float, nullable=True),
+        Column("budget_period", String(16), nullable=False, server_default="weekly"),
+        # P2-13 — voice opt-ins. Off by default; SPA seeds the in-page
+        # toggles from these and the user can override per session.
+        Column("voice_input_enabled", Boolean, nullable=False, server_default="0"),
+        Column("voice_output_enabled", Boolean, nullable=False, server_default="0"),
     )
 
     auth_token_table = Table(
@@ -421,6 +480,16 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(StockLevelChange, stock_level_change_table, properties={
         "_id_col": stock_level_change_table.c.id,
         "id": stock_level_change_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(StockItemWasteEvent, stock_item_waste_event_table, properties={
+        "_id_col": stock_item_waste_event_table.c.id,
+        "id": stock_item_waste_event_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(DoraSuggestionSuppression, dora_suggestion_suppression_table, properties={
+        "_id_col": dora_suggestion_suppression_table.c.id,
+        "id": dora_suggestion_suppression_table.c.id,
     })
 
     _mapper_registry.map_imperatively(ProductBarcode, product_barcode_table, properties={

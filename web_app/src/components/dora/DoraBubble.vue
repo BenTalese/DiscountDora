@@ -61,6 +61,22 @@
                     NEW
                     <q-tooltip>A newer version of Discount Dora is available.</q-tooltip>
                 </q-badge>
+                <!-- P2-04 — suggestion count badge. Skipped while the
+                     NEW (update) badge is showing so they don't stack. -->
+                <q-badge
+                    v-if="!updateBadge && suggestionCount > 0 && !open"
+                    floating
+                    :color="suggestionHighCount > 0 ? 'negative' : 'primary'"
+                    rounded
+                    class="dora-suggestion-badge"
+                >
+                    {{ suggestionCount > 9 ? '9+' : suggestionCount }}
+                    <q-tooltip>
+                        Dora has {{ suggestionCount }} suggestion{{
+                            suggestionCount === 1 ? '' : 's'
+                        }} for you.
+                    </q-tooltip>
+                </q-badge>
             </div>
         </button>
     </div>
@@ -79,6 +95,7 @@
     } from 'src/components/dora/doraTypes';
     import HelpApiService from 'src/services/api/helpApiService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useSuggestionStore } from 'src/stores/suggestionStore';
     import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
     const LOCAL_STORAGE_HINT_KEY = 'dora.helpHintDismissed';
@@ -86,6 +103,11 @@
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const helpApi = new HelpApiService();
+    // P2-04 — suggestion count drives the badge on the launcher and
+    // gives DoraChat the data when it opens. Refreshed on mount and
+    // when the chat closes (cheap; the endpoint is read-only).
+    const suggestionStore = useSuggestionStore();
+    const { count: suggestionCount, highCount: suggestionHighCount } = storeToRefs(suggestionStore);
 
     // How long without interaction before Dora's eyes droop shut. Short
     // enough to read as "she's napping" but long enough not to nod off
@@ -193,6 +215,10 @@
 
     function onClose() {
         open.value = false;
+        // Re-fetch suggestions after closing — the user may have just
+        // dismissed/snoozed/accepted from inside the chat, and the
+        // dashboard card + launcher badge should reflect that.
+        void suggestionStore.refreshAsync();
     }
 
     // ── Conversation-driven reactions ──────────────────────────────────
@@ -256,6 +282,10 @@
         } catch {
             // Don't bug the user — the bubble still works without this.
         }
+
+        // First suggestion-count fetch. The store swallows endpoint
+        // errors so older backends just keep the badge hidden.
+        void suggestionStore.refreshAsync();
     });
 
     // Closing the chat clears any held reply mood so the launcher resets to
@@ -400,7 +430,7 @@
        `floating` absolute-positioning keeps working — otherwise the
        generic `position: relative` here puts it back into flow and
        shoves the mascot sideways. */
-    .dora-bubble-launcher-inner > :not(.dora-update-badge) {
+    .dora-bubble-launcher-inner > :not(.dora-update-badge):not(.dora-suggestion-badge) {
         position: relative;
         z-index: 1;
     }
@@ -411,6 +441,18 @@
         top: 2px;
         right: 2px;
         z-index: 2;
+    }
+    /* P2-04 — same corner as the NEW badge but only one of them can be
+       shown at a time (NEW wins), so the rule above hides this until
+       updateBadge is false. */
+    .dora-suggestion-badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        z-index: 2;
+        font-weight: 700;
+        min-width: 22px;
+        padding: 0 6px;
     }
     .dora-bubble-launcher:hover .dora-bubble-launcher-inner {
         animation: dora-hover-bob 1.6s ease-in-out infinite;

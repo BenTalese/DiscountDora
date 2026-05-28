@@ -206,9 +206,15 @@
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    // P2-13 — extracted browser-speech composables. Cook mode opts into
+    // continuous listening so the user can keep their hands in the
+    // mixing bowl while saying "next" / "start timer".
+    import { useSpeechOutput } from 'src/composables/useSpeechOutput';
+    import { useVoiceInput } from 'src/composables/useVoiceInput';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
     import RecipeApiService from 'src/services/api/recipeApiService';
+    import { useAuthStore } from 'src/stores/authStore';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -242,27 +248,31 @@
     const loading = ref(true);
     const currentStepIndex = ref(0);
 
-    const speechEnabled = ref(false);
-    const listening = ref(false);
-    const speechRecognitionAvailable = ref(false);
+    // ── P2-13 voice (extracted into composables) ────────────────────────
+    // The user's persisted preference seeds the local toggle; subsequent
+    // in-page taps flip the session view and persist back via authStore.
+    const authStore = useAuthStore();
+    const speechOut = useSpeechOutput();
+    const speechEnabled = ref<boolean>(
+        authStore.currentUser?.voice_output_enabled ?? false,
+    );
+
+    const voiceInput = useVoiceInput({
+        continuous: true,
+        // Cook mode bypasses the chat draft entirely — the transcript is
+        // interpreted as a command and dispatched immediately. Wrapping
+        // the dispatcher in onFinal keeps the composable agnostic of
+        // cook-mode-specific verbs.
+        onFinal(text) {
+            handleVoiceCommand(text);
+        },
+    });
+    const listening = computed(() => voiceInput.listening.value);
+    const speechRecognitionAvailable = computed(() => voiceInput.available.value);
 
     const timerRemaining = ref<number | null>(null);
     const timerRunning = ref(false);
     let timerIntervalId: ReturnType<typeof setInterval> | null = null;
-
-    type SpeechRecognitionLike = {
-        continuous: boolean;
-        interimResults: boolean;
-        lang: string;
-        start: () => void;
-        stop: () => void;
-        onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-        onend: (() => void) | null;
-        onerror: ((event: unknown) => void) | null;
-    };
-    type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-    let recognition: SpeechRecognitionLike | null = null;
 
     const steps = computed(() => {
         if (!recipe.value?.instructions) return ['No instructions provided.'];
@@ -359,20 +369,26 @@
     }
 
     function speak(text: string) {
-        if (!speechEnabled.value || typeof window === 'undefined' || !window.speechSynthesis) return;
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        window.speechSynthesis.speak(utter);
+        if (!speechEnabled.value) return;
+        speechOut.speak(text);
     }
 
     function speakCurrent() {
         speak(currentStep.value);
     }
 
-    function toggleSpeech() {
-        speechEnabled.value = !speechEnabled.value;
-        if (speechEnabled.value) speakCurrent();
-        else if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+    async function toggleSpeech() {
+        const next = !speechEnabled.value;
+        speechEnabled.value = next;
+        if (next) speakCurrent();
+        else speechOut.cancel();
+        // Persist the preference back to the user row. Silent failure
+        // is fine — the session-local toggle still applies.
+        try {
+            await authStore.updateMeAsync({ voice_output_enabled: next });
+        } catch {
+            /* leave local state as-is */
+        }
     }
 
     function nextStep() {
@@ -501,73 +517,57 @@
         }
     }
 
-    function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-        if (typeof window === 'undefined') return null;
-        const w = window as unknown as {
-            SpeechRecognition?: SpeechRecognitionCtor;
-            webkitSpeechRecognition?: SpeechRecognitionCtor;
-        };
-        return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-    }
-
-    function startListening() {
-        const Ctor = getSpeechRecognitionCtor();
-        if (!Ctor) return;
-        recognition = new Ctor();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-        recognition.onresult = (event) => {
-            const lastIdx = event.results.length - 1;
-            const transcript = event.results[lastIdx]![0]!.transcript.trim().toLowerCase();
-            if (/(^|\s)(next|forward|continue)(\s|$)/.test(transcript)) nextStep();
-            else if (/(^|\s)(previous|back|go back)(\s|$)/.test(transcript)) prevStep();
-            else if (/(^|\s)(repeat|again|say it again)(\s|$)/.test(transcript)) speakCurrent();
-            else if (/(^|\s)(stop|exit|quit)(\s|$)/.test(transcript)) exitCookMode();
-        };
-        recognition.onend = () => {
-            if (listening.value && recognition) {
-                try {
-                    recognition.start();
-                } catch {
-                    listening.value = false;
-                }
-            }
-        };
-        recognition.onerror = () => {
-            listening.value = false;
-        };
-        try {
-            recognition.start();
-            listening.value = true;
-        } catch {
-            listening.value = false;
+    // ── P2-13 voice command dispatcher ──────────────────────────────────
+    // Called by `useVoiceInput.onFinal` whenever the browser hands us a
+    // finalised utterance. Each branch maps to a hands-free action that
+    // mirrors a visible button in the UI — we deliberately don't expose
+    // voice-only side effects, so the user can always verify what we
+    // think they said by spotting the corresponding click.
+    function handleVoiceCommand(rawTranscript: string) {
+        const transcript = rawTranscript.toLowerCase();
+        if (/(^|\s)(next|forward|continue)(\s|$)/.test(transcript)) {
+            nextStep();
+        } else if (/(^|\s)(previous|back|go back)(\s|$)/.test(transcript)) {
+            prevStep();
+        } else if (/(^|\s)(repeat|again|say it again)(\s|$)/.test(transcript)) {
+            speakCurrent();
+        } else if (/(^|\s)(start timer|begin timer|set timer)(\s|$)/.test(transcript)) {
+            // "start timer" → use whatever duration the current step
+            // implies; fall back to 5 minutes when nothing's detectable.
+            const minutes = detectedTimerMinutes.value ?? 5;
+            startTimer(minutes * 60);
+            if (speechEnabled.value) speak(`Timer set for ${minutes} minutes.`);
+        } else if (/(^|\s)(pause timer|stop timer)(\s|$)/.test(transcript)) {
+            pauseTimer();
+            if (speechEnabled.value) speak('Timer paused.');
+        } else if (/(^|\s)(reset timer|clear timer)(\s|$)/.test(transcript)) {
+            resetTimer();
+            if (speechEnabled.value) speak('Timer reset.');
+        } else if (/(^|\s)(mark done|step done|tick step|done)(\s|$)/.test(transcript)) {
+            // Mark the *current* step done without auto-advancing —
+            // "next" stays explicit. Mirrors tapping the checkbox in
+            // the step list rather than the big Next button.
+            toggleStepDone(currentStepIndex.value);
+            if (speechEnabled.value) speak('Step marked done.');
+        } else if (/(^|\s)(stop|exit|quit)(\s|$)/.test(transcript)) {
+            exitCookMode();
         }
+        // Unrecognised commands are deliberately ignored — silence is
+        // less annoying than a "I didn't understand that" interjection
+        // every time the user talks to someone else in the kitchen.
     }
 
-    function stopListening() {
-        listening.value = false;
-        if (recognition) {
-            try {
-                recognition.stop();
-            } catch {
-                /* ignore */
-            }
-            recognition = null;
-        }
-    }
-
-    function toggleListening() {
-        if (listening.value) stopListening();
-        else startListening();
-    }
+    function startListening() { voiceInput.start(); }
+    function stopListening() { voiceInput.stop(); }
+    function toggleListening() { voiceInput.toggle(); }
 
     watch(currentStepIndex, () => {
         if (speechEnabled.value) speakCurrent();
     });
 
     onMounted(async () => {
-        speechRecognitionAvailable.value = getSpeechRecognitionCtor() !== null;
+        // speechRecognitionAvailable is a computed off the composable
+        // now, so no manual seeding required.
         window.addEventListener('keydown', handleKeydown);
 
         const recipeId = route.params.id as string;

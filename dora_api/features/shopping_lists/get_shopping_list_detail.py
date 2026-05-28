@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
+from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
@@ -55,6 +56,11 @@ class ShoppingListLineDto:
     # ShoppingListDetail.
     added_via: str
     added_at: datetime | None
+    # P2-02 purchase memory — what the shopper actually paid / where they
+    # actually bought it. Both NULL until the user overrides on the line.
+    actual_unit_price: float | None
+    purchased_merchant_id: UUID | None
+    purchased_merchant_name: str | None
     offers: List[LineProductOfferDto] = field(default_factory=list)
 
 
@@ -110,6 +116,18 @@ class GetShoppingListDetailHandler:
             _LocationLookup = {
                 loc.id: loc for loc in self.repository.get(StockLocation).all()
             }
+
+        # Resolve merchant names for any `purchased_merchant_id` overrides
+        # so the line DTO can render the chip without a second round-trip.
+        _MerchantNameLookup: dict[UUID, str] = {}
+        _PurchasedMerchantIds = {
+            l.purchased_merchant_id for l in _Lines if l.purchased_merchant_id
+        }
+        if _PurchasedMerchantIds:
+            merchants = self.repository.get(Merchant).all(
+                EntityField(Merchant, "id").in_(list(_PurchasedMerchantIds))
+            )
+            _MerchantNameLookup = {m.id: m.name for m in merchants}
 
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
             if item is None or item.stock_location is None:
@@ -171,6 +189,12 @@ class GetShoppingListDetailHandler:
                 sequence = line.sequence,
                 added_via = line.added_via,
                 added_at = line.added_at,
+                actual_unit_price = line.actual_unit_price,
+                purchased_merchant_id = line.purchased_merchant_id,
+                purchased_merchant_name = (
+                    _MerchantNameLookup.get(line.purchased_merchant_id)
+                    if line.purchased_merchant_id else None
+                ),
                 offers = offers,
             ))
 

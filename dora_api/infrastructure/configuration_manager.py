@@ -256,7 +256,7 @@ class DoraConfig:
 
     def _save_configuration(self) -> None:
         with open(self._config_path, 'w') as _AppSettings:
-            json.dump(self._config.model_dump_json(), _AppSettings, indent = 4)
+            _AppSettings.write(self._config.model_dump_json(indent = 4))
 
 
 DORA_CONFIG = DoraConfig()

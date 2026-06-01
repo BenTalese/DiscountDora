@@ -92,8 +92,7 @@ class GetMealsHandler:
         page = self._base_query().paginate(
             options, MealDto.from_entity, field_map=_FIELD_MAP
         )
-        page.items = self._hydrate_tags(page.items)
-        return page
+        return dataclasses.replace(page, items=self._hydrate_tags(page.items))
 
     def handle_by_id(self, meal_id: UUID) -> MealDto | None:
         entity = self._base_query().by_id(meal_id)

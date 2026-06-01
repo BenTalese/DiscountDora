@@ -39,3 +39,4 @@ REPORTS_ROUTER = Blueprint("REPORTS_ROUTER", __name__, url_prefix="/api/reports"
 BUDGET_ROUTER = Blueprint("BUDGET_ROUTER", __name__, url_prefix="/api/budget")
 WASTE_ROUTER = Blueprint("WASTE_ROUTER", __name__, url_prefix="/api/waste")
 SUGGESTIONS_ROUTER = Blueprint("SUGGESTIONS_ROUTER", __name__, url_prefix="/api/suggestions")
+TTS_ROUTER = Blueprint("TTS_ROUTER", __name__, url_prefix="/api/tts")

@@ -70,6 +70,7 @@ const routes: RouteRecordRaw[] = [
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
+            { path: 'tts-test', component: () => import('pages/TtsTestPage.vue'), meta: { title: 'TTS test' } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
             { path: 'recipes', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Recipes' } },
             { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },

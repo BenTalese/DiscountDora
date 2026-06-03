@@ -1,10 +1,10 @@
-import type { MealPlan, MealPlanIngredient } from 'src/models/meal';
+import type { MealPlan, MealPlanIngredient, Shortfall } from 'src/models/mealPlan';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
 import type { Page } from './queryStringBuilder';
 
 export type MealPlanEntryCommand = {
-    meal_id: string;
+    recipe_id: string;
     scheduled_for: string;
     servings: number;
     slot: string;
@@ -21,6 +21,9 @@ export type UpdateMealPlanCommand = {
     name?: string;
     start_date?: string;
     entries?: MealPlanEntryCommand[];
+    /** Required when `entries` is an empty array. Without it the backend
+     *  rejects the wipe so a UI bug can't accidentally nuke a plan. */
+    confirm_clear_entries?: boolean;
 };
 
 export default class MealPlanApiService {
@@ -46,4 +49,7 @@ export default class MealPlanApiService {
 
     getIngredientsAsync = async (mealPlanId: string): Promise<MealPlanIngredient[]> =>
         await this.httpClient.get<MealPlanIngredient[]>(`/meal-plans/${mealPlanId}/ingredients`);
+
+    getShortfallAsync = async (): Promise<Shortfall[]> =>
+        await this.httpClient.get<Shortfall[]>('/meal-plans/shortfall');
 }

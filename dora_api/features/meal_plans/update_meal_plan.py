@@ -6,11 +6,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
 from dora_api.features.routers import MEAL_PLAN_ROUTER
-from dora_api.infrastructure.api_response import (entity_existence_failures,
+from dora_api.infrastructure.api_response import (bad_request,
+                                                  entity_existence_failures,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import (field_of, get_container,
@@ -22,7 +23,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class UpdateMealPlanEntryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    meal_id: UUID
+    recipe_id: UUID
     scheduled_for: date
     servings: int = Field(default = 1, ge = 1)
     slot: str = Field(min_length = 1, max_length = 50)
@@ -34,12 +35,19 @@ class UpdateMealPlanRequest(BaseModel):
     name: str | None = Field(default = None, min_length = 1, max_length = 255)
     start_date: date | None = None
     entries: List[UpdateMealPlanEntryRequest] | None = None
+    # Explicit opt-in for the destructive "clear every future entry"
+    # path. Sending `entries: []` without this flag is rejected so a
+    # caller can't accidentally nuke a plan by forgetting to populate
+    # the array. Past/consumed entries are preserved regardless.
+    confirm_clear_entries: bool = False
 
 
 @dataclass(slots=True)
 class UpdateMealPlanResponse:
     meal_plan_not_found: bool = False
-    missing_meal_ids: tuple[UUID, ...] = ()
+    missing_recipe_ids: tuple[UUID, ...] = ()
+    has_past_entry: bool = False
+    needs_clear_confirmation: bool = False
 
 
 class UpdateMealPlanHandler:
@@ -64,24 +72,39 @@ class UpdateMealPlanHandler:
             _Plan.start_date = request.start_date
 
         if "entries" in _SetFields and request.entries is not None:
+            if len(request.entries) == 0 and not request.confirm_clear_entries:
+                return UpdateMealPlanResponse(needs_clear_confirmation = True)
+            _Today = date.today()
+            # Don't overwrite already-consumed entries (past days are
+            # locked read-only); keep them as-is and replace only the
+            # forward-looking portion of the plan.
+            _ConsumedExisting = [
+                _Entry for _Entry in (_Plan.entries or [])
+                if _Entry.consumed_at is not None
+            ]
+
+            for _EntryRequest in request.entries:
+                if _EntryRequest.scheduled_for < _Today:
+                    return UpdateMealPlanResponse(has_past_entry = True)
+
             _NewEntries: List[MealPlanEntry] = []
             _MissingIds: List[UUID] = []
             for _EntryRequest in request.entries:
-                _Meal = self.repository.get(Meal).by_id(_EntryRequest.meal_id)
-                if not _Meal:
-                    _MissingIds.append(_EntryRequest.meal_id)
+                _Recipe = self.repository.get(Recipe).by_id(_EntryRequest.recipe_id)
+                if not _Recipe:
+                    _MissingIds.append(_EntryRequest.recipe_id)
                     continue
                 _NewEntries.append(MealPlanEntry(
-                    meal = _Meal,
+                    recipe = _Recipe,
                     scheduled_for = _EntryRequest.scheduled_for,
                     servings = _EntryRequest.servings,
                     slot = _EntryRequest.slot,
                 ))
             if _MissingIds:
-                return UpdateMealPlanResponse(missing_meal_ids = tuple(_MissingIds))
+                return UpdateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
             for _Entry in _NewEntries:
                 self.repository.add(_Entry)
-            _Plan.entries = _NewEntries
+            _Plan.entries = _ConsumedExisting + _NewEntries
 
         self.repository.save_changes()
         return UpdateMealPlanResponse()
@@ -98,12 +121,21 @@ def update_meal_plan(meal_plan_id: UUID):
     if _Response.meal_plan_not_found:
         return not_found(MealPlan.__name__, meal_plan_id)
 
-    if _Response.missing_meal_ids:
-        _Logger.warning(f"Meals not found: {_Response.missing_meal_ids}")
+    if _Response.has_past_entry:
+        return bad_request("Meal plan entries cannot be scheduled in the past.")
+
+    if _Response.needs_clear_confirmation:
+        return bad_request(
+            "Refusing to clear every future entry without confirmation. "
+            "Resend with `confirm_clear_entries: true` if that's really the intent."
+        )
+
+    if _Response.missing_recipe_ids:
+        _Logger.warning(f"Recipes not found: {_Response.missing_recipe_ids}")
         return entity_existence_failures(
-            Meal.__name__,
+            Recipe.__name__,
             field_of(UpdateMealPlanRequest, 'entries'),
-            *_Response.missing_meal_ids,
+            *_Response.missing_recipe_ids,
         )
 
     return no_content()

@@ -105,6 +105,7 @@ class CreateRecipeHandler:
             self.repository.add(_Ingredient)
 
         _NewRecipe = Recipe(
+            available_meals = 0,
             category = request.category,
             cook_time_minutes = request.cook_time_minutes,
             cuisine = request.cuisine,

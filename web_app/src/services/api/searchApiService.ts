@@ -6,7 +6,6 @@ export type SearchResultType =
     | 'recipe'
     | 'location'
     | 'product'
-    | 'meal'
     | 'meal_plan';
 
 export type SearchResult = {

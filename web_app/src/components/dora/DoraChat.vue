@@ -405,7 +405,7 @@
         type DoraContext,
         type DoraIntentId
     } from 'src/services/doraIntents';
-    import { useMealStore } from 'src/stores/mealStore';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -518,7 +518,7 @@
 
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
-    const mealStore = useMealStore();
+    const mealStore = useMealPlanStore();
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const { recipes } = storeToRefs(recipeStore);
@@ -936,7 +936,7 @@
                     .filter((e) => e.scheduled_for >= today)
                     .sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for))
                     .slice(0, 5)
-                    .map((e) => `${e.scheduled_for} — ${e.meal_name} (×${e.servings})`);
+                    .map((e) => `${e.scheduled_for} — ${e.recipe_name} (×${e.servings})`);
                 const lastDate = live.entries.length
                     ? live.entries.map((e) => e.scheduled_for).sort().at(-1)!
                     : live.start_date;

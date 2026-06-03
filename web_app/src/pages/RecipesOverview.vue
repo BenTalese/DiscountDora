@@ -208,7 +208,6 @@
                             @cook="onCookClick"
                             @edit="onEditClick"
                             @duplicate="onDuplicate"
-                            @mark-made="onMarkMade"
                             @delete="confirmDelete"
                             @toggle-favourite="onToggleFavourite"
                             @toggle-select="onToggleSelect"
@@ -683,24 +682,6 @@
     function onToggleFavourite(recipeId: string) {
         const r = recipes.value.find((x) => x.recipe_id === recipeId);
         if (r) void recipeStore.toggleFavouriteAsync(r);
-    }
-
-    async function onMarkMade(recipeId: string) {
-        try {
-            await recipeStore.markMadeAsync(recipeId);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Marked made.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not mark made.',
-                caption: describeApiError(err) || '',
-            });
-        }
     }
 
     async function onDuplicate(recipeId: string) {

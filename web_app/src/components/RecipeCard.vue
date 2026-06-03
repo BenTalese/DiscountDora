@@ -58,6 +58,22 @@
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
                     {{ recipe.difficulty }}
                 </q-chip>
+                <q-chip
+                    v-if="recipe.available_meals > 0"
+                    dense
+                    :icon="ICONS.inventory"
+                    :color="recipe.unallocated_meals > 0 ? 'positive' : 'grey-7'"
+                    text-color="white"
+                >
+                    {{ recipe.available_meals }}
+                    <span class="q-ml-xs text-caption">
+                        ({{ recipe.unallocated_meals }} free)
+                    </span>
+                    <q-tooltip>
+                        {{ recipe.available_meals }} cooked,
+                        {{ recipe.unallocated_meals }} not yet on a plan
+                    </q-tooltip>
+                </q-chip>
             </div>
         </q-card-section>
 
@@ -143,12 +159,6 @@
                             </q-item-section>
                             <q-item-section>Duplicate</q-item-section>
                         </q-item>
-                        <q-item clickable @click="emit('mark-made', recipe.recipe_id)">
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.check" />
-                            </q-item-section>
-                            <q-item-section>Mark made</q-item-section>
-                        </q-item>
                         <q-separator />
                         <q-item
                             clickable
@@ -225,7 +235,6 @@
         (e: 'cook', recipeId: string): void;
         (e: 'edit', recipeId: string): void;
         (e: 'duplicate', recipeId: string): void;
-        (e: 'mark-made', recipeId: string): void;
         (e: 'delete', recipeId: string): void;
         (e: 'toggle-favourite', recipeId: string): void;
         (e: 'toggle-select', recipeId: string): void;

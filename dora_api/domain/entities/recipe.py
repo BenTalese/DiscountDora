@@ -9,6 +9,7 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 
 @dataclass
 class Recipe(BaseEntity):
+    available_meals: int
     category: str | None
     cook_time_minutes: int | None
     cuisine: str | None
@@ -26,6 +27,7 @@ class Recipe(BaseEntity):
     time_of_day: str | None
 
     class Fields(BaseEntity.Fields):
+        AVAILABLE_MEALS = "available_meals"
         CATEGORY = "category"
         COOK_TIME_MINUTES = "cook_time_minutes"
         CUISINE = "cuisine"

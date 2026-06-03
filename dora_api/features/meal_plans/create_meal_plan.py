@@ -6,13 +6,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.meal_plans.get_meal_plans import get_meal_plans
 from dora_api.features.routers import MEAL_PLAN_ROUTER
-from dora_api.infrastructure.api_response import (created,
+from dora_api.infrastructure.api_response import (bad_request, created,
                                                   entity_existence_failures)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import (field_of, get_container,
@@ -23,7 +23,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class CreateMealPlanEntryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    meal_id: UUID
+    recipe_id: UUID
     scheduled_for: date
     servings: int = Field(default = 1, ge = 1)
     slot: str = Field(min_length = 1, max_length = 50)
@@ -40,7 +40,8 @@ class CreateMealPlanRequest(BaseModel):
 @dataclass(slots=True)
 class CreateMealPlanResponse:
     new_meal_plan_id: UUID = EMPTY_UUID
-    missing_meal_ids: tuple[UUID, ...] = ()
+    missing_recipe_ids: tuple[UUID, ...] = ()
+    has_past_entry: bool = False
 
 
 class CreateMealPlanHandler:
@@ -48,22 +49,27 @@ class CreateMealPlanHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateMealPlanRequest) -> CreateMealPlanResponse:
+        _Today = date.today()
+        for _EntryRequest in request.entries:
+            if _EntryRequest.scheduled_for < _Today:
+                return CreateMealPlanResponse(has_past_entry = True)
+
         _Entries: List[MealPlanEntry] = []
         _MissingIds: List[UUID] = []
         for _EntryRequest in request.entries:
-            _Meal = self.repository.get(Meal).by_id(_EntryRequest.meal_id)
-            if not _Meal:
-                _MissingIds.append(_EntryRequest.meal_id)
+            _Recipe = self.repository.get(Recipe).by_id(_EntryRequest.recipe_id)
+            if not _Recipe:
+                _MissingIds.append(_EntryRequest.recipe_id)
                 continue
             _Entries.append(MealPlanEntry(
-                meal = _Meal,
+                recipe = _Recipe,
                 scheduled_for = _EntryRequest.scheduled_for,
                 servings = _EntryRequest.servings,
                 slot = _EntryRequest.slot,
             ))
 
         if _MissingIds:
-            return CreateMealPlanResponse(missing_meal_ids = tuple(_MissingIds))
+            return CreateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
 
         for _Entry in _Entries:
             self.repository.add(_Entry)
@@ -86,12 +92,15 @@ def create_meal_plan():
     _Request: CreateMealPlanRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
-    if _Response.missing_meal_ids:
-        _Logger.warning(f"Meals not found: {_Response.missing_meal_ids}")
+    if _Response.has_past_entry:
+        return bad_request("Meal plan entries cannot be scheduled in the past.")
+
+    if _Response.missing_recipe_ids:
+        _Logger.warning(f"Recipes not found: {_Response.missing_recipe_ids}")
         return entity_existence_failures(
-            Meal.__name__,
+            Recipe.__name__,
             field_of(CreateMealPlanRequest, 'entries'),
-            *_Response.missing_meal_ids,
+            *_Response.missing_recipe_ids,
         )
 
     from dora_api.features.meal_plans.get_meal_plans import GetMealPlansHandler

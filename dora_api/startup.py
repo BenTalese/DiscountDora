@@ -107,6 +107,30 @@ def init_db(is_test_env: bool):
 
 
 def register_routers():
+    # Lazy meal-plan reconciliation. Any read against recipes or meal
+    # plans triggers the past-day consumption sweep first, so the pool
+    # counts displayed to the user are always current. Idempotent via
+    # conditional UPDATE in the helper. Must be attached *before*
+    # register_blueprint — Flask freezes blueprint setup at registration.
+    from dora_api.features.meal_plans.reconcile_consumed_meals import \
+        reconcile_consumed_meals
+    from dora_api.features.routers import (DASHBOARD_ROUTER, MEAL_PLAN_ROUTER,
+                                           RECIPE_ROUTER)
+
+    @DASHBOARD_ROUTER.before_request
+    @MEAL_PLAN_ROUTER.before_request
+    @RECIPE_ROUTER.before_request
+    def _reconcile():
+        # Swallow + log failures so a broken reconciliation can't 500
+        # every recipe / meal-plan / dashboard read. Stale pool counts
+        # are recoverable; total page failure isn't.
+        try:
+            reconcile_consumed_meals()
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception(
+                "reconcile_consumed_meals failed; serving stale pool counts"
+            )
+
     for _Router in get_attributes_ending_with('router', Path() / 'dora_api' / 'features'):
         app.register_blueprint(_Router)
     app.register_blueprint(MIDDLEWARE)

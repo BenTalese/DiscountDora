@@ -24,7 +24,7 @@ export type MealSummary = {
 };
 
 export type UpcomingMealPlanEntry = {
-    meal_name: string;
+    recipe_name: string;
     scheduled_for: string; // ISO date
     slot: string;
     servings: number;

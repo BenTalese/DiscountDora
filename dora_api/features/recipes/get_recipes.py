@@ -60,6 +60,8 @@ class RecipeIngredientDto:
 class RecipeDto:
     recipe_id: UUID
     name: str
+    available_meals: int
+    unallocated_meals: int
     category: str | None
     cook_time_minutes: int | None
     cuisine: str | None
@@ -80,10 +82,13 @@ class RecipeDto:
     tags: List[str] = field(default_factory=list)
 
     @classmethod
-    def from_entity(cls, recipe: Recipe, tags: list[str] | None = None) -> 'RecipeDto':
+    def from_entity(cls, recipe: Recipe, tags: list[str] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
+        _Available = recipe.available_meals or 0
         return RecipeDto(
             recipe_id = recipe.id,
             name = recipe.name,
+            available_meals = _Available,
+            unallocated_meals = _Available if unallocated_meals is None else unallocated_meals,
             category = recipe.category,
             cook_time_minutes = recipe.cook_time_minutes,
             cuisine = recipe.cuisine,
@@ -217,6 +222,49 @@ class GetRecipesHandler:
             for d in dtos
         ]
 
+    def _hydrate_unallocated(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """Subtract the sum of future, un-consumed servings per recipe
+        from `available_meals` to derive the unallocated pool. One
+        GROUP BY query keeps this O(1) regardless of list size."""
+        if not dtos:
+            return dtos
+        import dataclasses
+        from datetime import date
+
+        from sqlalchemy import bindparam, text
+
+        from dora_api.app import db
+
+        _Stmt = text(
+            "SELECT recipe_id, SUM(servings) "
+            'FROM "MealPlanEntry" '
+            "WHERE consumed_at IS NULL AND scheduled_for >= :today "
+            "  AND recipe_id IN :ids "
+            "GROUP BY recipe_id"
+        ).bindparams(bindparam("ids", expanding=True))
+        # SQLite's driver can't bind raw UUID objects through text(); stringify.
+        _Rows = db.session.execute(
+            _Stmt,
+            {"today": date.today(), "ids": [str(d.recipe_id) for d in dtos]},
+        ).all()
+        # UUIDType columns are 16-byte BLOBs in SQLite; text() reads
+        # bring them back as bytes. Normalise to UUID then to str so the
+        # dict lookup keys on a stable form.
+        def _key(v) -> str:
+            if isinstance(v, UUID):
+                return str(v)
+            if isinstance(v, bytes):
+                return str(UUID(bytes=v))
+            return str(v)
+        _Committed = {_key(row[0]): int(row[1] or 0) for row in _Rows}
+        return [
+            dataclasses.replace(
+                d,
+                unallocated_meals = max(d.available_meals - _Committed.get(str(d.recipe_id), 0), 0),
+            )
+            for d in dtos
+        ]
+
     def handle(
         self,
         options,
@@ -231,7 +279,8 @@ class GetRecipesHandler:
             options, RecipeDto.from_entity, field_map=_FIELD_MAP
         )
         import dataclasses
-        return dataclasses.replace(page, items=self._hydrate_tags(page.items))
+        _Hydrated = self._hydrate_unallocated(self._hydrate_tags(page.items))
+        return dataclasses.replace(page, items=_Hydrated)
 
     def handle_by_id(self, recipe_id: UUID) -> RecipeDto | None:
         entity = self._base_query().by_id(recipe_id)
@@ -240,7 +289,8 @@ class GetRecipesHandler:
         dto = RecipeDto.from_entity(entity)
         tag_map = get_tags_for_recipes([recipe_id])
         import dataclasses
-        return dataclasses.replace(dto, tags=tag_map.get(recipe_id, []))
+        _WithTags = dataclasses.replace(dto, tags=tag_map.get(recipe_id, []))
+        return self._hydrate_unallocated([_WithTags])[0]
 
 
 def _parse_tag_filters(args) -> RecipeTagFilters:

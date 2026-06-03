@@ -58,11 +58,19 @@ export const useRecipeStore = defineStore('recipe', () => {
     const toggleFavouriteAsync = async (recipe: Recipe) =>
         updateRecipeAsync({ recipe_id: recipe.recipe_id, is_favourite: !recipe.is_favourite });
 
-    const markMadeAsync = async (recipeId: string) => {
-        await recipeApiService.markMadeAsync(recipeId);
+    const cookAsync = async (recipeId: string, mealsCooked: number) => {
+        await recipeApiService.cookAsync(recipeId, mealsCooked);
         const updated = await recipeApiService.getAsync(recipeId);
         const idx = recipes.value.findIndex((r) => r.recipe_id === recipeId);
         if (idx >= 0) recipes.value[idx] = updated;
+    };
+
+    const adjustMealsAsync = async (recipeId: string, delta: number) => {
+        const { available_meals } = await recipeApiService.adjustMealsAsync(recipeId, delta);
+        const idx = recipes.value.findIndex((r) => r.recipe_id === recipeId);
+        if (idx >= 0) {
+            recipes.value[idx] = { ...recipes.value[idx]!, available_meals };
+        }
     };
 
     const createRecipeCollectionAsync = async (command: CreateRecipeCollectionCommand) => {
@@ -93,7 +101,8 @@ export const useRecipeStore = defineStore('recipe', () => {
         updateRecipeAsync,
         deleteRecipeAsync,
         toggleFavouriteAsync,
-        markMadeAsync,
+        cookAsync,
+        adjustMealsAsync,
         createRecipeCollectionAsync,
         updateRecipeCollectionAsync,
         deleteRecipeCollectionAsync

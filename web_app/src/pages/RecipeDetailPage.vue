@@ -167,6 +167,49 @@
                         </q-card-section>
                     </q-card>
 
+                    <!-- ── Meals on hand ──────────────────────────── -->
+                    <q-card v-if="recipe" flat bordered class="q-mb-md">
+                        <q-card-section class="row items-center q-gutter-md no-wrap">
+                            <div>
+                                <div class="text-subtitle1">Meals on hand</div>
+                                <div class="text-caption text-grey">
+                                    {{ recipe.unallocated_meals }} unallocated
+                                    of {{ recipe.available_meals }} cooked
+                                </div>
+                            </div>
+                            <q-space />
+                            <q-btn
+                                dense
+                                round
+                                outline
+                                :icon="ICONS.remove"
+                                :disable="recipe.available_meals <= 0 || adjusting"
+                                aria-label="Remove one meal"
+                                @click="onAdjustMeals(-1)"
+                            />
+                            <div class="text-h5 q-px-sm" style="min-width: 2.5rem; text-align: center;">
+                                {{ recipe.available_meals }}
+                            </div>
+                            <q-btn
+                                dense
+                                round
+                                outline
+                                :icon="ICONS.add"
+                                :disable="adjusting"
+                                aria-label="Add one meal"
+                                @click="onAdjustMeals(1)"
+                            />
+                            <q-btn
+                                no-caps
+                                outline
+                                color="primary"
+                                :icon="ICONS.restaurant"
+                                label="Log cook…"
+                                @click="logCookOpen = true"
+                            />
+                        </q-card-section>
+                    </q-card>
+
                     <!-- ── Ingredients ────────────────────────────── -->
                     <q-card flat bordered class="q-mb-md">
                         <q-card-section class="row items-center q-pb-sm">
@@ -466,12 +509,6 @@
                                     </q-item-label>
                                 </q-item-section>
                             </q-item>
-                            <q-item clickable @click="onMarkMade">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.check" />
-                                </q-item-section>
-                                <q-item-section>Mark made</q-item-section>
-                            </q-item>
                             <q-item clickable @click="onDelete">
                                 <q-item-section avatar>
                                     <q-icon :name="ICONS.delete" color="negative" />
@@ -599,6 +636,37 @@
                         :loading="addingMissing"
                         :disable="!targetListId"
                         @click="confirmAddMissing"
+                    />
+                </q-card-actions>
+            </q-card>
+        </q-dialog>
+
+        <!-- Log cook ──────────────────────────────────────────────── -->
+        <q-dialog v-model="logCookOpen">
+            <q-card style="min-width: 320px">
+                <q-card-section class="text-h6">Log a cook</q-card-section>
+                <q-card-section class="q-pt-none">
+                    <q-input
+                        v-model.number="logCookCount"
+                        type="number"
+                        min="1"
+                        max="999"
+                        outlined
+                        dense
+                        autofocus
+                        label="Meals cooked"
+                        hint="Adds to this recipe's pool."
+                    />
+                </q-card-section>
+                <q-card-actions align="right">
+                    <q-btn flat no-caps label="Cancel" v-close-popup />
+                    <q-btn
+                        color="primary"
+                        no-caps
+                        label="Log"
+                        :loading="logging"
+                        :disable="!(logCookCount > 0)"
+                        @click="onLogCook"
                     />
                 </q-card-actions>
             </q-card>
@@ -1139,23 +1207,53 @@
         }
     }
 
-    async function onMarkMade() {
+    // ── Meals-on-hand controls ────────────────────────────────────────
+    const adjusting = ref(false);
+    const logCookOpen = ref(false);
+    const logCookCount = ref<number>(1);
+    const logging = ref(false);
+
+    async function onAdjustMeals(delta: number) {
         if (!recipe.value) return;
+        adjusting.value = true;
         try {
-            await recipeStore.markMadeAsync(recipe.value.recipe_id);
+            await recipeStore.adjustMealsAsync(recipe.value.recipe_id, delta);
             await loadRecipe();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not update meals.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            adjusting.value = false;
+        }
+    }
+
+    async function onLogCook() {
+        if (!recipe.value) return;
+        const n = Math.max(1, Math.floor(logCookCount.value || 0));
+        logging.value = true;
+        try {
+            await recipeStore.cookAsync(recipe.value.recipe_id, n);
+            await loadRecipe();
+            logCookOpen.value = false;
+            logCookCount.value = 1;
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: 'Marked made.',
+                message: `Logged ${n} cooked meal${n === 1 ? '' : 's'}.`,
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not mark made.',
+                message: 'Could not log cook.',
                 caption: describeApiError(err) || '',
             });
+        } finally {
+            logging.value = false;
         }
     }
 

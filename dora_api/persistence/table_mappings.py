@@ -6,7 +6,6 @@ from sqlalchemy_utils import UUIDType
 from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.audit_event import AuditEvent
 from dora_api.domain.entities.auth_token import AuthToken
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
@@ -291,6 +290,7 @@ def configure_mappings(db: SQLAlchemy):
     recipe_table = Table(
         "Recipe", metadata,
         Column("id", UUIDType, primary_key=True),
+        Column("available_meals", Integer, nullable=False, server_default="0"),
         Column("category", String(255), nullable=True),
         Column("cook_time_minutes", Integer, nullable=True),
         Column("cuisine", String(255), nullable=True),
@@ -329,19 +329,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("unit", String(50), nullable=True),
     )
 
-    meal_table = Table(
-        "Meal", metadata,
-        Column("id", UUIDType, primary_key=True),
-        Column("name", String(255), nullable=False),
-        Column("quantity_in_stock", Integer, nullable=False),
-    )
-
-    meal_recipe_table = Table(
-        "MealRecipe", metadata,
-        Column("meal_id", UUIDType, ForeignKey("Meal.id", ondelete="CASCADE"), primary_key=True),
-        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), primary_key=True),
-    )
-
     meal_plan_table = Table(
         "MealPlan", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -352,11 +339,12 @@ def configure_mappings(db: SQLAlchemy):
     meal_plan_entry_table = Table(
         "MealPlanEntry", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("meal_id", UUIDType, ForeignKey("Meal.id", ondelete="CASCADE"), nullable=False),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
         Column("meal_plan_id", UUIDType, ForeignKey("MealPlan.id", ondelete="CASCADE"), nullable=False),
         Column("scheduled_for", Date, nullable=False),
-        Column("servings", Integer, nullable=False),
+        Column("servings", Integer, nullable=False, server_default="1"),
         Column("slot", String(50), nullable=False),
+        Column("consumed_at", DateTime(timezone=True), nullable=True),
     )
 
     user_table = Table(
@@ -533,19 +521,13 @@ def configure_mappings(db: SQLAlchemy):
         ),
     })
 
-    _mapper_registry.map_imperatively(Meal, meal_table, properties={
-        "_id_col": meal_table.c.id,
-        "id": meal_table.c.id,
-        "recipes": relationship(Recipe, secondary=meal_recipe_table, lazy="noload"),
-    })
-
     _mapper_registry.map_imperatively(MealPlanEntry, meal_plan_entry_table, properties={
         "_id_col": meal_plan_entry_table.c.id,
-        "_meal_id": meal_plan_entry_table.c.meal_id,
+        "_recipe_id": meal_plan_entry_table.c.recipe_id,
         # See RecipeIngredient above — FK columns hidden from verify_mappings.
         "_meal_plan_id": meal_plan_entry_table.c.meal_plan_id,
         "id": meal_plan_entry_table.c.id,
-        "meal": relationship(Meal, lazy="noload"),
+        "recipe": relationship(Recipe, lazy="noload"),
     })
 
     _mapper_registry.map_imperatively(MealPlan, meal_plan_table, properties={

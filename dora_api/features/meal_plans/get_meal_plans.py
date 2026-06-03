@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -21,21 +21,23 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(frozen=True, slots=True)
 class MealPlanEntryDto:
     meal_plan_entry_id: UUID
-    meal_id: UUID
-    meal_name: str
+    recipe_id: UUID
+    recipe_name: str
     scheduled_for: date
     servings: int
     slot: str
+    consumed_at: datetime | None
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
         return MealPlanEntryDto(
             meal_plan_entry_id = entry.id,
-            meal_id = entry.meal.id,
-            meal_name = entry.meal.name,
+            recipe_id = entry.recipe.id,
+            recipe_name = entry.recipe.name,
             scheduled_for = entry.scheduled_for,
             servings = entry.servings,
             slot = entry.slot,
+            consumed_at = entry.consumed_at,
         )
 
 
@@ -70,7 +72,7 @@ class GetMealPlansHandler:
             self.repository
             .get(MealPlan)
             .include(MealPlan.Fields.ENTRIES)
-                .then_include(MealPlanEntry.Fields.MEAL)
+                .then_include(MealPlanEntry.Fields.RECIPE)
         )
 
     def handle(self, options) -> Page[MealPlanDto]:

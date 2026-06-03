@@ -1,28 +1,17 @@
-export type MealRecipe = {
-    recipe_id: string;
-    name: string;
-};
-
-export type Meal = {
-    meal_id: string;
-    name: string;
-    quantity_in_stock: number;
-    recipes: MealRecipe[];
-};
-
 export type MealPlanEntry = {
     meal_plan_entry_id: string;
-    meal_id: string;
-    meal_name: string;
-    scheduled_for: string; // ISO date
+    recipe_id: string;
+    recipe_name: string;
+    scheduled_for: string;
     servings: number;
     slot: string;
+    consumed_at: string | null;
 };
 
 export type MealPlan = {
     meal_plan_id: string;
     name: string;
-    start_date: string; // ISO date
+    start_date: string;
     entries: MealPlanEntry[];
 };
 
@@ -31,5 +20,14 @@ export type MealPlanIngredient = {
     stock_item_name: string;
     total_quantity: number | null;
     unit: string | null;
-    used_in_meal_ids: string[];
+    used_in_recipe_ids: string[];
+};
+
+export type Shortfall = {
+    recipe_id: string;
+    recipe_name: string;
+    available_meals: number;
+    committed_meals: number;
+    shortfall: number;
+    earliest_needed: string | null;
 };

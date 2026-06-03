@@ -24,6 +24,34 @@
             />
         </div>
 
+        <!-- Shortfall rollup — visible whenever any recipe is over-committed. -->
+        <q-banner
+            v-if="shortfall.length"
+            class="bg-orange-1 text-orange-10 q-mb-md"
+            rounded
+        >
+            <template v-slot:avatar>
+                <q-icon :name="ICONS.warning" color="warning" />
+            </template>
+            <div class="text-subtitle2">You need to cook:</div>
+            <div class="row q-gutter-xs q-mt-xs">
+                <q-chip
+                    v-for="item in shortfall"
+                    :key="item.recipe_id"
+                    square
+                    color="warning"
+                    text-color="white"
+                    clickable
+                    @click="cookRecipe(item.recipe_id)"
+                >
+                    {{ item.shortfall }}× {{ item.recipe_name }}
+                    <span v-if="item.earliest_needed" class="q-ml-xs text-caption">
+                        by {{ formatDate(item.earliest_needed) }}
+                    </span>
+                </q-chip>
+            </div>
+        </q-banner>
+
         <div v-if="selectedPlan" class="row q-col-gutter-md">
             <!-- ── Main: palette + week grid ──────────────────────────── -->
             <div class="col-12 col-md-9">
@@ -50,34 +78,81 @@
                     <q-btn flat dense no-caps :icon="ICONS.delete" color="negative" label="Delete plan" @click="confirmDeletePlan" />
                 </div>
 
-                <!-- Draggable meal palette -->
+                <!-- Draggable recipe palette -->
                 <q-card flat bordered class="q-pa-sm q-mb-md">
                     <div class="text-caption text-grey q-mb-xs">
-                        <q-icon :name="ICONS.drag_indicator" /> Drag a meal onto a day to plan it
+                        <q-icon :name="ICONS.drag_indicator" /> Drag a recipe onto a day to plan it
                     </div>
                     <div class="row q-gutter-xs">
                         <div
-                            v-for="meal in meals"
-                            :key="meal.meal_id"
+                            v-for="recipe in recipes"
+                            :key="recipe.recipe_id"
                             draggable="true"
-                            @dragstart="onDragStart(meal.meal_id)"
-                            @dragend="draggingMealId = null"
+                            @dragstart="onDragStart(recipe.recipe_id)"
+                            @dragend="draggingRecipeId = null"
                         >
                             <q-chip
                                 square
+                                clickable
                                 class="cursor-grab"
-                                :color="mealCookableById(meal.meal_id) ? 'positive' : 'grey-4'"
-                                :text-color="mealCookableById(meal.meal_id) ? 'white' : 'grey-9'"
-                                :icon="mealCookableById(meal.meal_id) ? 'check_circle' : 'restaurant'"
+                                :color="recipeCookable(recipe.recipe_id) ? 'positive' : 'grey-4'"
+                                :text-color="recipeCookable(recipe.recipe_id) ? 'white' : 'grey-9'"
+                                :icon="recipeCookable(recipe.recipe_id) ? 'check_circle' : 'restaurant'"
                             >
-                                {{ meal.name }}
+                                {{ recipe.name }}
+                                <span class="q-ml-xs text-caption">({{ recipe.unallocated_meals }})</span>
                                 <q-tooltip>
-                                    {{ mealCookableById(meal.meal_id) ? 'Cookable now' : 'Missing ingredients' }}
+                                    {{ recipe.unallocated_meals }} unallocated of {{ recipe.available_meals }} on hand · click for actions
                                 </q-tooltip>
+                                <!-- Click (not drag) opens this menu; the chip stays draggable. -->
+                                <q-menu transition-show="jump-down" transition-hide="jump-up">
+                                    <q-card style="min-width: 240px">
+                                        <q-card-section class="q-pb-xs">
+                                            <div class="text-subtitle2">{{ recipe.name }}</div>
+                                            <div class="text-caption text-grey">
+                                                {{ recipe.unallocated_meals }} free of
+                                                {{ recipe.available_meals }} cooked
+                                            </div>
+                                        </q-card-section>
+                                        <q-card-actions class="q-px-md q-pb-sm">
+                                            <q-btn
+                                                dense
+                                                round
+                                                outline
+                                                :icon="ICONS.remove"
+                                                :disable="recipe.available_meals <= 0"
+                                                @click="adjustPaletteMeals(recipe.recipe_id, -1)"
+                                            />
+                                            <div
+                                                class="text-h6 q-px-sm"
+                                                style="min-width: 2.5rem; text-align: center;"
+                                            >
+                                                {{ recipe.available_meals }}
+                                            </div>
+                                            <q-btn
+                                                dense
+                                                round
+                                                outline
+                                                :icon="ICONS.add"
+                                                @click="adjustPaletteMeals(recipe.recipe_id, 1)"
+                                            />
+                                            <q-space />
+                                            <q-btn
+                                                no-caps
+                                                flat
+                                                color="primary"
+                                                :icon="ICONS.restaurant"
+                                                label="Log cook…"
+                                                v-close-popup
+                                                @click="openPaletteLogCook(recipe.recipe_id)"
+                                            />
+                                        </q-card-actions>
+                                    </q-card>
+                                </q-menu>
                             </q-chip>
                         </div>
-                        <div v-if="meals.length === 0" class="text-caption text-grey q-pa-sm">
-                            No meals yet — create some on the Meals page.
+                        <div v-if="recipes.length === 0" class="text-caption text-grey q-pa-sm">
+                            No recipes yet — create some on the Recipes page.
                         </div>
                     </div>
                 </q-card>
@@ -88,7 +163,10 @@
                         <q-card
                             bordered
                             class="full-height day-cell"
-                            :class="{ 'day-cell--drop': draggingMealId }"
+                            :class="{
+                                'day-cell--drop': draggingRecipeId && !isPastDay(day.iso),
+                                'day-cell--past': isPastDay(day.iso),
+                            }"
                             @dragover.prevent
                             @drop="onDropOnDay(day.iso)"
                         >
@@ -102,28 +180,40 @@
                                         v-for="entry in entriesByDay.get(day.iso)"
                                         :key="entry.meal_plan_entry_id"
                                         square
-                                        clickable
+                                        :clickable="!entry.consumed_at"
                                         class="q-mb-xs full-width entry-chip"
-                                        :color="mealCookableById(entry.meal_id) ? 'primary' : 'grey-6'"
+                                        :color="entry.consumed_at
+                                            ? 'grey-5'
+                                            : isShortfallEntry(entry)
+                                                ? 'warning'
+                                                : 'primary'"
                                         text-color="white"
                                     >
                                         <div class="column">
                                             <div class="text-caption text-italic">{{ entry.slot }}</div>
-                                            <div>{{ entry.meal_name }} ×{{ entry.servings }}</div>
+                                            <div>
+                                                {{ entry.recipe_name }} ×{{ entry.servings }}
+                                                <q-icon v-if="entry.consumed_at" :name="ICONS.check" class="q-ml-xs" />
+                                                <q-icon v-else-if="isShortfallEntry(entry)" :name="ICONS.warning" class="q-ml-xs">
+                                                    <q-tooltip>Needs cooking — pool is short</q-tooltip>
+                                                </q-icon>
+                                            </div>
                                         </div>
-                                        <q-menu transition-show="jump-down" transition-hide="jump-up">
+                                        <q-menu
+                                            v-if="!entry.consumed_at"
+                                            transition-show="jump-down"
+                                            transition-hide="jump-up"
+                                        >
                                             <q-list dense style="min-width: 200px">
-                                                <q-item-label header>{{ entry.meal_name }}</q-item-label>
-                                                <template v-for="r in recipesForMeal(entry.meal_id)" :key="r.recipe_id">
-                                                    <q-item clickable v-close-popup @click="goToRecipe(r.recipe_id)">
-                                                        <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
-                                                        <q-item-section>View {{ r.name }}</q-item-section>
-                                                    </q-item>
-                                                    <q-item clickable v-close-popup @click="cookRecipe(r.recipe_id)">
-                                                        <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
-                                                        <q-item-section>Cook {{ r.name }}</q-item-section>
-                                                    </q-item>
-                                                </template>
+                                                <q-item-label header>{{ entry.recipe_name }}</q-item-label>
+                                                <q-item clickable v-close-popup @click="goToRecipe(entry.recipe_id)">
+                                                    <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
+                                                    <q-item-section>View recipe</q-item-section>
+                                                </q-item>
+                                                <q-item clickable v-close-popup @click="cookRecipe(entry.recipe_id)">
+                                                    <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
+                                                    <q-item-section>Cook now</q-item-section>
+                                                </q-item>
                                                 <q-separator />
                                                 <q-item clickable v-close-popup @click="removeEntry(entry)">
                                                     <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
@@ -133,8 +223,11 @@
                                         </q-menu>
                                     </q-chip>
                                 </template>
+                                <div v-else-if="isPastDay(day.iso)" class="text-caption text-grey text-center q-py-sm">
+                                    —
+                                </div>
                                 <div v-else class="text-caption text-grey text-center q-py-sm">
-                                    Drop a meal here
+                                    Drop a recipe here
                                 </div>
                             </q-card-section>
                         </q-card>
@@ -210,34 +303,33 @@
             <q-banner class="bg-grey-2">Create a meal plan to get started.</q-banner>
         </div>
 
-        <!-- Suggest cookable meals ───────────────────────────────────── -->
+        <!-- Suggest cookable recipes ───────────────────────────────── -->
         <q-dialog v-model="suggestOpen">
             <q-card style="width: 460px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Meals you can cook now</div>
+                    <div class="text-h6">Recipes you can cook now</div>
                     <q-space />
                     <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
-                    <div v-if="cookableMeals.length === 0" class="text-grey">
-                        Nothing's fully in stock right now. Restock or pick a meal with fewer
+                    <div v-if="cookableRecipes.length === 0" class="text-grey">
+                        Nothing's fully in stock right now. Restock or pick a recipe with fewer
                         missing ingredients.
                     </div>
                     <q-list v-else separator>
-                        <q-item v-for="meal in cookableMeals" :key="meal.meal_id">
+                        <q-item v-for="recipe in cookableRecipes" :key="recipe.recipe_id">
                             <q-item-section avatar><q-icon :name="ICONS.check_circle" color="positive" /></q-item-section>
-                            <q-item-section>{{ meal.name }}</q-item-section>
+                            <q-item-section>{{ recipe.name }}</q-item-section>
                             <q-item-section side>
                                 <div class="row q-gutter-xs">
                                     <q-btn
                                         v-if="selectedPlan"
                                         flat dense no-caps label="Add to today"
-                                        @click="addMealToday(meal.meal_id)"
+                                        @click="addRecipeToday(recipe.recipe_id)"
                                     />
                                     <q-btn
                                         flat dense no-caps color="primary" label="Cook"
-                                        :disable="recipesForMeal(meal.meal_id).length === 0"
-                                        @click="cookMeal(meal.meal_id)"
+                                        @click="cookRecipe(recipe.recipe_id)"
                                     />
                                 </div>
                             </q-item-section>
@@ -248,6 +340,37 @@
         </q-dialog>
 
         <MealPlanEditDialog v-model="editDialogOpen" :plan="editingPlan" @saved="onPlanSaved" />
+
+        <!-- Log cook from the planner palette ─────────────────────── -->
+        <q-dialog v-model="paletteLogCookOpen">
+            <q-card style="min-width: 320px">
+                <q-card-section class="text-h6">Log a cook</q-card-section>
+                <q-card-section class="q-pt-none">
+                    <q-input
+                        v-model.number="paletteLogCookCount"
+                        type="number"
+                        min="1"
+                        max="999"
+                        outlined
+                        dense
+                        autofocus
+                        label="Meals cooked"
+                        hint="Adds to the recipe's pool."
+                    />
+                </q-card-section>
+                <q-card-actions align="right">
+                    <q-btn flat no-caps label="Cancel" v-close-popup />
+                    <q-btn
+                        color="primary"
+                        no-caps
+                        label="Log"
+                        :loading="paletteLogging"
+                        :disable="!(paletteLogCookCount > 0)"
+                        @click="confirmPaletteLogCook"
+                    />
+                </q-card-actions>
+            </q-card>
+        </q-dialog>
     </div>
 </template>
 
@@ -257,10 +380,10 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useMealPlanExport } from 'src/composables/useMealPlanExport';
-    import type { MealPlan, MealPlanIngredient } from 'src/models/meal';
+    import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
-    import { useMealStore } from 'src/stores/mealStore';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -272,14 +395,14 @@
     const $q = useQuasar();
     const router = useRouter();
     const planExport = useMealPlanExport();
-    const mealStore = useMealStore();
+    const mealPlanStore = useMealPlanStore();
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const shoppingListApi = new ShoppingListApiService();
 
-    const { meals, mealPlans } = storeToRefs(mealStore);
+    const { mealPlans, shortfall } = storeToRefs(mealPlanStore);
     const { recipes } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
@@ -289,7 +412,7 @@
     const editingPlan = ref<MealPlan | null>(null);
     const ingredients = ref<MealPlanIngredient[]>([]);
     const ingredientsLoading = ref(false);
-    const draggingMealId = ref<string | null>(null);
+    const draggingRecipeId = ref<string | null>(null);
     const suggestOpen = ref(false);
     const generating = ref(false);
 
@@ -305,10 +428,17 @@
                 null) as MealPlan | null,
     );
 
-    // Dates from the API arrive RFC-formatted ("Mon, 18 May 2026 …"); normalise
-    // everything to a UTC YYYY-MM-DD so grid matching and PATCH payloads agree.
     function toIso(d: string): string {
         return new Date(d).toISOString().slice(0, 10);
+    }
+
+    function todayIsoLocal(): string {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().slice(0, 10);
+    }
+
+    function isPastDay(iso: string): boolean {
+        return iso < todayIsoLocal();
     }
 
     const weekDays = computed(() => {
@@ -322,7 +452,7 @@
     });
 
     const entriesByDay = computed(() => {
-        const map = new Map<string, MealPlan['entries']>();
+        const map = new Map<string, MealPlanEntry[]>();
         if (!selectedPlan.value) return map;
         for (const entry of selectedPlan.value.entries) {
             const key = toIso(entry.scheduled_for);
@@ -332,6 +462,11 @@
         }
         return map;
     });
+
+    const shortfallRecipeIds = computed(() => new Set(shortfall.value.map((s) => s.recipe_id)));
+    function isShortfallEntry(entry: MealPlanEntry): boolean {
+        return shortfallRecipeIds.value.has(entry.recipe_id);
+    }
 
     // ── Stock status ─────────────────────────────────────────────────────
     const stockLevelByItemId = computed(() => {
@@ -356,7 +491,6 @@
         return 'grey';
     }
 
-    // need-to-buy: anything low, out, or not tracked can't reliably cover demand.
     const needToBuy = computed(() =>
         ingredients.value.filter((ing) => {
             const name = stockLevelName(ing.stock_item_id);
@@ -364,7 +498,7 @@
         }),
     );
 
-    // ── Cookable-now (same definition as P6 / RecipeCard) ─────────────────
+    // ── Cookable-now ─────────────────────────────────────────────────────
     const outOfStockLevelId = computed(
         () => stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null,
     );
@@ -373,59 +507,65 @@
         if (!item) return true;
         return item.stock_level_id === outOfStockLevelId.value;
     }
-    function recipesForMeal(mealId: string) {
-        return meals.value.find((m) => m.meal_id === mealId)?.recipes ?? [];
-    }
     function recipeCookable(recipeId: string): boolean {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
-        if (!recipe) return false;
+        if (!recipe || recipe.ingredients.length === 0) return false;
         return recipe.ingredients.every((ing) => !isMissing(ing.stock_item_id));
     }
-    function mealCookableById(mealId: string): boolean {
-        const meal = meals.value.find((m) => m.meal_id === mealId);
-        if (!meal || meal.recipes.length === 0) return false;
-        return meal.recipes.every((r) => recipeCookable(r.recipe_id));
-    }
-    const cookableMeals = computed(() =>
-        meals.value.filter((m) => mealCookableById(m.meal_id)),
+    const cookableRecipes = computed(() =>
+        recipes.value.filter((r) => recipeCookable(r.recipe_id)),
     );
 
     // ── Drag & drop planning ──────────────────────────────────────────────
-    function onDragStart(mealId: string) {
-        draggingMealId.value = mealId;
+    function onDragStart(recipeId: string) {
+        draggingRecipeId.value = recipeId;
     }
 
     function currentEntryCommands(): MealPlanEntryCommand[] {
-        return (selectedPlan.value?.entries ?? []).map((e) => ({
-            meal_id: e.meal_id,
-            scheduled_for: toIso(e.scheduled_for),
-            servings: e.servings,
-            slot: e.slot,
-        }));
+        return (selectedPlan.value?.entries ?? [])
+            .filter((e) => !e.consumed_at)
+            .map((e) => ({
+                recipe_id: e.recipe_id,
+                scheduled_for: toIso(e.scheduled_for),
+                servings: e.servings,
+                slot: e.slot,
+            }));
     }
 
     async function persistEntries(entries: MealPlanEntryCommand[]) {
         if (!selectedPlan.value) return;
-        await mealStore.updateMealPlanAsync({ meal_plan_id: selectedPlan.value.meal_plan_id, entries });
-        await loadIngredients();
+        // The planner's own drag/drop and chip-menu removals are
+        // explicit edits, so set the clear flag when an action would
+        // leave the future-entries list empty. Backend treats unflagged
+        // [] as a probable bug and refuses.
+        await mealPlanStore.updateMealPlanAsync({
+            meal_plan_id: selectedPlan.value.meal_plan_id,
+            entries,
+            ...(entries.length === 0 ? { confirm_clear_entries: true } : {}),
+        });
+        await Promise.all([loadIngredients(), mealPlanStore.getShortfallAsync(), recipeStore.getRecipesAsync()]);
     }
 
     async function onDropOnDay(dayIso: string) {
-        const mealId = draggingMealId.value;
-        draggingMealId.value = null;
-        if (!mealId || !selectedPlan.value) return;
+        const recipeId = draggingRecipeId.value;
+        draggingRecipeId.value = null;
+        if (!recipeId || !selectedPlan.value) return;
+        if (isPastDay(dayIso)) {
+            $q.notify({ type: 'warning', position: 'bottom-right', message: 'Past days are read-only.' });
+            return;
+        }
         await persistEntries([
             ...currentEntryCommands(),
-            { meal_id: mealId, scheduled_for: dayIso, servings: 2, slot: 'Dinner' },
+            { recipe_id: recipeId, scheduled_for: dayIso, servings: 1, slot: 'Dinner' },
         ]);
         $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
     }
 
-    async function removeEntry(entry: MealPlan['entries'][number]) {
+    async function removeEntry(entry: MealPlanEntry) {
         const remaining = (selectedPlan.value?.entries ?? [])
-            .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id)
+            .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id && !e.consumed_at)
             .map((e) => ({
-                meal_id: e.meal_id,
+                recipe_id: e.recipe_id,
                 scheduled_for: toIso(e.scheduled_for),
                 servings: e.servings,
                 slot: e.slot,
@@ -433,36 +573,78 @@
         await persistEntries(remaining);
     }
 
-    async function addMealToday(mealId: string) {
+    async function addRecipeToday(recipeId: string) {
         suggestOpen.value = false;
-        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayIso = todayIsoLocal();
         await persistEntries([
             ...currentEntryCommands(),
-            { meal_id: mealId, scheduled_for: todayIso, servings: 2, slot: 'Dinner' },
+            { recipe_id: recipeId, scheduled_for: todayIso, servings: 1, slot: 'Dinner' },
         ]);
         $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to today.' });
     }
 
-    // ── Navigation to recipe / cook mode ──────────────────────────────────
+    // ── Palette quick-actions (± / log cook) ──────────────────────────
+    const paletteLogCookOpen = ref(false);
+    const paletteLogCookCount = ref<number>(1);
+    const paletteLogCookRecipeId = ref<string | null>(null);
+    const paletteLogging = ref(false);
+
+    async function adjustPaletteMeals(recipeId: string, delta: number) {
+        try {
+            await recipeStore.adjustMealsAsync(recipeId, delta);
+            await Promise.all([recipeStore.getRecipesAsync(), mealPlanStore.getShortfallAsync()]);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not update meals.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    function openPaletteLogCook(recipeId: string) {
+        paletteLogCookRecipeId.value = recipeId;
+        paletteLogCookCount.value = 1;
+        paletteLogCookOpen.value = true;
+    }
+
+    async function confirmPaletteLogCook() {
+        if (!paletteLogCookRecipeId.value) return;
+        const n = Math.max(1, Math.floor(paletteLogCookCount.value || 0));
+        paletteLogging.value = true;
+        try {
+            await recipeStore.cookAsync(paletteLogCookRecipeId.value, n);
+            await Promise.all([recipeStore.getRecipesAsync(), mealPlanStore.getShortfallAsync()]);
+            paletteLogCookOpen.value = false;
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Logged ${n} cooked meal${n === 1 ? '' : 's'}.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not log cook.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            paletteLogging.value = false;
+        }
+    }
+
     function goToRecipe(recipeId: string) {
         void router.push(`/recipes/${recipeId}`);
     }
     function cookRecipe(recipeId: string) {
         void router.push(`/recipes/${recipeId}/cook`);
     }
-    function cookMeal(mealId: string) {
-        const first = recipesForMeal(mealId)[0];
-        if (first) cookRecipe(first.recipe_id);
-    }
 
-    // ── Generate shopping list for the week ───────────────────────────────
     async function generateListForWeek() {
         if (!selectedPlan.value) return;
         generating.value = true;
         try {
-            // X5: route through /auto-generate with the week start so the
-            // backend pulls the entries, subtracts well-stocked items, and
-            // tags every line as added_via=auto_meal_plan.
             const startIso = toIso(selectedPlan.value.start_date);
             const result = await shoppingListApi.autoGenerateAsync({
                 name: `Meals: ${selectedPlan.value.name}`,
@@ -499,7 +681,6 @@
         }
     }
 
-    // ── Plan CRUD ─────────────────────────────────────────────────────────
     function formatDate(iso: string): string {
         return new Date(iso).toLocaleDateString();
     }
@@ -510,7 +691,7 @@
         }
         ingredientsLoading.value = true;
         try {
-            ingredients.value = await mealStore.getIngredientsForPlanAsync(selectedPlanId.value);
+            ingredients.value = await mealPlanStore.getIngredientsForPlanAsync(selectedPlanId.value);
         } finally {
             ingredientsLoading.value = false;
         }
@@ -525,7 +706,11 @@
     }
     async function onPlanSaved() {
         editDialogOpen.value = false;
-        await mealStore.getMealPlansAsync();
+        await Promise.all([
+            mealPlanStore.getMealPlansAsync(),
+            mealPlanStore.getShortfallAsync(),
+            recipeStore.getRecipesAsync(),
+        ]);
         await loadIngredients();
     }
     function confirmDeletePlan() {
@@ -535,9 +720,10 @@
             .onOk(() => void doDeletePlan(plan.meal_plan_id));
     }
     async function doDeletePlan(planId: string) {
-        await mealStore.deleteMealPlanAsync(planId);
+        await mealPlanStore.deleteMealPlanAsync(planId);
         selectedPlanId.value = null;
         await loadIngredients();
+        await mealPlanStore.getShortfallAsync();
     }
 
     watch(selectedPlanId, loadIngredients);
@@ -553,8 +739,8 @@
 
     onMounted(async () => {
         await Promise.all([
-            mealStore.getMealPlansAsync(),
-            mealStore.getMealsAsync(),
+            mealPlanStore.getMealPlansAsync(),
+            mealPlanStore.getShortfallAsync(),
             recipeStore.getRecipesAsync(),
             stockItemStore.getStockItemsAsync(),
             stockLevelStore.getStockLevelsAsync(),
@@ -571,10 +757,11 @@
         outline: 2px dashed var(--q-primary);
         outline-offset: -2px;
     }
-    .entry-chip {
-        height: auto;
+    .day-cell--past {
+        opacity: 0.6;
     }
-    .cursor-grab {
-        cursor: grab;
+    .entry-chip {
+        height: auto !important;
+        white-space: normal;
     }
 </style>

@@ -281,7 +281,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { computed, onMounted, ref } from 'vue';
-    import { useMealStore } from 'src/stores/mealStore';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useMealPlanExport } from 'src/composables/useMealPlanExport';
@@ -291,7 +291,7 @@
 
     const shoppingListStore = useShoppingListStore();
     const recipeStore = useRecipeStore();
-    const mealStore = useMealStore();
+    const mealStore = useMealPlanStore();
     const shoppingExport = useShoppingListExport();
     const recipeExport = useRecipeExport();
     const mealPlanExport = useMealPlanExport();

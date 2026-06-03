@@ -22,7 +22,6 @@ from datetime import date, timedelta
 from typing import Any, Callable
 from uuid import UUID
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
@@ -511,14 +510,6 @@ def commit_set_primary_list(payload: dict[str, Any]) -> dict[str, Any]:
 _DEFAULT_SLOT = "Dinner"
 
 
-def _find_meal(repo: SqlAlchemyRepository, name: str) -> list[Meal]:
-    field = EntityField(Meal, Meal.Fields.NAME)
-    exact = repo.get(Meal).all(field.eq(name))
-    if exact:
-        return exact
-    return repo.get(Meal).all(field.contains(name))
-
-
 def _plan_covering(repo: SqlAlchemyRepository, target: date) -> MealPlan | None:
     """Find the meal plan whose existing entries straddle the target date.
     Falls back to the latest plan whose start_date is on/before the target."""
@@ -556,18 +547,18 @@ def propose_plan_meal_for_date(args: dict) -> dict[str, Any]:
         servings = 1
 
     repo = SqlAlchemyRepository()
-    meals = _find_meal(repo, name)
-    if not meals:
+    recipes = _find_recipe(repo, name)
+    if not recipes:
         return {"type": "plan_meal_for_date", "status": "not_found",
                 "summary": f"No meal called \"{name}\".", "candidates": []}
-    if len(meals) > 1:
+    if len(recipes) > 1:
         return {
             "type": "plan_meal_for_date",
             "status": "ambiguous",
             "summary": f"A few meals match \"{name}\" — which?",
-            "candidates": [{"meal_id": str(m.id), "name": m.name} for m in meals[:_MAX_CANDIDATES]],
+            "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
-    meal = meals[0]
+    recipe = recipes[0]
     plan = _plan_covering(repo, scheduled)
     if plan is None:
         return {"type": "plan_meal_for_date", "status": "not_found",
@@ -576,11 +567,11 @@ def propose_plan_meal_for_date(args: dict) -> dict[str, Any]:
     return {
         "type": "plan_meal_for_date",
         "status": "ready",
-        "summary": f"Plan {meal.name} for {slot.lower()} on {scheduled.isoformat()} (×{servings}) in \"{plan.name}\"?",
+        "summary": f"Plan {recipe.name} for {slot.lower()} on {scheduled.isoformat()} (×{servings}) in \"{plan.name}\"?",
         "payload": {
             "meal_plan_id": str(plan.id),
-            "meal_id": str(meal.id),
-            "meal_name": meal.name,
+            "recipe_id": str(recipe.id),
+            "meal_name": recipe.name,
             "scheduled_for": scheduled.isoformat(),
             "slot": slot,
             "servings": servings,
@@ -602,16 +593,16 @@ def commit_plan_meal_for_date(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "message": "That meal plan doesn't exist anymore."}
     existing = [
         UpdateMealPlanEntryRequest(
-            meal_id=e.meal.id,
+            recipe_id=e.recipe.id,
             scheduled_for=e.scheduled_for,
             servings=e.servings,
             slot=e.slot,
         )
         for e in (plan.entries or [])
-        if e.meal is not None
+        if e.recipe is not None and e.consumed_at is None
     ]
     existing.append(UpdateMealPlanEntryRequest(
-        meal_id=UUID(payload["meal_id"]),
+        recipe_id=UUID(payload["recipe_id"]),
         scheduled_for=date.fromisoformat(payload["scheduled_for"]),
         servings=int(payload["servings"]),
         slot=payload["slot"],
@@ -620,8 +611,10 @@ def commit_plan_meal_for_date(payload: dict[str, Any]) -> dict[str, Any]:
     response = handler.handle(UpdateMealPlanRequest(entries=existing), meal_plan_id=plan_id)
     if response.meal_plan_not_found:
         return {"ok": False, "message": "That meal plan vanished mid-request."}
-    if response.missing_meal_ids:
+    if response.missing_recipe_ids:
         return {"ok": False, "message": "One of the meals couldn't be found."}
+    if response.has_past_entry:
+        return {"ok": False, "message": "Can't plan a meal in the past."}
     return {
         "ok": True,
         "message": f"Done — {payload['meal_name']} planned for {payload['slot'].lower()} on {payload['scheduled_for']}.",
@@ -746,6 +739,145 @@ def commit_add_recipe_to_list(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ── cook_recipe ────────────────────────────────────────────────────────
+
+_MAX_COOK = 999
+
+
+def _coerce_positive_int(value: Any, default: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(n, _MAX_COOK))
+
+
+def propose_cook_recipe(args: dict) -> dict[str, Any]:
+    name = str(args.get("recipe_name") or "").strip()
+    if not name:
+        return {"type": "cook_recipe", "status": "invalid",
+                "summary": "Which recipe did you cook?", "candidates": []}
+    count = _coerce_positive_int(args.get("meals_cooked"), 1)
+
+    repo = SqlAlchemyRepository()
+    recipes = _find_recipe(repo, name)
+    if not recipes:
+        return {"type": "cook_recipe", "status": "not_found",
+                "summary": f"No recipe matches \"{name}\".", "candidates": []}
+    if len(recipes) > 1:
+        return {
+            "type": "cook_recipe",
+            "status": "ambiguous",
+            "summary": f"A few recipes match \"{name}\" — which?",
+            "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
+        }
+    recipe = recipes[0]
+    suffix = "meal" if count == 1 else "meals"
+    return {
+        "type": "cook_recipe",
+        "status": "ready",
+        "summary": f"Log {count} cooked {suffix} for {recipe.name}? (Pool: {recipe.available_meals or 0} → {(recipe.available_meals or 0) + count})",
+        "payload": {
+            "recipe_id": str(recipe.id),
+            "recipe_name": recipe.name,
+            "meals_cooked": count,
+        },
+        "candidates": [],
+    }
+
+
+def commit_cook_recipe(payload: dict[str, Any]) -> dict[str, Any]:
+    from dora_api.features.recipes.cook_recipe import (CookRecipeHandler,
+                                                       CookRecipeRequest)
+    handler = CookRecipeHandler()
+    response = handler.handle(
+        CookRecipeRequest(meals_cooked=int(payload["meals_cooked"])),
+        recipe_id=UUID(payload["recipe_id"]),
+    )
+    if response.recipe_not_found:
+        return {"ok": False, "message": "That recipe doesn't exist anymore."}
+    n = int(payload["meals_cooked"])
+    suffix = "meal" if n == 1 else "meals"
+    return {
+        "ok": True,
+        "message": (
+            f"Logged {n} cooked {suffix} for {payload['recipe_name']}. "
+            f"Pool: {response.available_meals}."
+        ),
+    }
+
+
+# ── adjust_recipe_meals ────────────────────────────────────────────────
+
+_MAX_DELTA = 999
+
+
+def _coerce_signed_int(value: Any) -> int | None:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(-_MAX_DELTA, min(n, _MAX_DELTA))
+
+
+def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
+    name = str(args.get("recipe_name") or "").strip()
+    if not name:
+        return {"type": "adjust_recipe_meals", "status": "invalid",
+                "summary": "Which recipe's meal count should I adjust?", "candidates": []}
+    delta = _coerce_signed_int(args.get("delta"))
+    if delta is None or delta == 0:
+        return {"type": "adjust_recipe_meals", "status": "invalid",
+                "summary": "I need a non-zero delta — e.g. -1 for 'I ate one' or +2 for 'I have two more'.",
+                "candidates": []}
+
+    repo = SqlAlchemyRepository()
+    recipes = _find_recipe(repo, name)
+    if not recipes:
+        return {"type": "adjust_recipe_meals", "status": "not_found",
+                "summary": f"No recipe matches \"{name}\".", "candidates": []}
+    if len(recipes) > 1:
+        return {
+            "type": "adjust_recipe_meals",
+            "status": "ambiguous",
+            "summary": f"A few recipes match \"{name}\" — which?",
+            "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
+        }
+    recipe = recipes[0]
+    current = recipe.available_meals or 0
+    projected = max(0, current + delta)
+    sign = "+" if delta > 0 else ""
+    return {
+        "type": "adjust_recipe_meals",
+        "status": "ready",
+        "summary": f"Adjust {recipe.name} by {sign}{delta}? (Pool: {current} → {projected})",
+        "payload": {
+            "recipe_id": str(recipe.id),
+            "recipe_name": recipe.name,
+            "delta": delta,
+        },
+        "candidates": [],
+    }
+
+
+def commit_adjust_recipe_meals(payload: dict[str, Any]) -> dict[str, Any]:
+    from dora_api.features.recipes.adjust_recipe_meals import (
+        AdjustRecipeMealsHandler, AdjustRecipeMealsRequest)
+    handler = AdjustRecipeMealsHandler()
+    response = handler.handle(
+        AdjustRecipeMealsRequest(delta=int(payload["delta"])),
+        recipe_id=UUID(payload["recipe_id"]),
+    )
+    if response.recipe_not_found:
+        return {"ok": False, "message": "That recipe doesn't exist anymore."}
+    return {
+        "ok": True,
+        "message": (
+            f"Updated {payload['recipe_name']}. Pool: {response.available_meals}."
+        ),
+    }
+
+
 # ── Public dispatchers ─────────────────────────────────────────────────
 
 PROPOSERS: dict[str, Callable[[dict], dict]] = {
@@ -757,6 +889,8 @@ PROPOSERS: dict[str, Callable[[dict], dict]] = {
     "set_primary_list": propose_set_primary_list,
     "plan_meal_for_date": propose_plan_meal_for_date,
     "add_recipe_to_list": propose_add_recipe_to_list,
+    "cook_recipe": propose_cook_recipe,
+    "adjust_recipe_meals": propose_adjust_recipe_meals,
 }
 
 COMMITTERS: dict[str, Callable[[dict], dict]] = {
@@ -768,6 +902,8 @@ COMMITTERS: dict[str, Callable[[dict], dict]] = {
     "set_primary_list": commit_set_primary_list,
     "plan_meal_for_date": commit_plan_meal_for_date,
     "add_recipe_to_list": commit_add_recipe_to_list,
+    "cook_recipe": commit_cook_recipe,
+    "adjust_recipe_meals": commit_adjust_recipe_meals,
 }
 
 

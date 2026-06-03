@@ -4,7 +4,7 @@
             <template #avatar>
                 <q-icon :name="ICONS.info" size="18px" />
             </template>
-            Backups capture your stock, lists, recipes, meals and saved products
+            Backups capture your stock, lists, recipes, meal plans and saved products
             by default. Optional sections (system settings, user accounts,
             historic offers) can be ticked on per-backup. Passwords are never
             included.
@@ -401,8 +401,6 @@
         { key: 'recipe_collections', label: 'Recipe collections', category: 'Core data', defaultOn: true },
         { key: 'recipes', label: 'Recipes', category: 'Core data', defaultOn: true },
         { key: 'recipe_ingredients', label: 'Recipe ingredients', category: 'Core data', defaultOn: true },
-        { key: 'meals', label: 'Meals', category: 'Core data', defaultOn: true },
-        { key: 'meal_recipes', label: 'Meal ↔ recipe links', category: 'Core data', defaultOn: true },
         { key: 'meal_plans', label: 'Meal plans', category: 'Core data', defaultOn: true },
         { key: 'meal_plan_entries', label: 'Meal plan entries', category: 'Core data', defaultOn: true },
         { key: 'product_barcodes', label: 'Product barcodes', category: 'Core data', defaultOn: true },
@@ -465,7 +463,6 @@
         'shopping_list_templates',
         'recipe_collections',
         'recipes',
-        'meals',
         'meal_plans',
         'app_settings',
         'users',

@@ -11,7 +11,6 @@ from typing import List
 
 from sqlalchemy import func, select
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.recipe import Recipe
@@ -58,13 +57,16 @@ class RecipeSummary:
 
 @dataclass(frozen=True, slots=True)
 class MealSummary:
+    # Number of recipes that currently have meals in the pool, and the
+    # total count of meals across all recipes. "Definitions" maps to
+    # recipes-with-meals since Meal-as-its-own-entity is gone.
     total_definitions: int
     total_in_stock: int
 
 
 @dataclass(frozen=True, slots=True)
 class UpcomingMealPlanEntry:
-    meal_name: str
+    recipe_name: str
     scheduled_for: date
     slot: str
     servings: int
@@ -136,20 +138,21 @@ class GetDashboardSummaryHandler:
         )
 
         # ── Meals ─────────────────────────────────────────────────────────
-        total_meals = self.repository.get(Meal).count()
-        # quantity_in_stock summed across all meal definitions.
+        # "Definitions" = recipes with any meals on hand. "In stock" =
+        # the sum of available_meals across every recipe.
         total_meals_in_stock = session.execute(
-            select(func.coalesce(func.sum(Meal.quantity_in_stock), 0))
+            select(func.coalesce(func.sum(Recipe.available_meals), 0))
+        ).scalar_one()
+        total_meal_definitions = session.execute(
+            select(func.count()).select_from(Recipe).where(Recipe.available_meals > 0)
         ).scalar_one()
 
         # ── Meal plan: upcoming entries within the next week ──────────────
-        # Window: today → today + 7 days. We pull entries with their meals
-        # eager-loaded so the frontend can render names without a follow-up.
         _Window = date.today() + timedelta(days=7)
         upcoming_entries_entities = (
             self.repository
             .get(MealPlanEntry)
-            .include(MealPlanEntry.Fields.MEAL)
+            .include(MealPlanEntry.Fields.RECIPE)
             .all(
                 EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR)
                 .between(date.today(), _Window)
@@ -158,7 +161,7 @@ class GetDashboardSummaryHandler:
         upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))
         upcoming_entries_dto: List[UpcomingMealPlanEntry] = [
             UpcomingMealPlanEntry(
-                meal_name = e.meal.name,
+                recipe_name = e.recipe.name,
                 scheduled_for = e.scheduled_for,
                 slot = e.slot,
                 servings = e.servings,
@@ -182,7 +185,7 @@ class GetDashboardSummaryHandler:
                 favourites = favourite_recipes,
             ),
             meals = MealSummary(
-                total_definitions = total_meals,
+                total_definitions = int(total_meal_definitions),
                 total_in_stock = int(total_meals_in_stock),
             ),
             meal_plan = MealPlanSummary(

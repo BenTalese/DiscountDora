@@ -5,7 +5,6 @@ DASHBOARD_ROUTER = Blueprint("DASHBOARD_ROUTER", __name__, url_prefix="/api/dash
 HEALTH_ROUTER = Blueprint("HEALTH_ROUTER", __name__, url_prefix="/api/health")
 MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
-MEAL_ROUTER = Blueprint("MEAL_ROUTER", __name__, url_prefix="/api/meals")
 MEAL_PLAN_ROUTER = Blueprint("MEAL_PLAN_ROUTER", __name__, url_prefix="/api/meal-plans")
 RECIPE_ROUTER = Blueprint("RECIPE_ROUTER", __name__, url_prefix="/api/recipes")
 RECIPE_COLLECTION_ROUTER = Blueprint("RECIPE_COLLECTION_ROUTER", __name__, url_prefix="/api/recipe-collections")

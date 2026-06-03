@@ -185,7 +185,15 @@
                 <q-card-section class="text-h6">Finished cooking?</q-card-section>
                 <q-card-section class="q-gutter-sm q-pt-none">
                     <q-toggle v-model="finishUpdateLevels" label="Update stock levels (use up what you cooked with)" />
-                    <q-toggle v-model="finishLogMeal" label="Log this as a meal eaten" />
+                    <q-input
+                        v-model.number="finishMealsCooked"
+                        type="number"
+                        min="0"
+                        label="How many meals did you cook?"
+                        outlined
+                        dense
+                        hint="Added to this recipe's pool. Leave at 0 if you just ate it."
+                    />
                     <q-toggle v-model="finishAddRanOut" label="Add anything that ran out to a shopping list" />
                     <div class="text-caption text-grey">
                         {{ usedIds.size }} ingredient(s) marked used.
@@ -420,7 +428,7 @@
     const finishDialogOpen = ref(false);
     const finishing = ref(false);
     const finishUpdateLevels = ref(true);
-    const finishLogMeal = ref(true);
+    const finishMealsCooked = ref<number>(1);
     const finishAddRanOut = ref(true);
 
     function openFinish() {
@@ -462,8 +470,9 @@
                 }
             }
 
-            if (finishLogMeal.value && recipe.value) {
-                await recipeStore.markMadeAsync(recipe.value.recipe_id);
+            if (recipe.value) {
+                const n = Math.max(0, Math.floor(finishMealsCooked.value || 0));
+                await recipeStore.cookAsync(recipe.value.recipe_id, n);
             }
 
             if (finishAddRanOut.value) {

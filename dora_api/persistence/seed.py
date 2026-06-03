@@ -3,7 +3,6 @@ from datetime import UTC, date, datetime, timedelta
 from werkzeug.security import generate_password_hash
 
 from dora_api.app import db
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
@@ -310,6 +309,7 @@ def seed_dev_data():
 
     def make_recipe(*, name, collection, ingredients, instructions, **kw):
         recipe = Recipe(
+            available_meals=kw.get("available_meals", 0),
             category=kw.get("category"),
             cook_time_minutes=kw.get("cook", 20),
             cuisine=kw.get("cuisine"),
@@ -415,22 +415,20 @@ def seed_dev_data():
         instructions="1. Scoop the Vanilla Ice Cream into a bowl.\n2. Enjoy.",
     )
 
-    # ---------------- MEALS ---------------- #
-    repo.add(Meal(name="Pasta Night", quantity_in_stock=3, recipes=[aglio]))
-    repo.add(Meal(name="Stir Fry Night", quantity_in_stock=2, recipes=[stir_fry]))
-    big_dinner = Meal(name="Big Italian Dinner", quantity_in_stock=1, recipes=[simple_pasta, icecream_bowl])
-    pasta_meal = Meal(name="Aglio Olio", quantity_in_stock=4, recipes=[aglio])
-    fry_meal = Meal(name="Fried Rice", quantity_in_stock=2, recipes=[fried_rice])
-    repo.add(big_dinner)
-    repo.add(pasta_meal)
-    repo.add(fry_meal)
+    # ---------------- MEAL POOL ---------------- #
+    # Seed `available_meals` directly on the recipes that the plan will
+    # draw from, so the dashboard "meals on hand" card and the planner
+    # shortfall panel both have something to show.
+    aglio.available_meals = 4
+    stir_fry.available_meals = 2
+    fried_rice.available_meals = 2
 
     # ---------------- MEAL PLAN (this week) ---------------- #
     monday = today - timedelta(days=today.weekday())
 
-    def plan_entry(meal, day_offset, slot, servings=2):
+    def plan_entry(recipe, day_offset, slot, servings=2):
         entry = MealPlanEntry(
-            meal=meal,
+            recipe=recipe,
             scheduled_for=monday + timedelta(days=day_offset),
             servings=servings,
             slot=slot,
@@ -439,14 +437,14 @@ def seed_dev_data():
         return entry
 
     entries = [
-        plan_entry(pasta_meal, 0, "Dinner"),
-        plan_entry(fry_meal, 1, "Dinner"),
-        plan_entry(pasta_meal, 2, "Lunch", servings=1),
-        # Big Italian Dinner pulls in out-of-stock Parmesan and low Ice Cream so
-        # the week's "need to buy" rollup has something to show.
-        plan_entry(big_dinner, 3, "Dinner", servings=2),
-        plan_entry(fry_meal, 4, "Dinner", servings=3),
-        plan_entry(pasta_meal, 5, "Dinner", servings=4),
+        plan_entry(aglio, 0, "Dinner"),
+        plan_entry(fried_rice, 1, "Dinner"),
+        plan_entry(aglio, 2, "Lunch", servings=1),
+        # `simple_pasta` and `icecream_bowl` aren't in the pool, so the
+        # planner surfaces a shortfall the user has to cook before then.
+        plan_entry(simple_pasta, 3, "Dinner", servings=2),
+        plan_entry(fried_rice, 4, "Dinner", servings=3),
+        plan_entry(aglio, 5, "Dinner", servings=4),
     ]
     repo.add(MealPlan(name="This Week", start_date=monday, entries=entries))
 

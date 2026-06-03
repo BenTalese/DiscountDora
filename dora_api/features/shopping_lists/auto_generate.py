@@ -364,17 +364,13 @@ class AutoGenerateHandler:
             for entry in plan.entries or []:
                 if not (week_start <= entry.scheduled_for <= week_end):
                     continue
-                meal = entry.meal
-                if meal is None:
+                if entry.consumed_at is not None:
+                    # Past entries already drew from the pool — they're
+                    # not part of the upcoming shop.
                     continue
-                # Meal.recipes is an m2m loaded lazy="noload" — fetch explicitly.
-                fetched_meal = (
-                    self.repository.get(type(meal))
-                    .include("recipes")
-                    .by_id(meal.id)
-                )
-                for r in (fetched_meal.recipes if fetched_meal else []) or []:
-                    recipe_ids.append(r.id)
+                _RecipeId = getattr(entry, "_recipe_id", None)
+                if _RecipeId is not None:
+                    recipe_ids.append(_RecipeId)
 
         if not recipe_ids:
             return

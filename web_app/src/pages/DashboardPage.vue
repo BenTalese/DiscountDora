@@ -583,7 +583,7 @@
                     </header>
                     <div v-if="nextEntry" class="dora-next-up">
                         <div class="dora-next-up-label">Next up</div>
-                        <div class="dora-next-up-meal">{{ nextEntry.meal_name }}</div>
+                        <div class="dora-next-up-meal">{{ nextEntry.recipe_name }}</div>
                         <div class="dora-next-up-meta">
                             {{ formatRelativeDay(nextEntry.scheduled_for) }} ·
                             {{ nextEntry.slot }} · ×{{ nextEntry.servings }}
@@ -606,9 +606,9 @@
                             <div class="dora-strip-meals">
                                 <span
                                     v-for="entry in day.entries.slice(0, 2)"
-                                    :key="entry.meal_name + entry.slot"
+                                    :key="entry.recipe_name + entry.slot"
                                     class="dora-strip-pip"
-                                    :title="`${entry.meal_name} (${entry.slot})`"
+                                    :title="`${entry.recipe_name} (${entry.slot})`"
                                 />
                                 <span
                                     v-if="day.entries.length > 2"
@@ -648,20 +648,20 @@
 
             <!-- ───── Meals card ────────────────────────────────────────── -->
             <div v-if="isCardVisible('meals')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/meals')">
+                <article class="dora-card dora-card-clickable" @click="goTo('/recipes')">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.restaurant" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Meals</h3>
-                        <span class="dora-card-action">Adjust →</span>
+                        <h3 class="dora-card-title">Meals on hand</h3>
+                        <span class="dora-card-action">Open →</span>
                     </header>
                     <div class="dora-stat-grid">
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.meals.total_definitions }}</div>
-                            <div class="dora-stat-label">defined</div>
-                        </div>
                         <div class="dora-stat dora-stat-ok">
                             <div class="dora-stat-num">{{ summary.meals.total_in_stock }}</div>
-                            <div class="dora-stat-label">cooked & ready</div>
+                            <div class="dora-stat-label">in the pool</div>
+                        </div>
+                        <div class="dora-stat">
+                            <div class="dora-stat-num">{{ summary.meals.total_definitions }}</div>
+                            <div class="dora-stat-label">recipes stocked</div>
                         </div>
                     </div>
                 </article>
@@ -1036,7 +1036,7 @@
         }
         if (nextEntry.value) {
             const when = formatRelativeDay(nextEntry.value.scheduled_for).toLowerCase();
-            return `${capitalise(when)}: ${nextEntry.value.meal_name} for ${nextEntry.value.servings}.`;
+            return `${capitalise(when)}: ${nextEntry.value.recipe_name} for ${nextEntry.value.servings}.`;
         }
         if (s.stock_items.low_stock > 0) {
             return `${s.stock_items.low_stock} ${plural(s.stock_items.low_stock, 'item is', 'items are')} running low.`;

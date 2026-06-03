@@ -60,7 +60,7 @@
                             dense
                             outlined
                             label="Meal"
-                            v-model="entry.meal_id"
+                            v-model="entry.recipe_id"
                             :options="mealOptions"
                             emit-value
                             map-options
@@ -100,10 +100,11 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
-    import type { MealPlan } from 'src/models/meal';
+    import type { MealPlan } from 'src/models/mealPlan';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
-    import { useMealStore } from 'src/stores/mealStore';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import { useRecipeStore } from 'src/stores/recipeStore';
     import { computed, reactive, ref, watch } from 'vue';
 
     const props = defineProps<{ modelValue: boolean; plan: MealPlan | null }>();
@@ -112,11 +113,12 @@
         (e: 'saved'): void;
     }>();
 
-    const mealStore = useMealStore();
-    const { meals } = storeToRefs(mealStore);
+    const mealPlanStore = useMealPlanStore();
+    const recipeStore = useRecipeStore();
+    const { recipes } = storeToRefs(recipeStore);
 
     const mealOptions = computed(() =>
-        meals.value.map((m) => ({ label: m.name, value: m.meal_id }))
+        recipes.value.map((r) => ({ label: r.name, value: r.recipe_id }))
     );
 
     type Form = { name: string; start_date: string; entries: MealPlanEntryCommand[] };
@@ -152,19 +154,21 @@
             if (props.plan) {
                 form.name = props.plan.name;
                 form.start_date = props.plan.start_date;
-                form.entries = props.plan.entries.map((e) => ({
-                    meal_id: e.meal_id,
-                    scheduled_for: e.scheduled_for,
-                    servings: e.servings,
-                    slot: e.slot
-                }));
+                form.entries = props.plan.entries
+                    .filter((e) => !e.consumed_at)
+                    .map((e) => ({
+                        recipe_id: e.recipe_id,
+                        scheduled_for: e.scheduled_for,
+                        servings: e.servings,
+                        slot: e.slot
+                    }));
             }
         }
     );
 
     function addEntry() {
         form.entries.push({
-            meal_id: '',
+            recipe_id: '',
             scheduled_for: form.start_date,
             servings: 1,
             slot: 'Dinner'
@@ -180,16 +184,21 @@
         generalError.value = null;
         fieldErrors.value = {};
         try {
-            const entries = form.entries.filter((e) => !!e.meal_id);
+            const entries = form.entries.filter((e) => !!e.recipe_id);
             if (props.plan) {
-                await mealStore.updateMealPlanAsync({
+                // Backend refuses entries=[] without an explicit
+                // confirm_clear_entries flag so a UI bug can't silently
+                // wipe a plan. The dialog is the explicit path, so set
+                // the flag when the user has emptied the list.
+                await mealPlanStore.updateMealPlanAsync({
                     meal_plan_id: props.plan.meal_plan_id,
                     name: form.name,
                     start_date: form.start_date,
-                    entries
+                    entries,
+                    ...(entries.length === 0 ? { confirm_clear_entries: true } : {}),
                 });
             } else {
-                await mealStore.createMealPlanAsync({
+                await mealPlanStore.createMealPlanAsync({
                     name: form.name,
                     start_date: form.start_date,
                     entries

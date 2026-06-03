@@ -96,8 +96,17 @@ export default class RecipeApiService {
         await this.httpClient.patch<void>(`/recipes/${recipe_id}`, payload);
     };
 
-    markMadeAsync = async (recipeId: string): Promise<void> =>
-        await this.httpClient.post<void>(`/recipes/${recipeId}/mark-made`, {});
+    cookAsync = async (recipeId: string, mealsCooked: number): Promise<{ available_meals: number } | void> =>
+        await this.httpClient.post<{ available_meals: number } | void, { meals_cooked: number }>(
+            `/recipes/${recipeId}/cook`,
+            { meals_cooked: mealsCooked },
+        );
+
+    adjustMealsAsync = async (recipeId: string, delta: number): Promise<{ available_meals: number }> =>
+        await this.httpClient.post<{ available_meals: number }, { delta: number }>(
+            `/recipes/${recipeId}/adjust-meals`,
+            { delta },
+        );
 
     importFromUrlAsync = async (url: string): Promise<ImportedRecipe> =>
         await this.httpClient.post<ImportedRecipe, { url: string }>(

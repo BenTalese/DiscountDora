@@ -107,7 +107,6 @@
         recipe: 'menu_book',
         location: 'place',
         product: 'local_offer',
-        meal: 'restaurant',
         meal_plan: 'calendar_month',
     };
     const TYPE_LABEL: Record<SearchResultType, string> = {
@@ -116,7 +115,6 @@
         recipe: 'Recipes',
         location: 'Locations',
         product: 'Products',
-        meal: 'Meals',
         meal_plan: 'Meal plans',
     };
 
@@ -127,7 +125,6 @@
             case 'recipe': return `/recipes/${id}`;
             case 'location': return `/stock?location_id=${id}`;
             case 'product': return '/my-products';
-            case 'meal': return '/meals';
             case 'meal_plan': return '/meal-plans';
         }
     }
@@ -275,7 +272,7 @@
                 byType.set(r.type, list);
             }
             const order: SearchResultType[] = [
-                'stock_item', 'shopping_list', 'recipe', 'location', 'product', 'meal', 'meal_plan',
+                'stock_item', 'shopping_list', 'recipe', 'location', 'product', 'meal_plan',
             ];
             for (const t of order) {
                 const list = byType.get(t);

@@ -166,15 +166,9 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
         mood: 'excited',
     },
     {
-        match: (p) => p === '/meals',
-        summary:
-            "Meals are recipe bundles — a roast plus its sides, that kind of thing. Use them in meal plans to commit to whole dinners, not just dishes.",
-        mood: 'happy',
-    },
-    {
         match: (p) => p === '/meal-plans',
         summary:
-            "Plan the week ahead. Drag meals onto days, set servings, and I'll surface what's coming up on the dashboard.",
+            "Plan the week ahead. Drag a recipe onto a day — past days lock themselves and drain the recipe's available-meals pool. The 'needs cooking' banner tells you when you're short.",
         mood: 'happy',
     },
     {

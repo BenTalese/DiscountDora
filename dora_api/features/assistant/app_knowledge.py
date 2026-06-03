@@ -22,11 +22,15 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
   product to a stock item so its deal price tracks alongside the pantry.
 - Recipes: the user's recipes, with ingredients (and where each lives),
   instructions, cook time, difficulty, cuisine, category, and a step-by-step
-  Cook mode. Favourite recipes are surfaced first in suggestions.
-- Meals: bundle one or more recipes together (e.g. a roast plus sides). Used
-  by Meal Plans so a "dinner" can be a multi-recipe affair.
-- Meal Plans: plan a week — drag meals onto days, set servings, slots
-  (breakfast/lunch/dinner). Upcoming entries surface on the dashboard.
+  Cook mode. Each recipe also tracks "available meals" — portions of that
+  dish currently in the pool (e.g. cooked-ahead servings in the freezer).
+  Cook mode ends by asking how many meals were cooked; that count is added
+  to the pool. Favourite recipes are surfaced first in suggestions.
+- Meal Plans: plan a week by assigning recipes to days + slots
+  (breakfast/lunch/dinner) with a servings count. When a day passes the
+  entries auto-decrement the recipe's available-meals pool (floored at 0)
+  and lock read-only. Past days can't be edited. If commitments exceed
+  the pool, the planner surfaces a "needs cooking" shortfall.
 - Shopping Lists: multiple lists with one marked PRIMARY (the default target
   for new additions). Archive completed lists, copy lists, use templates,
   group items by merchant, and a "finish shopping" flow that bumps ticked

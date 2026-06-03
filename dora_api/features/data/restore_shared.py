@@ -84,8 +84,6 @@ SECTIONS: tuple[Section, ...] = (
     Section("recipe_collections", "RecipeCollection", "Recipe collections", "Core data", True, _name_key),
     Section("recipes", "Recipe", "Recipes", "Core data", True, _name_key),
     Section("recipe_ingredients", "RecipeIngredient", "Recipe ingredients", "Core data", True),
-    Section("meals", "Meal", "Meals", "Core data", True, _name_key),
-    Section("meal_recipes", "MealRecipe", "Meal ↔ recipe links", "Core data", True),
     Section("meal_plans", "MealPlan", "Meal plans", "Core data", True, _name_key),
     Section("meal_plan_entries", "MealPlanEntry", "Meal plan entries", "Core data", True),
     # ── Optional (off by default) ──

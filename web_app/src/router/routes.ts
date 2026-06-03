@@ -75,7 +75,6 @@ const routes: RouteRecordRaw[] = [
             { path: 'recipes', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Recipes' } },
             { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
             { path: 'recipes/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
-            { path: 'meals', component: () => import('pages/MealsOverview.vue'), meta: { title: 'Meals' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },
             { path: 'shopping-lists', component: () => import('pages/ShoppingListsOverview.vue'), meta: { title: 'Shopping lists' } },
             { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping list templates' } },

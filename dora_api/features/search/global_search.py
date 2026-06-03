@@ -20,7 +20,6 @@ from flask import request
 warnings.filterwarnings("ignore", message="Using slow pure-python SequenceMatcher")
 from fuzzywuzzy import fuzz  # noqa: E402
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.recipe import Recipe
@@ -39,7 +38,6 @@ ALL_TYPES = (
     "recipe",
     "location",
     "product",
-    "meal",
     "meal_plan",
 )
 DEFAULT_LIMIT = 8
@@ -206,22 +204,6 @@ class GlobalSearchHandler:
                     query, "product", limit,
                     [(p.id, p.name) for p in products],
                     subtitle_by_id={p.id: product_sub(p) for p in products},
-                )
-            )
-
-        if "meal" in wanted:
-            meals = (
-                self.repository.get(Meal)
-                .include(Meal.Fields.RECIPES)
-                .all()
-            )
-            results.extend(
-                self._score_and_collect(
-                    query, "meal", limit,
-                    [(m.id, m.name) for m in meals],
-                    subtitle_by_id={
-                        m.id: f"{len(m.recipes or [])} recipe(s)" for m in meals
-                    },
                 )
             )
 

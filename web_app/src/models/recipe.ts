@@ -13,6 +13,13 @@ export type RecipeIngredient = {
 export type Recipe = {
     recipe_id: string;
     name: string;
+    /** Total meals of this recipe currently in the pool (cooked-ahead
+     *  portions). User-managed via Cook mode and the ± controls; also
+     *  auto-decrements when a meal-plan entry's day passes. */
+    available_meals: number;
+    /** `available_meals` minus the sum of un-consumed future meal-plan
+     *  servings for this recipe. Floored at 0. Derived server-side. */
+    unallocated_meals: number;
     category: string | null;
     cook_time_minutes: number | null;
     cuisine: string | null;

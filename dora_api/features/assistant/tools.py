@@ -18,7 +18,6 @@ from datetime import date, datetime, timedelta
 from typing import Any, Callable
 from uuid import UUID
 
-from dora_api.domain.entities.meal import Meal
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
@@ -297,6 +296,32 @@ TOOL_SCHEMAS: list[dict] = [
                 },
                 "required": [],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "meals_in_pool",
+            "description": (
+                "List recipes that have cooked-and-ready meals in the pool, "
+                "biggest stash first. Use for 'what's in the freezer', "
+                "'what cooked meals do I have', 'what's left from Sunday's "
+                "batch cook'. No arguments."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "meals_shortfall",
+            "description": (
+                "Recipes where planned servings exceed the pool — i.e. what "
+                "the user still needs to cook before those days arrive. Use "
+                "for 'what do I need to cook', 'what's the week short on', "
+                "'what should I batch-cook next'. No arguments."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
     {
@@ -743,6 +768,55 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "cook_recipe",
+            "description": (
+                "Log that the user has just cooked a recipe — adds the "
+                "given number of meals to that recipe's pool. Use for "
+                "'I cooked 3 lasagnes', 'just batch-cooked fried rice', "
+                "'made two more portions'. Defaults to 1 if the user "
+                "doesn't say a number."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_name": {"type": "string"},
+                    "meals_cooked": {
+                        "type": "integer",
+                        "description": "How many portions were cooked. Default 1.",
+                    },
+                },
+                "required": ["recipe_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "adjust_recipe_meals",
+            "description": (
+                "Adjust the cooked-meals pool for a recipe by a signed "
+                "delta — positive to add (e.g. 'I found two more in "
+                "the freezer'), negative to remove (e.g. 'I ate one', "
+                "'the kids finished two'). Don't use for fresh cooks "
+                "— that's `cook_recipe`. Floors at 0; never goes "
+                "negative."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_name": {"type": "string"},
+                    "delta": {
+                        "type": "integer",
+                        "description": "Signed change. -1 for 'I ate one', +2 for 'found two more'.",
+                    },
+                },
+                "required": ["recipe_name", "delta"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_to_shopping_list",
             "description": "Add one or more items to the user's shopping list, e.g. 'add 3 apples and some milk'.",
             "parameters": {
@@ -782,6 +856,8 @@ _ACTION_TOOLS = frozenset({
     "set_primary_list",
     "plan_meal_for_date",
     "add_recipe_to_list",
+    "cook_recipe",
+    "adjust_recipe_meals",
 })
 
 
@@ -1506,7 +1582,7 @@ def meal_plan_for_date(args: dict) -> list[dict]:
         days_ahead = 0
     end = anchor + timedelta(days=days_ahead)
 
-    query = repo.get(MealPlanEntry).include(MealPlanEntry.Fields.MEAL)
+    query = repo.get(MealPlanEntry).include(MealPlanEntry.Fields.RECIPE)
     conditions = [
         EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR).gte(anchor),
         EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR).lte(end),
@@ -1517,10 +1593,50 @@ def meal_plan_for_date(args: dict) -> list[dict]:
         {
             "date": entry.scheduled_for.isoformat(),
             "slot": entry.slot,
-            "meal_name": entry.meal.name if entry.meal else None,
+            "meal_name": entry.recipe.name if entry.recipe else None,
             "servings": entry.servings,
         }
         for entry in entries[:_MAX_ROWS]
+    ]
+
+
+# ── Meal pool: what's cooked & ready, what's running short ──────────────
+
+def meals_in_pool(_args: dict) -> list[dict]:
+    """List recipes with cooked-and-ready meals in the pool, descending
+    by count. Answers "what's in the freezer", "what cooked meals do I
+    have ready", "anything left from Sunday's batch cook"."""
+    repo = SqlAlchemyRepository()
+    recipes: list[Recipe] = repo.get(Recipe).all(
+        EntityField(Recipe, Recipe.Fields.AVAILABLE_MEALS).gt(0)
+    )
+    recipes.sort(key=lambda r: (-(r.available_meals or 0), r.name.lower()))
+    return [
+        {
+            "recipe_name": r.name,
+            "available_meals": r.available_meals or 0,
+        }
+        for r in recipes[:_MAX_ROWS]
+    ]
+
+
+def meals_shortfall(_args: dict) -> list[dict]:
+    """Per-recipe shortfall — recipes whose committed plan servings
+    exceed the pool. Answers "what do I need to cook", "what's the week
+    short on", "what should I batch-cook next"."""
+    from dora_api.features.meal_plans.get_shortfall import GetShortfallHandler
+    rows = GetShortfallHandler().handle()
+    return [
+        {
+            "recipe_name": row.recipe_name,
+            "available_meals": row.available_meals,
+            "committed_meals": row.committed_meals,
+            "shortfall": row.shortfall,
+            "earliest_needed": (
+                row.earliest_needed.isoformat() if row.earliest_needed else None
+            ),
+        }
+        for row in rows[:_MAX_ROWS]
     ]
 
 
@@ -1835,9 +1951,9 @@ def meal_detail(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
 
     def build():
-        return repo.get(Meal).include(Meal.Fields.RECIPES)
+        return repo.get(Recipe)
 
-    result = _find_one_by_name(repo, Meal, name, build)
+    result = _find_one_by_name(repo, Recipe, name, build)
     status = result[1] if isinstance(result, tuple) else "not_found"
     if status == "not_found":
         return [{"query": name, "status": "not_found"}]
@@ -1848,21 +1964,15 @@ def meal_detail(args: dict) -> list[dict]:
             "status": "ambiguous",
             "candidates": [{"name": c.name} for c in candidates[:_MAX_CANDIDATES]],
         }]
-    meal: Meal = result[0]
+    recipe: Recipe = result[0]
 
     return [{
-        "name": meal.name,
-        "quantity_in_stock": getattr(meal, "quantity_in_stock", 0),
-        "recipe_count": len(meal.recipes or []),
-        "recipes": [
-            {
-                "name": r.name,
-                "cuisine": r.cuisine,
-                "cook_time_minutes": r.cook_time_minutes,
-                "difficulty": r.difficulty,
-            }
-            for r in (meal.recipes or [])
-        ],
+        "name": recipe.name,
+        "available_meals": recipe.available_meals or 0,
+        "cuisine": recipe.cuisine,
+        "cook_time_minutes": recipe.cook_time_minutes,
+        "difficulty": recipe.difficulty,
+        "servings": recipe.servings,
     }]
 
 
@@ -2573,6 +2683,8 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "find_deals": find_deals,
     "pantry_health": pantry_health,
     "meal_plan_for_date": meal_plan_for_date,
+    "meals_in_pool": meals_in_pool,
+    "meals_shortfall": meals_shortfall,
     "recipes_using_item": recipes_using_item,
     "get_alerts": get_alerts,
     "stock_item_detail": stock_item_detail,
@@ -2600,12 +2712,14 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "find_deals": {"path": "/product-search", "label": "Open product search"},
     "pantry_health": {"path": "/stock", "label": "Open Stock"},
     "meal_plan_for_date": {"path": "/meal-plans", "label": "Open Meal Plans"},
+    "meals_in_pool": {"path": "/recipes", "label": "Open Recipes"},
+    "meals_shortfall": {"path": "/meal-plans", "label": "Open Meal Plans"},
     "recipes_using_item": {"path": "/recipes", "label": "Browse recipes"},
     "get_alerts": {"path": "/stock", "label": "See on Stock"},
     "stock_item_detail": {"path": "/stock", "label": "Open Stock"},
     "recipe_detail": {"path": "/recipes", "label": "Browse recipes"},
     "shopping_list_contents": {"path": "/shopping-lists", "label": "Open Shopping Lists"},
-    "meal_detail": {"path": "/meals", "label": "Open Meals"},
+    "meal_detail": {"path": "/recipes", "label": "Open Recipes"},
     "find_location": {"path": "/stock", "label": "See it on the Stock page"},
     "compare_prices": {"path": "/product-search", "label": "Open product search"},
     "purchase_price_stats": {"path": "/reports", "label": "Open Reports"},

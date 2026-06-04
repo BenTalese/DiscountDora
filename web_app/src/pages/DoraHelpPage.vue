@@ -5,7 +5,7 @@
             <DoraMascot mood="cute" :size="96" />
             <div class="q-ml-md col">
                 <div class="text-h6">Meet Dora</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Sentient burger robot. Your in-app pantry buddy. Slightly chaotic.
                 </div>
             </div>
@@ -42,11 +42,11 @@
                 <q-card flat bordered class="dora-mode-card">
                     <q-card-section>
                         <div class="row items-center q-mb-sm">
-                            <q-icon :name="ICONS.chat_bubble_outline" color="grey-7" size="22px" />
+                            <q-icon :name="ICONS.chat_bubble_outline" color="grey" size="22px" />
                             <div class="text-subtitle1 q-ml-sm">Basic mode</div>
-                            <q-chip dense color="grey-4" text-color="grey-9" class="q-ml-sm">always on</q-chip>
+                            <q-chip dense color="grey" text-color="white" class="q-ml-sm">always on</q-chip>
                         </div>
-                        <p class="text-caption text-grey q-mb-sm">
+                        <p class="text-caption dora-text-muted q-mb-sm">
                             Keyword-matched intents with hand-written replies.
                             Fast, predictable, works without any setup.
                         </p>
@@ -68,7 +68,7 @@
                             <div class="text-subtitle1 q-ml-sm">AI mode</div>
                             <q-chip dense color="primary" text-color="white" class="q-ml-sm">opt-in</q-chip>
                         </div>
-                        <p class="text-caption text-grey q-mb-sm">
+                        <p class="text-caption dora-text-muted q-mb-sm">
                             A local language model (Ollama) handles freeform
                             phrasing and chains tool calls. Set up in
                             <router-link :to="{ path: '/settings', query: { tab: 'system' } }">Settings → System</router-link>.
@@ -109,7 +109,7 @@
                                 :key="idx"
                                 dense
                                 outline
-                                color="grey-8"
+                                color="grey"
                                 class="dora-intent-example"
                             >
                                 {{ ex }}
@@ -122,7 +122,7 @@
 
         <!-- ── AI tools ───────────────────────────────────────────── -->
         <div class="text-h6 q-mb-sm">What AI mode unlocks</div>
-        <p class="text-caption text-grey q-mb-md">
+        <p class="text-caption dora-text-muted q-mb-md">
             When AI is active, Dora picks the right tool from your phrasing. You
             don't need to memorise these — just ask naturally.
         </p>
@@ -152,7 +152,7 @@
 
         <!-- ── Faces cheat sheet ──────────────────────────────────── -->
         <div class="text-h6 q-mb-sm">Faces &amp; expressions</div>
-        <p class="text-caption text-grey q-mb-md">
+        <p class="text-caption dora-text-muted q-mb-md">
             The big burger in the bottom-right reacts to the conversation. Here's
             what each face means, mostly so you can blame me when she pouts.
         </p>
@@ -166,7 +166,7 @@
                     <q-card-section class="q-pa-sm">
                         <DoraMascot :mood="face.mood" :size="72" />
                         <div class="text-weight-medium q-mt-sm">{{ face.label }}</div>
-                        <div class="text-caption text-grey">{{ face.when }}</div>
+                        <div class="text-caption dora-text-muted">{{ face.when }}</div>
                     </q-card-section>
                 </q-card>
             </div>
@@ -177,7 +177,7 @@
         <q-list bordered separator class="rounded-borders">
             <q-item v-for="tip in tips" :key="tip.title">
                 <q-item-section avatar>
-                    <q-icon :name="tip.icon" color="amber-7" />
+                    <q-icon :name="tip.icon" color="warning" />
                 </q-item-section>
                 <q-item-section>
                     <q-item-label class="text-weight-medium">{{ tip.title }}</q-item-label>

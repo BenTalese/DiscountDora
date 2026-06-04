@@ -3,7 +3,7 @@
         <q-card-section class="row items-center">
             <div>
                 <div class="text-h6">Stock groups</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Tag your stock items so they're easier to filter on the
                     overview. {{ groups.length }} group{{ groups.length === 1 ? '' : 's' }}.
                 </div>
@@ -19,7 +19,7 @@
             />
         </q-card-section>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -74,7 +74,7 @@
                 </q-item-section>
             </q-item>
             <q-item v-if="!loading && groups.length === 0">
-                <q-item-section class="text-grey text-center">
+                <q-item-section class="dora-text-muted text-center">
                     No groups yet. Create one to start tagging stock items.
                 </q-item-section>
             </q-item>
@@ -184,7 +184,6 @@
                           } currently in this group will lose their group tag. The items themselves stay.`
                         : 'Nothing currently uses this group.',
                 cancel: true,
-                persistent: true,
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

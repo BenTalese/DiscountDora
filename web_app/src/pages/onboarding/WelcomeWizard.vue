@@ -5,15 +5,14 @@
             <div class="row items-center q-mb-md">
                 <div class="col">
                     <div class="text-h5">Welcome to Discount Dora</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Step {{ stepIndex + 1 }} of {{ visibleSteps.length }}
                         · {{ visibleSteps[stepIndex]?.title }}
                     </div>
                 </div>
-                <q-btn
-                    flat
-                    no-caps
-                    color="grey-7"
+                <BaseButton
+                    variant="ghost"
+                    class="dora-text-secondary"
                     :icon="ICONS.skip_next"
                     label="Skip everything"
                     :loading="completing"
@@ -25,11 +24,10 @@
                 size="6px"
                 rounded
                 color="primary"
-                track-color="grey-3"
                 class="q-mb-lg"
             />
 
-            <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+            <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
                 {{ loadError }}
             </q-banner>
 
@@ -46,7 +44,7 @@
                     </q-avatar>
                     <div class="col">
                         <div class="text-h6">Hi! I'm Dora.</div>
-                        <div class="text-body2 text-grey-8">
+                        <div class="text-body2 dora-text-secondary">
                             I keep your pantry, deals and meals in one place
                             so the weekly shop stops feeling like detective
                             work. Let's get you set up — takes about a minute.
@@ -100,7 +98,7 @@
             >
                 <q-card-section>
                     <div class="text-h6 q-mb-sm">You're the admin</div>
-                    <div class="text-body2 text-grey-8 q-mb-md">
+                    <div class="text-body2 dora-text-secondary q-mb-md">
                         First user on a fresh install gets the admin role
                         automatically — so all the global settings (merchants,
                         stock levels, user management) are unlocked for you
@@ -153,7 +151,7 @@
                             <q-icon :name="ICONS.category" size="28px" class="q-mr-sm" color="primary" />
                             <div class="col">
                                 <div class="text-subtitle1">Use Dora's default stock groups</div>
-                                <div class="text-caption text-grey">
+                                <div class="text-caption dora-text-muted">
                                     Pantry, Fridge, Freezer, Cleaning, Toiletries, Pet, Other.
                                 </div>
                             </div>
@@ -166,7 +164,7 @@
                         <q-separator v-if="state?.has_groups" />
                         <q-card-section
                             v-if="state?.has_groups"
-                            class="text-caption text-grey q-py-sm"
+                            class="text-caption dora-text-muted q-py-sm"
                         >
                             You already have some groups set up. Skipping
                             this leaves them alone; opting in won't create
@@ -186,7 +184,7 @@
                             <q-icon :name="ICONS.place" size="28px" class="q-mr-sm" color="primary" />
                             <div class="col">
                                 <div class="text-subtitle1">Use Dora's default locations</div>
-                                <div class="text-caption text-grey">
+                                <div class="text-caption dora-text-muted">
                                     Kitchen (Pantry, Fridge, Freezer), Bathroom (Cabinet),
                                     Laundry (Shelf).
                                 </div>
@@ -200,14 +198,14 @@
                         <q-separator v-if="state?.has_locations" />
                         <q-card-section
                             v-if="state?.has_locations"
-                            class="text-caption text-grey q-py-sm"
+                            class="text-caption dora-text-muted q-py-sm"
                         >
                             You already have locations. Same deal — opting
                             in here won't double them up.
                         </q-card-section>
                     </q-card>
                 </div>
-                <div class="col-12 text-caption text-grey q-mt-xs">
+                <div class="col-12 text-caption dora-text-muted q-mt-xs">
                     Prefer to bring in your own data?
                     <router-link to="/data/import" class="text-primary">
                         Import from Grocy or a spreadsheet instead →
@@ -224,7 +222,7 @@
             >
                 <q-card-section>
                     <div class="text-h6 q-mb-sm">Add your first stock item</div>
-                    <div class="text-body2 text-grey-8 q-mb-md">
+                    <div class="text-body2 dora-text-secondary q-mb-md">
                         Pick something obvious — a staple you always have on
                         hand. You can add the rest in batches later.
                     </div>
@@ -273,17 +271,14 @@
                             />
                         </div>
                         <div class="row justify-end q-gutter-sm">
-                            <q-btn
-                                flat
-                                no-caps
-                                color="grey-7"
+                            <BaseButton
+                                variant="ghost"
+                                class="dora-text-secondary"
                                 label="I'll do this later"
                                 @click="advance"
                             />
-                            <q-btn
-                                unelevated
-                                no-caps
-                                color="primary"
+                            <BaseButton
+                                variant="primary"
                                 :icon="ICONS.add"
                                 :label="firstItemsAdded > 0
                                     ? `Add another (${firstItemsAdded} added)`
@@ -315,16 +310,15 @@
                                 class="q-mb-sm"
                             />
                             <div class="text-subtitle1">{{ card.title }}</div>
-                            <div class="text-body2 text-grey-8 q-mt-xs">
+                            <div class="text-body2 dora-text-secondary q-mt-xs">
                                 {{ card.description }}
                             </div>
                         </q-card-section>
                         <q-separator />
                         <q-card-actions align="right">
-                            <q-btn
-                                flat
-                                no-caps
-                                color="primary"
+                            <BaseButton
+                                variant="ghost"
+                                class="text-primary"
                                 :label="`Show me ${card.shortTitle}`"
                                 @click="onShowMe(card.path)"
                             />
@@ -335,19 +329,16 @@
 
             <!-- ── Footer: Back / Next ──────────────────────────────── -->
             <div class="row items-center q-mt-md">
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     :icon="ICONS.arrow_back"
                     label="Back"
                     :disable="stepIndex === 0"
                     @click="onBack"
                 />
                 <q-space />
-                <q-btn
-                    unelevated
-                    color="primary"
-                    no-caps
+                <BaseButton
+                    variant="primary"
                     :icon-right="isLastStep ? 'check' : 'arrow_forward'"
                     :label="isLastStep ? 'Finish' : 'Next'"
                     :loading="advancing"
@@ -360,6 +351,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type { OnboardingState } from 'src/models/onboarding';

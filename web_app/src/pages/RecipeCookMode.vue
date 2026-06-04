@@ -2,34 +2,32 @@
     <div class="q-pa-md cook-mode">
         <div v-if="!recipe" class="text-center q-pa-xl">
             <q-spinner size="40px" v-if="loading" />
-            <q-banner v-else class="bg-grey-2">Recipe not found.</q-banner>
+            <q-banner v-else class="dora-bg-sunken">Recipe not found.</q-banner>
         </div>
 
         <template v-else>
             <div class="row items-center q-mb-md">
-                <q-btn flat :icon="ICONS.arrow_back" label="Exit" @click="exitCookMode" />
+                <BaseButton variant="ghost" :icon="ICONS.arrow_back" label="Exit" @click="exitCookMode" />
                 <q-space />
                 <div class="text-h5 ellipsis">{{ recipe.name }}</div>
                 <q-space />
-                <q-btn
-                    flat
-                    round
+                <BaseButton
+                    variant="icon"
                     :icon="speechEnabled ? 'volume_up' : 'volume_off'"
-                    :color="speechEnabled ? 'primary' : 'grey'"
+                    :class="{ 'text-primary': speechEnabled, 'dora-text-muted': !speechEnabled }"
                     @click="toggleSpeech"
                 >
                     <q-tooltip>{{ speechEnabled ? 'Disable voice' : 'Enable voice' }}</q-tooltip>
-                </q-btn>
-                <q-btn
+                </BaseButton>
+                <BaseButton
                     v-if="speechRecognitionAvailable"
-                    flat
-                    round
+                    variant="icon"
                     :icon="listening ? 'mic' : 'mic_off'"
-                    :color="listening ? 'red' : 'grey'"
+                    :class="{ 'text-negative': listening, 'dora-text-muted': !listening }"
                     @click="toggleListening"
                 >
                     <q-tooltip>{{ listening ? 'Stop listening' : 'Listen for "next" / "previous" / "repeat"' }}</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </div>
 
             <q-linear-progress
@@ -49,7 +47,7 @@
                     <div class="text-h4 step-text">{{ currentStep }}</div>
                 </q-card-section>
 
-                <q-card-section v-if="detectedTimerMinutes !== null" class="bg-grey-2">
+                <q-card-section v-if="detectedTimerMinutes !== null" class="dora-bg-sunken">
                     <div class="row items-center q-gutter-sm">
                         <q-icon :name="ICONS.timer" size="32px" color="primary" />
                         <div class="text-h6">
@@ -114,7 +112,7 @@
                     <q-item-section avatar><q-icon :name="ICONS.kitchen" /></q-item-section>
                     <q-item-section>Ingredients</q-item-section>
                     <q-item-section side>
-                        <span class="text-caption text-grey">
+                        <span class="text-caption dora-text-muted">
                             {{ usedIds.size }} / {{ ingredientRows.length }} used
                         </span>
                     </q-item-section>
@@ -131,7 +129,7 @@
                         </q-item-section>
                         <q-item-section>
                             <div class="row items-center q-gutter-xs no-wrap">
-                                <span class="text-caption text-grey">
+                                <span class="text-caption dora-text-muted">
                                     <span v-if="row.ingredient.quantity">{{ row.ingredient.quantity }}</span>
                                     <span v-if="row.ingredient.unit"> {{ row.ingredient.unit }}</span>
                                 </span>
@@ -141,7 +139,7 @@
                             <q-item-label
                                 v-if="row.ingredient.notes"
                                 caption
-                                class="text-grey"
+                                class="dora-text-muted"
                             >
                                 {{ row.ingredient.notes }}
                             </q-item-label>
@@ -180,7 +178,7 @@
         </template>
 
         <!-- Finish flow ─────────────────────────────────────────────────── -->
-        <q-dialog v-model="finishDialogOpen" persistent>
+        <q-dialog v-model="finishDialogOpen">
             <q-card style="min-width: 360px; max-width: 95vw">
                 <q-card-section class="text-h6">Finished cooking?</q-card-section>
                 <q-card-section class="q-gutter-sm q-pt-none">
@@ -195,13 +193,13 @@
                         hint="Added to this recipe's pool. Leave at 0 if you just ate it."
                     />
                     <q-toggle v-model="finishAddRanOut" label="Add anything that ran out to a shopping list" />
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ usedIds.size }} ingredient(s) marked used.
                     </div>
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Skip & exit" @click="finishDialogOpen = false; exitCookMode()" />
-                    <q-btn color="primary" no-caps label="Done" :loading="finishing" @click="confirmFinish" />
+                    <BaseButton variant="ghost" label="Skip & exit" @click="finishDialogOpen = false; exitCookMode()" />
+                    <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -210,6 +208,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';

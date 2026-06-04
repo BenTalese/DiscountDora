@@ -10,7 +10,7 @@
         <polyline :points="polyline" fill="none" :stroke="strokeColour" stroke-width="1.5" />
         <circle :cx="lastPoint.x" :cy="lastPoint.y" r="2" :fill="strokeColour" />
     </svg>
-    <span v-else class="text-caption text-grey">—</span>
+    <span v-else class="text-caption dora-text-muted">—</span>
 </template>
 
 <script lang="ts" setup>
@@ -33,11 +33,15 @@
 
     const strokeColour = computed(() => {
         if (props.color) return props.color;
-        // Green when the latest price is below the first (a drop = good),
-        // red when it rose.
         const first = props.values[0] ?? 0;
         const last = props.values[props.values.length - 1] ?? 0;
-        return last <= first ? '#21ba45' : '#c10015';
+        const token = last <= first ? '--semantic-positive' : '--semantic-negative';
+        if (typeof document === 'undefined') {
+            return last <= first ? 'hsl(140, 50%, 45%)' : 'hsl(7, 75%, 56%)';
+        }
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(token)
+            .trim() || (last <= first ? 'hsl(140, 50%, 45%)' : 'hsl(7, 75%, 56%)');
     });
 
     const coords = computed(() => {

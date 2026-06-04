@@ -6,17 +6,17 @@
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <q-banner v-else-if="loadError" key="rd-error" class="bg-red-1 text-red-9" dense rounded>
+        <q-banner v-else-if="loadError" key="rd-error" class="dora-bg-negative-soft text-negative" dense rounded>
             {{ loadError }}
         </q-banner>
 
         <div v-else-if="recipe" key="rd-content">
             <!-- ── Header ─────────────────────────────────────────── -->
             <div class="row items-center q-mb-md">
-                <q-btn flat round dense :icon="ICONS.arrow_back" @click="onBack" />
+                <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="onBack" />
                 <div class="q-ml-sm col">
-                    <div class="text-caption text-grey">
-                        <router-link to="/recipes" class="text-grey">
+                    <div class="text-caption dora-text-muted">
+                        <router-link to="/recipes" class="dora-text-muted">
                             Recipes
                         </router-link>
                         <q-icon :name="ICONS.chevron_right" size="14px" />
@@ -31,15 +31,14 @@
                         @blur="markDirty"
                     />
                 </div>
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
-                    :color="recipe.is_favourite ? 'red' : undefined"
                     :label="recipe.is_favourite ? 'Favourited' : 'Favourite'"
+                    :class="{ 'text-negative': recipe.is_favourite }"
                     @click="onToggleFavourite"
                 />
-                <q-btn flat round dense :icon="ICONS.more_vert" class="q-ml-sm">
+                <BaseButton variant="icon" :icon="ICONS.more_vert" class="q-ml-sm">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 220px">
                             <q-item clickable v-close-popup @click="onExportCsv">
@@ -66,10 +65,9 @@
                             </q-item>
                         </q-list>
                     </q-menu>
-                </q-btn>
-                <q-btn
-                    color="primary"
-                    no-caps
+                </BaseButton>
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.save"
                     label="Save"
                     class="q-ml-sm"
@@ -172,7 +170,7 @@
                         <q-card-section class="row items-center q-gutter-md no-wrap">
                             <div>
                                 <div class="text-subtitle1">Meals on hand</div>
-                                <div class="text-caption text-grey">
+                                <div class="text-caption dora-text-muted">
                                     {{ recipe.unallocated_meals }} unallocated
                                     of {{ recipe.available_meals }} cooked
                                 </div>
@@ -215,7 +213,7 @@
                         <q-card-section class="row items-center q-pb-sm">
                             <div class="text-subtitle1">
                                 Ingredients
-                                <span class="text-caption text-grey q-ml-sm">
+                                <span class="text-caption dora-text-muted q-ml-sm">
                                     {{ form.ingredients.length }}
                                 </span>
                             </div>
@@ -257,7 +255,7 @@
                                     >
                                         <template #no-option>
                                             <q-item>
-                                                <q-item-section class="text-grey">
+                                                <q-item-section class="dora-text-muted">
                                                     Type to search — or press
                                                     <em>Create new</em>.
                                                 </q-item-section>
@@ -359,7 +357,7 @@
                                 </q-item-section>
                             </q-item>
                             <q-item v-if="form.ingredients.length === 0">
-                                <q-item-section class="text-grey text-center">
+                                <q-item-section class="dora-text-muted text-center">
                                     No ingredients yet. Add one or
                                     <a
                                         href="#"
@@ -415,7 +413,7 @@
                         flat
                         bordered
                         class="q-mb-md"
-                        :class="cookableNow ? 'bg-positive text-white' : 'bg-orange-1'"
+                        :class="cookableNow ? 'bg-positive dora-text-on-primary' : 'dora-bg-warning-soft'"
                     >
                         <q-card-section>
                             <div class="row items-center q-gutter-sm">
@@ -547,7 +545,7 @@
                             <q-icon :name="ICONS.report" color="negative" size="16px" />
                             {{ entry.name }}
                         </div>
-                        <div v-if="entry.substitutes.length === 0" class="text-caption text-grey">
+                        <div v-if="entry.substitutes.length === 0" class="text-caption dora-text-muted">
                             No substitutes recorded — set some on the stock item's detail page.
                         </div>
                         <div v-else class="row q-gutter-xs q-mt-xs">
@@ -566,7 +564,7 @@
                     </div>
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Close" v-close-popup />
+                    <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -576,7 +574,7 @@
             <q-card style="min-width: 460px; max-width: 600px">
                 <q-card-section>
                     <div class="text-h6">Import from URL</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Works on sites that publish schema.org/Recipe JSON-LD
                         (most major recipe sites do). Your existing recipe
                         will be overwritten with the imported fields.
@@ -595,11 +593,9 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Import"
                         :loading="importing"
                         :disable="importUrl.trim().length === 0"
@@ -627,11 +623,9 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Add"
                         :loading="addingMissing"
                         :disable="!targetListId"
@@ -659,10 +653,9 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Log"
                         :loading="logging"
                         :disable="!(logCookCount > 0)"
@@ -676,6 +669,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -1157,7 +1151,6 @@
                         }`,
                     ok: { label: 'Replace fields', color: 'primary', noCaps: true },
                     cancel: { noCaps: true },
-                    persistent: true,
                 })
                     .onOk(() => resolve(true))
                     .onCancel(() => resolve(false))
@@ -1265,7 +1258,6 @@
                 message: `Delete "${recipe.value!.name}"? This cannot be undone.`,
                 ok: { label: 'Delete', color: 'negative', noCaps: true },
                 cancel: { noCaps: true },
-                persistent: true,
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))
@@ -1292,7 +1284,6 @@
                 message: 'Your edits will be lost.',
                 ok: { label: 'Discard', color: 'negative', noCaps: true },
                 cancel: { noCaps: true },
-                persistent: true,
             }).onOk(() => { void router.push('/recipes'); });
             return;
         }

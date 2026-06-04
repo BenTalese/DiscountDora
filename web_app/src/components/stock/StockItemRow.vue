@@ -27,8 +27,8 @@
                 dense
                 clickable
                 :icon="ICONS.place"
-                color="grey-3"
-                text-color="grey-9"
+                color="grey"
+                text-color="white"
                 @click.stop="emit('filter-location', item.stock_location_id!)"
             >
                 {{ locationName }}

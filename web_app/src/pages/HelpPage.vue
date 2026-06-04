@@ -3,7 +3,7 @@
         <div class="row items-center q-mb-md">
             <DoraMascot mood="excited" :size="48" />
             <div class="q-ml-md col">
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Guides by area, a peek at what's new, and a fun fact while you're here.
                 </div>
             </div>
@@ -30,7 +30,7 @@
 
         <q-banner
             v-if="versionInfo?.update_available"
-            class="bg-amber-2 text-amber-9 q-mb-md"
+            class="dora-bg-warning-soft text-warning q-mb-md"
             rounded
         >
             <template #avatar>
@@ -59,7 +59,7 @@
             <q-card-section class="row items-start">
                 <q-icon :name="ICONS.restaurant" size="22px" color="primary" />
                 <div class="q-ml-md col">
-                    <div class="text-caption text-grey">Food fact</div>
+                    <div class="text-caption dora-text-muted">Food fact</div>
                     <div>{{ foodFact }}</div>
                 </div>
                 <q-btn
@@ -139,7 +139,7 @@
 
                     <div
                         v-if="filteredGuides.length === 0"
-                        class="col-12 text-center text-grey q-py-lg"
+                        class="col-12 text-center dora-text-muted q-py-lg"
                     >
                         Nothing matches "{{ search }}".
                     </div>
@@ -150,14 +150,14 @@
             <q-tab-panel name="changelog" class="q-pa-none q-pt-md">
                 <q-banner
                     v-if="changelogError"
-                    class="bg-red-1 text-red-9 q-mb-md"
+                    class="dora-bg-negative-soft text-negative q-mb-md"
                     dense
                     rounded
                 >
                     {{ changelogError }}
                 </q-banner>
 
-                <div v-if="changelogEntries.length === 0 && !changelogLoading" class="text-grey">
+                <div v-if="changelogEntries.length === 0 && !changelogLoading" class="dora-text-muted">
                     No changelog entries found.
                 </div>
 
@@ -187,7 +187,7 @@
                         <div class="text-h6">
                             Discount Dora {{ versionInfo.current_version }}
                         </div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             <span v-if="versionInfo.latest_version === null">
                                 Couldn't check for updates ({{ versionInfo.error ?? 'unknown reason' }}).
                             </span>
@@ -430,8 +430,8 @@
     .food-fact-card {
         background: linear-gradient(
             120deg,
-            rgba(23, 176, 115, 0.06),
-            rgba(254, 210, 36, 0.08)
+            color-mix(in srgb, var(--brand-primary) 6%, transparent),
+            color-mix(in srgb, var(--brand-accent) 8%, transparent)
         );
     }
     .changelog-body {

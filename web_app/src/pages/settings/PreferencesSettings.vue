@@ -2,7 +2,7 @@
     <div v-if="!currentUser">
         <q-card flat bordered>
             <q-card-section>
-                <q-banner class="bg-grey-2" dense>Not signed in.</q-banner>
+                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
             </q-card-section>
         </q-card>
     </div>
@@ -12,7 +12,7 @@
         <q-card flat bordered>
             <q-card-section>
                 <div class="text-h6">Appearance</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Theme, font, and text size for this account.
                 </div>
             </q-card-section>
@@ -20,7 +20,7 @@
 
             <q-card-section class="q-pb-none">
                 <div class="text-subtitle2">Theme</div>
-                <div class="text-caption text-grey q-mb-md">
+                <div class="text-caption dora-text-muted q-mb-md">
                     Pick a palette for the app. <strong>System</strong>
                     follows your browser's <code>prefers-color-scheme</code>
                     and flips between Pesto and Pesto Dark. Every other
@@ -154,7 +154,7 @@
         <q-card flat bordered>
             <q-card-section>
                 <div class="text-h6">Weekly deals email</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Discount Dora can email you a digest of the latest deals
                     once a week.
                 </div>
@@ -206,7 +206,7 @@
         <q-card flat bordered>
             <q-card-section>
                 <div class="text-h6">Grocery budget</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Optional. Set a weekly or monthly target and Dora will
                     track how much you've spent across every finished
                     shopping list in the period.
@@ -261,7 +261,7 @@
         <q-card flat bordered>
             <q-card-section>
                 <div class="text-h6">Voice</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Talk to Dora and let her talk back. Voice features
                     use your browser's built-in speech recognition and
                     synthesis — they only work where the browser
@@ -278,7 +278,7 @@
                     label="Enable voice input (microphone)"
                     @update:model-value="onVoiceInputChange"
                 />
-                <div v-if="!voiceInputAvailable" class="text-caption text-grey q-mt-xs">
+                <div v-if="!voiceInputAvailable" class="text-caption dora-text-muted q-mt-xs">
                     Your browser doesn't expose the Web Speech API for
                     recognition. Try Chrome or Edge.
                 </div>
@@ -291,7 +291,7 @@
                     label="Let Dora speak her replies"
                     @update:model-value="onVoiceOutputChange"
                 />
-                <div v-if="!voiceOutputAvailable" class="text-caption text-grey q-mt-xs">
+                <div v-if="!voiceOutputAvailable" class="text-caption dora-text-muted q-mt-xs">
                     Your browser doesn't expose SpeechSynthesis.
                 </div>
             </q-card-section>
@@ -301,7 +301,7 @@
         <q-card flat bordered>
             <q-card-section>
                 <div class="text-h6">Account</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Update your username, email, or password.
                 </div>
             </q-card-section>

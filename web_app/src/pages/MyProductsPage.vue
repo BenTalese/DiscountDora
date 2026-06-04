@@ -2,7 +2,7 @@
     <q-page padding>
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 {{ filteredProducts.length }} of {{ products.length }} shown
                 · {{ onDealCount }} on deal
                 <span v-if="unlinkedCount > 0">
@@ -10,18 +10,16 @@
                 </span>
             </div>
             <q-space />
-            <q-btn
-                outline
-                no-caps
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.link_off"
                 :label="`Stock items without products (${stockItemsMissingProducts.length})`"
                 class="q-mr-sm"
                 :disable="stockItemsMissingProducts.length === 0"
                 @click="orphansOpen = true"
             />
-            <q-btn
-                outline
-                no-caps
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.refresh"
                 label="Refresh"
                 :loading="loading"
@@ -162,14 +160,14 @@
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <q-banner v-else-if="loadError" key="prod-error" class="bg-red-1 text-red-9" dense rounded>
+        <q-banner v-else-if="loadError" key="prod-error" class="dora-bg-negative-soft text-negative" dense rounded>
             {{ loadError }}
         </q-banner>
 
         <div
             v-else-if="filteredProducts.length === 0"
             key="prod-empty"
-            class="text-center text-grey q-py-xl"
+            class="text-center dora-text-muted q-py-xl"
         >
             <q-icon :name="ICONS.shopping_bag" size="60px" class="q-mb-sm" />
             <div v-if="products.length === 0">
@@ -221,7 +219,7 @@
                             @click.stop
                             @update:model-value="toggleSelect(product.product_id)"
                         />
-                        <q-avatar v-else rounded size="40px" class="bg-grey-2">
+                        <q-avatar v-else rounded size="40px" class="dora-bg-sunken">
                             <img v-if="product.image" :src="product.image" :alt="product.name" />
                             <q-icon v-else :name="ICONS.shopping_bag" size="20px" />
                         </q-avatar>
@@ -229,7 +227,7 @@
                             <div class="text-subtitle2 ellipsis-2-lines">
                                 {{ product.name }}
                             </div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 <span v-if="product.brand">{{ product.brand }}</span>
                                 <span v-if="product.brand && product.size"> · </span>
                                 <span v-if="product.size">{{ product.size }}</span>
@@ -251,12 +249,12 @@
                             </span>
                             <span
                                 v-if="onSpecial(product)"
-                                class="text-caption text-grey strike"
+                                class="text-caption dora-text-muted strike"
                             >
                                 ${{ (product.price_was ?? 0).toFixed(2) }}
                             </span>
                         </div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             <MerchantLogo
                                 v-if="product.merchant_name"
                                 :name="product.merchant_name"
@@ -283,7 +281,7 @@
                                 <q-tooltip>Open stock item</q-tooltip>
                             </q-chip>
                         </div>
-                        <div v-else class="text-caption text-grey">
+                        <div v-else class="text-caption dora-text-muted">
                             <q-icon :name="ICONS.link_off" size="14px" />
                             Not linked to any stock item.
                             <a
@@ -296,7 +294,7 @@
                         </div>
                         <q-badge
                             v-if="!product.is_active"
-                            color="grey-7"
+                            color="grey"
                             text-color="white"
                             class="q-mt-xs"
                         >
@@ -411,7 +409,7 @@
             <q-card style="min-width: 380px">
                 <q-card-section>
                     <div class="text-h6">Add to which list?</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ bulkAddCandidates.length }} stock item{{
                             bulkAddCandidates.length === 1 ? '' : 's'
                         }} from on-deal products in your selection.
@@ -449,7 +447,7 @@
                 <q-card-section class="row items-center q-pb-sm">
                     <div>
                         <div class="text-h6">Stock items without products</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             {{ stockItemsMissingProducts.length }} item{{
                                 stockItemsMissingProducts.length === 1 ? '' : 's'
                             }} that no product in My Products is linked to.
@@ -511,7 +509,7 @@
             <q-card style="min-width: 420px">
                 <q-card-section>
                     <div class="text-h6">Link to a stock item</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ linkTarget?.name }}
                     </div>
                 </q-card-section>
@@ -549,6 +547,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

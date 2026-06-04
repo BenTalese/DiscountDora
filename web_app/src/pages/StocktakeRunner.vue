@@ -8,10 +8,10 @@
                 rounded
                 size="6px"
                 color="warning"
-                track-color="grey-9"
+                
                 class="col q-mx-md"
             />
-            <div class="text-caption text-grey-3">
+            <div class="text-caption dora-text-muted-3">
                 {{ reviewedCount }} / {{ session.length }}
             </div>
         </div>
@@ -21,16 +21,16 @@
             <q-card class="runner-card" flat>
                 <q-card-section class="text-center">
                     <div class="text-h5">{{ current.name }}</div>
-                    <div class="text-caption text-grey-7 q-mt-xs">
+                    <div class="text-caption dora-text-muted-7 q-mt-xs">
                         {{ current.stock_location_name ?? 'No location' }}
                     </div>
                 </q-card-section>
                 <q-card-section class="text-center">
-                    <div class="text-overline text-grey-7">Current level</div>
+                    <div class="text-overline dora-text-secondary">Current level</div>
                     <div class="text-h6">{{ current.stock_level_name ?? '—' }}</div>
                     <div
                         class="text-caption q-mt-xs"
-                        :class="current.overdue_days < 0 ? 'text-grey-7' : 'text-warning'"
+                        :class="current.overdue_days < 0 ? 'dora-text-secondary' : 'text-warning'"
                     >
                         {{ current.overdue_days < 0
                             ? 'Never checked'
@@ -70,7 +70,7 @@
                     />
                 </q-card-section>
                 <q-card-actions align="between">
-                    <q-btn flat no-caps color="grey-7" label="Skip (s)" @click="onSkip" />
+                    <q-btn flat no-caps class="dora-text-secondary" label="Skip (s)" @click="onSkip" />
                     <q-btn
                         flat
                         no-caps
@@ -89,7 +89,7 @@
                 <q-card-section class="text-center">
                     <q-icon :name="ICONS.check_circle" color="positive" size="64px" />
                     <div class="text-h5 q-mt-sm">Stocktake complete</div>
-                    <div class="text-caption text-grey-7">
+                    <div class="text-caption dora-text-muted-7">
                         Checked {{ summary.checked }} ·
                         Updated {{ summary.changed }} ·
                         Skipped {{ summary.skipped }}

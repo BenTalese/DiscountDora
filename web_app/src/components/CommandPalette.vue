@@ -8,7 +8,7 @@
     >
         <q-card class="command-palette">
             <div class="row items-center q-px-md q-pt-md q-pb-sm">
-                <q-icon :name="ICONS.search" size="20px" class="q-mr-sm text-grey-7" />
+                <q-icon :name="ICONS.search" size="20px" class="q-mr-sm dora-text-secondary" />
                 <q-input
                     ref="inputRef"
                     v-model="query"
@@ -25,7 +25,7 @@
             <q-separator />
 
             <div ref="listRef" class="cp-list" role="listbox" :aria-activedescendant="activeId">
-                <div v-if="flatItems.length === 0" class="text-grey text-caption q-pa-lg text-center">
+                <div v-if="flatItems.length === 0" class="dora-text-muted text-caption q-pa-lg text-center">
                     <span v-if="query.trim()">No matches.</span>
                     <span v-else>Type to search — or pick a command below.</span>
                 </div>
@@ -400,9 +400,6 @@
         border-radius: 4px;
         background: var(--overlay-hover);
     }
-    .body--dark .cp-kbd {
-        background: rgba(255, 255, 255, 0.05);
-    }
     .cp-list {
         overflow-y: auto;
         min-height: 80px;
@@ -422,10 +419,7 @@
         cursor: pointer;
     }
     .cp-row--selected {
-        background: rgba(var(--q-primary-rgb, 25 118 210), 0.12);
-    }
-    .body--dark .cp-row--selected {
-        background: rgba(255, 255, 255, 0.08);
+        background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
     }
     .cp-row__icon {
         flex-shrink: 0;
@@ -455,10 +449,7 @@
         letter-spacing: 0.04em;
     }
     .cp-hl {
-        background: rgba(255, 235, 59, 0.4);
+        background: var(--highlight-search);
         border-radius: 2px;
-    }
-    .body--dark .cp-hl {
-        background: rgba(255, 235, 59, 0.25);
     }
 </style>

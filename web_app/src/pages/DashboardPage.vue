@@ -53,7 +53,7 @@
             </div>
         </section>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -63,12 +63,12 @@
              window. After 24h the skip flag is treated as expired. -->
         <q-banner
             v-if="showSkipReminder"
-            class="bg-amber-2 text-grey-9 q-mb-md skip-reminder"
+            class="dora-bg-warning-soft dora-text-primary q-mb-md skip-reminder"
             rounded
             dense
         >
             <template #avatar>
-                <q-icon :name="ICONS.auto_awesome" size="20px" color="amber-9" />
+                <q-icon :name="ICONS.auto_awesome" size="20px" color="warning" />
             </template>
             <strong>Welcome —</strong>
             you skipped the setup wizard. Finish in two minutes whenever
@@ -235,7 +235,7 @@
                             </span>
                             <span
                                 class="dora-budget-remaining"
-                                :class="budgetStatus.over_budget ? 'text-negative' : 'text-grey'"
+                                :class="budgetStatus.over_budget ? 'text-negative' : 'dora-text-muted'"
                             >
                                 {{
                                     budgetStatus.over_budget
@@ -253,7 +253,7 @@
                         />
                         <div
                             v-if="budgetStatus.projected_active > 0"
-                            class="text-caption text-grey q-mt-xs"
+                            class="text-caption dora-text-muted q-mt-xs"
                         >
                             +${{ budgetStatus.projected_active.toFixed(2) }} in active lists
                         </div>
@@ -310,7 +310,7 @@
                                     no-caps
                                     size="sm"
                                     flat
-                                    color="grey-7"
+                                    color="grey"
                                     label="Dismiss"
                                     @click="dismissSuggestion(suggestion)"
                                 />
@@ -370,7 +370,7 @@
                     </ul>
                     <div
                         v-if="wasteRescue.recipes.length > 0"
-                        class="text-caption text-grey q-mt-xs"
+                        class="text-caption dora-text-muted q-mt-xs"
                     >
                         {{ wasteRescue.recipes[0]!.matching_count }} can go into
                         <em>{{ wasteRescue.recipes[0]!.name }}</em>
@@ -414,7 +414,7 @@
                                 <q-icon
                                     v-if="r.is_favourite"
                                     name="favorite"
-                                    color="red-5"
+                                    color="negative"
                                     size="14px"
                                     class="q-mr-xs"
                                 />
@@ -474,7 +474,7 @@
                             :key="p.product_id"
                             class="dora-deal-row"
                         >
-                            <q-avatar rounded size="36px" class="bg-grey-2 dora-deal-img">
+                            <q-avatar rounded size="36px" class="dora-bg-sunken dora-deal-img">
                                 <img v-if="p.image" :src="p.image" :alt="p.name" />
                                 <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
                             </q-avatar>
@@ -705,7 +705,7 @@
             </div>
 
             <div v-if="visibleCardCount === 0" class="col-12">
-                <q-banner class="bg-grey-2">
+                <q-banner class="dora-bg-sunken">
                     All cards are hidden. Use the <q-icon :name="ICONS.tune" /> Cards menu above to show some.
                 </q-banner>
             </div>
@@ -1357,7 +1357,7 @@
         background: var(--c-surface);
         border: 1px solid var(--c-line);
         border-radius: 18px;
-        box-shadow: 0 10px 30px -18px rgba(74, 56, 26, 0.25);
+        box-shadow: var(--elevation-card);
     }
     .dora-hero-mascot {
         border-radius: 14px;
@@ -1398,7 +1398,7 @@
             transform 0.18s ease,
             box-shadow 0.18s ease,
             border-color 0.18s ease;
-        box-shadow: 0 6px 18px -16px rgba(74, 56, 26, 0.4);
+        box-shadow: var(--elevation-card);
     }
     .dora-card-clickable {
         cursor: pointer;
@@ -1617,8 +1617,8 @@
         background: var(--surface-elevated);
         border-left: 3px solid var(--c-accent);
     }
-    .dora-suggest-row.dora-suggest-high { border-left-color: #c10015; }
-    .dora-suggest-row.dora-suggest-medium { border-left-color: #f2c037; }
+    .dora-suggest-row.dora-suggest-high { border-left-color: var(--semantic-negative); }
+    .dora-suggest-row.dora-suggest-medium { border-left-color: var(--semantic-warning); }
     .dora-suggest-row.dora-suggest-low { border-left-color: var(--c-accent); }
     .dora-suggest-title {
         font-weight: 600;
@@ -1883,7 +1883,7 @@
         background: var(--c-surface);
         border: 1px solid var(--c-line);
         border-radius: 14px;
-        box-shadow: 0 14px 30px -18px rgba(74, 56, 26, 0.5);
+        box-shadow: var(--elevation-card-hover);
         z-index: 50;
     }
     .dora-tip-mascot {

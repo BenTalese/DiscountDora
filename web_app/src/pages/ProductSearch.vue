@@ -4,7 +4,7 @@
         <div class="row items-center q-gutter-sm q-mb-sm">
             <q-input
                 v-model="searchTerm"
-                class="col bg-white"
+                class="col dora-bg-page"
                 dense
                 outlined
                 autofocus
@@ -36,7 +36,7 @@
 
         <!-- ─── Merchant connection status badges ──────────────────────── -->
         <div class="row items-center q-gutter-xs q-mb-md">
-            <span class="text-caption text-grey q-mr-xs">Connections:</span>
+            <span class="text-caption dora-text-muted q-mr-xs">Connections:</span>
             <q-chip
                 v-for="merchant in merchantStore.merchants"
                 :key="merchant.name"
@@ -54,7 +54,7 @@
         <q-card v-if="showFilters" flat bordered class="q-mb-md">
             <q-card-section class="q-py-sm">
                 <div class="row items-center q-gutter-sm q-mb-sm">
-                    <div class="text-caption text-grey q-mr-sm">Stores</div>
+                    <div class="text-caption dora-text-muted q-mr-sm">Stores</div>
                     <q-chip
                         v-for="merchant in merchantStore.merchants"
                         :key="merchant.name"
@@ -100,7 +100,7 @@
                         @click="halfPriceOnly = !halfPriceOnly">Half price or better</q-chip>
                     <q-space />
                     <div class="row items-center q-gutter-xs">
-                        <span class="text-caption text-grey">Per merchant</span>
+                        <span class="text-caption dora-text-muted">Per merchant</span>
                         <q-input v-model.number="resultLimit" type="number" dense outlined style="width: 80px" :min="1" :max="50" />
                     </div>
                 </div>
@@ -108,7 +108,7 @@
                 <!-- Range filters -->
                 <div class="row items-end q-gutter-md">
                     <div class="column">
-                        <span class="text-caption text-grey">Price ($)</span>
+                        <span class="text-caption dora-text-muted">Price ($)</span>
                         <div class="row items-center q-gutter-xs">
                             <q-input v-model.number="priceMin" type="number" dense outlined placeholder="min" style="width: 80px" />
                             <span>–</span>
@@ -116,13 +116,13 @@
                         </div>
                     </div>
                     <div class="column">
-                        <span class="text-caption text-grey">Unit price (per 100g/ml or ea)</span>
+                        <span class="text-caption dora-text-muted">Unit price (per 100g/ml or ea)</span>
                         <div class="row items-center q-gutter-xs">
                             <q-input v-model.number="unitPriceMax" type="number" step="0.01" dense outlined placeholder="max $" style="width: 110px" />
                         </div>
                     </div>
                     <div class="column">
-                        <span class="text-caption text-grey">Size / weight</span>
+                        <span class="text-caption dora-text-muted">Size / weight</span>
                         <div class="row items-center q-gutter-xs">
                             <q-input v-model.number="weightMin" type="number" dense outlined placeholder="min" style="width: 80px" />
                             <span>–</span>
@@ -136,14 +136,14 @@
         </q-card>
 
         <!-- ─── Status banners ─────────────────────────────────────────── -->
-        <q-banner v-if="isSearching" class="bg-grey-2 q-mb-md" dense rounded>
+        <q-banner v-if="isSearching" class="dora-bg-sunken q-mb-md" dense rounded>
             <template #avatar><q-spinner-dots color="primary" size="32px" /></template>
             Searching {{ searchingStoresLabel }}…
-            <span class="text-caption text-grey">Live scrapes can take 10–20 seconds.</span>
+            <span class="text-caption dora-text-muted">Live scrapes can take 10–20 seconds.</span>
             <template #action><q-btn flat no-caps label="Cancel" @click="onCancelSearch" /></template>
         </q-banner>
 
-        <q-banner v-if="!isSearching && searchError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="!isSearching && searchError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             <template #avatar><q-icon :name="ICONS.cloud_off" /></template>
             We couldn't reach one or more merchant scrapers. Check your connection or the merchant API status, then try again.
             <template #action>
@@ -152,7 +152,7 @@
             </template>
         </q-banner>
 
-        <q-banner v-if="!isSearching && unhealthyEnabledMerchants.length > 0" class="bg-amber-1 text-amber-10 q-mb-md" dense rounded>
+        <q-banner v-if="!isSearching && unhealthyEnabledMerchants.length > 0" class="dora-bg-warning-soft text-warning q-mb-md" dense rounded>
             <template #avatar><q-icon :name="ICONS.warning" /></template>
             {{ unhealthyMerchantWarning }}
             <template #action><q-btn flat no-caps icon-right="open_in_new" label="Check providers" to="/settings/admin/merchants" /></template>
@@ -190,7 +190,7 @@
             </q-avatar>
             <div class="dora-empty-text">
                 No products found for <strong>"{{ previousSearchTerm }}"</strong>.
-                <div class="text-caption text-grey q-mt-sm">Try spelling it differently, or check the right merchants are enabled.</div>
+                <div class="text-caption dora-text-muted q-mt-sm">Try spelling it differently, or check the right merchants are enabled.</div>
             </div>
         </div>
         <div v-else-if="!isSearching && !previousSearchTerm" class="dora-empty">
@@ -204,7 +204,7 @@
 
         <!-- ─── Comparison tray ────────────────────────────────────────── -->
         <q-page-sticky v-if="comparison.length > 0" position="bottom" :offset="[0, 16]">
-            <q-card class="bg-primary text-white row items-center q-px-md q-py-sm q-gutter-sm shadow-4">
+            <q-card class="bg-primary dora-text-on-primary row items-center q-px-md q-py-sm q-gutter-sm shadow-4">
                 <q-icon :name="ICONS.compare_arrows" />
                 <span>{{ comparison.length }} selected for comparison</span>
                 <q-btn dense no-caps color="white" text-color="primary" label="Compare" :disable="comparison.length < 2" @click="compareOpen = true" />
@@ -268,7 +268,7 @@
                     <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
-                    <div class="text-caption text-grey q-mb-sm" v-if="linkTargetOffer">
+                    <div class="text-caption dora-text-muted q-mb-sm" v-if="linkTargetOffer">
                         {{ linkTargetOffer.name }}
                     </div>
                     <q-select

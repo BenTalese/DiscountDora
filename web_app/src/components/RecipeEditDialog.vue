@@ -1,5 +1,5 @@
 <template>
-    <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" persistent>
+    <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
         <q-card style="width: 800px; max-width: 95vw">
             <q-card-section>
                 <div class="text-h5">{{ recipe ? 'Edit Recipe' : 'New Recipe' }}</div>
@@ -111,7 +111,7 @@
                         />
                         <div
                             v-if="tagCatalogue?.disclaimer"
-                            class="text-caption text-grey q-mt-xs"
+                            class="text-caption dora-text-muted q-mt-xs"
                         >
                             <q-icon name="info" size="14px" class="q-mr-xs" />
                             {{ tagCatalogue.disclaimer }}
@@ -159,21 +159,18 @@
                             label="Notes"
                             v-model="ingredient.notes"
                         />
-                        <q-btn
-                            class="col-2 col-sm-1"
-                            flat
-                            round
-                            dense
+                        <BaseButton
+                            class="col-2 col-sm-1 text-negative"
+                            variant="icon"
                             :icon="ICONS.delete"
-                            color="negative"
                             @click="removeIngredient(idx)"
                         />
                     </div>
-                    <q-btn flat :icon="ICONS.add" label="Add ingredient" @click="addIngredient" />
+                    <BaseButton variant="ghost" :icon="ICONS.add" label="Add ingredient" @click="addIngredient" />
 
                     <q-card-actions align="right">
-                        <q-btn flat label="Cancel" @click="$emit('update:modelValue', false)" />
-                        <q-btn type="submit" color="primary" label="Save" :loading="saving" />
+                        <BaseButton variant="ghost" label="Cancel" @click="$emit('update:modelValue', false)" />
+                        <BaseButton type="submit" variant="primary" label="Save" :loading="saving" />
                     </q-card-actions>
                 </q-form>
             </q-card-section>
@@ -184,6 +181,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, {

@@ -1,7 +1,7 @@
 <template>
     <q-banner
         v-if="message"
-        class="bg-red-1 text-red-9 q-mb-md"
+        class="dora-bg-negative-soft text-negative q-mb-md"
         dense
         rounded
         role="alert"

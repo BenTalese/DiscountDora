@@ -9,11 +9,11 @@
             </q-card-section>
 
             <q-card-section style="max-height: 70vh; overflow-y: auto">
-                <div v-if="shortcuts.length === 0" class="text-grey">
+                <div v-if="shortcuts.length === 0" class="dora-text-muted">
                     No shortcuts are active on this screen.
                 </div>
                 <div v-for="group in groups" :key="group.scope" class="q-mb-md">
-                    <div class="text-subtitle2 text-grey-8 q-mb-xs">{{ group.scope }}</div>
+                    <div class="text-subtitle2 dora-text-secondary q-mb-xs">{{ group.scope }}</div>
                     <q-list dense>
                         <q-item v-for="s in group.items" :key="s.keys + s.description">
                             <q-item-section>{{ s.description }}</q-item-section>
@@ -80,8 +80,5 @@
         font-family: monospace;
         font-size: 0.8rem;
         background: var(--overlay-hover);
-    }
-    .body--dark .shortcut-key {
-        background: rgba(255, 255, 255, 0.06);
     }
 </style>

@@ -50,7 +50,7 @@
                 </q-btn>
                 <q-btn flat round dense :icon="ICONS.close" @click="emit('close')" />
             </div>
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 Your in-app helper. {{ pageHintForHeader }}
             </div>
         </q-card-section>
@@ -74,7 +74,7 @@
                 v-if="suggestionStore.count > 0"
                 class="dora-suggestion-panel"
             >
-                <div class="text-caption text-grey q-mb-xs">
+                <div class="text-caption dora-text-muted q-mb-xs">
                     <q-icon name="auto_awesome" size="14px" class="q-mr-xs" />
                     Suggestions
                 </div>
@@ -96,7 +96,7 @@
                         header-class="dora-suggestion-why-header"
                         class="dora-suggestion-why"
                     >
-                        <div class="text-caption text-grey q-px-sm q-pb-xs">
+                        <div class="text-caption dora-text-muted q-px-sm q-pb-xs">
                             {{ suggestion.reason }}
                         </div>
                     </q-expansion-item>
@@ -124,7 +124,7 @@
                             no-caps
                             size="sm"
                             flat
-                            color="grey-7"
+                            color="grey"
                             label="Dismiss"
                             @click="onDismissSuggestion(suggestion)"
                         />
@@ -194,7 +194,7 @@
                                 size="sm"
                                 no-caps
                                 flat
-                                color="grey-7"
+                                color="grey"
                                 label="Cancel"
                                 @click="cancelAction(message)"
                             />
@@ -286,7 +286,7 @@
                 v-if="contextualActions.length > 0"
                 class="dora-context-row q-mb-sm"
             >
-                <div class="text-caption text-grey q-mb-xs">
+                <div class="text-caption dora-text-muted q-mb-xs">
                     <q-icon :name="ICONS.adjust" size="12px" />
                     On this page
                 </div>
@@ -1447,16 +1447,13 @@
            combined fixed sizes exceed the viewport. */
         max-height: 70vh;
         height: 70vh;
-        background: white;
-    }
-    .body--dark .dora-chat-card {
-        background: var(--q-component);
+        background: var(--surface-component);
     }
     .dora-chat-header {
         background: linear-gradient(
             120deg,
-            rgba(23, 176, 115, 0.08),
-            rgba(254, 210, 36, 0.08)
+            color-mix(in srgb, var(--brand-primary) 8%, transparent),
+            color-mix(in srgb, var(--brand-accent) 8%, transparent)
         );
     }
     /* QScrollArea is the flex child that fills the column and owns the
@@ -1483,25 +1480,19 @@
         max-width: 80%;
         padding: 8px 12px;
         border-radius: 12px;
-        background: rgba(23, 176, 115, 0.12);
+        background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
         font-size: 0.92em;
         line-height: 1.35;
     }
-    .body--dark .dora-chat-bubble {
-        background: rgba(23, 176, 115, 0.22);
-    }
     .dora-chat-message-user .dora-chat-bubble {
         background: var(--q-primary);
-        color: white;
+        color: var(--text-on-primary);
     }
     .dora-chat-message-user .dora-chat-bubble .dora-chat-text {
-        color: white;
+        color: var(--text-on-primary);
     }
     .dora-chat-thinking {
-        background: rgba(23, 176, 115, 0.08);
-    }
-    .body--dark .dora-chat-thinking {
-        background: rgba(23, 176, 115, 0.16);
+        background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
     }
     .dora-chat-text {
         white-space: pre-wrap;
@@ -1571,20 +1562,20 @@
         margin-bottom: 8px;
     }
     .dora-suggestion-card {
-        background: var(--surface-elevated, rgba(0, 0, 0, 0.02));
+        background: var(--surface-elevated);
         border-radius: 10px;
         padding: 8px 10px;
         margin-top: 6px;
-        border-left: 3px solid var(--c-accent, #17b073);
+        border-left: 3px solid var(--brand-primary);
     }
     .dora-suggestion-card.dora-suggestion-high {
-        border-left-color: var(--q-negative, #c10015);
+        border-left-color: var(--q-negative);
     }
     .dora-suggestion-card.dora-suggestion-medium {
-        border-left-color: var(--q-warning, #f2c037);
+        border-left-color: var(--q-warning);
     }
     .dora-suggestion-card.dora-suggestion-low {
-        border-left-color: var(--q-primary, #17b073);
+        border-left-color: var(--q-primary);
     }
     .dora-suggestion-title {
         font-weight: 600;
@@ -1592,7 +1583,7 @@
     }
     .dora-suggestion-body {
         font-size: 0.85rem;
-        color: var(--c-ink-mute, rgba(0, 0, 0, 0.65));
+        color: var(--text-muted);
         margin-top: 2px;
     }
     .dora-suggestion-why :deep(.dora-suggestion-why-header) {
@@ -1606,8 +1597,8 @@
         padding: 8px 10px;
         background: linear-gradient(
             120deg,
-            rgba(23, 176, 115, 0.06),
-            rgba(254, 210, 36, 0.06)
+            color-mix(in srgb, var(--brand-primary) 6%, transparent),
+            color-mix(in srgb, var(--brand-accent) 6%, transparent)
         );
         border-radius: 10px;
     }

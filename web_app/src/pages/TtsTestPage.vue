@@ -2,7 +2,7 @@
     <q-page padding>
         <div class="text-h5 q-mb-md">Piper TTS test</div>
 
-        <q-banner v-if="error" class="bg-red-2 text-red-9 q-mb-md" rounded>
+        <q-banner v-if="error" class="dora-bg-negative-soft text-negative q-mb-md" rounded>
             {{ error }}
         </q-banner>
 
@@ -21,7 +21,7 @@
                 <q-slider v-model="lengthScale" :min="0.5" :max="2" :step="0.05" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ lengthScale.toFixed(2) }}</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">Piper speed knob: &gt;1 slower, &lt;1 faster.</div>
+            <div class="text-caption dora-text-muted q-ml-sm">Piper speed knob: &gt;1 slower, &lt;1 faster.</div>
         </div>
 
         <div class="q-mb-md">
@@ -30,7 +30,7 @@
                 <q-slider v-model="noiseScale" :min="0" :max="1" :step="0.05" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ noiseScale.toFixed(2) }}</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">Higher = more variation in timbre.</div>
+            <div class="text-caption dora-text-muted q-ml-sm">Higher = more variation in timbre.</div>
         </div>
 
         <div class="q-mb-md">
@@ -39,7 +39,7 @@
                 <q-slider v-model="noiseW" :min="0" :max="1.5" :step="0.05" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ noiseW.toFixed(2) }}</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">Phoneme-duration jitter. Higher = draggier, more drawled rhythm.</div>
+            <div class="text-caption dora-text-muted q-ml-sm">Phoneme-duration jitter. Higher = draggier, more drawled rhythm.</div>
         </div>
 
         <div class="q-mb-md">
@@ -48,7 +48,7 @@
                 <q-slider v-model="sentenceSilence" :min="0" :max="2" :step="0.05" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ sentenceSilence.toFixed(2) }}s</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">Silence inserted between sentences.</div>
+            <div class="text-caption dora-text-muted q-ml-sm">Silence inserted between sentences.</div>
         </div>
 
         <div class="q-mb-md">
@@ -57,7 +57,7 @@
                 <q-slider v-model="pitchSemitones" :min="-12" :max="12" :step="1" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ pitchSemitones }}</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">True pitch shift (ffmpeg, server-side). Negative = deeper. Speed unchanged.</div>
+            <div class="text-caption dora-text-muted q-ml-sm">True pitch shift (ffmpeg, server-side). Negative = deeper. Speed unchanged.</div>
         </div>
 
         <div class="q-mb-md">
@@ -66,7 +66,7 @@
                 <q-slider v-model="playbackRate" :min="0.5" :max="2" :step="0.05" label label-always class="col" />
                 <div style="min-width: 48px; text-align: right">{{ playbackRate.toFixed(2) }}</div>
             </div>
-            <div class="text-caption text-grey q-ml-sm">Browser-side. Shifts pitch + speed together (chipmunk/slow-mo effect).</div>
+            <div class="text-caption dora-text-muted q-ml-sm">Browser-side. Shifts pitch + speed together (chipmunk/slow-mo effect).</div>
         </div>
 
         <div class="row q-gutter-sm q-mb-md">

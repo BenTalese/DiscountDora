@@ -25,7 +25,7 @@
                     <div class="text-subtitle1 ellipsis-2-lines">
                         {{ recipe.name }}
                     </div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         <span v-if="recipe.cuisine">{{ recipe.cuisine }}</span>
                         <span v-if="recipe.cuisine && recipe.category"> · </span>
                         <span v-if="recipe.category">{{ recipe.category }}</span>
@@ -113,7 +113,7 @@
                 v-else
                 dense
                 clickable
-                color="orange-9"
+                color="warning"
                 text-color="white"
                 :icon="ICONS.remove_shopping_cart"
                 @click.stop="emit('add-missing', recipe.recipe_id, missingIds)"

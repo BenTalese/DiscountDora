@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <q-btn flat round dense :icon="ICONS.arrow_back" @click="goBack" />
+            <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <div class="q-ml-sm col">
                 <div class="text-h5">
                     <span v-if="!editingName">{{ detail?.name ?? 'Loading…' }}</span>
@@ -15,19 +15,16 @@
                         @keydown.enter.prevent="saveName"
                         @keydown.esc.prevent="cancelName"
                     />
-                    <q-btn
+                    <BaseButton
                         v-if="detail && !editingName"
-                        flat
-                        round
-                        dense
-                        size="sm"
+                        variant="icon"
                         :icon="ICONS.edit"
                         @click="startNameEdit"
                     >
                         <q-tooltip>Rename</q-tooltip>
-                    </q-btn>
+                    </BaseButton>
                 </div>
-                <div v-if="detail" class="text-caption text-grey">
+                <div v-if="detail" class="text-caption dora-text-muted">
                     {{ detail.lines.length }} item{{ detail.lines.length === 1 ? '' : 's' }} ·
                     {{ tickedCount }} ticked ·
                     Created {{ formatDate(detail.created_at) }}
@@ -39,21 +36,18 @@
                 <!-- P2-11 — drop into shop mode (mobile-first fullscreen
                      view with big tap targets). Disabled on an empty
                      list because there'd be nothing to step through. -->
-                <q-btn
-                    unelevated
-                    no-caps
-                    color="primary"
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.shopping_cart"
                     label="Shop mode"
                     :disable="detail.lines.length === 0"
                     @click="openShopMode"
                 >
                     <q-tooltip>Big-button, one-item-at-a-time view for in-store use</q-tooltip>
-                </q-btn>
-                <q-btn
+                </BaseButton>
+                <BaseButton
                     v-if="!detail.is_primary"
-                    flat
-                    no-caps
+                    variant="ghost"
                     :icon="ICONS.star_outline"
                     label="Set primary"
                     @click="setPrimary"
@@ -67,10 +61,8 @@
                 >
                     Primary
                 </q-chip>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.more_vert"
                 >
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
@@ -234,10 +226,9 @@
                             </q-item>
                         </q-list>
                     </q-menu>
-                </q-btn>
-                <q-btn
-                    flat
-                    no-caps
+                </BaseButton>
+                <BaseButton
+                    variant="ghost"
                     :icon="reviewMode ? 'visibility_off' : 'preview'"
                     :label="reviewMode ? 'Exit review' : 'Review mode'"
                     :disable="tickedCount === 0"
@@ -247,28 +238,25 @@
                         Show only ticked items and preview what will restock
                         when you finish.
                     </q-tooltip>
-                </q-btn>
-                <q-btn
+                </BaseButton>
+                <BaseButton
                     v-if="!detail.is_in_progress"
-                    color="primary"
-                    no-caps
+                    variant="primary"
                     :icon="ICONS.play_arrow"
                     label="Start shopping"
                     :loading="togglingProgress"
                     @click="onStartShopping"
                 />
-                <q-btn
+                <BaseButton
                     v-else
-                    flat
-                    no-caps
+                    variant="ghost"
                     :icon="ICONS.pause"
                     label="Stop shopping"
                     :loading="togglingProgress"
                     @click="onStopShopping"
                 />
-                <q-btn
-                    color="positive"
-                    no-caps
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.check_circle"
                     label="Finish shopping"
                     :loading="finishing"
@@ -276,9 +264,8 @@
                 />
             </div>
             <div v-else-if="detail" class="row q-gutter-sm">
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     :icon="ICONS.content_copy"
                     label="Copy to new list"
                     @click="copyAll"
@@ -286,7 +273,7 @@
             </div>
         </div>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -300,7 +287,7 @@
                  a one-click stop. The picker hides while in progress. -->
             <q-banner
                 v-if="detail.is_in_progress"
-                class="bg-primary text-white q-mb-md"
+                class="bg-primary dora-text-on-primary q-mb-md"
                 rounded
             >
                 <template #avatar>
@@ -340,7 +327,7 @@
                         :disable="detail.is_archived"
                         @click="onOpenQuickAdd"
                     />
-                    <span class="text-caption text-grey">
+                    <span class="text-caption dora-text-muted">
                         Search across every stock item, pick the offer, and
                         drop it onto this list.
                     </span>
@@ -413,7 +400,7 @@
 
             <!-- Lines -->
             <q-card v-if="detail.lines.length === 0" flat bordered>
-                <q-card-section class="text-center text-grey">
+                <q-card-section class="text-center dora-text-muted">
                     No items yet. Use <strong>Quick add</strong> above, or
                     <router-link to="/stock" class="text-primary">
                         cart-add from your stock list
@@ -429,7 +416,7 @@
                 >
                     <div
                         v-if="groupBy !== 'none' && group.label"
-                        class="text-subtitle2 text-grey q-mb-xs row items-center q-gutter-xs"
+                        class="text-subtitle2 dora-text-muted q-mb-xs row items-center q-gutter-xs"
                     >
                         <q-icon
                             :name="groupBy === 'location' ? 'place' : 'storefront'"
@@ -463,7 +450,7 @@
                                 top
                                 class="shopping-line-drag-handle"
                             >
-                                <q-icon :name="ICONS.drag_indicator" color="grey-5" />
+                                <q-icon :name="ICONS.drag_indicator" class="dora-text-muted" />
                                 <q-tooltip>Drag to reorder</q-tooltip>
                             </q-item-section>
                             <q-item-section v-if="bulkMode" side top>
@@ -498,7 +485,7 @@
                                     <q-chip
                                         v-else
                                         dense
-                                        color="grey-4"
+                                        class="dora-text-muted"
                                     >
                                         {{ line.stock_item_name }}
                                     </q-chip>
@@ -508,10 +495,9 @@
                                         v-if="line.added_via && line.added_via !== 'manual'"
                                         dense
                                         size="sm"
-                                        color="blue-grey-2"
-                                        text-color="blue-grey-10"
+                                        class="dora-bg-elevated q-mr-sm"
+                                        text-color="grey"
                                         :icon="ICONS.auto_awesome"
-                                        class="q-mr-sm"
                                     >
                                         {{ addedViaLabel(line.added_via) }}
                                     </q-chip>
@@ -527,7 +513,7 @@
                                             line.offers.length === 1 ? '' : 's'
                                         }}
                                     </span>
-                                    <span v-else class="text-grey">
+                                    <span v-else class="dora-text-muted">
                                         No linked products
                                     </span>
                                 </q-item-label>
@@ -558,7 +544,7 @@
                                             v-if="offer.is_preferred"
                                             name="star"
                                             size="14px"
-                                            color="amber-7"
+                                            color="warning"
                                             class="q-mr-xs"
                                         >
                                             <q-tooltip>Preferred merchant for this item</q-tooltip>
@@ -676,7 +662,7 @@
                                                     <div class="text-subtitle2">
                                                         Actual price paid
                                                     </div>
-                                                    <div class="text-caption text-grey">
+                                                    <div class="text-caption dora-text-muted">
                                                         Overrides the offer price for totals
                                                         and feeds Dora's purchase history.
                                                     </div>
@@ -737,7 +723,7 @@
                                 </div>
                                 <div
                                     v-if="line.purchased_merchant_name"
-                                    class="text-caption text-grey text-right"
+                                    class="text-caption dora-text-muted text-right"
                                 >
                                     {{ line.purchased_merchant_name }}
                                 </div>
@@ -809,7 +795,7 @@
                 v-if="reviewMode && detail.lines.length > 0"
                 flat
                 bordered
-                class="q-mt-md bg-blue-1"
+                class="q-mt-md dora-bg-info-soft"
             >
                 <q-card-section>
                     <div class="row items-center q-mb-sm">
@@ -818,12 +804,12 @@
                             Review — {{ tickedCount }} item{{ tickedCount === 1 ? '' : 's' }} ready to finish
                         </div>
                     </div>
-                    <div v-if="tickedCount === 0" class="text-grey">
+                    <div v-if="tickedCount === 0" class="dora-text-muted">
                         Nothing is ticked yet — tick the items you've actually
                         picked up to preview what will restock.
                     </div>
                     <div v-else>
-                        <div class="text-caption text-grey q-mb-xs">
+                        <div class="text-caption dora-text-muted q-mb-xs">
                             These items will be bumped to <strong>Well-Stocked</strong>
                             when you finish:
                         </div>
@@ -846,22 +832,22 @@
             <q-card v-if="detail.lines.length > 0" flat bordered class="q-mt-md">
                 <q-card-section class="row items-center q-gutter-md">
                     <div class="col">
-                        <div class="text-caption text-grey">Remaining (unticked)</div>
+                        <div class="text-caption dora-text-muted">Remaining (unticked)</div>
                         <div class="text-h6">${{ remainingTotal.toFixed(2) }}</div>
                     </div>
                     <q-separator vertical />
                     <div class="col">
-                        <div class="text-caption text-grey">Picked up so far</div>
+                        <div class="text-caption dora-text-muted">Picked up so far</div>
                         <div class="text-h6">${{ tickedTotal.toFixed(2) }}</div>
                     </div>
                     <q-separator vertical />
                     <div class="col">
-                        <div class="text-caption text-grey">Full list total</div>
+                        <div class="text-caption dora-text-muted">Full list total</div>
                         <div class="text-h6">${{ fullTotal.toFixed(2) }}</div>
                     </div>
                     <q-separator v-if="savingsTotal > 0" vertical />
                     <div v-if="savingsTotal > 0" class="col">
-                        <div class="text-caption text-grey">Savings vs RRP</div>
+                        <div class="text-caption dora-text-muted">Savings vs RRP</div>
                         <div class="text-h6 text-positive">
                             ${{ savingsTotal.toFixed(2) }}
                         </div>
@@ -875,6 +861,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
@@ -1788,7 +1775,6 @@
                     },
                     ok: { label: 'Finish', color: 'positive', noCaps: true },
                     cancel: { noCaps: true },
-                    persistent: true,
                 })
                     .onOk((value: 'copy' | 'finish') => resolve(value || 'finish'))
                     .onCancel(() => resolve(null))
@@ -1804,7 +1790,6 @@
                         'Archives the list and resets ticked items\' stock level to Well-Stocked.',
                     ok: { label: 'Finish', color: 'positive', noCaps: true },
                     cancel: { noCaps: true },
-                    persistent: true,
                 })
                     .onOk(() => resolve(true))
                     .onCancel(() => resolve(false))
@@ -2018,7 +2003,6 @@
                     + `Well-Stocked and stamp them as checked?`,
                 ok: { label: 'Finish', color: 'primary', noCaps: true },
                 cancel: { noCaps: true },
-                persistent: true,
             }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false));
         });
         if (!ok) return;
@@ -2055,7 +2039,6 @@
                 message: 'Every line on this list will be removed. The list stays.',
                 ok: { label: 'Clear', color: 'negative', noCaps: true },
                 cancel: { noCaps: true },
-                persistent: true,
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))
@@ -2248,7 +2231,7 @@
         background: var(--overlay-hover);
     }
     .bulk-bar-active {
-        background: rgba(23, 176, 115, 0.12);
+        background: var(--brand-primary-soft);
     }
     .shopping-line-name {
         font-weight: 500;

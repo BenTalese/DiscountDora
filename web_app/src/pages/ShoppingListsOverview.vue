@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 {{ activeCount }} active, {{ archivedCount }} archived.
                 <span v-if="!primarySummary && activeCount > 0">
                     · No primary list set — pick one for quick-add.
@@ -126,7 +126,7 @@
             </q-btn-dropdown>
         </div>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -144,7 +144,7 @@
             </q-tab>
             <q-tab name="archived" no-caps>
                 Archived
-                <q-badge v-if="archivedCount > 0" floating color="grey-5">{{ archivedCount }}</q-badge>
+                <q-badge v-if="archivedCount > 0" floating color="grey">{{ archivedCount }}</q-badge>
             </q-tab>
         </q-tabs>
         <q-separator />
@@ -154,7 +154,7 @@
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <div v-else-if="visibleLists.length === 0" key="sl-empty" class="text-center text-grey q-py-xl">
+        <div v-else-if="visibleLists.length === 0" key="sl-empty" class="text-center dora-text-muted q-py-xl">
             <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
             <template v-if="tab === 'active'">
                 <div class="text-h6">No active shopping lists yet.</div>
@@ -220,7 +220,7 @@
                                     Primary
                                 </q-badge>
                             </div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 Created {{ formatDate(list.created_at) }}
                                 <span v-if="list.completed_at">
                                     · Finished {{ formatDate(list.completed_at) }}
@@ -310,7 +310,7 @@
                             size="40px"
                             :thickness="0.2"
                             color="primary"
-                            track-color="grey-3"
+                            
                         >
                             {{ list.ticked_count }}/{{ list.line_count }}
                         </q-circular-progress>
@@ -320,7 +320,7 @@
                                     remainingCount(list) === 1 ? '' : 's'
                                 }} remaining
                             </div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 {{ list.line_count }} total ·
                                 {{ list.ticked_count }} ticked
                             </div>
@@ -337,26 +337,26 @@
                     >
                         <template v-if="primaryStats">
                             <div class="col">
-                                <div class="text-caption text-grey">Remaining</div>
+                                <div class="text-caption dora-text-muted">Remaining</div>
                                 <div class="text-subtitle1">
                                     ${{ primaryStats.remaining.toFixed(2) }}
                                 </div>
                             </div>
                             <div class="col">
-                                <div class="text-caption text-grey">Full total</div>
+                                <div class="text-caption dora-text-muted">Full total</div>
                                 <div class="text-subtitle1">
                                     ${{ primaryStats.full.toFixed(2) }}
                                 </div>
                             </div>
                             <div v-if="primaryStats.savings > 0" class="col">
-                                <div class="text-caption text-grey">Saves vs RRP</div>
+                                <div class="text-caption dora-text-muted">Saves vs RRP</div>
                                 <div class="text-subtitle1 text-positive">
                                     ${{ primaryStats.savings.toFixed(2) }}
                                 </div>
                             </div>
                         </template>
                         <template v-else>
-                            <div class="col text-caption text-grey">
+                            <div class="col text-caption dora-text-muted">
                                 <q-spinner size="14px" /> Loading totals…
                             </div>
                         </template>
@@ -370,7 +370,7 @@
             <q-card style="min-width: 360px; max-width: 480px">
                 <q-card-section>
                     <div class="text-h6">Auto-generate shopping list</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Pick which sources to draw from. Items are deduped so
                         nothing gets added twice.
                     </div>
@@ -397,7 +397,7 @@
                         label="Frequently added in past lists"
                     />
                     <q-separator class="q-my-md" />
-                    <div class="text-caption text-grey q-mb-xs">Target</div>
+                    <div class="text-caption dora-text-muted q-mb-xs">Target</div>
                     <q-select
                         v-model="advanced.merge_into_list_id"
                         :options="mergeOptions"
@@ -1080,7 +1080,6 @@
                               } not yet ticked off. Delete anyway?`
                             : 'This will remove the list and all its lines.',
                     cancel: true,
-                    persistent: true,
                 })
                     .onOk(() => resolve(true))
                     .onCancel(() => resolve(false))
@@ -1133,6 +1132,6 @@
         opacity: 0.65;
     }
     .primary-stats {
-        background: rgba(0, 0, 0, 0.025);
+        background: var(--overlay-hover);
     }
 </style>

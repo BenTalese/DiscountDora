@@ -2,10 +2,10 @@
     <div :class="embedded ? 'q-pa-sm' : 'q-pa-md'">
         <!-- Header + toolbar ──────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn v-if="!embedded" flat dense round :icon="ICONS.arrow_back" @click="goBack" />
-            <q-btn v-else flat dense round :icon="ICONS.close" @click="emit('close')">
+            <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
+            <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
                 <q-tooltip>Close panel</q-tooltip>
-            </q-btn>
+            </BaseButton>
             <div class="text-h5 q-mr-sm">{{ detail?.name || 'Stock item' }}</div>
             <q-chip
                 v-if="detail?.stock_level_name"
@@ -18,7 +18,7 @@
             <q-space />
         </div>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -30,29 +30,26 @@
         <div v-else-if="detail" key="sid-content">
             <!-- Toolbar actions ─────────────────────────────────────────── -->
             <div class="row q-gutter-sm q-mb-md items-center">
-                <q-btn
-                    outline
-                    no-caps
-                    :color="detail.is_open ? 'secondary' : undefined"
+                <BaseButton
+                    variant="secondary"
                     :icon="detail.is_open ? 'lock_open' : 'lock'"
                     :label="detail.is_open ? 'Opened' : 'Mark open'"
                     :loading="busy"
                     @click="onToggleOpen"
                 />
-                <q-btn outline no-caps :icon="ICONS.refresh" label="Restock" :loading="busy" @click="onRestock" />
-                <q-btn outline no-caps :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
-                <q-btn outline no-caps :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
-                <q-btn color="primary" no-caps :icon="ICONS.add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
+                <BaseButton variant="secondary" :icon="ICONS.refresh" label="Restock" :loading="busy" @click="onRestock" />
+                <BaseButton variant="secondary" :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
+                <BaseButton variant="secondary" :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
+                <BaseButton variant="primary" :icon="ICONS.add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
                 <q-space />
-                <q-btn outline no-caps icon="qr_code_2" label="Show QR" @click="showQrOpen = true" />
-                <q-btn
-                    outline
-                    no-caps
+                <BaseButton variant="secondary" icon="qr_code_2" label="Show QR" @click="showQrOpen = true" />
+                <BaseButton
+                    variant="secondary"
                     :icon="ICONS.qr_code_scanner"
                     label="Register barcode"
                     @click="registerScanOpen = true"
                 />
-                <q-btn flat :icon="ICONS.delete" color="negative" no-caps label="Delete" @click="confirmDelete" />
+                <BaseButton variant="danger-ghost" :icon="ICONS.delete" label="Delete" @click="confirmDelete" />
             </div>
 
             <!-- ── QR / scan overlays (N5) ──────────────────────────── -->
@@ -67,16 +64,15 @@
                         />
                         <div
                             v-if="detail.barcode"
-                            class="text-caption text-grey q-mt-sm"
+                            class="text-caption dora-text-muted q-mt-sm"
                         >
                             Registered barcode: <code>{{ detail.barcode }}</code>
                         </div>
                     </q-card-section>
                     <q-card-actions align="right">
-                        <q-btn flat no-caps label="Close" v-close-popup />
-                        <q-btn
-                            color="primary"
-                            no-caps
+                        <BaseButton variant="ghost" label="Close" v-close-popup />
+                        <BaseButton
+                            variant="primary"
                             :icon="ICONS.print"
                             label="Print one"
                             @click="openSingleQrSheet"
@@ -91,7 +87,7 @@
                 @decoded="onBarcodeDecoded"
             />
 
-            <q-tabs v-model="tab" dense align="left" class="text-grey-8 q-mb-sm" no-caps>
+            <q-tabs v-model="tab" dense align="left" class="dora-text-secondary q-mb-sm" no-caps>
                 <q-tab name="overview" :icon="ICONS.info" label="Overview" />
                 <q-tab name="products" :icon="ICONS.local_offer" :label="`Products (${detail.products.length})`" />
                 <q-tab name="recipes" :icon="ICONS.menu_book" :label="`Recipes (${detail.recipes.length})`" />
@@ -136,25 +132,25 @@
                                 </q-item>
                                 <q-item>
                                     <q-item-section>Location</q-item-section>
-                                    <q-item-section side class="text-grey-9">
+                                    <q-item-section side class="dora-text-primary">
                                         {{ detail.stock_location_breadcrumb.join(' › ') || '—' }}
                                     </q-item-section>
                                 </q-item>
                                 <q-item>
                                     <q-item-section>Expiry</q-item-section>
-                                    <q-item-section side class="text-grey-9">
+                                    <q-item-section side class="dora-text-primary">
                                         {{ detail.expiry_date || 'Not set' }}
                                     </q-item-section>
                                 </q-item>
                                 <q-item>
                                     <q-item-section>Open / in-use</q-item-section>
-                                    <q-item-section side class="text-grey-9">
+                                    <q-item-section side class="dora-text-primary">
                                         {{ detail.is_open ? `Yes${detail.opened_on ? ' — since ' + detail.opened_on : ''}` : 'Sealed' }}
                                     </q-item-section>
                                 </q-item>
                                 <q-item>
                                     <q-item-section>Level updated</q-item-section>
-                                    <q-item-section side class="text-grey-9">
+                                    <q-item-section side class="dora-text-primary">
                                         {{ relativeTime(detail.stock_level_last_updated) }}
                                     </q-item-section>
                                 </q-item>
@@ -186,7 +182,7 @@
                                         v-model="form.auto_add_when_low"
                                         label="Auto-add when low or out"
                                     />
-                                    <q-icon :name="ICONS.info_outline" size="18px" color="grey-7">
+                                    <q-icon :name="ICONS.info_outline" size="18px" class="dora-text-secondary">
                                         <q-tooltip max-width="320px">
                                             Drops this item onto your primary
                                             shopping list the moment its level
@@ -202,7 +198,7 @@
                                         v-model="form.is_flagged"
                                         label="Always include in auto-generated lists"
                                     />
-                                    <q-icon :name="ICONS.info_outline" size="18px" color="grey-7">
+                                    <q-icon :name="ICONS.info_outline" size="18px" class="dora-text-secondary">
                                         <q-tooltip max-width="320px">
                                             Flagged items show up in the
                                             "essentials" auto-generate sources
@@ -215,8 +211,8 @@
                                     </q-icon>
                                 </div>
                                 <div class="row justify-end q-gutter-sm">
-                                    <q-btn flat label="Reset" :disable="!isDirty || savingBasics" @click="resetBasicsForm" />
-                                    <q-btn type="submit" color="primary" label="Save" :disable="!isDirty" :loading="savingBasics" />
+                                    <BaseButton variant="ghost" label="Reset" :disable="!isDirty || savingBasics" @click="resetBasicsForm" />
+                                    <BaseButton type="submit" variant="primary" label="Save" :disable="!isDirty" :loading="savingBasics" />
                                 </div>
                             </q-form>
                         </div>
@@ -228,10 +224,10 @@
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Linked products</div>
                         <q-space />
-                        <q-btn color="primary" dense no-caps :icon="ICONS.add" label="Link product" @click="openProductPicker" />
+                        <BaseButton variant="primary" :icon="ICONS.add" label="Link product" @click="openProductPicker" />
                     </div>
 
-                    <div v-if="detail.products.length === 0" class="text-grey text-caption q-pa-md">
+                    <div v-if="detail.products.length === 0" class="dora-text-muted text-caption q-pa-md">
                         No products linked yet. Linked products surface deals and prices for this
                         stock item.
                     </div>
@@ -247,7 +243,7 @@
                                     <MerchantLogo :name="prod.merchant_name" :height="20" :width="34" class="q-mr-sm" />
                                     <div class="col">
                                         <div class="ellipsis text-weight-medium">{{ prod.name }}</div>
-                                        <div class="text-caption text-grey">
+                                        <div class="text-caption dora-text-muted">
                                             {{ prod.merchant_name }}
                                             <span v-if="prod.size"> · {{ prod.size }}</span>
                                         </div>
@@ -281,7 +277,7 @@
                                         </span>
                                         <span
                                             v-if="prod.price_was !== null && prod.price_now !== null && prod.price_was > prod.price_now"
-                                            class="text-caption text-grey strike q-ml-xs"
+                                            class="text-caption dora-text-muted strike q-ml-xs"
                                         >
                                             ${{ prod.price_was.toFixed(2) }}
                                         </span>
@@ -304,9 +300,9 @@
                                     >
                                         <q-tooltip>Open on {{ prod.merchant_name }}</q-tooltip>
                                     </q-btn>
-                                    <q-btn flat dense round :icon="ICONS.link_off" color="negative" @click="onUnlink(prod.product_id)">
+                                    <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onUnlink(prod.product_id)">
                                         <q-tooltip>Unlink</q-tooltip>
-                                    </q-btn>
+                                    </BaseButton>
                                 </q-card-actions>
                             </q-card>
                         </div>
@@ -326,7 +322,7 @@
 
                 <!-- ── Recipes using this ─────────────────────────────── -->
                 <q-tab-panel name="recipes">
-                    <div v-if="recipesForDetail.length === 0" class="text-grey text-caption q-pa-md">
+                    <div v-if="recipesForDetail.length === 0" class="dora-text-muted text-caption q-pa-md">
                         Not used in any saved recipe.
                     </div>
                     <div v-else class="row q-col-gutter-md">
@@ -354,7 +350,7 @@
                         <q-btn color="primary" dense no-caps :icon="ICONS.add" label="Add substitute" @click="openSubstitutePicker" />
                     </div>
 
-                    <div v-if="detail.substitutes.length === 0" class="text-grey text-caption q-pa-md">
+                    <div v-if="detail.substitutes.length === 0" class="dora-text-muted text-caption q-pa-md">
                         No substitutes yet. Add items that can stand in for this one.
                     </div>
 
@@ -374,9 +370,9 @@
                                         :loading="busy"
                                         @click="onSwapSubstitute(sub.stock_item_id)"
                                     />
-                                    <q-btn flat dense round :icon="ICONS.link_off" color="negative" @click="onRemoveSubstitute(sub.stock_item_id)">
+                                    <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onRemoveSubstitute(sub.stock_item_id)">
                                         <q-tooltip>Remove substitute</q-tooltip>
-                                    </q-btn>
+                                    </BaseButton>
                                 </div>
                             </q-item-section>
                         </q-item>
@@ -385,7 +381,7 @@
 
                 <!-- ── On shopping lists ──────────────────────────────── -->
                 <q-tab-panel name="lists">
-                    <div v-if="onLists.length === 0" class="text-grey text-caption q-pa-md">
+                    <div v-if="onLists.length === 0" class="dora-text-muted text-caption q-pa-md">
                         Not on any active shopping list.
                         <q-btn flat dense no-caps color="primary" label="Add to primary" @click="onAddToList" />
                     </div>
@@ -407,7 +403,7 @@
 
                 <!-- ── History ────────────────────────────────────────── -->
                 <q-tab-panel name="history">
-                    <div v-if="detail.level_history.length === 0" class="text-grey text-caption q-pa-md">
+                    <div v-if="detail.level_history.length === 0" class="dora-text-muted text-caption q-pa-md">
                         No level changes recorded yet.
                     </div>
                     <q-timeline v-else color="primary">
@@ -431,7 +427,7 @@
                     <q-date v-model="expiryDraft" mask="YYYY-MM-DD" />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Clear" color="negative" @click="onSetExpiry(null)" />
+                    <BaseButton variant="danger-ghost" label="Clear" @click="onSetExpiry(null)" />
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
                 </q-card-actions>
@@ -452,14 +448,14 @@
                     </q-input>
                 </q-card-section>
                 <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
-                    <q-banner v-if="pickerLoading" class="bg-grey-2" dense>Loading products…</q-banner>
-                    <q-banner v-else-if="pickerCandidates.length === 0" class="bg-grey-2" dense>
+                    <q-banner v-if="pickerLoading" class="dora-bg-sunken" dense>Loading products…</q-banner>
+                    <q-banner v-else-if="pickerCandidates.length === 0" class="dora-bg-sunken" dense>
                         No matching saved products.
                     </q-banner>
                     <q-list v-else separator>
                         <q-item v-for="prod in pickerCandidates" :key="prod.product_id" clickable @click="onLink(prod.product_id)">
                             <q-item-section avatar>
-                                <q-avatar rounded size="36px" color="grey-3" text-color="grey-9">
+                                <q-avatar rounded size="36px" class="dora-bg-sunken dora-text-secondary">
                                     {{ prod.merchant_name.substring(0, 1).toUpperCase() }}
                                 </q-avatar>
                             </q-item-section>
@@ -495,7 +491,7 @@
                             <q-item-section side><q-btn flat round dense :icon="ICONS.add" color="primary" /></q-item-section>
                         </q-item>
                         <q-item v-if="substituteCandidates.length === 0">
-                            <q-item-section class="text-grey">No matching items.</q-item-section>
+                            <q-item-section class="dora-text-muted">No matching items.</q-item-section>
                         </q-item>
                     </q-list>
                 </q-card-section>
@@ -506,6 +502,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -916,7 +913,6 @@
             title: 'Delete stock item',
             message: `Delete "${item.name}"? Recipes that use it will be left with a dangling reference.`,
             cancel: true,
-            persistent: true,
         }).onOk(() => void doDelete(item.stock_item_id));
     }
     async function doDelete(id: string) {

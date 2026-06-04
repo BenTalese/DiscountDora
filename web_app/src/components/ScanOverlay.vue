@@ -56,7 +56,7 @@
                     v-model="manualValue"
                     dense
                     dark
-                    standout="bg-grey-9 text-white"
+                    standout="dora-bg-sunken text-white"
                     label="Or type a barcode"
                     label-color="grey-4"
                     @keyup.enter="onManualSubmit"

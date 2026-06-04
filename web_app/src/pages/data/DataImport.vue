@@ -1,6 +1,6 @@
 <template>
     <div class="q-gutter-md">
-        <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
+        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
             <template #avatar>
                 <q-icon :name="ICONS.info" size="18px" />
             </template>
@@ -15,7 +15,7 @@
                 <q-icon :name="ICONS.upload_file" size="32px" class="text-primary" />
                 <div>
                     <div class="text-h6">Spreadsheet import</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Required column: <strong>name</strong>. Optional:
                         level, location, group, expiry, is&nbsp;essential.
                     </div>
@@ -56,13 +56,13 @@
                         size="6px"
                         color="primary"
                     />
-                    <div class="text-caption text-grey-7 q-mt-xs">
+                    <div class="text-caption dora-text-muted-7 q-mt-xs">
                         Uploading {{ Math.round(progress * 100) }}%
                     </div>
                 </div>
                 <div
                     v-else-if="inspecting"
-                    class="text-caption text-grey-7 q-mt-sm"
+                    class="text-caption dora-text-muted-7 q-mt-sm"
                 >
                     Reading spreadsheet…
                 </div>
@@ -83,7 +83,7 @@
         </q-card>
         <q-banner
             v-if="inspect && inspect.warnings.length"
-            class="bg-orange-1 text-orange-9"
+            class="dora-bg-warning-soft text-warning"
             dense
             rounded
         >
@@ -99,7 +99,7 @@
         <q-card v-if="inspect && selectedSheet" flat bordered>
             <q-card-section>
                 <div class="text-subtitle1">Map columns</div>
-                <div class="text-caption text-grey-7 q-mb-sm">
+                <div class="text-caption dora-text-muted-7 q-mb-sm">
                     Pick a spreadsheet column for each Dora field. Auto-picks
                     obvious matches based on column name.
                 </div>
@@ -153,7 +153,7 @@
                             <td
                                 v-for="target in targetFields"
                                 :key="target"
-                                :class="row[target] === null ? 'text-grey-5' : ''"
+                                :class="row[target] === null ? 'dora-text-muted' : ''"
                             >
                                 {{ row[target] ?? '—' }}
                             </td>
@@ -186,7 +186,7 @@
             </q-card-section>
             <q-separator />
             <q-card-actions align="right">
-                <q-btn flat label="Cancel" @click="onClearPick" />
+                <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
                 <q-btn
                     color="primary"
                     :icon="ICONS.check"
@@ -199,7 +199,7 @@
         </q-card>
 
         <!-- ── Result dialog ─────────────────────────────────────────── -->
-        <q-dialog v-model="resultOpen" persistent>
+        <q-dialog v-model="resultOpen">
             <q-card style="min-width: 420px; max-width: 720px">
                 <q-card-section class="row items-center q-gutter-md">
                     <q-icon
@@ -211,7 +211,7 @@
                         <div class="text-h6">
                             {{ result?.headline ?? '' }}
                         </div>
-                        <div v-if="result?.subline" class="text-caption text-grey">
+                        <div v-if="result?.subline" class="text-caption dora-text-muted">
                             {{ result.subline }}
                         </div>
                     </div>
@@ -258,7 +258,7 @@
                         :icon="ICONS.download"
                         @click="downloadErrorRows"
                     />
-                    <q-btn flat label="Close" @click="onResultClose" />
+                    <BaseButton variant="ghost" label="Close" @click="onResultClose" />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -266,6 +266,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, reactive, ref, watch } from 'vue';

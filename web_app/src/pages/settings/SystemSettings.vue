@@ -6,7 +6,7 @@
                     <q-icon :name="ICONS.shield" size="20px" class="q-mr-xs" />
                     System
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Install-wide settings. Changes here apply to every account.
                 </div>
             </div>
@@ -15,7 +15,7 @@
         <q-separator />
 
         <q-card-section v-if="!isAdmin">
-            <q-banner class="bg-red-1 text-red-9" dense rounded>
+            <q-banner class="dora-bg-negative-soft text-negative" dense rounded>
                 You don't have admin permissions to view this page.
             </q-banner>
         </q-card-section>
@@ -27,7 +27,7 @@
                     <q-icon :name="ICONS.smart_toy" size="20px" class="q-mr-xs" />
                     AI assistant
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Optional. Connect Dora's chat to a language model you run
                     yourself. Off by default — when off, the assistant uses its
                     built-in rule-based replies.
@@ -45,7 +45,7 @@
                         label="Enable the AI assistant"
                         :disable="saving"
                     />
-                    <div class="text-caption text-grey q-ml-sm">
+                    <div class="text-caption dora-text-muted q-ml-sm">
                         {{ enabledDraft
                             ? 'Enter a base URL and model below, then Save to apply.'
                             : 'Toggle on to configure. Nothing is applied until you Save.' }}
@@ -80,7 +80,7 @@
 
                 <q-card-section v-if="probeResult" class="q-pt-none">
                     <q-banner
-                        :class="probeResult.reachable ? 'bg-green-1 text-green-9' : 'bg-red-1 text-red-9'"
+                        :class="probeResult.reachable ? 'dora-bg-positive-soft text-positive' : 'dora-bg-negative-soft text-negative'"
                         dense
                         rounded
                     >
@@ -126,7 +126,7 @@
                     >
                         <template #no-option>
                             <q-item>
-                                <q-item-section class="text-grey">
+                                <q-item-section class="dora-text-muted">
                                     No detected models — type a name (e.g. qwen2.5:7b).
                                 </q-item-section>
                             </q-item>
@@ -146,7 +146,7 @@
                     />
                     <div
                         v-if="!unchanged && !canSave"
-                        class="text-caption text-grey q-mt-xs"
+                        class="text-caption dora-text-muted q-mt-xs"
                     >
                         Enable, then fill in both the base URL and the model
                         before saving.
@@ -154,7 +154,7 @@
                 </q-card-section>
 
                 <q-card-section>
-                    <q-banner class="bg-blue-1 text-blue-9" dense rounded>
+                    <q-banner class="dora-bg-info-soft text-info" dense rounded>
                         <template #avatar>
                             <q-icon :name="ICONS.info" size="20px" />
                         </template>

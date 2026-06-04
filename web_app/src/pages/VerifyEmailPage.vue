@@ -4,37 +4,35 @@
             <q-card-section class="text-center">
                 <q-icon
                     :name="status === 'ok' ? 'mark_email_read' : status === 'error' ? 'error' : 'mail_lock'"
-                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : 'grey-7'"
+                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
+                    :class="{ 'dora-text-secondary': status !== 'ok' && status !== 'error' }"
                     size="64px"
                 />
                 <div class="text-h6 q-mt-md">
                     {{ headline }}
                 </div>
-                <div class="text-caption text-grey q-mt-xs">
+                <div class="text-caption dora-text-muted q-mt-xs">
                     {{ subline }}
                 </div>
             </q-card-section>
             <q-card-actions align="center">
-                <q-btn
+                <BaseButton
                     v-if="status === 'ok'"
-                    color="primary"
-                    no-caps
+                    variant="primary"
                     label="Continue to sign in"
                     to="/login?verified=1"
                 />
-                <q-btn
+                <BaseButton
                     v-else-if="status === 'error'"
-                    flat
-                    color="primary"
-                    no-caps
+                    variant="ghost"
+                    class="text-primary"
                     label="Resend verification"
                     @click="resendOpen = true"
                 />
-                <q-btn
+                <BaseButton
                     v-else
-                    flat
-                    color="primary"
-                    no-caps
+                    variant="ghost"
+                    class="text-primary"
                     label="Cancel"
                     to="/login"
                 />
@@ -57,10 +55,9 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Send"
                         :loading="resending"
                         :disable="!resendEmail.trim() || resending"
@@ -74,6 +71,7 @@
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { computed, onMounted, ref } from 'vue';
     import { useRoute } from 'vue-router';
     import AuthApiService from 'src/services/api/authApiService';

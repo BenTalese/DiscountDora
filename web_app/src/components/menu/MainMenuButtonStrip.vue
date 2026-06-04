@@ -108,7 +108,7 @@
         height: 3px;
         border-radius: 3px;
         background: var(--q-accent);
-        box-shadow: 0 0 8px rgba(242, 192, 55, 0.55);
+        box-shadow: 0 0 8px color-mix(in srgb, var(--brand-accent) 55%, transparent);
         opacity: 0;
         transition:
             transform 0.42s cubic-bezier(0.65, 0, 0.2, 1),

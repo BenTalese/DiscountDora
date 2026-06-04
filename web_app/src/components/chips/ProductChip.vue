@@ -12,7 +12,7 @@
 
         <div class="column no-wrap product-chip__text">
             <span class="ellipsis">{{ product.name }}</span>
-            <span v-if="product.brand" class="text-caption text-grey ellipsis">
+            <span v-if="product.brand" class="text-caption dora-text-muted ellipsis">
                 {{ product.brand }}
             </span>
         </div>
@@ -36,7 +36,7 @@
         </q-badge>
         <q-badge
             v-else-if="product.price_now != null"
-            color="grey-7"
+            color="grey"
             text-color="white"
             class="q-ml-xs"
         >

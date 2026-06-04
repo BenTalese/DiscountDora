@@ -25,7 +25,7 @@
                     <q-icon :name="ICONS.notifications" size="22px" class="q-mr-sm" />
                     <div class="col">
                         <div class="text-h6">What needs your attention</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             <span v-if="totalCount === 0 && snoozedCount === 0">
                                 All quiet. Good work.
                             </span>
@@ -45,7 +45,7 @@
 
                 <q-separator class="q-mt-sm" />
 
-                <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-ma-md" dense rounded>
+                <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-ma-md" dense rounded>
                     {{ loadError }}
                 </q-banner>
 
@@ -151,7 +151,7 @@
                         class="alerts-snoozed-section"
                         :icon="ICONS.snooze"
                         :label="`Snoozed (${snoozedCount})`"
-                        header-class="text-grey-7"
+                        header-class="dora-text-secondary"
                     >
                         <q-list separator>
                             <q-item
@@ -191,7 +191,7 @@
                     </q-expansion-item>
 
                     <q-item v-if="!loading && totalCount === 0 && snoozedCount === 0">
-                        <q-item-section class="text-center text-grey q-py-lg">
+                        <q-item-section class="text-center dora-text-muted q-py-lg">
                             <q-icon :name="ICONS.check_circle" size="48px" color="positive" />
                             <div class="q-mt-sm">Nothing to do right now.</div>
                         </q-item-section>
@@ -202,7 +202,7 @@
                 <q-separator v-if="lowOrOutStockItemIds.length > 0" />
                 <q-card-section
                     v-if="lowOrOutStockItemIds.length > 0"
-                    class="bg-grey-1 q-py-sm"
+                    class="dora-bg-elevated q-py-sm"
                 >
                     <q-btn
                         unelevated
@@ -216,7 +216,7 @@
                         :loading="addingAll"
                         @click="addAllLowOrOutToPrimary"
                     />
-                    <div class="text-caption text-grey q-mt-xs">
+                    <div class="text-caption dora-text-muted q-mt-xs">
                         Skips items already on your primary list.
                     </div>
                 </q-card-section>

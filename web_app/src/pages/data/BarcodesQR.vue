@@ -1,6 +1,6 @@
 <template>
     <div class="q-gutter-md">
-        <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
+        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
             <template #avatar>
                 <q-icon :name="ICONS.info" size="18px" />
             </template>
@@ -31,7 +31,7 @@
                     <q-icon :name="ICONS.qr_code_scanner" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Scan a barcode</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             Opens the camera in a fullscreen overlay. The first
                             valid decode opens the matching stock item or
                             offers to register a new barcode.
@@ -58,7 +58,7 @@
                     <q-icon :name="ICONS.print" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Print QR sheets</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             Pick items, choose a layout, open a printable
                             sheet. Save as PDF from your browser's print dialog.
                         </div>
@@ -157,7 +157,7 @@
                     <q-icon :name="ICONS.list_alt" size="32px" class="text-primary" />
                     <div>
                         <div class="text-h6">Manage barcodes</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             Inline edit / clear / print individual QRs.
                         </div>
                     </div>
@@ -193,7 +193,7 @@
                                 <span v-else-if="item.barcode">
                                     <code>{{ item.barcode }}</code>
                                 </span>
-                                <span v-else class="text-grey-5">no barcode registered</span>
+                                <span v-else class="dora-text-muted">no barcode registered</span>
                             </q-item-label>
                         </q-item-section>
                         <q-item-section side>
@@ -261,13 +261,13 @@
             <q-card style="min-width: 320px; max-width: 480px">
                 <q-card-section v-if="resultKind === 'stock_item'">
                     <div class="text-h6">{{ matchedItem?.name ?? 'Stock item' }}</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ matchedItem?.stock_level_name ?? '—' }}
                     </div>
                 </q-card-section>
                 <q-card-section v-else-if="resultKind === 'unknown'">
                     <div class="text-h6">Unknown barcode</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         <code>{{ lastScannedValue }}</code>
                     </div>
                     <q-separator class="q-my-md" />
@@ -291,7 +291,7 @@
                     <div class="text-h6">No match</div>
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Close" v-close-popup />
+                    <BaseButton variant="ghost" label="Close" v-close-popup />
                     <q-btn
                         v-if="resultKind === 'stock_item' && matchedItem"
                         flat
@@ -317,6 +317,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';

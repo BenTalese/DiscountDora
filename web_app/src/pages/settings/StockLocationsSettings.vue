@@ -3,7 +3,7 @@
         <q-card-section class="row items-center">
             <div>
                 <div class="text-h6">Stock locations</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Where things live. Zones at the top (e.g. Pantry), areas
                     inside (e.g. Top shelf), sections inside those (e.g. Left).
                     Items can attach at any level.
@@ -19,13 +19,13 @@
             />
         </q-card-section>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
         <q-separator />
 
-        <div v-if="!loading && tree.length === 0" class="q-pa-lg text-center text-grey">
+        <div v-if="!loading && tree.length === 0" class="q-pa-lg text-center dora-text-muted">
             No zones yet. Create one to start organising your pantry.
         </div>
 
@@ -171,7 +171,6 @@
                 title: `Delete "${node.name}"?`,
                 message: messageParts.join(' '),
                 cancel: true,
-                persistent: true,
                 ok: { label: 'Delete', color: 'negative', noCaps: true },
             })
                 .onOk(() => resolve(true))

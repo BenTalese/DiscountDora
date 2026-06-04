@@ -7,19 +7,31 @@
  * series' position in the selection (stable for the duration of the
  * picker session); colours wrap if a future bump raises the per-page
  * cap above 5.
+ *
+ * Colours come from the active theme via `--chart-1` … `--chart-5`. The
+ * hex fallbacks match the Pesto defaults so a server-render / pre-paint
+ * call still returns a sensible colour.
  */
-const PALETTE: readonly string[] = [
-    '#1e88e5', // blue
-    '#43a047', // green
-    '#ef5350', // red
-    '#ab47bc', // purple
-    '#fb8c00', // orange
+const CHART_TOKEN_FALLBACKS: readonly string[] = [
+    'hsl(150, 76%, 39%)', // --chart-1 (primary)
+    'hsl(189, 100%, 32%)', // --chart-2 (secondary)
+    'hsl(50, 95%, 50%)',  // --chart-3 (accent)
+    'hsl(20, 85%, 60%)',  // --chart-4 (warm tertiary)
+    'hsl(280, 50%, 58%)', // --chart-5 (cool tertiary)
 ];
 
+function readVar(index: number): string {
+    if (typeof document === 'undefined') return CHART_TOKEN_FALLBACKS[index]!;
+    const value = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--chart-${index + 1}`)
+        .trim();
+    return value || CHART_TOKEN_FALLBACKS[index]!;
+}
+
 export function seriesColour(index: number): string {
-    return PALETTE[index % PALETTE.length]!;
+    return readVar(index % CHART_TOKEN_FALLBACKS.length);
 }
 
 export function paletteSnapshot(): readonly string[] {
-    return PALETTE;
+    return CHART_TOKEN_FALLBACKS.map((_, i) => readVar(i));
 }

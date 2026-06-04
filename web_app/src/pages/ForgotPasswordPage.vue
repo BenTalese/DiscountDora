@@ -4,7 +4,7 @@
             <q-card-section class="text-center">
                 <q-icon :name="ICONS.lock_reset" size="56px" class="text-primary" />
                 <div class="text-h6 q-mt-md">Forgot password</div>
-                <div class="text-caption text-grey q-mt-xs">
+                <div class="text-caption dora-text-muted q-mt-xs">
                     Enter your account email and we'll send a reset link.
                 </div>
             </q-card-section>
@@ -30,20 +30,21 @@
                 </q-form>
             </q-card-section>
             <q-card-section v-else>
-                <q-banner class="bg-grey-2 text-grey-9" rounded>
+                <q-banner class="dora-bg-sunken" rounded>
                     <template #avatar><q-icon :name="ICONS.mark_email_read" /></template>
                     If that address is registered, a reset link is on its way.
                     Check your inbox (and spam folder).
                 </q-banner>
             </q-card-section>
             <q-card-actions align="center">
-                <q-btn flat no-caps color="primary" label="Back to sign in" to="/login" />
+                <BaseButton variant="ghost" class="text-primary" label="Back to sign in" to="/login" />
             </q-card-actions>
         </q-card>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { ref } from 'vue';
     import AuthApiService from 'src/services/api/authApiService';

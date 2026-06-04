@@ -4,12 +4,12 @@
             <q-card-section class="text-center">
                 <q-icon :name="ICONS.password" size="56px" class="text-primary" />
                 <div class="text-h6 q-mt-md">Choose a new password</div>
-                <div class="text-caption text-grey q-mt-xs">
+                <div class="text-caption dora-text-muted q-mt-xs">
                     Must be at least 10 characters and include a letter and a digit.
                 </div>
             </q-card-section>
             <q-card-section v-if="!token">
-                <q-banner class="bg-red-1 text-red-9" rounded>
+                <q-banner class="dora-bg-negative-soft text-negative" rounded>
                     This reset link is missing a token. Request a fresh one
                     from Forgot password.
                 </q-banner>
@@ -49,7 +49,7 @@
                 </q-form>
             </q-card-section>
             <q-card-section v-else>
-                <q-banner class="bg-green-1 text-green-9" rounded>
+                <q-banner class="dora-bg-positive-soft text-positive" rounded>
                     <template #avatar><q-icon :name="ICONS.check_circle" /></template>
                     Password reset. Sign in with your new password.
                 </q-banner>
@@ -62,13 +62,14 @@
                     label="Continue to sign in"
                     to="/login"
                 />
-                <q-btn v-else flat no-caps color="primary" label="Cancel" to="/login" />
+                <BaseButton v-else variant="ghost" class="text-primary" label="Cancel" to="/login" />
             </q-card-actions>
         </q-card>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, ref } from 'vue';

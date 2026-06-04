@@ -37,8 +37,8 @@
 /* ─── Pesto (default light — fresh garden green + teal + golden) ──── */
 /* ═══════════════════════════════════════════════════════════════════ */
 [data-theme="pesto"] {
-    --brand-primary: hsl(150 76% 39%);
-    --brand-primary-soft: hsl(150 70% 92%);
+    --brand-primary: hsl(150 60% 36%);
+    --brand-primary-soft: hsl(150 60% 92%);
     --brand-secondary: hsl(189 100% 26%);
     --brand-secondary-soft: hsl(189 35% 88%);
     --brand-accent: hsl(50 99% 56%);
@@ -62,7 +62,7 @@
 
     --text-primary: hsl(168 28% 12%);
     --text-secondary: hsl(168 12% 32%);
-    --text-muted: hsl(168 8% 50%);
+    --text-muted: hsl(168 10% 42%);
     --text-on-primary: hsl(0 0% 100%);
     --text-on-accent: hsl(168 28% 12%);
 
@@ -70,7 +70,7 @@
     --border-strong: hsl(168 18% 72%);
     --divider: hsl(168 14% 86%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(150, 76%, 39%, 0.35);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(150 76% 39%);
     --chart-2: hsl(189 100% 32%);
@@ -80,16 +80,19 @@
     --chart-6: hsl(218 70% 55%);
 
     color-scheme: light;
+    --dora-disc-bg: hsl(40 50% 95%);
+    --dora-halo: hsla(150, 76%, 39%, 0.32);
+    --dora-halo-strong: hsla(150, 76%, 39%, 0.55);
 }
 
 /* ─── Pesto Dark (Group 3: forest teal + bright lime) ─────────────── */
 [data-theme="pesto-dark"] {
-    --brand-primary: hsl(150 75% 55%);            /* lifted from #31E981 */
-    --brand-primary-soft: hsla(150, 75%, 55%, 0.18);
+    --brand-primary: hsl(150 48% 40%);            /* further toned for dark-mode contrast */
+    --brand-primary-soft: hsla(150, 48%, 40%, 0.22);
     --brand-secondary: hsl(170 28% 30%);          /* #35605A */
     --brand-secondary-soft: hsla(170, 28%, 30%, 0.3);
-    --brand-accent: hsl(150 75% 55%);
-    --brand-accent-soft: hsla(150, 75%, 55%, 0.18);
+    --brand-accent: hsl(150 48% 40%);
+    --brand-accent-soft: hsla(150, 48%, 40%, 0.22);
 
     --surface-page: hsl(165 60% 5%);              /* #00120B */
     --surface-component: hsl(170 28% 12%);
@@ -105,8 +108,8 @@
         var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
 
     --text-primary: hsl(225 100% 93%);            /* #D8E4FF */
-    --text-secondary: hsl(205 12% 67%);           /* #6B818C lifted */
-    --text-muted: hsl(205 10% 55%);
+    --text-secondary: hsl(205 14% 78%);           /* lifted for dark-page pop */
+    --text-muted: hsl(205 12% 66%);
     --text-on-primary: hsl(165 60% 5%);
     --text-on-accent: hsl(165 60% 5%);
 
@@ -114,10 +117,10 @@
     --border-strong: hsl(205 12% 40%);
     --divider: hsl(205 12% 24%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(150, 75%, 55%, 0.45);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 45%, transparent);
 
-    --semantic-positive: hsl(150 75% 55%);
-    --semantic-positive-soft: hsla(150, 75%, 55%, 0.16);
+    --semantic-positive: hsl(150 48% 40%);
+    --semantic-positive-soft: hsla(150, 48%, 40%, 0.20);
     --semantic-warning: hsl(33 95% 65%);
     --semantic-warning-soft: hsla(33, 95%, 65%, 0.16);
     --semantic-negative: hsl(7 78% 65%);
@@ -125,7 +128,7 @@
     --semantic-info: hsl(218 80% 70%);
     --semantic-info-soft: hsla(218, 80%, 70%, 0.16);
 
-    --chart-1: hsl(150 75% 55%);
+    --chart-1: hsl(150 48% 45%);
     --chart-2: hsl(180 50% 50%);
     --chart-3: hsl(225 100% 80%);
     --chart-4: hsl(50 95% 62%);
@@ -139,6 +142,9 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
 
     color-scheme: dark;
+    --dora-disc-bg: hsl(150 48% 40%);
+    --dora-halo: hsla(150, 48%, 40%, 0.26);
+    --dora-halo-strong: hsla(150, 48%, 40%, 0.45);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -175,7 +181,7 @@
     --border-strong: hsl(40 22% 74%);
     --divider: hsl(40 18% 88%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(40, 88%, 67%, 0.4);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(40 88% 55%);
     --chart-2: hsl(189 100% 32%);
@@ -185,6 +191,9 @@
     --chart-6: hsl(218 70% 55%);
 
     color-scheme: light;
+    --dora-disc-bg: hsl(40 50% 95%);
+    --dora-halo: hsla(40, 88%, 67%, 0.32);
+    --dora-halo-strong: hsla(40, 88%, 67%, 0.55);
 }
 
 /* ─── Lemon Tart Dark (Group 4: charcoal + golden + orange) ───────── */
@@ -220,12 +229,12 @@
     --border-strong: hsl(225 12% 42%);
     --divider: hsl(225 12% 26%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(46, 100%, 50%, 0.45);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(105 47% 50%);
     --semantic-positive-soft: hsla(105, 47%, 50%, 0.16);
-    --semantic-warning: hsl(46 100% 55%);
-    --semantic-warning-soft: hsla(46, 100%, 55%, 0.16);
+    --semantic-warning: hsl(40 90% 60%);
+    --semantic-warning-soft: hsla(40, 90%, 60%, 0.16);
     --semantic-negative: hsl(7 85% 65%);
     --semantic-negative-soft: hsla(7, 85%, 65%, 0.16);
     --semantic-info: hsl(218 80% 70%);
@@ -245,6 +254,9 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
 
     color-scheme: dark;
+    --dora-disc-bg: hsl(46 100% 50%);
+    --dora-halo: hsla(46, 100%, 55%, 0.32);
+    --dora-halo-strong: hsla(46, 100%, 55%, 0.55);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -281,7 +293,7 @@
     --border-strong: hsl(218 22% 70%);
     --divider: hsl(218 18% 86%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(218, 76%, 56%, 0.4);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(218 76% 56%);
     --chart-2: hsl(195 90% 50%);
@@ -291,6 +303,9 @@
     --chart-6: hsl(7 75% 60%);
 
     color-scheme: light;
+    --dora-disc-bg: hsl(218 30% 95%);
+    --dora-halo: hsla(218, 76%, 56%, 0.28);
+    --dora-halo-strong: hsla(218, 76%, 56%, 0.50);
 }
 
 /* ─── Blueberry Dark (Group 1: muted teals + lavender) ────────────── */
@@ -325,7 +340,7 @@
     --border-strong: hsl(184 14% 42%);
     --divider: hsl(184 14% 26%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(193, 25%, 66%, 0.45);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(150 50% 60%);
     --semantic-positive-soft: hsla(150, 50%, 60%, 0.16);
@@ -350,6 +365,9 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
 
     color-scheme: dark;
+    --dora-disc-bg: hsl(193 25% 66%);
+    --dora-halo: hsla(193, 25%, 66%, 0.32);
+    --dora-halo-strong: hsla(193, 25%, 66%, 0.55);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -386,7 +404,7 @@
     --border-strong: hsl(20 22% 72%);
     --divider: hsl(20 18% 88%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(352, 65%, 50%, 0.4);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(352 65% 50%);
     --chart-2: hsl(36 85% 50%);
@@ -396,6 +414,9 @@
     --chart-6: hsl(218 65% 55%);
 
     color-scheme: light;
+    --dora-disc-bg: hsl(20 35% 95%);
+    --dora-halo: hsla(352, 65%, 50%, 0.28);
+    --dora-halo-strong: hsla(352, 65%, 50%, 0.50);
 }
 
 /* ─── Cherry Cola Dark (Group 2: deep purple-red + olive/sage) ───── */
@@ -430,7 +451,7 @@
     --border-strong: hsl(2 16% 40%);
     --divider: hsl(2 16% 24%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(98, 60%, 70%, 0.45);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(98 60% 60%);
     --semantic-positive-soft: hsla(98, 60%, 60%, 0.16);
@@ -455,6 +476,9 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.9);
 
     color-scheme: dark;
+    --dora-disc-bg: hsl(98 50% 60%);
+    --dora-halo: hsla(98, 60%, 70%, 0.22);
+    --dora-halo-strong: hsla(98, 60%, 70%, 0.40);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -491,7 +515,7 @@
     --border-strong: hsl(33 22% 68%);
     --divider: hsl(33 18% 84%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(33, 72%, 55%, 0.4);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(33 72% 50%);
     --chart-2: hsl(28 50% 36%);
@@ -501,6 +525,9 @@
     --chart-6: hsl(280 50% 55%);
 
     color-scheme: light;
+    --dora-disc-bg: hsl(36 32% 95%);
+    --dora-halo: hsla(33, 72%, 55%, 0.30);
+    --dora-halo-strong: hsla(33, 72%, 55%, 0.55);
 }
 
 /* ─── Sourdough Dark (warm browns + amber on dark crust) ──────────── */
@@ -535,7 +562,7 @@
     --border-strong: hsl(28 18% 40%);
     --divider: hsl(28 18% 24%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(33, 80%, 60%, 0.45);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(140 55% 60%);
     --semantic-positive-soft: hsla(140, 55%, 60%, 0.16);
@@ -560,4 +587,7 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
 
     color-scheme: dark;
+    --dora-disc-bg: hsl(33 70% 55%);
+    --dora-halo: hsla(33, 80%, 60%, 0.22);
+    --dora-halo-strong: hsla(33, 80%, 60%, 0.42);
 }

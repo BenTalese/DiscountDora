@@ -1,12 +1,12 @@
 <template>
     <div class="data-shell q-pa-md">
-        <q-breadcrumbs class="q-mb-sm" active-color="grey-9">
+        <q-breadcrumbs class="q-mb-sm" active-color="primary">
             <q-breadcrumbs-el label="Data" :icon="ICONS.storage" />
             <q-breadcrumbs-el :label="activeLabel" />
         </q-breadcrumbs>
 
         <div class="row items-center q-mb-md">
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 Backup, import, export and barcode tools for your Dora data.
             </div>
         </div>

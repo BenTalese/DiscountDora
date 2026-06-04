@@ -16,7 +16,7 @@
                     :x2="width - padding.right"
                     :y1="tick.y"
                     :y2="tick.y"
-                    stroke="#eee"
+                    class="chart-gridline"
                 />
                 <text
                     v-for="(tick, i) in yTicks"
@@ -24,7 +24,7 @@
                     :x="padding.left - 6"
                     :y="tick.y + 3"
                     font-size="10"
-                    fill="#888"
+                    class="chart-axis-label"
                     text-anchor="end"
                 >
                     ${{ tick.value.toFixed(2) }}
@@ -39,7 +39,7 @@
                     :x="lbl.x"
                     :y="height - 4"
                     font-size="10"
-                    fill="#888"
+                    class="chart-axis-label"
                     text-anchor="middle"
                 >
                     {{ lbl.label }}
@@ -74,7 +74,7 @@
                     :x2="hover.x"
                     :y1="padding.top"
                     :y2="height - padding.bottom"
-                    stroke="#bbb"
+                    class="chart-crosshair"
                     stroke-dasharray="3,2"
                 />
             </g>
@@ -302,9 +302,12 @@
 <style scoped>
     .chart-host { position: relative; }
     .chart-svg { display: block; }
+    .chart-gridline { stroke: var(--divider); }
+    .chart-axis-label { fill: var(--text-muted); }
+    .chart-crosshair { stroke: var(--border-strong); }
     .chart-tooltip {
         position: absolute;
-        background: rgba(255, 255, 255, 0.97);
+        background: var(--surface-component);
         border: 1px solid var(--border-default);
         border-radius: 6px;
         padding: 8px 10px;

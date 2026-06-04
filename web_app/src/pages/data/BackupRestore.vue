@@ -1,6 +1,6 @@
 <template>
     <div class="q-gutter-md">
-        <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
+        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
             <template #avatar>
                 <q-icon :name="ICONS.info" size="18px" />
             </template>
@@ -18,12 +18,12 @@
                         <q-icon :name="ICONS.cloud_download" size="32px" class="text-primary" />
                         <div>
                             <div class="text-h6">Create backup</div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 Download a JSON snapshot of your install.
                             </div>
                             <div
                                 v-if="lastBackupLabel"
-                                class="text-caption text-grey-7 q-mt-xs"
+                                class="text-caption dora-text-muted-7 q-mt-xs"
                             >
                                 <q-icon :name="ICONS.schedule" size="14px" class="q-mr-xs" />
                                 Last backup: {{ lastBackupLabel }}
@@ -32,7 +32,7 @@
                     </q-card-section>
                     <q-separator />
                     <q-card-section class="q-pb-none">
-                        <div class="text-caption text-grey-7 q-mb-xs">
+                        <div class="text-caption dora-text-muted-7 q-mb-xs">
                             Include in this backup:
                         </div>
                         <q-expansion-item
@@ -91,7 +91,7 @@
                         <q-icon :name="ICONS.cloud_upload" size="32px" class="text-primary" />
                         <div>
                             <div class="text-h6">Restore from backup</div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 Inspect a backup, then choose what to import.
                             </div>
                         </div>
@@ -131,13 +131,13 @@
                                 size="6px"
                                 color="primary"
                             />
-                            <div class="text-caption text-grey-7 q-mt-xs">
+                            <div class="text-caption dora-text-muted-7 q-mt-xs">
                                 Uploading {{ Math.round(uploadProgressValue * 100) }}%
                             </div>
                         </div>
                         <div
                             v-else-if="inspecting && uploadProgressValue >= 1"
-                            class="text-caption text-grey-7 q-mt-sm"
+                            class="text-caption dora-text-muted-7 q-mt-sm"
                         >
                             Inspecting backup…
                         </div>
@@ -151,12 +151,12 @@
             <q-card-section class="row items-center justify-between">
                 <div>
                     <div class="text-subtitle1">Backup preview</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Exported {{ formatDate(preview.exported_at) }} by
                         <strong>{{ preview.exported_by }}</strong>
                     </div>
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     <strong>{{ selectedCount }}</strong> of <strong>{{ selectableTotal }}</strong> items selected
                     <span v-if="duplicateCount">
                         · <strong>{{ duplicateCount }}</strong> duplicate{{ duplicateCount === 1 ? '' : 's' }} skipped
@@ -168,8 +168,8 @@
 
             <q-card-section class="q-pt-none">
                 <div class="row q-gutter-sm q-mb-sm">
-                    <q-btn dense flat color="primary" label="Select all" @click="onSelectAll" />
-                    <q-btn dense flat label="Clear selection" @click="onClearSelection" />
+                    <BaseButton variant="ghost" class="text-primary" label="Select all" @click="onSelectAll" />
+                    <BaseButton variant="ghost" label="Clear selection" @click="onClearSelection" />
                 </div>
 
                 <q-tree
@@ -188,8 +188,8 @@
                                     v-if="prop.node.duplicate"
                                     dense
                                     size="sm"
-                                    color="orange-3"
-                                    text-color="grey-9"
+                                    color="warning"
+                                    text-color="white"
                                     class="q-ml-sm"
                                 >
                                     duplicate
@@ -197,7 +197,7 @@
                             </div>
                             <div
                                 v-if="prop.node.count !== undefined"
-                                class="text-caption text-grey q-ml-sm"
+                                class="text-caption dora-text-muted q-ml-sm"
                             >
                                 {{ prop.node.count }}
                             </div>
@@ -209,9 +209,9 @@
             <q-separator />
 
             <q-card-actions align="right">
-                <q-btn flat label="Cancel" @click="onClearPick" />
+                <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
                 <q-btn
-                    color="grey-7"
+                    color="grey"
                     :icon="ICONS.done_all"
                     label="Restore all (skip duplicates)"
                     :loading="restoring"
@@ -230,7 +230,7 @@
         </q-card>
 
         <!-- ── Restore report (shown after a commit) ─────────────────── -->
-        <q-dialog v-model="reportOpen" persistent>
+        <q-dialog v-model="reportOpen">
             <q-card style="min-width: 360px; max-width: 600px">
                 <q-card-section class="row items-center q-gutter-md">
                     <q-icon
@@ -242,7 +242,7 @@
                         <div class="text-h6">
                             {{ report?.ok ? 'Restore complete' : 'Restore failed' }}
                         </div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             {{ report?.headline ?? '' }}
                         </div>
                     </div>
@@ -257,7 +257,7 @@
                             <q-item-section side>
                                 <q-item-label class="text-caption">
                                     <span class="text-positive">+{{ row.created }}</span>
-                                    <span class="text-grey-7"> · {{ row.skipped }} skipped</span>
+                                    <span class="dora-text-secondary"> · {{ row.skipped }} skipped</span>
                                 </q-item-label>
                             </q-item-section>
                         </q-item>
@@ -277,7 +277,7 @@
                     </q-expansion-item>
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat label="Close" @click="reportOpen = false" />
+                    <BaseButton variant="ghost" label="Close" @click="reportOpen = false" />
                     <q-btn
                         v-if="report?.ok"
                         color="primary"
@@ -292,6 +292,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';

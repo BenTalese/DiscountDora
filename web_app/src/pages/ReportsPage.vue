@@ -14,15 +14,15 @@
                 no-caps
                 rounded
                 dense
-                color="grey-3"
-                text-color="grey-9"
+                color="grey"
+                text-color="white"
                 toggle-color="primary"
                 toggle-text-color="white"
                 @update:model-value="loadAll"
             />
         </header>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 

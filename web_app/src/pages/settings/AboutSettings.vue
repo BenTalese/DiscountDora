@@ -6,7 +6,7 @@
             </q-avatar>
             <div>
                 <div class="text-h6" style="font-family: 'Cute Dino'">Discount Dora</div>
-                <div class="text-caption text-grey">Your pantry at your fingertips.</div>
+                <div class="text-caption dora-text-muted">Your pantry at your fingertips.</div>
             </div>
         </q-card-section>
 
@@ -22,7 +22,7 @@
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side>
-                        <q-chip dense color="grey-3" text-color="grey-9">{{ buildLabel }}</q-chip>
+                        <q-chip dense class="dora-bg-sunken dora-text-secondary">{{ buildLabel }}</q-chip>
                     </q-item-section>
                 </q-item>
 
@@ -99,7 +99,7 @@
 
         <q-separator />
 
-        <q-card-section class="text-caption text-grey">
+        <q-card-section class="text-caption dora-text-muted">
             Dora is a hobby project. The mascot is doing its best.
         </q-card-section>
     </q-card>

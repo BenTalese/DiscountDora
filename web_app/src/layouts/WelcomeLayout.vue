@@ -4,7 +4,7 @@
          app furniture. We keep the offline banner because the wizard
          needs the API to seed and complete. -->
     <q-layout view="hHh Lpr lFf">
-        <q-header reveal class="bg-transparent text-grey-9 q-px-md">
+        <q-header reveal class="bg-transparent welcome-header q-px-md">
             <q-toolbar class="welcome-toolbar">
                 <q-avatar square size="36px">
                     <img src="../assets/logo-mascot.png" alt="Discount Dora" />
@@ -51,6 +51,9 @@
 </script>
 
 <style scoped>
+    .welcome-header {
+        color: var(--text-primary);
+    }
     .welcome-toolbar {
         max-width: 960px;
         width: 100%;

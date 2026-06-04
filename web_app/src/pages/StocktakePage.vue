@@ -1,11 +1,10 @@
 <template>
     <div class="q-pa-md q-gutter-md">
-        <div class="row items-center q-gutter-sm">
-            <q-btn flat dense round :icon="ICONS.arrow_back" :to="'/stock'" />
-            <div class="text-h5">Stocktake</div>
-            <q-space />
-            <q-btn flat dense no-caps :icon="ICONS.refresh" label="Refresh" @click="loadQueue" />
-        </div>
+        <PageToolbar title="Stocktake" back-to="/stock">
+            <template #actions>
+                <BaseButton variant="ghost" :icon="ICONS.refresh" label="Refresh" @click="loadQueue" />
+            </template>
+        </PageToolbar>
 
         <q-card flat bordered>
             <q-card-section class="row items-center q-gutter-md">
@@ -20,12 +19,12 @@
                             ? "You're all caught up."
                             : `${overdueCount} item${overdueCount === 1 ? '' : 's'} need a check.` }}
                     </div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Focused review goes through them one at a time. Most-
                         overdue first; tap "Still correct" to confirm a level
                         without changing it.
                     </div>
-                    <div v-if="mostOverdue" class="text-caption text-grey-7 q-mt-xs">
+                    <div v-if="mostOverdue" class="text-caption dora-text-muted-7 q-mt-xs">
                         Top of the queue:
                         <strong>{{ mostOverdue.name }}</strong>
                         <span v-if="mostOverdue.overdue_days > 0">
@@ -74,7 +73,7 @@
                         </q-item-section>
                     </q-item>
                 </q-list>
-                <div v-if="queue.length > 10" class="text-caption text-grey q-mt-sm">
+                <div v-if="queue.length > 10" class="text-caption dora-text-muted q-mt-sm">
                     …and {{ queue.length - 10 }} more.
                 </div>
             </q-card-section>
@@ -84,6 +83,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
+    import PageToolbar from 'src/components/PageToolbar.vue';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import StocktakeApiService, { type StocktakeQueueItem } from 'src/services/api/stocktakeApiService';

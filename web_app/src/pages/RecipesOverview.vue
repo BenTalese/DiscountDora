@@ -2,24 +2,21 @@
     <div class="q-pa-md">
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 {{ filteredRecipes.length }} of {{ recipes.length }} shown
                 · {{ cookableNowCount }} cookable now
             </div>
             <q-space />
-            <q-btn
-                no-caps
-                :outline="!compareMode"
-                :color="compareMode ? 'primary' : undefined"
+            <BaseButton
+                :variant="compareMode ? 'primary' : 'secondary'"
                 :label="compareMode ? `Comparing (${selectedIds.size}/3)` : 'Compare'"
                 :icon="ICONS.compare"
                 class="q-mr-sm"
                 @click="toggleCompareMode"
             />
-            <q-btn
+            <BaseButton
                 v-if="compareMode"
-                color="primary"
-                no-caps
+                variant="primary"
                 label="Show comparison"
                 :icon="ICONS.open_in_new"
                 class="q-mr-sm"
@@ -37,10 +34,9 @@
             >
                 <template #append><q-icon :name="ICONS.search" /></template>
             </q-input>
-            <q-btn
-                color="positive"
+            <BaseButton
+                variant="primary"
                 :icon="ICONS.add"
-                no-caps
                 label="New recipe"
                 @click="onCreateClick"
             />
@@ -152,7 +148,7 @@
              between the SPA and Dora. -->
         <div
             v-if="(dietaryTagsInclude.length > 0 || dietaryTagsExclude.length > 0 || ingredientExclude.length > 0) && tagCatalogue?.disclaimer"
-            class="text-caption text-grey q-mb-md"
+            class="text-caption dora-text-muted q-mb-md"
         >
             <q-icon name="info" size="14px" class="q-mr-xs" />
             {{ tagCatalogue.disclaimer }}
@@ -166,7 +162,7 @@
         <div v-else key="rec-content">
             <div
                 v-if="filteredRecipes.length === 0"
-                class="text-center text-grey q-py-xl"
+                class="text-center dora-text-muted q-py-xl"
             >
                 <q-icon :name="ICONS.menu_book" size="60px" class="q-mb-sm" />
                 <div>No recipes match the current filters.</div>
@@ -233,7 +229,7 @@
             <q-card style="min-width: 380px; max-width: 480px">
                 <q-card-section>
                     <div class="text-h6">Add to a shopping list</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ addMissingPayload?.stockItemIds.length ?? 0 }}
                         item{{
                             (addMissingPayload?.stockItemIds.length ?? 0) === 1 ? '' : 's'
@@ -290,7 +286,7 @@
                             <q-card flat bordered class="full-height">
                                 <q-card-section>
                                     <div class="text-subtitle1">{{ recipe.name }}</div>
-                                    <div class="text-caption text-grey">
+                                    <div class="text-caption dora-text-muted">
                                         <span v-if="recipe.cuisine">{{ recipe.cuisine }}</span>
                                         <span v-if="recipe.cuisine && recipe.category"> · </span>
                                         <span v-if="recipe.category">{{ recipe.category }}</span>
@@ -332,7 +328,7 @@
                                 </q-list>
                                 <q-separator />
                                 <q-card-section>
-                                    <div class="text-caption text-grey q-mb-xs">
+                                    <div class="text-caption dora-text-muted q-mb-xs">
                                         Ingredients
                                     </div>
                                     <q-chip
@@ -367,6 +363,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -730,7 +727,6 @@
             title: 'Delete recipe',
             message: `Delete "${recipe.name}"? This cannot be undone.`,
             cancel: true,
-            persistent: true,
         }).onOk(() => {
             void recipeStore.deleteRecipeAsync(recipeId);
         });

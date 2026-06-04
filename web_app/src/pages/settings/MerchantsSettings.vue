@@ -3,7 +3,7 @@
         <q-card-section class="row items-center q-gutter-sm">
             <div>
                 <div class="text-h6">Merchant providers</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Toggle which supermarkets are searched when you look up products.
                     Disabled merchants are skipped without raising errors.
                 </div>
@@ -31,10 +31,10 @@
             </q-btn>
         </q-card-section>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
             {{ loadError }}
             <template #action>
-                <q-btn flat no-caps label="Retry" @click="loadAll" />
+                <BaseButton variant="ghost" label="Retry" @click="loadAll" />
             </template>
         </q-banner>
 
@@ -50,7 +50,7 @@
             >
                 Merchant API · {{ apiHealthLabel }}
             </q-chip>
-            <span class="text-caption text-grey" v-if="lastCheckedLabel">
+            <span class="text-caption dora-text-muted" v-if="lastCheckedLabel">
                 Providers last checked {{ lastCheckedLabel }}
             </span>
         </q-card-section>
@@ -62,8 +62,9 @@
             <q-item v-for="merchant in merchants" :key="merchant.name" class="q-py-md">
                 <q-item-section avatar>
                     <q-avatar
-                        :color="merchant.is_enabled ? 'amber-3' : 'grey-3'"
-                        text-color="grey-10"
+                        :color="merchant.is_enabled ? 'accent' : undefined"
+                        :class="merchant.is_enabled ? '' : 'dora-bg-sunken dora-text-secondary'"
+                        :text-color="merchant.is_enabled ? 'dark' : undefined"
                         size="42px"
                     >
                         {{ merchant.name.substring(0, 1).toUpperCase() }}
@@ -76,7 +77,7 @@
                             v-if="providerForMerchant(merchant.name)"
                             :health="providerForMerchant(merchant.name)!"
                         />
-                        <span v-else class="text-grey">
+                        <span v-else class="dora-text-muted">
                             No provider reachable for this merchant.
                         </span>
                     </q-item-label>
@@ -88,7 +89,7 @@
                         @update:model-value="onToggle(merchant)"
                     >
                         <template #default>
-                            <span class="text-caption text-grey q-ml-sm">
+                            <span class="text-caption dora-text-muted q-ml-sm">
                                 {{ merchant.is_enabled ? 'Enabled' : 'Disabled' }}
                             </span>
                         </template>
@@ -98,7 +99,7 @@
 
             <q-item v-if="!loading && merchants.length === 0">
                 <q-item-section>
-                    <q-item-label class="text-grey text-caption">
+                    <q-item-label class="dora-text-muted text-caption">
                         No merchants configured. Make sure the merchant_api is running
                         on port 5172 and accessible from this host.
                     </q-item-label>
@@ -116,7 +117,7 @@
             class="q-pt-md"
         >
             <div class="text-subtitle2 q-mb-sm">Other providers</div>
-            <div class="text-caption text-grey q-mb-sm">
+            <div class="text-caption dora-text-muted q-mb-sm">
                 Reachable scraper endpoints with no matching configured merchant.
             </div>
             <div class="row q-gutter-sm">
@@ -135,6 +136,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import MerchantManagementApiService, {

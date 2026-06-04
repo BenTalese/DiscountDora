@@ -10,14 +10,14 @@
                 :icon="isExpanded ? ICONS.expand_more : ICONS.chevron_right"
                 @click="$emit('toggle', node.location_id)"
             />
-            <q-icon v-else :name="kindIcon" size="18px" color="grey-6" />
+            <q-icon v-else :name="kindIcon" size="18px" color="grey" />
         </q-item-section>
 
         <q-item-section>
             <q-item-label v-if="editingId !== node.location_id" class="row items-center">
-                <q-icon v-if="canHaveChildren" :name="kindIcon" size="16px" class="q-mr-xs" color="grey-7" />
+                <q-icon v-if="canHaveChildren" :name="kindIcon" size="16px" class="q-mr-xs" color="grey" />
                 <span>{{ node.name }}</span>
-                <q-chip dense square size="sm" color="grey-3" text-color="grey-8" class="q-ml-sm">
+                <q-chip dense square size="sm" color="grey" text-color="white" class="q-ml-sm">
                     {{ node.kind }}
                 </q-chip>
             </q-item-label>

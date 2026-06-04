@@ -36,7 +36,7 @@
             position: absolute;
             inset: 6px;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--overlay-hover-on-coloured);
             opacity: 0;
             transform: scale(0.85);
             transition: opacity 0.25s ease, transform 0.25s ease;

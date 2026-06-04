@@ -5,6 +5,178 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **A2 — Standard button (Phase 2: detail-page toolbars + dialog footers
+  + onboarding + auth/settings/data).** Migrated approximately 95
+  `q-btn` instances across 20 additional files to `BaseButton`. App-wide
+  count: 399 → 304 `q-btn` usages (the remainder are inline list-row
+  buttons, `q-btn-dropdown`, `q-btn-toggle`, and `q-btn` instances
+  inside `q-input` append slots — all out of scope for the standard-
+  button base).
+  - Detail-page toolbars + dialog footers: `StockItemDetailPage` (back,
+    9 toolbar actions, delete kept as q-btn for flat-negative pattern,
+    QR dialog Close/Print, Reset/Save form pair, Link product, Add
+    substitute), `RecipeDetailPage` (back, favourite toggle, menu
+    trigger, Save, three dialog Cancel/CTA pairs), `ShoppingListDetail`
+    (back, rename, Shop mode, Set primary, more-menu, Review/Start/Stop/
+    Finish actions, Copy-to-new), `ShoppingListShopMode` (price-editor
+    Clear/Cancel/Save + offer-picker Close), `RecipeCookMode` (Exit,
+    voice and mic toggles, finish dialog Skip/Done).
+  - Dialog components: `RecipeEditDialog`, `MealPlanEditDialog` (each:
+    Add-row icon, Add line, Cancel, Save). `CreateStockItemDialog`,
+    `BulkMoveLocationDialog` (Cancel/CTA).
+  - Onboarding: `WelcomeWizard` Skip everything, step "I'll do this
+    later" / Add stock item, tour "Show me" cards, Back/Next footer.
+  - Auth: `ForgotPasswordPage`, `ResetPasswordPage`,
+    `ConfirmEmailChangePage`, `VerifyEmailPage` (continue/resend/cancel
+    + resend dialog Send).
+  - Settings: `UsersAdminSettings` (close-icon + Cancel/Done),
+    `AuditLogSettings` (close + Close), `MerchantsSettings` (Retry).
+  - Data: `BackupRestore` (Select all / Clear selection / Cancel /
+    Close), `DataImport` (Cancel / Close), `BarcodesQR` (Close).
+- **A2 — Standard button + page toolbar (Phase 1: components + main-page toolbars).**
+  Built two new shared components and migrated the top-of-page toolbars on
+  the six main overview / index pages. Inline q-btns elsewhere left as-is —
+  scoped to top-of-page CTAs in this pass.
+  - New: `web_app/src/components/BaseButton.vue`. Wraps `q-btn` with a
+    fixed 36px height (for toolbar alignment) and five variants:
+    `primary` (filled brand) | `secondary` (outlined brand) | `ghost`
+    (flat, page-text colour) | `danger` (filled negative) | `icon` (round
+    flat, square 36×36). Plus an `attention` boolean modifier that adds
+    a pulsing brand-accent glow (the stocktake-button "look at me" effect).
+    Honours `prefers-reduced-motion` (animation off → static glow).
+  - New: `web_app/src/components/PageToolbar.vue`. Standard left-title /
+    optional back-arrow / right-actions-slot row. Replaces ad-hoc header
+    div rows on pages that already had a title pattern.
+  - Migrated page toolbars: `StockOverview` (4 buttons + empty-state CTA),
+    `RecipesOverview` (3 buttons), `MealPlansOverview` (2 buttons),
+    `MyProductsPage` (2 buttons), `ShoppingListTemplates` (1 button),
+    `StocktakePage` (wrapped header in PageToolbar, Refresh → BaseButton).
+    Stocktake "glow when overdue" hand-rolled CSS removed — now uses
+    BaseButton's `:attention="stocktakeOverdue > 0"` instead.
+  - Convention: **"New X" CTAs use `variant="primary"` (brand colour),
+    not `color="positive"` (green semantic).** Decouples create-action
+    from success-semantic so Cherry Cola's "New" reads brand-red, not
+    green. ShoppingListsOverview was already on `color="primary"` —
+    untouched (uses `q-btn-dropdown` split-button which is out of
+    BaseButton scope).
+- **A1b — Token value tuning, round 2 (Pesto Dark + dual-source sync).**
+  Pesto Dark green was still too vibrant after round 1 — toned further:
+  `--brand-primary` / `--brand-accent` / `--semantic-positive` from
+  `hsl(150 62% 50%)` to `hsl(150 48% 40%)`; `--chart-1` to `hsl(150 48% 45%)`;
+  Dora halo tokens retuned to match. White button labels and dark chip
+  text now contrast comfortably (white-on-darker-green ~5.5:1 AA pass).
+  Pesto Dark `--text-secondary` lifted `hsl(205 12% 67%)` → `hsl(205 14% 78%)`
+  and `--text-muted` `hsl(205 10% 55%)` → `hsl(205 12% 66%)` so captions /
+  subtitles pop on the dark page.
+  - **Caught a dual-source bug:** `web_app/src/services/themeService.ts`
+    holds a parallel `THEMES` palette dict that `setCssVar` writes into
+    `--q-*` on every theme switch. Quasar's `color="primary"` / `bg-positive`
+    components ride `--q-primary` / `--q-positive`, so the new values in
+    `themes.scss` were getting overwritten by the stale themeService values
+    on theme apply. Synced the Pesto, Pesto Dark, and Lemon Tart Dark
+    palette entries so the Quasar-driven path matches the CSS-driven path.
+    (The dual-source warning lives in the themeService comment — flagged
+    for collapse into a single source in a future refactor.)
+- **A1b — Token value tuning.** Pure-value sweep over `tokens.scss` and
+  `themes.scss` (plus three template clean-ups that became possible once the
+  underlying tokens flipped).
+  - Added two missing tokens to `tokens.scss`: `--overlay-hover-on-coloured`
+    / `--overlay-active-on-coloured` (light veils for hover on saturated
+    brand surfaces — toolbar, main-menu strip) and `--highlight-search`
+    (alpha-blended search-match background, theme-tinted via
+    `color-mix(var(--brand-accent) 40%, transparent)`).
+  - Rewired `MainMenuButton.vue` hover veil to `--overlay-hover-on-coloured`
+    (was `rgba(255,255,255,0.08)`). Rewired `CommandPalette.vue` `.cp-hl`
+    matched-substring background to `--highlight-search` (was raw rgba).
+    Rewired `CommandPalette.vue` `.cp-row--selected` to `color-mix(in srgb,
+    var(--brand-primary) 12%, transparent)` so the selection band picks up
+    the active brand.
+  - Deleted the `.body--dark` overrides in `CommandPalette.vue:404,428` and
+    `ShortcutsCheatsheet.vue:85` — they were legacy workarounds for a
+    token-flip gap that no longer exists (`--overlay-hover` already flips
+    per dark theme in `themes.scss`).
+  - `--ring-focus` is now theme-aware in every theme via
+    `color-mix(in srgb, var(--brand-primary) 35%, transparent)` (45% in
+    Pesto Dark). Previously hardcoded to Pesto-green hsla in every theme.
+  - Pesto: `--brand-primary` saturation toned from `hsl(150 76% 39%)` to
+    `hsl(150 60% 36%)` — fixes the "add" / cookable green that read too
+    bright across the app.
+  - Pesto Dark: `--brand-primary`, `--brand-accent`, `--semantic-positive`,
+    `--chart-1` toned from `hsl(150 75% 55%)` to `hsl(150 62% 50%)` —
+    fixes the unreadable green chips (connections / stores / well-stocked).
+    Dora halo tokens retuned to match the new brand value.
+  - Lemon Tart Dark: `--semantic-warning` toned from `hsl(46 100% 55%)`
+    (pure yellow at 100% saturation) to `hsl(40 90% 60%)` — readable
+    warning chips again.
+  - Cherry Cola Dark + Sourdough Dark: Dora halo alpha dropped (0.28→0.22,
+    0.50→0.40, 0.55→0.42 etc.) so the dora-glow doesn't overpower the
+    rest of the chrome.
+  - `--text-muted` (Pesto defaults + `[data-theme="pesto"]` override) bumped
+    from `hsl(168 8% 50%)` to `hsl(168 10% 42%)` — fixes the borderline
+    AA contrast against `--surface-page`.
+- **A1 STEP 2 — Theme token-compliance (Chunks D, G, C, B, E, H, F).**
+  Completed the audit's remaining chunk list in one pass: recipes/cook (D),
+  settings (G), products/price-history (C — minimal-touch per master Decision
+  1; surface is companion-bound), stock (B), meal-plans/shopping (E),
+  dashboard/reports/waste/data (H), and Dora chat/help (F). All Quasar
+  numbered palette classes (`text-grey-7`, `bg-red-1`, …) and palette
+  `color=` / `text-color=` / `track-color=` props swapped for semantic
+  tokens or theme-aware Quasar semantics (`text-positive`, `bg-negative`,
+  `color="warning"`, etc.). Hardcoded `rgba(23,176,115,…)` / `rgba(74,56,26,…)`
+  literals routed through tokens via `color-mix(in srgb, var(--token) X%,
+  transparent)`. Dashboard ink-shadows now use `var(--elevation-card[-hover])`
+  (DEC-11). StockOverview's "just-added" pulse now uses `var(--brand-accent)`
+  (DEC-7). MainMenuButtonStrip indicator glow uses `var(--brand-accent)` at
+  α 55% (DEC-6).
+  - **DEC-3 implemented:** added `--dora-disc-bg` / `--dora-halo` /
+    `--dora-halo-strong` tokens to `tokens.scss` (Pesto defaults) plus
+    per-theme overrides in `themes.scss` for all 10 theme variants.
+    `DoraBubble.vue`'s disc backdrop and `DoraChat.vue`'s header / bubble
+    gradients now ride these. The `.body--dark` workaround blocks for the
+    bubble disc / chat bubble / chat thinking spinner removed — the tokens
+    flip per theme automatically.
+  - **Charts:** `usePriceHistoryPalette.ts` now reads `--chart-1`…`-5` from
+    CSS at call time (with HSL fallbacks for SSR / pre-paint).
+    `TrendSparkline.vue` reads `--semantic-positive`/`-negative` the same
+    way. `PriceHistoryChart.vue` SVG strokes/fills moved to CSS classes
+    (`.chart-gridline`/`.chart-axis-label`/`.chart-crosshair`) so they
+    ride `--divider` / `--text-muted` / `--border-strong`.
+  - **Accepted carve-outs:** brand-logo hex (Aldi/Coles/IGA),
+    `ProductSearchCard.vue`'s deterministic-hash category swatch (DEC-8),
+    `MerchantLogo.vue` placeholder (DEC-9), `ScanOverlay.vue` rings
+    (DEC-4), `pages/settings/PreferencesSettings.vue:65,73` theme-picker
+    swatches (DEC-10), and the canvas/EChart `read('--token', '#hex')`
+    fallback pattern in `ReportsPage.vue` / `DashboardPage.vue` (the hex
+    only paints if the token read fails, which it never does in this
+    codebase).
+  - **Deferred to A1b** (filed in `web_app/THEME_AUDIT.md §6b` and the
+    new DEC-A-1 / DEC-A-2): `--overlay-hover` theme-flip + a
+    `--highlight-search` alpha token, so `CommandPalette` /
+    `ShortcutsCheatsheet` `.body--dark` overrides can be deleted later.
+- **A1 STEP 2 — Theme token-compliance (Chunk I: onboarding).** Repainted
+  `pages/onboarding/WelcomeWizard.vue` — all `text-grey*`, `bg-red-1` banner,
+  and grey-shaded skip-button/icon colours now ride the semantic tokens
+  introduced in Chunk A. Also dropped `track-color="grey-3"` from the step
+  progress bar so the track theme-flips automatically.
+- **A1 STEP 2 — Theme token-compliance (Chunk A: auth/shell).** Replaced
+  hardcoded Quasar palette classes (`text-grey`, `bg-red-1`, `bg-grey-2`,
+  etc.) and pinned colour literals with semantic design tokens across the
+  always-on chrome and auth pages. No visible behaviour change in light mode;
+  dark themes (Pesto Dark, Cherry Cola Dark, etc.) now read correctly on
+  these surfaces. Added a small `dora-*` helper-class set in
+  `web_app/src/css/colours.scss` (`dora-text-muted`, `dora-text-secondary`,
+  `dora-bg-sunken/elevated`, `dora-bg-{positive,negative,warning,info}-soft`,
+  `dora-text-on-{primary,toolbar}`) — these are reused by future chunks
+  B–I. Files touched: `OfflineBanner.vue`, `PageErrorState.vue`,
+  `CommandPalette.vue`, `AlertsBell.vue`, `PwaInstallPrompt.vue`,
+  `ShortcutsCheatsheet.vue`, `FormErrorSummary.vue`, `MainMenuButtonStrip.vue`,
+  `ErrorNotFound.vue`, `ForgotPasswordPage.vue`, `ResetPasswordPage.vue`,
+  `VerifyEmailPage.vue`, `ConfirmEmailChangePage.vue`, `SettingsShell.vue`,
+  `WelcomeLayout.vue`. `LoginPage.vue` deliberately excluded (its `--lp-*`
+  splash ladder is kept as intentional per DEC-2). Audit + chunk plan at
+  `web_app/THEME_AUDIT.md`.
+
 ### Added
 - **P2-13 — Voice-first Dora + hands-free cook mode.** Extracted the
   ad-hoc voice handling from `RecipeCookMode.vue` into two reusable

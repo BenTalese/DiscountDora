@@ -2,20 +2,18 @@
     <div class="q-pa-md">
         <!-- Header bar ───────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn color="positive" :icon="ICONS.add" label="New item" no-caps @click="onCreateClick" />
-            <q-btn
-                outline
+            <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.qr_code_scanner"
                 label="Scan"
-                no-caps
                 @click="overviewScanOpen = true"
             />
-            <q-btn
-                outline
-                no-caps
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.fact_check"
                 :label="stocktakeOverdue > 0 ? `Stocktake (${stocktakeOverdue})` : 'Stocktake'"
-                :class="stocktakeOverdue > 0 ? 'stocktake-glow' : ''"
+                :attention="stocktakeOverdue > 0"
                 to="/stocktake"
             />
             <q-btn-dropdown flat no-caps :icon="ICONS.more_horiz" label="Export">
@@ -59,28 +57,28 @@
         >
             <div class="stock-summary-stat">
                 <div class="text-h6">{{ stockItems.length }}</div>
-                <div class="text-caption text-grey">total items</div>
+                <div class="text-caption dora-text-muted">total items</div>
             </div>
             <q-separator vertical />
             <div class="stock-summary-stat">
-                <div class="text-h6 text-orange-9">{{ filters.summaryCounts.value.low }}</div>
-                <div class="text-caption text-grey">low stock</div>
+                <div class="text-h6 text-warning">{{ filters.summaryCounts.value.low }}</div>
+                <div class="text-caption dora-text-muted">low stock</div>
             </div>
             <div class="stock-summary-stat">
-                <div class="text-h6 text-red-7">{{ filters.summaryCounts.value.out }}</div>
-                <div class="text-caption text-grey">out of stock</div>
+                <div class="text-h6 text-negative">{{ filters.summaryCounts.value.out }}</div>
+                <div class="text-caption dora-text-muted">out of stock</div>
             </div>
             <q-separator vertical />
             <div class="stock-summary-stat">
-                <div class="text-h6 text-amber-9">{{ filters.summaryCounts.value.essentials }}</div>
-                <div class="text-caption text-grey">essentials</div>
+                <div class="text-h6 text-warning">{{ filters.summaryCounts.value.essentials }}</div>
+                <div class="text-caption dora-text-muted">essentials</div>
             </div>
             <div class="stock-summary-stat">
                 <div class="text-h6 text-secondary">{{ filters.summaryCounts.value.open }}</div>
-                <div class="text-caption text-grey">open / in-use</div>
+                <div class="text-caption dora-text-muted">open / in-use</div>
             </div>
             <q-space />
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 {{ filters.filteredStockItems.value.length }} of {{ stockItems.length }} shown
             </div>
         </div>
@@ -107,14 +105,14 @@
                     class="q-mr-xs"
                 />
                 {{ level.name }}
-                <q-badge floating color="grey-3" text-color="grey-9">
+                <q-badge floating color="grey" text-color="white">
                     {{ filters.countByLevel.value.get(level.stock_level_id) ?? 0 }}
                 </q-badge>
             </q-chip>
 
             <q-separator vertical class="q-mx-sm" />
 
-            <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="amber-9">
+            <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="warning">
                 Flagged for auto
             </FilterChip>
 
@@ -204,7 +202,7 @@
         </div>
 
         <!-- Bulk action bar ───────────────────────────────────────────── -->
-        <q-banner v-if="bulkMode" class="bg-primary text-white q-mb-md" dense rounded>
+        <q-banner v-if="bulkMode" class="bg-primary dora-text-on-primary q-mb-md" dense rounded>
             <template #avatar>
                 <q-icon :name="ICONS.checklist" />
             </template>
@@ -288,15 +286,15 @@
                     </ListTransition>
 
                     <!-- Empty state ───────────────────────────────────── -->
-                    <q-banner v-else class="bg-grey-2 q-mt-md" rounded>
+                    <q-banner v-else class="dora-bg-sunken q-mt-md" rounded>
                         <template v-if="stockItems.length === 0">
                             <div class="text-subtitle1 q-mb-sm">Your pantry is empty.</div>
-                            <div class="text-body2 q-mb-md text-grey-8">
+                            <div class="text-body2 q-mb-md dora-text-secondary">
                                 Start by adding an item, or build your pantry from things you
                                 already track elsewhere.
                             </div>
                             <div class="q-gutter-sm">
-                                <q-btn color="positive" :icon="ICONS.add" no-caps label="New item" @click="onCreateClick" />
+                                <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
                                 <q-btn
                                     outline
                                     color="primary"
@@ -358,6 +356,7 @@
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
@@ -702,15 +701,5 @@
     .stock-peek {
         max-height: 80vh;
         overflow-y: auto;
-    }
-    /* X1: glow the Stocktake button when items need attention so the
-       user notices it at a glance from the overview. */
-    .stocktake-glow {
-        animation: stocktake-pulse 2s ease-in-out infinite;
-        border-color: var(--brand-primary) !important;
-    }
-    @keyframes stocktake-pulse {
-        0%, 100% { box-shadow: 0 0 0 0 var(--ring-focus); }
-        50%      { box-shadow: 0 0 0 8px rgba(245, 196, 98, 0); }
     }
 </style>

@@ -5,7 +5,7 @@
             <q-card flat bordered>
                 <q-card-section>
                     <div class="text-subtitle1">Pick products</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Compare up to 5 products' price history side by side.
                     </div>
                 </q-card-section>
@@ -23,8 +23,8 @@
                     </q-input>
                 </q-card-section>
                 <q-card-section class="q-pt-none">
-                    <div class="text-caption text-grey-7 q-mb-xs">Selected</div>
-                    <div v-if="selectedIds.length === 0" class="text-caption text-grey-5">
+                    <div class="text-caption dora-text-muted-7 q-mb-xs">Selected</div>
+                    <div v-if="selectedIds.length === 0" class="text-caption dora-text-muted-5">
                         Pick from the list below.
                     </div>
                     <div v-else>
@@ -71,7 +71,7 @@
                             </q-item-section>
                         </q-item>
                         <q-item v-if="filteredCandidates.length === 0">
-                            <q-item-section class="text-grey-5 text-caption">
+                            <q-item-section class="dora-text-muted text-caption">
                                 No products match.
                             </q-item-section>
                         </q-item>
@@ -91,7 +91,7 @@
                     dense
                     flat
                     no-caps
-                    color="grey-7"
+                    color="grey"
                     toggle-color="primary"
                 />
                 <q-btn
@@ -126,7 +126,7 @@
                                 />
                                 <div class="col">
                                     <div class="text-subtitle2">{{ s.name }}</div>
-                                    <div class="text-caption text-grey-7">
+                                    <div class="text-caption dora-text-muted-7">
                                         {{ s.merchant }}
                                     </div>
                                 </div>
@@ -146,7 +146,7 @@
                                     -{{ s.current.deal_pct }}%
                                 </q-chip>
                             </div>
-                            <div v-if="s.all_time_low" class="text-caption text-grey-7">
+                            <div v-if="s.all_time_low" class="text-caption dora-text-muted-7">
                                 All-time low:
                                 <strong>${{ s.all_time_low.unit_price.toFixed(2) }}</strong>
                                 <span v-if="aboveLowPct(s) !== null">
@@ -154,7 +154,7 @@
                                 </span>
                             </div>
                         </q-card-section>
-                        <q-card-section v-else class="text-caption text-grey-5">
+                        <q-card-section v-else class="text-caption dora-text-muted-5">
                             No data yet.
                         </q-card-section>
                         <q-separator />
@@ -193,7 +193,7 @@
                     <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-separator />
-                <q-card-section v-if="alerts.length === 0" class="text-grey-7">
+                <q-card-section v-if="alerts.length === 0" class="dora-text-secondary">
                     No active alerts yet.
                 </q-card-section>
                 <q-list v-else separator>

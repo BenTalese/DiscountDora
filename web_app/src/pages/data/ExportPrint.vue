@@ -1,6 +1,6 @@
 <template>
     <div class="q-gutter-md">
-        <q-banner class="bg-grey-2 text-grey-8 text-caption" dense rounded>
+        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
             <template #avatar>
                 <q-icon :name="ICONS.info" size="18px" />
             </template>
@@ -21,18 +21,18 @@
                     :options="listFilterOptions"
                     dense
                     flat
-                    color="grey-7"
+                    color="grey"
                     toggle-color="primary"
                 />
             </q-card-section>
             <q-separator />
             <q-card-section v-if="loadingLists" class="row items-center q-gutter-sm">
                 <q-spinner size="20px" />
-                <div class="text-caption text-grey">Loading lists…</div>
+                <div class="text-caption dora-text-muted">Loading lists…</div>
             </q-card-section>
             <q-card-section
                 v-else-if="filteredShoppingLists.length === 0"
-                class="text-grey-7"
+                class="dora-text-secondary"
             >
                 <div v-if="(shoppingListStore.summaries ?? []).length === 0">
                     No shopping lists yet.
@@ -65,8 +65,8 @@
                                 v-if="list.is_archived"
                                 dense
                                 size="sm"
-                                color="grey-5"
-                                text-color="grey-9"
+                                color="grey"
+                                text-color="white"
                                 class="q-ml-sm"
                             >
                                 Archived
@@ -125,11 +125,11 @@
             <q-separator />
             <q-card-section v-if="loadingRecipes" class="row items-center q-gutter-sm">
                 <q-spinner size="20px" />
-                <div class="text-caption text-grey">Loading recipes…</div>
+                <div class="text-caption dora-text-muted">Loading recipes…</div>
             </q-card-section>
             <q-card-section
                 v-else-if="filteredRecipes.length === 0"
-                class="text-grey-7"
+                class="dora-text-secondary"
             >
                 <div v-if="(recipeStore.recipes ?? []).length === 0">
                     No recipes yet.
@@ -151,8 +151,8 @@
                                 v-if="recipe.is_favourite"
                                 dense
                                 size="sm"
-                                color="amber-3"
-                                text-color="grey-9"
+                                color="warning"
+                                text-color="white"
                                 class="q-ml-sm"
                             >
                                 ★
@@ -197,7 +197,7 @@
                     <q-icon name="inventory_2" size="24px" class="text-primary" />
                     <div>
                         <div class="text-h6">Stock overview</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             Every stock item, grouped by location — handy as a
                             stocktake printout.
                         </div>
@@ -234,7 +234,7 @@
             <q-separator />
             <q-card-section
                 v-if="(mealStore.mealPlans ?? []).length === 0"
-                class="text-grey-7"
+                class="dora-text-secondary"
             >
                 No meal plans yet.
                 <router-link to="/meal-plans">Create one</router-link>

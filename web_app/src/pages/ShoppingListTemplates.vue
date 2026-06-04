@@ -2,20 +2,19 @@
     <q-page padding>
         <div class="row items-center q-mb-md">
             <q-btn flat round dense :icon="ICONS.arrow_back" @click="goBack" />
-            <div class="q-ml-sm col text-caption text-grey">
+            <div class="q-ml-sm col text-caption dora-text-muted">
                 Saved list shapes you can drop into a new shop in one click.
                 {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
             </div>
-            <q-btn
-                color="primary"
-                no-caps
+            <BaseButton
+                variant="primary"
                 :icon="ICONS.add"
                 label="New template"
                 @click="onCreate"
             />
         </div>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -23,7 +22,7 @@
             <q-spinner color="primary" size="48px" />
         </div>
 
-        <div v-else-if="templates.length === 0" class="text-center text-grey q-py-xl">
+        <div v-else-if="templates.length === 0" class="text-center dora-text-muted q-py-xl">
             <q-icon :name="ICONS.bookmarks" size="60px" class="q-mb-sm" />
             <div>
                 No templates yet. Create one to capture a recurring shop pattern
@@ -55,7 +54,7 @@
                                     @keydown.esc.prevent="editingId = null"
                                 />
                             </div>
-                            <div class="text-caption text-grey">
+                            <div class="text-caption dora-text-muted">
                                 {{ template.line_count }} item{{ template.line_count === 1 ? '' : 's' }}
                                 · updated {{ formatDate(template.updated_at) }}
                             </div>
@@ -82,7 +81,7 @@
                                         @click="onUse(template, true)"
                                     >
                                         <q-item-section avatar>
-                                            <q-icon :name="ICONS.star" color="amber-9" />
+                                            <q-icon :name="ICONS.star" color="warning" />
                                         </q-item-section>
                                         <q-item-section>
                                             <q-item-label>Use as primary</q-item-label>
@@ -138,7 +137,7 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="col">
                         <div class="text-h6">{{ editingDetail?.name ?? 'Loading…' }}</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             {{ editingDetail?.lines.length ?? 0 }} item{{
                                 editingDetail?.lines.length === 1 ? '' : 's'
                             }}
@@ -168,7 +167,7 @@
                     >
                         <template #no-option>
                             <q-item>
-                                <q-item-section class="text-grey">
+                                <q-item-section class="dora-text-muted">
                                     No matching stock items.
                                 </q-item-section>
                             </q-item>
@@ -229,7 +228,7 @@
                             </q-item-section>
                         </q-item>
                         <q-item v-if="editingDetail.lines.length === 0">
-                            <q-item-section class="text-grey text-center">
+                            <q-item-section class="dora-text-muted text-center">
                                 No items on this template yet.
                             </q-item-section>
                         </q-item>
@@ -248,6 +247,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { useQuasar } from 'quasar';
     import type {
         TemplateDetail,
@@ -372,7 +372,6 @@
                 title: `Delete "${template.name}"?`,
                 message: 'This removes the template. Shopping lists previously created from it are unaffected.',
                 cancel: true,
-                persistent: true,
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

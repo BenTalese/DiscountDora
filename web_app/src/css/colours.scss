@@ -25,3 +25,23 @@
 .dora-colour-component {
     background-color: var(--q-component);
 }
+
+// ── DS1 semantic helpers (A1 STEP 2 — used by Chunks A–I) ────────────
+// Quasar's `text-positive/negative/warning/info` already ride the
+// themeService-set --q-* vars, so use those directly for semantic ink.
+// These helpers cover the rest: muted/secondary text, surface tints,
+// soft semantic backgrounds, and on-toolbar text. Prefixed `dora-` to
+// avoid colliding with Quasar's own `text-secondary` (brand secondary).
+.dora-text-muted       { color: var(--text-muted) !important; }
+.dora-text-secondary   { color: var(--text-secondary) !important; }
+.dora-text-on-toolbar  { color: var(--text-on-toolbar) !important; }
+.dora-text-on-primary  { color: var(--text-on-primary) !important; }
+
+.dora-bg-page          { background-color: var(--surface-page) !important; }
+.dora-bg-sunken        { background-color: var(--surface-sunken) !important; }
+.dora-bg-elevated      { background-color: var(--surface-elevated) !important; }
+
+.dora-bg-positive-soft { background-color: var(--semantic-positive-soft) !important; }
+.dora-bg-negative-soft { background-color: var(--semantic-negative-soft) !important; }
+.dora-bg-warning-soft  { background-color: var(--semantic-warning-soft) !important; }
+.dora-bg-info-soft     { background-color: var(--semantic-info-soft) !important; }

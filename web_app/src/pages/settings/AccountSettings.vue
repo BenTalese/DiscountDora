@@ -2,19 +2,19 @@
     <q-card flat bordered>
         <q-card-section>
             <div class="text-h6">Account</div>
-            <div class="text-caption text-grey">Your sign-in identity.</div>
+            <div class="text-caption dora-text-muted">Your sign-in identity.</div>
         </q-card-section>
 
         <q-separator />
 
         <q-card-section v-if="currentUser">
             <div class="row items-center q-gutter-md">
-                <q-avatar size="60px" color="amber-3" text-color="grey-10">
+                <q-avatar size="60px" color="accent" text-color="dark">
                     {{ initials }}
                 </q-avatar>
                 <div>
                     <div class="text-h6">{{ currentUser.username }}</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         {{ currentUser.email ?? 'No email on file.' }}
                     </div>
                 </div>
@@ -31,7 +31,7 @@
         </q-card-section>
 
         <q-card-section v-else>
-            <q-banner class="bg-grey-2" dense>Not signed in.</q-banner>
+            <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
         </q-card-section>
 
         <q-separator />
@@ -39,7 +39,7 @@
         <!-- ── Onboarding (F1) ─────────────────────────────────── -->
         <q-card-section>
             <div class="text-subtitle2 q-mb-sm">First-run wizard</div>
-            <div class="text-caption text-grey q-mb-md">
+            <div class="text-caption dora-text-muted q-mb-md">
                 Want to revisit the welcome tour? This sends you back to
                 /welcome — nothing in your data is touched, you'll just
                 step through the prompts again.
@@ -58,7 +58,7 @@
 
         <q-card-section>
             <div class="text-subtitle2 q-mb-sm">Danger zone</div>
-            <div class="text-caption text-grey q-mb-md">
+            <div class="text-caption dora-text-muted q-mb-md">
                 Sign out of this device. Your data stays where it is on the server.
             </div>
             <q-btn

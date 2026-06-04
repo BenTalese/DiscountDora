@@ -54,7 +54,7 @@
                                         v-if="!query && isFrequent(item.stock_item_id)"
                                         name="star"
                                         size="14px"
-                                        color="amber-7"
+                                        color="warning"
                                     >
                                         <q-tooltip>Frequently added</q-tooltip>
                                     </q-icon>
@@ -66,12 +66,12 @@
                             </q-item-section>
                         </q-item>
                         <q-item v-if="results.length === 0">
-                            <q-item-section class="text-grey">
+                            <q-item-section class="dora-text-muted">
                                 {{ query ? 'No matches.' : 'No stock items yet.' }}
                             </q-item-section>
                         </q-item>
                     </q-list>
-                    <div v-if="!query" class="text-caption text-grey q-mt-xs">
+                    <div v-if="!query" class="text-caption dora-text-muted q-mt-xs">
                         {{
                             frequentlyAdded.length > 0
                                 ? 'Showing what you usually buy, then low/out.'
@@ -107,7 +107,7 @@
                             type="radio"
                             dense
                         />
-                        <div v-if="offers.length === 0" class="text-caption text-grey">
+                        <div v-if="offers.length === 0" class="text-caption dora-text-muted">
                             No linked products — added without a specific offer.
                         </div>
                     </template>

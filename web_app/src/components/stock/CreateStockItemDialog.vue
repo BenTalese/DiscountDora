@@ -60,8 +60,8 @@
                     />
 
                     <q-card-actions align="right">
-                        <q-btn flat label="Cancel" v-close-popup />
-                        <q-btn type="submit" color="primary" label="Add" :loading="saving" />
+                        <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                        <BaseButton type="submit" variant="primary" label="Add" :loading="saving" />
                     </q-card-actions>
                 </q-form>
             </q-card-section>
@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
     import { storeToRefs } from 'pinia';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { StockLevel } from 'src/models/stockLevel';

@@ -17,7 +17,7 @@
                 <div class="text-subtitle1 ellipsis">
                     {{ detail?.name ?? 'Loading…' }}
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     {{ pickedCount }} / {{ totalCount }} picked
                     <span v-if="estimatedRemainingTotal > 0">
                         · ${{ estimatedRemainingTotal.toFixed(2) }} left
@@ -74,7 +74,7 @@
                 <q-spinner color="primary" size="60px" />
             </div>
 
-            <q-banner v-else-if="loadError" class="bg-negative text-white q-ma-md" rounded>
+            <q-banner v-else-if="loadError" class="bg-negative dora-text-on-primary q-ma-md" rounded>
                 {{ loadError }}
             </q-banner>
 
@@ -84,7 +84,7 @@
             >
                 <q-icon :name="ICONS.check_circle" size="80px" color="positive" />
                 <div class="text-h5 q-mt-md">All done!</div>
-                <div class="text-body2 text-grey q-mt-sm">
+                <div class="text-body2 dora-text-muted q-mt-sm">
                     Every item is ticked. You can finish the shop now or
                     head back to the full list.
                 </div>
@@ -105,7 +105,7 @@
                      breadcrumb so the shopper sees "Fridge > Dairy" or
                      similar grouping if their locations describe a route.
                      Falls back to "Other" when unlocated. -->
-                <div class="shop-mode-section text-caption text-grey">
+                <div class="shop-mode-section text-caption dora-text-muted">
                     {{ currentSection }}
                 </div>
 
@@ -128,7 +128,7 @@
                             unelevated
                             round
                             size="lg"
-                            color="grey-3"
+                            color="grey"
                             text-color="black"
                             :icon="ICONS.remove"
                             aria-label="Decrease quantity"
@@ -142,7 +142,7 @@
                             unelevated
                             round
                             size="lg"
-                            color="grey-3"
+                            color="grey"
                             text-color="black"
                             :icon="ICONS.add"
                             aria-label="Increase quantity"
@@ -184,7 +184,7 @@
                         <q-btn
                             flat
                             no-caps
-                            color="grey-8"
+                            class="dora-text-secondary"
                             :icon="ICONS.arrow_forward"
                             label="Skip"
                             @click="skipForNow"
@@ -202,7 +202,7 @@
                     v-if="upcomingPreview.length > 0"
                     class="shop-mode-up-next"
                 >
-                    <div class="text-caption text-grey">Up next</div>
+                    <div class="text-caption dora-text-muted">Up next</div>
                     <button
                         v-for="line in upcomingPreview"
                         :key="line.line_id"
@@ -210,7 +210,7 @@
                         @click="jumpTo(line.line_id)"
                     >
                         {{ line.stock_item_name }}
-                        <span class="text-caption text-grey">
+                        <span class="text-caption dora-text-muted">
                             ×{{ line.quantity ?? 1 }}
                         </span>
                     </button>
@@ -222,11 +222,11 @@
         <footer v-if="detail && !detail.is_archived" class="shop-mode-footer">
             <div class="shop-mode-footer-totals">
                 <div>
-                    <div class="text-caption text-grey">Picked</div>
+                    <div class="text-caption dora-text-muted">Picked</div>
                     <div class="text-h6">{{ pickedCount }}</div>
                 </div>
                 <div>
-                    <div class="text-caption text-grey">Estimated</div>
+                    <div class="text-caption dora-text-muted">Estimated</div>
                     <div class="text-h6">${{ estimatedTotalAll.toFixed(2) }}</div>
                 </div>
             </div>
@@ -249,7 +249,7 @@
             <q-card style="min-width: 280px">
                 <q-card-section>
                     <div class="text-h6">Actual price paid</div>
-                    <div v-if="priceEditorLine" class="text-caption text-grey">
+                    <div v-if="priceEditorLine" class="text-caption dora-text-muted">
                         {{ priceEditorLine.stock_item_name }}
                     </div>
                 </q-card-section>
@@ -278,20 +278,17 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn
+                    <BaseButton
                         v-if="priceEditorLine?.actual_unit_price != null"
-                        flat
-                        no-caps
-                        color="negative"
+                        variant="ghost"
+                        class="text-negative"
                         label="Clear"
                         v-close-popup
                         @click="clearPriceOverride"
                     />
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton
+                        variant="primary"
                         label="Save"
                         v-close-popup
                         @click="savePriceEditor"
@@ -306,7 +303,7 @@
             <q-card style="min-width: 280px">
                 <q-card-section>
                     <div class="text-h6">Substitute</div>
-                    <div v-if="currentLine" class="text-caption text-grey">
+                    <div v-if="currentLine" class="text-caption dora-text-muted">
                         {{ currentLine.stock_item_name }}
                     </div>
                 </q-card-section>
@@ -338,7 +335,7 @@
                     </q-item>
                 </q-list>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Close" v-close-popup />
+                    <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -347,6 +344,7 @@
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import {
@@ -759,7 +757,7 @@
         font-weight: 600;
     }
     .shop-mode-card {
-        background: var(--surface-elevated, rgba(0, 0, 0, 0.04));
+        background: var(--surface-elevated);
         border-radius: 18px;
         padding: 24px 20px;
         display: flex;
@@ -773,7 +771,7 @@
         word-break: break-word;
     }
     .shop-mode-card-merchant {
-        color: var(--c-ink-mute, rgba(0, 0, 0, 0.6));
+        color: var(--text-muted);
     }
     .shop-mode-qty-row {
         display: flex;
@@ -816,14 +814,14 @@
     }
     .shop-mode-up-row:hover,
     .shop-mode-up-row:focus-visible {
-        background: var(--overlay-active, rgba(0, 0, 0, 0.06));
+        background: var(--overlay-active);
         outline: none;
     }
     .shop-mode-footer {
         position: sticky;
         bottom: 0;
         background: var(--q-page-background, white);
-        border-top: 1px solid var(--overlay-active, rgba(0, 0, 0, 0.06));
+        border-top: 1px solid var(--overlay-active);
         padding: 10px 16px;
         display: flex;
         align-items: center;

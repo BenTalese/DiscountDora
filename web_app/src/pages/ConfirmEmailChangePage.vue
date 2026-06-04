@@ -4,13 +4,14 @@
             <q-card-section class="text-center">
                 <q-icon
                     :name="status === 'ok' ? 'check_circle' : status === 'error' ? 'error' : 'mail_lock'"
-                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : 'grey-7'"
+                    :color="status === 'ok' ? 'positive' : status === 'error' ? 'negative' : undefined"
+                    :class="{ 'dora-text-secondary': status !== 'ok' && status !== 'error' }"
                     size="56px"
                 />
                 <div class="text-h6 q-mt-md">
                     {{ status === 'ok' ? 'Email updated' : status === 'error' ? 'Link invalid' : 'Confirming…' }}
                 </div>
-                <div class="text-caption text-grey q-mt-xs">
+                <div class="text-caption dora-text-muted q-mt-xs">
                     {{ status === 'ok'
                         ? 'Your account email has been changed.'
                         : status === 'error'
@@ -19,13 +20,14 @@
                 </div>
             </q-card-section>
             <q-card-actions align="center">
-                <q-btn color="primary" no-caps label="Continue" to="/" />
+                <BaseButton variant="primary" label="Continue" to="/" />
             </q-card-actions>
         </q-card>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { onMounted, ref } from 'vue';
     import { useRoute } from 'vue-router';
     import AuthApiService from 'src/services/api/authApiService';

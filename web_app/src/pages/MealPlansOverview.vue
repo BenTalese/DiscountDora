@@ -1,11 +1,9 @@
 <template>
     <div class="q-pa-md">
         <div class="row items-center q-mb-md q-gutter-sm">
-            <q-btn color="positive" :icon="ICONS.add" no-caps label="New plan" @click="onCreatePlan" />
-            <q-btn
-                outline
-                color="primary"
-                no-caps
+            <BaseButton variant="primary" :icon="ICONS.add" label="New plan" @click="onCreatePlan" />
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.lightbulb"
                 label="Suggest meals I can cook now"
                 @click="suggestOpen = true"
@@ -27,7 +25,7 @@
         <!-- Shortfall rollup — visible whenever any recipe is over-committed. -->
         <q-banner
             v-if="shortfall.length"
-            class="bg-orange-1 text-orange-10 q-mb-md"
+            class="dora-bg-warning-soft text-warning q-mb-md"
             rounded
         >
             <template v-slot:avatar>
@@ -75,12 +73,12 @@
                         label="Print"
                         @click="planExport.openPrintView(selectedPlan.meal_plan_id)"
                     />
-                    <q-btn flat dense no-caps :icon="ICONS.delete" color="negative" label="Delete plan" @click="confirmDeletePlan" />
+                    <BaseButton variant="danger-ghost" :icon="ICONS.delete" label="Delete plan" @click="confirmDeletePlan" />
                 </div>
 
                 <!-- Draggable recipe palette -->
                 <q-card flat bordered class="q-pa-sm q-mb-md">
-                    <div class="text-caption text-grey q-mb-xs">
+                    <div class="text-caption dora-text-muted q-mb-xs">
                         <q-icon :name="ICONS.drag_indicator" /> Drag a recipe onto a day to plan it
                     </div>
                     <div class="row q-gutter-xs">
@@ -109,7 +107,7 @@
                                     <q-card style="min-width: 240px">
                                         <q-card-section class="q-pb-xs">
                                             <div class="text-subtitle2">{{ recipe.name }}</div>
-                                            <div class="text-caption text-grey">
+                                            <div class="text-caption dora-text-muted">
                                                 {{ recipe.unallocated_meals }} free of
                                                 {{ recipe.available_meals }} cooked
                                             </div>
@@ -151,7 +149,7 @@
                                 </q-menu>
                             </q-chip>
                         </div>
-                        <div v-if="recipes.length === 0" class="text-caption text-grey q-pa-sm">
+                        <div v-if="recipes.length === 0" class="text-caption dora-text-muted q-pa-sm">
                             No recipes yet — create some on the Recipes page.
                         </div>
                     </div>
@@ -170,7 +168,7 @@
                             @dragover.prevent
                             @drop="onDropOnDay(day.iso)"
                         >
-                            <q-card-section class="bg-grey-2 q-pa-sm">
+                            <q-card-section class="dora-bg-sunken q-pa-sm">
                                 <div class="text-weight-bold">{{ day.label }}</div>
                                 <div class="text-caption">{{ formatDate(day.iso) }}</div>
                             </q-card-section>
@@ -223,10 +221,10 @@
                                         </q-menu>
                                     </q-chip>
                                 </template>
-                                <div v-else-if="isPastDay(day.iso)" class="text-caption text-grey text-center q-py-sm">
+                                <div v-else-if="isPastDay(day.iso)" class="text-caption dora-text-muted text-center q-py-sm">
                                     —
                                 </div>
-                                <div v-else class="text-caption text-grey text-center q-py-sm">
+                                <div v-else class="text-caption dora-text-muted text-center q-py-sm">
                                     Drop a recipe here
                                 </div>
                             </q-card-section>
@@ -240,11 +238,11 @@
                 <q-card flat bordered>
                     <q-card-section class="q-pb-xs">
                         <div class="text-subtitle1">This week's shopping</div>
-                        <div v-if="ingredientsLoading" class="text-caption text-grey">Calculating…</div>
+                        <div v-if="ingredientsLoading" class="text-caption dora-text-muted">Calculating…</div>
                         <div v-else class="text-h5" :class="needToBuy.length ? 'text-negative' : 'text-positive'">
                             {{ needToBuy.length }}
                         </div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             {{ needToBuy.length ? "item(s) you'll need to buy" : 'fully stocked for this plan' }}
                         </div>
                     </q-card-section>
@@ -300,7 +298,7 @@
         </div>
 
         <div v-else>
-            <q-banner class="bg-grey-2">Create a meal plan to get started.</q-banner>
+            <q-banner class="dora-bg-sunken">Create a meal plan to get started.</q-banner>
         </div>
 
         <!-- Suggest cookable recipes ───────────────────────────────── -->
@@ -312,7 +310,7 @@
                     <q-btn flat dense round :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
-                    <div v-if="cookableRecipes.length === 0" class="text-grey">
+                    <div v-if="cookableRecipes.length === 0" class="dora-text-muted">
                         Nothing's fully in stock right now. Restock or pick a recipe with fewer
                         missing ingredients.
                     </div>
@@ -376,6 +374,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import MealPlanEditDialog from 'components/MealPlanEditDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -716,7 +715,7 @@
     function confirmDeletePlan() {
         if (!selectedPlan.value) return;
         const plan = selectedPlan.value;
-        $q.dialog({ title: 'Delete plan', message: `Delete "${plan.name}"?`, cancel: true, persistent: true })
+        $q.dialog({ title: 'Delete plan', message: `Delete "${plan.name}"?`, cancel: true })
             .onOk(() => void doDeletePlan(plan.meal_plan_id));
     }
     async function doDeletePlan(planId: string) {

@@ -1,7 +1,7 @@
 <template>
     <div class="text-center q-pa-xl">
         <q-spinner color="primary" size="60px" />
-        <div class="text-body2 text-grey q-mt-md">
+        <div class="text-body2 dora-text-muted q-mt-md">
             {{ message }}
         </div>
     </div>

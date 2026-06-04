@@ -2,12 +2,12 @@
     <div class="page-error-state column items-center justify-center q-pa-xl">
         <q-icon :name="icon" :color="iconColor" size="72px" class="q-mb-md" />
         <div class="text-h5 q-mb-sm text-center">{{ title }}</div>
-        <div class="text-body2 text-grey text-center" style="max-width: 480px">
+        <div class="text-body2 dora-text-muted text-center" style="max-width: 480px">
             {{ description }}
         </div>
         <div
             v-if="correlationId"
-            class="text-caption text-grey q-mt-sm correlation-id"
+            class="text-caption dora-text-muted q-mt-sm correlation-id"
         >
             Reference:
             <code>{{ correlationId }}</code>
@@ -176,7 +176,7 @@
         min-height: 60vh;
     }
     .correlation-id code {
-        background: rgba(0, 0, 0, 0.05);
+        background: var(--overlay-active);
         padding: 1px 6px;
         border-radius: 4px;
         font-size: 0.85em;

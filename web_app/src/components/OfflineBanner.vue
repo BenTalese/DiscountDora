@@ -23,7 +23,7 @@
                 dense
                 no-caps
                 size="sm"
-                color="white"
+                class="dora-text-on-primary"
                 :icon="reconnecting ? 'sync' : 'refresh'"
                 :label="reconnecting ? 'Checking…' : 'Retry'"
                 :loading="reconnecting"
@@ -60,14 +60,14 @@
         gap: 4px;
         padding: 6px 16px;
         background: var(--q-negative);
-        color: white;
+        color: var(--text-on-primary);
         font-size: 0.85rem;
         font-weight: 500;
         line-height: 1.3;
         position: sticky;
         top: 0;
         z-index: 2500;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        box-shadow: var(--elevation-1);
     }
     .offline-banner-text {
         flex: 1;

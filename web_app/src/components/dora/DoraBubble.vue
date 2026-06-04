@@ -54,7 +54,7 @@
                     v-if="updateBadge"
                     floating
                     color="accent"
-                    text-color="grey-10"
+                    text-color="dark"
                     rounded
                     class="dora-update-badge"
                 >
@@ -393,15 +393,16 @@
            barely visible at the edges. Not a halo, just a backdrop. */
         inset: 4%;
         border-radius: 50%;
-        /* Warm off-white (#f7f3ea) so the disc reads as a soft paper backdrop
-           rather than a stark white plate against the page. */
+        /* Theme-aware backdrop disc. Light themes paint a warm-paper halo;
+           dark themes paint a brand-primary halo. Both ride
+           `--dora-disc-bg` (set per theme in themes.scss). */
         background: radial-gradient(
             circle at 50% 45%,
-            rgba(247, 243, 234, 0.97),
-            rgba(247, 243, 234, 0.75) 65%,
-            rgba(247, 243, 234, 0) 100%
+            color-mix(in srgb, var(--dora-disc-bg) 97%, transparent),
+            color-mix(in srgb, var(--dora-disc-bg) 75%, transparent) 65%,
+            transparent 100%
         );
-        box-shadow: 0 6px 22px var(--overlay-dim);
+        box-shadow: 0 6px 22px var(--dora-halo);
         opacity: 0;
         transform: scale(0.6);
         transition:
@@ -409,18 +410,6 @@
             transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
         z-index: 0;
         pointer-events: none;
-    }
-    .body--dark .dora-bubble-launcher-inner::before {
-        /* Theme-tinted disc in dark mode — same primary green as the brand
-           (#17B073) at low opacity so it reads as Dora's own halo rather
-           than a generic dark plate. */
-        background: radial-gradient(
-            circle at 50% 45%,
-            rgba(23, 176, 115, 0.55),
-            rgba(23, 176, 115, 0.32) 65%,
-            rgba(23, 176, 115, 0) 100%
-        );
-        box-shadow: 0 6px 22px rgba(23, 176, 115, 0.35);
     }
     .dora-bubble-launcher.is-active .dora-bubble-launcher-inner::before {
         opacity: 1;
@@ -501,7 +490,7 @@
         font-size: 0.65rem;
     }
     .dora-bubble-hint {
-        background: white;
+        background: var(--surface-component);
         color: var(--text-primary);
         padding: 10px 14px;
         border-radius: 12px;

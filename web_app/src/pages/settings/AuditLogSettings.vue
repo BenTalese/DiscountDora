@@ -4,7 +4,7 @@
             <q-icon :name="ICONS.fact_check" size="32px" class="text-primary" />
             <div class="col">
                 <div class="text-h6">Audit log</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Every mutating request, login attempt, client crash, and
                     explicit service-layer event lands here. Filters narrow
                     the view; click a row to see the full payload.
@@ -156,7 +156,7 @@
             </template>
             <template #body-cell-source="props">
                 <q-td :props="props">
-                    <q-chip dense size="sm" color="grey-3" text-color="grey-9">
+                    <q-chip dense size="sm" class="dora-bg-sunken dora-text-secondary">
                         {{ props.row.source }}
                     </q-chip>
                 </q-td>
@@ -173,7 +173,7 @@
                 :disable="page <= 1 || loading"
                 @click="reload(page - 1)"
             />
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 Page {{ page }} of {{ pageCount }} ({{ total.toLocaleString() }} event(s))
             </div>
             <q-btn
@@ -214,7 +214,7 @@
                             {{ detail.severity }}
                         </q-chip>
                     </q-toolbar-title>
-                    <q-btn flat round :icon="ICONS.close" v-close-popup />
+                    <BaseButton variant="icon" :icon="ICONS.close" v-close-popup />
                 </q-toolbar>
                 <q-separator />
                 <q-card-section v-if="detail">
@@ -222,9 +222,9 @@
                         <q-item><q-item-section>Action</q-item-section><q-item-section side><code>{{ detail.action }}</code></q-item-section></q-item>
                         <q-item><q-item-section>Source</q-item-section><q-item-section side>{{ detail.source }}</q-item-section></q-item>
                         <q-item><q-item-section>When</q-item-section><q-item-section side>{{ formatWhen(detail.occurred_at) }}</q-item-section></q-item>
-                        <q-item><q-item-section>Actor</q-item-section><q-item-section side>{{ detail.actor_username || '—' }} <span v-if="detail.actor_user_id" class="text-grey">({{ detail.actor_user_id }})</span></q-item-section></q-item>
+                        <q-item><q-item-section>Actor</q-item-section><q-item-section side>{{ detail.actor_username || '—' }} <span v-if="detail.actor_user_id" class="dora-text-muted">({{ detail.actor_user_id }})</span></q-item-section></q-item>
                         <q-item><q-item-section>Actor IP</q-item-section><q-item-section side>{{ detail.actor_ip || '—' }}</q-item-section></q-item>
-                        <q-item v-if="detail.entity_type"><q-item-section>Entity</q-item-section><q-item-section side>{{ detail.entity_type }} <span v-if="detail.entity_id" class="text-grey">({{ detail.entity_id }})</span></q-item-section></q-item>
+                        <q-item v-if="detail.entity_type"><q-item-section>Entity</q-item-section><q-item-section side>{{ detail.entity_type }} <span v-if="detail.entity_id" class="dora-text-muted">({{ detail.entity_id }})</span></q-item-section></q-item>
                         <q-item v-if="detail.request_id"><q-item-section>Request id</q-item-section><q-item-section side><code>{{ detail.request_id }}</code></q-item-section></q-item>
                     </q-list>
                 </q-card-section>
@@ -243,7 +243,7 @@
                         label="Find related"
                         @click="findRelated(detail.request_id)"
                     />
-                    <q-btn flat no-caps label="Close" v-close-popup />
+                    <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -251,6 +251,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref } from 'vue';

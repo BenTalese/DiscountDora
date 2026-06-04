@@ -1,7 +1,7 @@
 <template>
     <div class="settings-shell q-pa-md">
         <div class="row items-center q-mb-md">
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 Manage your account and, if you're an admin, the install itself.
             </div>
         </div>
@@ -59,7 +59,7 @@
 
                 <q-banner
                     v-if="!isAdmin"
-                    class="bg-grey-2 text-grey-8 q-mt-md text-caption"
+                    class="dora-bg-sunken dora-text-secondary q-mt-md text-caption"
                     dense
                     rounded
                 >

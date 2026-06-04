@@ -80,7 +80,7 @@
     /* ────────────────────────────── Text ─────────────────────────── */
     --text-primary: hsl(168 28% 12%);
     --text-secondary: hsl(168 12% 32%);
-    --text-muted: hsl(168 8% 50%);
+    --text-muted: hsl(168 10% 42%);
     --text-inverse: var(--palette-neutral-0);
     --text-on-primary: var(--palette-neutral-0);
     --text-on-accent: hsl(168 28% 12%);
@@ -97,6 +97,24 @@
     --overlay-dim: hsla(168, 30%, 10%, 0.18);
     --overlay-hover: hsla(168, 30%, 10%, 0.04);
     --overlay-active: hsla(168, 30%, 10%, 0.08);
+    /* Hover/active overlay for components that sit on a saturated brand
+       surface (toolbar, main-menu strip). `--overlay-hover` is dark in
+       light themes and that reads as nothing on a dark toolbar — these
+       are always a light veil so the hover effect lands. */
+    --overlay-hover-on-coloured: hsla(0, 0%, 100%, 0.08);
+    --overlay-active-on-coloured: hsla(0, 0%, 100%, 0.14);
+    /* Matched-substring highlight (CommandPalette etc.). Alpha-blended
+       so the text reads through; theme-tinted via brand-accent. */
+    --highlight-search: color-mix(in srgb, var(--brand-accent) 40%, transparent);
+
+    /* ────────────────────────────── Dora (assistant chrome) ──────── */
+    /* Dora's bubble + chat panel paint a warm "disc" + green halo on
+       top of the page. Pinning them to Pesto green made Dora look alien
+       in Cherry Cola / Blueberry. These tokens let each theme keep its
+       own Dora vibe. Defaults below mirror Pesto. */
+    --dora-disc-bg: hsl(40 50% 95%);
+    --dora-halo: hsla(150, 76%, 39%, 0.32);
+    --dora-halo-strong: hsla(150, 76%, 39%, 0.55);
 
     /* ────────────────────────────── Chart palette ────────────────── */
     /* Six categorical hues per theme. Used by ECharts series (Reports

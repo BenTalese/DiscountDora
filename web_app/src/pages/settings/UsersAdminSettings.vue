@@ -6,7 +6,7 @@
                     <q-icon :name="ICONS.group" size="20px" class="q-mr-xs" />
                     Users
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Manage every account in this install.
                 </div>
             </div>
@@ -23,7 +23,7 @@
             </q-btn>
         </q-card-section>
 
-        <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
@@ -33,8 +33,9 @@
             <q-item v-for="user in users" :key="user.user_id" class="q-py-md">
                 <q-item-section avatar>
                     <q-avatar
-                        :color="user.is_admin ? 'amber-3' : 'grey-3'"
-                        text-color="grey-10"
+                        :color="user.is_admin ? 'accent' : undefined"
+                        :class="user.is_admin ? '' : 'dora-bg-sunken dora-text-secondary'"
+                        :text-color="user.is_admin ? 'dark' : undefined"
                         size="42px"
                     >
                         {{ initials(user.username) }}
@@ -45,7 +46,7 @@
                         {{ user.username }}
                         <q-badge
                             v-if="user.is_admin"
-                            color="amber-9"
+                            color="warning"
                             text-color="white"
                             class="q-ml-sm"
                         >
@@ -53,7 +54,7 @@
                         </q-badge>
                         <q-badge
                             v-if="user.user_id === currentUserId"
-                            color="grey-6"
+                            color="grey"
                             text-color="white"
                             class="q-ml-xs"
                         >
@@ -111,7 +112,7 @@
 
             <q-item v-if="!loading && users.length === 0">
                 <q-item-section>
-                    <q-item-label class="text-grey">No users found.</q-item-label>
+                    <q-item-label class="dora-text-muted">No users found.</q-item-label>
                 </q-item-section>
             </q-item>
         </q-list>
@@ -121,12 +122,12 @@
         </q-inner-loading>
 
         <!-- Edit dialog ─────────────────────────────────────────── -->
-        <q-dialog v-model="editOpen" persistent>
+        <q-dialog v-model="editOpen">
             <q-card style="min-width: 320px; max-width: 480px">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Edit {{ editingUser?.username }}</div>
                     <q-space />
-                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
+                    <BaseButton variant="icon" :icon="ICONS.close" v-close-popup />
                 </q-card-section>
                 <q-card-section>
                     <q-input
@@ -145,7 +146,7 @@
                     />
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
                     <q-btn
                         color="primary"
                         no-caps
@@ -159,11 +160,11 @@
         </q-dialog>
 
         <!-- Password-reset result dialog ────────────────────────── -->
-        <q-dialog v-model="resetResultOpen" persistent>
+        <q-dialog v-model="resetResultOpen">
             <q-card style="min-width: 320px">
                 <q-card-section>
                     <div class="text-h6">Password reset</div>
-                    <div class="text-caption text-grey">
+                    <div class="text-caption dora-text-muted">
                         Copy this and pass it to {{ resetTargetName }} out-of-band.
                         It's shown once.
                     </div>
@@ -188,7 +189,7 @@
                     </q-input>
                 </q-card-section>
                 <q-card-actions align="right">
-                    <q-btn flat no-caps label="Done" v-close-popup />
+                    <BaseButton variant="ghost" label="Done" v-close-popup />
                 </q-card-actions>
             </q-card>
         </q-dialog>
@@ -196,6 +197,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { copyToClipboard, useQuasar } from 'quasar';
@@ -298,7 +300,6 @@
                 title: 'Reset password',
                 message: `Generate a new one-time password for "${user.username}"?`,
                 cancel: true,
-                persistent: true
             })
                 .onOk(() => resolve(true))
                 .onCancel(() => resolve(false))

@@ -16,9 +16,9 @@
                 />
             </q-card-section>
             <q-card-actions align="right">
-                <q-btn flat label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
                     label="Move"
                     :loading="busy"
                     @click="emit('confirm', targetLocationId)"
@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
     import { ref, watch } from 'vue';
+    import BaseButton from 'src/components/BaseButton.vue';
 
     type LocationOption = { label: string; value: string };
 

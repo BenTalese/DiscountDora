@@ -3,7 +3,7 @@
         <div class="row items-center q-mb-md">
             <div class="col">
                 <div class="text-h5">Use soon</div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     Items expiring within the next
                     <q-btn flat dense no-caps :label="`${horizonDays} days`" class="waste-horizon-btn">
                         <q-menu auto-close>
@@ -39,7 +39,7 @@
 
         <q-banner
             v-if="loadError"
-            class="bg-negative text-white q-mb-md"
+            class="bg-negative dora-text-on-primary q-mb-md"
             rounded
         >
             {{ loadError }}
@@ -48,7 +48,7 @@
         <div v-if="!loading && rescue && rescue.items.length === 0" class="q-pa-lg text-center">
             <q-icon :name="ICONS.check" size="48px" color="positive" />
             <div class="text-subtitle1 q-mt-sm">Nothing's at risk right now.</div>
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 Stretch the horizon above if you want a longer look ahead.
             </div>
         </div>
@@ -61,7 +61,7 @@
                         <div class="text-subtitle1">
                             {{ rescue.items.length }} item{{ rescue.items.length === 1 ? '' : 's' }} at risk
                         </div>
-                        <div v-if="totalValueAtRisk > 0" class="text-caption text-grey">
+                        <div v-if="totalValueAtRisk > 0" class="text-caption dora-text-muted">
                             Roughly ${{ totalValueAtRisk.toFixed(2) }} on the line
                         </div>
                     </q-card-section>
@@ -146,12 +146,12 @@
                 <q-card flat bordered>
                     <q-card-section>
                         <div class="text-subtitle1">Recipes that help</div>
-                        <div class="text-caption text-grey">
+                        <div class="text-caption dora-text-muted">
                             Ranked by how many at-risk items they'd use.
                         </div>
                     </q-card-section>
                     <q-separator />
-                    <div v-if="rescue.recipes.length === 0" class="q-pa-md text-caption text-grey">
+                    <div v-if="rescue.recipes.length === 0" class="q-pa-md text-caption dora-text-muted">
                         No recipes in your library use any of these items.
                     </div>
                     <q-list v-else separator>
@@ -167,7 +167,7 @@
                                         v-if="recipe.is_favourite"
                                         name="star"
                                         size="14px"
-                                        color="amber-7"
+                                        color="warning"
                                         class="q-mr-xs"
                                     />
                                     {{ recipe.name }}
@@ -179,13 +179,13 @@
                                 <q-item-label
                                     v-if="recipe.missing_ingredients.length > 0"
                                     caption
-                                    class="text-grey"
+                                    class="dora-text-muted"
                                 >
                                     Missing: {{ recipe.missing_ingredients.join(', ') }}
                                 </q-item-label>
                             </q-item-section>
                             <q-item-section side>
-                                <div class="text-caption text-grey">
+                                <div class="text-caption dora-text-muted">
                                     {{ recipe.cook_time_minutes ? `${recipe.cook_time_minutes} min` : '' }}
                                 </div>
                             </q-item-section>
@@ -201,7 +201,7 @@
                 <div class="text-subtitle1">
                     What you've been wasting (last {{ insights.window_days }} days)
                 </div>
-                <div class="text-caption text-grey">
+                <div class="text-caption dora-text-muted">
                     {{ insights.total_events }} event{{ insights.total_events === 1 ? '' : 's' }} logged
                     <span v-if="insights.total_estimated_value > 0">
                         · ~${{ insights.total_estimated_value.toFixed(2) }} in food
@@ -219,7 +219,7 @@
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side v-if="row.estimated_value > 0">
-                        <div class="text-grey">~${{ row.estimated_value.toFixed(2) }}</div>
+                        <div class="dora-text-muted">~${{ row.estimated_value.toFixed(2) }}</div>
                     </q-item-section>
                 </q-item>
             </q-list>
@@ -230,7 +230,7 @@
             <q-card style="min-width: 320px">
                 <q-card-section>
                     <div class="text-h6">Log as wasted</div>
-                    <div v-if="wasteTarget" class="text-caption text-grey">
+                    <div v-if="wasteTarget" class="text-caption dora-text-muted">
                         {{ wasteTarget.name }}
                     </div>
                 </q-card-section>

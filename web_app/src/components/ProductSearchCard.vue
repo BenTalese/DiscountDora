@@ -6,10 +6,10 @@
                 :src="imageSrc"
                 :ratio="1"
                 fit="contain"
-                class="bg-grey-1"
+                class="dora-bg-elevated"
             >
                 <template #error>
-                    <div class="absolute-full flex flex-center bg-grey-2 text-grey">
+                    <div class="absolute-full flex flex-center dora-bg-sunken dora-text-muted">
                         <q-icon :name="ICONS.image_not_supported" size="32px" />
                     </div>
                 </template>
@@ -47,7 +47,7 @@
         <q-card-section class="q-py-sm col">
             <div class="text-body2 ellipsis-2-lines">
                 {{ offer.name }}
-                <span v-if="offer.size" class="text-grey">· {{ offer.size }}</span>
+                <span v-if="offer.size" class="dora-text-muted">· {{ offer.size }}</span>
             </div>
         </q-card-section>
 
@@ -57,20 +57,20 @@
                     <span class="text-h6">${{ offer.price_now.toFixed(2) }}</span>
                     <span
                         v-if="onSpecial"
-                        class="text-caption text-grey strike q-ml-xs"
+                        class="text-caption dora-text-muted strike q-ml-xs"
                     >${{ offer.price_was.toFixed(2) }}</span>
                 </template>
-                <span v-else class="text-caption text-grey">Price unavailable</span>
+                <span v-else class="text-caption dora-text-muted">Price unavailable</span>
                 <q-space />
                 <TrendSparkline v-if="hist.length >= 2" :values="hist" :width="80" :height="24" />
             </div>
-            <div class="text-caption text-grey">
+            <div class="text-caption dora-text-muted">
                 {{ unitLabel ?? offer.price_per_cup ?? '' }}
             </div>
         </q-card-section>
 
         <q-separator />
-        <q-card-actions class="bg-grey-1 items-center">
+        <q-card-actions class="dora-bg-elevated items-center">
             <MerchantLogo :name="offer.merchant_name" :height="18" :width="32" />
             <q-space />
             <q-btn

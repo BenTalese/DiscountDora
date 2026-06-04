@@ -16,7 +16,7 @@
     />
     <q-banner
         v-else-if="ios"
-        class="bg-grey-2 text-grey-9"
+        class="dora-bg-sunken"
         dense
         rounded
     >
@@ -28,7 +28,7 @@
         <strong>Share</strong> button in Safari, then
         <strong>Add to Home Screen</strong>.
     </q-banner>
-    <q-item-label v-else caption class="text-grey-7">
+    <q-item-label v-else caption class="dora-text-secondary">
         Install isn't available in this browser. Try Chrome on Android,
         Edge on Windows, or Safari on iOS.
     </q-item-label>

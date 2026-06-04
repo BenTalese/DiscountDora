@@ -1,15 +1,8 @@
 # Claude session instructions — DiscountDora / Dashy Dora
 
-The repo is being finished against a planning library ("DORA DOCS") that lives
-*outside* the repo on the user's local machine. Multiple Claude sessions may be
-working on this concurrently from different computers, so the docs path is not
-fixed.
-
-**On the primary workstation** the docs are at `/home/benny/Downloads/DORA DOCS/`.
-On other machines (or if that directory is missing), **ask the user where the
-docs are** before proceeding — do not guess, do not search the filesystem, and
-do not try to work from memory of the docs. If the user can't provide them in
-this session, say so in your worklog entry and stop rather than improvising.
+The repo is being finished against a planning library "docs" folder that lives
+in the repo. Multiple Claude sessions may be working on this concurrently from
+different computers.
 
 To keep handoffs clean:
 

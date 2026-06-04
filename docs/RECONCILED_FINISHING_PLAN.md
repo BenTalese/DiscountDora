@@ -1,0 +1,171 @@
+# Reconciled Finishing Plan — Dashy Dora
+
+**Status:** Active — all decisions resolved (§7). This is the finishing plan; the rest of the doc set feeds it.
+**Date:** 2026-06-04
+**Reconciles:** the planning library (00_DOCS_INDEX, PROMPT_PLAN 1–7, DASHY_DORA_CHAMPION_PLAN/Part 8, COMMERCIALIZATION_REPORT, STATUS) · the code (CHANGELOG + current state) · your `Feedback / Fixes (MASTER).md` · the proposals & prompt pack generated this session.
+
+---
+
+## 0. How to use these documents (orchestration map)
+
+**Start here (this doc)** = the master: strategy, resolved decisions (§7), and the phase sequence (§5). It governs *order and scope*. Everything below feeds it.
+
+| Document | Role | Use it when |
+|---|---|---|
+| **RECONCILED_FINISHING_PLAN.md** (this) | Master — phases, decisions, in/out of scope | Always first; the arbiter |
+| `FEEDBACK_TRIAGE_AND_PLAN.md` | Feedback → work mapping (cross-cutting themes, bug clusters, per-item detail) | To see *why* a task exists / trace a feedback point |
+| `prompts/` (+ `prompts/00_INDEX.md`) | Executable units — runnable prompts per task | To *run* a task |
+| `SHOPPING_LIST_REDESIGN_PROPOSAL.md` | Design for P6-01/06/07 (Phase 1) | Designing the shop/restock loop |
+| `STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` | Server-owned derived state (Phase 1 enabler) | Before P6 features + the assistant refactor |
+| `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` | One capability registry (Phase 1/3) | Untangling the assistant; pairs with state-ownership |
+| `MULTI_USER_READINESS.md` | Pre-flight for households/tenancy (Phase 4) | Before any multi-user work |
+| `AUTH_ASSISTANT_SECURITY_FINDINGS.md` | Security fixes (CSRF/email → Phase 0; rest → Phase 4) | Phase 0 hardening + pre-sale |
+| `00_DOCS_INDEX.md` + `PROMPT_PLAN_*`, `DASHY_DORA_CHAMPION_PLAN.md`, `COMMERCIALIZATION_REPORT.md` | The underlying vision/spec: the Charter, Part 6/7/8 tasks | For the source spec behind a phase |
+
+**Orchestration order:** Phase 0 → run `prompts/` Waves A + B + INV (incl. INV-6). Phase 1 → the loop: state-ownership enabler first, then shopping-list + cook-mode, each gated by its C-brief/proposal. Phase 2 → extract scraper + build the ingestion API (§6.6). Phase 3 → champion (Part 8). Phase 4 → commercialize (Part 7).
+
+**Vocabulary:** the prompt pack says "Wave A/B/C"; this plan says "Phase 0–4". **Wave A + B + INV = Phase 0; Wave C = Phases 1–3.** This doc owns *order*; the pack owns *execution*.
+
+---
+
+## 1. The core finding: three trajectories, only partly aligned
+
+| Trajectory | What it says | State |
+|---|---|---|
+| **The plan library** (Charter + Part 6/7/8) | A strategic **pivot**: kill central scraping & the deal-comparison identity; become *Dashy Dora* — effortless, **personal-price**, **zero-input pantry**, anti-creep, legally defensible; then commercialize. | **Designed, coherent, governing.** |
+| **The code** (per CHANGELOG/STATUS) | Built the **old** *Discount Dora*: scraping + deal-comparison product search, stock map (N9), substitutes graph (N7), barcodes, plus Part-2 intelligence bolt-ons (P2-02/04/05/06/08/11/13). **No P6/P7/P8 entries.** | **On the pre-pivot path** — but see below. |
+| **Your feedback** | Page-by-page polish of the app **as it exists today**, largely without the pivot lens. Heavy investment in product search, merchants, comparison. | **Polish altitude.** |
+
+**Crucial nuance on "state":** my code copy is stale, and STATUS.md is dated 2026‑05‑27. Your *current* code is **further into the pivot than either shows** — you've already killed the substitutes graph and stock map and merged meals→recipes (all of which the plan mandates). So treat the pivot as **in progress**, and STATUS as needing a re-baseline (Phase 0).
+
+**The reconciliation problem in one line:** the plan is pivoting the boat; the feedback is repainting cabins — some of them cabins the plan is about to remove.
+
+---
+
+## 2. The arbiter: your own Decision Charter
+
+The Champion Plan defines a **12-principle Dora Decision Charter** (tie-break: **Effortless (1)** + **Anti-creep (10)**). It is the right instrument to settle plan-vs-feedback conflicts, because it's *your own* stated strategy. Every triage call below is made against it. The ones that bite hardest:
+
+- **P4 Personal > generic** and **P9 No legal-risk scraping** → the product-search/deals direction.
+- **P10 Anti-feature-creep** → comparison tools, gamification, nutrition-DB depth.
+- **P1 Effortless / P5 Leverage the loop** → why the Zero-Input Pantry is the flagship, not the polish.
+
+---
+
+## 3. The central conflict you may not have clocked: product search / scraping
+
+This is the big one, and it's exactly the "you might not realise how what you said changes things" case.
+
+- **Your plan already decided to remove central scraping** — Charter P9, **P7-01** (de-risk → personal price history), and the very rename from *Discount* → *Dashy* Dora (P8-01 drops the deal-comparison promise). The COMMERCIALIZATION_REPORT is blunt: hosted scraping is the dominant legal risk and **any hosted/SaaS model forces you to stop it**.
+- **Your feedback pours effort into the opposite** — 20–30s search optimisation, anti-blocking, the merchant-vs-data-provider model, keeping/​improving comparison.
+
+**If the pivot holds, a large slice of your product-search feedback is moot** — you'd be polishing a feature you're removing from the hosted product (it survives only as a self-hosted, off-by-default module). That includes my own prompt-pack items **C-6 (search performance)** and **C-8 (merchant/provider model)** — written before I'd read the plan; they push *against* P7-01.
+
+**RESOLVED (2026-06-04):** the scraper/product-search is **extracted into a separate private companion** (standalone app or private fork) that pushes data into Dora via Dora's API. Dora-core stays Charter-clean and commercially viable; your product-search feedback is actioned in the *companion's* scope. See §7 Decision 1 + the new ingestion-API work item.
+
+---
+
+## 4. Feedback triaged through the Charter
+
+At the category level (the full item-by-item mapping lives in `FEEDBACK_TRIAGE_AND_PLAN.md`):
+
+**Aligned — proceed (serves the Charter and/or maps onto Part 6/8):**
+- Theming/dark-mode, consistency, modals, loading, text-size, sticky footers, renames → **P11 fast UX**; the rename *is* **P8-01**.
+- The bug clusters (extra-inputs, PATCH, delete-FK, dead nav, toasts) → just broken; fix.
+- Shop-mode-as-receipt + finish→restock-all → **literally P6-01 + P6-07**.
+- Alerts control centre + alerts-as-launchpads → **P6-12**; per-type opt-in → **P3-13/Charter P6**.
+- Opt-in budget & nutrition, hide money features → **Charter P8/P10** (you already framed these as opt-in).
+- **Remove the comparison tools** (you said "useless") → **Charter P10 agrees** — even though STATUS marks X2/X3 *done*. Easy aligned cut.
+
+**Conflicts with the Charter — cut/defer/demote (per your *own* principles):**
+- Deep product-search polish + merchant/provider model → **P9 + P7-01** (de-risk). **Moved to the companion app** (§7 Decision 1) — not Dora-core.
+- Gamification (new-feature idea) → **P10 anti-creep.**
+- Nutrition-DB complexity → **P10** (you hedged this yourself: "maybe just off/simple").
+
+**Neutral polish:** everything else — fold into Phase 0/1 as the relevant surface is touched.
+
+---
+
+## 5. The reconciled phased plan
+
+Merges all three trajectories. Sequenced so we never polish a surface the pivot is about to rebuild.
+
+### Phase 0 — Foundations & truth *(now)*
+- **Re-baseline STATUS** against current code (it's stale; pivot partly done). Cheap, unblocks honest planning.
+- **Wave A foundations** (theming/filters/modals/loading/text/sticky-footer/renames incl. **P8-01 Dashy Dora**) + **Wave B bugs**. This is where ~most of the feedback lands, and it's all Charter-aligned (effortless/fast/consistent). Prompt pack already written.
+- **Comparison tools:** product comparison (X3) leaves with the scraper → companion; recipe comparison (X2) → assess via **INV-6** before rework/cut. Drop other P10-conflicting cruft.
+
+### Phase 1 — Close the loop *(Part 6 — the strategic core)*
+Order per the plan's own dependencies:
+- **P6-02** barcode→QR cleanup (removes surface first).
+- **P6-01** purchase reconciliation = **your shopping-list redesign** (DRAFT→SHOPPING→DONE, shop-as-receipt, finish→restock). *My `SHOPPING_LIST_REDESIGN_PROPOSAL` is this.*
+- **P6-07** cook→consume = **your cook-mode finish-restock** feedback.
+- **P6-04** suggestions/run-out prediction; **P6-13** confidence/decision-driven stocktake.
+- **P6-09/10/12** costing, self-drafting shop, daily briefing.
+- *Enabler:* the **state-ownership refactor** (server-owned `cookable`/prices) underpins P6 and satisfies Charter P3/P12 — do it early in this phase.
+
+### Phase 2 — Extract the scraper & build Dora's ingestion API *(P7-01, resolved)*
+- Move the merchant-API + product-search/comparison **out of Dora-core** into the private companion (standalone app **recommended over a fork** — forks rot; a clean API boundary doesn't).
+- Build Dora's authenticated **ingestion API**: the companion pushes products / offers / price-observations into Dora's personal price history (feeds P6-01/P6-03; adjacent to P8-03/04 ingestion).
+- **Boundary:** Dora-core keeps the product/price *data model* + "your prices" views; the companion owns scraping, merchant connections, and the search/comparison UI. Your product-search feedback (incl. C-6/C-8) applies to the companion.
+
+### Phase 3 — Champion features *(Part 8 — the differentiators)*
+- **P8-07 Zero-Input Pantry** (flagship — requires P6-01/04/07/13 from Phase 1; *do not start before them*).
+- P8-02 barcode-to-add (Open Food Facts), P8-05/06 buy/wait oracles, P8-08 Dora Score, P8-09 culinary memory, **P8-10 native app**.
+
+### Phase 4 — Commercialize *(rest of Part 7 — only when selling)*
+- Productionize (Postgres/gunicorn/Redis), tenancy (Path B managed instances first → Path A multi-tenant = **my MULTI_USER_READINESS / P6-05 / P7-A1+A2**), Stripe, compliance (security headers/data rights = P5-01/02), ops, launch readiness.
+
+---
+
+## 6. Reconciling this session's proposals & prompt pack against the plan
+
+| Artifact | Verdict |
+|---|---|
+| `SHOPPING_LIST_REDESIGN_PROPOSAL` | **Aligned** — it *is* P6-01/06/07. Promote into Phase 1. |
+| `STATE_OWNERSHIP_REFACTOR_PROPOSAL` | **Aligned** — Charter P3/P12; enables P6. Phase 1 enabler. |
+| `MULTI_USER_READINESS` | **Aligned** — it's P6-05 + P7-A1/A2. Phase 4 (or Phase 1 if households land early). |
+| `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL` | **Aligned** — Charter P12; relates to P5-05. Fold in during Phase 1/3. |
+| `AUTH_ASSISTANT_SECURITY_FINDINGS` | **Aligned** — feeds P7-08 compliance; CSRF/email fixes are Phase 0/4. |
+| Prompt pack **Wave A / Wave B / INV** | **Aligned** — Phase 0. |
+| Prompt pack **C-6 search perf, C-8 merchant/provider** | **Re-scoped, not cut** — belongs to the **private companion app**, not Dora-core. Action your product-search feedback there. C-8's merchant-vs-source distinction also informs Dora's ingestion-API contract (how pushed data is labelled). |
+| My earlier "you didn't review Stock Map" note | **Retract** — Stock Map is a *removed* feature; I was reading stale code. |
+
+---
+
+## 6.5 Cross-doc coordination (so two refactors don't collide)
+
+- **State-ownership ↔ Dora-assistant:** both delete the *same* client-side missing-ingredients recompute (the 4th copy lives in `DoraChat.vue`). `STATE_OWNERSHIP` adds the server `cookable`/`missing_count` field; `DORA_ASSISTANT` deletes the client copy. **Sequence state-ownership first**, then the assistant refactor reads the server field.
+- **Shopping-list ↔ state-ownership:** the finish→restock path (P6-01) writes stock-level deltas server-side; land the state-ownership stock-status contract *before* implementing finish-restock so reopen/undo is reliable.
+
+## 6.6 Ingestion-API contract (new Dora-core work — Phase 2; sketch to firm up)
+
+The seam between Dora and the companion (and later P8-03 email + P8-04 crowd prices). One authenticated endpoint Dora **owns**; external sources push in.
+
+- **Accepts** (batched, idempotent): `product {name, brand?, size?, source}`, `offer {product_ref, price_now, price_was?, valid_until?, source}`, `price_observation {product_ref|stock_item_ref, price, observed_at, source}`. The `source` field carries the merchant/provider label — this is where C-8's distinction lands.
+- **Dora maps to:** product/price data model (dedup by source+code), optional stock-item link, personal price history (feeds P6-01 costing, P6-03 intelligence).
+- **Out of scope for Dora:** scraping, merchant connections, search/comparison UI — all companion. Dora never calls the companion; the companion calls Dora.
+- **Task:** draft the formal contract (prompt-pack **C-10** → `PROPOSAL_INGESTION_API.md`) before Phase 2; reused by P8-03/04.
+
+---
+
+## 7. Decisions (resolved 2026-06-04)
+
+1. **Identity & scraping — RESOLVED: separate the scraper.** Dora-core = the Charter-clean, personal-price, commercially-viable product with **no central scraping**. The merchant-API + product-search/deal-comparison is **extracted into a private companion** that **pushes data into Dora via Dora's public ingestion API**. Your product-search feedback is actioned in the *companion's* scope; Dora-core stays legally clean and sellable.
+   - **Derived — RESOLVED: standalone companion, not a private fork.** A fork diverges and must re-merge every Dora change forever; a standalone tool with a clean API boundary doesn't decay and forces the ingestion contract Dora needs anyway. The companion is its own project, out of scope for *finishing Dora* except for the ingestion-API seam.
+   - **New Dora-core work item — the ingestion API.** An authenticated endpoint that receives pushed products/offers/price-observations and folds them into personal price history (feeds P6-01/P6-03; adjacent to P8-03/04). **Boundary:** Dora keeps the product/price *data model* + "your prices" views; the companion owns scraping, merchant connections, search/comparison UI.
+2. **Sequencing — RESOLVED: Foundations → loop → champion.** Phase 0 now; Part 6 loop; Part 8 champion. Polish each surface as the pivot reaches it.
+3. **Charter cuts — RESOLVED (per item):**
+   - **Product comparison (X3)** → leaves with the scraper to the companion.
+   - **Recipe comparison (X2)** → **assess its real worth first** (new task INV-6), *then* rework or cut on the evidence — not a blind keep.
+   - **Gamification** → **someday-list** (captured, not built during finishing).
+   - **Nutrition** → **off + simple (kcal) only**; no complex linked nutrition-DB. Make the existing freeform field opt-in + structured-simple.
+4. **Commercialize — RESOLVED: someday, not near-term — but it IS a real goal.** Phases 0–3 first; Part 7 (productionize/tenancy/billing/compliance) when validated. Because selling is a genuine future goal, Dora-core must stay Charter-clean *now* — which is exactly what Decision 1 secures.
+
+### Someday-list (captured, not in finishing scope)
+- Gamification (rewards / notify-users / streaks).
+- The standalone scraper/product-search companion (its own project; Dora-core only owes it the ingestion API).
+- Crowd price graph (P8-04), native app (P8-10) — already in Part 8 but post-loop.
+
+### Immediate next step
+Phase 0 is unblocked and no-regret — start the **Wave A foundation + Wave B bug prompts**. Two small parallel tasks: **INV-6** (assess recipe-comparison worth) and drafting the **ingestion-API contract** (the Dora↔companion seam, reused by P8-03/04).

@@ -1,0 +1,39 @@
+You're continuing work on Discount Dora, a hobby grocery / pantry / shopping app. Before you do anything, get oriented:
+
+Read first
+Memory for this project lives at C:\Users\ben.talese\.claude\projects\C--Users-ben-talese-Downloads-DiscountDora-main-DiscountDora-main\memory\. Read MEMORY.md and every file it indexes — there's important context about how I prefer to work, the project's status, and where spec notes live.
+Spec notes live OUTSIDE the repo at C:\Users\ben.talese\Downloads\Discount Dora\. The relevant subfolders:
+Feature Boards\*.md — kanban-style markdown for each domain (Shopping Lists, Stock Items, Alerts, User & Global Options, Recipes, Products, Meals, Dashboard, Help/Guides & Assistant, Data Management, !Dump ~ No Area). Items are checkbox lines tagged with #80%, #admin, #stocktake, #cart_button, etc.
+Feature Notes\*.md — per-feature detail notes (often wikilinked from boards).
+Taskboard Notes\*.md — smaller items.
+Stack
+Backend: Python + Flask, two services. dora_api (port 5170, main app + auth + sessions) and merchant_api (port 5172, scrapers for Coles/Wools/IGA/Aldi). SQLAlchemy + Alembic. Repo's pre-release.
+Frontend: Vue 3 + Quasar (Vite). Pinia stores. Lives in web_app/.
+Migrations chain head: e9c2b748f015. Always check dora_api/persistence/migrations/versions/ for the current head; recent migrations stack …→8d3f1e5a9c40→9a4c1f8e2d56→b2e8d4f1c9a3→c4f7a2b8e1d6→d8e3a5f7b210→e9c2b748f015.
+Current version (from dora_api/features/help/version_info.py + CHANGELOG.md): 0.7.0.
+What's already built
+Across recent rounds I shipped, in order: hierarchical Locations + heatmap + drag-and-drop, the Dora help assistant (rule-based intent registry + chat bubble + /help page with changelog), per-user preferences (theme/font/font-size/deals email, plus password & username change), admin Users page, Shopping Lists (multiple lists, primary, archive, finish-with-auto-restock, copy, move-unticked, refresh-deals, clear, auto-generate from flagged-low items, templates, start/stop in-progress mode, drag-reorder, bulk-tick, free-form quantity, group-by-merchant), Alerts (bell + slide-in panel + inline actions, polling), Stock filters round 2 (Stock Groups CRUD, open/in-use marker + filter, multi-token search, summary banner, cart-button quick-remove with multi-list prompt, group filter, auto-add-on-low hook).
+
+How the user prefers I work
+This is critical — they pulled me up on this multiple times.
+
+Lock scope explicitly before touching files. Say "doing X, Y, Z; deferring A, B, C." Don't shift scope mid-round.
+Don't over-claim. End every round with an honest scorecard: what shipped, what's still missing from the kanban, what's untested, what could break.
+The project is pre-release. When the user says "nuke the table" or similar, drop and recreate — don't write backward-compat shims they didn't ask for.
+The user runs and tests the code; I don't. Everything I've written is theoretically correct but unverified until they exercise it.
+Stylistic: minimal comments (only the non-obvious "why"), no emojis unless asked, no unnecessary .md files, no AI/Claude self-references in code.
+Just-fixed bugs (last session)
+Quasar Dialog plugin wasn't registered in quasar.config.ts → $q.dialog is not a function. Fixed by adding to plugins: list.
+Login input text invisible in OS dark mode → forced .login-card to fixed light colours with :deep overrides.
+merchant_api CORS missing supports_credentials=True → blocked all requests because axios uses withCredentials: true. Now matches dora_api.
+Two migrations both pointed at the same down_revision (4b1d9c2e7a31). Re-pointed mine to the real head 5c2e8a4f9b1d.
+Dashboard shopping_list_items_count blew up because _mapper_registry.metadata is a different MetaData than db.metadata. Swapped to the entity query-builder.
+Dora chat input fell off-screen after a few replies → CSS combined fixed heights exceeded 70vh. Switched to flex: 1 1 0 + min-height: 0.
+Likely next moves the user might ask for
+Stocktake mode (focused review of stale items) — last #80% tag from Stock Items board.
+Frequently-added suggestions on shopping lists (needs new usage-history table).
+A different board entirely: Recipes, Products, Data Management, Meals.
+More bug fixes once they test.
+Don't assume which — ask. The user is direct and will tell you what's next. Now read the memory directory and ask what they want to work on.
+
+

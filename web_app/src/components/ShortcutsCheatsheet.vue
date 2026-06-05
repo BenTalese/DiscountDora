@@ -1,6 +1,5 @@
 <template>
-    <q-dialog v-model="cheatsheetOpen">
-        <q-card style="width: 560px; max-width: 95vw">
+    <BaseDialog v-model="cheatsheetOpen" card-style="width: 560px; max-width: 95vw">
             <q-card-section class="row items-center q-pb-none">
                 <q-icon :name="ICONS.keyboard" size="24px" class="q-mr-sm" />
                 <div class="text-h6">Keyboard shortcuts</div>
@@ -28,12 +27,12 @@
                     </q-list>
                 </div>
             </q-card-section>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { useShortcutRegistry } from 'src/composables/useShortcut';
     import { computed } from 'vue';
 

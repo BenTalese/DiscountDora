@@ -199,8 +199,7 @@
         </q-card>
 
         <!-- ── Result dialog ─────────────────────────────────────────── -->
-        <q-dialog v-model="resultOpen">
-            <q-card style="min-width: 420px; max-width: 720px">
+        <BaseDialog v-model="resultOpen" card-style="min-width: 420px; max-width: 720px">
                 <q-card-section class="row items-center q-gutter-md">
                     <q-icon
                         :name="result?.ok ? 'check_circle' : 'error'"
@@ -260,13 +259,13 @@
                     />
                     <BaseButton variant="ghost" label="Close" @click="onResultClose" />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, reactive, ref, watch } from 'vue';

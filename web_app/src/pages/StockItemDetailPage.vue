@@ -53,8 +53,7 @@
             </div>
 
             <!-- ── QR / scan overlays (N5) ──────────────────────────── -->
-            <q-dialog v-model="showQrOpen">
-                <q-card style="min-width: 280px; max-width: 400px">
+            <BaseDialog v-model="showQrOpen" card-style="min-width: 280px; max-width: 400px">
                     <q-card-section class="text-center">
                         <div class="text-h6 q-mb-sm">{{ detail.name }}</div>
                         <img
@@ -78,8 +77,7 @@
                             @click="openSingleQrSheet"
                         />
                     </q-card-actions>
-                </q-card>
-            </q-dialog>
+            </BaseDialog>
 
             <ScanOverlay
                 v-model="registerScanOpen"
@@ -420,8 +418,7 @@
         </FadeTransition>
 
         <!-- ── Set-expiry dialog ──────────────────────────────────────── -->
-        <q-dialog v-model="expiryDialogOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="expiryDialogOpen" card-style="min-width: 320px">
                 <q-card-section class="text-h6">Set expiry</q-card-section>
                 <q-card-section>
                     <q-date v-model="expiryDraft" mask="YYYY-MM-DD" />
@@ -431,12 +428,10 @@
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Link-product picker dialog ─────────────────────────────── -->
-        <q-dialog v-model="pickerOpen">
-            <q-card style="width: 640px; max-width: 95vw">
+        <BaseDialog v-model="pickerOpen" card-style="width: 640px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Link a product</div>
                     <q-space />
@@ -467,12 +462,10 @@
                         </q-item>
                     </q-list>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Add-substitute picker dialog ───────────────────────────── -->
-        <q-dialog v-model="subPickerOpen">
-            <q-card style="width: 560px; max-width: 95vw">
+        <BaseDialog v-model="subPickerOpen" card-style="width: 560px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Add a substitute</div>
                     <q-space />
@@ -495,14 +488,14 @@
                         </q-item>
                     </q-list>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

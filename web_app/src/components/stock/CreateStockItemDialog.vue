@@ -1,6 +1,10 @@
 <template>
-    <q-dialog :model-value="modelValue" @update:model-value="onDialogUpdate" @hide="resetForm">
-        <q-card style="width: 600px; max-width: 95vw">
+    <BaseDialog
+        :model-value="modelValue"
+        card-style="width: 600px; max-width: 95vw"
+        @update:model-value="onDialogUpdate"
+        @cancel="resetForm"
+    >
             <q-card-section>
                 <div class="text-h6">Add a stock item</div>
             </q-card-section>
@@ -65,13 +69,13 @@
                     </q-card-actions>
                 </q-form>
             </q-card-section>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script setup lang="ts">
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { StockLevel } from 'src/models/stockLevel';

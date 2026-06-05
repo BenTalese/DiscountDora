@@ -245,8 +245,7 @@
 
         <!-- Inline price editor — reuses the same logic as the list page
              but with a larger touch target for shop-mode use. -->
-        <q-dialog v-model="priceEditorOpen">
-            <q-card style="min-width: 280px">
+        <BaseDialog v-model="priceEditorOpen" card-style="min-width: 280px">
                 <q-card-section>
                     <div class="text-h6">Actual price paid</div>
                     <div v-if="priceEditorLine" class="text-caption dora-text-muted">
@@ -294,13 +293,11 @@
                         @click="savePriceEditor"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- Substitute picker — list the line's known offers; the shopper
              swaps the merchant chip without leaving shop mode. -->
-        <q-dialog v-model="offerPickerOpen">
-            <q-card style="min-width: 280px">
+        <BaseDialog v-model="offerPickerOpen" card-style="min-width: 280px">
                 <q-card-section>
                     <div class="text-h6">Substitute</div>
                     <div v-if="currentLine" class="text-caption dora-text-muted">
@@ -337,14 +334,14 @@
                 <q-card-actions align="right">
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import {

@@ -1,6 +1,9 @@
 <template>
-    <q-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
-        <q-card style="width: 800px; max-width: 95vw">
+    <BaseDialog
+        :model-value="modelValue"
+        card-style="width: 800px; max-width: 95vw"
+        @update:model-value="$emit('update:modelValue', $event)"
+    >
             <q-card-section>
                 <div class="text-h5">{{ recipe ? 'Edit Recipe' : 'New Recipe' }}</div>
             </q-card-section>
@@ -174,14 +177,14 @@
                     </q-card-actions>
                 </q-form>
             </q-card-section>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, {

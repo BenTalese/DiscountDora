@@ -523,8 +523,7 @@
         </FadeTransition>
 
         <!-- ── Substitutes dialog ───────────────────────────────── -->
-        <q-dialog v-model="substitutesOpen">
-            <q-card style="min-width: 460px; max-width: 640px">
+        <BaseDialog v-model="substitutesOpen" card-style="min-width: 460px; max-width: 640px">
                 <q-card-section>
                     <div class="text-h6">Substitutes for missing ingredients</div>
                 </q-card-section>
@@ -566,12 +565,10 @@
                 <q-card-actions align="right">
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Import-from-URL dialog ───────────────────────────── -->
-        <q-dialog v-model="importOpen">
-            <q-card style="min-width: 460px; max-width: 600px">
+        <BaseDialog v-model="importOpen" card-style="min-width: 460px; max-width: 600px">
                 <q-card-section>
                     <div class="text-h6">Import from URL</div>
                     <div class="text-caption dora-text-muted">
@@ -602,12 +599,10 @@
                         @click="onConfirmImport"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Target-list picker (for add-all-missing) ─────────── -->
-        <q-dialog v-model="targetListOpen">
-            <q-card style="min-width: 360px">
+        <BaseDialog v-model="targetListOpen" card-style="min-width: 360px">
                 <q-card-section>
                     <div class="text-h6">Add to which list?</div>
                 </q-card-section>
@@ -632,12 +627,10 @@
                         @click="confirmAddMissing"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- Log cook ──────────────────────────────────────────────── -->
-        <q-dialog v-model="logCookOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="logCookOpen" card-style="min-width: 320px">
                 <q-card-section class="text-h6">Log a cook</q-card-section>
                 <q-card-section class="q-pt-none">
                     <q-input
@@ -662,14 +655,14 @@
                         @click="onLogCook"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

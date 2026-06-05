@@ -226,8 +226,7 @@
         </q-card>
 
         <!-- Log-waste dialog -->
-        <q-dialog v-model="wasteDialogOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="wasteDialogOpen" card-style="min-width: 320px">
                 <q-card-section>
                     <div class="text-h6">Log as wasted</div>
                     <div v-if="wasteTarget" class="text-caption dora-text-muted">
@@ -278,14 +277,14 @@
                         @click="submitWaste"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';

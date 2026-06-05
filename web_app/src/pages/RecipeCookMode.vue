@@ -178,8 +178,7 @@
         </template>
 
         <!-- Finish flow ─────────────────────────────────────────────────── -->
-        <q-dialog v-model="finishDialogOpen">
-            <q-card style="min-width: 360px; max-width: 95vw">
+        <BaseDialog v-model="finishDialogOpen" card-style="min-width: 360px; max-width: 95vw">
                 <q-card-section class="text-h6">Finished cooking?</q-card-section>
                 <q-card-section class="q-gutter-sm q-pt-none">
                     <q-toggle v-model="finishUpdateLevels" label="Update stock levels (use up what you cooked with)" />
@@ -201,14 +200,14 @@
                     <BaseButton variant="ghost" label="Skip & exit" @click="finishDialogOpen = false; exitCookMode()" />
                     <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';

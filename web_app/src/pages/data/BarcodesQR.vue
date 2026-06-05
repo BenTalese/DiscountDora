@@ -257,8 +257,7 @@
         />
 
         <!-- ── Lookup-result dialog (after a successful scan) ───────── -->
-        <q-dialog v-model="resultOpen">
-            <q-card style="min-width: 320px; max-width: 480px">
+        <BaseDialog v-model="resultOpen" card-style="min-width: 320px; max-width: 480px">
                 <q-card-section v-if="resultKind === 'stock_item'">
                     <div class="text-h6">{{ matchedItem?.name ?? 'Stock item' }}</div>
                     <div class="text-caption dora-text-muted">
@@ -311,13 +310,13 @@
                         @click="registerUnknownBarcode"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';

@@ -1,6 +1,9 @@
 <template>
-    <q-dialog :model-value="modelValue" @update:model-value="onDialogUpdate">
-        <q-card style="width: 480px; max-width: 95vw">
+    <BaseDialog
+        :model-value="modelValue"
+        card-style="width: 480px; max-width: 95vw"
+        @update:model-value="onDialogUpdate"
+    >
             <q-card-section>
                 <div class="text-h6">Move {{ count }} item{{ count === 1 ? '' : 's' }}</div>
             </q-card-section>
@@ -24,13 +27,13 @@
                     @click="emit('confirm', targetLocationId)"
                 />
             </q-card-actions>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script setup lang="ts">
     import { ref, watch } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
 
     type LocationOption = { label: string; value: string };
 

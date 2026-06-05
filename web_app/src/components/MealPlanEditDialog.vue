@@ -1,6 +1,9 @@
 <template>
-    <q-dialog :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)">
-        <q-card style="width: 800px; max-width: 95vw">
+    <BaseDialog
+        :model-value="modelValue"
+        card-style="width: 800px; max-width: 95vw"
+        @update:model-value="emit('update:modelValue', $event)"
+    >
             <q-card-section>
                 <div class="text-h6">{{ plan ? 'Edit Meal Plan' : 'New Meal Plan' }}</div>
             </q-card-section>
@@ -89,14 +92,14 @@
                     </q-card-actions>
                 </q-form>
             </q-card-section>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import type { MealPlan } from 'src/models/mealPlan';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';

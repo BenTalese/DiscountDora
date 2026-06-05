@@ -132,8 +132,7 @@
         </div>
 
         <!-- Edit-items dialog ──────────────────────────────────────────── -->
-        <q-dialog v-model="editorOpen" :maximized="$q.screen.lt.sm">
-            <q-card style="min-width: 480px; max-width: 720px; width: 100%">
+        <BaseDialog v-model="editorOpen" :maximized="$q.screen.lt.sm" card-style="min-width: 480px; max-width: 720px; width: 100%">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="col">
                         <div class="text-h6">{{ editingDetail?.name ?? 'Loading…' }}</div>
@@ -240,14 +239,14 @@
                 <q-card-actions align="right">
                     <q-btn flat no-caps label="Done" v-close-popup />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';
     import type {
         TemplateDetail,

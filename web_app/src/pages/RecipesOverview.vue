@@ -42,8 +42,10 @@
             />
         </div>
 
-        <!-- ── Filter bar ─────────────────────────────────────────── -->
-        <div class="row q-mb-md q-gutter-sm items-center">
+        <!-- ── Filter bar ─ standardised via FilterBar (A4) ───────── -->
+        <FilterBar :active-count="activeFilterCount" @clear="clearFilters">
+            <template #filters>
+            <div class="row q-gutter-sm items-center">
             <q-toggle v-model="favouritesOnly" label="Favourites only" dense />
             <q-toggle v-model="cookableNowOnly" label="Cookable now" dense />
             <q-input
@@ -134,15 +136,9 @@
                 label="Free from ingredient(s)"
                 hint="Type and press Enter"
             />
-            <q-btn
-                v-if="hasAnyFilter"
-                flat
-                no-caps
-                :icon="ICONS.filter_alt_off"
-                label="Clear"
-                @click="clearFilters"
-            />
-        </div>
+            </div>
+            </template>
+        </FilterBar>
         <!-- P2-08 — disclaimer surfaced when any dietary filter is on.
              Pulled from the backend so the wording stays consistent
              between the SPA and Dora. -->
@@ -225,8 +221,7 @@
         />
 
         <!-- ── Add-missing-to-list dialog ─────────────────────────── -->
-        <q-dialog v-model="addMissingOpen">
-            <q-card style="min-width: 380px; max-width: 480px">
+        <BaseDialog v-model="addMissingOpen" card-style="min-width: 380px; max-width: 480px">
                 <q-card-section>
                     <div class="text-h6">Add to a shopping list</div>
                     <div class="text-caption dora-text-muted">
@@ -260,12 +255,15 @@
                         @click="confirmAddMissing"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Comparison dialog ──────────────────────────────────── -->
-        <q-dialog v-model="showComparison" :maximized="$q.screen.lt.md">
-            <q-card class="comparison-card column">
+        <BaseDialog
+            v-model="showComparison"
+            :maximized="$q.screen.lt.md"
+            card-style="width: 95vw; max-width: 1200px; height: 90vh"
+            card-class="column"
+        >
                 <q-card-section class="row items-center q-pb-sm">
                     <div class="text-h6">
                         Comparing {{ selectedRecipes.length }} recipe{{
@@ -356,14 +354,15 @@
                         </div>
                     </div>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
+    import FilterBar from 'src/components/FilterBar.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -518,7 +517,9 @@
     const filteredRecipes = computed(() =>
         recipes.value.filter((r) => {
             if (favouritesOnly.value && !r.is_favourite) return false;
-            if (collectionFilter.value) {
+            // A4: explicit "empty = off" — null collection skips the predicate.
+            // ('__none__' is a real value meaning "uncategorised", so keep it.)
+            if (collectionFilter.value !== null) {
                 if (
                     collectionFilter.value === '__none__'
                         ? r.recipe_collection_id !== null
@@ -528,14 +529,21 @@
                 }
             }
             if (cookableNowOnly.value && !isCookable(r)) return false;
-            if (missingMax.value !== null && missingCount(r) > missingMax.value) return false;
+            // A4: blank or non-numeric "Missing ≤" = off (Number.isFinite guards NaN).
+            if (
+                missingMax.value !== null
+                && Number.isFinite(missingMax.value)
+                && missingCount(r) > missingMax.value
+            ) {
+                return false;
+            }
             if (tagFilter.value.length > 0) {
                 const recipeTags = [r.cuisine, r.category].filter(
                     (t): t is string => Boolean(t),
                 );
                 if (!tagFilter.value.some((t) => recipeTags.includes(t))) return false;
             }
-            if (usesStockItemId.value) {
+            if (usesStockItemId.value !== null) {
                 if (!r.ingredients.some((i) => i.stock_item_id === usesStockItemId.value))
                     return false;
             }
@@ -604,6 +612,22 @@
             || dietaryTagsExclude.value.length > 0
             || ingredientExclude.value.length > 0,
     );
+
+    // Active-filter count for the FilterBar badge (excludes the search box,
+    // which lives separately in the header and has its own clear affordance).
+    const activeFilterCount = computed(() => {
+        let n = 0;
+        if (favouritesOnly.value) n++;
+        if (cookableNowOnly.value) n++;
+        if (missingMax.value !== null && Number.isFinite(missingMax.value)) n++;
+        if (collectionFilter.value !== null) n++;
+        if (tagFilter.value.length > 0) n++;
+        if (usesStockItemId.value !== null) n++;
+        if (dietaryTagsInclude.value.length > 0) n++;
+        if (dietaryTagsExclude.value.length > 0) n++;
+        if (ingredientExclude.value.length > 0) n++;
+        return n;
+    });
 
     function clearFilters() {
         searchText.value = '';
@@ -913,11 +937,6 @@
 </script>
 
 <style scoped>
-    .comparison-card {
-        width: 95vw;
-        max-width: 1200px;
-        height: 90vh;
-    }
     .full-height {
         height: 100%;
     }

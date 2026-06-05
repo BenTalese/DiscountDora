@@ -366,8 +366,7 @@
         </div>
         </FadeTransition>
 
-        <q-dialog v-model="advancedOpen">
-            <q-card style="min-width: 360px; max-width: 480px">
+        <BaseDialog v-model="advancedOpen" card-style="min-width: 360px; max-width: 480px">
                 <q-card-section>
                     <div class="text-h6">Auto-generate shopping list</div>
                     <div class="text-caption dora-text-muted">
@@ -429,13 +428,13 @@
                         @click="runAdvancedAutogen(false)"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

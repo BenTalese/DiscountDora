@@ -24,6 +24,183 @@ next.
 
 ---
 
+## 2026-06-05 — A4 (filter system standardisation + "empty = off")
+**Status:** complete (static verification only — node_modules not installed)
+**What changed:**
+- New `web_app/src/components/FilterBar.vue` — standard filter skin: persistent
+  `#search` slot (outside the panel), collapsible `#filters` slot (default shown
+  desktop / hidden mobile), active-filter count badge on the toggle, single
+  standard "Clear filters" button shown only when ≥1 filter active, optional
+  `#actions` slot. Uncontrolled expand defaults by screen size; supports
+  `v-model` if a page needs to control it.
+- Migrated all four target pages to FilterBar: `StockOverview` (bulk-select btn →
+  `#actions`; chips/selects → `#filters`; search stays in header),
+  `RecipesOverview` (filters → `#filters`; search stays in header; inline Clear
+  removed), `MyProductsPage` (search → `#search`; toggles/selects → `#filters`),
+  `ProductSearch` (bespoke `showFilters` toggle + "Clear ranges" removed; filter
+  card → FilterBar `#filters`; search term stays in header).
+- Hardened "empty = off" to be explicit/regression-proof: dropdown predicates
+  `if (value && …)` → `if (value !== null && …)` in `useStockFilters.ts`,
+  `RecipesOverview`, `MyProductsPage`; numeric "Missing ≤" guarded with
+  `Number.isFinite`. Added an `activeFilterCount` to each page/composable.
+
+**Decisions made:**
+- **The headline A4 bug does NOT reproduce in current code.** A thorough
+  per-page audit (quoted predicates) showed every page already skips a blank
+  filter (truthiness / `!= null` / empty-array / boolean-false). Stale docs
+  again (CLAUDE.md warns of this). So A4's value here is UX standardisation +
+  regression-proofing, not a bug fix. Surfaced this to the user before building.
+- **Scope = full A4, all four pages (user's call).** Note this overrides master
+  Decision 1's "products surface is minimal-touch / companion-bound" for
+  `ProductSearch` + `MyProductsPage` — the user explicitly chose to migrate them
+  anyway. Logged so a future session doesn't "fix" it back.
+- **Prompt's 3 decisions** taken as recommended (user didn't object): filters
+  shown desktop / hidden mobile; free-text search kept separate + persistent
+  (outside the collapsible panel); numeric blank/non-numeric = off.
+- **Search stays separate** — each page keeps its existing search box; FilterBar
+  only owns the collapsible panel + toggle + active-count + Clear. Lower-risk
+  than relocating searches, and satisfies "search separate from the panel."
+- **`activeFilterCount` excludes the search box** (search has its own clearable
+  X and lives outside the panel), so the toggle badge reflects panel filters.
+- **Replaced one-off clears** per the prompt: ProductSearch "Clear ranges" and
+  its bespoke filter toggle are gone, folded into FilterBar's standard Clear +
+  toggle.
+
+**Files touched:**
+- New: `web_app/src/components/FilterBar.vue`.
+- `web_app/src/composables/useStockFilters.ts` (hardened predicates +
+  `activeFilterCount`).
+- `web_app/src/pages/StockOverview.vue`, `RecipesOverview.vue`,
+  `MyProductsPage.vue`, `ProductSearch.vue`.
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- `<FilterBar>` balanced 1/1 in each of the four pages; import present in each.
+- Named slots (`#search`/`#filters`/`#actions`) open/close balanced; q-card
+  balance intact in ProductSearch after removing its filter card.
+- `showFilters` fully removed from ProductSearch (0 refs); `hasAnyFilter` still
+  used by the empty-states in Recipes/MyProducts (no orphans); `clearRanges`
+  still used by `clearAllFilters` (no orphan).
+- Reasoned through empty=off for every field on every page (now explicit).
+- **Not run:** lint / `quasar build` / dev server — `node_modules` absent.
+
+**Next up:**
+- **User eyeballs A4** once deps installed: on each of the 4 pages confirm —
+  Filters toggle shows/hides the panel; panel hidden by default on mobile; the
+  active-count badge is right; Clear appears only when filters active and resets
+  them; blank inputs show all rows; light + dark.
+- **Wave A is now A1–A4 done.** Next prompt: check `docs/prompts/00_INDEX.md` for
+  the Wave B start (or the next item in `RECONCILED_FINISHING_PLAN.md §5`).
+- See `DORA_FOLLOWUPS.md` for A4 leftovers (multi-select control only partially
+  standardised; FilterBar panel has no card container; AuditLogSettings filtering
+  not standardised — server-side, was out of A4 scope).
+
+**Open questions for user:**
+- Any A4 page where the panel default (open desktop / closed mobile) or the
+  moved controls feel wrong? Flag page + screen size.
+- The products pages were migrated despite being companion-bound — still happy
+  with that, or should they be reverted to minimal-touch later?
+
+---
+
+## 2026-06-05 — A3 (standard modal / BaseDialog) + A2 follow-up (danger-ghost button)
+**Status:** complete (static verification only — node_modules not installed)
+**What changed:**
+- New `web_app/src/components/BaseDialog.vue` — standard modal shell wrapping
+  `q-dialog` + `q-card`. Non-`persistent` by default (backdrop + Esc = cancel,
+  never commit/navigate), token radius, optional standardised header
+  (`title`/`closable`) and `#actions` footer slot, `cancel` event on any close.
+- Migrated **all ~28 standard template `<q-dialog>` modals across 25 files** to
+  `BaseDialog` (3 reference files done by hand: `RecipeEditDialog`,
+  `RecipeCookMode` finish, `RecipeDetailPage` ×4; the remaining 22 files fanned
+  out to 4 parallel subagents against a precise transform spec).
+- **A2 follow-up:** confirmed the other agent had already added the
+  `danger-ghost` `BaseButton` variant (flat negative — the "ghost danger" delete
+  button) and wired it into `StockItemDetailPage` (Delete + clear-expiry) and
+  `MealPlansOverview` (Delete plan). Verified complete; nothing more to do there.
+
+**Decisions made:**
+- **Destructive dismiss policy** (the prompt's "confirm with me"): user chose
+  **backdrop = cancel for ALL modals**, including deletes. Delete only fires from
+  its explicit button. This already matched the de-facto code behaviour, so no
+  `persistent` was added anywhere.
+- **Scope:** user chose "migrate all ~30". Interpreted as: migrate every standard
+  *card* modal, and document 3 specialised overlays as intentional exceptions —
+  `AlertsBell` (seamless side drawer, no backdrop → modal-cancel semantics don't
+  apply), `CommandPalette` (custom search overlay), `ScanOverlay` (persistent
+  camera overlay). Forcing these through BaseDialog adds no value and risks their
+  custom layout/positioning.
+- **The prompt's "bugs" are mostly already fixed** (docs are stale, per CLAUDE.md).
+  The `$q.dialog()` programmatic confirms (recipe delete, unsaved-changes,
+  cook-start) only commit/navigate on `.onOk()` and resolve false on
+  `.onDismiss()` — already correct. Left them as-is; A3's real value here is the
+  shell standardisation, not bug-fixing.
+- **Shell transform, not internal rewrite.** Each dialog keeps its own
+  header/footer markup inside BaseDialog's default slot. Fully unifying 28
+  heterogeneous dialogs' internal structure (via the `title`/`#actions` slots)
+  would be a large, risky rewrite for little gain — deferred as future polish.
+  Mirrors how A2 was run incrementally.
+- **`@hide` → `@cancel`.** Dialogs with an `@hide` cleanup handler
+  (`CreateStockItemDialog` resetForm, `QuickAddSheet` onHide) were converted to
+  `@cancel` — BaseDialog re-emits the dialog's hide as `cancel`. Semantics
+  preserved (both fire on any close).
+- **Scoped card-class sizing bug caught + fixed.** Three dialogs sized their card
+  via a *scoped* CSS class (`comparison-card`, `orphans-card`, `quick-add-sheet`).
+  Once the `<q-card>` moved into BaseDialog's style scope (and dialogs teleport to
+  `<body>`), those scoped selectors no longer matched. Moved each into the inline
+  `card-style` prop and deleted the dead rules. Also fixed `AuditLogSettings`
+  (always-maximized, bare card) whose card was being capped at 95vw by BaseDialog's
+  default `card-style` — gave it an explicit fill style.
+
+**Files touched:**
+- New: `web_app/src/components/BaseDialog.vue`.
+- Reference migrations: `components/RecipeEditDialog.vue`, `pages/RecipeCookMode.vue`,
+  `pages/RecipeDetailPage.vue`.
+- Subagent migrations (22 files): `components/MealPlanEditDialog.vue`,
+  `components/stock/BulkMoveLocationDialog.vue`,
+  `components/stock/CreateStockItemDialog.vue`, `components/QuickAddSheet.vue`,
+  `components/ShortcutsCheatsheet.vue`, `pages/StockItemDetailPage.vue`,
+  `pages/StocktakeRunner.vue`, `pages/ShoppingListShopMode.vue`,
+  `pages/ShoppingListsOverview.vue`, `pages/ShoppingListTemplates.vue`,
+  `pages/MyProductsPage.vue`, `pages/ProductSearch.vue`,
+  `pages/MealPlansOverview.vue`, `pages/RecipesOverview.vue`,
+  `pages/data/BackupRestore.vue`, `pages/data/DataImport.vue`,
+  `pages/data/BarcodesQR.vue`, `pages/PriceHistoryPage.vue`, `pages/WastePage.vue`,
+  `pages/VerifyEmailPage.vue`, `pages/settings/AuditLogSettings.vue`,
+  `pages/settings/UsersAdminSettings.vue`.
+- `CHANGELOG.md`.
+
+**Verification:**
+- `<q-dialog` opens app-wide = 4, all expected: `BaseDialog` itself + the 3
+  documented exceptions. `</q-dialog>` closers = 4 (balanced).
+- 38 `<BaseDialog>` usages across 25 files; every consuming file imports
+  `BaseDialog` (scripted check — 0 missing imports).
+- `<q-card>`/`</q-card>` and `<BaseDialog>`/`</BaseDialog>` tag balance verified
+  per file (scripted — 0 unbalanced).
+- `@hide` now only in `BaseDialog` (internal) + `CommandPalette` (exception).
+- **Not run:** lint / `quasar build` / dev server — `node_modules` is not
+  installed in this checkout, consistent with prior sessions.
+
+**Next up:**
+- **User eyeballs A3 in browser** once deps are installed: open a representative
+  modal in each family (new-recipe, cook-mode finish, a stock-item picker, the
+  recipe comparison dialog, quick-add sheet, a data report dialog, audit detail).
+  Confirm: backdrop-click and Esc close *without* committing/navigating; Cancel +
+  primary buttons work; widths/maximized behaviour unchanged; the comparison /
+  orphans / quick-add cards are still correctly sized (the scoped-class fix).
+- Optional A3 polish (deferred): adopt BaseDialog's `title` prop + `#actions`
+  slot to truly unify header/footer chrome across dialogs (currently each keeps
+  its own markup). Low priority — purely cosmetic consistency.
+- Next Wave A prompt: **A4 — filter system** (`docs/prompts/A4_filter_system.md`).
+
+**Open questions for user:**
+- Any modal that now closes when it shouldn't, or whose sizing looks off after
+  the scoped-class → `card-style` move? Flag the dialog + screen size.
+- OK that the 3 specialised overlays (AlertsBell / CommandPalette / ScanOverlay)
+  stay on raw `q-dialog`, or do you want them folded in too?
+
+---
+
 ## 2026-06-04 — A2 Phase 2 (detail-page toolbars, dialogs, onboarding, auth/settings/data)
 **Status:** complete (substantial coverage — see remaining residuals below)
 **What changed:**

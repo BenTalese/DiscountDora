@@ -5,7 +5,67 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **A4 — Standard filter bar (`FilterBar`).** New
+  `web_app/src/components/FilterBar.vue` gives every data-list page one
+  filter skin: a persistent search box (`#search` slot) kept outside the
+  collapsible panel; a collapsible filter panel (`#filters` slot) that
+  defaults to **shown on desktop, hidden on mobile**; an active-filter
+  count badge on the Filters toggle; and a single standard "Clear
+  filters" button that appears only when ≥1 filter is active. Pages keep
+  their own filter fields/predicates — only the mechanics/skin are shared.
+- **A3 — Standard modal (`BaseDialog`).** New
+  `web_app/src/components/BaseDialog.vue` wraps `q-dialog` + `q-card` so
+  dialog behaviour is defined in one place: **not** `persistent` by
+  default, so backdrop-click and Esc always **dismiss = cancel** (never a
+  commit or navigation); token-based corner radius; an optional
+  standardised header (`title` + `closable` close button) and footer
+  (`#actions` slot); and a `cancel` event fired on any close. Specialised
+  overlays are intentionally left on raw `q-dialog`: `AlertsBell`
+  (seamless side drawer, no backdrop), `CommandPalette` (custom search
+  overlay), and `ScanOverlay` (persistent camera overlay).
+
 ### Changed
+- **A4 — Filter standardisation across the data-list pages.** Migrated
+  `StockOverview`, `RecipesOverview`, `MyProductsPage`, and `ProductSearch`
+  to `FilterBar`. Replaced one-off filter affordances with the standard
+  set: ProductSearch's bespoke "show filters" toggle and its "Clear
+  ranges" button are gone (folded into FilterBar's toggle + standard
+  Clear); each page now exposes an active-filter count and a consistent
+  Clear.
+  - **"Empty = off" hardened (regression-proofing).** The reported bug
+    (clearing a filter excludes every row) was already *not* reproducing
+    — every page skipped blank predicates. But the dropdown predicates
+    relied on truthiness (`if (value && …)`), which would break if a
+    default were ever non-null. Made them explicit `!== null` checks, and
+    guarded the numeric "Missing ≤" filter with `Number.isFinite` so a
+    blank/non-numeric value reliably means "filter off." Applied in
+    `useStockFilters.ts`, `RecipesOverview`, `MyProductsPage`.
+- **A3 — Standard modal migration.** Migrated all ~28 standard
+  template `<q-dialog>` modals across 25 files to `BaseDialog`
+  (new-recipe / edit-recipe, recipe substitutes / import-URL /
+  target-list / log-cook, cook-mode "finished cooking", stock-item QR /
+  expiry / level / substitute pickers, stocktake change, shopping-list
+  shop-mode price-editor / offer-picker, advanced options, list-template
+  editor, my-products bulk-add / orphans / link, product compare / link,
+  meal-plan suggest / log-cook, recipe compare / add-missing, quick-add
+  sheet, shortcuts cheatsheet, data backup / import / barcodes reports,
+  price alerts, waste logger, verify-email resend, audit detail, user
+  edit / reset). Dismiss is now uniformly non-committal; the destructive
+  policy is **backdrop = cancel for all** (delete only fires from its
+  explicit button). Programmatic `$q.dialog()` confirms (recipe delete,
+  unsaved-changes, cook-start) were audited and already correct — they
+  only commit/navigate on `.onOk()`, never on dismiss — so they were left
+  as-is. Dialog cards that sized themselves via a scoped CSS class
+  (`comparison-card`, `orphans-card`, `quick-add-sheet`) had that sizing
+  moved to the `card-style` prop, since the card now lives in
+  `BaseDialog`'s style scope.
+- **A2 follow-up — `BaseButton` `danger-ghost` variant.** Added a flat
+  negative ("ghost danger") variant for low-emphasis destructive actions
+  (`{ flat: true, color: 'negative' }`). Replaces the flat-negative
+  `q-btn`s that A2 Phase 2 had deliberately left unmigrated:
+  `StockItemDetailPage` Delete + clear-expiry, `MealPlansOverview` Delete
+  plan.
 - **A2 — Standard button (Phase 2: detail-page toolbars + dialog footers
   + onboarding + auth/settings/data).** Migrated approximately 95
   `q-btn` instances across 20 additional files to `BaseButton`. App-wide

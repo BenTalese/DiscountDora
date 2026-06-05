@@ -302,8 +302,7 @@
         </div>
 
         <!-- Suggest cookable recipes ───────────────────────────────── -->
-        <q-dialog v-model="suggestOpen">
-            <q-card style="width: 460px; max-width: 95vw">
+        <BaseDialog v-model="suggestOpen" card-style="width: 460px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Recipes you can cook now</div>
                     <q-space />
@@ -334,14 +333,12 @@
                         </q-item>
                     </q-list>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <MealPlanEditDialog v-model="editDialogOpen" :plan="editingPlan" @saved="onPlanSaved" />
 
         <!-- Log cook from the planner palette ─────────────────────── -->
-        <q-dialog v-model="paletteLogCookOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="paletteLogCookOpen" card-style="min-width: 320px">
                 <q-card-section class="text-h6">Log a cook</q-card-section>
                 <q-card-section class="q-pt-none">
                     <q-input
@@ -367,14 +364,14 @@
                         @click="confirmPaletteLogCook"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import MealPlanEditDialog from 'components/MealPlanEditDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

@@ -230,8 +230,7 @@
         </q-card>
 
         <!-- ── Restore report (shown after a commit) ─────────────────── -->
-        <q-dialog v-model="reportOpen">
-            <q-card style="min-width: 360px; max-width: 600px">
+        <BaseDialog v-model="reportOpen" card-style="min-width: 360px; max-width: 600px">
                 <q-card-section class="row items-center q-gutter-md">
                     <q-icon
                         :name="report?.ok ? 'check_circle' : 'error'"
@@ -286,13 +285,13 @@
                         @click="reloadNow"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';

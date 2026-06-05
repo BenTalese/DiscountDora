@@ -28,10 +28,6 @@
                 @click="onSearch"
             />
             <q-btn v-else color="negative" no-caps :icon="ICONS.close" label="Cancel" @click="onCancelSearch" />
-
-            <q-btn flat round dense :icon="ICONS.tune" :color="showFilters ? 'primary' : undefined" @click="showFilters = !showFilters">
-                <q-tooltip>Toggle filters</q-tooltip>
-            </q-btn>
         </div>
 
         <!-- ─── Merchant connection status badges ──────────────────────── -->
@@ -50,9 +46,9 @@
             </q-chip>
         </div>
 
-        <!-- ─── Filters ────────────────────────────────────────────────── -->
-        <q-card v-if="showFilters" flat bordered class="q-mb-md">
-            <q-card-section class="q-py-sm">
+        <!-- ─── Filters ─ standardised via FilterBar (A4) ──────────────── -->
+        <FilterBar :active-count="activeFilterCount" @clear="clearAllFilters">
+            <template #filters>
                 <div class="row items-center q-gutter-sm q-mb-sm">
                     <div class="text-caption dora-text-muted q-mr-sm">Stores</div>
                     <q-chip
@@ -129,11 +125,9 @@
                             <q-input v-model.number="weightMax" type="number" dense outlined placeholder="max" style="width: 80px" />
                         </div>
                     </div>
-                    <q-space />
-                    <q-btn flat dense no-caps label="Clear ranges" @click="clearRanges" />
                 </div>
-            </q-card-section>
-        </q-card>
+            </template>
+        </FilterBar>
 
         <!-- ─── Status banners ─────────────────────────────────────────── -->
         <q-banner v-if="isSearching" class="dora-bg-sunken q-mb-md" dense rounded>
@@ -213,8 +207,7 @@
         </q-page-sticky>
 
         <!-- ─── Comparison dialog ──────────────────────────────────────── -->
-        <q-dialog v-model="compareOpen">
-            <q-card style="min-width: 320px; max-width: 95vw">
+        <BaseDialog v-model="compareOpen" card-style="min-width: 320px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Compare products</div>
                     <q-space />
@@ -256,12 +249,10 @@
                         </tbody>
                     </q-markup-table>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ─── Link-to-stock-item dialog ──────────────────────────────── -->
-        <q-dialog v-model="linkOpen">
-            <q-card style="width: 460px; max-width: 95vw">
+        <BaseDialog v-model="linkOpen" card-style="width: 460px; max-width: 95vw">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Link to a stock item</div>
                     <q-space />
@@ -285,8 +276,7 @@
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Link" :loading="linking" :disable="!linkStockItemId" @click="confirmLink" />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
@@ -294,6 +284,8 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import BaseDialog from 'src/components/BaseDialog.vue';
+    import FilterBar from 'src/components/FilterBar.vue';
     import ProductSearchCard from 'src/components/ProductSearchCard.vue';
     import type { IOfferSortByOption } from 'src/helpers/offerSortByOptions';
     import { OfferSortByOptions } from 'src/helpers/offerSortByOptions';
@@ -338,7 +330,6 @@
     const searchTerm = ref('');
     const previousSearchTerm = ref<string | undefined>();
     const resultLimit = ref(10);
-    const showFilters = ref(true);
 
     function offerKey(o: ScrapedProductOffer): string {
         return `${o.merchant_name}-${o.merchant_stockcode}`;
@@ -481,6 +472,22 @@
         if (filters.showOnlySpecials) toggleSpecialsFilter();
         clearRanges();
     }
+
+    // Active-filter count for the FilterBar badge. Counts the refinement
+    // filters that "Clear filters" resets — NOT the merchant/search scope
+    // (which has its own "Toggle all"). Mirrors clearAllFilters.
+    const activeFilterCount = computed(() => {
+        let n = 0;
+        if (filters.showOnlyAvailable) n++;
+        if (filters.showOnlySpecials) n++;
+        if (halfPriceOnly.value) n++;
+        if (priceMin.value != null) n++;
+        if (priceMax.value != null) n++;
+        if (unitPriceMax.value != null) n++;
+        if (weightMin.value != null) n++;
+        if (weightMax.value != null) n++;
+        return n;
+    });
 
     // ── Price-history sparklines (only for saved products) ────────────────
     const historyByKey = ref<Map<string, number[]>>(new Map());

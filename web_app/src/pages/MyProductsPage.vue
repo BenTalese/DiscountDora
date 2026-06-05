@@ -100,19 +100,22 @@
             </template>
         </q-banner>
 
-        <!-- ── Filters ────────────────────────────────────────────── -->
-        <div class="row q-mb-md q-gutter-sm items-center">
-            <q-input
-                v-model="searchText"
-                dense
-                outlined
-                clearable
-                debounce="200"
-                placeholder="Search products"
-                style="min-width: 220px"
-            >
-                <template #append><q-icon :name="ICONS.search" /></template>
-            </q-input>
+        <!-- ── Filters ─ standardised via FilterBar (A4) ──────────── -->
+        <FilterBar :active-count="activeFilterCount" @clear="clearFilters">
+            <template #search>
+                <q-input
+                    v-model="searchText"
+                    dense
+                    outlined
+                    clearable
+                    debounce="200"
+                    placeholder="Search products"
+                >
+                    <template #append><q-icon :name="ICONS.search" /></template>
+                </q-input>
+            </template>
+            <template #filters>
+            <div class="row q-gutter-sm items-center">
             <q-toggle v-model="onDealOnly" label="On deal now" dense />
             <q-toggle v-model="includeInactive" label="Show inactive" dense />
             <q-select
@@ -140,15 +143,9 @@
                 label="Linked stock item"
                 style="min-width: 240px"
             />
-            <q-btn
-                v-if="hasAnyFilter"
-                flat
-                no-caps
-                :icon="ICONS.filter_alt_off"
-                label="Clear"
-                @click="clearFilters"
-            />
-        </div>
+            </div>
+            </template>
+        </FilterBar>
 
         <!-- ── Grid ───────────────────────────────────────────────── -->
         <FadeTransition mode="out-in">
@@ -405,8 +402,7 @@
         </FadeTransition>
 
         <!-- ── Bulk-add target-list picker ────────────────────────── -->
-        <q-dialog v-model="bulkAddOpen">
-            <q-card style="min-width: 380px">
+        <BaseDialog v-model="bulkAddOpen" card-style="min-width: 380px">
                 <q-card-section>
                     <div class="text-h6">Add to which list?</div>
                     <div class="text-caption dora-text-muted">
@@ -438,12 +434,15 @@
                         @click="confirmBulkAdd"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Stock items without products dialog ────────────────── -->
-        <q-dialog v-model="orphansOpen" :maximized="$q.screen.lt.sm">
-            <q-card class="orphans-card column">
+        <BaseDialog
+            v-model="orphansOpen"
+            :maximized="$q.screen.lt.sm"
+            card-style="width: 560px; max-width: 100vw; height: 90vh"
+            card-class="column"
+        >
                 <q-card-section class="row items-center q-pb-sm">
                     <div>
                         <div class="text-h6">Stock items without products</div>
@@ -501,12 +500,10 @@
                         </q-item>
                     </q-list>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- ── Link-to-stock-item dialog ──────────────────────────── -->
-        <q-dialog v-model="linkOpen">
-            <q-card style="min-width: 420px">
+        <BaseDialog v-model="linkOpen" card-style="min-width: 420px">
                 <q-card-section>
                     <div class="text-h6">Link to a stock item</div>
                     <div class="text-caption dora-text-muted">
@@ -540,14 +537,15 @@
                         @click="confirmLink"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
+    import FilterBar from 'src/components/FilterBar.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -651,10 +649,11 @@
         products.value.filter((p) => {
             if (!includeInactive.value && !p.is_active) return false;
             if (onDealOnly.value && !onSpecial(p)) return false;
-            if (merchantFilter.value && p.merchant_name !== merchantFilter.value)
+            // A4: explicit "empty = off" — a null selection skips the predicate.
+            if (merchantFilter.value !== null && p.merchant_name !== merchantFilter.value)
                 return false;
             if (
-                linkedStockItemFilter.value
+                linkedStockItemFilter.value !== null
                 && p.linked_stock_item_id !== linkedStockItemFilter.value
             )
                 return false;
@@ -689,6 +688,15 @@
             || merchantFilter.value !== null
             || linkedStockItemFilter.value !== null,
     );
+    // Active-filter count for the FilterBar badge (excludes the search box).
+    const activeFilterCount = computed(() => {
+        let n = 0;
+        if (onDealOnly.value) n++;
+        if (includeInactive.value) n++;
+        if (merchantFilter.value !== null) n++;
+        if (linkedStockItemFilter.value !== null) n++;
+        return n;
+    });
     function clearFilters() {
         searchText.value = '';
         onDealOnly.value = false;
@@ -1079,10 +1087,5 @@
         line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-    }
-    .orphans-card {
-        width: 560px;
-        max-width: 100vw;
-        height: 90vh;
     }
 </style>

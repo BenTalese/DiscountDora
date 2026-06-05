@@ -102,8 +102,7 @@
         </div>
 
         <!-- ── Level picker dialog ────────────────────────────────── -->
-        <q-dialog v-model="changeOpen">
-            <q-card style="min-width: 280px">
+        <BaseDialog v-model="changeOpen" card-style="min-width: 280px">
                 <q-card-section>
                     <div class="text-h6 q-mb-sm">Set level</div>
                     <q-list>
@@ -118,13 +117,13 @@
                         </q-item>
                     </q-list>
                 </q-card-section>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
     import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';

@@ -185,8 +185,7 @@
         </div>
 
         <!-- ── Alerts modal ──────────────────────────────────────── -->
-        <q-dialog v-model="alertsOpen">
-            <q-card style="min-width: 420px">
+        <BaseDialog v-model="alertsOpen" card-style="min-width: 420px">
                 <q-card-section class="row items-center">
                     <div class="text-h6">Price alerts</div>
                     <q-space />
@@ -219,8 +218,7 @@
                         </q-item-section>
                     </q-item>
                 </q-list>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
@@ -229,6 +227,7 @@
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';
     import ProductApiService from 'src/services/api/productApiService';

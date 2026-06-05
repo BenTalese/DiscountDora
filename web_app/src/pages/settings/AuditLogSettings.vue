@@ -198,8 +198,11 @@
         </q-card-section>
 
         <!-- ── Detail drawer ─────────────────────────────────────────── -->
-        <q-dialog v-model="detailOpen" maximized>
-            <q-card>
+        <BaseDialog
+            v-model="detailOpen"
+            maximized
+            card-style="width: 100%; max-width: 100vw; height: 100%; max-height: 100vh"
+        >
                 <q-toolbar>
                     <q-toolbar-title>
                         Audit event
@@ -245,13 +248,13 @@
                     />
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-card>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref } from 'vue';

@@ -1,6 +1,5 @@
 <template>
-    <q-dialog v-model="open" position="bottom" @hide="onHide">
-        <q-card class="quick-add-sheet">
+    <BaseDialog v-model="open" position="bottom" card-style="width: 520px; max-width: 96vw" @cancel="onHide">
             <q-card-section class="row items-center q-pb-none">
                 <div class="text-h6">Quick add to list</div>
                 <q-space />
@@ -126,13 +125,13 @@
                     @click="confirmAdd"
                 />
             </q-card-actions>
-        </q-card>
-    </q-dialog>
+    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
@@ -331,10 +330,6 @@
 </script>
 
 <style scoped>
-    .quick-add-sheet {
-        width: 520px;
-        max-width: 96vw;
-    }
     .quick-add-sheet__results {
         max-height: 320px;
         overflow-y: auto;

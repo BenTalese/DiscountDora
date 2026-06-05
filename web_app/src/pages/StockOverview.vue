@@ -83,8 +83,28 @@
             </div>
         </div>
 
-        <!-- Quick filters ──────────────────────────────────────────────── -->
-        <div class="row q-gutter-sm q-mb-md items-center">
+        <!-- Quick filters ─ standardised via FilterBar (A4) ────────────── -->
+        <FilterBar :active-count="filters.activeFilterCount.value" @clear="filters.clearFilters">
+            <template #actions>
+                <q-btn
+                    v-if="bulkMode"
+                    flat
+                    no-caps
+                    :icon="ICONS.close"
+                    label="Cancel"
+                    @click="cancelBulk"
+                />
+                <q-btn
+                    v-else
+                    flat
+                    no-caps
+                    :icon="ICONS.checklist"
+                    label="Bulk select"
+                    @click="bulkMode = true"
+                />
+            </template>
+            <template #filters>
+            <div class="row q-gutter-sm items-center">
             <q-chip
                 v-for="level in stockLevels"
                 :key="level.stock_level_id"
@@ -180,26 +200,9 @@
                 label="Sort by"
                 style="min-width: 180px"
             />
-
-            <q-space />
-
-            <q-btn
-                v-if="bulkMode"
-                flat
-                no-caps
-                :icon="ICONS.close"
-                label="Cancel"
-                @click="cancelBulk"
-            />
-            <q-btn
-                v-else
-                flat
-                no-caps
-                :icon="ICONS.checklist"
-                label="Bulk select"
-                @click="bulkMode = true"
-            />
-        </div>
+            </div>
+            </template>
+        </FilterBar>
 
         <!-- Bulk action bar ───────────────────────────────────────────── -->
         <q-banner v-if="bulkMode" class="bg-primary dora-text-on-primary q-mb-md" dense rounded>
@@ -357,6 +360,7 @@
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
+    import FilterBar from 'src/components/FilterBar.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';

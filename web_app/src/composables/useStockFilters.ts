@@ -170,10 +170,15 @@ export function useStockFilters(sources: {
             .filter((t) => t.length > 0);
 
         const matches = sources.stockItems().filter((item) => {
-            if (levelFilter.value && item.stock_level_id !== levelFilter.value) return false;
-            if (locationFilter.value && item.stock_location_id !== locationFilter.value)
+            // A4: explicit "empty = off". A blank/null selection must skip the
+            // predicate entirely, never exclude rows. (Was relying on
+            // truthiness, which would break if a default were ever non-null.)
+            if (levelFilter.value !== null && item.stock_level_id !== levelFilter.value)
                 return false;
-            if (groupFilter.value && item.stock_group_id !== groupFilter.value) return false;
+            if (locationFilter.value !== null && item.stock_location_id !== locationFilter.value)
+                return false;
+            if (groupFilter.value !== null && item.stock_group_id !== groupFilter.value)
+                return false;
             if (essentialsOnly.value && !item.is_flagged) return false;
             if (autoAddOnly.value && !item.auto_add_when_low) return false;
             if (openOnly.value && !item.is_open) return false;
@@ -239,6 +244,21 @@ export function useStockFilters(sources: {
         return sorted;
     });
 
+    // ── Active-filter count (for the FilterBar badge; excludes search) ──
+    const activeFilterCount = computed(() => {
+        let n = 0;
+        if (levelFilter.value !== null) n++;
+        if (locationFilter.value !== null) n++;
+        if (groupFilter.value !== null) n++;
+        if (essentialsOnly.value) n++;
+        if (autoAddOnly.value) n++;
+        if (openOnly.value) n++;
+        if (hasAlertOnly.value) n++;
+        if (usedInRecipeOnly.value) n++;
+        if (cartFilter.value !== 'all') n++;
+        return n;
+    });
+
     // ── Imperative helpers ──────────────────────────────────────────────
     function toggleLevelFilter(id: string) {
         levelFilter.value = levelFilter.value === id ? null : id;
@@ -276,6 +296,7 @@ export function useStockFilters(sources: {
         summaryCounts,
         countByLevel,
         filteredStockItems,
+        activeFilterCount,
         // helpers
         toggleLevelFilter,
         clearFilters,

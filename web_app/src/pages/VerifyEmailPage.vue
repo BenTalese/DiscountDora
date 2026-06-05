@@ -39,8 +39,7 @@
             </q-card-actions>
         </q-card>
 
-        <q-dialog v-model="resendOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="resendOpen" card-style="min-width: 320px">
                 <q-card-section>
                     <div class="text-h6">Resend verification</div>
                 </q-card-section>
@@ -64,14 +63,14 @@
                         @click="onResend"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </div>
 </template>
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { computed, onMounted, ref } from 'vue';
     import { useRoute } from 'vue-router';
     import AuthApiService from 'src/services/api/authApiService';

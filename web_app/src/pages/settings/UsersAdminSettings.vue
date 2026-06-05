@@ -122,8 +122,7 @@
         </q-inner-loading>
 
         <!-- Edit dialog ─────────────────────────────────────────── -->
-        <q-dialog v-model="editOpen">
-            <q-card style="min-width: 320px; max-width: 480px">
+        <BaseDialog v-model="editOpen" card-style="min-width: 320px; max-width: 480px">
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-h6">Edit {{ editingUser?.username }}</div>
                     <q-space />
@@ -156,12 +155,10 @@
                         @click="onSaveEdit"
                     />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
 
         <!-- Password-reset result dialog ────────────────────────── -->
-        <q-dialog v-model="resetResultOpen">
-            <q-card style="min-width: 320px">
+        <BaseDialog v-model="resetResultOpen" card-style="min-width: 320px">
                 <q-card-section>
                     <div class="text-h6">Password reset</div>
                     <div class="text-caption dora-text-muted">
@@ -191,13 +188,13 @@
                 <q-card-actions align="right">
                     <BaseButton variant="ghost" label="Done" v-close-popup />
                 </q-card-actions>
-            </q-card>
-        </q-dialog>
+        </BaseDialog>
     </q-card>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { copyToClipboard, useQuasar } from 'quasar';

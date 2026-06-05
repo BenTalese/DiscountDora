@@ -21,7 +21,7 @@
         <q-card class="login-card" flat>
             <q-card-section class="text-center login-card-head">
                 <div class="login-title" style="font-family: 'Cute Dino'">
-                    Discount Dora
+                    Dashy Dora
                 </div>
                 <div class="login-sub">
                     {{ mode === 'login' ? 'Sign in to your pantry' : 'Create your account' }}

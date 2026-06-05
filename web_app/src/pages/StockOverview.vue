@@ -50,38 +50,7 @@
             </q-input>
         </div>
 
-        <!-- Quick-info summary banner — at-a-glance pantry health. -->
-        <div
-            v-if="stockItems.length > 0"
-            class="row q-gutter-md items-center q-mb-md stock-summary-banner"
-        >
-            <div class="stock-summary-stat">
-                <div class="text-h6">{{ stockItems.length }}</div>
-                <div class="text-caption dora-text-muted">total items</div>
-            </div>
-            <q-separator vertical />
-            <div class="stock-summary-stat">
-                <div class="text-h6 text-warning">{{ filters.summaryCounts.value.low }}</div>
-                <div class="text-caption dora-text-muted">low stock</div>
-            </div>
-            <div class="stock-summary-stat">
-                <div class="text-h6 text-negative">{{ filters.summaryCounts.value.out }}</div>
-                <div class="text-caption dora-text-muted">out of stock</div>
-            </div>
-            <q-separator vertical />
-            <div class="stock-summary-stat">
-                <div class="text-h6 text-warning">{{ filters.summaryCounts.value.essentials }}</div>
-                <div class="text-caption dora-text-muted">essentials</div>
-            </div>
-            <div class="stock-summary-stat">
-                <div class="text-h6 text-secondary">{{ filters.summaryCounts.value.open }}</div>
-                <div class="text-caption dora-text-muted">open / in-use</div>
-            </div>
-            <q-space />
-            <div class="text-caption dora-text-muted">
-                {{ filters.filteredStockItems.value.length }} of {{ stockItems.length }} shown
-            </div>
-        </div>
+        <!-- Summary counts moved to the sticky PageCountsFooter (A7). -->
 
         <!-- Quick filters ─ standardised via FilterBar (A4) ────────────── -->
         <FilterBar :active-count="filters.activeFilterCount.value" @clear="filters.clearFilters">
@@ -335,6 +304,8 @@
             </template>
         </q-splitter>
 
+        <PageCountsFooter v-if="stockItems.length > 0" :counts="filters.footerCounts.value" />
+
         <CreateStockItemDialog v-model="createDialogOpen" />
 
         <BulkMoveLocationDialog
@@ -361,6 +332,7 @@
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import ScanOverlay from 'src/components/ScanOverlay.vue';
     import BulkMoveLocationDialog from 'src/components/stock/BulkMoveLocationDialog.vue';
@@ -527,7 +499,7 @@
     }
 
     function bulkSetSubstitute() {
-        // The substitutes graph arrives with the StockItemDetail revamp (P2).
+        // Substitutes are managed on each item's detail page (StockItemDetail, P2).
         $q.notify({
             type: 'info',
             position: 'bottom-right',

@@ -101,7 +101,7 @@ export function useStockItemActions() {
         void router.push(`/stock/${stockItemId}`);
     }
 
-    /** Substitutes graph lives on the detail page (built in P2). */
+    /** A stock item's substitutes live on its detail page (built in P2). */
     function findSubstitutes(stockItemId: string) {
         void router.push({ path: `/stock/${stockItemId}`, query: { section: 'substitutes' } });
     }

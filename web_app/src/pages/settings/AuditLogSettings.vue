@@ -429,13 +429,14 @@
         background: var(--surface-sunken);
         border-radius: 4px;
         padding: 12px;
-        font-size: 12px;
+        /* A6 — scale token (was fixed 12px). */
+        font-size: calc(var(--font-size-xs) * 1rem);
         white-space: pre-wrap;
         max-height: 360px;
         overflow: auto;
     }
     .text-mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 12px;
+        font-size: calc(var(--font-size-xs) * 1rem);
     }
 </style>

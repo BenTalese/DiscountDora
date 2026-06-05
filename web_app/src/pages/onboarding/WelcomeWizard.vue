@@ -4,7 +4,7 @@
             <!-- ── Header: progress + skip-everything ─────────────────── -->
             <div class="row items-center q-mb-md">
                 <div class="col">
-                    <div class="text-h5">Welcome to Discount Dora</div>
+                    <div class="text-h5">Welcome to Dashy Dora</div>
                     <div class="text-caption dora-text-muted">
                         Step {{ stepIndex + 1 }} of {{ visibleSteps.length }}
                         · {{ visibleSteps[stepIndex]?.title }}

@@ -2,13 +2,7 @@
     <q-page padding>
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div class="text-caption dora-text-muted">
-                {{ filteredProducts.length }} of {{ products.length }} shown
-                · {{ onDealCount }} on deal
-                <span v-if="unlinkedCount > 0">
-                    · {{ unlinkedCount }} unlinked
-                </span>
-            </div>
+            <!-- Counts moved to the sticky PageCountsFooter (A7). -->
             <q-space />
             <BaseButton
                 variant="secondary"
@@ -154,7 +148,7 @@
             key="prod-loading"
             class="text-center q-py-xl"
         >
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </div>
 
         <q-banner v-else-if="loadError" key="prod-error" class="dora-bg-negative-soft text-negative" dense rounded>
@@ -401,6 +395,8 @@
         </div>
         </FadeTransition>
 
+        <PageCountsFooter v-if="products.length > 0" :counts="footerCounts" />
+
         <!-- ── Bulk-add target-list picker ────────────────────────── -->
         <BaseDialog v-model="bulkAddOpen" card-style="min-width: 380px">
                 <q-card-section>
@@ -543,9 +539,11 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -675,10 +673,20 @@
         }),
     );
 
-    const onDealCount = computed(() => products.value.filter(onSpecial).length);
-    const unlinkedCount = computed(
-        () => products.value.filter((p) => !p.linked_stock_item_id).length,
-    );
+    // A7 — sticky footer counts over the FILTERED view.
+    const footerCounts = computed(() => [
+        { label: 'Shown', value: filteredProducts.value.length, tone: 'primary' as const },
+        {
+            label: 'On deal',
+            value: filteredProducts.value.filter(onSpecial).length,
+            tone: 'positive' as const,
+        },
+        {
+            label: 'Unlinked',
+            value: filteredProducts.value.filter((p) => !p.linked_stock_item_id).length,
+            tone: 'warning' as const,
+        },
+    ]);
 
     const hasAnyFilter = computed(
         () =>

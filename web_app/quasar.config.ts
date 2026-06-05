@@ -222,7 +222,7 @@ export default defineConfig((ctx): any => {
             injectPwaMetaTags: true,
             useCredentialsForManifestTag: false,
             extendManifestJson(json: Record<string, unknown>) {
-                json.name = 'Discount Dora';
+                json.name = 'Dashy Dora';
                 json.short_name = 'Dora';
                 json.description = 'Your pantry at your fingertips.';
                 json.theme_color = '#f5c462';        // matches DS1's primary swatch

@@ -1,7 +1,7 @@
 <template>
     <div class="q-pa-md cook-mode">
         <div v-if="!recipe" class="text-center q-pa-xl">
-            <q-spinner size="40px" v-if="loading" />
+            <AppSpinner v-if="loading" size="40px" />
             <q-banner v-else class="dora-bg-sunken">Recipe not found.</q-banner>
         </div>
 
@@ -133,8 +133,44 @@
                                     <span v-if="row.ingredient.quantity">{{ row.ingredient.quantity }}</span>
                                     <span v-if="row.ingredient.unit"> {{ row.ingredient.unit }}</span>
                                 </span>
-                                <StockItemChip v-if="row.stockItem" :stock-item="row.stockItem" />
-                                <span v-else>{{ row.ingredient.stock_item_name }}</span>
+                                <!-- B8: temporary cook-session substitute (never edits the recipe) -->
+                                <template v-if="sessionSwaps.has(row.ingredient.stock_item_id)">
+                                    <q-chip
+                                        dense
+                                        color="secondary"
+                                        text-color="white"
+                                        :icon="ICONS.swap_horiz"
+                                    >
+                                        {{ sessionSwaps.get(row.ingredient.stock_item_id)!.substituteName }}
+                                    </q-chip>
+                                    <span class="text-caption dora-text-muted">
+                                        instead of {{ row.ingredient.stock_item_name }}
+                                    </span>
+                                    <q-btn
+                                        flat
+                                        dense
+                                        round
+                                        size="sm"
+                                        :icon="ICONS.undo"
+                                        @click="clearSwap(row.ingredient.stock_item_id)"
+                                    >
+                                        <q-tooltip>Undo substitute</q-tooltip>
+                                    </q-btn>
+                                </template>
+                                <template v-else>
+                                    <StockItemChip v-if="row.stockItem" :stock-item="row.stockItem" />
+                                    <span v-else>{{ row.ingredient.stock_item_name }}</span>
+                                    <q-btn
+                                        flat
+                                        dense
+                                        round
+                                        size="sm"
+                                        :icon="ICONS.swap_horiz"
+                                        @click="openSwapPicker(row.ingredient.stock_item_id, row.ingredient.stock_item_name)"
+                                    >
+                                        <q-tooltip>Use a substitute for this cook</q-tooltip>
+                                    </q-btn>
+                                </template>
                             </div>
                             <q-item-label
                                 v-if="row.ingredient.notes"
@@ -177,6 +213,39 @@
             </q-expansion-item>
         </template>
 
+        <!-- B8 — cook-session substitute picker (temporary; never edits recipe) -->
+        <BaseDialog v-model="swapPickerOpen" card-style="min-width: 360px; max-width: 520px">
+            <q-card-section class="text-h6">Substitute for {{ swapForName }}</q-card-section>
+            <q-separator />
+            <q-card-section v-if="loadingSwapOptions" class="text-center q-py-lg">
+                <AppSpinner size="32px" />
+            </q-card-section>
+            <q-card-section v-else-if="swapOptions.length === 0" class="dora-text-muted">
+                No substitutes recorded for {{ swapForName }}. Add some on the
+                stock item's detail page.
+            </q-card-section>
+            <q-card-section v-else class="q-pt-sm">
+                <div class="text-caption dora-text-muted q-mb-sm">
+                    Just for this cook — your saved recipe won't change.
+                </div>
+                <div class="row q-gutter-xs">
+                    <q-chip
+                        v-for="opt in swapOptions"
+                        :key="opt.stock_item_id"
+                        clickable
+                        color="primary"
+                        text-color="white"
+                        @click="applySwap(opt.stock_item_id, opt.name)"
+                    >
+                        {{ opt.name }}
+                    </q-chip>
+                </div>
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton variant="ghost" label="Close" v-close-popup />
+            </q-card-actions>
+        </BaseDialog>
+
         <!-- Finish flow ─────────────────────────────────────────────────── -->
         <BaseDialog v-model="finishDialogOpen" card-style="min-width: 360px; max-width: 95vw">
                 <q-card-section class="text-h6">Finished cooking?</q-card-section>
@@ -206,6 +275,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
@@ -219,7 +289,9 @@
     import { useVoiceInput } from 'src/composables/useVoiceInput';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
+    import type { Substitute } from 'src/models/stockItemDetail';
     import RecipeApiService from 'src/services/api/recipeApiService';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -238,6 +310,7 @@
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const recipeApiService = new RecipeApiService();
+    const stockItemApi = new StockItemApiService();
     const slActions = useShoppingListActions();
 
     const { stockItems } = storeToRefs(stockItemStore);
@@ -308,6 +381,43 @@
         if (usedIds.value.has(stockItemId)) usedIds.value.delete(stockItemId);
         else usedIds.value.add(stockItemId);
         usedIds.value = new Set(usedIds.value);
+    }
+
+    // ── B8 — temporary, cook-session-only substitutions ─────────────────
+    // Picking a substitute here applies ONLY to this cook: it never edits the
+    // saved recipe. It changes what gets decremented / added-to-list on finish.
+    // Keyed by the recipe ingredient's original stock_item_id.
+    const sessionSwaps = ref(new Map<string, { substituteId: string; substituteName: string }>());
+    const swapPickerOpen = ref(false);
+    const swapForId = ref<string | null>(null);
+    const swapForName = ref('');
+    const swapOptions = ref<Substitute[]>([]);
+    const loadingSwapOptions = ref(false);
+
+    async function openSwapPicker(stockItemId: string, name: string) {
+        swapForId.value = stockItemId;
+        swapForName.value = name;
+        swapOptions.value = [];
+        swapPickerOpen.value = true;
+        loadingSwapOptions.value = true;
+        try {
+            const detail = await stockItemApi.getDetailAsync(stockItemId);
+            swapOptions.value = detail.substitutes ?? [];
+        } catch {
+            swapOptions.value = [];
+        } finally {
+            loadingSwapOptions.value = false;
+        }
+    }
+    function applySwap(substituteId: string, substituteName: string) {
+        if (!swapForId.value) return;
+        sessionSwaps.value.set(swapForId.value, { substituteId, substituteName });
+        sessionSwaps.value = new Map(sessionSwaps.value);
+        swapPickerOpen.value = false;
+    }
+    function clearSwap(stockItemId: string) {
+        sessionSwaps.value.delete(stockItemId);
+        sessionSwaps.value = new Map(sessionSwaps.value);
     }
 
     // Mark every ingredient whose name appears in a step's text as used.
@@ -452,7 +562,12 @@
     async function confirmFinish() {
         finishing.value = true;
         try {
-            const used = [...usedIds.value];
+            // A session-substituted ingredient means the *substitute* was the
+            // thing actually used — so decrement / restock that item, not the
+            // original the recipe lists.
+            const used = [...usedIds.value].map(
+                (id) => sessionSwaps.value.get(id)?.substituteId ?? id,
+            );
 
             if (finishUpdateLevels.value) {
                 for (const id of used) {

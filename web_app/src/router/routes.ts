@@ -76,7 +76,11 @@ const routes: RouteRecordRaw[] = [
             { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
             { path: 'tts-test', component: () => import('pages/TtsTestPage.vue'), meta: { title: 'TTS test' } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
-            { path: 'recipes', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Recipes' } },
+            // A8 — the recipes collection page is now the "Cookbook" (/cookbook).
+            // Individual recipes stay at /recipes/:id (a single item is a recipe).
+            // Legacy /recipes redirects so old links/bookmarks/shortcuts still work.
+            { path: 'cookbook', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Cookbook' } },
+            { path: 'recipes', redirect: '/cookbook' },
             { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
             { path: 'recipes/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },

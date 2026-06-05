@@ -2,8 +2,24 @@
     <q-page padding>
         <!-- Loading shell -->
         <FadeTransition mode="out-in">
-        <div v-if="loading && !recipe" key="rd-loading" class="text-center q-py-xl">
-            <q-spinner color="primary" size="48px" />
+        <div v-if="loading && !recipe" key="rd-loading">
+            <!-- Skeleton mirrors the header + the two-column editor layout. -->
+            <div class="row items-center q-mb-md q-gutter-sm">
+                <AppSkeleton type="circle" width="36px" height="36px" />
+                <AppSkeleton type="line" width="240px" height="1.6rem" />
+                <q-space />
+                <AppSkeleton type="rect" width="110px" height="36px" />
+            </div>
+            <div class="row q-col-gutter-lg">
+                <div class="col-12 col-md-8">
+                    <AppSkeleton type="rect" width="100%" height="200px" class="q-mb-md" />
+                    <AppSkeleton type="rect" width="100%" height="260px" />
+                </div>
+                <div class="col-12 col-md-4">
+                    <AppSkeleton type="rect" width="100%" height="120px" class="q-mb-md" />
+                    <AppSkeleton type="rect" width="100%" height="180px" />
+                </div>
+            </div>
         </div>
 
         <q-banner v-else-if="loadError" key="rd-error" class="dora-bg-negative-soft text-negative" dense rounded>
@@ -487,7 +503,7 @@
                                         Find substitutes for missing
                                     </q-item-label>
                                     <q-item-label caption>
-                                        Uses the substitutes graph from each item's detail.
+                                        Shows substitutes recorded on each item's detail page.
                                     </q-item-label>
                                 </q-item-section>
                             </q-item>
@@ -526,13 +542,19 @@
         <BaseDialog v-model="substitutesOpen" card-style="min-width: 460px; max-width: 640px">
                 <q-card-section>
                     <div class="text-h6">Substitutes for missing ingredients</div>
+                    <div class="text-caption dora-text-muted">
+                        These are recorded on each item's detail page. To cook
+                        with one, start cook mode and tap the swap icon on the
+                        ingredient — it applies to that cook only and never
+                        changes the saved recipe.
+                    </div>
                 </q-card-section>
                 <q-separator />
                 <q-card-section
                     v-if="loadingSubstitutes"
                     class="text-center q-py-xl"
                 >
-                    <q-spinner color="primary" />
+                    <AppSpinner />
                 </q-card-section>
                 <q-card-section v-else class="q-pt-sm">
                     <div
@@ -551,13 +573,10 @@
                             <q-chip
                                 v-for="sub in entry.substitutes"
                                 :key="sub.stock_item_id"
-                                clickable
                                 color="primary"
                                 text-color="white"
-                                @click="onSwapIngredient(entry.stockItemId, sub.stock_item_id, sub.name)"
                             >
                                 {{ sub.name }}
-                                <q-tooltip>Swap into this recipe</q-tooltip>
                             </q-chip>
                         </div>
                     </div>
@@ -661,6 +680,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -1092,20 +1113,6 @@
         } finally {
             loadingSubstitutes.value = false;
         }
-    }
-
-    function onSwapIngredient(missingId: string, substituteId: string, substituteName: string) {
-        // Swap the *form* in place; user still has to Save to persist.
-        const idx = form.ingredients.findIndex((i) => i.stock_item_id === missingId);
-        if (idx < 0) return;
-        form.ingredients[idx]!.stock_item_id = substituteId;
-        markDirty();
-        $q.notify({
-            type: 'positive',
-            position: 'bottom-right',
-            message: `Swapped in "${substituteName}". Don't forget to save.`,
-        });
-        substitutesOpen.value = false;
     }
 
     // ── Import from URL ──────────────────────────────────────────────

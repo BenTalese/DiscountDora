@@ -13,7 +13,8 @@
 <style scoped>
     .dora-pageTitle {
         font-family: 'Cute Dino', sans-serif;
-        font-size: 24px;
+        /* A6 — scale token (was fixed 24px) so it follows the text-size pref. */
+        font-size: calc(var(--font-size-2xl) * 1rem);
         margin-top: 4px;
         opacity: 0.9;
     }

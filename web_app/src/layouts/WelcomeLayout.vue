@@ -7,10 +7,10 @@
         <q-header reveal class="bg-transparent welcome-header q-px-md">
             <q-toolbar class="welcome-toolbar">
                 <q-avatar square size="36px">
-                    <img src="../assets/logo-mascot.png" alt="Discount Dora" />
+                    <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
                 </q-avatar>
                 <q-toolbar-title class="welcome-title">
-                    Discount Dora
+                    Dashy Dora
                 </q-toolbar-title>
                 <q-btn
                     flat

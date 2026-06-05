@@ -2,10 +2,7 @@
     <div class="q-pa-md">
         <!-- ── Header ─────────────────────────────────────────────── -->
         <div class="row items-center q-mb-md">
-            <div class="text-caption dora-text-muted">
-                {{ filteredRecipes.length }} of {{ recipes.length }} shown
-                · {{ cookableNowCount }} cookable now
-            </div>
+            <!-- Counts moved to the sticky PageCountsFooter (A7). -->
             <q-space />
             <BaseButton
                 :variant="compareMode ? 'primary' : 'secondary'"
@@ -153,7 +150,7 @@
         <!-- ── Grid grouped by collection ─────────────────────────── -->
         <FadeTransition mode="out-in">
         <div v-if="loading && recipes.length === 0" key="rec-loading" class="text-center q-py-xl">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </div>
         <div v-else key="rec-content">
             <div
@@ -212,6 +209,8 @@
             </div>
         </div>
         </FadeTransition>
+
+        <PageCountsFooter v-if="recipes.length > 0" :counts="footerCounts" />
 
         <!-- ── Edit dialog ────────────────────────────────────────── -->
         <RecipeEditDialog
@@ -360,9 +359,11 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -475,7 +476,20 @@
         );
     }
 
-    const cookableNowCount = computed(() => recipes.value.filter(isCookable).length);
+    // A7 — sticky footer counts over the FILTERED view.
+    const footerCounts = computed(() => [
+        { label: 'Shown', value: filteredRecipes.value.length, tone: 'primary' as const },
+        {
+            label: 'Cookable now',
+            value: filteredRecipes.value.filter(isCookable).length,
+            tone: 'positive' as const,
+        },
+        {
+            label: 'Favourites',
+            value: filteredRecipes.value.filter((r) => r.is_favourite).length,
+            tone: 'info' as const,
+        },
+    ]);
 
     // ── Tag (cuisine + category) options ────────────────────────────
     // Recipes don't have a dedicated `tags` field — we synthesise tags

@@ -131,7 +131,7 @@
 
         <!-- ─── Status banners ─────────────────────────────────────────── -->
         <q-banner v-if="isSearching" class="dora-bg-sunken q-mb-md" dense rounded>
-            <template #avatar><q-spinner-dots color="primary" size="32px" /></template>
+            <template #avatar><AppSpinner size="32px" /></template>
             Searching {{ searchingStoresLabel }}…
             <span class="text-caption dora-text-muted">Live scrapes can take 10–20 seconds.</span>
             <template #action><q-btn flat no-caps label="Cancel" @click="onCancelSearch" /></template>
@@ -284,6 +284,7 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
     import ProductSearchCard from 'src/components/ProductSearchCard.vue';

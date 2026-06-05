@@ -214,15 +214,15 @@ def register_user():
         try_send(
             send_email,
             to=response.verify_user_email,
-            subject="Verify your Discount Dora account",
+            subject="Verify your Dashy Dora account",
             html_body=render_template(
                 "verify_email.html",
-                subject="Verify your Discount Dora account",
+                subject="Verify your Dashy Dora account",
                 username=response.verify_username or "there",
                 verify_url=build_verify_url(response.verify_token),
             ),
             text_body=(
-                f"Hi {response.verify_username}, verify your Discount Dora "
+                f"Hi {response.verify_username}, verify your Dashy Dora "
                 f"account: {build_verify_url(response.verify_token)} "
                 f"(expires in 24 hours)"
             ),

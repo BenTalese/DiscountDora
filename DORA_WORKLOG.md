@@ -24,6 +24,25 @@ next.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B5 follow-up 2: Dashboard "Continue" sealed-wizard bug + Wave-B audit
 **Status:** complete (static verification only)
 **What changed:**
@@ -108,6 +127,25 @@ next.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B5 follow-up: onboarding "dead button" bug (stale auth state vs router guard)
 **Status:** complete (static verification only)
 **What changed:**
@@ -180,6 +218,25 @@ next.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B7 (notification defects: "I'm a notification!" + duplicate toasts)
 **Status:** complete (static verification only)
 **What changed:**
@@ -262,6 +319,25 @@ next.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B5 (dead nav buttons — onboarding, dashboard, alerts→404)
 **Status:** complete (static verification only — node_modules absent)
 **What changed:**
@@ -343,6 +419,25 @@ as a follow-up.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B4 (delete stock item → FK constraint failed)
 **Status:** complete (static verification only — node_modules / DB not exercised)
 **What changed:**
@@ -426,6 +521,25 @@ as a follow-up.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B3 (partial-update semantics / "can't save unless I change the name")
 **Status:** complete (verified-resolved — no code changes)
 **What changed:** nothing in code. Audit confirmed the reported bug doesn't
@@ -482,6 +596,25 @@ toast) or a code path I haven't seen yet. Flag it and I'll re-investigate.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — B1 ("Extra inputs are not permitted" on product save/link/quick-add/inactive)
 **Status:** complete (static verification only — node_modules not installed)
 **What changed:**
@@ -551,6 +684,359 @@ toast) or a code path I haven't seen yet. Flag it and I'll re-investigate.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
+## 2026-06-05 — A6 (text-size scale: re-spaced + extra-large + global apply)
+**Status:** complete — static verification only (node_modules absent)
+**What changed:**
+- **New 4th step + re-spaced scale.** `themeService.ts` FONT_SIZE_PX:
+  sm 14 / md 16.5 / lg 20.5 / xl 23px (was 14/16/18, too close). Ratios ≈
+  0.85 / 1.0 / 1.25 / 1.4 with a very slightly larger default.
+- **`xl` wired end-to-end:** `models/auth.ts` `FontSizePreference` += `'xl'`;
+  `PreferencesSettings.vue` picker += "Extra large"; backend
+  `user.py` `ALLOWED_FONT_SIZES` += `FONT_SIZE_XL`. DB column is `String(2)` so
+  "xl" fits — **no migration**. Default stays `md`.
+- **Global application (fixed-px → scale tokens):** `PageTitle.vue` (24px →
+  `calc(var(--font-size-2xl)*1rem)`), `PreferencesSettings` theme-card blurb and
+  `AuditLogSettings` payload/mono (12px → `--font-size-xs`). Added a `.q-tooltip`
+  rule in `app.scss` so tooltips follow the pref.
+
+**Decisions made:**
+- **User chose 4 steps `0.85 / 1.0 / 1.25 / 1.4` with a "very slightly larger"
+  default** (vs the prompt's 3-step options). Implemented base md = 16.5px (a
+  +3% bump from 16) → sm 14 / lg 20.5 / xl 23 honour those ratios with clean-ish
+  px. This was a bigger change than "re-space" (new enum value end-to-end).
+- **Root cause of "not applied everywhere":** `app.scss` already sets
+  `:root { font-size: var(--dora-base-font-size) }`, so rem text (incl. Quasar
+  `text-*`) already scaled. The only hold-outs were fixed-px — migrated the real
+  text ones; left deliberate carve-outs (camera overlay, SVG chart, micro-gauge).
+- **Tooltips:** added a defensive global rule (they teleport to <body>; rem still
+  resolves against root, but the rule guarantees they track the pref).
+
+**Files touched:**
+- Backend: `dora_api/domain/entities/user.py`.
+- Frontend: `web_app/src/models/auth.ts`, `web_app/src/services/themeService.ts`,
+  `web_app/src/pages/settings/PreferencesSettings.vue`,
+  `web_app/src/components/menu/PageTitle.vue`,
+  `web_app/src/pages/settings/AuditLogSettings.vue`, `web_app/src/css/app.scss`.
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- `FONT_SIZE_PX` is the only `Record<FontSizePreference,…>` — updated with `xl`;
+  no other exhaustive map/switch over font sizes (grep). Picker is the only
+  runtime option list (updated).
+- Backend `ALLOWED_FONT_SIZES` now accepts `xl`; `register_user` passes through
+  (no input validation against the old set); entity default `md` unchanged.
+- Fixed-px audit: 8 sites total; 4 migrated (PageTitle, Preferences blurb,
+  AuditLog ×2), 4 intentionally kept (ScanOverlay ×2, PriceHistoryChart SVG,
+  Dashboard 3px/7.5px micro-gauge).
+- **Not run:** lint / build / dev server — node_modules absent. See FU-025 for
+  the required in-browser eyeball (xl on dense screens, tooltip scaling).
+
+**Next up:**
+- **User eyeballs A6** (FU-025): switch through Small→Extra large; confirm the
+  spread is now obvious and nothing breaks on dense screens at xl; tooltips scale.
+- **Wave A is essentially done** bar A8 (renames/refresh/nav-state, 🟡 — has
+  decisions). A1, A1b, A2, A3, A4, A5, A6, A7 all complete.
+- Wave B: B9 remains (other session's lane).
+
+**Open questions for user:**
+- Is md = 16.5px the right "very slightly larger" default, or nudge to 17?
+- Happy with the xl spread (23px base → headings get large), or cap it lower?
+
+---
+
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
+## 2026-06-05 — A7 (sticky page-counts footer)
+**Status:** complete — static verification only (node_modules absent)
+**What changed:**
+- New `web_app/src/components/PageCountsFooter.vue` — sticky-to-bottom counts
+  footer (top border + soft elevation, tokenised; responsive wrap). Props:
+  `counts: { label, value, tone? }[]`. tone → theme-aware text-* class.
+- `useStockFilters.ts`: added `footerCounts` computed over the FILTERED set —
+  Shown + per-stock-level (dynamic from `stockLevels`, so it survives renames;
+  tone via name heuristic) + Flagged + Auto-add + Needs attention.
+- StockOverview: **removed the top summary banner**; footer renders the counts.
+  Toolbar button row untouched (Wave-C owns the top-area teardown).
+- RecipesOverview: removed top count text; footer = Shown + Cookable now +
+  Favourites (filtered). Removed now-orphan `cookableNowCount`.
+- MyProductsPage: removed top count text; footer = Shown + On deal + Unlinked
+  (filtered). Replaced orphan `onDealCount`/`unlinkedCount` with `footerCounts`.
+
+**Decisions made:**
+- **Counts reflect the FILTERED view** (user's call) — matches the
+  export-follows-filtered convention. A "Shown" stat gives the filtered total.
+- **Removed the StockOverview summary banner** (user's call) and moved counts to
+  the footer; explicitly did NOT touch the toolbar (that's the Wave-C Stock
+  Overview brief, per A7's own note).
+- **Per-level stats derived dynamically** from the stock-levels list rather than
+  hardcoding "Well-Stocked"/"Sufficient" — robust to user-renamed/added levels.
+- Footer shown only when the page has data (`v-if=...length > 0`).
+
+**Files touched:**
+- New: `web_app/src/components/PageCountsFooter.vue`.
+- `web_app/src/composables/useStockFilters.ts` (footerCounts).
+- `web_app/src/pages/StockOverview.vue`, `RecipesOverview.vue`, `MyProductsPage.vue`.
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- 3 pages each: 1 `<PageCountsFooter>` use + import present (scripted).
+- 0 orphan count computeds left (cookableNowCount/onDealCount/unlinkedCount gone).
+- `summaryCounts` still exported from useStockFilters (now unused by the banner,
+  harmless); `countByLevel` still used by the level-filter chips.
+- **Not run:** lint / build / dev server — node_modules absent. Sticky-bottom
+  behaviour in the Quasar layout needs an in-browser eyeball.
+
+**Next up:**
+- **User eyeballs A7:** footer sticks to the bottom without overlapping content;
+  counts update live with filters; consistent across the 3 pages; mobile wraps
+  sensibly; light + dark.
+- **Wave A remaining:** A6 (text-size scale, 🟡) and A8 (renames/refresh/nav-state,
+  🟡) — both have decisions to confirm first. A7 was the last 🟢 foundation.
+- Wave B: B9 still open (other session's lane).
+
+**Open questions for user:**
+- Footer sticky behaviour OK in the real layout, or prefer a plain (non-sticky)
+  bottom strip?
+- Adopt the footer on other list pages (shopping lists, meal plans) too? (FU-024.)
+
+---
+
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
+## 2026-06-05 — A5 (one loading/skeleton treatment everywhere)
+**Status:** complete (active surfaces; deferred pages noted) — static verification only
+**What changed:**
+- New `web_app/src/components/AppSpinner.vue` — shared inline/short-wait spinner
+  (consistent size, theme-aware colour, optional label, `block` mode).
+- New `web_app/src/components/AppSkeleton.vue` — layout-mimicking placeholder
+  blocks (`line`/`rect`/`circle`), pulse on the boot splash's 1.6s rhythm,
+  theme-aware (color-mix of `--surface-sunken` + `--text-muted`), reduced-motion
+  aware.
+- **Detail pages → skeletons (kills the placeholder-text bug):**
+  `StockItemDetailPage` (no more "Stock item" while loading — skeleton title +
+  toolbar/card blocks), `ShoppingListDetail` (no more "Loading…" — skeleton
+  rows), `RecipeDetailPage` (header + two-column skeleton).
+- **Spinners → `AppSpinner`** on: RecipesOverview, ShoppingListsOverview (+ inline
+  "Loading totals…"), MyProductsPage, DashboardPage, ProductSearch (searching
+  banner — was `q-spinner-dots color=primary`, now consistent), RecipeCookMode
+  (page + swap-picker), RecipeDetailPage substitutes, ShoppingListShopMode,
+  ShoppingListTemplates, ShopNowRedirect, QuickAddSheet.
+
+**Decisions made:**
+- **Decision (spinner + skeleton, both)** taken as recommended — boot-pulse-style
+  spinner for short/inline waits; skeletons for known-layout detail/list loads.
+  The user's impact-block intent was clearly both.
+- **Reused the existing boot pulse rhythm** (index.html `pre-mount-pulse` /
+  `SplashScreen` `splash-pulse`, both already identical: 1.6s ease-in-out). For
+  skeleton blocks I used an **opacity-only** pulse on that rhythm — the boot pulse
+  also scales, which would look wrong resizing individual layout blocks.
+- **Skeleton colour via `color-mix`** of existing tokens (no new global token, no
+  10-theme edit) → automatically theme-aware.
+- **Deferred surfaces left on raw `q-spinner`** (Reports, Data→Export/Print,
+  Settings sub-pages — on the prompt-pack "deferred" list) plus **DoraChat's
+  typing dots** (deliberate). Logged as FU-023. A spinner swap there is harmless
+  but low-value and the pages are "don't design yet."
+- **Overviews got `AppSpinner`, not list-skeletons** — bounded scope; the
+  placeholder-text bug was the detail-page issue. List-skeletons noted in FU-023.
+
+**Files touched:**
+- New: `web_app/src/components/AppSpinner.vue`, `web_app/src/components/AppSkeleton.vue`.
+- Pages: `StockItemDetailPage`, `ShoppingListDetail`, `RecipeDetailPage`,
+  `RecipeCookMode`, `RecipesOverview`, `ShoppingListsOverview`, `MyProductsPage`,
+  `DashboardPage`, `ProductSearch`, `ShoppingListShopMode`, `ShoppingListTemplates`,
+  `ShopNowRedirect`.
+- Components: `QuickAddSheet`.
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- 0 AppSpinner/AppSkeleton usages missing their import (scripted check).
+- Remaining `q-spinner` only on the deferred surfaces + DoraChat dots (expected).
+- Detail-page placeholder strings ("Stock item", "Loading…") no longer render
+  during load — replaced by skeletons in the keyed loading branch.
+- **Not run:** lint / `quasar build` / dev server — `node_modules` absent.
+
+**Next up:**
+- **User eyeballs A5** once deps installed: detail pages show layout skeletons
+  (not placeholder text); spinners consistent; ProductSearch searching banner
+  reads in dark themes; reduced-motion stops the pulse. Light + dark.
+- **Wave A remaining:** A6 (text-size scale, 🟡), A7 (sticky footer, 🟢),
+  A8 (renames/refresh/nav-state, 🟡). Suggest A7 next (🟢, no decision), then the
+  two 🟡 ones.
+- Wave B: B9 still open (other session's lane).
+
+**Open questions for user:**
+- Want list-skeletons on the big overviews too (currently a centred spinner), or
+  is spinner-for-lists fine? (Tracked in FU-023.)
+- Migrate the deferred-page spinners (Reports/Data/Settings) now for full
+  consistency, or leave per the "deferred" guidance?
+
+---
+
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
+## 2026-06-05 — B8 (recipe detail actions + substitutes → cook-session swap)
+**Status:** complete (static verification only — node_modules not installed)
+**What changed:**
+- **Substitutes reworked to a temporary cook-session swap** (user's decision):
+  - `RecipeCookMode.vue`: added per-ingredient session swap. New `sessionSwaps`
+    Map (original stock_item_id → {substituteId, substituteName}), a swap-picker
+    BaseDialog (fetches `stockItemApi.getDetailAsync(id).substitutes`), ↔ button +
+    "Y instead of X" display + undo per ingredient row. `confirmFinish` maps used
+    ids through `sessionSwaps` so the *substitute* is decremented / ran-out-checked,
+    not the original. Never touches the saved recipe.
+  - `RecipeDetailPage.vue`: removed the destructive `onSwapIngredient` (it edited
+    the recipe form + marked dirty → permanent on Save). Substitutes dialog is now
+    informational (chips non-clickable) with a note pointing to cook mode.
+- Reworded stale "substitutes graph" text → "substitutes" in `RecipeDetailPage`
+  (sidebar caption), `useStockItemActions.ts`, `StockOverview.vue`.
+- Clarified `CLAUDE.md` "Removed features": the removed thing is the standalone
+  substitute **graph page** (N7 `/substitutes`), NOT basic per-item substitutes.
+
+**Decisions made:**
+- **The substitutes confusion, resolved with the user.** Current state: the N7
+  graph *page* is already deleted (no route/component); basic per-stock-item
+  substitutes are live (stock-item tab + `StockItemSubstitute` table + recipe
+  find-substitutes). Docs/CLAUDE.md conflated the two ("Substitute graph
+  (stock-item substitutes)"). User wants basic substitutes KEPT; only the graph
+  page was ever meant to go. Confirmed against `RECONCILED_FINISHING_PLAN §39`
+  and `PROMPT_PLAN.md:90,154` (substitutes are a kept P2 feature).
+- **Substitute behaviour = temporary cook-session swap** (user picked this over
+  add-to-list / informational-only). Swap lives in cook mode, never edits the
+  saved recipe. Recipe detail keeps substitutes *visible* (informational).
+- **Most B8 reported defects don't reproduce** (stale docs / meals→recipes merge):
+  favourite toggle chain is sound (sends `!is_favourite` → PATCH → backend
+  assigns); all recipe actions are wired; there is no related-recipes section at
+  all (so "clicking a related recipe → overview" can't happen). Logged, not
+  "fixed". The genuine bug was the permanent substitute swap.
+- Did NOT purge the substitutes backend/table — it's the kept feature.
+
+**Files touched:**
+- `web_app/src/pages/RecipeCookMode.vue` (session swap: state, picker dialog, row
+  UI, finish mapping; +imports StockItemApiService, Substitute).
+- `web_app/src/pages/RecipeDetailPage.vue` (removed destructive swap; dialog now
+  informational; caption reworded).
+- `web_app/src/composables/useStockItemActions.ts`, `web_app/src/pages/StockOverview.vue`
+  (comment rewordings).
+- `CLAUDE.md` (Removed-features clarification), `CHANGELOG.md`, `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- No "substitute(s) graph" text remains anywhere in `web_app/src`.
+- `onSwapIngredient` fully removed from RecipeDetailPage (0 refs); `Substitute`
+  type still used (substituteOptions) — no orphan import.
+- RecipeCookMode tag balance: BaseDialog 2/2, q-card-section 8/8, template 5/5.
+- `Substitute` model fields (`stock_item_id`, `name`) match the picker usage.
+- Reasoned through finish flow: swapped ingredient decrements/ran-out-checks the
+  substitute id, not the original.
+- **Not run:** lint / `quasar build` / dev server — `node_modules` absent.
+
+**Next up:**
+- **User eyeballs B8** once deps installed: in cook mode, swap an ingredient (↔),
+  confirm "Y instead of X" + undo, finish and confirm the *substitute's* level
+  drops (not the original) and ran-out adds the substitute; on recipe detail,
+  confirm "Find substitutes" no longer edits the recipe (Save stays disabled /
+  recipe unchanged). Also confirm favourite un-toggle persists (reported broken;
+  looks fine in code).
+- Continue Wave B: next is **B9 — misc bugs** (`docs/prompts/B9_misc_bugs.md`),
+  or revisit B1/B3/B4/B5/B7 if those weren't actually run yet (verify against
+  code — our logs only cover A-series + B8).
+
+**Open questions for user:**
+- Cook-session swap feel right, or do you also want a quick swap affordance on
+  the recipe detail page itself (not just cook mode)?
+- Were B1/B3/B4/B5/B7 already run in other sessions? Our worklog has no record —
+  worth confirming before assuming Wave B is nearly done.
+
+---
+
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — A4 (filter system standardisation + "empty = off")
 **Status:** complete (static verification only — node_modules not installed)
 **What changed:**
@@ -630,6 +1116,25 @@ toast) or a code path I haven't seen yet. Flag it and I'll re-investigate.
 
 ---
 
+## 2026-06-05 -- D.O.R.A. acronym naming pass
+**Status:** complete (discussion/recon only -- no code changed)
+**What changed:**
+- Reviewed the current handoff context, changelog, follow-ups, Dashy Dora docs, and Dora assistant architecture notes to ground acronym suggestions in the pivoted product direction.
+- No product/code files changed.
+
+**Decisions made:**
+- Naming suggestions should emphasize the pivoted Dora promise: effortless kitchen assistance, pantry/list organization, personal guidance, and action with user confirmation.
+- "Delicious Organised Restock Assistant" is a good friendly baseline, but "Restock" may be too narrow for the planned closed-loop / zero-input pantry direction.
+
+**Files touched:** `DORA_WORKLOG.md` only.
+
+**Verification:** read-only review of `DORA_WORKLOG.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`, `docs/DASHY_DORA_CHAMPION_PLAN.md`, `docs/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md`, `docs/PROMPT_PLAN_PART_3.md`, and `web_app/src/components/dora/DoraChat.vue`.
+
+**Next up:** awaiting user decision on the preferred D.O.R.A. expansion / tone.
+
+**Open questions for user:** choose whether D.O.R.A. should sound more practical/productive, friendly/foodie, or intelligent/proactive.
+
+---
 ## 2026-06-05 — A3 (standard modal / BaseDialog) + A2 follow-up (danger-ghost button)
 **Status:** complete (static verification only — node_modules not installed)
 **What changed:**

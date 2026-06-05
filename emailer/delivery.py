@@ -38,7 +38,7 @@ def prepare_email(product_offers) -> str:
         food_emojis = file.read().split()
 
     message = MIMEMultipart('alternative')
-    message['Subject'] = f"Discount Dora: {random.choice(food_emojis)} Weekly Price Report!"
+    message['Subject'] = f"Dashy Dora: {random.choice(food_emojis)} Weekly Price Report!"
     # body = MIMEText(generate_email_body(product_offers), 'html')
     body = MIMEText(mjml_test(), 'html')
     message.attach(body)

@@ -1,9 +1,9 @@
 <template>
-    <router-link to="/" class="dora-brand row items-center no-wrap" aria-label="Discount Dora — home">
+    <router-link to="/" class="dora-brand row items-center no-wrap" aria-label="Dashy Dora — home">
         <q-avatar square size="44px" class="q-mr-sm dora-brand-mascot">
             <img src="../../assets/logo-mascot.png" alt="" />
         </q-avatar>
-        <span class="dora-brand-text text-accent">Discount Dora</span>
+        <span class="dora-brand-text text-accent">Dashy Dora</span>
     </router-link>
 </template>
 

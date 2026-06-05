@@ -2,10 +2,10 @@
     <q-card flat bordered>
         <q-card-section class="row items-center q-gutter-md">
             <q-avatar size="56px" square>
-                <img src="../../assets/logo-mascot.png" alt="Discount Dora" />
+                <img src="../../assets/logo-mascot.png" alt="Dashy Dora" />
             </q-avatar>
             <div>
-                <div class="text-h6" style="font-family: 'Cute Dino'">Discount Dora</div>
+                <div class="text-h6" style="font-family: 'Cute Dino'">Dashy Dora</div>
                 <div class="text-caption dora-text-muted">Your pantry at your fingertips.</div>
             </div>
         </q-card-section>

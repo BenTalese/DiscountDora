@@ -81,7 +81,7 @@
 
         <FadeTransition mode="out-in">
         <div v-if="loading && !summary" key="dash-loading" class="row justify-center q-pa-xl">
-            <q-spinner size="48px" color="primary" />
+            <AppSpinner size="48px" />
         </div>
 
         <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
@@ -737,6 +737,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import AnimatedNumber from 'src/components/AnimatedNumber.vue';
     import { storeToRefs } from 'pinia';
     import {

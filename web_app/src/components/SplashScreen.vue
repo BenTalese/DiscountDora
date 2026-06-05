@@ -3,7 +3,7 @@
         <div class="splash-logo-wrap">
             <img
                 :src="error ? offlineSrc : logoSrc"
-                alt="Discount Dora"
+                alt="Dashy Dora"
                 class="splash-logo"
                 :class="{ 'splash-logo--pulse': !error }"
                 draggable="false"

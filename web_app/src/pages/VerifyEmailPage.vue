@@ -90,7 +90,7 @@
         return 'Verifying your email…';
     });
     const subline = computed(() => {
-        if (status.value === 'ok') return 'You can now sign in to Discount Dora.';
+        if (status.value === 'ok') return 'You can now sign in to Dashy Dora.';
         if (status.value === 'error') return 'The link may have expired. Request a fresh one below.';
         return 'Just a moment.';
     });

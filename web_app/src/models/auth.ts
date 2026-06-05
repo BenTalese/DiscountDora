@@ -28,7 +28,7 @@ export type FontFamilyPreference =
     | 'inter'
     | 'lexend'
     | 'plus_jakarta_sans';
-export type FontSizePreference = 'sm' | 'md' | 'lg';
+export type FontSizePreference = 'sm' | 'md' | 'lg' | 'xl';
 export type BudgetPeriod = 'weekly' | 'monthly';
 
 export type AuthenticatedUser = {

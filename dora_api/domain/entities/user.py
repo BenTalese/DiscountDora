@@ -66,7 +66,8 @@ ALLOWED_FONT_FAMILIES = (
 FONT_SIZE_SM = "sm"
 FONT_SIZE_MD = "md"
 FONT_SIZE_LG = "lg"
-ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG)
+FONT_SIZE_XL = "xl"  # A6 — extra-large step
+ALLOWED_FONT_SIZES = (FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL)
 
 # P2-05 — grocery-budget period. `weekly` rolls from Monday; `monthly`
 # from the 1st (local-civil-date for simplicity; the home use-case

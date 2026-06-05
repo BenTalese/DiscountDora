@@ -259,6 +259,40 @@ export function useStockFilters(sources: {
         return n;
     });
 
+    // ── Sticky-footer counts (A7) — reflect the FILTERED view ───────────
+    function toneForLevel(name: string): 'positive' | 'warning' | 'negative' {
+        const n = name.toLowerCase();
+        if (n.includes('out')) return 'negative';
+        if (n.includes('low')) return 'warning';
+        return 'positive';
+    }
+    const footerCounts = computed(() => {
+        const items = filteredStockItems.value;
+        const byLevel = new Map<string, number>();
+        let flagged = 0;
+        let autoAdd = 0;
+        let attention = 0;
+        for (const it of items) {
+            if (it.stock_level_id)
+                byLevel.set(it.stock_level_id, (byLevel.get(it.stock_level_id) ?? 0) + 1);
+            if (it.is_flagged) flagged++;
+            if (it.auto_add_when_low) autoAdd++;
+            if (hasAlert(it)) attention++;
+        }
+        const levelStats = sources.stockLevels().map((l) => ({
+            label: l.name,
+            value: byLevel.get(l.stock_level_id) ?? 0,
+            tone: toneForLevel(l.name),
+        }));
+        return [
+            { label: 'Shown', value: items.length, tone: 'primary' as const },
+            ...levelStats,
+            { label: 'Flagged', value: flagged, tone: 'warning' as const },
+            { label: 'Auto-add', value: autoAdd, tone: 'info' as const },
+            { label: 'Needs attention', value: attention, tone: 'negative' as const },
+        ];
+    });
+
     // ── Imperative helpers ──────────────────────────────────────────────
     function toggleLevelFilter(id: string) {
         levelFilter.value = levelFilter.value === id ? null : id;
@@ -297,6 +331,7 @@ export function useStockFilters(sources: {
         countByLevel,
         filteredStockItems,
         activeFilterCount,
+        footerCounts,
         // helpers
         toggleLevelFilter,
         clearFilters,

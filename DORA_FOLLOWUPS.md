@@ -17,6 +17,10 @@ long session summary. Distinct from the other two logs:
 - **On ending a work unit:** add any new follow-ups/leftovers/findings you
   generated. Mark items you actually resolved as `[RESOLVED]` (don't delete them —
   the trail matters), with a one-line note on how.
+- **Reported defect that "doesn't reproduce" → still log it here** as `[OPEN]`
+  type `finding`, resolution "confirm in browser". A static code read is not proof
+  a user-reported bug is fixed. Track each reported item individually; never bury
+  several as one "all fine" note. (See CLAUDE.md → "On ending a work unit".)
 - Keep the newest items near the top of the Open section.
 
 ## Entry template
@@ -34,6 +38,118 @@ long session summary. Distinct from the other two logs:
 ---
 
 # Open
+
+## [OPEN] FU-025 — Eyeball A6 text scale (xl + slightly-larger default) on dense screens
+- **Raised:** 2026-06-05 (A6)
+- **Type:** finding
+- **What:** A6 widened the steps to 14 / 16.5 / 20.5 / 23px (added Extra-large) and
+  bumped the default a touch (16 → 16.5px), so EVERY md user sees slightly bigger
+  text now. Needs a real-browser check: at **Extra large**, spot-check dense
+  screens (Stock Overview, Recipe detail, Meal plans) for layout breakage; confirm
+  tooltips now scale (new `.q-tooltip` rule); confirm the small step's ~9–12px
+  captions are still readable. Light + dark.
+- **Why deferred:** can't run the app (node_modules absent).
+- **Recommended resolution:** now-ish — when the app is next run. Deliberately-fixed
+  px left in place (ScanOverlay camera UI, PriceHistoryChart SVG labels, Dashboard
+  3px/7.5px micro-gauge) are intentional carve-outs, not bugs.
+
+## [OPEN] FU-024 — A7 leftovers: dead banner CSS + wider footer adoption
+- **Raised:** 2026-06-05 (A7)
+- **Type:** leftover
+- **What:** (a) Removing StockOverview's summary banner left its scoped
+  `.stock-summary-banner` / `.stock-summary-stat` CSS unused (harmless dead
+  rules). (b) `PageCountsFooter` is only wired on the 3 prompt pages
+  (StockOverview, RecipesOverview, MyProductsPage); other list pages
+  (ShoppingLists, MealPlans, etc.) could adopt it for consistency.
+- **Why deferred:** dead CSS is harmless; broader adoption was out of A7's
+  defined scope (3 pages).
+- **Recommended resolution:** opportunistic — delete the dead CSS next time
+  StockOverview is touched (or during the Wave-C Stock Overview top-area
+  teardown); adopt the footer on other list pages if/when they get polish.
+
+## [OPEN] FU-023 — A5 leftover: spinners not yet migrated on deferred surfaces
+- **Raised:** 2026-06-05 (A5)
+- **Type:** leftover
+- **What:** A5 unified loading on the active app pages, but left raw `q-spinner`
+  on the **deferred surfaces** (Reports, Data→Export/Print, Settings sub-pages —
+  per the prompt-pack "deferred" list) and on **DoraChat's typing dots** (a
+  deliberate `q-spinner-dots` indicator). Also: overview pages got `AppSpinner`
+  rather than list-skeletons — fine, but list-skeletons would be a nicer touch.
+- **Why deferred:** those pages are flagged "do not design yet"; a spinner swap
+  is harmless but low-value there, and DoraChat's dots are an intentional style.
+- **Recommended resolution:** opportunistic — migrate the deferred-page spinners
+  to `AppSpinner` whenever those pages are next worked on. Decide DoraChat dots
+  separately (keep as a typing indicator, or switch to AppSpinner). Consider
+  list-skeletons for the big overviews during the FU-010 holistic look pass.
+
+## [OPEN] FU-022 — Confirm A4 reported filter bug did NOT reproduce
+- **Raised:** 2026-06-05 (A4; back-filled per the non-issue rule)
+- **Type:** finding
+- **What:** A4 was built around a reported bug — "clearing a filter input filters
+  *everything* out instead of behaving as filter off (empty MUST = off)." Static
+  read across StockOverview / RecipesOverview / MyProductsPage / ProductSearch
+  found it did **not** reproduce — every page already skipped blank predicates
+  (truthiness / `!= null` / empty-array / boolean-false). A4 hardened them to be
+  explicit anyway, but the original symptom was never observed.
+- **Why deferred:** can't run the app (node_modules absent); the report came from
+  real usage, so a static read isn't proof.
+- **Recommended resolution:** confirm in browser — on each of the four pages,
+  clear each filter and verify all rows return (no wipe-out). If a wipe still
+  happens somewhere, re-open as a real bug.
+
+## [OPEN] FU-021 — Confirm A3 reported modal bug did NOT reproduce
+- **Raised:** 2026-06-05 (A3; back-filled per the non-issue rule)
+- **Type:** finding
+- **What:** A3 was built around reported bugs — modals that "navigate/commit away
+  on click-outside" (esp. the unsaved-changes modal navigating instead of
+  staying) and modals with "no Cancel." Static read found these did **not**
+  reproduce in current code: the `$q.dialog` confirms (recipe delete,
+  unsaved-changes, cook-start) only commit/navigate on explicit `.onOk()` and
+  resolve false on dismiss; template dialogs don't commit on `@hide`; all had a
+  Cancel/Close. A3 standardised them via `BaseDialog` anyway.
+- **Why deferred:** can't run the app (node_modules absent); reported from real
+  usage, so a static read isn't proof.
+- **Recommended resolution:** confirm in browser — backdrop-click / Esc on the
+  key modals (new-recipe, recipe delete, cook-finish, and especially the
+  unsaved-changes dialog) must cancel WITHOUT navigating or committing. Re-open
+  any that still misbehave.
+
+## [OPEN] FU-020 — Recipe-detail substitute swap affordance (cook-mode-only for now?)
+- **Raised:** 2026-06-05 (B8)
+- **Type:** finding / open question
+- **What:** B8 made substitute swapping a temporary **cook-session** action (in
+  cook mode only). The recipe-detail "Find substitutes" dialog is now purely
+  informational. Open question for the user: do you also want a quick swap
+  affordance on the recipe detail page itself, or is cook-mode-only the intended
+  model?
+- **Why deferred:** cook-mode-only was the chosen scope for B8; adding a second
+  swap entry point is a UX decision, not a bug.
+- **Recommended resolution:** now-ish — quick user call. If "yes", design where it
+  applies (a swap that's still non-destructive to the saved recipe — likely a
+  "pre-stage this swap for the next cook" rather than editing the recipe).
+
+## [OPEN] FU-019 — Confirm B8 reported defects that did NOT reproduce (per-defect)
+- **Raised:** 2026-06-05 (B8)
+- **Type:** finding
+- **What:** Three user-reported B8 defects could not be reproduced in a *static*
+  read of current code (post meals→recipes merge). Each was REPORTED from real
+  usage, so each needs an in-browser confirm before it can be called resolved —
+  tracked individually below, not dismissed as a blanket "all fine":
+  - **(a) "Remove-from-favourites does nothing."** Static read: chain looks sound
+    (`toggleFavouriteAsync` sends `!is_favourite` → PATCH → backend assigns →
+    refetch). Confirm un-favourite persists in the running app. If it fails,
+    likely PATCH-semantics (cf. B3) — re-open as a real bug.
+  - **(b) "Clicking a related recipe dumps you on the Cookbook overview."** Static
+    read: there is **no related-recipes section anywhere** in the current UI.
+    Confirm whether the user expects one (i.e. is the real ask "add related
+    recipes"?) or whether this is genuinely gone.
+  - **(c) "All recipe actions inert except Cook."** Static read: every action
+    (favourite, save, log-cook, adjust-meals, import, add-to-list, delete,
+    export) is wired to a working handler. Confirm each actually fires in-app.
+- **Why deferred:** can't run the app (node_modules absent); needs eyeballing.
+- **Recommended resolution:** now-ish — confirm each of (a)/(b)/(c) when the app
+  is next run. Flip to `[RESOLVED]` only once verified; re-open any that still
+  break as real bugs.
 
 ## [OPEN] FU-018 — B7: wider sweep for "store mutation + page toast" double-emits
 - **Raised:** 2026-06-05 (Wave-B self-audit)

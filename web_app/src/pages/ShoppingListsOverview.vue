@@ -151,7 +151,7 @@
 
         <FadeTransition mode="out-in">
         <div v-if="loading && summaries.length === 0" key="sl-loading" class="text-center q-py-xl">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </div>
 
         <div v-else-if="visibleLists.length === 0" key="sl-empty" class="text-center dora-text-muted q-py-xl">
@@ -357,7 +357,7 @@
                         </template>
                         <template v-else>
                             <div class="col text-caption dora-text-muted">
-                                <q-spinner size="14px" /> Loading totals…
+                                <AppSpinner size="14px" /> Loading totals…
                             </div>
                         </template>
                     </q-card-section>
@@ -434,6 +434,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';

@@ -2,7 +2,7 @@
     "name": "discount-dora",
     "version": "1.0.0",
     "description": "Your grocery explorer!",
-    "productName": "Discount Dora",
+    "productName": "Dashy Dora",
     "author": "BenTalese <ben.talese@gmail.com>",
     "type": "module",
     "private": true,

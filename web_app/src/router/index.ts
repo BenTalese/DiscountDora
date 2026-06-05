@@ -121,7 +121,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     // nested settings pages get their leaf title (e.g. "Preferences"), not
     // the parent ("Settings"). Falls back to the app name if a route has
     // no title set.
-    const APP_NAME = 'Discount Dora';
+    const APP_NAME = 'Dashy Dora';
     ROUTER.afterEach((to) => {
         if (typeof document === 'undefined') return;
         const titled = [...to.matched].reverse().find((r) => r.meta?.title);

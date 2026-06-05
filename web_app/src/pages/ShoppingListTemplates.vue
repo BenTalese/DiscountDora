@@ -19,7 +19,7 @@
         </q-banner>
 
         <div v-if="loading && templates.length === 0" class="text-center q-py-xl">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </div>
 
         <div v-else-if="templates.length === 0" class="text-center dora-text-muted q-py-xl">
@@ -245,6 +245,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';

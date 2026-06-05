@@ -142,7 +142,8 @@
                         :options="[
                             { label: 'Small', value: 'sm' },
                             { label: 'Medium', value: 'md' },
-                            { label: 'Large', value: 'lg' }
+                            { label: 'Large', value: 'lg' },
+                            { label: 'Extra large', value: 'xl' }
                         ]"
                         @update:model-value="onFontSizeChange"
                     />
@@ -155,7 +156,7 @@
             <q-card-section>
                 <div class="text-h6">Weekly deals email</div>
                 <div class="text-caption dora-text-muted">
-                    Discount Dora can email you a digest of the latest deals
+                    Dashy Dora can email you a digest of the latest deals
                     once a week.
                 </div>
             </q-card-section>
@@ -793,7 +794,8 @@
     }
     .theme-card-blurb {
         color: var(--text-secondary);
-        font-size: 12px;
+        /* A6 — scale token (was fixed 12px). */
+        font-size: calc(var(--font-size-xs) * 1rem);
         line-height: 1.35;
     }
     .theme-variant-toggle {

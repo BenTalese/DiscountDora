@@ -98,7 +98,7 @@
                     />
 
                     <div class="text-subtitle2 q-mb-xs">Merchant offer</div>
-                    <q-spinner v-if="offersLoading" color="primary" />
+                    <AppSpinner v-if="offersLoading" />
                     <template v-else>
                         <q-option-group
                             v-model="selectedProductId"
@@ -130,6 +130,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { storeToRefs } from 'pinia';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';

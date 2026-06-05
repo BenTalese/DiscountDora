@@ -1,6 +1,6 @@
 <template>
     <div class="text-center q-pa-xl">
-        <q-spinner color="primary" size="60px" />
+        <AppSpinner size="60px" />
         <div class="text-body2 dora-text-muted q-mt-md">
             {{ message }}
         </div>
@@ -18,6 +18,7 @@
      * than as a router guard) keeps the routing config flat and gives
      * us a visible spinner while the store warms up after a cold launch.
      */
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';

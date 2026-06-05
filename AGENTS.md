@@ -1,7 +1,7 @@
-# Claude session instructions — DiscountDora / Dashy Dora
+# Codex session instructions — DiscountDora / Dashy Dora
 
 The repo is being finished against the planning library at `docs/` inside this
-repo. Multiple Claude sessions may be working on this concurrently from
+repo. Multiple Codex sessions may be working on this concurrently from
 different computers — because `docs/` is versioned with the code, every
 machine has the same copy automatically.
 

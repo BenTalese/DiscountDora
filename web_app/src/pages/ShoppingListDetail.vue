@@ -4,7 +4,13 @@
             <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <div class="q-ml-sm col">
                 <div class="text-h5">
-                    <span v-if="!editingName">{{ detail?.name ?? 'Loading…' }}</span>
+                    <AppSkeleton
+                        v-if="loading && !detail"
+                        type="line"
+                        width="200px"
+                        height="1.6rem"
+                    />
+                    <span v-else-if="!editingName">{{ detail?.name ?? '' }}</span>
                     <q-input
                         v-else
                         v-model="nameDraft"
@@ -278,8 +284,14 @@
         </q-banner>
 
         <FadeTransition mode="out-in">
-        <div v-if="loading && !detail" key="sld-loading" class="text-center q-py-xl">
-            <q-spinner color="primary" size="48px" />
+        <div v-if="loading && !detail" key="sld-loading">
+            <!-- Skeleton mirrors a few list rows while the list loads. -->
+            <div v-for="n in 5" :key="n" class="row items-center q-gutter-sm q-py-sm">
+                <AppSkeleton type="circle" width="24px" height="24px" />
+                <AppSkeleton type="line" width="40%" height="1rem" />
+                <q-space />
+                <AppSkeleton type="line" width="64px" height="1rem" />
+            </div>
         </div>
 
         <div v-else-if="detail" key="sld-content">
@@ -861,6 +873,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useQuasar } from 'quasar';

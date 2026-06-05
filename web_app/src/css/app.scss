@@ -35,3 +35,10 @@ body {
     font-family: 'Nunito Variable', 'Nunito', 'Segoe UI', sans-serif;
     color: var(--q-text);
 }
+
+// A6 — tooltips are teleported to <body>, so make sure they follow the
+// text-size preference too (rem is relative to the root font-size, which
+// themeService drives from the user's font_size pref).
+.q-tooltip {
+    font-size: calc(var(--font-size-sm) * 1rem);
+}

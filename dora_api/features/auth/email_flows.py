@@ -134,10 +134,10 @@ def resend_verification():
         try_send(
             send_email,
             to=email_norm,
-            subject="Verify your Discount Dora account",
+            subject="Verify your Dashy Dora account",
             html_body=render_template(
                 "verify_email.html",
-                subject="Verify your Discount Dora account",
+                subject="Verify your Dashy Dora account",
                 username=user.username,
                 verify_url=build_verify_url(raw),
             ),
@@ -174,10 +174,10 @@ def forgot_password():
         try_send(
             send_email,
             to=email_norm,
-            subject="Reset your Discount Dora password",
+            subject="Reset your Dashy Dora password",
             html_body=render_template(
                 "reset_password.html",
-                subject="Reset your Discount Dora password",
+                subject="Reset your Dashy Dora password",
                 username=user.username,
                 reset_url=build_reset_url(raw),
             ),
@@ -237,13 +237,13 @@ def reset_password():
         try_send(
             send_email,
             to=user.email,
-            subject="Your Discount Dora password was reset",
+            subject="Your Dashy Dora password was reset",
             html_body=render_template(
                 "password_changed.html",
-                subject="Your Discount Dora password was reset",
+                subject="Your Dashy Dora password was reset",
                 username=user.username,
             ),
-            text_body=f"Hi {user.username}, your Discount Dora password was just reset.",
+            text_body=f"Hi {user.username}, your Dashy Dora password was just reset.",
         )
 
     _Logger.info("Password reset for user %s", user.id)
@@ -292,10 +292,10 @@ def request_email_change():
     try_send(
         send_email,
         to=new_email,
-        subject="Confirm your new Discount Dora email",
+        subject="Confirm your new Dashy Dora email",
         html_body=render_template(
             "verify_email.html",
-            subject="Confirm your new Discount Dora email",
+            subject="Confirm your new Dashy Dora email",
             username=user.username,
             verify_url=f"{build_verify_url(raw_token).replace('/verify-email', '/confirm-email-change')}",
         ),

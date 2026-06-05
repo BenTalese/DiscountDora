@@ -283,10 +283,14 @@ function resolveThemeKey(pref: ThemePreference): string {
     return THEMES[pref] ? pref : 'pesto';
 }
 
+// A6 — re-spaced steps (ratios ~0.85 / 1.0 / 1.25 / 1.4) with a very slightly
+// larger base than the old 16px. These drive the root font-size, so all
+// rem-based text (incl. the --font-size-* ratio tokens) scales with them.
 const FONT_SIZE_PX: Record<FontSizePreference, string> = {
     sm: '14px',
-    md: '16px',
-    lg: '18px',
+    md: '16.5px',
+    lg: '20.5px',
+    xl: '23px',
 };
 
 const SYSTEM_FALLBACK =

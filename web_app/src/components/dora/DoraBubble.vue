@@ -59,7 +59,7 @@
                     class="dora-update-badge"
                 >
                     NEW
-                    <q-tooltip>A newer version of Discount Dora is available.</q-tooltip>
+                    <q-tooltip>A newer version of Dashy Dora is available.</q-tooltip>
                 </q-badge>
                 <!-- P2-04 — suggestion count badge. Skipped while the
                      NEW (update) badge is showing so they don't stack. -->

@@ -6,7 +6,10 @@
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
                 <q-tooltip>Close panel</q-tooltip>
             </BaseButton>
-            <div class="text-h5 q-mr-sm">{{ detail?.name || 'Stock item' }}</div>
+            <div class="text-h5 q-mr-sm" style="min-width: 160px">
+                <AppSkeleton v-if="loading && !detail" type="line" width="180px" height="1.6rem" />
+                <template v-else>{{ detail?.name || 'Stock item' }}</template>
+            </div>
             <q-chip
                 v-if="detail?.stock_level_name"
                 dense
@@ -23,8 +26,15 @@
         </q-banner>
 
         <FadeTransition mode="out-in">
-        <div v-if="loading && !detail" key="sid-loading" class="row justify-center q-pa-xl">
-            <q-spinner size="48px" color="primary" />
+        <div v-if="loading && !detail" key="sid-loading">
+            <!-- Skeleton mirrors the toolbar row + content cards below. -->
+            <div class="row q-gutter-sm q-mb-md">
+                <AppSkeleton type="rect" width="120px" height="36px" />
+                <AppSkeleton type="rect" width="110px" height="36px" />
+                <AppSkeleton type="rect" width="130px" height="36px" />
+            </div>
+            <AppSkeleton type="rect" width="100%" height="160px" class="q-mb-md" />
+            <AppSkeleton type="rect" width="100%" height="220px" />
         </div>
 
         <div v-else-if="detail" key="sid-content">
@@ -494,6 +504,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';

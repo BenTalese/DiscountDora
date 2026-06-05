@@ -71,7 +71,7 @@
         <!-- Main: big card for the current item ─────────────────────── -->
         <main class="shop-mode-main">
             <div v-if="loading && !detail" class="text-center q-pa-xl">
-                <q-spinner color="primary" size="60px" />
+                <AppSpinner size="60px" />
             </div>
 
             <q-banner v-else-if="loadError" class="bg-negative dora-text-on-primary q-ma-md" rounded>
@@ -340,6 +340,7 @@
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';

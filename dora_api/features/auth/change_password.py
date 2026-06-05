@@ -110,14 +110,14 @@ def change_password():
         try:
             send_email(
                 to=user.email,
-                subject="Your Discount Dora password was changed",
+                subject="Your Dashy Dora password was changed",
                 html_body=render_template(
                     "password_changed.html",
-                    subject="Your Discount Dora password was changed",
+                    subject="Your Dashy Dora password was changed",
                     username=user.username,
                 ),
                 text_body=(
-                    f"Hi {user.username}, your Discount Dora password was just changed. "
+                    f"Hi {user.username}, your Dashy Dora password was just changed. "
                     "If this wasn't you, contact your admin."
                 ),
             )

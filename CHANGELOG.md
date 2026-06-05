@@ -6,6 +6,37 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **A6 — "Extra large" text size + a wider, re-spaced scale.** The text-size
+  preference now has four steps instead of three, with a clearly distinct
+  spread (~0.85 / 1.0 / 1.25 / 1.4) and a very slightly larger default:
+  **Small 14px · Medium 16.5px · Large 20.5px · Extra large 23px** (was
+  14 / 16 / 18, which sat too close together). The new step is wired
+  end-to-end (preference type, picker, and backend `ALLOWED_FONT_SIZES`;
+  the DB column already fit "xl", so no migration).
+- **A7 — Sticky page-counts footer (`PageCountsFooter`).** New
+  `web_app/src/components/PageCountsFooter.vue`: a reusable footer that
+  sticks to the bottom of the page scroll area (top border + soft
+  elevation, tokenised), wraps responsively, and renders a list of
+  `{ label, value, tone? }` stats. Counts reflect the **filtered** view.
+  - **StockOverview**: the cramped top summary banner is removed; its
+    counts now live in the footer — Shown + one stat per stock level
+    (Well-Stocked / Sufficient / Low / Out, derived dynamically so it
+    survives level renames) + Flagged + Auto-add + Needs attention. (The
+    top toolbar itself is untouched — that teardown belongs to the Stock
+    Overview Wave-C brief.)
+  - **RecipesOverview**: top count text moved to the footer — Shown +
+    Cookable now + Favourites.
+  - **MyProductsPage**: top count text moved to the footer — Shown + On
+    deal + Unlinked.
+- **A5 — Shared loading components (`AppSpinner` + `AppSkeleton`).** Two
+  new components in `web_app/src/components/`:
+  - `AppSpinner.vue` — the one inline/short-wait spinner: consistent
+    default size, theme-aware colour, optional label, and a `block` mode
+    that centres it in a padded column.
+  - `AppSkeleton.vue` — layout-mimicking placeholder blocks (`line` /
+    `rect` / `circle`) that pulse on the same 1.6s rhythm as the boot
+    splash, with theme-aware colours (mixed from `--surface-sunken` +
+    `--text-muted`) and `prefers-reduced-motion` support.
 - **A4 — Standard filter bar (`FilterBar`).** New
   `web_app/src/components/FilterBar.vue` gives every data-list page one
   filter skin: a persistent search box (`#search` slot) kept outside the
@@ -26,6 +57,53 @@ semver — major bumps signal schema or breaking-config changes.
   overlay), and `ScanOverlay` (persistent camera overlay).
 
 ### Changed
+- **A6 — Text size now applies more consistently.** Because the root
+  font-size is driven by the preference, rem-based text (including Quasar
+  `text-*` classes) already scaled — the gaps were fixed-px hold-outs.
+  Migrated those to scale tokens so they follow the setting: the app-bar
+  page title (`PageTitle`, was 24px), the Preferences theme-card blurb,
+  and the Audit-log payload/mono text. Added a rule so **tooltips** follow
+  the preference too. Deliberately left fixed (with reason): the scan
+  overlay's camera UI, price-history SVG chart labels, and the dashboard's
+  3px/7.5px micro-gauge text.
+- **A5 — Unified loading states across the active app.** Replaced ad-hoc
+  `q-spinner`s and placeholder-text loads with the shared components:
+  - **Detail pages now use skeletons that mirror their layout** instead of
+    flashing literal placeholder text. `StockItemDetailPage` no longer
+    shows "Stock item" while loading (skeleton title + toolbar/card
+    blocks); `ShoppingListDetail` no longer shows "Loading…" (skeleton
+    rows); `RecipeDetailPage` shows a header + two-column skeleton.
+  - **Spinners unified to `AppSpinner`** on the overview/search/other
+    active pages: StockOverview-adjacent flows, RecipesOverview,
+    ShoppingListsOverview (incl. inline "Loading totals…"),
+    MyProductsPage, DashboardPage, ProductSearch (the searching banner —
+    now consistent/theme-aware), RecipeCookMode (page + swap-picker),
+    RecipeDetailPage substitutes, ShoppingListShopMode,
+    ShoppingListTemplates, ShopNowRedirect, QuickAddSheet.
+  - Left on raw `q-spinner` for now (out of scope / deferred surfaces):
+    Reports, Data→Export/Print, Settings sub-pages, and DoraChat's typing
+    dots (a deliberate indicator).
+- **B8 — Recipe substitutes are now a temporary cook-session swap (no
+  longer edit the saved recipe).** Previously, picking a substitute for a
+  missing ingredient on the recipe detail page rewrote the editable recipe
+  form and, on Save, **permanently replaced the ingredient** in the saved
+  recipe. That destructive swap is removed. Instead:
+  - **Cook mode** gains a per-ingredient swap (↔ icon): pick a substitute
+    and it applies **only to that cook** — the saved recipe is never
+    changed. Swapped ingredients show "Y instead of X" with an undo, and
+    the finish flow decrements / restocks the *substitute* that was
+    actually used, not the original.
+  - The recipe-detail "Find substitutes" dialog is now **informational**:
+    it lists the substitutes recorded on each missing item's detail page
+    and points you to cook mode to use one.
+  - Clarified naming: the basic per-stock-item substitutes feature is
+    kept; only the long-deleted standalone **substitute *graph* page**
+    (N7 `/substitutes`) stays removed. Stale "substitutes graph" wording
+    in recipe/stock comments + labels reworded to just "substitutes."
+  - Audited the other reported B8 defects against current code: favourite
+    toggle, recipe actions, and related-recipe navigation all behave
+    correctly post meals→recipes merge (the inert-actions / dead-nav
+    reports no longer reproduce; there is no related-recipes section).
 - **A4 — Filter standardisation across the data-list pages.** Migrated
   `StockOverview`, `RecipesOverview`, `MyProductsPage`, and `ProductSearch`
   to `FilterBar`. Replaced one-off filter affordances with the standard

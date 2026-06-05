@@ -24,6 +24,162 @@ next.
 
 ---
 
+## 2026-06-05 — B5 follow-up 2: Dashboard "Continue" sealed-wizard bug + Wave-B audit
+**Status:** complete (static verification only)
+**What changed:**
+- `web_app/src/pages/DashboardPage.vue` — replaced the
+  `<q-btn ... to="/welcome">` bare router-link on the skipped-setup
+  banner with `@click="onContinueOnboarding"`. New handler calls
+  `onboardingApi.restartAsync()` → `authStore.refreshAsync()` → drops
+  the `dora.onboarding.skipped_at` localStorage key → `router.push('/welcome')`.
+  Imported `OnboardingApiService`.
+- `DORA_FOLLOWUPS.md` — logged FU-017 (B3 user re-test) and the
+  miss-pattern note (FU-016 already covers the cross-cutting audit).
+- `CHANGELOG.md` — Continue fix entry above the previous Skip/Finish
+  fix, plus reframing of the original "no changes needed" claim.
+
+**Decisions made:**
+- **User asked me to audit my own "already-fine" claims** after the
+  Skip/Finish bug landed. Re-walked every "no changes needed" call I
+  made this session against the user's reported symptoms:
+  - **B3 "can't save without changing the name"** — backend
+    handlers (stock_item, recipe, recipe_collection, stock_location,
+    stock_group, user_as_admin, me) all use `model_fields_set` +
+    exclude-self correctly. The repo's identity map means `_StockItem`
+    and `_SameName` are the same Python object when ids match, so the
+    `_SameName.id != stock_item_id` guard returns False. Type
+    alignment is fine (both UUIDs). I can't reproduce statically.
+    Logged FU-017 for the user to re-test in browser — if it still
+    repros, the actual error payload will tell us what code path is
+    actually firing.
+  - **B5 Dashboard "Continue"** — **was wrong**, same family as the
+    Skip/Finish bug. The bare `to="/welcome"` link triggered a
+    navigation that the router guard immediately reverted, because
+    Skip Everything had stamped `onboarding_completed_at` on the
+    backend and the guard now redirects authed users with a
+    non-null timestamp AWAY from `/welcome` (lines 103-109). Fixed
+    by using the existing `restartAsync` infrastructure (backend
+    route + frontend service method both already existed —
+    `AccountSettings.vue`'s "Restart onboarding" action even
+    contains a comment explaining the exact guard issue). The
+    "audit" approach worked: I saw the pattern by re-tracing
+    Skip Everything's downstream effects on the guard, not by
+    re-reading the button's wiring in isolation.
+  - **B5 Skip/Finish/Show-me-X** — confirmed wrong, fixed in the
+    previous worklog entry.
+  - **B4 link-also-saves** — was correct in narrative *post-B1*, but
+    pre-B1 fix would have 422'd. Noting for completeness.
+  - **B7 "no other double-toast patterns"** — limited audit; only
+    walked `addItems` callers. Wider sweep (store-mutation + page
+    toast double-emit) not done. Flagging for opportunistic fix.
+- **B3 verdict: re-test, don't dig further blind.** User chose
+  "follow up later" (FU-017). Cheaper to wait for a live repro than
+  to keep tracing speculative paths.
+
+**Files touched:**
+- `web_app/src/pages/DashboardPage.vue`
+- `DORA_FOLLOWUPS.md`
+- `CHANGELOG.md`
+
+**Verification:**
+- Walked the Continue path: user has skipped → `currentUser.onboarding_completed_at`
+  is an ISO string → click → `restartAsync` POST sets it back to null
+  on backend → `refreshAsync()` re-fetches `/me` → cached value is
+  now null → `router.push('/welcome')` → guard (94-99) sees null
+  for an authed user → falls through to the WelcomeLayout. ✓
+- Confirmed `AccountSettings.vue:110-124` does the exact same dance
+  in a different surface; copying its pattern.
+- Confirmed `/onboarding/restart` exists at
+  `dora_api/features/onboarding/onboarding.py:151` and that
+  `onboardingApiService.restartAsync` (line 20) hits it.
+- `useAuthStore` and `currentUser` already imported and instantiated
+  in DashboardPage (lines 766/824) — no new store imports needed.
+- **Not run:** dev server / browser (node_modules absent).
+
+**Next up:**
+- **User eyeballs**: Skip Everything from a fresh user → land on
+  dashboard → banner appears → click Continue → wizard opens at
+  the welcome step. No refresh needed.
+- Back to the Wave B sequence: **B8** — recipe-detail dead actions /
+  permanent substitute swap / deleted substitutes-graph ref.
+
+**Open questions for user:** none. Wider audit findings logged in
+`DORA_FOLLOWUPS.md` (FU-016, FU-017, FU-018).
+
+---
+
+## 2026-06-05 — B5 follow-up: onboarding "dead button" bug (stale auth state vs router guard)
+**Status:** complete (static verification only)
+**What changed:**
+- `web_app/src/pages/onboarding/WelcomeWizard.vue` — both `complete()` and
+  `onSkipEverything()` now `await authStore.refreshAsync()` immediately
+  after `onboardingApi.completeAsync()` and before `router.push('/')`.
+  (Show-me-X also benefits because it calls `complete()`.)
+
+**Decisions made:**
+- **My earlier B5 verdict was wrong.** I claimed the buttons were
+  "already wired correctly in current code" after a static read. User
+  pushed back with the actual symptom: clicks did nothing until a
+  browser refresh — classic stale-state behaviour I should have
+  recognised. Logging the miss here so the pattern (handler exists ≠
+  feature works; check the guard layer) sticks for the next session.
+- **Root cause: router-guard / auth-store race.**
+  `router/index.ts:94-99` redirects authed users with
+  `currentUser?.onboarding_completed_at === null` to `/welcome`.
+  `completeAsync()` updates the backend; the frontend's cached
+  `currentUser` keeps the stale null. `router.push('/')` then trips
+  the guard, which bounces back to `/welcome` immediately. Hard
+  refresh works because the router's `beforeEach` calls
+  `bootstrapAsync()` on a fresh page load, which re-fetches `/me` and
+  observes the new timestamp.
+- **Fix kept minimal:** add a single `await authStore.refreshAsync()`
+  (the method already exists for exactly this case — its docstring
+  literally references the onboarding flow). No changes to the
+  router guard, no caching/optimistic updates. Two call sites
+  touched.
+- **No other callers of `completeAsync()`** in `src/` — verified by
+  grep, so no other paths need the same paired refresh.
+
+**Files touched:**
+- `web_app/src/pages/onboarding/WelcomeWizard.vue`
+- `CHANGELOG.md` (extended the B5 Fixed entry rather than starting a
+  new one — same prompt's loop)
+
+**Verification:**
+- Walked the failure path through `router/index.ts:75-118`: before
+  fix, guard sees stale `null` → `{ path: '/welcome' }`; after fix,
+  guard sees ISO timestamp → falls through to the actual destination.
+- Confirmed `authStore.refreshAsync()` is the right method (line
+  67-71 of authStore.ts) — its own docstring calls out the
+  onboarding-state case. `useAuthStore` is already imported and
+  instantiated in WelcomeWizard (lines 363/374).
+- `clearDraft()` and the localStorage manipulation still run after
+  the refresh, in the same order as before the bug fix.
+- Grep'd every other call to `onboardingApi.completeAsync()` — only
+  the two fixed sites. No other path leaks the same stale guard
+  read.
+- **Not run:** dev server / browser repro (node_modules absent).
+  Once deps installed, this is the exact eyeball flow: Welcome →
+  Finish (or Skip everything, or Show-me-X) → should land on its
+  destination first try, no refresh needed.
+
+**Next up:**
+- **User re-eyeballs B5 onboarding flow** end-to-end. If a
+  Finish/Skip/Show-me-X click still appears dead, the next thing to
+  check is whether `getMeAsync()` is actually returning the updated
+  timestamp (backend issue) rather than a stale-frontend issue.
+- Then back to the Wave B sequence: **B8 — recipe-detail dead
+  actions / permanent substitute swap / deleted substitutes-graph
+  ref**.
+
+**Open questions for user:**
+- Worth a parallel audit for any other "frontend cached state vs
+  backend mutation" gaps? Common shapes: after-import data refresh,
+  after-restore stock-item refresh, after-onboarding-restart refresh.
+  Logging as an opportunistic follow-up rather than acting now.
+
+---
+
 ## 2026-06-05 — B7 (notification defects: "I'm a notification!" + duplicate toasts)
 **Status:** complete (static verification only)
 **What changed:**

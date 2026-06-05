@@ -35,6 +35,55 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-018 — B7: wider sweep for "store mutation + page toast" double-emits
+- **Raised:** 2026-06-05 (Wave-B self-audit)
+- **Type:** finding
+- **What:** B7's "no other double-toast patterns" verdict only walked
+  `useShoppingListActions.addItems` callers. Same pattern could exist
+  for any store mutation that toasts internally and a page handler that
+  toasts on success after. Worth grepping for `$q.notify` and
+  `notifyOk` calls inside store/composable methods, then cross-checking
+  every caller for a follow-up notify.
+- **Why deferred:** out of B7's original scope; opportunistic cleanup.
+- **Recommended resolution:** opportunistic — fold into the next polish
+  pass.
+
+## [OPEN] FU-017 — B3: user re-test "can't save unless I change the name"
+- **Raised:** 2026-06-05 (Wave-B self-audit)
+- **Type:** open verification
+- **What:** Static read says every update handler already does the right
+  thing (`model_fields_set` + exclude-self on the name-uniqueness check).
+  No code changed this session for B3. But the user originally reported
+  the symptom in browser testing, and the Wave-B self-audit found two
+  other "looked fine on paper, broken in browser" cases — so this might
+  also reproduce despite the static evidence.
+  - To re-test: edit a stock item, change only e.g. `expiry_date`, save.
+    Then edit a recipe, change only `servings`, save. Both should
+    succeed without a "name already exists" 422.
+  - If it reproduces, capture the request payload + response body and
+    share — that will tell us whether (a) wrong endpoint is being hit
+    (e.g. the create-new path), (b) the frontend is sending a
+    different `name` value than displayed, or (c) something else.
+- **Why deferred:** can't reproduce statically; cheaper to wait for a
+  live error than keep tracing speculative paths.
+- **Recommended resolution:** when the user gets a browser session up
+  next — try the test above; report back.
+
+## [OPEN] FU-016 — Audit other "frontend cache vs backend mutation" guard races
+- **Raised:** 2026-06-05 (B5 follow-up)
+- **Type:** finding
+- **What:** The onboarding "dead button" bug was a stale `authStore.currentUser`
+  read by the router guard after `onboardingApi.completeAsync()` updated the
+  backend. The same shape could exist for any flow where the backend mutates
+  user-scoped state that a guard or computed reads from a frontend cache —
+  candidates worth scanning: account changes (email/role/admin flag), data
+  import/restore, restart-onboarding, and stock-item Undo restore. Look for
+  `currentUser?.*` reads in router and layout guards, and pair each with the
+  store mutation that should refresh them.
+- **Why deferred:** out of B5's bug-fix scope; cross-cutting audit.
+- **Recommended resolution:** opportunistic — fold into a Wave-A or polish
+  pass once one obvious symptom shows up; not worth a dedicated session.
+
 ## [OPEN] FU-015 — B5: Onboarding tour "Alerts" card points at stock, not /alerts
 - **Raised:** 2026-06-05 (B5)
 - **Type:** finding

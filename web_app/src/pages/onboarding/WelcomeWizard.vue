@@ -680,6 +680,11 @@
             // Persist the timestamp + drop a flag so the dashboard can
             // show a 24h "finish setting up" banner.
             await onboardingApi.completeAsync();
+            // Refresh the cached user so the router guard sees the new
+            // `onboarding_completed_at`. Without this, the guard reads the
+            // stale (null) value and bounces the user straight back to
+            // /welcome — making the button look dead until a hard refresh.
+            await authStore.refreshAsync();
             try {
                 localStorage.setItem(
                     'dora.onboarding.skipped_at',
@@ -703,6 +708,12 @@
         completing.value = true;
         try {
             await onboardingApi.completeAsync();
+            // Refresh the cached user so the router guard sees the new
+            // `onboarding_completed_at`. Without this, Finish / Show-me-X
+            // navigations bounce straight back to /welcome on the first
+            // attempt (the guard reads stale null); user only escapes
+            // after a hard refresh re-bootstraps the auth state.
+            await authStore.refreshAsync();
             clearDraft();
             // Clear any stale "skipped" flag so the dashboard banner
             // doesn't reappear after a proper completion.

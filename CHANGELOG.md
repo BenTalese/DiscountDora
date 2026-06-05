@@ -280,10 +280,37 @@ semver — major bumps signal schema or breaking-config changes.
   `AlertsBell`, `MyProductsPage`, `DoraChat`) don't stack a second
   toast on top — clean.
 - **B5 — Dashboard "All N alerts →" link no longer 404s.** Wired by adding
-  the `/alerts` route (see Added above); no Dashboard code changed. The
-  rest of the B5 nav cluster (Onboarding **Skip everything** / **Finish** /
-  "Show me X" tour cards; Dashboard **Continue** banner) was already wired
-  correctly in current code — verified, no changes needed.
+  the `/alerts` route (see Added above); no Dashboard code changed.
+- **B5 (follow-up) — Dashboard "Continue" button on the skipped-setup
+  banner no longer silently bounces back to the dashboard.** Same
+  stale-state guard shape, mirror direction: Skip Everything stamps
+  `onboarding_completed_at`, so the wizard route is now sealed off —
+  the guard at `router/index.ts:103-109` redirects authed users with a
+  non-null timestamp away from `/welcome`. The button was a bare
+  `to="/welcome"` link, so the navigation fired and immediately
+  reversed. Now wired to a handler that calls
+  `onboardingApi.restartAsync()` (existing backend route at
+  `POST /onboarding/restart`, frontend service method already in
+  `onboardingApiService.ts`), `await authStore.refreshAsync()` so the
+  guard sees the now-null timestamp, clears the
+  `dora.onboarding.skipped_at` localStorage flag, then pushes
+  `/welcome`. Mirrors the existing "Restart onboarding" flow in
+  `AccountSettings.vue`.
+- **B5 (follow-up) — Onboarding Skip everything / Finish / Show-me-X
+  buttons no longer appear dead, requiring a browser refresh to escape
+  the wizard.** Root cause was a stale-state guard race, not a missing
+  click handler: `onboardingApi.completeAsync()` updates the server,
+  but the frontend `authStore.currentUser` wasn't refreshed before
+  `router.push(...)` ran. The global router guard
+  (`router/index.ts:97`) reads
+  `authStore.currentUser?.onboarding_completed_at` and bounces users
+  with a `null` value straight back to `/welcome` — so the navigation
+  fired, then the guard reverted it, and from the user's perspective
+  nothing happened. A hard refresh re-bootstrapped the auth state and
+  unblocked the path. `WelcomeWizard.complete()` and
+  `onSkipEverything()` now `await authStore.refreshAsync()`
+  immediately after `completeAsync()` so the guard sees the new
+  timestamp on the very next navigation.
 - **B4 — Stock-item delete no longer 500s when the item is used by a recipe.**
   The only FK with `ondelete="RESTRICT"` on `StockItem` is
   `RecipeIngredient.stock_item_id`; everything else already cascades

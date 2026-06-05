@@ -74,7 +74,7 @@
             you skipped the setup wizard. Finish in two minutes whenever
             you're ready.
             <template #action>
-                <q-btn flat no-caps :icon="ICONS.east" label="Continue" to="/welcome" />
+                <q-btn flat no-caps :icon="ICONS.east" label="Continue" :loading="continuingOnboarding" @click="onContinueOnboarding" />
                 <q-btn flat no-caps :icon="ICONS.close" label="Hide" @click="dismissSkipReminder" />
             </template>
         </q-banner>
@@ -761,6 +761,7 @@
     import { useSuggestionStore } from 'src/stores/suggestionStore';
     import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
+    import OnboardingApiService from 'src/services/api/onboardingApiService';
     import ProductApiService from 'src/services/api/productApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useAuthStore } from 'src/stores/authStore';
@@ -870,6 +871,32 @@
     });
     function dismissSkipReminder() {
         skipReminderDismissed.value = true;
+    }
+    // Continue → re-open the wizard. The Skip-everything path stamps
+    // `onboarding_completed_at` on the backend so subsequent visits don't
+    // get bounced to /welcome. To re-enter we need that timestamp cleared
+    // (POST /onboarding/restart) AND the cached auth state refreshed,
+    // otherwise the router guard sees the stale non-null value and
+    // bounces straight back here. Same shape as the AccountSettings
+    // "Restart onboarding" action.
+    const onboardingApi = new OnboardingApiService();
+    const continuingOnboarding = ref(false);
+    async function onContinueOnboarding() {
+        if (continuingOnboarding.value) return;
+        continuingOnboarding.value = true;
+        try {
+            await onboardingApi.restartAsync();
+            await authStore.refreshAsync();
+            try {
+                localStorage.removeItem('dora.onboarding.skipped_at');
+            } catch {
+                // Ignore — banner hides on the next render anyway once
+                // the guard sends us to /welcome.
+            }
+            void router.push('/welcome');
+        } finally {
+            continuingOnboarding.value = false;
+        }
     }
 
     // Independent slot loaders. Each card surfaces a small chunk of data

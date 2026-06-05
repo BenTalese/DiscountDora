@@ -70,6 +70,10 @@ const routes: RouteRecordRaw[] = [
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
+            // B5 stopgap — minimal alerts list, reuses alertStore (same
+            // data as the header bell). The full alerts control centre is
+            // the C-wave design brief.
+            { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
             { path: 'tts-test', component: () => import('pages/TtsTestPage.vue'), meta: { title: 'TTS test' } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
             { path: 'recipes', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Recipes' } },

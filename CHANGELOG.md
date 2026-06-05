@@ -237,6 +237,83 @@ semver — major bumps signal schema or breaking-config changes.
   splash ladder is kept as intentional per DEC-2). Audit + chunk plan at
   `web_app/THEME_AUDIT.md`.
 
+### Removed
+- **B7 — Quasar boot scaffold `boot/axios.ts`.** Dead-since-bootstrap file
+  that exported an Axios instance pointed at `https://api.example.com` and
+  hung `$api` / `$axios` on global properties. Never registered in
+  `quasar.config.ts`'s `boot:` list, and nothing in `src/` referenced
+  either property. The real API client lives in `src/services/api/axiosHttpClient.ts`.
+
+### Added
+- **B5 — Minimal Alerts page at `/alerts`.** Stopgap so the dashboard's
+  "All N →" link and any other `/alerts` navigation no longer 404s. Reuses
+  `alertStore` (the same data the header bell already fetches), groups items
+  by severity (high / medium / low), shows a collapsed "Snoozed" section at
+  the bottom, and click-throughs row → stock item detail. Deliberately does
+  NOT carry inline actions (push expiry, mark restocked, snooze) — those
+  still live on the bell panel. A banner on the page makes that explicit
+  and points users at the bell. The full alerts control centre with bulk
+  actions remains the C-wave design brief.
+
+### Fixed
+- **B7 — "I'm a notification!" placeholder caption removed from the global
+  `info` toast type.** `boot/notifyTypeRegistration.ts` registered the
+  custom `info` type with `message: 'Hey did you know...'` and
+  `caption: "I'm a notification!"` as Quasar Notify defaults. Any
+  `notify({ type: 'info' })` that didn't override the caption (most of
+  them) rendered the placeholder underneath the real message — which is
+  how it landed in the Meal Plans "Generate shopping list" toast in
+  production. The type registration now sets visual defaults only
+  (color/icon/progress) and leaves message+caption to the call site.
+- **B7 — Stocktake quick-add no longer fires two contradictory toasts.**
+  `StocktakeRunner.onAddToList` was calling the bulk-add composable
+  (`useShoppingListActions.addItems`) for a single item — which emits
+  its own summary toast ("0 added, 1 already on list." or "1 added.") —
+  and then fired a second `${name} added to primary list.` toast on
+  top, producing the reported double / contradictory pair. Switched
+  StocktakeRunner to the existing single-item action
+  `useStockItemActions.addToList`, which emits exactly one accurate
+  toast ("Already on your primary list." vs "Added to primary list.")
+  and handles the no-primary-list dialog for free. The unused
+  `useShoppingListStore` / `useShoppingListActions` imports went with
+  it. Sweep: the other four `addItems` callers (`QuickAddSheet`,
+  `AlertsBell`, `MyProductsPage`, `DoraChat`) don't stack a second
+  toast on top — clean.
+- **B5 — Dashboard "All N alerts →" link no longer 404s.** Wired by adding
+  the `/alerts` route (see Added above); no Dashboard code changed. The
+  rest of the B5 nav cluster (Onboarding **Skip everything** / **Finish** /
+  "Show me X" tour cards; Dashboard **Continue** banner) was already wired
+  correctly in current code — verified, no changes needed.
+- **B4 — Stock-item delete no longer 500s when the item is used by a recipe.**
+  The only FK with `ondelete="RESTRICT"` on `StockItem` is
+  `RecipeIngredient.stock_item_id`; everything else already cascades
+  (shopping lines, templates, product joins, level-change history, legacy
+  substitutes) or sets-null to preserve history (waste events). The delete
+  handler now pre-checks for blocking recipes and, when any exist, returns a
+  structured 422 with a `blocked_by_recipes: [{recipe_id, name}, …]`
+  extension on the problem-details body. The Stock Item Detail page parses
+  that and pops a "Still used by recipes — remove from these first" dialog
+  with the recipe names instead of the previous generic error toast. The
+  vague "Recipes that use it will be left with a dangling reference" warning
+  on the initial confirm dialog is gone — it described an outcome the FK
+  constraint never actually allowed. Sweep confirmed there are no other
+  delete routes exposing a RESTRICT FK (Product → Merchant is RESTRICT but
+  has no delete endpoint).
+- **B1 — "Extra inputs are not permitted" on product save / quick-add / link /
+  mark-inactive.** Two frontend-side payload mismatches against
+  `extra="forbid"` request models. (1) `productApiService.updateAsync` was
+  PATCHing the entire `UpdateProductCommand` (including `product_id`) into the
+  request body; now strips `product_id` before sending — fixes Save toggle,
+  bulk Mark inactive, and per-row Mark active/inactive on Product Search and
+  My Products. (2) `ProductSearch.vue`'s `ensureSaved` spread the full
+  `ScrapedProductOffer` into `CreateProductCommand`, leaking
+  `is_saved` / `is_saved_product_active` / `price_difference` / `price_per_cup`;
+  now builds an explicit command — fixes Save (create), Quick-add to primary
+  list, and Link to stock item (all three go through `ensureSaved` first).
+  Backend request models unchanged — `extra="forbid"` kept as the guardrail.
+  Link-to-stock-item already saved the product first via `ensureSaved`
+  (single user action); confirmed and unchanged.
+
 ### Added
 - **P2-13 — Voice-first Dora + hands-free cook mode.** Extracted the
   ad-hoc voice handling from `RecipeCookMode.vue` into two reusable

@@ -24,6 +24,377 @@ next.
 
 ---
 
+## 2026-06-05 — B7 (notification defects: "I'm a notification!" + duplicate toasts)
+**Status:** complete (static verification only)
+**What changed:**
+- `web_app/src/boot/notifyTypeRegistration.ts` — removed placeholder
+  `message: 'Hey did you know...'` and `caption: "I'm a notification!"`
+  from the custom `info` Notify type registration. Type still defines
+  the visual styling (colour, icon, progress bar, classes); the text now
+  comes exclusively from the call site, as it should.
+- `web_app/src/boot/axios.ts` — **deleted**. Quasar scaffold file with
+  `baseURL: 'https://api.example.com'`. Confirmed: NOT registered in
+  `quasar.config.ts`'s `boot:` array; `$api` / `$axios` never referenced
+  in `src/`. The real http client is `axiosHttpClient.ts`.
+- `web_app/src/pages/StocktakeRunner.vue` — `onAddToList` now delegates
+  to `useStockItemActions.addToList(stock_item_id)` instead of calling
+  `useShoppingListActions.addItems(...)` and then firing its own
+  second toast. Dropped the `useShoppingListStore` /
+  `useShoppingListActions` imports and the local `primaryListId` /
+  no-primary-list branch (handled inside `addToList`).
+
+**Decisions made:**
+- **Fix the source, not the call sites.** Every `notify({ type: 'info', ... })`
+  call already supplies a real message — the placeholder caption was
+  bleeding through *underneath* the real message because Quasar renders
+  both message and caption. Trimming the type registration is one
+  surgical change rather than touching every caller. Sweep confirmed
+  no caller relied on the placeholder defaults.
+- **Reuse `useStockItemActions.addToList` instead of writing new
+  messaging.** It already does the correct "Already on your primary
+  list." vs "Added to primary list." messaging, handles the
+  no-primary-list dialog, and is the cross-screen single-item action
+  every other surface uses. The duplicate-toast bug was really a "this
+  page used the bulk composable for a single item" miswiring.
+- **No other double-toast patterns found.** Audited every `addItems`
+  caller (4 sites: QuickAddSheet, AlertsBell, MyProductsPage,
+  DoraChat). None stacks a custom toast on top of the composable's
+  summary toast. DoraChat does push a chat-bubble after `addItems`,
+  but that's a different surface (in-chat reply vs system Notify),
+  not a redundant toast.
+- **Kept `oopsie` type intact.** Its `message: 'Oops, something went
+  wrong...'` default is real production copy used by
+  `globalErrorHandler.ts` and `boot/stores.ts` which call
+  `Notify.create({ type: 'oopsie' })` with no message — that's a
+  deliberate "use the default" pattern there, not a placeholder leak.
+
+**Files touched:**
+- `web_app/src/boot/notifyTypeRegistration.ts`
+- `web_app/src/boot/axios.ts` (deleted)
+- `web_app/src/pages/StocktakeRunner.vue`
+- `CHANGELOG.md` (Removed + Fixed entries)
+
+**Verification:**
+- Grep'd `"I'm a notification"`, `"placeholder"`, `"lorem"`,
+  `"example.com"`, `"demo"` across `web_app/src/`. Remaining matches
+  are either (a) input-`placeholder=` attributes (legitimate form
+  hints), (b) the merchant-logo `.dora-logo-placeholder` CSS class
+  (real placeholder badge rendering — not text), or (c) the
+  intentional "UI placeholder" tooltips on unfinished
+  `SystemSettings` toggles (those are functional indicators, not
+  copy bugs).
+- Manually walked through `notifyTypeRegistration.ts` post-edit —
+  `info` type now only sets visual properties; no leaking text.
+- Confirmed StocktakeRunner still uses `useStockLevelStore`,
+  `StocktakeApiService`, `StockItemApiService`, and `useQuasar`;
+  none of the removed imports are referenced elsewhere in the file.
+- Quasar `boot:` array in `quasar.config.ts` does NOT list
+  `axios` — confirmed the deletion has zero runtime effect.
+- **Not run:** dev server / type-check / lint (node_modules absent).
+
+**Next up:**
+- **User eyeballs B7** in browser: Meal Plans → "Generate shopping
+  list for this week" → toast should now show just the real message,
+  no "I'm a notification!" caption under it. Stocktake → Add to list
+  → exactly one toast ("Added to primary list." or "Already on your
+  primary list."), no contradictory pair.
+- Then proceed to **B8 — Recipe detail dead actions / permanent
+  substitute swap / deleted substitutes-graph ref**, next 🟡 in
+  Wave B.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-05 — B5 (dead nav buttons — onboarding, dashboard, alerts→404)
+**Status:** complete (static verification only — node_modules absent)
+**What changed:**
+- New `web_app/src/pages/AlertsPage.vue` — minimal stopgap.
+  Reuses `useAlertStore` (same source as the bell), groups items by severity
+  with severity-coloured avatars + per-kind icons, shows snoozed entries in
+  a collapsed expansion at the bottom, click row → `/stock/<id>`.
+  Deliberately does NOT host inline actions (push expiry / mark restocked /
+  snooze new) — those stay on the bell panel for now. Banner makes that
+  explicit so the page doesn't read as half-built.
+- `web_app/src/router/routes.ts` — added `/alerts` route under MainLayout.
+- `CHANGELOG.md` — Unreleased § Added (AlertsPage stopgap) + § Fixed
+  (`/alerts` 404 resolved, rest of B5 cluster verified already-wired).
+
+**Decisions made:**
+- **B5 is 80% already-wired.** Audit found the only real bug in the cluster
+  was the `/alerts` 404; the rest were already correct in current code.
+  Specifically verified:
+  - `WelcomeWizard.vue:677` `onSkipEverything` → `onboardingApi.completeAsync()`
+    + sets `dora.onboarding.skipped_at` + `router.push('/')`.
+  - `WelcomeWizard.vue:702` `complete()` (invoked on Finish via
+    `onNext`→`isLastStep`) → `completeAsync()` + clears skipped flag +
+    `router.push('/')`.
+  - `WelcomeWizard.vue:670` `onShowMe` → completes onboarding, then
+    `router.push(path)` for the tour card (4 cards: `/stock`,
+    `/shopping-lists`, `/stock?attention=true`, `/help`).
+  - `DashboardPage.vue:77` Continue button uses `to="/welcome"` — Quasar
+    router-link is fine, navigates correctly.
+  Logged the verification rather than making no-op edits.
+- **Stopgap target = new minimal page** (per user). Going with a tiny
+  page rather than redirecting to the bell drawer keeps the link semantics
+  honest (`All N →` lands on a real list view), and reusing `alertStore`
+  means no duplicate fetching.
+- **No inline actions on the page (yet).** The C-wave brief owns the real
+  control centre. Putting half the actions here would risk locking in a
+  shape we'd then have to rework. Banner explicitly steers users at the
+  bell so they don't think the actions vanished.
+- **Page is added to MainLayout's children**, not the deferred-section
+  list — `/alerts` is an active navigation target now, not a planning
+  doc. The "deferred surfaces" guidance in CLAUDE.md is about *redesign*,
+  not *don't add routes that 404 today*.
+
+**Files touched:**
+- `web_app/src/pages/AlertsPage.vue` (new)
+- `web_app/src/router/routes.ts`
+- `CHANGELOG.md`
+
+**Verification:**
+- Read every handler the prompt named: `onSkipEverything`, `complete`,
+  `onShowMe`, dashboard Continue button. Each navigates and persists state
+  per the prompt's "Fix wiring" section already.
+- TOUR_CARDS' four paths (`/stock`, `/shopping-lists`,
+  `/stock?attention=true`, `/help`) all map to existing routes in
+  `routes.ts` — no further 404s in the show-me-X cluster.
+- Confirmed `/alerts` previously hit the catch-all `ErrorNotFound`
+  (line 196 of `routes.ts`). New route at indent under MainLayout means
+  the page renders inside the standard chrome with header bell still
+  visible.
+- Sanity-checked every ICONS key used in AlertsPage
+  (`priority_high`, `warning`, `info`, `snooze`, `undo`,
+  `chevron_right`, `check_circle`, `refresh`) — all exist in `style/icons.ts`.
+- `useAlertStore` API used: `alerts`, `loading`, `loadError`, `totalCount`,
+  `snoozedCount`, `snoozedAlerts`, `refreshAsync`, `snoozedUntil`,
+  `unsnoozeAlert` — all on the public return of the store.
+- **Not run:** dev server / lint / type-check (node_modules absent).
+
+**Next up:**
+- **User eyeballs B5** in browser: click "All N alerts →" on dashboard →
+  lands on /alerts with grouped list; bell still works independently;
+  onboarding Skip/Finish/Show-me-X still navigate as expected.
+- Then proceed to **B7 — notification defects** ("I'm a notification!"
+  placeholder, duplicate/contradictory toasts), next 🟢 in Wave B.
+
+**Open questions for user:** none — but note: TOUR_CARDS' "Alerts" tour
+card still routes to `/stock?attention=true` (per the existing copy "deep-
+link into Stock"). That predates today's `/alerts` page; the user can
+decide later whether to switch the tour card to `/alerts` instead. Logged
+as a follow-up.
+
+---
+
+## 2026-06-05 — B4 (delete stock item → FK constraint failed)
+**Status:** complete (static verification only — node_modules / DB not exercised)
+**What changed:**
+- `dora_api/features/stock_items/delete_stock_item.py` — full rewrite:
+  - New `BlockingRecipe` dataclass; `DeleteStockItemResponse` carries
+    `blocked_by_recipes: list[BlockingRecipe]`.
+  - Handler now queries `RecipeIngredient._stock_item_id` (same shape as
+    `get_stock_item_detail.linked_recipes`) before `repository.remove(...)`.
+    If any recipes reference the item, returns a non-empty
+    `blocked_by_recipes` and skips the delete entirely — nothing is mutated.
+  - New module-local `_blocked_by_recipes_response(...)` helper builds the
+    422 problem-details body: standard `errors`/`title`/`type` shape PLUS a
+    `blocked_by_recipes: [{recipe_id, name}]` extension the frontend uses
+    to render a structured dialog.
+- `web_app/src/pages/StockItemDetailPage.vue`:
+  - `confirmDelete` message changed from
+    `Delete "X"? Recipes that use it will be left with a dangling reference.`
+    to `Delete "X"?`. The dangling-reference promise was incorrect: the FK
+    is `RESTRICT`, so the previous behaviour was a 500, not a dangle.
+  - `doDelete` catch block now inspects `err.details?.blocked_by_recipes`;
+    if it's a non-empty array, pops a Quasar `$q.dialog` with
+    `html: true` listing the recipe names ("Can't delete this stock item —
+    it's an ingredient on N recipe(s): …"). Other errors still flow into
+    the existing `notifyErr` toast.
+  - Added `NormalisedApiError` to the existing `axiosHttpClient` import so
+    the catch can type-narrow.
+
+**Decisions made:**
+- **Policy (b) — block-with-explanation** (per user). Implemented entirely on
+  the existing 422/problem-details rails; no new HTTP helper added (kept
+  churn low — used `flask.jsonify` directly in the module-local helper).
+- **Extension field placement.** Put `blocked_by_recipes` on the body itself
+  rather than buried inside `errors`. `errors` keeps the string fallback so
+  `describeApiError` still produces a readable line for clients that don't
+  know the extension (e.g. assistant tools, future routes). This keeps the
+  contract additive — no existing error-handling code breaks.
+- **Reference map confirms no other action needed.** Every other FK to
+  StockItem either cascades or set-nulls — `ShoppingListLine`,
+  `ShoppingListTemplateLine`, `StockItemProduct`, `StockLevelChange`,
+  legacy `StockItemSubstitute` (all CASCADE); `StockItemWasteEvent`
+  (SET NULL with denormalised name to preserve history). Only
+  `RecipeIngredient` was RESTRICT and that's now handled.
+- **Sweep: only one other RESTRICT FK in schema** — `Product.merchant_id`
+  → `Merchant.id`. No DELETE route exists for Merchant, so no exposure.
+  Other delete handlers don't need the same treatment.
+
+**Files touched:**
+- `dora_api/features/stock_items/delete_stock_item.py`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `CHANGELOG.md` (Unreleased § Fixed — B4 entry above B1)
+
+**Verification:**
+- Reasoned through three paths against current code:
+  1. Item not used anywhere → query returns no ingredient rows → `remove` +
+     `save_changes` + 204. (Unchanged behaviour for the happy path.)
+  2. Item used by ≥1 recipe → query returns ids → fetch recipe names →
+     422 with `blocked_by_recipes` → frontend dialog. (Was 500.)
+  3. Item id doesn't exist → unchanged 404.
+- Cross-checked the RecipeIngredient query against the existing
+  `get_stock_item_detail.linked_recipes` query (same `_recipe_id` /
+  `_stock_item_id` mapper-property names); both compile against the same
+  table_mappings.
+- Verified the only call site for `stockItemStore.deleteStockItemAsync` is
+  `StockItemDetailPage.vue:913` — no other surfaces need the new dialog.
+- Verified the optimistic-update / Undo flow in the store doesn't fire on
+  failure: the store awaits `deleteAsync` before mutating the local array,
+  so a 422 throw bypasses the splice and the snapshot/restore toast.
+- **Not run:** dev server, DB delete, lint, type-check (node_modules absent).
+
+**Next up:**
+- **User eyeballs B4** in browser once deps installed:
+  - Delete an unreferenced stock item → succeeds with Undo toast.
+  - Delete an item used by a recipe → dialog appears listing the recipe(s);
+    no toast; no 500 in server logs.
+  - Delete a stock item that's *only* on a shopping list (no recipe) →
+    succeeds; the line cascades out cleanly.
+- Then proceed to **B5 — dead nav buttons** (onboarding skip/finish, dashboard
+  continue, Alerts → 404), next 🟢 in Wave B.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-05 — B3 (partial-update semantics / "can't save unless I change the name")
+**Status:** complete (verified-resolved — no code changes)
+**What changed:** nothing in code. Audit confirmed the reported bug doesn't
+reproduce in current backend code (same situation as B2).
+
+**Decisions made:**
+- **B3 closed as already-resolved.** The bug Joey reported is the
+  classic PUT-style self-collision: name-uniqueness check finds the row, the
+  row *is* the row being edited, but the handler doesn't exclude self → 422.
+  Every update handler in the repo now does both of B3's recommended fixes:
+  - **Partial update via `model_fields_set`** (only set fields get applied):
+    `update_stock_item.py`, `update_recipe.py`, `update_stock_location.py`,
+    `manage_stock_groups.py`, `update_user_as_admin.py`, `update_me.py`,
+    `update_meal_plan.py`.
+  - **Exclude-self on the name-uniqueness check** (`_SameName.id != <entity_id>`):
+    `update_stock_item.py:118`, `update_recipe.py:100`,
+    `update_recipe_collection.py:40`, `update_stock_location.py:48`,
+    `manage_stock_groups.py:156`, `update_user_as_admin.py:86`,
+    `update_me.py:71`.
+  Handlers without a name-uniqueness check (`update_meal_plan`,
+  `update_location`, `update_product`, `update_app_settings`) don't need one.
+- **Probable history:** the meals→recipes merge and DS-series rework that
+  fixed B2 also brought this pattern in line. Stale planning docs again.
+- **No CHANGELOG entry** — nothing shipped this session for B3. The
+  underlying fix already shipped in earlier work and is already reflected
+  in the current code.
+
+**Files touched:** none.
+
+**Verification:**
+- Read both handlers the prompt names: `update_stock_item.py`,
+  `update_recipe.py`. Both exclude-self and use `model_fields_set`.
+- Swept every other `update_*.py` in `dora_api/features/` for the same risk
+  pattern. All clean.
+- Reasoned through the failure path: send unchanged name → backend finds
+  same row → `id != current_id` is False → no `already_exists` → name
+  re-assigned no-op → save_changes → 204. Should work today.
+- **Not run:** the actual edit flow in browser. User should still eyeball
+  before fully closing the loop (edit a stock item changing only expiry,
+  edit a recipe changing only servings — both should save without changing
+  name). Logged as part of the upcoming verification sweep.
+
+**Next up:**
+- **User eyeballs B1 + B3** together once deps are installed. B3 verification
+  is: edit a stock item changing only e.g. expiry → saves; edit a recipe
+  changing only servings → saves; renaming to a *different* existing name
+  still 422s.
+- Then proceed to **B4 — delete cascade ("delete stock item → FOREIGN KEY
+  constraint failed")**, next 🟡 in Wave B.
+
+**Open questions for user:** none — but if the bug DOES still reproduce in
+browser, the cause must be frontend-side (e.g. a stale optimistic-update
+toast) or a code path I haven't seen yet. Flag it and I'll re-investigate.
+
+---
+
+## 2026-06-05 — B1 ("Extra inputs are not permitted" on product save/link/quick-add/inactive)
+**Status:** complete (static verification only — node_modules not installed)
+**What changed:**
+- `web_app/src/services/api/productApiService.ts` — `updateAsync` now strips
+  `product_id` from the PATCH body (mirrors the `stockItemApiService.updateAsync`
+  pattern). Was sending the full `UpdateProductCommand` including `product_id`,
+  which the backend `UpdateProductRequest` (`extra="forbid"`) rejects.
+- `web_app/src/pages/ProductSearch.vue` — `ensureSaved` now builds an explicit
+  `CreateProductCommand` from the offer (brand, image, is_active=true,
+  is_available, merchant_name, merchant_stockcode, name, price_now, price_was,
+  size, size_unit, size_value, web_url). Was `{ ...offer, is_active: true }`,
+  which leaked the offer-only fields `is_saved`, `is_saved_product_active`,
+  `price_difference`, `price_per_cup` and tripped `CreateProductRequest`'s
+  `extra="forbid"`.
+
+**Decisions made:**
+- **Backend kept frontend-aligned, not the other way around** (per the prompt's
+  default). Two `extra="forbid"` schemas survive intact: `CreateProductRequest`
+  and `UpdateProductRequest`. The leaking offer fields are display-only state,
+  so the right move was to drop them client-side.
+- **"Link also saves" requirement was already met.** `confirmLink` (and
+  `onQuickAdd`) already call `ensureSaved` before `stockItemApi.linkProductAsync`.
+  No new transaction logic added — sequencing was already correct. Fixing
+  `ensureSaved`'s payload makes the existing save-then-link flow actually
+  succeed.
+- **Quick-add and Link backend models already matched the frontend** —
+  `QuickAddRequest{stock_item_id}` and `LinkProductRequest{product_id}` accept
+  exactly what the frontend sends. Both flows failed because of the save step
+  they each chain to (`ensureSaved`), not the quick-add/link calls themselves.
+  Logged here so a future agent doesn't go looking for a separate fix.
+
+**Files touched:**
+- `web_app/src/services/api/productApiService.ts`
+- `web_app/src/pages/ProductSearch.vue`
+- `CHANGELOG.md` (Unreleased § Fixed — new section)
+
+**Verification:**
+- Grep'd every caller of `productApi.createAsync` / `productApi.updateAsync` /
+  `productStore.createProductAsync` / `productStore.updateProductAsync` —
+  three call sites total (ProductSearch ensureSaved + onSaveToggle,
+  MyProductsPage bulk inactive + per-row toggle). All now send only allowed
+  fields.
+- Cross-checked `CreateProductRequest` (create_product.py) and
+  `UpdateProductRequest` (update_product.py) field-by-field against the new
+  explicit `ensureSaved` payload and the trimmed PATCH body. No remaining
+  mismatches.
+- Walked the four failing actions end-to-end against current code: Save
+  (create) → ensureSaved fixed; Save toggle / Mark active+inactive (bulk and
+  per-row) → updateAsync trim fixed; Quick-add → ensureSaved + already-OK
+  primary-line POST; Link → ensureSaved + already-OK link POST.
+- **Not run:** `quasar build` / lint / dev server — `node_modules` absent.
+- **Not tested manually** — UI eyeball required (see Next up).
+
+**Next up:**
+- **User eyeballs B1** on Product Search + My Products: Save toggle,
+  Mark inactive (per-row and bulk), Quick-add to primary list, Link to stock
+  item. Confirm no "Extra inputs are not permitted" toast on any.
+- Then proceed to **B3 — partial-update semantics ("can't save unless I change
+  the name")**, next 🟡 in Wave B.
+
+**Open questions for user:**
+- The image field is sent as a string from the frontend (`offer.image`) but
+  the backend expects `Base64Bytes | None`. If existing offers populate
+  `image` as a full data URL or a `data:image/...;base64,...` string, the
+  backend may not parse it cleanly. Worth checking once the dev server runs.
+  Logged as FU candidate if it surfaces.
+
+---
+
 ## 2026-06-05 — A4 (filter system standardisation + "empty = off")
 **Status:** complete (static verification only — node_modules not installed)
 **What changed:**

@@ -129,8 +129,7 @@
     import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService, { type StocktakeQueueItem } from 'src/services/api/stocktakeApiService';
-    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
 
     const $q = useQuasar();
@@ -138,8 +137,7 @@
     const stockApi = new StockItemApiService();
     const stockLevelStore = useStockLevelStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { addItems } = useShoppingListActions();
-    const shoppingListStore = useShoppingListStore();
+    const { addToList } = useStockItemActions();
 
     const session = ref<StocktakeQueueItem[]>([]);
     const index = ref(0);
@@ -205,21 +203,13 @@
 
     async function onAddToList() {
         if (!current.value) return;
-        const primaryId = shoppingListStore.primaryListId;
-        if (!primaryId) {
-            $q.notify({
-                type: 'warning', position: 'bottom-right',
-                message: 'No primary shopping list. Set one to quick-add from stocktake.',
-            });
-            return;
-        }
-        try {
-            await addItems(primaryId, [{ stock_item_id: current.value.stock_item_id }]);
-            $q.notify({
-                type: 'positive', position: 'bottom-right',
-                message: `${current.value.name} added to primary list.`,
-            });
-        } catch { /* surfaced by addItems */ }
+        // Delegate to the shared single-item action: it emits exactly one
+        // toast — "Already on your primary list." or "Added to primary list."
+        // — and pops the no-primary-list dialog when needed. Previously this
+        // called the bulk addItems(...) and then fired its own toast, which
+        // produced the B7 "0 added, 1 already on list" + "X added to primary
+        // list." double-toast.
+        await addToList(current.value.stock_item_id);
     }
 
     // ── Keyboard: 1/2/3/s ───────────────────────────────────────

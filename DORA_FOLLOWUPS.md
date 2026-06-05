@@ -35,6 +35,32 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-015 — B5: Onboarding tour "Alerts" card points at stock, not /alerts
+- **Raised:** 2026-06-05 (B5)
+- **Type:** finding
+- **What:** `WelcomeWizard.vue` `TOUR_CARDS` "Alerts — Dora pings you" still
+  routes to `/stock?attention=true` (its description even says "deep-link
+  into Stock"). Now that `/alerts` exists as a real page, the tour card
+  could go there instead — or keep both as different teaching moments
+  (Stock + filter vs the dedicated list).
+- **Why deferred:** out of B5's bug-fix scope; user-style decision.
+- **Recommended resolution:** opportunistic, or fold into the C-wave
+  alerts control centre brief.
+
+## [OPEN] FU-014 — B1: confirm `image` field round-trips for product create
+- **Raised:** 2026-06-05 (B1)
+- **Type:** finding
+- **What:** `CreateProductRequest.image` is typed `Base64Bytes | None` but the
+  frontend ships `offer.image` as a string (likely a raw URL or a `data:` URL).
+  B1 didn't change this — pre-existing — but the offer-spread fix in
+  `ensureSaved` now sends `image` explicitly, so it'll exercise the parse path
+  every save. If creates 422 on `image`, switch the request model to
+  `str | None` (a URL, not bytes) or make the frontend omit the field.
+- **Why deferred:** out of B1's scope (B1 was field-list mismatches, not type
+  mismatches); no node_modules so couldn't test live.
+- **Recommended resolution:** opportunistic — first time the user actually
+  saves a scraped product in browser, watch for a 422 on `image`.
+
 ## [OPEN] FU-013 — A4 leftover: "consistent multi-select control" only partial
 - **Raised:** 2026-06-05 (A4)
 - **Type:** leftover

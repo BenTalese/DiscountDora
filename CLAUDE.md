@@ -1,8 +1,9 @@
 # Claude session instructions — DiscountDora / Dashy Dora
 
-The repo is being finished against a planning library "docs" folder that lives
-in the repo. Multiple Claude sessions may be working on this concurrently from
-different computers.
+The repo is being finished against the planning library at `docs/` inside this
+repo. Multiple Claude sessions may be working on this concurrently from
+different computers — because `docs/` is versioned with the code, every
+machine has the same copy automatically.
 
 To keep handoffs clean:
 
@@ -12,10 +13,11 @@ To keep handoffs clean:
    you what was just done, what decisions were made, and what's next. If the
    last entry says "Next up: X", that's your starting point unless the user
    redirects.
-2. **Locate the planning docs.** Check `/home/benny/Downloads/DORA DOCS/` first.
-   If it's missing (e.g. you're on a different machine), **ask the user where
-   the docs are** before doing anything that depends on them. Don't search the
-   filesystem and don't try to reconstruct from memory.
+2. **Planning docs live at `docs/` in this repo.** Entry points:
+   `docs/00_DOCS_INDEX.md`, `docs/RECONCILED_FINISHING_PLAN.md`,
+   `docs/STATUS.md`, `docs/prompts/00_INDEX.md`. Read from there directly —
+   don't search the filesystem and don't reconstruct from memory. If a path a
+   prompt references is genuinely missing under `docs/`, ask the user.
 3. **Verify state before acting.** The planning docs (esp. `STATUS.md`) are
    known stale; the code is the source of truth. Read the actual code paths
    the prompt references before assuming they exist.
@@ -56,10 +58,9 @@ Three logs, three purposes — keep them separate:
 
 ## Governing documents (read on demand, not every session)
 
-All paths below are *inside* the DORA DOCS folder (whose location you confirmed
-at session start — see step 2 above).
+All paths below are *inside* `docs/` in this repo.
 
-The master is `RECONCILED_FINISHING_PLAN.md`. It owns order
+The master is `docs/RECONCILED_FINISHING_PLAN.md`. It owns order
 and scope. Inside it:
 
 - **§5** — phased plan (Phase 0 foundations → Phase 1 loop → Phase 2 ingestion
@@ -69,12 +70,12 @@ and scope. Inside it:
   gamification → someday.
 
 The **Dora Decision Charter** (12 principles, tiebreak: Effortless + Anti-creep)
-lives in `DASHY_DORA_CHAMPION_PLAN.md` Part II. Every design call is checked
-against it.
+lives in `docs/DASHY_DORA_CHAMPION_PLAN.md` Part II. Every design call is
+checked against it.
 
-The executable prompts live in `prompts/` inside the docs folder. Each one is
-self-contained — read its "Impact & decisions" block first, resolve any
-choices with the user, then run it. After running, log it.
+The executable prompts live in `docs/prompts/`. Each one is self-contained —
+read its "Impact & decisions" block first, resolve any choices with the user,
+then run it. After running, log it.
 
 ## Removed features — do not reintroduce
 

@@ -513,7 +513,7 @@
     import type { LinkedProduct, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
-    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useProductStore } from 'src/stores/productStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -904,7 +904,7 @@
         const item = detail.value;
         $q.dialog({
             title: 'Delete stock item',
-            message: `Delete "${item.name}"? Recipes that use it will be left with a dangling reference.`,
+            message: `Delete "${item.name}"?`,
             cancel: true,
         }).onOk(() => void doDelete(item.stock_item_id));
     }
@@ -914,6 +914,28 @@
             if (props.embedded) emit('close');
             else void router.push('/stock');
         } catch (err) {
+            // B4: backend refuses delete when the item is still on a recipe,
+            // returning 422 with a structured `blocked_by_recipes` list.
+            // Surface the recipe names in a dialog rather than a vague toast
+            // so the user knows where to act.
+            if (err instanceof NormalisedApiError) {
+                const blocked = err.details?.blocked_by_recipes;
+                if (Array.isArray(blocked) && blocked.length > 0) {
+                    const lines = (blocked as Array<{ name: string }>)
+                        .map((r) => `<li>${r.name}</li>`)
+                        .join('');
+                    $q.dialog({
+                        title: 'Still used by recipes',
+                        message:
+                            `<p>Can't delete this stock item — it's an ingredient on ${blocked.length} recipe(s):</p>` +
+                            `<ul>${lines}</ul>` +
+                            `<p>Remove it from those recipes first, then try again.</p>`,
+                        html: true,
+                        ok: { label: 'OK', flat: true },
+                    });
+                    return;
+                }
+            }
             notifyErr('Could not delete this stock item.', err);
         }
     }

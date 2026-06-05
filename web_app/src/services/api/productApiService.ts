@@ -26,8 +26,10 @@ export default class ProductApiService {
     searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
         await this.mapiHttpClient.post<ScrapedProductOffer[]>('/products/search', searchQuery);
 
-    updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> =>
-        await this.dapiHttpClient.patch<Product>(`/products/${productToUpdate.product_id}`, productToUpdate);
+    updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> => {
+        const { product_id, ...payload } = productToUpdate;
+        return await this.dapiHttpClient.patch<Product>(`/products/${product_id}`, payload);
+    };
 }
 
 export type SearchByTermQuery = {

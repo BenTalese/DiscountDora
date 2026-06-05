@@ -512,7 +512,21 @@
     async function ensureSaved(offer: ScrapedProductOffer): Promise<Product | null> {
         const existing = savedProductFor(offer);
         if (existing) return existing;
-        await productStore.createProductAsync({ ...offer, is_active: true });
+        await productStore.createProductAsync({
+            brand: offer.brand,
+            image: offer.image,
+            is_active: true,
+            is_available: offer.is_available,
+            merchant_name: offer.merchant_name,
+            merchant_stockcode: offer.merchant_stockcode,
+            name: offer.name,
+            price_now: offer.price_now,
+            price_was: offer.price_was,
+            size: offer.size,
+            size_unit: offer.size_unit,
+            size_value: offer.size_value,
+            web_url: offer.web_url,
+        });
         productStore.updateProductOffer({
             is_saved: true,
             is_saved_product_active: true,

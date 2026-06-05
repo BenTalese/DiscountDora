@@ -5,11 +5,13 @@ import { Notify } from 'quasar';
 
 Notify.setDefaults({});
 
+// Visual defaults only — callers always supply their own `message` (and
+// optional `caption`) at the call site. Setting message/caption defaults
+// here makes them silent fallbacks for any miswired call, which is how
+// "I'm a notification!" reached production (B7).
 Notify.registerType('info', {
     color: 'blue',
     textColor: 'white',
-    message: 'Hey did you know...',
-    caption: "I'm a notification!",
     icon: ICONS.announcement,
     iconColor: 'amber',
     iconSize: '30px',

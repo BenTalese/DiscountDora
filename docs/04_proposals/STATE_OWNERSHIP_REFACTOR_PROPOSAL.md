@@ -131,3 +131,44 @@ The principle to encode going forward: **the server owns derived domain facts an
 - Does "missing" mean only *out of stock*, or should *low stock* also count as missing for cookability? The current client code keys strictly on `'Out of Stock'`; the contract should make this an explicit, named policy.
 - Should `cookable` account for ingredient *quantity* (enough flour, not just "have flour")? Today neither client nor server does — worth deciding whether the server fix is the moment to introduce it, or explicitly defer.
 - For Type B, extend the existing `/dashboard/summary` payload, or add focused endpoints? Bigger summary = one round-trip but a fatter, more coupled DTO.
+
+---
+
+## 8. App-wide audit addendum (2026-06-06)
+
+The original proposal worked *flagship* cases. A later app-wide sweep (every domain)
+checked whether the rest of the app has the same smell. **Conclusion: the framework
+above already captures the worst of it; the rest is mostly clean.** A balanced
+result matters — §5 warns against over-correcting, so the "leave alone" list is
+load-bearing.
+
+### 8.1 Already clean — DO NOT relocate
+Server-owned and consumed correctly today: **unallocated-meals** (`get_recipes.py`
+`_hydrate_unallocated`), **waste value / expiry / rescue ranking** (`waste.py`),
+**meal-plan shortfall** (`get_shortfall.py`), **frequently-added** (`frequently_added.py`),
+**attention scoring + severity weights** (`attention.py`). The shopping-line price
+helper (`shoppingList.ts priceOfLine/savingsOfLine`) is a fine centralized Type-C.
+Touching these would be the over-correction §5 cautions against.
+
+### 8.2 New instances found — fold into the existing categories
+| Smell | Type | Where | Fix |
+|---|---|---|---|
+| Dashboard "best deals" fetches **all** products to sort-and-slice top-3 | **B** | `DashboardPage.vue:1198-1212` | A `?sort=discount&limit=N` (or focused best-deals endpoint) — feeds §3.3 / Chunk 5 |
+| Dashboard budget card **re-fetches the primary list + re-sums** totals the budget endpoint already computes | **B** | `DashboardPage.vue:1218-1242` vs `budget.py:183-196` | Return the totals on the summary; drop the client re-sum — Chunk 5 |
+| **Expiring-soon window `7`** hardcoded client-side while the server has `EXPIRING_SOON_WINDOW_DAYS` | **A (constant)** | `attention.py:33` vs `useStockFilters.ts:113`, `StockItemChip.vue:173` | **Generalise §3.1:** the status contract also owns thresholds and exposes them; client stops hardcoding — Chunk 1 |
+| Discount-% **inline copy** instead of the shared helper | **C (minor dup)** | `DashboardPage.vue:1192-1196` vs `scrapedProductOfferLogic.ts:112` | Use the helper; tiny cleanup |
+
+### 8.3 The smoking gun is wider than first stated
+The `"Out of Stock"` / `"Low Stock"` name match is in **~28 spots** (server + client),
+not ~8 — and the codebase has *half*-evolved: a sequence-based notion already exists
+(`attention.py` `LOW_/OUT_OF_STOCK_SEQUENCE`) but is **re-declared** in
+`assistant/tools.py` and client `doraIntents.ts`, and the client still can't see
+sequence/booleans on its DTOs so it name-matches. The §3.1 contract must **also
+consolidate these scattered constants** (one server module), not just add booleans.
+
+### 8.4 Standing principle (to stop re-introduction)
+> **Server owns derived domain facts and cross-entity aggregates; the client owns
+> presentation and ephemeral view state. No domain constant or threshold lives in
+> two languages.** New features are checked against this — a client computing a
+> cross-entity rule, summing across a fetched collection, or hardcoding a domain
+> constant is a smell to push to the server, not a thing to copy a fourth time.

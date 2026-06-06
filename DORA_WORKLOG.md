@@ -24,6 +24,107 @@ next.
 
 ---
 
+## 2026-06-06 — App-wide state-ownership audit (user-prompted)
+**Status:** complete (audit + doc updates; **no code changes**)
+**What changed:**
+- Ran an app-wide sweep for state-ownership smells (duplication / client-side
+  cross-entity logic / fetch-all-then-filter / duplicated constants) beyond the
+  proposal's flagships.
+- Appended **§8 audit addendum** to `STATE_OWNERSHIP_REFACTOR_PROPOSAL.md`;
+  tightened `IMPL_PLAN_STATE_OWNERSHIP.md` (Chunk 1 thresholds, Chunk 5 new B's);
+  added a **standing state-ownership principle to `CLAUDE.md`**.
+
+**Decisions made / key findings (answer to "do other areas need this?"):**
+- **Mostly contained, not sprawling.** The proposal's Type A/B/C/D framework
+  already captured the worst; the rest of the app is largely clean.
+- **Genuinely clean (do NOT relocate — over-correction guard):** unallocated-meals,
+  waste value/expiry/ranking, meal-plan shortfall, frequently-added, attention
+  scoring + severity weights, the centralized price helper.
+- **New instances found, all in dashboard/threshold territory:** (B) best-deals
+  fetches all products to sort/slice client-side; (B) budget card re-fetches +
+  re-sums what `budget.py` already computes; (A/constant) expiring-soon window `7`
+  hardcoded in 3 client spots vs the server constant; (C) one inline discount-%
+  copy. Folded into the existing chunks, not a new workstream.
+- **Smoking gun is wider:** `"Out of Stock"` name-match in ~28 spots; sequence
+  constants re-declared in `attention.py` + `assistant/tools.py` + client
+  `doraIntents.ts` — the §3.1 contract must consolidate these, not just add
+  booleans.
+- **Standing principle** added to CLAUDE.md so new features don't re-introduce it:
+  server owns derived facts + cross-entity aggregates + constants; client owns
+  presentation + ephemeral view state; but don't over-correct fine display math.
+
+**Files touched:** `STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` (§8),
+`IMPL_PLAN_STATE_OWNERSHIP.md` (Chunks 1 & 5), `CLAUDE.md`, this worklog.
+
+**Verification:** very-thorough Explore sweep across budget/waste/deals/attention/
+meal-plan/stock/search domains, mapped to A/B/C/D with a balanced clean-vs-smell
+list. Audit only — no code.
+
+**Next up:** unchanged from the C-impl entry — start Phase-1 implementation
+(state-ownership Chunk 1, which now also consolidates thresholds), or write the
+C-cross brief.
+
+---
+
+## 2026-06-06 — C-impl plans (state ownership + shopping lists)
+**Status:** complete (two phased plans; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/IMPL_PLAN_STATE_OWNERSHIP.md` and
+  `docs/04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` — phased plans + first chunks
+  from the two existing approved proposals.
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated.
+
+**Decisions made / key findings:**
+- **State ownership — verify-state-first caught positive drift** (proposal is
+  2026-06-04): recipe ingredient DTO ALREADY carries `stock_level_id`; a
+  sequence-based status notion ALREADY exists (`attention.py` constants) but is
+  scattered/duplicated across ~28 spots incl. client `doraIntents.ts`; and
+  `?cookable=true` is ALREADY referenced client-side but unimplemented. So the
+  first chunk is "finish + consolidate," not "build from zero."
+  - **First chunk = the canonical stock-status contract (§3.1):** one server
+    module keyed to `StockLevel.sequence` (not name), consolidating the scattered
+    constants + migrating the server name-hardcodes (dashboard/waste/reports/
+    confirm_actions); rename-test is the guard. Pure server, no behaviour change.
+  - Then DTO cookable/missing (set-based, no N+1) → `?cookable=true` + dashboard
+    `cookable_count` → delete the 7 client copies → Type B aggregates → Type C
+    snapshot-at-add (overlaps shopping-list Chunk 1) → Type D optional.
+- **Shopping lists — no drift.** First chunk = **status enum + migration
+  (is_archived→done / is_in_progress→shopping / else draft, old booleans kept for
+  rollback) + server-owned finish audit + reopen** that reverses from the audit
+  (kills the brittle client-snapshot undo; the finish/restock transaction is the
+  riskiest surface). Then contextual target inference (removes stored is_primary,
+  7 consumers; **same resolver the C-7 cart button needs**) → lifecycle one-button
+  UI → one creation surface (5 buttons → 1 form on the existing /auto-generate) →
+  merge overview into detail → in-store polish (receipt/pricing-as-you-go,
+  drag off-by-one) → planned_shop_date + drop old columns.
+
+**Cross-refs captured:** C-7 (quick-add inference == cart Axis B resolver);
+state-ownership Type C ↔ shopping-list finish transaction (build snapshot/audit
+once); C-9 (shopping-day alert).
+
+**Files touched:** the two new IMPL_PLAN docs, `00_DOCS_INDEX.md`,
+`COVERAGE_GAPS.md`, this worklog.
+
+**Verification:** two Explore sweeps mapped current touch-points + drift against
+each proposal; cross-read shopping-list feedback (L401-422). Plans only — no code.
+
+**Next up:**
+- User reviews both IMPL plans — esp. each **first chunk** and the open decisions
+  (state-ownership: missing=out-only-vs-out+low, quantity-aware cookable, Type-B
+  endpoint shape; shopping-lists: DONE delete vs purge, remember-pick scope, two
+  SHOPPING lists at once).
+- **Wave C is now fully drafted** (all design briefs C-1..C-10 except companion
+  C-6/C-8, + both C-impl plans). Per the master plan, **Phase 1 implementation**
+  starts with the state-ownership first chunk, then shopping-list + cook-mode.
+  Optional remaining design: a **C-cross** brief (money/nutrition opt-ins,
+  tag/tool taxonomy settings, feature-flag panel) that C-4/C-5/C-9 lean on.
+
+**Open questions for user:** the per-plan open decisions; whether to (a) start
+Phase-1 implementation (state-ownership chunk 1), (b) write the C-cross brief, or
+(c) review the proposal set as a whole first.
+
+---
+
 ## 2026-06-06 — C-10 ingestion-API contract design brief
 **Status:** complete (proposal only; **no code changes**)
 **What changed:**

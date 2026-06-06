@@ -168,8 +168,9 @@ next reviewer can fast-skip them.
   maps L317-338). Tools/structured-steps → C-4; headcount → C-5; finish add-to-
   list → C-7.
 - MEAL PLANS — `04_proposals/PROPOSAL_MEAL_PLANS.md` (F1..F49 table).
-- SHOPPING LISTS / DETAILS / MODE — `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`,
-  B9.1, `03_prompts/C_big_rock_design_briefs.md §C-impl` shopping-list IMPL.
+- SHOPPING LISTS / DETAILS / MODE — `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`
+  + `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` (C-impl phased plan, written
+  2026-06-06; maps L401-422), B9.1.
 - REPORTS / WASTE — feedback empty; deferred.
 - ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
   L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only

@@ -94,7 +94,9 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 | `04_proposals/PROPOSAL_ALERTS.md` | C-9 |
 | `04_proposals/PROPOSAL_INGESTION_API.md` | C-10 |
 | `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md` | Shopping-list overhaul (pre-Wave-C) |
-| `04_proposals/STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` | C-impl: state ownership |
+| `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` | C-impl: shopping-lists phased plan |
+| `04_proposals/STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` | State-ownership proposal |
+| `04_proposals/IMPL_PLAN_STATE_OWNERSHIP.md` | C-impl: state-ownership phased plan |
 | `04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` | Dora assistant SLM design |
 
 (More land here as the Wave-C briefs are run.)

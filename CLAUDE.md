@@ -165,6 +165,18 @@ The code still reads "DiscountDora" until P8-01 lands. That's expected — the
 rename to "Dashy Dora" is itself a planned prompt, not a drift to fix
 piecemeal.
 
+## State-ownership principle (check new work against it)
+
+**Server owns derived domain facts and cross-entity aggregates; the client owns
+presentation and ephemeral view state. No domain constant or threshold lives in
+two languages.** A client computing a cross-entity rule (e.g. "cookable"), summing
+across a fetched collection, or hardcoding a domain constant (a stock-level name, a
+"7-day" window) is a smell — push it to the server, don't copy it a fourth time.
+The full triage + app-wide audit is in
+`docs/04_proposals/STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` (§8 addendum); but the
+"already clean — do not relocate" list there is equally binding (don't
+over-correct fine client display math into the API).
+
 ## Don'ts
 
 - Don't rewrite the framework. Stay on Flask / Quasar / Vue 3.

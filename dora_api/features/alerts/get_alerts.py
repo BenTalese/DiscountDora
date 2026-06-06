@@ -16,9 +16,8 @@ from typing import List
 from uuid import UUID
 
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.features.locations.attention import (
-    LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE, EXPIRING_SOON_WINDOW_DAYS,
-)
+from dora_api.domain.stock_status import is_low_stock, is_out_of_stock
+from dora_api.features.locations.attention import EXPIRING_SOON_WINDOW_DAYS
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
@@ -116,8 +115,7 @@ class GetAlertsHandler:
 
             # ── Stock level ────────────────────────────────────────────
             if item.stock_level is not None:
-                seq = getattr(item.stock_level, "sequence", None)
-                if seq == OUT_OF_STOCK_SEQUENCE:
+                if is_out_of_stock(item.stock_level):
                     # Essential + out-of-stock is the harshest combination,
                     # so it gets its own kind.
                     if item.is_flagged:
@@ -142,7 +140,7 @@ class GetAlertsHandler:
                             detail = None,
                             related_date = None,
                         ))
-                elif seq == LOW_STOCK_SEQUENCE:
+                elif is_low_stock(item.stock_level):
                     if item.is_flagged:
                         push(AlertDto(
                             alert_id = f"{item.id}:essential_low",

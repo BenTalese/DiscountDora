@@ -44,6 +44,7 @@ from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.data.uploads import staged_path
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import bad_request, internal_server_error, not_found, ok
@@ -512,12 +513,13 @@ class CommitSpreadsheetHandler:
         row: list[Any], idx: int | None,
         existing_levels: list[StockLevel], choices: list[str],
     ) -> Any:
-        # Pick a sensible default — the seeded "Sufficient Stock" level
-        # is the middle-of-the-road option; users can edit individual
-        # items post-import.
-        default = next(
-            (lvl.id for lvl in existing_levels if lvl.name == "Sufficient Stock"),
-            existing_levels[0].id if existing_levels else None,
+        # Pick a sensible default — the Sufficient-Stock level (resolved by
+        # status identity, not name) is the middle-of-the-road option; users
+        # can edit individual items post-import.
+        sufficient = level_for_status(existing_levels, StockStatus.SUFFICIENT_STOCK)
+        default = (
+            sufficient.id if sufficient
+            else (existing_levels[0].id if existing_levels else None)
         )
         if idx is None or idx >= len(row):
             return default

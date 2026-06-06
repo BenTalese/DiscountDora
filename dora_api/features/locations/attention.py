@@ -15,6 +15,7 @@ from datetime import date, datetime, timezone
 from typing import Iterable
 
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.stock_status import is_low_stock, is_out_of_stock
 
 
 # Tunable weights. Tweak here, not in callers.
@@ -24,11 +25,6 @@ WEIGHT_OUT_OF_STOCK = 15
 WEIGHT_LOW_STOCK = 8
 WEIGHT_FLAGGED = 5
 WEIGHT_STOCKTAKE_OVERDUE = 5
-
-# `StockLevel.sequence` values from the seed: 0 Well-Stocked, 1 Sufficient,
-# 2 Low, 3 Out of Stock. Keep this aligned with the seeded sequences.
-LOW_STOCK_SEQUENCE = 2
-OUT_OF_STOCK_SEQUENCE = 3
 
 EXPIRING_SOON_WINDOW_DAYS = 7
 
@@ -94,10 +90,9 @@ def reasons_for_item(item: StockItem, today: date | None = None) -> AttentionRea
             r.expiring_soon = 1
 
     if item.stock_level is not None:
-        seq = getattr(item.stock_level, "sequence", None)
-        if seq == OUT_OF_STOCK_SEQUENCE:
+        if is_out_of_stock(item.stock_level):
             r.out_of_stock = 1
-        elif seq == LOW_STOCK_SEQUENCE:
+        elif is_low_stock(item.stock_level):
             r.low_stock = 1
 
     if item.is_flagged:

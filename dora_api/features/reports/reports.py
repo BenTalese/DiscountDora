@@ -53,6 +53,7 @@ from dora_api.domain.entities.shopping_list import (ShoppingList,
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import REPORTS_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok
 from dora_api.infrastructure.utils import get_container
@@ -456,16 +457,14 @@ class KeepsRunningOutHandler:
     rather than guessed.
     """
 
-    OUT_LEVEL_NAME = "Out of Stock"
-
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
     def handle(self, limit: int) -> List[KeepsRunningOutRow]:
         session = self.repository.session
 
-        out_level = self.repository.get(StockLevel).one(
-            EntityField(StockLevel, StockLevel.Fields.NAME).eq(self.OUT_LEVEL_NAME)
+        out_level = level_for_status(
+            self.repository.get(StockLevel).all(), StockStatus.OUT_OF_STOCK
         )
         if out_level is None:
             return []

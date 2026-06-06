@@ -6,6 +6,8 @@ from uuid import UUID
 from flask import request
 
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.stock_status import (is_low_stock, is_out_of_stock,
+                                          needs_restock)
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -22,6 +24,12 @@ class StockItemDto:
     stock_item_id: UUID
     stock_level_id: UUID
     stock_level_name: str | None
+    # Status keyed to the level's ordinal sequence, plus the server-owned
+    # derived predicates — so the client never matches on a level name.
+    stock_level_sequence: int | None
+    is_out_of_stock: bool
+    is_low_stock: bool
+    needs_restock: bool
     stock_location_id: UUID | None
     stock_group_id: UUID | None
     stock_level_last_updated: datetime
@@ -35,11 +43,16 @@ class StockItemDto:
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
+        level = stock_item.stock_level
         return StockItemDto(
             name = stock_item.name,
             stock_item_id = stock_item.id,
             stock_level_id = stock_item.stock_level.id,
-            stock_level_name = stock_item.stock_level.name if stock_item.stock_level else None,
+            stock_level_name = level.name if level else None,
+            stock_level_sequence = level.sequence if level else None,
+            is_out_of_stock = is_out_of_stock(level),
+            is_low_stock = is_low_stock(level),
+            needs_restock = needs_restock(level),
             stock_location_id = stock_item.stock_location.id if stock_item.stock_location else None,
             stock_group_id = stock_item.stock_group.id if stock_item.stock_group else None,
             stock_level_last_updated = stock_item.stock_level_last_updated,

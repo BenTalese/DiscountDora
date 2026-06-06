@@ -18,7 +18,8 @@ To keep handoffs clean:
    - `docs/00_DOCS_INDEX.md` — top-level navigation.
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
-     `STATUS.md`).
+     `STATUS.md`, `ENGINEERING_STANDARDS.md` — the code/architecture rules
+     `R-001..` + ADR log; checked on **every** task, see section below).
    - `docs/02_feedback/` — user input (source of truth):
      `Feedback _ Fixes - as of [DATE].md`, `FEEDBACK_TRIAGE_AND_PLAN.md`,
      `COVERAGE_GAPS.md`.
@@ -79,6 +80,16 @@ reproduce in a static read, and set the recommended resolution to **"confirm in
 browser"**. Only flip it to `[RESOLVED]` once it's actually been verified
 not-broken in the running app. This applies per-defect — don't bury several
 reported items as one vague "all fine" note.
+
+**MANDATORY — engineering-standards close-gate.** Before closing the work unit,
+confirm the change was checked against the standing rules in
+`docs/01_charter/ENGINEERING_STANDARDS.md`. Every rule violation you introduced or
+touched must be either (a) fixed, (b) explained in place with an inline comment that
+names the rule (e.g. `// R-002 carve-out: …`), or (c) logged as a `DORA_FOLLOWUPS.md`
+finding citing the rule id + location. An unexplained violation **blocks the unit from
+closing** — do not hand off with silent drift. Then run the **ADR evaluation**: did
+this task make/rely on a recurring decision worth promoting into a new rule? If so,
+add an ADR (and a new `R-0NN`) to that doc. See the next section.
 
 Three logs, three purposes — keep them separate:
 - **`CHANGELOG.md`** = product/code changes (user-visible, "the app now does
@@ -164,6 +175,30 @@ there is worth extracting, that's fine — no section needed.
 The code still reads "DiscountDora" until P8-01 lands. That's expected — the
 rename to "Dashy Dora" is itself a planned prompt, not a drift to fix
 piecemeal.
+
+## Engineering standards & ADRs — MANDATORY, every task
+
+`docs/01_charter/ENGINEERING_STANDARDS.md` is the **code/architecture rubric**
+(the engineering counterpart to the Charter's product rubric). It holds the
+standing rules `R-001..R-0NN` — componentisation-first, theme-tokens-only,
+single-source-of-truth/state-ownership, framework discipline, portable data
+access, clean migrations, scope discipline, code-style, safe mutations — each
+established from a recurring cleanup so it never has to be done twice.
+
+On **every** task (feature, fix, *or tidy-up*):
+1. **Check the work against the standing rules** before and while building. Take
+   the proper path, not the shortcut that creates future cleanup. No lazy code; do
+   it properly and consistently.
+2. **Explain-or-flag any violation** (yours or pre-existing) — never a silent
+   third option: fix it, OR comment it in place naming the rule, OR log a
+   `DORA_FOLLOWUPS.md` finding citing the rule id. Enforced at the end-of-work
+   close-gate above; an unexplained violation blocks the unit.
+3. **Evaluate for a new rule/ADR** at end of work — promote recurring decisions
+   into a new `R-0NN` + ADR entry in that doc.
+
+The two sections below (state-ownership, distribution posture) are `R-003` / `R-005`
+expanded — they remain authoritative for their detail; the standards doc indexes
+them.
 
 ## State-ownership principle (check new work against it)
 

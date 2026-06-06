@@ -29,6 +29,8 @@ from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE, is_out_of_stock,
+                                          needs_restock)
 from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
@@ -45,18 +47,13 @@ _MAX_ROWS = 25
 # listing everything. Mirrors the shopping_actions threshold.
 _MAX_CANDIDATES = 6
 
-# Stock levels are ordered by ascending `sequence`; higher = less stock.
-# "Low Stock" = 2, "Out of Stock" = 3 in the seed, so >= 2 means "needs
-# restocking". Kept as a named constant so the intent is obvious.
-_LOW_STOCK_SEQUENCE = 2
+# Stock-status thresholds and predicates are owned by domain/stock_status.py
+# (LOW_STOCK_SEQUENCE, is_out_of_stock, needs_restock). An ingredient counts as
+# "in stock" for recipe suggestions unless it's out of stock — low/sufficient
+# still count, since you can usually cook with a little of something.
 
 # How many days out counts as "expiring soon".
 _EXPIRY_HORIZON_DAYS = 7
-
-# An ingredient counts as "in stock" for recipe suggestions unless its stock
-# level is the worst one ("Out of Stock", sequence 3). Low/Sufficient still
-# count — you can usually cook with a little of something.
-_OUT_OF_STOCK_SEQUENCE = 3
 
 # Don't list every missing ingredient — a few is enough for the user to judge.
 _MAX_MISSING = 5
@@ -900,7 +897,7 @@ def search_stock(args: dict) -> list[dict]:
     if keyword_condition is not None:
         conditions.append(keyword_condition)
     if _truthy(args.get("low_only")):
-        conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(_LOW_STOCK_SEQUENCE))
+        conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(LOW_STOCK_SEQUENCE))
     if _truthy(args.get("expiring_soon")):
         horizon = date.today() + timedelta(days=_EXPIRY_HORIZON_DAYS)
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
@@ -1029,7 +1026,7 @@ def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
         total += 1
         item = ingredient.stock_item
         level = item.stock_level if item else None
-        if level is not None and level.sequence < _OUT_OF_STOCK_SEQUENCE:
+        if level is not None and not is_out_of_stock(level):
             in_stock += 1
         elif item is not None:
             missing.append(item.name)
@@ -1546,8 +1543,8 @@ def pantry_health(_args: dict) -> list[dict]:
         repo.get(StockItem).include(StockItem.Fields.STOCK_LEVEL).all()
     )
     total = len(items)
-    low = sum(1 for i in items if i.stock_level and i.stock_level.sequence >= _LOW_STOCK_SEQUENCE)
-    out = sum(1 for i in items if i.stock_level and i.stock_level.sequence >= _OUT_OF_STOCK_SEQUENCE)
+    low = sum(1 for i in items if needs_restock(i.stock_level))
+    out = sum(1 for i in items if is_out_of_stock(i.stock_level))
     flagged = sum(1 for i in items if i.is_flagged)
     open_items = sum(1 for i in items if i.is_open)
     horizon = date.today() + timedelta(days=_EXPIRY_HORIZON_DAYS)
@@ -1861,7 +1858,7 @@ def recipe_detail(args: dict) -> list[dict]:
                 "in_stock": bool(
                     ing.stock_item
                     and ing.stock_item.stock_level
-                    and ing.stock_item.stock_level.sequence < _OUT_OF_STOCK_SEQUENCE
+                    and not is_out_of_stock(ing.stock_item.stock_level)
                 ),
             }
             for ing in (recipe.ingredients or [])
@@ -2003,7 +2000,7 @@ def find_location(args: dict) -> list[dict]:
     horizon = today + timedelta(days=_EXPIRY_HORIZON_DAYS)
 
     def is_urgent(it: StockItem) -> bool:
-        level_bad = it.stock_level and it.stock_level.sequence >= _LOW_STOCK_SEQUENCE
+        level_bad = needs_restock(it.stock_level)
         expiry_bad = it.expiry_date and (it.expiry_date < today or it.expiry_date <= horizon)
         return bool(level_bad or expiry_bad)
 

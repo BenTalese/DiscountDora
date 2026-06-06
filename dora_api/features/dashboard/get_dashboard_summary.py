@@ -17,18 +17,12 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.shopping_list import ShoppingList
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
-
-
-# Stock level names used to bucket stock items. Kept here as a contract with
-# the seeded values — if you ever rename a stock level via the UI/migration,
-# this lookup falls back gracefully (count = 0) rather than 500.
-OUT_OF_STOCK_NAME = "Out of Stock"
-LOW_STOCK_NAME = "Low Stock"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,9 +91,14 @@ class GetDashboardSummaryHandler:
         session = self.repository.session
 
         # ── Stock items ───────────────────────────────────────────────────
+        # Buckets are keyed to stock-status identity (sequence), not display
+        # name — renaming a level in the UI must not change the counts.
         total_stock_items = self.repository.get(StockItem).count()
-        out_of_stock_id = self._stock_level_id_for(OUT_OF_STOCK_NAME)
-        low_stock_id = self._stock_level_id_for(LOW_STOCK_NAME)
+        all_levels = self.repository.get(StockLevel).all()
+        out_level = level_for_status(all_levels, StockStatus.OUT_OF_STOCK)
+        low_level = level_for_status(all_levels, StockStatus.LOW_STOCK)
+        out_of_stock_id = out_level.id if out_level else None
+        low_stock_id = low_level.id if low_level else None
 
         stock_level_field = EntityField(StockItem, "_stock_level_id")
         out_of_stock_count = (
@@ -192,13 +191,6 @@ class GetDashboardSummaryHandler:
                 upcoming_entries = upcoming_entries_dto,
             ),
         )
-
-    def _stock_level_id_for(self, name: str):
-        level = self.repository.get(StockLevel).one(
-            EntityField(StockLevel, StockLevel.Fields.NAME).eq(name)
-        )
-        return level.id if level else None
-
 
 @DASHBOARD_ROUTER.route("/summary")
 def get_dashboard_summary():

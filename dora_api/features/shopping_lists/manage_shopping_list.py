@@ -16,6 +16,7 @@ from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
@@ -220,9 +221,9 @@ class FinishShoppingListHandler:
             if line.picked_offer_price is None:
                 snapshot_offer_price(self.repository, line)
 
-        # Look up the "Well-Stocked" level once.
-        well_stocked: StockLevel | None = self.repository.get(StockLevel).one(
-            EntityField(StockLevel, StockLevel.Fields.NAME).eq("Well-Stocked")
+        # Resolve the Well-Stocked level once (by status identity, not name).
+        well_stocked = level_for_status(
+            self.repository.get(StockLevel).all(), StockStatus.WELL_STOCKED
         )
 
         updated = 0

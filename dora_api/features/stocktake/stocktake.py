@@ -31,6 +31,7 @@ from dora_api.app import db
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
@@ -171,12 +172,11 @@ class ReviewCompleteRequest(BaseModel):
 
 
 def _well_stocked_level_id(repo: SqlAlchemyRepository) -> UUID | None:
-    """The seeded "Well-Stocked" level. Looked up by name because the
-    UUID isn't stable across installs."""
-    for lvl in repo.get(StockLevel).all():
-        if (lvl.name or "").strip().lower() == "well-stocked":
-            return lvl.id
-    return None
+    """The seeded Well-Stocked level, resolved by status identity (sequence)
+    rather than name — the UUID isn't stable across installs and the label may
+    be renamed."""
+    level = level_for_status(repo.get(StockLevel).all(), StockStatus.WELL_STOCKED)
+    return level.id if level else None
 
 
 from dora_api.features.routers import SHOPPING_LIST_ROUTER  # noqa: E402

@@ -24,6 +24,205 @@ next.
 
 ---
 
+## 2026-06-06 — Phase 1 (state-ownership) Chunk 1: stock-status contract
+**Status:** complete
+**What changed:**
+- New `dora_api/domain/stock_status.py` — the canonical stock-status authority:
+  `StockStatus` enum + sequence constants + predicates (`is_out_of_stock`,
+  `is_low_stock`, `needs_restock`, `is_missing`, `status_for`) + pure
+  `level_for_status(levels, status)`. Keyed to the level's ordinal `sequence`,
+  **never** its display name.
+- Migrated every server site off the duplicated `"Out of Stock"` / `"Low Stock"`
+  / `"Well-Stocked"` / `"Sufficient Stock"` string-matching and bare sequence
+  literals to consume the contract: `attention.py`, `alerts/get_alerts.py`,
+  `assistant/tools.py` (5 sites), `waste/waste.py` (rescue `>=3` literal + the
+  mark-out-of-stock assignment), `dashboard/get_dashboard_summary.py` (buckets
+  now resolve level ids by sequence; dropped `_stock_level_id_for`),
+  `reports.py` (keeps-running-out), and the level-**assignment** writes in
+  `alerts/act_on_alert.py`, `shopping_lists/manage_shopping_list.py`,
+  `stocktake/stocktake.py`, `data/import_spreadsheet.py` (default level).
+- `StockItemDto` now exposes `stock_level_sequence` + derived `is_out_of_stock` /
+  `is_low_stock` / `needs_restock` (the §3.1 "expose derived booleans" step).
+- New unit test `tests/test_stock_status.py` (8 tests) pinning name-independence.
+
+**Decisions made (per user, this session):**
+- **Status source = sequence-constants module** (not a new semantic-role column
+  on `StockLevel`). Smallest change, no migration; safe because stock levels are
+  fixed/seeded and not user-editable (only `get_stock_levels.py`, no CRUD). The
+  semantic-role column (option B) is noted as a *future ADR* if levels ever
+  become editable. (R-003 / state-ownership; R-007 keeps it minimal.)
+- **"Missing" / cookability = out-of-stock only** (low stock still counts as
+  "have it") — matches the prior name-based `"Out of Stock"` checks, least
+  behaviour change. Encoded once as `is_missing()`.
+- Left `assistant/confirm_actions._resolve_level` **alone** — it maps free-text
+  user phrasing → level *names* (NLU input resolution), a different concern from
+  §3.1's server-derived status facts. Logged as FU-047.
+
+**Files touched:** `dora_api/domain/stock_status.py` (new), `attention.py`,
+`alerts/get_alerts.py`, `alerts/act_on_alert.py`, `assistant/tools.py`,
+`waste/waste.py`, `dashboard/get_dashboard_summary.py`, `reports/reports.py`,
+`shopping_lists/manage_shopping_list.py`, `stocktake/stocktake.py`,
+`data/import_spreadsheet.py`, `stock_items/get_stock_items.py`,
+`tests/test_stock_status.py` (new).
+
+**Verification:**
+- `tests/test_stock_status.py` — 8/8 pass.
+- All 12 changed modules byte-compile and import cleanly; full app boots.
+- In-process smoke: dashboard summary returns correct counts (total=20, out=2,
+  low=5) via the new sequence bucketing; `StockItemDto` derived booleans correct
+  across all four seeded levels (0→all-false, 2→low+needs_restock, 3→out+needs_restock).
+- **Not done:** the e2e suite under `tests/e2e/dora_api/` is **pre-existing
+  broken** on this branch (asserts a bare-list `/stock-levels` response that
+  predates a pagination/response-shape change) — verified the same failures
+  occur with my changes stashed. Not introduced here; logged as FU-048.
+
+**Engineering-standards gate:** This *is* an R-003 (single-source-of-truth /
+state-ownership) realisation — no R-003 violation introduced; no new rule
+warranted (R-003 already covers it). No carve-out comments needed.
+
+**Next up:** Chunk 2 — recipe/meal `missing_count` / `cookable` server ownership
+(the Type-A flagship; the contract's `is_missing` is the building block). Then
+Chunk 3 deletes the ~7 client copies that name-match `'Out of Stock'`. Open §7
+Qs still pending: Q2 (does `cookable` account for quantity?), Q3 (extend
+`/dashboard/summary` vs focused endpoints for Type-B aggregates).
+
+## 2026-06-06 — Engineering Standards + ADR governance established
+**Status:** complete (governance doc + CLAUDE.md wiring; no app code)
+**What changed:**
+- New `docs/01_charter/ENGINEERING_STANDARDS.md` — the **code/architecture rubric**,
+  engineering counterpart to the Charter. Standing rules **R-001..R-009** seeded from
+  the Charter, state-ownership proposal, theme audit, followups backlog, and memory:
+  R-001 componentisation-first, R-002 theme-tokens-only, R-003 single-source-of-truth
+  / state-ownership, R-004 framework discipline, R-005 portable data access, R-006
+  clean migrations, R-007 scope/anti-creep, R-008 code-style minimalism, R-009 safe
+  mutations. Each rule carries Why / Apply / Violation-signal (greppable) / Carve-outs
+  / Source. Includes an **ADR process** + **ADR log** (ADR-001 = adopting the system).
+- Wired into `CLAUDE.md`: (1) session-start entry-point list now names the doc;
+  (2) new **"Engineering standards & ADRs — MANDATORY, every task"** section; (3) a
+  **MANDATORY engineering-standards close-gate** added to the "On ending a work unit"
+  ritual. Registered in `docs/00_DOCS_INDEX.md`.
+
+**Decisions made (per user, this session):**
+- **Seed-from-core-docs-then-grow-via-ADR**, not an exhaustive up-front sweep of all
+  100+ docs (most of `docs/` is plans/feedback, not engineering rules). Rules accrete
+  as decisions recur.
+- **Mandatory, blocking gate:** every task is checked against the rules; any violation
+  (introduced or pre-existing-and-touched) must be fixed, **explained in place** with a
+  comment naming the rule (e.g. `// R-002 carve-out: …`), or **flagged** in
+  `DORA_FOLLOWUPS.md` citing the rule id. Unexplained drift blocks the work unit from
+  closing. Plus a per-task **ADR evaluation** to promote recurring decisions into new
+  rules. This is the durable answer to "stop the same tidy-up recurring" (cf. FU-046,
+  where post-paint feature work silently regressed theme tokens).
+- Kept the doc as the engineering layer; the **Dora Decision Charter** stays the
+  product/UX layer. State-ownership + distribution sections in `CLAUDE.md` are now
+  framed as R-003 / R-005 expansions (still authoritative for detail).
+
+**Files touched:** `docs/01_charter/ENGINEERING_STANDARDS.md` (new), `CLAUDE.md`,
+`docs/00_DOCS_INDEX.md`, this worklog.
+
+**Verification:** doc/process only — no app code, nothing to run. Grounded each seed
+rule in a real source (cited per rule). The doc dog-foods its own ADR process
+(ADR-001).
+
+**Next up:** unchanged from the Chunk-D entry below — decide on FU-046's A1c theme
+regression re-sweep (now itself an R-002 enforcement exercise), or resume the §6 chunk
+order. Future tasks now run the standards close-gate automatically.
+
+**Open questions for user:** none — the rule set is intentionally a seed; it grows by
+ADR as decisions recur. Flag if any seeded rule (R-001..R-009) is wrong or too strict.
+
+---
+
+## 2026-06-06 — A1 STEP 2 Chunk D — finished + uncovered chunk-regression problem
+**Status:** complete (Chunk D fixed) + finding logged (FU-046)
+**What changed:**
+- **Fixed the 4 live Chunk D palette-literal offenders.** Neutral branches now route
+  through `dora-bg-sunken dora-text-secondary` (chips) / `dora-text-muted` (icon btn),
+  keeping the saturated semantic branch (`negative`/`positive` + `text-color="white"`)
+  on its props — the theme-stable pattern kept since Chunk A:
+  - `pages/RecipesOverview.vue` ingredient chip `'grey-3'` → neutral helper class.
+  - `pages/RecipeDetailPage.vue` untracked-level chip `'grey-4'` → neutral helper
+    class (also kills the white-on-light-grey contrast bug). `levelColourFor()` is
+    data-driven stock-level colour — left as-is.
+  - `components/RecipeCard.vue` fav heart `'grey'` → `dora-text-muted`; **`'red'`
+    kept by user decision** (brand-agnostic favourited affordance). Available-meals
+    chip `'grey-7'` → neutral helper class.
+  - `RecipeCookMode.vue` / `RecipeEditDialog.vue` were already clean.
+- Re-grep of all five files → zero offenders except the intentional `'red'` heart.
+- Marked Chunk D ✅ in `THEME_AUDIT.md`; raised **FU-046**.
+
+**Decisions made / KEY FINDING:** Chunk D was *claimed done already* —
+`CHANGELOG.md` [Unreleased] (committed `5819fe8`) lists Chunks **D, G, C, B, E, H, F**
+as complete. They were, at that commit; **later wave-A/B feature work regressed
+several** by adding new palette-literal chips. Confirmed live regressions beyond D:
+`StockItemRow.vue:274` (`'grey-5'`, B), `MealPlansOverview.vue:96-97` (`'grey-4'`/
+`'grey-9'`, E — same cookable-chip shape as RecipeCard), `ProviderHealthChip.vue:23`
+(`'grey-7'`, G). So the CHANGELOG's "all chunks done" is stale and must NOT be trusted
+as proof — verify each chunk against current code. Full finding + carve-out caveats in
+**FU-046**. The 7 `text-color="white"` hits in Chunk D are NOT offenders (saturated
+semantic surfaces — kept per Chunk A).
+
+**Files touched:** `web_app/src/pages/RecipesOverview.vue`,
+`web_app/src/pages/RecipeDetailPage.vue`, `web_app/src/components/RecipeCard.vue`,
+`web_app/THEME_AUDIT.md`, `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-046), this worklog.
+
+**Verification:** grep across the five Chunk D files pre/post-fix (palette classes,
+hex, `rgb(a)`, palette `color=`/`:color` literals, `text-color="white"` context). Broad
+cross-chunk regression scan to ground FU-046. **Not run in browser** — template-only
+token swaps; user runs/tests. Worth eyeballing the recipe ingredient chips + RecipeCard
+in Pesto Dark to confirm the neutral chips read right.
+
+**Next up:** decide on **FU-046's A1c regression re-sweep** (fix B/E/G regressions +
+separate carve-outs from genuine offenders) before declaring A1 complete — recommended
+over blindly advancing the §6 chunk order, since the order assumes chunks stay done.
+
+**Open questions for user:** run the A1c regression re-sweep now (recommended), or
+defer FU-046 and move on?
+
+---
+
+## 2026-06-06 — A1 STEP 2 Chunk I (onboarding) — already compliant, no-op
+**Status:** complete (no code changes)
+**What changed:**
+- Verified `pages/onboarding/WelcomeWizard.vue` against the theme-token contract.
+  **Zero offenders** — the audit's 11 hits are stale. The file was rewritten since
+  the 2026-06-04 audit: its colour-coded step-list (`bg-green-1`/`text-green-9`
+  checkmark, `bg-amber-2`/`text-amber-9` current-step) was replaced by a single
+  `q-linear-progress` bar (`color="primary"`), and `text-grey-*` step labels are now
+  `dora-text-muted`/`dora-text-secondary`. Nothing to fix.
+- Marked Chunk I ✅ in `web_app/THEME_AUDIT.md §6` with the reason.
+
+**Decisions made:** Static grep is conclusive here — palette classes are literal
+strings, so a clean grep across hex / `rgb(a)` / Quasar palette classes / palette
+`color=`/`text-color=` props proves compliance without running the app. Every
+remaining colour ref is a semantic token (`dora-text-*`, `text-negative` on
+`dora-bg-negative-soft`, `color="primary"`, `var(--overlay-active)`,
+`var(--q-primary)`); the rest (`text-h5`, `text-body2`, …) are Quasar *typography*
+classes, not colours. No browser eyeball required to close the chunk.
+
+**Files touched:** `web_app/THEME_AUDIT.md` (Chunk I marked already-compliant), this
+worklog.
+
+**Verification:** grep scan of the current file for hex literals, `rgb/rgba/hsl(a)`,
+Quasar palette classes, palette `color=`/`text-color=` props → all empty. Confirmed
+`pages/onboarding/` holds only `WelcomeWizard.vue` (no second onboarding file the
+audit could have meant). Not run in browser — unnecessary for a zero-offender static
+result.
+
+**Next up:** **A1 STEP 2 Chunk D (recipes + cook mode)** per the chunk order in
+`THEME_AUDIT.md §6` (A → I → **D** → G → C → B → E → H → F). Note Chunk D's
+`RecipeCookMode.vue` row (~6 hits) may *also* be stale post-B8 — verify against
+current code before assuming the offenders exist, same as Chunk I turned out.
+
+**Open questions for user:** none. Chunk I closed; clear to proceed to Chunk D on
+your say-so.
+
+**Note (not new, not mine to fix here):** the onboarding "Alerts" tour card still
+points at `/stock?attention=true` rather than `/alerts` — that's feedback B5 /
+**FU-015**, a structure issue explicitly out-of-scope for theme paint. Left as-is.
+
+---
+
 ## 2026-06-06 — Distribution & tenancy posture (Decision 5) recorded
 **Status:** complete (charter + CLAUDE.md; **no code changes**)
 **What changed:**

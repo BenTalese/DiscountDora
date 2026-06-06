@@ -214,7 +214,26 @@ re-theming only** (just fix dark-broken cases); don't refactor structure.
 
 ---
 
-### Chunk D — Recipes + cook (~30 hits)
+### Chunk D — Recipes + cook (~30 hits) — ✅ DONE (2026-06-06)
+
+The ~30 figure was stale: most `text-grey-*` captions/breadcrumbs had already been
+migrated to `var(--text-*)` tokens before this chunk ran. The re-verify found only
+**4 genuine survivors** (palette literals as `:color` fallbacks), now fixed by
+routing the neutral branch through `dora-bg-sunken dora-text-secondary` (chips) /
+`dora-text-muted` (icon btn) while keeping the saturated semantic branch (`negative`/
+`positive`) on its `color=`/`text-color="white"` props — the theme-stable
+white-on-saturated pattern kept since Chunk A:
+
+- `pages/RecipesOverview.vue` — ingredient chip `'grey-3'` → neutral helper class. ✅
+- `pages/RecipeDetailPage.vue` — untracked-level chip `'grey-4'` → neutral helper
+  class (also fixes the white-on-light-grey contrast bug). `levelColourFor(…)` is
+  data-driven stock-level colour, left as-is. ✅
+- `components/RecipeCard.vue` — fav heart `'grey'` → `dora-text-muted`; **`'red'`
+  kept by user decision** (brand-agnostic favourited affordance, like a like-button).
+  Available-meals chip `'grey-7'` → neutral helper class. ✅
+
+`RecipeCookMode.vue` and `RecipeEditDialog.vue` were already clean. The remaining
+`text-color="white"` hits sit on saturated semantic surfaces — kept, not offenders.
 
 Files: `pages/RecipesOverview.vue`, `pages/RecipeDetailPage.vue`,
 `pages/RecipeCookMode.vue`, `components/RecipeCard.vue`,
@@ -330,7 +349,15 @@ because grep flagged them.
 
 ---
 
-### Chunk I — Onboarding (~11 hits)
+### Chunk I — Onboarding (~11 hits) — ✅ ALREADY COMPLIANT (2026-06-06)
+
+**No code change needed.** This row is stale: `WelcomeWizard.vue` was rewritten
+after the 2026-06-04 audit (the colour-coded step-list became a single
+`q-linear-progress` bar), so the 11 palette offenders below no longer exist. A
+fresh grep of the current file finds zero palette classes / hex / `rgb(a)` /
+palette `color=` props — every colour reference is a semantic theme token
+(`dora-text-secondary/muted`, `text-negative` on `dora-bg-negative-soft`,
+`color="primary"`, `var(--overlay-active)`, `var(--q-primary)`). Chunk closed.
 
 Files: `pages/onboarding/WelcomeWizard.vue`.
 

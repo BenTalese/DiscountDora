@@ -6,6 +6,21 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Phase 1 (state-ownership) Chunk 1 — single server-owned stock-status
+  contract.** New `dora_api/domain/stock_status.py` is the one authority for
+  what a stock level *means*, keyed to the level's ordinal `sequence`, never its
+  display name. Every server feature that previously matched the `"Out of
+  Stock"` / `"Low Stock"` / `"Well-Stocked"` / `"Sufficient Stock"` strings (or
+  bare sequence literals) on its own — dashboard buckets, waste rescue + waste
+  mark-out, the "keeps running out" report, alerts, the assistant tools, and the
+  restock/stocktake/import level-assignment paths — now consumes the shared
+  predicates (`is_out_of_stock`, `is_low_stock`, `needs_restock`, `is_missing`,
+  `level_for_status`). Stock-item DTOs now expose `stock_level_sequence` plus
+  derived `is_out_of_stock` / `is_low_stock` / `needs_restock`, so the client
+  will no longer need to match a level name (client de-duplication is a later
+  chunk). "Missing" / cookability counts out-of-stock only. **Effect:** renaming
+  a stock level in the UI can no longer make the dashboard counts and the
+  cookable/low filters silently disagree.
 - **B9.3 — Removed duplicate "Settings" entry from the main nav menu.**
   Settings lives on the user avatar dropdown already; carrying it in both
   surfaces was confusing. The avatar dropdown is unchanged.
@@ -16,6 +31,17 @@ semver — major bumps signal schema or breaking-config changes.
   single source of truth.
 
 ### Fixed
+- **A1 theme regression (Chunk D) — recipe chips/heart now theme-aware again.**
+  Later feature work had re-introduced hardcoded Quasar palette literals on
+  recipe surfaces after Chunk D was first signed off: the ingredient chip's
+  neutral state (`grey-3`), the untracked-level chip (`grey-4`, which also gave
+  white-on-light-grey text), the favourite-heart "off" state (`grey`), and the
+  available-meals chip (`grey-7`). Neutral states now ride the `dora-bg-sunken`/
+  `dora-text-secondary`/`dora-text-muted` helpers so they flip correctly in dark
+  themes; the saturated `positive`/`negative` states keep their white-on-colour
+  treatment, and the favourited heart stays red by design. (Sister regressions
+  in Stock / Meal-plans / settings chunks are tracked in `DORA_FOLLOWUPS.md`
+  FU-046 for a follow-up re-sweep.)
 - **B9.6 — Price-history chart now extends to the surrounding card edge
   and resizes with the viewport.** Width was hard-coded to 720px on the
   page; replaced with a `ResizeObserver` on the chart card element so

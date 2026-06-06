@@ -335,12 +335,17 @@
                                         :color="
                                             missingStockItemNames(recipe).has(ing.stock_item_name)
                                                 ? 'negative'
-                                                : 'grey-3'
+                                                : undefined
                                         "
                                         :text-color="
                                             missingStockItemNames(recipe).has(ing.stock_item_name)
                                                 ? 'white'
                                                 : undefined
+                                        "
+                                        :class="
+                                            missingStockItemNames(recipe).has(ing.stock_item_name)
+                                                ? undefined
+                                                : 'dora-bg-sunken dora-text-secondary'
                                         "
                                     >
                                         {{ ing.stock_item_name }}

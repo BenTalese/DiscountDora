@@ -22,13 +22,13 @@ from pydantic import BaseModel, ConfigDict
 
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_container, get_request_body
-from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -65,8 +65,8 @@ class AlertActionHandler:
             base = item.expiry_date or _date.today()
             item.expiry_date = base + timedelta(days=7)
         elif action == ACTION_MARK_RESTOCKED:
-            well_stocked: StockLevel | None = self.repository.get(StockLevel).one(
-                EntityField(StockLevel, StockLevel.Fields.NAME).eq("Well-Stocked")
+            well_stocked = level_for_status(
+                self.repository.get(StockLevel).all(), StockStatus.WELL_STOCKED
             )
             if well_stocked is not None:
                 item.stock_level = well_stocked

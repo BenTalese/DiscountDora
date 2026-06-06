@@ -39,6 +39,70 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-048 — e2e suite (`tests/e2e/dora_api/`) is pre-existing broken on this branch
+- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
+- **Type:** finding
+- **What:** Running `tests/e2e/dora_api/test_stock_level_router.py` /
+  `test_stock_item_router.py` yields dozens of failures/errors. They fail
+  **identically with my Chunk-1 changes stashed**, so they predate this work.
+  Sampled root cause: `test_stock_level_router.py:17` does
+  `requests.get('/api/stock-levels').json()[0]` and gets `KeyError: 0` — the
+  endpoint returns a paginated/enveloped shape now, but the tests still assert a
+  bare list. Likely a broad response-shape/auth drift the e2e tests were never
+  updated for. The server itself boots and returns 200s.
+- **Why deferred:** out of scope for Chunk 1 (the contract change is verified by
+  the new unit test + in-process smoke). Fixing the e2e harness is its own job and
+  touches many test files.
+- **Recommended resolution:** **later — dedicated "repair e2e suite" pass** (align
+  the e2e assertions with the current paginated response shape + auth/session
+  setup). Until then the e2e suite can't gate Phase 1 work; lean on unit tests +
+  in-process smokes.
+
+## [OPEN] FU-047 — `confirm_actions._resolve_level` still maps phrases → hardcoded level names
+- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
+- **Type:** finding
+- **What:** `dora_api/features/assistant/confirm_actions.py` `_LEVEL_ALIASES`
+  maps user phrasings ("out", "gone", "low", "plenty") to canonical level
+  **name** strings, then `_resolve_level` looks the level up by `name.eq(...)`
+  with a substring fallback. This is NLU input resolution (deliberately left out
+  of the Chunk-1 sequence migration), but it's still name-coupled and brittle:
+  the aliases use `"Sufficient"` / `"Well Stocked"` which do **not** exactly match
+  the seeded `"Sufficient Stock"` / `"Well-Stocked"`, so those alias paths fall
+  through to the substring fallback (latent — "ok"→"Sufficient" won't exact-match).
+- **Why deferred:** §3.1 scope is server-*derived* status facts, not free-text
+  user→level resolution; converting it cleanly means mapping phrase → `StockStatus`
+  → `level_for_status(...)`, a small assistant-side refactor better done with the
+  assistant work.
+- **Recommended resolution:** later during the assistant/SLM work (or
+  opportunistic) — re-key `_LEVEL_ALIASES` to `StockStatus` and resolve via
+  `level_for_status`, fixing the `"Sufficient"`/`"Well Stocked"` mismatch at the
+  same time.
+
+## [OPEN] FU-046 — A1 theme chunks D–F regressed since "done"; CHANGELOG over-claims
+- **Raised:** 2026-06-06 (A1 STEP 2 Chunk D verify/finish)
+- **Type:** finding
+- **What:** `CHANGELOG.md` [Unreleased] (committed in `5819fe8 "Begin major rework —
+  part A1 A2…"`) claims A1 STEP 2 Chunks **D, G, C, B, E, H, F** all theme-token-
+  compliant. They *were* at that commit, but later wave-A/B feature work re-introduced
+  Quasar palette literals on several surfaces. Confirmed live offenders on a
+  2026-06-06 scan: **Chunk D** — `RecipesOverview`/`RecipeDetailPage`/`RecipeCard`
+  (4 literals; **fixed this session**); **Chunk B** — `StockItemRow.vue:274`
+  (`colour:'grey-5'`); **Chunk E** — `MealPlansOverview.vue:96-97` (`'grey-4'`/
+  `'grey-9'` cookable chip, same pattern as RecipeCard); **Chunk G** —
+  `ProviderHealthChip.vue:23` (`'grey-7'`). Broader `grep` flags ~12 surfaces total,
+  but several are accepted carve-outs (ScanOverlay DEC-4, ProductSearchCard DEC-8,
+  MerchantLogo DEC-9, settings theme swatches DEC-10) — needs a per-file pass to
+  separate regressions from carve-outs.
+- **Why deferred:** out of scope for "finish Chunk D" — fixing B/E/G/etc. regressions
+  is a separate sweep, and the carve-out/regression split needs per-file judgement
+  against the DEC list. Logged so the stale "all chunks done" CHANGELOG claim doesn't
+  fool the next agent into skipping a needed re-sweep.
+- **Recommended resolution:** **opportunistic — run an "A1c regression re-sweep"**
+  (re-grep every claimed-done chunk surface for palette literals, fix genuine
+  regressions, leave DEC carve-outs) before signing A1 off as complete. The
+  cookable-chip `positive/grey` pattern (RecipeCard + MealPlansOverview) is the most
+  common regression shape — worth a shared neutral-chip approach.
+
 ## [OPEN] FU-045 — Migrate to Postgres as the standard datastore (SQLite kept for lightweight self-host)
 - **Raised:** 2026-06-06 (distribution posture — Decision 5 / §7.5)
 - **Type:** deferred job

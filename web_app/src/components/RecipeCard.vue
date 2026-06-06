@@ -33,7 +33,8 @@
                 </div>
                 <q-btn
                     :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
-                    :color="recipe.is_favourite ? 'red' : 'grey'"
+                    :color="recipe.is_favourite ? 'red' : undefined"
+                    :class="recipe.is_favourite ? undefined : 'dora-text-muted'"
                     flat
                     round
                     dense
@@ -62,8 +63,9 @@
                     v-if="recipe.available_meals > 0"
                     dense
                     :icon="ICONS.inventory"
-                    :color="recipe.unallocated_meals > 0 ? 'positive' : 'grey-7'"
-                    text-color="white"
+                    :color="recipe.unallocated_meals > 0 ? 'positive' : undefined"
+                    :text-color="recipe.unallocated_meals > 0 ? 'white' : undefined"
+                    :class="recipe.unallocated_meals > 0 ? undefined : 'dora-bg-sunken dora-text-secondary'"
                 >
                     {{ recipe.available_meals }}
                     <span class="q-ml-xs text-caption">

@@ -301,8 +301,9 @@
                                     <div v-if="ing.stock_item_id" class="column items-end">
                                         <q-chip
                                             dense
-                                            :color="levelColourFor(ing.stock_item_id) ?? 'grey-4'"
-                                            text-color="white"
+                                            :color="levelColourFor(ing.stock_item_id) ?? undefined"
+                                            :text-color="levelColourFor(ing.stock_item_id) ? 'white' : undefined"
+                                            :class="levelColourFor(ing.stock_item_id) ? undefined : 'dora-bg-sunken dora-text-secondary'"
                                         >
                                             {{ levelNameFor(ing.stock_item_id) ?? 'Untracked' }}
                                         </q-chip>

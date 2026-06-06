@@ -61,6 +61,7 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 |---|---|
 | `01_charter/RECONCILED_FINISHING_PLAN.md` | **START HERE.** The current phased finishing plan. Records resolved strategic decisions (scraper → companion via ingestion API; Foundations → loop → champion). |
 | `01_charter/DASHY_DORA_CHAMPION_PLAN.md` | Vision + the **Dora Decision Charter** (Part II) + the verify-state-first operating procedure (Part III) that govern every prompt. |
+| `01_charter/ENGINEERING_STANDARDS.md` | The **code/architecture rubric** — standing rules `R-001..` (componentisation, theming, single-source-of-truth, scope, code-style, …) + ADR log. Checked on **every** task; violations must be fixed, commented, or flagged. The engineering counterpart to the Charter. |
 | `01_charter/STATUS.md` | Audit of what's built vs the Part 1-5 plans. Known stale — always re-check the live code. |
 
 ## 02_feedback — user input (source of truth)

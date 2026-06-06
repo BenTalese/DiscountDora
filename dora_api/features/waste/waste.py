@@ -32,6 +32,8 @@ from dora_api.domain.entities.stock_item_waste_event import (
     StockItemWasteEvent, WASTE_REASON_OTHER, WASTE_REASON_VALUES,
 )
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.stock_status import (StockStatus, is_missing,
+                                          level_for_status)
 from dora_api.features.routers import WASTE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
@@ -165,8 +167,7 @@ class GetWasteRescueHandler:
                 if item.id in at_risk_ids:
                     matches.append(item.name)
                 else:
-                    level = item.stock_level
-                    if level is None or level.sequence >= 3:
+                    if is_missing(item.stock_level):
                         missing.append(item.name)
             if not matches:
                 continue
@@ -255,8 +256,8 @@ class LogWasteEventHandler:
         self.repository.add(event)
 
         if request.mark_out_of_stock:
-            out_level: StockLevel | None = self.repository.get(StockLevel).one(
-                EntityField(StockLevel, StockLevel.Fields.NAME).eq("Out of Stock")
+            out_level = level_for_status(
+                self.repository.get(StockLevel).all(), StockStatus.OUT_OF_STOCK
             )
             if out_level is not None:
                 item.stock_level = out_level

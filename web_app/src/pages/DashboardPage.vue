@@ -1392,6 +1392,13 @@
         background: var(--c-accent-soft);
         padding: 4px;
         flex-shrink: 0;
+        // B9.8: centre the mascot in its padded square (see same comment
+        // in ProductSearch.vue .dora-empty-mascot).
+        :deep(img) {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
     }
     .dora-hero-text {
         min-width: 0;

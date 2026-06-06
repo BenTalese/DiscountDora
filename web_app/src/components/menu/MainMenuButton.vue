@@ -104,4 +104,14 @@
     .dora-mainMenuButton-active {
         color: var(--q-accent);
     }
+
+    // B9.2: Quasar's q-item ships a built-in hover/focus overlay
+    // (`.q-focus-helper`) that was stacking on top of the custom
+    // `::before` overlay above — inactive-hover rendered as two
+    // concentric rounded rectangles ("double outline"), while active
+    // (where `::before` is hidden) only showed the Quasar overlay. Hide
+    // the Quasar helper so our `::before` is the single source of truth.
+    .dora-mainMenuButton :deep(.q-focus-helper) {
+        display: none;
+    }
 </style>

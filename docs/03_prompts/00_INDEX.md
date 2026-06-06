@@ -44,7 +44,7 @@ Generated from `Feedback / Fixes (MASTER).md` via `FEEDBACK_TRIAGE_AND_PLAN.md`.
 ## INV — Investigations (you asked; report, then we act)
 | File | What | Status |
 |---|---|---|
-| `INV_investigations.md` | Orphaned-field audit, stock-overview perf/"DS4", log rolling/.local, forgot-password email wiring, QR-vs-barcode, relevancy filter, **recipe-comparison worth (INV-6)** | 🔵 |
+| `INV_investigations.md` | Orphaned-field audit, stock-overview perf/"DS4", log rolling/.local, forgot-password email wiring, QR-vs-barcode, relevancy filter, **recipe-comparison worth (INV-6)**, history-tab worth (INV-7), substitute swap-into-list (INV-8), command-palette worth (INV-9), essential-flag model (INV-10) | 🔵 |
 
 ## Wave C — Big rocks (design briefs → proposals you approve)
 | File | What | Status |

@@ -5,6 +5,35 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **B9.3 — Removed duplicate "Settings" entry from the main nav menu.**
+  Settings lives on the user avatar dropdown already; carrying it in both
+  surfaces was confusing. The avatar dropdown is unchanged.
+- **B9.2 — Main-menu hover renders a single outline.** Quasar's built-in
+  `.q-focus-helper` overlay was stacking on top of the custom `::before`
+  hover ring, producing a "double outline" on inactive hover that
+  disappeared on active. Hidden the helper so the custom ring is the
+  single source of truth.
+
+### Fixed
+- **B9.6 — Price-history chart now extends to the surrounding card edge
+  and resizes with the viewport.** Width was hard-coded to 720px on the
+  page; replaced with a `ResizeObserver` on the chart card element so
+  the chart fills the available column at every breakpoint. (Selection
+  → chart binding and tooltip theming were already correct in current
+  code — A1 had token-ified the tooltip — so no change there; logged for
+  browser confirm.)
+- **B9.8 — Floating Dora visible on mobile login + properly centred on
+  Product Search / Dashboard greeting.** `LoginPage`'s mobile breakpoint
+  was `display: none` on the mascot below 760px; now keeps her visible
+  centred above the card (96px / 72px at the tighter 360px breakpoint)
+  using `right: 50%; margin-right: -<half-width>px` so the existing
+  `bob` keyframe (which owns the `transform` property) doesn't clobber
+  horizontal centring. `dora-empty-mascot` (ProductSearch) and
+  `dora-hero-mascot` (Dashboard) now force their inner `<img>` to
+  `width:100%; height:100%; object-fit: contain` so the mascot sits
+  centred in its padded box regardless of intrinsic aspect ratio.
+
 ### Added
 - **A6 — "Extra large" text size + a wider, re-spaced scale.** The text-size
   preference now has four steps instead of three, with a clearly distinct

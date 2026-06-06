@@ -24,6 +24,354 @@ next.
 
 ---
 
+## 2026-06-06 — INV-6 (recipe-comparison worth assessment)
+**Status:** complete (memo only; **no code changes**)
+**What changed:**
+- New `docs/RECIPE_COMPARISON_ASSESSMENT.md`. One-page memo per the
+  prompt: (1) what the feature does today, (2) signal of use,
+  (3) what a useful comparison would need, (4) Charter check,
+  (5) where the real use cases land if cut, (6) cleanup cost,
+  (7) recommendation, (8) open follow-up.
+
+**Decisions made:**
+- **Recommended CUT.** Feature has no usage signal, the user's own
+  feedback says "useless, would users actually use this?", and it
+  fails 5 of the 12 Charter principles (P1 Effortless, P5 Closed
+  loop, P6 Insight→action, P10 Anti-creep, P11 Fast UX). Every
+  real cook-decision question it tries to answer lands more
+  cleanly on the Cookbook overview's sort+filter, Cook Mode
+  servings auto-adjust, money-opt-in per-row cost, or the Dora
+  "what should I cook?" intent.
+- **Cleanup placement:** fold the X2 removal into **C-4 Cookbook
+  redesign** as a Charter-aligned cut, in the same chunk that adds
+  the sort axes (`time`, `missing`, `last_made`,
+  `cost_per_serving`) so users land on the overview and find the
+  answer comparison was meant to give without entering a dialog.
+- **No code touched.** Memo is decision input for C-4.
+
+**Files touched:**
+- `docs/RECIPE_COMPARISON_ASSESSMENT.md` (new)
+- `DORA_WORKLOG.md` (this entry)
+
+**Verification:**
+- Read live code: `RecipesOverview.vue` compare-mode block
+  (header buttons L7-22, dialog L259-356, state + handlers L662-692).
+- Cross-referenced against the user feedback bullets in
+  `Feedback _ Fixes - as of [06-Jun-2026].md` (Cookbook section)
+  and against the reconciled finishing plan / triage / Charter
+  Part II (P1, P5, P6, P10, P11).
+- Confirmed no backend route exists for comparison and no
+  telemetry surface tracks the toggle. Footprint estimate ~100
+  lines, one file, no migration.
+
+**Next up:**
+- **User reviews the memo.** If `CUT` is approved:
+  - The X2 removal becomes part of the C-4 Cookbook brief / impl
+    chunk (when C-4 lands as a proposal).
+  - `STATUS.md` X2 flips DONE → **CUT (INV-6, 2026-06-06)**.
+- Per the prior plan sequencing: ready for the next INV
+  (INV-1/2/3/4/5) or to head back to a Wave C brief on your
+  signal.
+
+**Open questions for user:**
+- Sign off on **CUT** (vs `rework` if there's a use case in §3
+  the memo missed).
+- Confirm fold-into-C-4 is the right cleanup chunk vs a smaller
+  standalone removal prompt.
+
+---
+
+## 2026-06-06 — Docs reorg + feedback coverage audit + INV-7..10 + CLAUDE.md cross-check rule
+**Status:** complete (docs/governance — no app code touched)
+**What changed:**
+- **Docs folder reorganised** by lifecycle:
+  - `docs/01_charter/` — DASHY_DORA_CHAMPION_PLAN, RECONCILED_FINISHING_PLAN, STATUS.
+  - `docs/02_feedback/` — Feedback raw doc, FEEDBACK_TRIAGE_AND_PLAN, **new** COVERAGE_GAPS.md.
+  - `docs/03_prompts/` — (was `docs/prompts/`) all wave A/B/C + INV prompts; INDEX updated.
+  - `docs/04_proposals/` — PROPOSAL_MEAL_PLANS, SHOPPING_LIST_REDESIGN, STATE_OWNERSHIP_REFACTOR, DORA_ASSISTANT_ARCHITECTURE.
+  - `docs/05_investigations/` — RECIPE_COMPARISON_ASSESSMENT, AUTH_ASSISTANT_SECURITY_FINDINGS, MULTI_USER_READINESS, COMMERCIALIZATION_REPORT, Distribution Spec.
+  - `docs/06_legacy_prompt_plans/` — PROMPT_PLAN.md + PROMPT_PLAN_PART_2..7.
+  - `docs/99_scratch/` — claude convo.txt, prompt - up to speed.txt, Finish task DS1.txt.
+  - Root `docs/00_DOCS_INDEX.md` rewritten to describe new layout.
+- **`CLAUDE.md` + `AGENTS.md` updated** with:
+  - New folder layout enumerated in step 2.
+  - Governing-document paths updated (`01_charter/RECONCILED_FINISHING_PLAN.md`, `01_charter/DASHY_DORA_CHAMPION_PLAN.md`, `03_prompts/`).
+  - **New "Cross-checking against the original feedback — MANDATORY" section** requiring every brief/proposal/assessment/impl-plan to end with a flat coverage table mapping every relevant feedback bullet to a section in the doc, OR explicitly mark it out-of-scope. The PROPOSAL_MEAL_PLANS `F1..F49` table is the reference shape.
+- **`02_feedback/COVERAGE_GAPS.md` created** — full audit of which feedback bullets currently have no home:
+  - **Bucket A (whole-surface gaps)** — Stock Item Detail polish, DATA page, Dora Bot polish, HELP content, Settings deferred bullets.
+  - **Bucket B (assessment-style)** — feeds INV-7..10.
+  - **Bucket C (cross-cutting/niche/future)** — full systems QA doc, telemetry, design polish, push notifications, P2P, etc.
+  - **Bucket D** — surfaces verified covered (so the audit is reproducible).
+- **`03_prompts/INV_investigations.md` expanded** with INV-7..10:
+  - INV-7 stock-item detail History tab worth.
+  - INV-8 substitute swap-into-list behaviour.
+  - INV-9 command-palette worth (keep / shrink / cut).
+  - INV-10 essential-flag — where it lives, how to set, is it the right primitive.
+  - INDEX line updated accordingly.
+
+**Decisions made:**
+- All four pieces of the audit response executed (user picked all in
+  one `AskUserQuestion`): write COVERAGE_GAPS, reorg, CLAUDE.md
+  cross-check rule, INV-7..10.
+- Mixed `git mv` and plain `mv` for the moves because some files
+  (PROPOSAL_MEAL_PLANS, RECIPE_COMPARISON_ASSESSMENT, the raw feedback
+  doc) hadn't been committed yet. Git tracks the rest as renames.
+- Worklog historical entries' inline paths kept as-is (they describe
+  state at time of writing — not rewriting history).
+
+**Files touched:**
+- Moved: 26 docs across the new subfolders.
+- Edited: `CLAUDE.md`, `AGENTS.md`, `docs/00_DOCS_INDEX.md`,
+  `docs/03_prompts/00_INDEX.md`, `docs/03_prompts/INV_investigations.md`,
+  this worklog.
+- Created: `docs/02_feedback/COVERAGE_GAPS.md`.
+
+**Verification:**
+- `ls docs/` shows only `00_DOCS_INDEX.md` + the seven new subfolders.
+- `git status` confirms all files tracked under their new paths.
+- `CLAUDE.md` and `AGENTS.md` now point at the new paths consistently.
+- COVERAGE_GAPS.md cross-referenced against the full
+  `02_feedback/Feedback _ Fixes - as of [06-Jun-2026].md` section by
+  section (SPLASH..Technical Considerations).
+- **Not run:** any build / lint — docs-only changes.
+
+**Next up:**
+- **Back to INV** — INV-6 already done (`05_investigations/RECIPE_COMPARISON_ASSESSMENT.md`).
+  Next: pick from INV-1..10 (1/2/3/4/5 from original, 7/8/9/10 newly
+  added). User had earlier sequencing of "INV-6 only first" — INV-6 is
+  done.
+- User may want to triage `02_feedback/COVERAGE_GAPS.md` Bucket A
+  items into new C-briefs (especially C-DATA which is the biggest
+  uncovered surface).
+- Open user-blocking items unchanged from prior worklog entries.
+
+**Open questions for user:**
+- Which INV next? (INV-1 orphaned-fields is the most foundational — it
+  also feeds A-1 and A-5 in COVERAGE_GAPS.)
+- Want me to draft the C-DATA brief now or defer?
+
+---
+
+## 2026-06-06 — C-2 (Meal Plans proposal — feedback cross-check + rewrite)
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- Cross-checked every Meal Plans bullet in
+  `docs/Feedback _ Fixes - as of [06-Jun-2026].md` against the
+  proposal. Found 12+ gaps (page chrome removals, custom calendar
+  spec detail, carousel direction, no-name plan instances, sidebar
+  redesign, past-day bug, hover-to-highlight, etc.). Surfaced 4
+  decisions to the user; took the picks
+  (trays in left column, rotating sets in scope, single-button
+  choice modal, drop cookable cues).
+- Rewrote `docs/PROPOSAL_MEAL_PLANS.md` end-to-end. New §3.4-3.7
+  cover the missing surface (new-plan flow, no-name instances, page
+  chrome removals, page icon). New §5 expands templates with
+  template-sets (rotating). New §13 is a flat per-feedback-bullet
+  coverage table (F1..F49) so the next reviewer can audit the
+  proposal against the source quickly.
+
+**Decisions made (in addition to prior three):**
+- 4. Rotating template sets **in scope** — new
+  `MealPlanTemplateSet` entity; `from-template/recurring` accepts
+  either a template_id or a template_set_id.
+- 5. Trays in **left column** above all-recipes (not below carousel
+  as feedback originally said — user explicitly picked left column;
+  noted as a divergence from feedback wording).
+- 6. Shopping-list target = **single button → choice modal**.
+- 7. **Drop cookable cues from planner entirely** — no green-check,
+  no "in-stock only" filter, no "Suggest meals I can cook now"
+  CTA. Cookable lives on cookbook (C-4).
+
+**Files touched:**
+- `docs/PROPOSAL_MEAL_PLANS.md` (full rewrite)
+- `DORA_WORKLOG.md` (this entry)
+
+**Verification:**
+- Re-read full `MEAL PLANS` section of the feedback doc bullet-by-
+  bullet against the proposal. Every bullet F1..F49 mapped to a
+  section in §13.
+- Live code re-grounding from prior pass still holds (B6 works,
+  past-day backend refusal, meals→recipes merge complete).
+- Identified a real frontend bug from the feedback's exception
+  log (Thu 8am AEST → 400 on Wed drop) — `isPastDay` drift vs the
+  backend's `date.today()`. Specced as §12 phase C-2.K.
+- No build/run — proposal only.
+
+**Next up:**
+- **User reviews the rewritten `docs/PROPOSAL_MEAL_PLANS.md`.** §13
+  table is the quick audit.
+- 5 smaller decisions remain in §11 (recurring window cap, tray
+  count max, templates page route, slot-remap UI build-now-or-defer,
+  set rotation start anchor).
+- After approval — back to **INV — investigations** as per the
+  user's earlier sequencing.
+
+**Open questions for user:**
+- §11 smaller decisions when convenient.
+- Anything in the flat F1..F49 coverage table you disagree with the
+  mapping for.
+
+---
+
+## 2026-06-06 — C-2 (Meal Plans redesign — proposal)
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/PROPOSAL_MEAL_PLANS.md`. Sections:
+  1. Re-grounding against live code (meals→recipes merge, B6
+     allocation, shortfall, slot model, past-day rules).
+  2. Three big open decisions resolved with user (templates fork at
+     apply-time; past days skipped entirely on template apply; shortfall
+     banner moved per-cell + sidebar summary).
+  3. Three-column surface map (left=recipe list, main=week carousel,
+     right=calendar+shopping+templates).
+  4. Configurable slot vocabulary (`Breakfast/Lunch/Dinner/Snack`
+     defaults; user-scoped settings entry).
+  5. Templates data model + API + recurring application.
+  6. Sequential builder modal as alt path for fresh-cookers.
+  7. Two-persona walk-through (batch + fresh).
+  8. Wave A primitive reuse map.
+  9. Ripple notes for C-3 / C-4 / C-impl / dashboard / settings /
+     onboarding.
+ 10. Smaller secondary open decisions (servings default, recurring
+     window cap, etc.).
+ 11. Sequencing into 8 chunks if approved.
+
+**Decisions made:**
+- Took the three "Recommended" answers for the brief's listed open
+  decisions: fork-on-apply templates, skip past days, move shortfall
+  per-cell. Logged inline in §2 of the proposal so the next agent
+  doesn't re-litigate.
+- B6 allocation **explicitly verified working** in `_hydrate_unallocated`
+  — but kept the CLAUDE.md MANDATORY rule, so the proposal flags it as
+  needing in-browser confirm before being closed.
+- Calendar widget designed as a custom small widget (NOT `q-date`) —
+  the brief specified "minimalist rounded squares with status
+  underlines" which q-date can't render.
+- Same-recipe-same-(day,slot) drop **increments servings** (single
+  entry); same recipe on the same day at *different* slots stays two
+  entries (no schema churn). Flagged as a smaller open decision in
+  §10 so the user can override.
+
+**Files touched:**
+- `docs/PROPOSAL_MEAL_PLANS.md` (new)
+- `DORA_WORKLOG.md` (this entry)
+- `DORA_FOLLOWUPS.md` (FU-032 — B6 allocation in-browser confirm)
+
+**Verification:**
+- Read both create+update meal-plan handlers, get_meal_plans,
+  get_meal_plan_ingredients, get_shortfall, reconcile_consumed_meals,
+  cook_recipe, adjust_recipe_meals, `_hydrate_unallocated` in
+  get_recipes — to ground every "current state" claim against live
+  code.
+- Read MealPlansOverview.vue start-to-middle (first ~370 lines incl.
+  template + setup, palette, week grid, sidebar, dialogs) and
+  cross-referenced with the recipe store and dto models.
+- No build/run — proposal only.
+
+**Next up:**
+- **User reviews `docs/PROPOSAL_MEAL_PLANS.md`** and approves /
+  redirects the smaller open decisions in §10.
+- Per the user's plan ("a valuable big rock, then back to INV") —
+  next session, drive **INV — investigations**
+  (`docs/prompts/INV_investigations.md`).
+- If approved, the proposal's §11 lays out 8 chunked implementation
+  prompts (A→H). Phase A (slot vocabulary) is the first reviewable
+  chunk and can ship before the canvas changes start.
+
+**Open questions for user:**
+- Sign-off on the proposal (§2 big decisions are locked from prior
+  Q&A; §10 smaller decisions need your call when convenient).
+- Anything in the surface map that should swap places (e.g. calendar
+  on the LEFT and recipe list on the right — the brief said right for
+  calendar but you might prefer otherwise).
+
+---
+
+## 2026-06-06 — B9 (misc global bugs)
+**Status:** complete (static verification only; node_modules absent)
+**What changed (fixes):**
+- **B9.2** — `web_app/src/components/menu/MainMenuButton.vue`: hide
+  Quasar's built-in `.q-focus-helper` overlay so the custom `::before`
+  hover ring is the only outline. Removes "double outline" on inactive
+  hover.
+- **B9.3** — `web_app/src/layouts/MainLayout.vue`: removed the Settings
+  entry from `linksList` (main menu). Already lives in the user-avatar
+  dropdown.
+- **B9.6** — `web_app/src/pages/PriceHistoryPage.vue`: replaced the
+  hard-coded `chartWidth.value = 720` with a `ResizeObserver` against
+  the chart card element. Chart now extends to the card edge at every
+  breakpoint, minus q-card-section padding (~16px). Selection→chart
+  binding and tooltip theming verified already correct in current code.
+- **B9.8** — `web_app/src/pages/LoginPage.vue`: removed `display:none`
+  on `.login-mascot` below 760px; mascot now scales to 96px (and 72px
+  below 360px) and is horizontally centred via `right: 50%; margin-right:
+  -<half-width>px` so the `bob` keyframe (which owns `transform`) doesn't
+  clobber centring. Plus `.dora-empty-mascot` (ProductSearch) and
+  `.dora-hero-mascot` (Dashboard) force their inner `<img>` to
+  `width:100%; height:100%; object-fit: contain` so the mascot is centred
+  in its padded square.
+
+**What changed (verified already-correct → confirm-in-browser FUs):**
+- **B9.1** — drag-drop. Static walk-through both directions produces the
+  right ordering; backend sorts by `(sequence, id)`; frontend's
+  `insertAt = fromIdx < toIdx ? toIdx-1 : toIdx` checks out.
+- **B9.4** — command palette. Every static command in `useCommands(...)`
+  has a wired action; `create.stock-item` routes to `/stock?create=1`
+  and `StockOverview.maybeOpenCreateFromQuery` watches it.
+- **B9.9** — 404 page. Both surfaces already use tokens (A1 themed).
+
+**What changed (needs decision / repro — flagged):**
+- **B9.5** — undo. `stockItemStore.updateStockItemAsync` captures
+  pre-state field-by-field and registers inverse+redo for every change,
+  including expiry pushes/clears. Plumbing correct on static read.
+  Closest guess for "oddly": Dashboard's `alerts.value` is its own ref
+  and doesn't refetch after an inverse runs on another surface. FU-026
+  requests a concrete repro.
+- **B9.7** — log rotation. `RotatingFileHandler` is wired (10MB × 5
+  backups) at `infrastructure/logging_setup.py:87`. Current ~46k-line
+  file is below the size trigger. Symptom implies time-based rotation
+  expectation. FU-027 needs decision: `TimedRotatingFileHandler` (and
+  when?), or lower `maxBytes`?
+
+**Decisions made:**
+- Took the prompt's "OK with two nav fixes touching deferred areas" as
+  implicit-yes since the user said "continue B9". Both are surgical.
+- CLAUDE.md MANDATORY rule applied per-defect: every "code says fine"
+  defect gets `[OPEN] confirm in browser`, not blanket "all fine".
+
+**Files touched:**
+- `web_app/src/components/menu/MainMenuButton.vue`
+- `web_app/src/layouts/MainLayout.vue`
+- `web_app/src/pages/PriceHistoryPage.vue`
+- `web_app/src/pages/LoginPage.vue`
+- `web_app/src/pages/ProductSearch.vue`
+- `web_app/src/pages/DashboardPage.vue`
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, this worklog.
+
+**Verification:**
+- Each fix reasoned-through against current code; no build/run.
+- ResizeObserver guarded with `typeof` for SSR safety; cleaned up in
+  `onBeforeUnmount`.
+- Mascot positioning: confirmed the `bob` keyframe only touches
+  `transform` (not `right/left/top`), so `right + margin-right` centring
+  is animation-safe.
+- **Not run:** dev server / lint / type-check (node_modules absent).
+
+**Next up:**
+- **User eyeballs the 4 visible fixes** (menu hover, no Settings dup in
+  main menu, price-history chart extends + resizes, mobile login mascot
+  visible + Dora centred on ProductSearch/Dashboard).
+- **User confirms the 3 FU-flagged "static-fine" items in browser**
+  (DnD, palette commands, 404 theme).
+- **User decision on B9.7** rotation model.
+- **Precise repro requested on B9.5** undo oddness.
+- **Wave B complete (B1-B9).** Per `docs/prompts/00_INDEX.md`: next is
+  INV (investigations, read-only) → Wave C (big-rock design briefs).
+
+**Open questions for user:** see Next up.
+
+---
+
 ## 2026-06-05 -- D.O.R.A. acronym naming pass
 **Status:** complete (discussion/recon only -- no code changed)
 **What changed:**

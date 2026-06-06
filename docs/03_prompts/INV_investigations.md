@@ -45,3 +45,31 @@ Small "how does this work / is it redundant" questions.
 You called the recipe comparison tool "useless" but want its worth assessed before cutting (master plan Decision 3).
 
 **Prompt:** Assess whether the recipe-comparison feature (X2, in the Cookbook) earns its place. Report: what it does today, any signal it's used, what a *useful* comparison would need (sorting / highlighting / decision support), and whether that serves a Charter principle or is anti-creep (P10). Recommend **keep-as-is / rework (with a concrete sketch) / cut**. One-page memo, not a full design. Output `RECIPE_COMPARISON_ASSESSMENT.md`. No code changes. The Cookbook brief (C-4) defers to this outcome.
+
+---
+
+## INV-7 — Stock-item detail "History" tab worth (keep / rework / cut)
+You said "the history tab as-is feels unuseful. Maybe if it had a bit more data/info in it…maybe? I'd need to be convinced."
+
+**Prompt:** Assess whether the History tab on Stock Item Detail earns its surface. Document what it shows today (level changes, what else?), what *could* be there to make it decision-useful (last-time-restocked, who/when, level cadence, expiry events, on-list events), and whether the resulting feature serves the closed loop (Charter P5) or is incremental noise (P10). Recommend **keep-as-is / rework (with a concrete sketch of "what would be useful") / cut**. One-page memo. Output `05_investigations/HISTORY_TAB_ASSESSMENT.md`. No code changes.
+
+---
+
+## INV-8 — Substitute "swap into list" behaviour (keep / rework / cut)
+You said "swap into list for substitutes feels like a weird feature. Would it even get used?"
+
+**Prompt:** Trace the current "swap substitute into shopping list" path (where the affordance lives, what action it triggers, where it appears in cook mode). Assess: is the user mental model "I'm at the shop and the planned item is out, swap it in here" actually served by the current implementation? Or is the cook-mode-temporary-swap (B8) the real ask and this list-level swap is leftover? Recommend **keep-as-is / rework / cut**. One-page memo. Output `05_investigations/SUBSTITUTE_SWAP_ASSESSMENT.md`. No code changes.
+
+---
+
+## INV-9 — Command-palette worth (keep / shrink / cut)
+You said "how useful is the command palette feature really? Let's assess."
+
+**Prompt:** Assess the Ctrl-K command palette (`CommandPalette.vue` + `useCommands`). Document the static command set, search wiring, usage frequency signals (none today — note that), and the Charter-fit (Effortless+keyboard for power users vs Anti-creep surface area). Distinguish between (a) the palette as a power-user accelerator, and (b) the entity-search inside it which arguably belongs on a global search bar instead. Recommend **keep / shrink to entity-search-only / cut**. One-page memo. Output `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`. No code changes.
+
+---
+
+## INV-10 — "Essential" flag — where is it, how to set it, is it the right model?
+You said "no way to set 'essential' that I can see. Might be missing it?" The auto-generate shopping-list path already references an `essentials_only_for_low` criterion, so the concept exists somewhere.
+
+**Prompt:** Trace where "essential" lives in the data model and code. Specifically: does `StockItem` carry an `is_essential` (or similar) column? Where is it read (auto-gen low-stock path, anywhere else)? Where SHOULD users be able to set it (detail page toolbar? stock-overview quick-toggle? settings → essentials list?). And is "essential" the right primitive at all, or should it be derived (e.g. "you buy this every shop" auto-detected)? Report findings + a concrete recommendation. Output `05_investigations/ESSENTIAL_FLAG_FINDINGS.md`. No code changes.

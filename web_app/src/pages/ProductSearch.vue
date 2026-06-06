@@ -688,6 +688,16 @@
         background: var(--surface-elevated);
         padding: 8px;
         flex-shrink: 0;
+        // B9.8: q-avatar's default inner-img sizing leaves the mascot
+        // pinned to one corner of the padded box (Quasar centers via line
+        // height which doesn't fit a square avatar with custom padding).
+        // Force the img to fill the padded box and contain so the mascot
+        // sits centred regardless of its own aspect ratio.
+        :deep(img) {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
     }
     .dora-empty-text {
         font-size: 1.15rem;

@@ -104,7 +104,7 @@
                 />
             </div>
 
-            <q-card flat bordered>
+            <q-card ref="chartCardRef" flat bordered>
                 <q-card-section class="q-pa-sm">
                     <PriceHistoryChart :series="series" :width="chartWidth" :height="320" />
                 </q-card-section>
@@ -225,7 +225,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
-    import { computed, onMounted, ref, watch, reactive } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
@@ -257,7 +257,20 @@
     const alertsOpen = ref(false);
     const alertInputs = reactive<Record<string, number | null>>({});
 
+    // B9.6: chart width tracks the surrounding card so the graph extends to
+    // the card edge at every viewport size. Was hard-coded to 720, which
+    // left a gap on wide screens and overflowed on narrow ones.
+    const chartCardRef = ref<{ $el?: HTMLElement } | null>(null);
     const chartWidth = ref(720);
+    let chartResizeObserver: ResizeObserver | null = null;
+
+    function measureChart(): void {
+        const el = chartCardRef.value?.$el;
+        if (!el) return;
+        // Account for q-card-section padding (q-pa-sm ≈ 8px each side).
+        const next = Math.max(280, Math.floor(el.clientWidth) - 16);
+        if (next !== chartWidth.value) chartWidth.value = next;
+    }
 
     const filteredCandidates = computed(() => {
         const needle = filter.value.trim().toLowerCase();
@@ -366,6 +379,19 @@
         }
         void refreshSeries();
         void refreshAlerts();
+        // Wait one tick so the q-card has mounted before measuring.
+        await Promise.resolve();
+        measureChart();
+        const el = chartCardRef.value?.$el;
+        if (el && typeof ResizeObserver !== 'undefined') {
+            chartResizeObserver = new ResizeObserver(() => measureChart());
+            chartResizeObserver.observe(el);
+        }
+    });
+
+    onBeforeUnmount(() => {
+        chartResizeObserver?.disconnect();
+        chartResizeObserver = null;
     });
 </script>
 

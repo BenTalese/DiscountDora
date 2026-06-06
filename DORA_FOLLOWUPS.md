@@ -39,6 +39,104 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-032 — C-2: confirm B6 allocation works end-to-end in browser
+- **Raised:** 2026-06-06 (C-2 recon)
+- **Type:** finding
+- **What:** Backend `_hydrate_unallocated` (in `get_recipes.py`) computes
+  `unallocated_meals = max(available_meals - sum(future un-consumed
+  servings), 0)` via a single GROUP BY. The recipe palette renders the
+  result directly. On static read, B6 (allocation reduces "X unallocated
+  of Y on hand") works correctly. Original B6 report was from real usage,
+  so per the CLAUDE.md MANDATORY rule it stays `[OPEN] confirm in
+  browser` until eyeballed.
+- **Recommended resolution:** confirm in browser — cook 4 meals of a
+  recipe, drop it on two future days (2 servings each), verify palette
+  shows "(0/4)". If it doesn't, capture the response from
+  `GET /recipes?...&include=unallocated` and re-open as a real bug.
+
+## [OPEN] FU-031 — B9.3: stale "Recipes" labels after A8 cookbook rename
+- **Raised:** 2026-06-06 (B9.3 sweep)
+- **Type:** leftover
+- **What:** A8 renamed Recipes → Cookbook (`/cookbook`; `/recipes` redirects).
+  The command palette still says "Go to Recipes" → `/recipes`. Functional via
+  the redirect, but the label is now stale. Same likely in other static lists
+  (tour cards, help text). Worth a one-shot rename sweep.
+- **Recommended resolution:** opportunistic — fold into the A8 wrap-up or
+  next polish pass.
+
+## [OPEN] FU-030 — B9.9: confirm 404 page already-themed (no code change)
+- **Raised:** 2026-06-06 (B9.9; CLAUDE.md confirm-in-browser rule)
+- **Type:** finding
+- **What:** Both 404 surfaces already use tokens — `ErrorNotFound.vue`
+  uses `--surface-toolbar`/`--text-on-toolbar`; `errors/ErrorPageNotFound.vue`
+  delegates to `PageErrorState`. A1 themed them. Reported defect didn't
+  reproduce statically.
+- **Recommended resolution:** confirm in browser — hit a 404 URL (e.g.
+  `/this-route-does-not-exist`) and verify both fullscreen and in-layout
+  variants look themed (not default Quasar).
+
+## [OPEN] FU-029 — B9.4: confirm command-palette commands all trigger
+- **Raised:** 2026-06-06 (B9.4; CLAUDE.md confirm-in-browser rule)
+- **Type:** finding
+- **What:** Ctrl+K palette: every static command has a wired action.
+  `create.stock-item` navigates to `/stock?create=1` and the page already
+  watches `route.query.create`. Reported defect "doesn't trigger some
+  actions" did not reproduce in static code.
+- **Recommended resolution:** confirm in browser — open palette, run each
+  Create / Navigate / Shopping-lists / View / Help command, verify each
+  produces the intended outcome. If any really is broken, re-open as a
+  real bug with the command id.
+
+## [OPEN] FU-028 — B9.1: confirm shopping-list drag-drop ordering
+- **Raised:** 2026-06-06 (B9.1; CLAUDE.md confirm-in-browser rule)
+- **Type:** finding
+- **What:** Static walk-through (both drag-up and drag-down examples) ends
+  with the dragged item correctly placed BEFORE the target index. Backend
+  `bulk_operations.reorder_lines` sorts by `(sequence, id)`. Frontend
+  `ShoppingListDetail.onLineDrop` insertAt math
+  (`fromIdx < toIdx ? toIdx - 1 : toIdx`) is correct.
+- **Recommended resolution:** confirm in browser — reorder a few times,
+  drag both directions, drop on a row and check the dragged item lands
+  exactly where the dashed outline showed. If wrong, capture the exact
+  before/after order and we'll re-investigate.
+
+## [OPEN] FU-027 — B9.7: log-rotation model decision (timed vs size)
+- **Raised:** 2026-06-06 (B9.7)
+- **Type:** open decision
+- **What:** `dora_api/infrastructure/logging_setup.py:87` wires
+  `RotatingFileHandler` size-based at 10MB × 5 backups. The current
+  ~46k-line file is well below the 10MB trigger, so it has simply not
+  rotated yet. The user's reported symptom — "logs span the wrong date
+  range" — implies an expectation of *time-based* rotation (e.g. one
+  file per day).
+- **Decision needed:** keep size-based (and just trust the threshold), or
+  switch to `TimedRotatingFileHandler` (and pick `when` — typically
+  'midnight' for daily). Could also go hybrid (whichever fires first)
+  but Python's stdlib doesn't ship that out of the box.
+- **Recommended resolution:** decide before any other log-related work
+  (INV touches `.local` folder layout — natural pair).
+
+## [OPEN] FU-026 — B9.5: precise repro for "undo behaves oddly across surfaces"
+- **Raised:** 2026-06-06 (B9.5)
+- **Type:** finding / open verification
+- **What:** `useUndo` registry is sound (per-entry inverse closures, redo
+  stack cleared on new register, pending optimistic states). The
+  surface-level mutations (`updateStockItemAsync`) capture pre-state
+  field-by-field and register an inverse and redo closure for every
+  changed field — including expiry pushes and clears. Static read shows
+  the example flow (push expiry on dashboard → clear on detail page →
+  Ctrl-Z twice) yields the correct end states.
+  - Closest plausible "oddly" without a repro: the *originating surface*
+    (Dashboard alerts) caches its own `alerts.value` and does NOT
+    refetch after an inverse runs on another surface. So Ctrl-Z mutates
+    the store correctly, but the Dashboard renders stale state until
+    the user navigates / refreshes.
+- **Recommended resolution:** capture an exact reproduction (which
+  action on which surface in which order, what was expected, what
+  actually happened, ideally a screen recording). Then either fix the
+  staleness vector with a surface-level refetch on the affected store
+  or pick a different design.
+
 ## [OPEN] FU-025 — Eyeball A6 text scale (xl + slightly-larger default) on dense screens
 - **Raised:** 2026-06-05 (A6)
 - **Type:** finding

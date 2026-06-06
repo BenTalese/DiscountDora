@@ -1,0 +1,13 @@
+- [ ] [[🗒️ Changelog#2.0.0 🍅 Tomato|2.0.0 🍅 Tomato]]
+	- [ ] Stock Overview
+	- [ ] Stock Overview - Filters
+	- [ ] Merchant Product Search
+	- [ ] Manage a Stock Item (Basic Actions)
+- [ ] [[🗒️ Changelog#2.1.0 🥝 Kiwi|2.1.0 🥝 Kiwi]]
+	- [ ] Link a Product to a Stock Item
+	- [ ] My Products
+	- [ ] Product Offers Email
+	- [ ] User Account Management - Email Management
+- [ ] 2.2.0 🍌 Banana
+	- [ ] Shopping List Overview
+	- [ ] Manage a Shopping List

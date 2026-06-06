@@ -24,6 +24,596 @@ next.
 
 ---
 
+## 2026-06-06 — C-10 ingestion-API contract design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_INGESTION_API.md` — the Dora↔companion seam.
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated.
+
+**Context (answered the user's Qs first):** C-6/C-8 exist as briefs but are
+**companion-scope, deliberately unwritten** as Dora-core (re-scoped per Decision
+1). The ingestion API is **necessary only because of Decision 1** (extract the
+scraper into a companion); it's downstream of that call (user confirmed it
+stands). It differs from the current `POST /products` by adding machine auth,
+batching, idempotency, a `source` label, a first-class `price_observation`, and a
+conflict policy — `POST /products` is a single-item, user-session, dedupe-or-skip
+interactive save.
+
+**Decisions made / key design:**
+- **Auth:** new `IngestionSource` credential (hashed key, label, enabled, trust
+  tier) + bearer-token decorator — net-new, since `AuthToken` is email-flow only.
+- **One batched `POST /api/ingest`** with three record types (`products`,
+  `offers`, `price_observations`), each carrying a `source`; `Idempotency-Key`
+  header; per-record result DTO.
+- **Mapping:** product → shared catalogue upsert; offer → set `current_offer` +
+  append `ProductHistoricOffer` (the existing price-history log); observation →
+  personal price-history point (product or stock-item ref).
+- **`source` seam = where C-8 lands** — C-10 only stores the source string
+  (reserve the seam); the full merchant↔provider taxonomy stays C-8/companion.
+- **Multi-user:** pushed data → shared catalogue; personal price history unions it
+  with the user's own shopping-pick snapshots (INV-1). Single-user desktop: moot.
+- **Trust tier** carried now for P8-04 crowd reuse; enforcement later.
+- Boundary restated: sources call in, Dora never calls out.
+
+**Original spec:** taskboard "require an API key to hit the backend API"
+corroborates the machine-auth need; "manually add product offers" = a user-side
+share of the offer-append path; "back in stock" alert could be fed by offer pushes
+(→ C-9).
+
+**Files touched:** `docs/04_proposals/PROPOSAL_INGESTION_API.md` (new),
+`00_DOCS_INDEX.md`, `COVERAGE_GAPS.md`, this worklog.
+
+**Verification:** read the live product/offer/historic-offer/merchant/auth-token
+models + `create_product.py` + `price_history.py` + §6.6 / §7 Decision 1. Proposal
+only.
+
+**Next up:**
+- User reviews `PROPOSAL_INGESTION_API.md` — **6 open decisions §5** (price-history
+  conflict policy, sync vs async, source storage, shared-catalogue ownership, fate
+  of `POST /products`, trust enforcement).
+- **Wave-C design briefs are now ALL done** (C-1,2,3,4,5,7,9,10; C-6/C-8 are
+  companion-scope). Remaining Wave-C work: the two **C-impl plans** (shopping
+  lists, state ownership — turn existing proposals into phased plans), and an
+  optional **C-cross** brief (money/nutrition opt-ins, tag/tool taxonomy settings,
+  feature flags) referenced by C-4/C-5/C-9.
+
+**Open questions for user:** the 6 §5 decisions; whether to do the C-impl plans or
+a C-cross brief next.
+
+---
+
+## 2026-06-06 — C-9 alerts control centre design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_ALERTS.md` — maps ALERTS (L437-441) + dashboard
+  alert bullets (L57/L60).
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated; new **FU-042** (bell-count fix).
+
+**Decisions made / key design:**
+- **Found the bell-count root cause (L438):** badge = high+medium only (excludes
+  **low**) while the dropdown lists ALL severities → the "6 vs 10" the user saw is
+  the omitted lows; compounded by the badge using raw backend counts while the list
+  filters client-snoozed alerts. Fix = **one canonical "what counts" set** feeding
+  badge + bell + dashboard + page (FU-042; shippable ahead of the page).
+- **Control centre** fills the existing `AlertsPage.vue` stub: summary boxes
+  (types/counts/themes) + grouped list with **per-kind icons/styling** + manage
+  prefs in-page. This is also the **contract for the deferred dashboard card** (L60).
+- **Per-type opt-in/out + configurable thresholds** (L440) — "quiet or noisy";
+  expiring-soon window etc. currently hardcoded. Prefs hosted on the page (settings
+  deferred).
+- **New "no planned meals next week" alert** (L441) from meal-plan data.
+- **Unify context-aware subscriptions:** price "notify under" (separate today) +
+  future "back in stock" surfaced/managed centrally — centre has two tiers (active
+  alerts vs armed subscriptions).
+- **Snooze is client-side localStorage** today; recommend **server-side** (reuse
+  the `DoraSuggestionSuppression` pattern) so counts are consistent across devices.
+- Alerts-route 404 (L57) already fixed by **B5** (confirm); the page was a stub.
+
+**Original spec:** Alerts board strongly corroborates per-type config (stale-level
+window, turn-off unchanging-level warnings), expiry-reset/prompt-after-alert
+(partly built), and a "back in stock" subscription; plus system alerts (offline/
+error) as a possible separate tier (open decision 5).
+
+**Files touched:** `docs/04_proposals/PROPOSAL_ALERTS.md` (new), `00_DOCS_INDEX.md`,
+`COVERAGE_GAPS.md`, `DORA_FOLLOWUPS.md` (FU-042), this worklog.
+
+**Verification:** Explore sweep of `get_alerts.py` + `AlertsBell.vue` + dashboard
+card + `AlertsPage.vue` + price alerts; root-caused the count mismatch in code;
+cross-read ALERTS + dashboard feedback + original spec. Proposal only.
+
+**Next up:**
+- User reviews `PROPOSAL_ALERTS.md` — **5 open decisions §5** (priority/what-counts
+  model, which alerts default on, snooze server-vs-device, prefs home, system
+  alerts tier).
+- **Wave-C per-surface briefs are now ALL done** (C-1,2,3,4,5,7,9). Remaining:
+  **C-10 ingestion-API** (Dora-core backend seam; gates the companion C-6/C-8) and
+  the two **C-impl plans** (shopping lists, state ownership — proposals already
+  exist, these produce phased implementation plans). C-cross (config/opt-in
+  surfaces: money, nutrition, tag/tool taxonomies, feature flags) is referenced by
+  several proposals and may warrant its own brief.
+
+**Open questions for user:** the 5 §5 decisions; whether to do C-10, the C-impl
+plans, or a C-cross brief next.
+
+---
+
+## 2026-06-06 — C-5 onboarding design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_ONBOARDING.md` — maps ONBOARDING bullets (L24-46).
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated; new **FU-041** (first-run copy
+  confirm-in-browser).
+
+**Decisions made / key design:**
+- **Centre of gravity = a pick-and-choose starter TEMPLATE of common household
+  items** (cheese→Fridge, etc.) — the user's "worst part is getting data in" (L37).
+  Plus all/none/some default groups/locations with preview, and opt-in demo
+  recipe/meal/plan toggles (warned). Inline import (don't name Grocy; on-page not
+  nav-away).
+- **Sell the vision first** (L41/L43): short diagram/flowchart intro to the loop +
+  core values, shared auth-shell styling, BEFORE any data entry.
+- **Stock-item-vs-product explainer** (L46) before "add stock items" (milk vs
+  Vitasoy Oat Milk @ Coles).
+- **Capture headcount** (→ cook-mode C-3 serving auto-adjust) + **preferred
+  stores** (L44/L45).
+- **Admin first-login feature enable/disable** (L42) — but needs a matching
+  settings panel (settings deferred → dependency).
+- **Finish celebration** (confetti, L39) + the tour becomes a workflow/power-user
+  explainer covering MORE areas, pointing to help/guides (L40/L43).
+- **Theme** = system/pesto-light/pesto-dark only (L28); "Skip everything"→"Skip",
+  persist on finish only (L35); slim "added" list (L36).
+- **The flagged "you already have groups/locations" copy (L32/L33):** static read
+  shows it's gated on has_groups/has_locations (false on a fresh DB), so it
+  shouldn't misfire on a clean install — the user likely had dev/seed data.
+  Logged FU-041 confirm-in-browser per the MANDATORY rule.
+- Dead nav (skip/finish/show-me, L25-27) already fixed by **B5** (confirm).
+
+**Original spec:** barely covers onboarding (only "pre-defined groups/locations on
+first usage"); the rich wizard + starter-item template are newer feedback with no
+original counterpart — nothing to extract/supersede.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_ONBOARDING.md` (new),
+`00_DOCS_INDEX.md`, `COVERAGE_GAPS.md`, `DORA_FOLLOWUPS.md` (FU-041), this worklog.
+
+**Verification:** full read of `WelcomeWizard.vue` + `onboarding.py` via Explore
+(incl. the seed/pre-seeding logic for the copy question); cross-read ONBOARDING
+feedback (L24-46) + original spec. Proposal only.
+
+**Next up:**
+- User reviews `PROPOSAL_ONBOARDING.md` — **5 open decisions §5** (toggleable
+  features, starter-template contents, demo-data scope, vision depth, headcount
+  granularity).
+- Remaining Wave-C Dora-core briefs: **C-9 alerts**, **C-10 ingestion**; plus the
+  two C-impl plans (shopping lists, state ownership). C-9 is the natural next
+  per-surface brief; C-10 is the backend seam; the impl-plans turn approved
+  proposals into phased plans.
+
+**Open questions for user:** the 5 §5 decisions; which brief next.
+
+---
+
+## 2026-06-06 — C-3 cook-mode design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_COOK_MODE.md` — maps COOK MODE bullets (L317-338).
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated; new **FU-040** (structured steps
+  → C-4 dependency).
+
+**Decisions made / key design:**
+- Cook mode is already feature-rich (timer, voice/TTS, B8 session swaps). The
+  redesign targets the weak spots:
+- **Finish flow = close the loop (highest value):** replace the blunt "update
+  everything" toggle with a **per-item stock-level checklist** (set any level) +
+  **per-item add-to-list** (C-7), meals-cooked **starts at 0/optional**,
+  click-out cancels (A3), and a **celebration / "you saved N meals"** finish.
+- **Serving auto-adjust by headcount** (default from onboarding C-5, per-session,
+  scales quantities).
+- **Ingredients grouped by base location**; stock level **de-emphasised mid-cook**
+  (only relevant at finish, L334); UI rebuilt.
+- **Highlight instead of tick** (remove ticking) — but reliable highlighting needs
+  **structured steps**, which is a C-4 recipe-model change (FU-040).
+- **Tools per step** (C-4), **sub-steps + per-step hints** (structured steps),
+  **timer** theme-aware + sound + fill-bar + visible reset, **unit formatting**
+  inclusion list ("200ml" vs "2 scoops"), **sous-chef** voice branding/discovery.
+- B8 session swaps kept as-is (correct).
+
+**Original spec consulted:** the cook-mode note ("interactive mode with TTS, voice
+'next step', timers") matches what's already built — §2 just polishes it; location-
+grouping note grounds §2.3. No superseded items.
+
+**Key dependency surfaced (FU-040):** the recipe model stores instructions as a
+freeform blob; cook mode's per-step highlighting/tools/hints/timers all need
+**structured steps** — that model change belongs in C-4.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_COOK_MODE.md` (new),
+`00_DOCS_INDEX.md`, `COVERAGE_GAPS.md`, `DORA_FOLLOWUPS.md` (FU-040), this worklog.
+
+**Verification:** full read of `RecipeCookMode.vue` + cook endpoint via Explore;
+cross-read COOK MODE feedback (L317-338) + original spec. Proposal only.
+
+**Next up:**
+- User reviews `PROPOSAL_COOK_MODE.md` — **5 open decisions §5** (ticking removal,
+  structured-steps model, unit inclusion list, scaling display, finish-flow level
+  controls).
+- Remaining Wave-C Dora-core briefs: **C-5 onboarding**, **C-9 alerts**, **C-10
+  ingestion**; plus the two C-impl plans (shopping lists, state ownership).
+- Note: C-3, C-4, and C-1 all now point at recipe-model / cross-cutting work; a
+  good moment soon to consider the C-impl plans or C-cross (config/opt-ins).
+
+**Open questions for user:** the 5 §5 decisions; which brief next.
+
+---
+
+## 2026-06-06 — C-4 cookbook design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_COOKBOOK.md` — recipe-domain redesign covering
+  all RECIPES OVERVIEW + RECIPE DETAIL bullets (L228-315).
+- `00_DOCS_INDEX.md` + `COVERAGE_GAPS.md` updated; new **FU-039** (Recipe.image).
+
+**Decisions made / key design:**
+- **Tag taxonomy overhaul (the big one):** dietary tags → ONE filter cycling
+  must/must-not/neutral (+/−/grey, no-close); cuisine & category → single-select
+  each, NOT lumped, NOT "tags"; all taxonomies user-configurable in settings
+  (C-cross).
+- **Comparison → CUT** per INV-6; fold removal into the same chunk that adds the
+  sort/filter axes it was standing in for.
+- **Versions** replace Duplicate (original spec confirms intent: keep revisions
+  without a separate recipe). Proposed full-snapshot + current-pointer.
+- **Multi-part:** recommend **sections-first** (within one recipe) over linked
+  sub-recipes (which ripple into cookability/allocation/cost) — open decision.
+- **Images** (wire up dead `Recipe.image`, FU-039), **tools-required**
+  (configurable + filter), **source** as its own field (stop dumping into
+  instructions), **importer** site guidance + import-from-overview.
+- **Cost estimate** (opt-in, product/history-fed, → meal-plan/shopping budgets)
+  and **nutrition tiers off/simple/complex** — both gated by the money/nutrition
+  opt-ins (C-cross); recommend off+simple nutrition now, complex later.
+- **Card:** image, editable in-stock count + allocated box (red if avail<alloc,
+  only shown when allocations exist), actions on card, ditch ⋮, fix collection
+  grouping visibility.
+- **Detail cleanup:** empty-ingredient validation (L290), filterable stock-item
+  picker, editable-title consistency, buttons across top, log-cook into toolbar,
+  "meals on hand"→"available meals", personal recipe notes shown in cook mode.
+- Heavy cross-cutting overlap mapped to A1/A3/A4/A8/B3/B8/C-7/C-cross/C-2 rather
+  than re-litigated here.
+
+**Original spec consulted:** grounded the versions feature + rationale (the
+"original feature notes" L312 cites); confirmed comparison's aspiration is now
+served by sort/filter (so CUT stands); **superseded** the old markdown-file
+storage idea (current DB model needed for cost/nutrition/allocation).
+
+**Files touched:** `docs/04_proposals/PROPOSAL_COOKBOOK.md` (new),
+`00_DOCS_INDEX.md`, `COVERAGE_GAPS.md`, `DORA_FOLLOWUPS.md` (FU-039), this worklog.
+
+**Verification:** Explore sweep of the recipe domain (overview/detail/edit/model/
+DTO/tags/allocation/import); cross-read all recipe feedback (L228-315) + original
+spec Recipes board & notes; INV-6 CUT decision applied. Proposal only.
+
+**Next up:**
+- User reviews `PROPOSAL_COOKBOOK.md` — esp. the **6 open decisions §5**
+  (cuisine-vs-category, versions UX, multi-part model, nutrition scope, cost
+  estimate acceptability, substitute-status).
+- Remaining Wave-C Dora-core briefs: **C-3 cook mode** (now unblocked — consumes
+  C-4 tools/versions/notes/location-grouping), C-5 onboarding, C-9 alerts,
+  C-10 ingestion; plus the two C-impl plans.
+
+**Open questions for user:** the 6 §5 decisions; which brief next (C-3 is the
+natural follow-on).
+
+---
+
+## 2026-06-06 — C-1 stock-overview design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_STOCK_OVERVIEW.md` — full redesign covering all
+  37 STOCK OVERVIEW feedback bullets (L63-99).
+- `COVERAGE_GAPS.md` + `00_DOCS_INDEX.md` updated (C-1 + C-7 proposals listed).
+
+**Decisions made / key design:**
+- **Kill the chip** (L75); rebuild the row: **stock-level button first, big,
+  coloured, text-less = the focus action** (L70), replacing BOTH the chip avatar
+  and the duplicate right-side level dropdown. Name emphasised; right cluster =
+  expiry + planned-meals + cart. Removes badge/red-dot/on-N-lists/⋮/in-chip-cart.
+- **Highlighting rules:** status → whole-row outline; selection → row **fill**
+  (L91, avoids colour clash); essential is a filter, not a row dot (L66/L82).
+- **Nav model (the #1 open decision):** proposed desktop drawer + mobile full-page,
+  shared detail component; flagged the L68-vs-L71 wording tension + miss-tap risk
+  for the user to confirm.
+- **Expiry:** date-picker when unset, +1/+7/+14/clear when set (L87/L88).
+- **Top area:** all buttons grouped; filter panel hidden behind a toggle (desktop
+  too); search separate + shorter placeholder; stock-level filter → dropdown w/o
+  counts; remove "used in recipe" filter; counts → sticky footer (A7).
+- **Scan mode** (action-then-scan) — proposed unifying with stocktake (open Q).
+- **"# recipes" → "# upcoming planned meals"** — gated on C-2 allocation.
+- **Correctness prerequisites folded in:** the 50-item cap (FU-035) and
+  filtered-export (L67) must be fixed with the redesign.
+- **Original spec consulted** (per the new rule): corroborated the coloured
+  level-button shape, the bottom summary panel, the missing-picture placeholder,
+  long-press multi-select; and **superseded** column-header sorting (the author
+  archived it — "it's a list view now, controlled by filters").
+
+**Ripple/deps noted:** cart → C-7; chip removal app-wide → follow-up; location
+display → C-cross; planned-meals → C-2; images → FU-033; detail component shared
+with the stock-detail surface.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (new),
+`COVERAGE_GAPS.md`, `00_DOCS_INDEX.md`, this worklog.
+
+**Verification:** Explore sweep of the live overview/row/chip/filters; cross-read
+all STOCK OVERVIEW feedback (L63-99) and the original-spec Stock Items board +
+notes. Proposal only — nothing built/run.
+
+**Next up:**
+- User reviews `PROPOSAL_STOCK_OVERVIEW.md` — esp. the **7 open decisions §7**
+  (nav model, miss-tap, open/in-use toggle, scan-vs-stocktake, planned-meals
+  fallback, outline palette, 50-cap fix approach).
+- Remaining Wave-C Dora-core briefs: C-3 cook mode, C-4 cookbook, C-5 onboarding,
+  C-9 alerts, C-10 ingestion; plus the two C-impl plans.
+
+**Open questions for user:** the 7 §7 decisions; which brief next.
+
+---
+
+## 2026-06-06 — Original spec wired in + cart-button extractions
+**Status:** complete (docs/governance — no app code)
+**What changed:**
+- User added their **first-ever project spec** under `docs/00_original_spec/`
+  (Feature Boards + ~125 "I can…" Feature Notes + original PROMPT_PLAN, etc.),
+  pre-dating this branch's ~100k LOC.
+- Referenced it meaningfully (NOT as an override): new section in
+  `docs/00_DOCS_INDEX.md`; folder + cross-check rule added to `CLAUDE.md`
+  (skim the matching board/notes when writing a brief; extract tagged
+  keep/consider/superseded; it never auto-overrides the charter/feedback).
+- **Extracted cart-button items into `PROPOSAL_CART_BUTTON.md §9`** (new "From
+  the original spec" section + §9.1 remove path):
+  - **keep (gap!):** the button is also the **remove** affordance — added a
+    symmetric multi-list remove (remove-from-this / remove-from-all). The brief
+    had only designed add.
+  - **keep:** list picker's last row = "+ New list" (unifies add-to-existing /
+    add-new; aligns L382).
+  - **consider:** swipe-right → list picker (+ success animation) — new open
+    decision §7.7.
+  - **keep (corroborates):** standalone product uses the same button; cheapest-
+    highlighted rationale.
+  - **superseded:** auto-create-stock-item-on-product-add (user's own later note
+    + L191 say products/stock-items are separate); stored "primary/default list"
+    (replaced by DRAFT-count inference).
+  - **cross-ref:** the picture-fallback note corroborates `StockItem.image`
+    intent (INV-1 / FU-033) — noted on FU-033.
+
+**Decisions made:**
+- Original spec is **historical, non-authoritative**; charter/feedback/reconciled
+  plan win where they disagree. Future briefs consult it per the new CLAUDE.md
+  rule; `PROPOSAL_CART_BUTTON.md §9` is the reference shape.
+- The most material extraction was the **remove path** — a genuine gap in the
+  C-7 brief, now folded in.
+
+**Files touched:** `docs/00_DOCS_INDEX.md`, `CLAUDE.md`,
+`docs/04_proposals/PROPOSAL_CART_BUTTON.md` (§9 + §7.7), `DORA_FOLLOWUPS.md`
+(FU-033 note), this worklog.
+
+**Verification:** read the cart-relevant original notes directly; reconciled each
+against the current design before tagging. No code touched.
+
+**Next up:** same as the C-7 entry below — user reviews the cart proposal (now incl.
+§9 + the remove path + the swipe open-decision), then picks the next Wave-C brief.
+
+---
+
+## 2026-06-06 — C-7 cart-button design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_CART_BUTTON.md` — unified add-to-list button,
+  decision tree, products-without-stock-items model change, feedback coverage.
+- `docs/02_feedback/COVERAGE_GAPS.md` Bucket D updated (cart/standalone bullets
+  now covered by the proposal).
+
+**Decisions made / key findings:**
+- Mapped **~13 add-to-list controls** across the app (full table in the
+  proposal). Two paradigms: blind quick-add-to-primary (11 of 13) vs multi-step.
+- **Core design = two orthogonal axes:** Axis A "what line" (0/1/2+ linked
+  products → none / pre-select / choice modal; or standalone product), Axis B
+  "which list" (adopt `SHOPPING_LIST_REDESIGN §2.4` DRAFT-count inference, no
+  stored primary). Combine into ONE modal when both ambiguous; 0 prompts in the
+  common case.
+- **Critical structural finding:** shopping-list lines currently REQUIRE a
+  `stock_item_id` — products can't be added standalone, directly contradicting the
+  My Products requirement (L191). Proposal adds nullable `product_id` line
+  anchoring + the 4 nesting/cascade rules from L191. This is the heavy rock.
+- **State-awareness fix:** generalise `cartStateFor`; clicking an already-on item
+  becomes idempotent w/ a popover (Add-to-another / Remove), killing the
+  contradictory double-toast (L154).
+- **Sequencing:** ship the state-aware button against a temporary `is_primary`
+  adapter first; flip Axis B to draft-counting when the shopping-list status model
+  lands; do the standalone-product migration as a later phase. C-1 should consume
+  this component, not define its own.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_CART_BUTTON.md` (new),
+`docs/02_feedback/COVERAGE_GAPS.md`, this worklog.
+
+**Verification:**
+- Mapped surfaces via an Explore sweep; cross-checked the load-bearing claim
+  (lines require `stock_item_id`) against `shoppingListApiService.ts` AddLineCommand
+  + the line model. Read `SHOPPING_LIST_REDESIGN_PROPOSAL.md` for Axis-B alignment
+  and the actual feedback bullets (L83-84,108,130,154,191,195-196,288,380-382).
+- Proposal only — nothing built or run.
+
+**Next up:**
+- **User reviews `PROPOSAL_CART_BUTTON.md`** — esp. the 6 open decisions in §7
+  (already-on-list click behaviour; >1-product silent vs modal; standalone-product
+  line model; session-default scope; quantity; bulk reporting).
+- Then continue Wave C. User picked C-7 first; remaining Dora-core briefs:
+  C-1 stock overview, C-3 cook mode, C-4 cookbook, C-5 onboarding, C-9 alerts,
+  C-10 ingestion API; plus the two C-impl plans (shopping lists, state ownership).
+
+**Open questions for user:** the 6 §7 decisions, and which Wave C brief next.
+
+---
+
+## 2026-06-06 — INV-5, INV-7, INV-8, INV-9, INV-10 (remaining INV)
+**Status:** complete (5 memos; **no code changes**) — INV series now fully done.
+**What changed:**
+- New `docs/05_investigations/FEATURE_CLARIFICATIONS.md` (INV-5)
+- New `docs/05_investigations/HISTORY_TAB_ASSESSMENT.md` (INV-7)
+- New `docs/05_investigations/SUBSTITUTE_SWAP_ASSESSMENT.md` (INV-8)
+- New `docs/05_investigations/COMMAND_PALETTE_ASSESSMENT.md` (INV-9)
+- New `docs/05_investigations/ESSENTIAL_FLAG_FINDINGS.md` (INV-10)
+
+**Decisions made / key findings:**
+- **INV-5:** (a) QR show+print and register-barcode (scan-to-jump) are **two
+  distinct kept features, not redundant** — and register-barcode is NOT the
+  removed P6-02 (that was barcodes for *deal lookup*; this lookup resolves to a
+  stock item to open, verified `barcodes.py:350-401`). Clarify labels. (b)
+  Relevancy = naive fuzzywuzzy token-overlap, threshold 70 — keep + document.
+  (c) expiry & open are fully independent (no derivation) — keep + add tooltip.
+- **INV-7:** History tab = level-changes-only, no context/action. **REWORK** —
+  merge waste events + list-add provenance + open/checked context (all already
+  in the model) into the timeline. Not cut (loses the only home for item
+  history), not keep-as-is (weak).
+- **INV-8:** List-level substitute swap works but is buried in the full-list menu
+  and mispositioned vs the real in-shop moment; collides with Shop Mode's
+  offer-"Substitute". **REWORK** (move into Shop Mode + disambiguate), cut only
+  if confirmed unused. Distinct from B8 cook-mode ephemeral swap (no overlap).
+- **INV-9:** Palette = 18 static commands (13 redundant nav) + a valuable but
+  *hidden* entity search. No usage telemetry. **SHRINK** command set **+ PROMOTE**
+  entity search to a visible global bar. Confirmed FU-031 stale "Recipes" labels.
+- **INV-10:** "Essential" = existing `is_flagged` — there's **no missing
+  feature**, just a labelling gap: the detail toggle reads "Always include in
+  auto-generated lists," never "Essential." **Rename it** + add a stock-overview
+  quick-toggle; keep the primitive explicit (don't auto-derive). Verified
+  `essentials_only_for_low` reads `is_flagged` (`auto_generate.py:80-82`).
+
+**Files touched:** the 5 new memos + this worklog + `DORA_FOLLOWUPS.md`.
+
+**Verification:**
+- Spot-verified the two most load-bearing claims against live code (not just
+  sub-agents): INV-10 `is_flagged`==essential + toggle label
+  (`StockItemDetailPage.vue:205-220`, `auto_generate.py:80-82`), and INV-5
+  barcode-lookup purpose (`barcodes.py:350-401` → resolves to stock_item, NOT
+  deal lookup) — corrected a sub-agent overstatement that register-barcode is
+  "scheduled for deletion."
+- Not run in the browser — read-only.
+
+**Next up:**
+- **INV series complete (1–10).** User reviews the 5 memos + decides per-item:
+  - INV-5: approve label clarifications (QR/scan grouping; help text; tooltip)?
+  - INV-7: schedule the History-tab rework, or defer to a detail-polish chunk?
+  - INV-8: rework into Shop Mode vs cut — confirm Shop Mode "Substitute"==offer-only in browser first.
+  - INV-9: shrink+promote vs keep-as-is? (fold FU-031 rename in either way)
+  - INV-10: approve rename + overview quick-toggle.
+- Per the master sequencing, after INV the next wave is **Wave C** big-rock
+  design briefs (`docs/03_prompts/00_INDEX.md`). Several INV outcomes feed C
+  briefs (INV-6→C-4 Cookbook; INV-7/8/10 → stock-item & shopping-list briefs).
+
+**Open questions for user:** see Next up — one decision per INV, plus whether to
+start Wave C next.
+
+---
+
+## 2026-06-06 — INV-2, INV-3, INV-4 (perf / logging / email)
+**Status:** complete (3 memos; **no code changes**)
+**What changed:**
+- New `docs/05_investigations/STOCK_OVERVIEW_PERF.md` (INV-2)
+- New `docs/05_investigations/LOGGING_AND_DATA_LAYOUT.md` (INV-3)
+- New `docs/05_investigations/EMAIL_SETUP_FINDINGS.md` (INV-4)
+
+**Decisions made / key findings (several CORRECT the original premises):**
+- **INV-2:** The overview does **not** "load all 500 items" — the opposite. The
+  frontend (`stockItemStore.ts:48`) fetches only **page 1 (≤50 items)** and never
+  loops, so pantries >50 items silently drop the rest. **New correctness bug**
+  (FU-035). Real mount cost = 8 parallel requests + per-row O(N) recipe/membership
+  lookups, not list size. DS4 didn't speed anything up — it added fade/slide/hover
+  motion that masks unchanged latency (perceived-perf, confirmed). Fixes: lift the
+  50-cap, defer secondary loads, prebuild lookup maps; server-side aggregation is
+  the bigger play.
+- **INV-3:** Rotation IS configured but **size-based** (`RotatingFileHandler`,
+  10 MB × 5) — a low-volume install never trips 10 MB, so one append-mode file
+  grows across all days/restarts → the "46k-line wrong-date" symptom (= FU-027).
+  Fix: switch to `TimedRotatingFileHandler` (midnight, ~14 backups). "Two
+  locations" = stdout+file handlers + dev `./data/logs` vs desktop `user_log_dir`.
+  **No `.local` folder exists** — the split is `data/` (persistent) vs `cache/`
+  (regenerable) + desktop platformdirs; recommend keeping as-is.
+- **INV-4:** Reset email **works out-of-the-box** — with SMTP env vars it sends;
+  without, it runs **dry-run** and logs the reset link (deliberate, for
+  self-hosted/desktop). No UI to configure SMTP today (env-var only). Proposed:
+  extend the existing `AppSetting` singleton with SMTP fields + a SystemSettings
+  section, add an `email_sender_configured` capability, hide the forgot-password
+  link when unconfigured. Open Q: does dry-run count as "configured"?
+
+**Files touched:** the three new memos + this worklog + `DORA_FOLLOWUPS.md`
+(FU-035 raised; FU-027 referenced).
+
+**Verification:**
+- Spot-verified the premise-correcting claims against live code, not just the
+  sub-agents: `email_sender.py` dry-run branch, `logging_setup.py` rotation
+  config, `get_stock_items.py` `.paginate()`, `query_options.py` DEFAULT_LIMIT=50
+  / MAX_LIMIT=500, and `stockItemStore.ts:48` taking only `page.items`.
+- Not run in the browser — read-only investigations.
+
+**Next up:**
+- User reviews the three memos. Decisions:
+  1. INV-2: how to fix the 50-item cap (quick `?limit=500` vs paging vs
+     virtualised infinite-scroll)? Schedule the perf fixes?
+  2. INV-3: approve switch to time-based log rotation (resolves FU-027)?
+  3. INV-4: approve the phased email-setup plan; answer the dry-run "counts as
+     configured?" question.
+- Remaining INV: INV-5 (QR/barcode/relevancy clarifications), INV-7..10.
+
+**Open questions for user:** see Next up (one decision per INV).
+
+---
+
+## 2026-06-06 — INV-1 (orphaned-field audit)
+**Status:** complete (memo only; **no code changes**)
+**What changed:**
+- New `docs/05_investigations/ORPHANED_FIELDS_AUDIT.md`.
+  Full sweep of all entities against DTOs and frontend refs.
+
+**Decisions made:**
+- **Two unfinished features found (NOT dead — user corrected this):**
+  - `StockItem.image` — supposed to support an own image, with a fallback to a
+    *linked product's* image when no own image is set. Neither half was built.
+    Recommend **WIRE UP** (storage column already exists).
+  - `StockItemSubstitute.notes` — supposed to capture *how* to substitute, e.g.
+    "X butter can be replaced with Y amount of olive oil". Column exists (added
+    in the undirected-refactor migration) but hardcoded to `None`, never in DTO
+    or UI. Recommend **WIRE UP**, fits B8 cook-mode swap especially.
+- **Two backend-only fields (intentional design, not bugs):**
+  - `ShoppingListLine.picked_offer_price` and `list_price_at_pick` — used by
+    budget, reports, waste, assistant but deliberately absent from the DTO.
+    Recommend documenting with a comment; no structural fix needed.
+- All user-flagged topics (stock groups, notes, preferred merchant, nutrition)
+  turned out to be fully wired — no surprises there.
+- No structured nutrition columns exist anywhere — only `Recipe.nutrition`
+  (freeform string), which is fully surfaced.
+
+**Files touched:**
+- `docs/05_investigations/ORPHANED_FIELDS_AUDIT.md` (new)
+- `DORA_WORKLOG.md` (this entry)
+
+**Verification:**
+- Read all entity files under `dora_api/domain/entities/`.
+- Grepped `web_app/src/` for every suspect field (snake_case + camelCase).
+- Checked `table_mappings.py`, all relevant feature handlers, and the
+  budget / reports / waste / assistant files for invisible backend use.
+- Not run in the browser — read-only investigation.
+
+**Next up:**
+- User reviews the memo. Key decisions:
+  1. `StockItem.image` + `StockItemSubstitute.notes` are wire-up jobs (user
+     confirmed both are intended-but-unbuilt). Need to schedule them — image
+     likely its own prompt; substitute-notes folds into INV-8 / B8 cook-mode.
+  2. Happy with "document only" for the two snapshot fields?
+- Continue INV series: INV-2 (stock-overview perf), INV-3 (logging layout),
+  INV-4 (forgot-password email), INV-5 (QR/barcode/relevancy clarifications),
+  or jump to INV-7..10.
+
+**Open questions for user:**
+- Schedule the two wire-up jobs now or defer (FU-033 image, FU-034 sub-notes)?
+- Which INV next?
+
+---
+
 ## 2026-06-06 — INV-6 (recipe-comparison worth assessment)
 **Status:** complete (memo only; **no code changes**)
 **What changed:**

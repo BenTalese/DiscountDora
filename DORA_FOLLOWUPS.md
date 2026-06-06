@@ -39,6 +39,154 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-042 — Alerts bell count ≠ list count (badge excludes low + ignores snooze)
+- **Raised:** 2026-06-06 (C-9 brief; feedback L438)
+- **Type:** finding (reported bug — root cause found statically)
+- **What:** The bell badge shows fewer than the dropdown lists ("I see 6, the bell
+  shows 10"). Two causes: (1) badge = `high_count + medium_count` (`alertStore:99`)
+  — it **excludes low-severity**, but the list shows all severities; (2) the badge
+  uses raw backend counts while the list filters **client-snoozed** alerts
+  (`alertStore:81`), so snoozing shrinks the list but not the badge.
+- **Why open:** real reported bug; fixable independently of the full C-9 page.
+- **Recommended resolution:** define ONE "what counts" set (C-9 §2.3) and derive
+  the badge, bell list, dashboard card, and page from it — badge number must equal
+  the count of items in its tier, and snooze must apply everywhere. Confirm in
+  browser after. Can ship ahead of the control-centre page.
+
+## [OPEN] FU-041 — Onboarding "you already have groups/locations" copy on first-run
+- **Raised:** 2026-06-06 (C-5 brief; feedback L32/L33)
+- **Type:** finding (reported defect — didn't reproduce statically)
+- **What:** User reported the seed step says "You already have some groups set
+  up…" / "You already have locations…" during *first-time* setup. Static read
+  shows that copy is gated on `has_groups`/`has_locations` (`onboarding.py:94-117`,
+  `WelcomeWizard.vue:161-172,195-205`), which are false on a truly-empty DB — so it
+  shouldn't render on a clean install. The user likely had dev/seed data or a prior
+  seed run. No migration pre-creates *user* groups/locations (confirmed).
+- **Why open:** the report came from real usage; a static read isn't proof.
+- **Recommended resolution:** **confirm in browser** on a genuinely fresh DB
+  (register first user → onboarding) that the "already have" copy does NOT appear
+  and the seed checkboxes are enabled. If it DOES appear, find what's seeding user
+  groups/locations and fix. Folded into the C-5 §2.6 design either way.
+
+## [OPEN] FU-040 — C-4 should model structured recipe steps (C-3 depends on it)
+- **Raised:** 2026-06-06 (C-3 brief)
+- **Type:** follow-up (design dependency)
+- **What:** Recipe instructions are a freeform text blob (`recipe.py` instructions;
+  cook mode splits on newlines, `RecipeCookMode.vue:356-363`). Cook mode's richer
+  per-step features — reliable ingredient highlighting (instead of fragile
+  text-match), per-step tools, per-step hints, per-step timers — all need
+  **structured steps** (step = text + optional sub-steps + hint + the
+  ingredients/tools it uses). This is a recipe-model change that belongs in **C-4**
+  (adjacent to its multi-part "sections"), not cook mode.
+- **Why deferred:** C-3 is a proposal; the model change is C-4's to own. Flagged so
+  C-4 picks it up if/when revisited.
+- **Recommended resolution:** fold a structured-steps model into the C-4 design
+  (it's listed as C-3 open decision 2 and cross-ref'd in `PROPOSAL_COOK_MODE.md
+  §2.6`). Cook mode degrades gracefully to freeform if a recipe has no structure.
+
+## [OPEN] FU-039 — Wire up `Recipe.image` (parallels StockItem.image)
+- **Raised:** 2026-06-06 (C-4 brief)
+- **Type:** deferred job
+- **What:** `Recipe.image` (bytes) exists on the entity but is never displayed,
+  edited, or uploaded — a dead field, same pattern as `StockItem.image` (FU-033).
+  C-4 (L249 "recipes should have an image") wires it up: upload + display on card
+  and detail + missing-image placeholder.
+- **Why deferred:** part of the C-4 Cookbook redesign; needs the image-handling
+  decisions (size limits, formats) resolved with the StockItem.image work for
+  consistency.
+- **Recommended resolution:** during C-4 implementation; share the image
+  upload/storage approach with FU-033 (StockItem.image) so there's one mechanism.
+  See [[stockitem-image-substitute-notes-intent]].
+
+## [OPEN] FU-038 — Cart button fires contradictory double-toast on already-on-list
+- **Raised:** 2026-06-06 (C-7 brief; feedback L154)
+- **Type:** finding (reported bug)
+- **What:** Adding an already-listed item shows two toasts at once — "0 added, 1
+  already on list" AND "<item> added to your primary list" (feedback L154). The
+  `addToList` path (`useStockItemActions.ts:38-64`) and a caller both notify. The
+  C-7 proposal makes the button idempotent/state-aware, but this double-toast can
+  be fixed independently and sooner.
+- **Why deferred:** C-7 is a proposal (no code). The full state-aware button is a
+  bigger build; the toast dedupe is a small standalone fix.
+- **Recommended resolution:** opportunistic / quick win — dedupe to one toast in
+  `addToList`; confirm in browser. Or fold into C-7 implementation phase 1.
+
+## [OPEN] FU-037 — `.secret_key` hardcoded to `./data/`, ignores DORA_DATA_DIR
+- **Raised:** 2026-06-06 (INV-3 re-verification)
+- **Type:** finding (latent bug)
+- **What:** `dora_api/app.py:23` resolves the session-secret file as
+  `Path('data') / '.secret_key'` — a literal CWD-relative path, NOT
+  `DORA_CONFIG.get_data_dir()`. Everything else (DB, config, uploads, logs)
+  honours `DORA_DATA_DIR`. So on the desktop app (data dir =
+  `%LOCALAPPDATA%\BenTalese\Dora`) the secret key instead writes to `./data/`
+  relative to the launch CWD.
+- **Why it matters:** the secret escapes the configured/backed-up data dir; it's
+  CWD-dependent, so launching from a different folder regenerates it and silently
+  invalidates all existing session cookies (everyone logged out). Found via
+  static read; not yet observed at runtime.
+- **Recommended resolution:** now/soon — change to resolve via
+  `DORA_CONFIG.get_data_dir() / '.secret_key'`. Low-risk one-liner. Confirm in
+  browser/desktop that sessions persist across a restart from a different CWD.
+
+## [OPEN] FU-036 — Confirm Shop Mode "Substitute" swaps offer-only (gates INV-8)
+- **Raised:** 2026-06-06 (INV-8)
+- **Type:** finding
+- **What:** Static read says Shop Mode's "Substitute" button
+  (`ShoppingListShopMode.vue:176-182`) swaps the **merchant offer**, while the
+  permanent stock-item substitute swap lives in the full-list per-line menu
+  (`ShoppingListDetail.vue:756-763`). INV-8's "rework into Shop Mode" recommendation
+  depends on this being true.
+- **Why deferred:** INV is investigation-only; needs runtime confirmation.
+- **Recommended resolution:** confirm in browser — in Shop Mode, tap "Substitute"
+  on a line and verify it changes the offer/merchant (not the stock item). If it
+  actually swaps the item, INV-8's recommendation changes.
+
+## [OPEN] FU-035 — Stock overview silently shows only the first 50 items
+- **Raised:** 2026-06-06 (INV-2)
+- **Type:** finding (likely real bug)
+- **What:** `stockItemStore.getStockItemsAsync` (`stockItemStore.ts:48`) calls
+  `getAllAsync()` → `GET /stock-items` with no query string. Backend defaults to
+  page 1, `DEFAULT_LIMIT = 50` (`query_options.py:24`; `MAX_LIMIT = 500`). The
+  store takes `page.items` and never reads `page.total` or loops further pages —
+  so a pantry with >50 items shows only the first 50 (alphabetically). Filters
+  and counts operate on the truncated set. Found via static read.
+- **Why deferred:** INV-2 is investigation-only; this is a code fix.
+- **Recommended resolution:** confirm in browser (create >50 stock items, check
+  the overview shows them all), then fix — cheapest is requesting `?limit=500`;
+  better long-term is paging or virtualised infinite-scroll. See
+  `STOCK_OVERVIEW_PERF.md`.
+
+## [OPEN] FU-034 — Wire up `StockItemSubstitute.notes` (substitution notes)
+- **Raised:** 2026-06-06 (INV-1)
+- **Type:** deferred job
+- **What:** `StockItemSubstitute.notes` column exists (added in the
+  `c8a1d3b6e9f4` undirected-refactor migration) but was never wired up.
+  `add_substitute.py:66` hardcodes `notes=None`; absent from `SubstituteDto`;
+  zero frontend references. **Intended feature** (user confirmed): notes should
+  capture *how* to substitute, e.g. "X butter → Y amount of olive oil".
+- **Why deferred:** wire-up work, not no-regret; best done with the substitute
+  surface so the note shows where it's useful (incl. B8 cook-mode swap).
+- **Recommended resolution:** later — fold into **INV-8** (substitute
+  swap-into-list assessment) or **B8** cook-mode temporary-swap work.
+
+## [OPEN] FU-033 — Wire up `StockItem.image` (own image + product fallback)
+- **Raised:** 2026-06-06 (INV-1)
+- **Type:** deferred job
+- **What:** `StockItem.image` (LargeBinary) exists but is always set to `None`
+  (`create_stock_item.py:84`), never returned in any DTO, no frontend.
+  **Intended feature** (user confirmed): a stock item should carry its own
+  image, and when it has none but a *linked product* has an image, fall back to
+  the product's image. Neither half is built.
+- **Why deferred:** it's a feature (upload + fallback + display), not a clean-up.
+  Needs design Qs resolved first (precedence, size limits, list-view display).
+- **Recommended resolution:** later — its own prompt, or a stock-item-detail
+  polish chunk.
+- **State note:** 2026-06-06 — corroborated by the original spec note
+  *"When I link a product to a stock item, if the stock item has no picture it
+  takes the product's picture automatically… otherwise a 'no pic' fallback"*
+  (`docs/00_original_spec/Feature Notes/`). Confirms own-image + product-image
+  fallback is a designed feature, not dead code. Still `[OPEN]`.
+
 ## [OPEN] FU-032 — C-2: confirm B6 allocation works end-to-end in browser
 - **Raised:** 2026-06-06 (C-2 recon)
 - **Type:** finding
@@ -115,6 +263,17 @@ long session summary. Distinct from the other two logs:
   but Python's stdlib doesn't ship that out of the box.
 - **Recommended resolution:** decide before any other log-related work
   (INV touches `.local` folder layout — natural pair).
+- **State note:** 2026-06-06 (INV-3) — root cause confirmed and a concrete
+  recommendation written in `docs/05_investigations/LOGGING_AND_DATA_LAYOUT.md`
+  (switch to `TimedRotatingFileHandler`, midnight, ~14 backups; keep `data/` +
+  `cache/` split; no `.local` folder exists). Still `[OPEN]` pending the
+  user's go-ahead to implement.
+- **State note:** 2026-06-06 (post re-verification) — user asked whether the
+  folder layout was actually verified; it was NOT originally (code-resolved paths
+  described as if observed). Re-read the resolver directly: layout is less clean
+  than first stated — `.secret_key` hardcoded escape (FU-037) + dev-vs-desktop
+  log-nesting difference. On-disk confirmation still pending (app never run on
+  this checkout); checklist added to the memo.
 
 ## [OPEN] FU-026 — B9.5: precise repro for "undo behaves oddly across surfaces"
 - **Raised:** 2026-06-06 (B9.5)

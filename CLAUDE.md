@@ -29,6 +29,12 @@ To keep handoffs clean:
    - `docs/05_investigations/` — outputs of INV prompts + ad-hoc audits.
    - `docs/06_legacy_prompt_plans/` — original `PROMPT_PLAN_PART_*`
      (historical reference; the active set lives in `03_prompts/`).
+   - `docs/00_original_spec/` — the author's **very first spec** (Feature
+     Boards + ~125 "I can …" Feature Notes + original PROMPT_PLAN), written
+     *before* this branch's ~100k LOC. **Historical, NOT authoritative** — it
+     pre-dates the charter/feedback, so where it disagrees, those win; it never
+     auto-overrides. Mine it for dropped intent, half-built features, or a
+     cleaner original framing — see the cross-check rule below.
    - `docs/99_scratch/` — raw notes awaiting triage.
 
    Read from there directly — don't search the filesystem and don't
@@ -124,6 +130,19 @@ the app.
 A proposal without this table is incomplete. Open
 `docs/02_feedback/COVERAGE_GAPS.md` after writing one to flip any
 bullets that now have a home from gap → covered.
+
+## Consulting the original spec — for briefs/investigations
+
+When a brief, proposal, or investigation targets a specific surface, **also skim
+the matching Feature Board / Feature Notes under `docs/00_original_spec/`** for
+that surface (it's the author's first spec, pre-~100k-LOC). It is **historical
+and non-authoritative** — the charter, reconciled plan, and current feedback
+override it, and it never silently changes a decision. Use it only to *extract*
+dropped intent, half-built features, or a cleaner original framing. When you do
+pull something in, add it to the doc in its own clearly-labelled section, tagged
+**keep / consider / superseded**, noting how old the source is. The reference
+shape is `PROPOSAL_CART_BUTTON.md §9` ("From the original spec"). If nothing
+there is worth extracting, that's fine — no section needed.
 
 ## Removed features — do not reintroduce
 

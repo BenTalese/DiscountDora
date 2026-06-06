@@ -145,21 +145,35 @@ Surfaces verified covered by existing prompts/proposals — listed so the
 next reviewer can fast-skip them.
 
 - SPLASH, CANNOT CONNECT, LOGIN/REGISTER/FORGOT — A1, B9.8, INV-4.
-- ONBOARDING — `03_prompts/C_big_rock_design_briefs.md §C-5`; B5 nav wiring.
+- ONBOARDING — `04_proposals/PROPOSAL_ONBOARDING.md` (C-5, written 2026-06-06;
+  maps L24-46); dead-nav was B5; feature-flags → settings (deferred); headcount → C-3.
 - DASHBOARD — deferred per master plan.
-- STOCK OVERVIEW — `C_big_rock_design_briefs.md §C-1`.
+- STOCK OVERVIEW — `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (C-1, written
+  2026-06-06; maps L63-99). Cart bullets → C-7; planned-meals metric → C-2;
+  location display → C-cross; images → FU-033.
 - STOCKTAKE MODE — B9 fixes.
-- PRODUCT SEARCH — `C_big_rock_design_briefs.md §C-6` (companion).
-- MY PRODUCTS — `C_big_rock_design_briefs.md §C-7` (cart-button decision tree).
+- PRODUCT SEARCH — `C_big_rock_design_briefs.md §C-6` (companion-scope, not
+  written as Dora-core). The Dora-core seam it targets is
+  `04_proposals/PROPOSAL_INGESTION_API.md` (C-10, written 2026-06-06).
+- MY PRODUCTS / CART BUTTON — `04_proposals/PROPOSAL_CART_BUTTON.md` (C-7,
+  written 2026-06-06: unified button, decision tree, standalone-product rule).
+  Note: My-Products link affordance (L195) + custom products (L192) still its own
+  scope; the cart/standalone-product bullets (L83-84,108,130,154,191,196,288,
+  380-382) are now covered.
 - PRODUCT HISTORY — B9.6.
-- RECIPES OVERVIEW — `C_big_rock_design_briefs.md §C-4`.
-- RECIPE DETAIL — B8 + C-4.
-- COOK MODE — `C_big_rock_design_briefs.md §C-3`.
+- RECIPES OVERVIEW / RECIPE DETAIL — `04_proposals/PROPOSAL_COOKBOOK.md` (C-4,
+  written 2026-06-06; maps L228-315). Comparison CUT per INV-6; cost/nutrition/
+  tag-taxonomy settings → C-cross; cart → C-7; allocation → C-2/B6.
+- COOK MODE — `04_proposals/PROPOSAL_COOK_MODE.md` (C-3, written 2026-06-06;
+  maps L317-338). Tools/structured-steps → C-4; headcount → C-5; finish add-to-
+  list → C-7.
 - MEAL PLANS — `04_proposals/PROPOSAL_MEAL_PLANS.md` (F1..F49 table).
 - SHOPPING LISTS / DETAILS / MODE — `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`,
   B9.1, `03_prompts/C_big_rock_design_briefs.md §C-impl` shopping-list IMPL.
 - REPORTS / WASTE — feedback empty; deferred.
-- ALERTS — `C_big_rock_design_briefs.md §C-9`.
+- ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
+  L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only
+  (deferred); price/back-in-stock subscriptions folded into central management.
 - MOBILE VIEW — empty in feedback.
 - NO AREA / MISC — most bullets covered by B9 + INV-3; the unresolved
   ones are itemised in Bucket C above.

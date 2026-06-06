@@ -16,6 +16,7 @@ The single entry point to this planning library. Read this first.
 ```
 docs/
 ├── 00_DOCS_INDEX.md            this file
+├── 00_original_spec/           the project's FIRST spec (historical, non-authoritative)
 ├── 01_charter/                 vision + governance — read on demand
 ├── 02_feedback/                INPUTS — source of truth
 ├── 03_prompts/                 EXECUTABLE prompts (Wave A/B/C + INV)
@@ -29,6 +30,30 @@ Lifecycle: **charter → feedback → prompt → proposal/investigation →
 implementation.** Inputs and outputs are deliberately separated.
 
 ---
+
+## 00_original_spec — the project's first spec (historical)
+
+The author's **very first spec notes**, written *before* this branch's ~100k
+lines of code existed. Feature Boards + ~125 "I can …" Feature Notes + the
+original `PROMPT_PLAN.md`, taskboard, roadmap and navigation sketch.
+
+**Status: historical reference, NOT authoritative.** It pre-dates almost every
+decision recorded in `01_charter/` and `02_feedback/`, so where it disagrees with
+the charter, the reconciled plan, or the current feedback, **those win** — the old
+spec never overrides. Treat it as a *source of ideas and a memory aid*: it can
+surface intent that the code half-implemented, requirements that were dropped by
+accident rather than on purpose, or a cleaner original framing worth reviving.
+Always weigh how old it is, and confirm against live code + the charter before
+acting on anything found here.
+
+**How to use it:** when writing a Wave-C brief or an investigation for a surface,
+skim the matching Feature Board / Notes for that surface and *extract* anything
+worth keeping into the brief — explicitly tagged as sourced from the original
+spec, with a keep / consider / superseded call. (Worked example: the cart-button
+extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
+
+> Note: `00_original_spec/Distribution Spec …` is the original of the same-named
+> legacy copy under `05_investigations/`.
 
 ## 01_charter — vision & governance
 
@@ -60,7 +85,14 @@ implementation.** Inputs and outputs are deliberately separated.
 
 | Doc | Wave-C tag |
 |---|---|
+| `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` | C-1 |
 | `04_proposals/PROPOSAL_MEAL_PLANS.md` | C-2 |
+| `04_proposals/PROPOSAL_COOK_MODE.md` | C-3 |
+| `04_proposals/PROPOSAL_ONBOARDING.md` | C-5 |
+| `04_proposals/PROPOSAL_COOKBOOK.md` | C-4 |
+| `04_proposals/PROPOSAL_CART_BUTTON.md` | C-7 |
+| `04_proposals/PROPOSAL_ALERTS.md` | C-9 |
+| `04_proposals/PROPOSAL_INGESTION_API.md` | C-10 |
 | `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md` | Shopping-list overhaul (pre-Wave-C) |
 | `04_proposals/STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` | C-impl: state ownership |
 | `04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` | Dora assistant SLM design |

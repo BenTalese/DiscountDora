@@ -146,11 +146,13 @@ next reviewer can fast-skip them.
 
 - SPLASH, CANNOT CONNECT, LOGIN/REGISTER/FORGOT — A1, B9.8, INV-4.
 - ONBOARDING — `04_proposals/PROPOSAL_ONBOARDING.md` (C-5, written 2026-06-06;
-  maps L24-46); dead-nav was B5; feature-flags → settings (deferred); headcount → C-3.
+  maps L24-46); dead-nav was B5; feature-flags → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md`
+  §2.6 (C-cross); headcount → C-3.
 - DASHBOARD — deferred per master plan.
 - STOCK OVERVIEW — `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (C-1, written
   2026-06-06; maps L63-99). Cart bullets → C-7; planned-meals metric → C-2;
-  location display → C-cross; images → FU-033.
+  location display → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` §2.5 (C-cross);
+  images → FU-033.
 - STOCKTAKE MODE — B9 fixes.
 - PRODUCT SEARCH — `C_big_rock_design_briefs.md §C-6` (companion-scope, not
   written as Dora-core). The Dora-core seam it targets is
@@ -163,7 +165,8 @@ next reviewer can fast-skip them.
 - PRODUCT HISTORY — B9.6.
 - RECIPES OVERVIEW / RECIPE DETAIL — `04_proposals/PROPOSAL_COOKBOOK.md` (C-4,
   written 2026-06-06; maps L228-315). Comparison CUT per INV-6; cost/nutrition/
-  tag-taxonomy settings → C-cross; cart → C-7; allocation → C-2/B6.
+  tag-taxonomy settings → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` (C-cross);
+  cart → C-7; allocation → C-2/B6.
 - COOK MODE — `04_proposals/PROPOSAL_COOK_MODE.md` (C-3, written 2026-06-06;
   maps L317-338). Tools/structured-steps → C-4; headcount → C-5; finish add-to-
   list → C-7.
@@ -175,6 +178,11 @@ next reviewer can fast-skip them.
 - ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
   L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only
   (deferred); price/back-in-stock subscriptions folded into central management.
+- SETTINGS / CONFIG (cross-cutting) — `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md`
+  (C-cross, written 2026-06-06): money opt-in (L254), nutrition off/simple/complex
+  (L262-263,287), tag/cuisine/category/tools taxonomy editors (L235,238,255,260,
+  264,283-284,310), location-display zone policy (L81,107,321), feature-flag panel
+  (L42). Settings-shell redesign itself stays deferred.
 - MOBILE VIEW — empty in feedback.
 - NO AREA / MISC — most bullets covered by B9 + INV-3; the unresolved
   ones are itemised in Bucket C above.
@@ -188,3 +196,4 @@ next reviewer can fast-skip them.
 | Date | Pass | Notes |
 |---|---|---|
 | 2026-06-06 | Initial pass | Created this file as part of the docs reorg. Buckets A/B/C reflect a full walk of `Feedback _ Fixes - as of [06-Jun-2026].md`. INV-7..10 added to `03_prompts/INV_investigations.md`. |
+| 2026-06-06 | C-cross written | `PROPOSAL_CONFIG_AND_OPTINS.md` (C-cross) lands the cross-cutting config layer. Flipped money/nutrition/tag-taxonomy/location/feature-flag bullets from "→ C-cross (TBD)" to a written home. Completes the Wave-C design briefs (companion C-6/C-8 remain out of Dora-core scope). |

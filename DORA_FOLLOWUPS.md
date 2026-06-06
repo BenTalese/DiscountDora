@@ -39,6 +39,60 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-045 — Migrate to Postgres as the standard datastore (SQLite kept for lightweight self-host)
+- **Raised:** 2026-06-06 (distribution posture — Decision 5 / §7.5)
+- **Type:** deferred job
+- **What:** Make **Postgres the standard datastore** for dev + hosted; SQLite stays
+  supported as the zero-dependency lightweight self-host option (user decision:
+  Postgres-default, *not* Postgres-only — retiring SQLite would raise the self-host
+  bar). Motivation: SQLite feels too unstable for the long term. Scope when done:
+  local Postgres dev setup (docker-compose or similar), confirm Alembic migrations
+  run clean on both engines, keep the dev reset flow (`drop_all` /
+  `DORA_ALLOW_DESTRUCTIVE` — see memory) working on Postgres, and re-check the
+  UUID/`text()` binding sharp edge (Postgres has native UUID, so the raw-`text()`
+  workaround likely simplifies — verify both inbound and outbound). Keep the
+  ORM/migration layer portable both ways per discipline #2.
+- **Why deferred:** posture recorded now; the actual migration is real engineering,
+  best done as its own focused unit rather than mid-stream. No urgency — SQLite works
+  today.
+- **Recommended resolution:** **later — fold into Phase 4 productionize**
+  (`RECONCILED_FINISHING_PLAN.md §5`, which already lists "Postgres/gunicorn/Redis"),
+  OR opportunistically sooner if the user wants to dev against Postgres before then.
+  Not a blocker for Phase 0/1.
+
+## [OPEN] FU-044 — C-help opt-in help-overlay brief written; awaiting approval + per-surface hint rollout
+- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`)
+- **Type:** deferred job (design brief done; implementation pending approval)
+- **What:** A persistent "?" toggle overlaying dismissible per-element "what does
+  this do" hints — the opt-in inverse of the forced tour C-5 removed. Net-new
+  cross-cutting front-end component (no existing tour/coachmark system). The
+  expensive part is **content** (a hint per control, kept from rotting), so the
+  brief defers the hint corpus to a per-surface rollout folded into each C-1..C-9
+  implementation prompt.
+- **Why deferred:** brief-only per the Wave-C ritual; no code until the user
+  approves and resolves §4 open decisions (reveal style, content model, mascot,
+  discoverability).
+- **Recommended resolution:** **when the user approves the brief** — build the
+  mechanism + `v-help` directive first (§8.1), then seed hints on the highest-
+  confusion surfaces, then roll out per-surface as each C-brief implements. Pair
+  the C-5 finish-card mention (§4-4) with C-5 implementation.
+
+## [OPEN] FU-043 — C-locale international-readiness brief written; awaiting approval
+- **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_LOCALE_I18N.md`)
+- **Type:** deferred job (design brief done; implementation pending approval)
+- **What:** Make Dora usable outside Australia. Companion split solves product
+  sourcing; Dora-core still has AU residue — hardcoded `$` currency, `en-AU` voice
+  default (`useVoiceInput.ts`), AU merchant branding/copy/seed in core, and a
+  **dormant vue-i18n scaffold** (installed in `boot/i18n.ts`, locale hardcoded
+  `en-US`, stub messages, zero `$t()`). Brief recommends Layer A (currency/format
+  neutrality) + Layer B (de-AU core) now; Layer C (full UI translation) deferred.
+- **Why deferred:** brief-only; no code until approval + §3 open decisions
+  (currency home, vue-i18n adopt-vs-rip, C-10 currency field, merchant-logo fate).
+- **Recommended resolution:** **when the user approves** — fold the currency
+  setting + shared money formatter into the C-cross config work (they share the
+  config layer); coordinate the C-10 currency field with the ingestion impl;
+  de-AU (voice/branding/seed) is independent and low-risk. Layer C stays parked.
+
 ## [OPEN] FU-042 — Alerts bell count ≠ list count (badge excludes low + ignores snooze)
 - **Raised:** 2026-06-06 (C-9 brief; feedback L438)
 - **Type:** finding (reported bug — root cause found statically)

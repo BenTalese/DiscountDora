@@ -24,6 +24,178 @@ next.
 
 ---
 
+## 2026-06-06 — Distribution & tenancy posture (Decision 5) recorded
+**Status:** complete (charter + CLAUDE.md; **no code changes**)
+**What changed:**
+- Added **Decision 5 — Distribution & tenancy posture** to
+  `RECONCILED_FINISHING_PLAN.md §7`, plus a new **§7.5 distribution-posture
+  checklist** it references.
+- Added a **"Distribution & tenancy posture (check new work against it)"** section
+  to `CLAUDE.md`, mirroring the existing state-ownership principle, pointing at
+  Decision 5 / §7.5.
+
+**Decisions made / reasoning:** resolves a multi-message strategic thread (SaaS vs
+self-hosted vs local-first for a solo dev). User chose the **GitLab model: one
+codebase, SaaS-style, self-hostable** — explicitly steering away from both pure SaaS
+and a local-first rebuild.
+- **Why this isn't a conflict (the crux):** SaaS and self-host-single-instance
+  *agree* the server owns the domain logic + is the source of truth; only who runs
+  the box / tenant isolation / managed conveniences differ → deployment difference,
+  not architecture. **Local-first was rejected earlier in the thread precisely
+  because it *disagreed* on where the source of truth lives** — that would have
+  flipped the Phase-1 state-ownership refactor's direction. Self-host-vs-SaaS does
+  not, so the current stack is already the shared trunk.
+- **Five disciplines** to keep Path A reachable without paying for it now:
+  repository-routed data access (one-layer tenant scoping later); DB layer portable
+  (SQLite + Postgres); env/config-driven cloud-vs-self-host differences (no build
+  forks); auth behind an interface with a local default; **no speculative
+  `tenant_id`** (single-tenant = tenancy of size 1).
+- **One caveat:** only *multi-tenant isolation* (Path A) is genuinely hard to
+  retrofit and stays deferred to Phase 4; "managed single-tenant instances" (Path B)
+  costs ~nothing now. Decision 5 makes Decision 4's "Path B → Path A" concrete at
+  the code level — supersedes nothing.
+- **Postgres = standard datastore target (new, user-directed).** User wants to
+  migrate to Postgres ("SQLite feels too unstable for the long term"). Resolved as
+  **Postgres-default, NOT Postgres-only** — SQLite stays supported as the
+  zero-dependency lightweight self-host option so the everyday-person story survives.
+  Strengthens discipline #2 (keep DB layer portable both ways, prefer the
+  Postgres-native path where SQLite forces a wrinkle — e.g. the UUID/`text()`
+  binding). Migration itself logged as **FU-045**, recommended for Phase 4
+  productionize (already lists Postgres/gunicorn/Redis) or opportunistically sooner.
+- **No build work** — this is a *posture*, recorded so finishing-phase prompts don't
+  dig a self-hosted-only hole.
+
+**Files touched:** `docs/01_charter/RECONCILED_FINISHING_PLAN.md` (Decision 5 + §7.5),
+`CLAUDE.md` (new posture section), `DORA_FOLLOWUPS.md` (FU-045), this worklog.
+
+**Verification:** doc-only; grounded against existing Decision 4 / Phase-4 Path B→A
+tenancy language and the Clapy repository layer the disciplines rely on. Not run.
+
+**Next up:** unchanged — Phase-1 implementation (state-ownership first chunk) remains
+the master-plan next step. The offered `PROPOSAL_LOCAL_FIRST_SYNC.md` was **not**
+written (local-first rejected; sync belongs to Phase 4 if/when hosted). No open
+follow-up created — the posture lives in the charter, not the backlog.
+
+---
+
+## 2026-06-06 — C-locale + C-help design briefs (user-floated ideas)
+**Status:** complete (two proposals; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_LOCALE_I18N.md` (C-locale) and
+  `docs/04_proposals/PROPOSAL_HELP_OVERLAY.md` (C-help) — two cross-cutting briefs
+  for ideas the user floated this session.
+- Registered both: `C_big_rock_design_briefs.md` (two new C sections),
+  `00_DOCS_INDEX.md` (proposals table). Logged as `FU-043` (locale) and `FU-044`
+  (help) in `DORA_FOLLOWUPS.md` — deferred jobs pending approval.
+
+**Decisions made / key findings (verify-state-first):**
+- **C-locale — the companion split is necessary but NOT sufficient.** It solves
+  product *sourcing* (C-10 ingests country-agnostic data), but Dora-core keeps AU
+  residue. Concrete finds: `$` hardcoded (`ShoppingListShopMode.vue`,
+  `PreferencesSettings.vue` budget input); voice default `en-AU`
+  (`useVoiceInput.ts`); AU merchants in `seed.py` + `AldiLogo`/`IgaLogo` + assistant
+  copy. **Key:** `vue-i18n` is already a dep and wired in `boot/i18n.ts`, but
+  **dormant** — locale hardcoded `en-US`, `src/i18n/en-US/index.ts` is the untouched
+  Quasar stub (`failed`/`success`), zero `$t()` calls. So it's "plumbing present,
+  unused," not "from scratch" nor "done." Brief = Layer A (currency/format) + B
+  (de-AU) now; Layer C (full translation) deferred — matches the original spec's
+  multi-language as a someday.
+- **C-help — it's the opt-in inverse of the tour C-5 deleted.** Three help
+  modalities already exist (Help page, assistant) but the **in-context "what is
+  this"** one is missing. Net-new front-end component; the design's hard problem is
+  **content rot**, so it recommends a co-located `v-help` directive + dev-time
+  orphan check, with the hint corpus rolled out per-surface (folded into each
+  C-1..C-9 impl), not authored up front. Mechanism is ephemeral client view-state —
+  essentially no server model. Original spec ("page-based tips from Dora",
+  non-obtrusive mascot) corroborates.
+- Both briefs are **user-originated in conversation, not feedback-doc bullets** —
+  honestly noted in each §coverage table (related bullets mapped: locale ↔ master
+  Decision 1 / original-spec multi-language; help ↔ L43 / L444-449 / C-5 tour
+  removal). Neither *closes* an existing feedback bullet; they're net-new scope.
+
+**Files touched:** the two new proposals, `docs/03_prompts/C_big_rock_design_briefs.md`,
+`docs/00_DOCS_INDEX.md`, `DORA_FOLLOWUPS.md` (FU-043, FU-044), this worklog.
+
+**Verification:** grounded in live code — confirmed the dormant i18n scaffold
+(`boot/i18n.ts`, `src/i18n/*`), hardcoded `$`/voice locale, AU seed/branding, and
+the existing Help page/assistant surfaces. Design only — no code, not run.
+
+**Next up:** unchanged — Phase-1 implementation (state-ownership first chunk) is
+still the master-plan next step. C-locale and C-help now sit alongside the other
+Wave-C briefs awaiting the user's approval + open-decision calls before any
+implementation prompt is written for them (FU-043/FU-044).
+
+**Open questions for user:**
+- C-locale §3 (currency home; vue-i18n adopt-lite vs rip-out; C-10 currency field;
+  merchant-logo fate) and C-help §4 (reveal style; content model; mascot;
+  discoverability).
+- Where these slot in priority vs Phase-1 implementation — C-locale's currency
+  work pairs naturally with the C-cross config build; C-help can land anytime.
+
+---
+
+## 2026-06-06 — C-cross config/opt-ins design brief
+**Status:** complete (proposal only; **no code changes**)
+**What changed:**
+- New `docs/04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` — the C-cross brief that
+  C-1/C-4/C-5/C-9 each defer to. Owns once: money opt-in, nutrition mode
+  (off/simple/complex), the four taxonomy settings editors (dietary tags /
+  cuisine / category / tools), the location-display zone policy, and the
+  install-wide feature-flag panel.
+- Registered it: `C_big_rock_design_briefs.md` (new C-cross section),
+  `00_DOCS_INDEX.md` (proposals table), `COVERAGE_GAPS.md` (flipped the
+  money/nutrition/tag-taxonomy/location/feature-flag bullets from "→ C-cross
+  (TBD)" to a written home; added SETTINGS/CONFIG line + audit row).
+
+**Decisions made / key findings (verify-state-first):**
+- **Two-tier model** is the spine: per-user opt-ins on `User`; install-wide config
+  on `AppSetting` + new taxonomy tables. Taxonomies are install-wide because Dora
+  is single-household (shared vocabulary), nutrition *mode* is per-user but the
+  nutrition-*DB source* is admin.
+- **Money is already half-built** — `User.budget_amount IS NULL` currently doubles
+  as the money master switch. Recommended a dedicated `money_features_enabled`
+  flag because the cost estimate wants money-on *without* a budget number
+  (overloaded-NULL smell). Left as open-decision 1.
+- **Feature flags belong on the existing single-row `AppSetting`** (already holds
+  `llm_enabled`) — fold the assistant flag in, don't duplicate. C-5's first-login
+  step writes the same flags; the set is open-decision 2 (recommend conservative).
+- **Nutrition complex deferred** as a reserved seam (mirrors C-10 reserving the
+  `source` seam for C-8): build off+simple now, reserve `nutrition_mode=complex`
+  + the admin `nutrition_db_source` setting, don't build the DB conversion.
+- **Scope discipline:** C-cross designs the *config editors* the per-surface briefs
+  need; it does NOT redesign the deferred settings shell, own the per-type alert
+  matrix (C-9), the inline location-edit interaction (stock-detail polish), or the
+  cuisine-vs-category keep/collapse call (C-4 open-decision 1).
+- **Original spec corroborates** the feature panel ("I can disable/re-enable
+  features I don't use") — §6 keep; merchant enable/disable there is companion/C-8.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` (new),
+`docs/03_prompts/C_big_rock_design_briefs.md`, `docs/00_DOCS_INDEX.md`,
+`docs/02_feedback/COVERAGE_GAPS.md`, this worklog.
+
+**Verification:** grounded in live code — `User`/`AppSetting`/`StockLocation`
+entities, `app_settings` feature, `pages/settings/*`; read every C-cross
+deference (C-1 §5, C-4 §2.2/2.6/2.8/2.9, C-5 §2.3); skimmed the original-spec
+User & Global Options board; built the cross-cutting feedback-coverage table per
+CLAUDE.md. Design only — no code, not run.
+
+**Next up:**
+- **Wave-C design briefs are now COMPLETE** — C-1,2,3,4,5,7,9,10 + C-cross + both
+  C-impl plans. Only C-6/C-8 remain unwritten, and those are companion-app scope
+  (master Decision 1), not Dora-core.
+- Per the master plan, the ball is now **Phase-1 implementation**: start with the
+  state-ownership first chunk (canonical stock-status contract), then shopping-list
+  + cook-mode. Or the user reviews the C-cross open decisions first.
+
+**Open questions for user:**
+- The 5 C-cross open decisions (§4): money-flag vs overloaded-NULL; the
+  toggleable-feature set; taxonomy edit permission (admin vs any-user);
+  location-detail pref yes/no; confirm nutrition off+simple-now/complex-later.
+- Proceed to Phase-1 implementation, or review the full proposal set as a whole
+  first?
+
+---
+
 ## 2026-06-06 — App-wide state-ownership audit (user-prompted)
 **Status:** complete (audit + doc updates; **no code changes**)
 **What changed:**

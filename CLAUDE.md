@@ -177,6 +177,22 @@ The full triage + app-wide audit is in
 "already clean — do not relocate" list there is equally binding (don't
 over-correct fine client display math into the API).
 
+## Distribution & tenancy posture (check new work against it)
+
+The product is built the **GitLab way: one codebase, SaaS-style, self-hostable** —
+the *same artifact* runs as a self-hosted single instance, a managed single-tenant
+instance (Path B), or a multi-tenant SaaS (Path A, deferred). SaaS and self-host are
+**not conflicting architectures**; only deployment/tenancy/managed-conveniences
+differ. Don't dig a self-hosted-only hole, and don't pre-build multi-tenancy. Run
+the **§7.5 distribution-posture checklist** in
+`docs/01_charter/RECONCILED_FINISHING_PLAN.md` (repository-routed data access;
+**Postgres is the standard datastore target, SQLite still supported** for lightweight
+self-host, so keep the DB layer portable both ways; env/config-driven differences;
+auth behind an interface with a local default; no speculative `tenant_id`; managed
+conveniences degrade gracefully) on any prompt touching data access, auth, config, or
+deployment. Full rationale: that doc's **Decision 5** (§7). Postgres migration is
+tracked as `DORA_FOLLOWUPS.md` FU-045.
+
 ## Don'ts
 
 - Don't rewrite the framework. Stay on Flask / Quasar / Vue 3.

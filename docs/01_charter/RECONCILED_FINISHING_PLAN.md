@@ -161,6 +161,15 @@ The seam between Dora and the companion (and later P8-03 email + P8-04 crowd pri
    - **Gamification** → **someday-list** (captured, not built during finishing).
    - **Nutrition** → **off + simple (kcal) only**; no complex linked nutrition-DB. Make the existing freeform field opt-in + structured-simple.
 4. **Commercialize — RESOLVED: someday, not near-term — but it IS a real goal.** Phases 0–3 first; Part 7 (productionize/tenancy/billing/compliance) when validated. Because selling is a genuine future goal, Dora-core must stay Charter-clean *now* — which is exactly what Decision 1 secures.
+5. **Distribution & tenancy posture — RESOLVED: build the GitLab model — ONE codebase, SaaS-style, self-hostable.** The product is a normal client → server → database app (current Flask + Quasar stack). It ships as **one artifact** that runs three ways, differing only by *configuration*, never by code fork: (a) **self-hosted single instance** (the everyday self-host default — SQLite, no email server required), (b) **managed single-tenant instance** you operate for a customer (= the charter's **Path B**), (c) **multi-tenant hosted SaaS** (= **Path A**, deferred to Phase 4). SaaS and self-host are **not conflicting architectures** — they agree the server owns the domain logic and is the source of truth; only *who runs the box*, *tenant isolation*, and *which managed conveniences are on* differ. (This is why local-first was rejected and this wasn't: local-first disagreed on *where the source of truth lives*; self-host-vs-SaaS does not.)
+   - **The five disciplines that keep Path A reachable without paying for it now** (check new work against these — see §7.5):
+     1. **Route all data access through repositories** (Clapy clean-arch already does) so tenant scoping can be injected in **one layer**, not 400 query sites, if/when Path A lands.
+     2. **Keep the DB layer portable, with Postgres as the standard target.** **Postgres is the chosen long-term datastore** for dev + hosted (SQLite feels too unstable for the long haul). **SQLite stays supported** as the zero-dependency lightweight self-host option, so the everyday-person self-host story survives — so the ORM/migration layer must remain portable *both* ways: don't lean on Postgres-only quirks that SQLite can't express, nor SQLite-only behaviour. (The UUID/`text()` binding sharp edge — see memory — is exactly the kind of SQLite wrinkle Postgres removes natively; treat such cases as "make it generic / prefer the Postgres-native path.") Migration to Postgres-default is tracked as a follow-up (see `DORA_FOLLOWUPS.md`); it is **not** Postgres-*only* — retiring SQLite would raise the self-host bar and is explicitly not chosen.
+     3. **Every cloud-vs-self-host difference is env/config-driven, never a build flag or branch.** `DATABASE_URL`, `RELAY_URL`, `SMTP_*` (optional), feature toggles on `AppSetting`. Same artifact, different env.
+     4. **Auth behind an interface with a local provider as the default** (username/password against own DB; no mandatory external IdP or email server). Leave room for a hosted provider later.
+     5. **Do NOT pre-build multi-tenancy.** No unused `tenant_id` columns. The repository *seam* is the insurance; the column is dead weight + a migration headache until Path A is real. Treat the single-tenant assumption as "a tenancy of size 1."
+   - **The one genuine caveat:** the only thing truly hard to retrofit is **multi-tenant isolation** (strangers' data in one DB, per-tenant backups/migrations/rate-limits) — that's Path A, deferred. "SaaS-style" meaning *managed single-tenant instances* (Path B) costs ~nothing today. The five disciplines are exactly what keep the Path B→A jump a **6–12 month project, not a rewrite**.
+   - **No new build work now** — this is a posture, not a task. It records what to *avoid* (the irreversible mistakes) while finishing, so the SaaS door stays open. Confirms and supersedes nothing in Decision 4; it makes Decision 4's "Path B → Path A" concrete at the code level.
 
 ### Someday-list (captured, not in finishing scope)
 - Gamification (rewards / notify-users / streaks).
@@ -169,3 +178,16 @@ The seam between Dora and the companion (and later P8-03 email + P8-04 crowd pri
 
 ### Immediate next step
 Phase 0 is unblocked and no-regret — start the **Wave A foundation + Wave B bug prompts**. Two small parallel tasks: **INV-6** (assess recipe-comparison worth) and drafting the **ingestion-API contract** (the Dora↔companion seam, reused by P8-03/04).
+
+---
+
+## 7.5 Distribution-posture checklist (check new work against this)
+
+A lightweight gate for any prompt that touches data access, auth, config, or deployment — keeps the GitLab "one codebase, self-host-or-cloud" door open (Decision 5). Pass = no action; fail = fix now or log a `DORA_FOLLOWUPS.md` finding, don't silently ship.
+
+- [ ] **Data access goes through a repository**, not a raw query at the call site (so tenant scoping is a one-layer change later).
+- [ ] **Portable both ways — Postgres is the standard target.** No SQLite-only assumption that would block Postgres (the long-term datastore), and no Postgres-only behaviour that breaks the still-supported lightweight SQLite self-host. Prefer the Postgres-native path where SQLite forces a wrinkle (e.g. UUID handling).
+- [ ] **New cloud-vs-self-host difference is read from env/config**, not hardcoded or behind a build flag.
+- [ ] **New auth/identity path resolves through the auth interface**, with the local provider working when no external IdP/SMTP is configured.
+- [ ] **No `tenant_id` / multi-tenant scaffolding introduced** "just in case" (single-tenant = tenancy of size 1).
+- [ ] **A required managed convenience** (relay, LLM, email, companion) **degrades gracefully to "feature absent"** when unconfigured — never a hard crash on the self-host default.

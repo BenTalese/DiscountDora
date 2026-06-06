@@ -38,6 +38,46 @@ Read current alert generation + the bell + dashboard alert card. Propose a dedic
 ## C-10 — Ingestion-API contract (Dora-core seam) → `PROPOSAL_INGESTION_API.md`
 **Dora-core, NOT the companion.** Design the authenticated endpoint Dora exposes for external price/product data to be pushed in — used by the scraper companion (C-6/C-8) and later P8-03 (email) and P8-04 (crowd). Read the current product/offer/price-history models. Propose: accepted payloads (`product`, `offer`, `price_observation`; batched + idempotent; each carrying a `source` label), how Dora dedups/maps them into the product catalog + personal price history (feeds P6-01/P6-03), the auth model, and the explicit boundary (Dora never calls out; sources call in). **Open decisions:** conflict/overwrite policy for price history; sync vs async. **Gates C-6/C-8** (the companion targets this contract). See master plan §6.6.
 
+## C-cross — Config, opt-ins & taxonomy settings → `PROPOSAL_CONFIG_AND_OPTINS.md`
+The cross-cutting config layer that C-1/C-4/C-5/C-9 each defer to. Owns, once:
+the **money opt-in** (gates recipe cost C-4 §2.8 + meal-plan budgets C-2, leaves
+basic product-search prices alone); the **nutrition mode** off/simple/complex
+(C-4 §2.9 — build off+simple, reserve the nutrition-DB seam); the four
+**taxonomy settings editors** (dietary tags / cuisine / category / tools — seeded
+defaults + add/edit/remove, delete-safe; C-4 defines the vocabulary, this builds
+the editor); the **location-display policy** (show the zone, not "right shelf";
+breadcrumb on demand — C-1 §2.5, C-3 grouping); and the **feature-flag panel**
+(install-wide enable/disable, the settings mirror of C-5's first-login step).
+Two tiers: per-user opt-ins on `User`, install-wide config on `AppSetting` + new
+taxonomy tables. **Does NOT** redesign the settings shell (deferred), build the
+nutrition-DB integration (reserved seam), own the per-type alert matrix (C-9), or
+the cuisine-vs-category keep/collapse call (C-4 open-decision 1). **Open
+decisions:** money-flag vs overloaded-NULL; the toggleable-feature set; taxonomy
+edit permission; whether to add a per-user location-detail pref. Written
+2026-06-06.
+
+## C-locale — Locale & international readiness → `PROPOSAL_LOCALE_I18N.md`
+User-floated (2026-06-06): make Dora usable outside Australia. The companion split
+(Decision 1) solves *product sourcing* (products can be from anywhere via C-10),
+but Dora-core still carries AU residue: hardcoded `$` currency, `en-AU` voice
+default, AU merchant branding/copy/seed in core, and a **dormant vue-i18n scaffold**
+(plumbed in `boot/i18n.ts` but unused — stub messages, zero `$t()`). Three layers:
+**A. currency/number-format neutrality (do now), B. de-AU the core (do now),
+C. full UI translation (deferred big rock).** **Open decisions:** currency home
+(install-wide vs per-user); vue-i18n adopt-lite-for-formatting vs rip-out; whether
+C-10 price observations carry a currency; merchant-logo fate. Written 2026-06-06.
+
+## C-help — Opt-in contextual help overlay → `PROPOSAL_HELP_OVERLAY.md`
+User-floated (2026-06-06): a persistent **"?" toggle** that overlays dismissible
+"what does this do" bubbles on the current page's controls — the **opt-in inverse**
+of the forced first-run tour C-5 removed. Complements (not replaces) the existing
+Help page + assistant; fills the missing *in-context* help modality. The mechanism
+is cheap client view-state; the real cost is **content** (a hint per element kept
+from rotting), so the design favours a co-located `v-help` directive + a dev-time
+orphan check, with hints rolled out per-surface as each C-1..C-9 lands. **Open
+decisions:** reveal-all vs hover-to-reveal; co-located vs central content model;
+mascot-fronted vs plain; discoverability. Written 2026-06-06.
+
 ---
 
 ## C-impl — Implementation-planning prompts (proposals already exist)

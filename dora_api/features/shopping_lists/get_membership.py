@@ -1,8 +1,12 @@
 """GET /api/shopping-lists/membership — which stock items are on which active lists.
 
-Used by the stock overview to colour the cart button per row (already on
-primary, on a non-primary list, on multiple unticked lists, etc) without
+Used by the stock overview to colour the cart button per row (already on the
+quick-add target, on another list, on multiple unticked lists, etc) without
 loading every list's lines client-side.
+
+Chunk 2: the "quick-add target" is now inferred from DRAFT count (resolver),
+not a stored primary flag. `quick_add_target_list_id` is non-null only when
+exactly one DRAFT exists.
 """
 import logging
 from dataclasses import dataclass, field
@@ -13,6 +17,8 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists.primary_target_resolver import \
+    resolve_primary_target
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
@@ -25,8 +31,8 @@ class StockItemMembershipDto:
     # List IDs the item appears on, AND is still unticked. Ticked items
     # are excluded — they're effectively "done" from a quick-action POV.
     unticked_list_ids: List[UUID] = field(default_factory=list)
-    # True if the item is unticked on the (single) primary list.
-    on_primary: bool = False
+    # True if the item is unticked on the (inferred) quick-add target list.
+    on_quick_add_target: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +42,12 @@ class ActiveListInfoDto:
     human-readable list names without an extra round-trip."""
     shopping_list_id: UUID
     name: str
-    is_primary: bool
+    status: str
 
 
 @dataclass(frozen=True, slots=True)
 class MembershipDto:
-    primary_shopping_list_id: UUID | None
+    quick_add_target_list_id: UUID | None
     items: List[StockItemMembershipDto] = field(default_factory=list)
     active_lists: List[ActiveListInfoDto] = field(default_factory=list)
 
@@ -56,9 +62,8 @@ class GetMembershipHandler:
         active_lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
-        primary_id: UUID | None = next(
-            (l.id for l in active_lists if l.is_primary), None
-        )
+        outcome = resolve_primary_target(active_lists)
+        quick_add_target_id = outcome.target_list_id if outcome.kind == "single" else None
         active_ids = {l.id for l in active_lists}
 
         # All unticked lines. We bucket in Python.
@@ -76,7 +81,9 @@ class GetMembershipHandler:
             StockItemMembershipDto(
                 stock_item_id = stock_item_id,
                 unticked_list_ids = list_ids,
-                on_primary = (primary_id is not None and primary_id in list_ids),
+                on_quick_add_target = (
+                    quick_add_target_id is not None and quick_add_target_id in list_ids
+                ),
             )
             for stock_item_id, list_ids in per_item.items()
         ]
@@ -84,12 +91,12 @@ class GetMembershipHandler:
             ActiveListInfoDto(
                 shopping_list_id = l.id,
                 name = l.name,
-                is_primary = bool(l.is_primary),
+                status = l.status,
             )
             for l in active_lists
         ]
         return MembershipDto(
-            primary_shopping_list_id=primary_id,
+            quick_add_target_list_id=quick_add_target_id,
             items=items,
             active_lists=active_list_infos,
         )
@@ -100,7 +107,7 @@ def get_membership():
     _Logger = logging.getLogger(__name__)
     _Result = get_container().inject(GetMembershipHandler).handle()
     _Logger.debug(
-        "Membership: primary=%s, %d items on at least one active list",
-        _Result.primary_shopping_list_id, len(_Result.items),
+        "Membership: quick_add_target=%s, %d items on at least one active list",
+        _Result.quick_add_target_list_id, len(_Result.items),
     )
     return ok(_Result)

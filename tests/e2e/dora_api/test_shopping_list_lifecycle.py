@@ -29,8 +29,8 @@ def levels_by_sequence():
     return {l["sequence"]: l["stock_level_id"] for l in levels}
 
 
-def _create_list(name: str, make_primary: bool = False) -> str:
-    resp = requests.post(SHOPPING_LISTS, json={"name": name, "make_primary": make_primary})
+def _create_list(name: str) -> str:
+    resp = requests.post(SHOPPING_LISTS, json={"name": name})
     assert resp.status_code == 201, resp.text
     return resp.json()["shopping_list_id"]
 

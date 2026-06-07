@@ -145,12 +145,12 @@
 
             <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
             <div
-                v-if="isCardVisible('primary_list') && primarySummary"
+                v-if="isCardVisible('primary_list') && quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
             >
                 <article
                     class="dora-card dora-card-clickable"
-                    @click="goTo(`/shopping-lists/${primarySummary.shopping_list_id}`)"
+                    @click="goTo(`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`)"
                 >
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
@@ -158,7 +158,7 @@
                         <span class="dora-card-action">Open list →</span>
                     </header>
                     <div class="dora-primary-list-name">
-                        {{ primarySummary.name }}
+                        {{ quickAddTargetSummary.name }}
                     </div>
                     <div v-if="primaryListStats" class="dora-stat-grid q-mt-sm">
                         <div class="dora-stat">
@@ -189,7 +189,7 @@
                 </article>
             </div>
             <div
-                v-else-if="isCardVisible('primary_list') && !primarySummary"
+                v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
             >
                 <article class="dora-card dora-card-clickable" @click="goTo('/shopping-lists')">
@@ -1193,8 +1193,8 @@
     }
 
     // ── Primary shopping list ────────────────────────────────────────────
-    const primaryListId = computed(() => shoppingListStore.primaryListId);
-    const primarySummary = computed(() => shoppingListStore.primarySummary);
+    const quickAddTargetListId = computed(() => shoppingListStore.quickAddTargetListId);
+    const quickAddTargetSummary = computed(() => shoppingListStore.quickAddTargetSummary);
 
     // Totals are server-owned (state-ownership Type B) — read them off the
     // detail's `totals` instead of summing `priceOfLine`/`savingsOfLine` here.
@@ -1213,7 +1213,7 @@
     });
 
     async function loadPrimaryListDetail() {
-        const id = primaryListId.value;
+        const id = quickAddTargetListId.value;
         if (!id) {
             primaryListDetail.value = null;
             return;
@@ -1227,7 +1227,7 @@
 
     // Re-fetch detail when the primary list changes (e.g. set-primary from
     // another tab) so the card stays honest.
-    watch(primaryListId, () => {
+    watch(quickAddTargetListId, () => {
         void loadPrimaryListDetail();
     });
 

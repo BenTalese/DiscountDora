@@ -35,8 +35,6 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class CreateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, max_length=255)
-    # If true the new list is set as primary (unsetting whatever currently is).
-    make_primary: bool = False
 
 
 @dataclass(slots=True)
@@ -53,20 +51,7 @@ class CreateShoppingListHandler:
         # Default name = today's date — most users want a list-per-shop.
         # Auto-naming keeps the create UX one click.
         name = (request.name or "").strip() or now.strftime("%a %d %b")
-
-        # Setting primary atomically: clear any existing primary first.
-        if request.make_primary:
-            existing_primary = self.repository.get(ShoppingList).all(
-                EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            )
-            for p in existing_primary:
-                p.is_primary = False
-
-        new_list = ShoppingList(
-            name = name,
-            created_at = now,
-            is_primary = request.make_primary,
-        )
+        new_list = ShoppingList(name=name, created_at=now)
         self.repository.add(new_list)
         self.repository.save_changes()
         return CreateShoppingListResponse(shopping_list_id=new_list.id)
@@ -94,7 +79,6 @@ def create_shopping_list():
 class UpdateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    is_primary: bool | None = None
     # Lifecycle status (draft / shopping / done). Setting it to/from `done`
     # also manages completed_at. Note: this is the plain status edit — the
     # restock-and-snapshot Finish flow lives in /finish, not here.
@@ -127,21 +111,6 @@ class UpdateShoppingListHandler:
                 lst.completed_at = datetime.now(timezone.utc)
             elif request.status != SHOPPING_LIST_STATUS_DONE:
                 lst.completed_at = None
-
-        # When setting primary, clear the current primary first so the
-        # invariant ("at most one primary list") holds. When clearing the
-        # primary on the current list, just unset.
-        if "is_primary" in set_fields and request.is_primary is not None:
-            if request.is_primary:
-                existing_primary = self.repository.get(ShoppingList).all(
-                    EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-                )
-                for p in existing_primary:
-                    if p.id != shopping_list_id:
-                        p.is_primary = False
-                lst.is_primary = True
-            else:
-                lst.is_primary = False
 
         self.repository.save_changes()
         return UpdateShoppingListResponse()
@@ -199,7 +168,6 @@ def delete_shopping_list(shopping_list_id: UUID):
 class FinishShoppingListResponse:
     not_found: bool = False
     ticked_lines: int = 0
-    new_primary_list_id: UUID | None = None
 
 
 class FinishShoppingListHandler:
@@ -263,38 +231,15 @@ class FinishShoppingListHandler:
                 item.stock_level_last_updated = now
                 updated += 1
 
-        was_primary = bool(lst.is_primary)
-
-        # If we just archived the primary list, promote the most recent
-        # active list. Matches the spec: "Completing the primary default
-        # shopping list moves the primary selection to the next available
-        # shopping list by creation date".
-        new_primary_id: UUID | None = None
-        if lst.is_primary:
-            lst.is_primary = False
-            candidates = self.repository.get(ShoppingList).all(
-                EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-            )
-            candidates = [c for c in candidates if c.id != shopping_list_id]
-            candidates.sort(key=lambda c: c.created_at, reverse=True)
-            if candidates:
-                candidates[0].is_primary = True
-                new_primary_id = candidates[0].id
-
         lst.status = SHOPPING_LIST_STATUS_DONE
         lst.completed_at = datetime.now(timezone.utc)
-        lst.finish_snapshot = json.dumps({
-            "was_primary": was_primary,
-            "promoted_primary_list_id": (
-                str(new_primary_id) if new_primary_id is not None else None
-            ),
-            "level_restores": level_restores,
-        })
+        # Chunk 2: "primary" is now inferred from DRAFT-count, so finish no
+        # longer auto-promotes a sibling — there's no stored primary to move.
+        # finish_snapshot keeps only what reopen actually needs to reverse.
+        lst.finish_snapshot = json.dumps({"level_restores": level_restores})
 
         self.repository.save_changes()
-        return FinishShoppingListResponse(
-            ticked_lines=updated, new_primary_list_id=new_primary_id
-        )
+        return FinishShoppingListResponse(ticked_lines=updated)
 
 
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/finish", methods=["POST"])
@@ -305,13 +250,9 @@ def finish_shopping_list(shopping_list_id: UUID):
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(
         f"Finished shopping list {shopping_list_id}: "
-        f"{_Response.ticked_lines} items restocked, "
-        f"new primary = {_Response.new_primary_list_id}"
+        f"{_Response.ticked_lines} items restocked"
     )
-    return ok({
-        "items_restocked": _Response.ticked_lines,
-        "new_primary_list_id": _Response.new_primary_list_id,
-    })
+    return ok({"items_restocked": _Response.ticked_lines})
 
 
 # ───── Copy ────────────────────────────────────────────────────────────────

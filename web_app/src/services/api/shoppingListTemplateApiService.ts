@@ -25,7 +25,6 @@ export type AddTemplateLineCommand = {
 
 export type InstantiateCommand = {
     name?: string;
-    make_primary?: boolean;
 };
 
 export type InstantiateResult = {

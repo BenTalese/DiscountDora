@@ -65,7 +65,7 @@
                                     <q-item
                                         clickable
                                         v-close-popup
-                                        @click="onUse(template, false)"
+                                        @click="onUse(template)"
                                     >
                                         <q-item-section avatar>
                                             <q-icon :name="ICONS.playlist_add_check" color="primary" />
@@ -73,21 +73,6 @@
                                         <q-item-section>
                                             <q-item-label>Use template</q-item-label>
                                             <q-item-label caption>Create a new list</q-item-label>
-                                        </q-item-section>
-                                    </q-item>
-                                    <q-item
-                                        clickable
-                                        v-close-popup
-                                        @click="onUse(template, true)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon :name="ICONS.star" color="warning" />
-                                        </q-item-section>
-                                        <q-item-section>
-                                            <q-item-label>Use as primary</q-item-label>
-                                            <q-item-label caption>
-                                                Creates the list and sets it as primary
-                                            </q-item-label>
                                         </q-item-section>
                                     </q-item>
                                     <q-separator />
@@ -391,11 +376,9 @@
         }
     }
 
-    async function onUse(template: TemplateSummary, makePrimary: boolean) {
+    async function onUse(template: TemplateSummary) {
         try {
-            const result = await api.instantiateAsync(template.template_id, {
-                make_primary: makePrimary,
-            });
+            const result = await api.instantiateAsync(template.template_id, {});
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',

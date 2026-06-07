@@ -451,7 +451,7 @@ def seed_dev_data():
     repo.add(MealPlan(name="This Week", start_date=monday, entries=entries))
 
     # ---------------- SHOPPING LISTS ---------------- #
-    primary = ShoppingList(name="This week", created_at=now, is_primary=True)
+    primary = ShoppingList(name="This week", created_at=now)
     in_progress = ShoppingList(
         name="Saturday shop", created_at=now - timedelta(days=1),
         status=SHOPPING_LIST_STATUS_SHOPPING,

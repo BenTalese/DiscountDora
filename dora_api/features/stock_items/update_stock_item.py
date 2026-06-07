@@ -225,18 +225,26 @@ class UpdateStockItemHandler:
             if on_any is not None:
                 return None
 
-        primary: ShoppingList | None = next(
-            (l for l in active_lists if l.is_primary), None
+        # Auto-add only when there's an unambiguous DRAFT target — if the user
+        # has 0 or 2+ drafts, the cart button still does the right thing on the
+        # next manual click; we don't silently pick one.
+        from dora_api.features.shopping_lists.primary_target_resolver import \
+            resolve_primary_target
+        outcome = resolve_primary_target(active_lists)
+        if outcome.kind != "single":
+            return None
+        target = next(
+            (l for l in active_lists if l.id == outcome.target_list_id), None
         )
-        if primary is None:
+        if target is None:
             return None
 
         siblings = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(primary.id)
+            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
         )
         next_sequence = (max((l.sequence for l in siblings), default=-1)) + 1
         line = ShoppingListLine(
-            shopping_list_id=primary.id,
+            shopping_list_id=target.id,
             stock_item_id=stock_item.id,
             quantity=1,
             sequence=next_sequence,
@@ -244,7 +252,7 @@ class UpdateStockItemHandler:
             added_at=datetime.now(UTC),
         )
         self.repository.add(line)
-        return (line.id, primary.id)
+        return (line.id, target.id)
 
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>", methods=["PATCH"])

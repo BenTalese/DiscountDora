@@ -1,16 +1,18 @@
 """POST /api/shopping-lists/<id>/unfinish — inverse of /finish (Reopen).
 
 The Undo system (F5) calls this to reverse a freshly-finished shopping list.
-Reopen reads the server-owned `finish_snapshot` written by /finish — what the
-finish changed (the list's prior is_primary, any list auto-promoted to primary,
-and each restocked item's prior stock level) — so the reversal never trusts a
+Reopen reads the server-owned `finish_snapshot` written by /finish (each
+restocked item's prior stock level) — so the reversal never trusts a
 client-supplied snapshot (R-003: derived domain facts live on the server).
 
-It un-finishes the list (status -> draft), clears `completed_at`, restores the
-prior primary flag, demotes any sibling auto-promoted by the finish, restores
+It un-finishes the list (status -> draft), clears `completed_at`, restores
 each item's prior stock level, and clears `finish_snapshot`. A list with no
 snapshot (never finished, or already reopened) is a no-op beyond the status
 flip.
+
+Chunk 2: the snapshot no longer carries `was_primary` / `promoted_primary_list_id`
+— "primary" is inferred from DRAFT count at read time, so there's nothing to
+restore on the list itself.
 """
 import json
 import logging
@@ -54,17 +56,6 @@ class UnfinishShoppingListHandler:
                 snapshot = json.loads(lst.finish_snapshot)
             except (ValueError, TypeError):
                 snapshot = {}
-
-        if snapshot.get("was_primary"):
-            lst.is_primary = True
-
-        # If a sibling was auto-promoted to primary during finish, demote it
-        # now to avoid the two-primaries footgun.
-        promoted_id = snapshot.get("promoted_primary_list_id")
-        if promoted_id:
-            other = self.repository.get(ShoppingList).by_id(UUID(promoted_id))
-            if other is not None:
-                other.is_primary = False
 
         # Restore prior stock levels: bulk-load each StockItem + StockLevel so
         # we don't N+1 across the restored rows.

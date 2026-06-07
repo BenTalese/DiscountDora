@@ -145,7 +145,6 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
 class ShoppingListDetailDto:
     shopping_list_id: UUID
     name: str
-    is_primary: bool
     status: str
     created_at: datetime
     completed_at: datetime | None
@@ -278,7 +277,6 @@ class GetShoppingListDetailHandler:
         return ShoppingListDetailDto(
             shopping_list_id = _List.id,
             name = _List.name,
-            is_primary = bool(_List.is_primary),
             status = _List.status,
             created_at = _List.created_at,
             completed_at = _List.completed_at,

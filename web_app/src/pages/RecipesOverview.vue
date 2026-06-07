@@ -747,7 +747,7 @@
         shoppingListStore.summaries
             .filter((s) => s.status !== 'done')
             .map((s) => ({
-                label: s.name + (s.is_primary ? ' (primary)' : ''),
+                label: s.name,
                 value: s.shopping_list_id,
             })),
     );
@@ -767,7 +767,7 @@
             ...(recipeId !== undefined ? { recipeId } : {}),
         };
         addMissingTargetListId.value =
-            shoppingListStore.primaryListId ?? activeListOptions.value[0]?.value ?? null;
+            shoppingListStore.quickAddTargetListId ?? activeListOptions.value[0]?.value ?? null;
         if (!addMissingTargetListId.value) {
             $q.dialog({
                 title: 'No active shopping list',

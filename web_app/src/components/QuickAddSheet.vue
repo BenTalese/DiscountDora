@@ -158,7 +158,7 @@
     const shoppingListStore = useShoppingListStore();
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { summaries, primaryListId } = storeToRefs(shoppingListStore);
+    const { summaries, quickAddTargetListId } = storeToRefs(shoppingListStore);
 
     // Bridge the module-level open flag to a local v-model so q-dialog's hide
     // event can close it cleanly.
@@ -182,7 +182,7 @@
         summaries.value
             .filter((s) => s.status !== 'done')
             .map((s) => ({
-                label: s.name + (s.is_primary ? ' (primary)' : ''),
+                label: s.name,
                 value: s.shopping_list_id,
             })),
     );
@@ -319,7 +319,7 @@
         await Promise.all(loads);
 
         targetListId.value =
-            presetListId.value ?? primaryListId.value ?? listOptions.value[0]?.value ?? null;
+            presetListId.value ?? quickAddTargetListId.value ?? listOptions.value[0]?.value ?? null;
 
         if (presetStockItemId.value) {
             const preset = stockItems.value.find(

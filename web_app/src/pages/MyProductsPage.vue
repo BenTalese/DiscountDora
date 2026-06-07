@@ -759,7 +759,7 @@
         shoppingListStore.summaries
             .filter((s) => s.status !== 'done')
             .map((s) => ({
-                label: s.name + (s.is_primary ? ' (primary)' : ''),
+                label: s.name,
                 value: s.shopping_list_id,
             })),
     );
@@ -784,7 +784,7 @@
             return;
         }
         bulkAddTargetListId.value =
-            shoppingListStore.primaryListId ?? activeListOptions.value[0]?.value ?? null;
+            shoppingListStore.quickAddTargetListId ?? activeListOptions.value[0]?.value ?? null;
         if (!bulkAddTargetListId.value) {
             $q.dialog({
                 title: 'No active shopping list',
@@ -914,7 +914,7 @@
     // ── Per-product actions ─────────────────────────────────────────
     async function onAddSingle(product: Product) {
         if (!product.linked_stock_item_id) return;
-        const primary = shoppingListStore.primaryListId;
+        const primary = shoppingListStore.quickAddTargetListId;
         if (!primary) {
             $q.dialog({
                 title: 'No primary list',

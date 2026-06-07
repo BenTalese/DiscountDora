@@ -52,22 +52,6 @@
                     <q-tooltip>Big-button, one-item-at-a-time view for in-store use</q-tooltip>
                 </BaseButton>
                 <BaseButton
-                    v-if="!detail.is_primary"
-                    variant="ghost"
-                    :icon="ICONS.star_outline"
-                    label="Set primary"
-                    @click="setPrimary"
-                />
-                <q-chip
-                    v-else
-                    dense
-                    color="primary"
-                    text-color="white"
-                    :icon="ICONS.star"
-                >
-                    Primary
-                </q-chip>
-                <BaseButton
                     variant="icon"
                     :icon="ICONS.more_vert"
                 >
@@ -1274,20 +1258,6 @@
         }
     }
 
-    async function setPrimary() {
-        try {
-            await api.updateAsync(listId.value, { is_primary: true });
-            await refreshAll();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not set primary.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
-
     function onOpenQuickAdd() {
         // Pre-target this list so the sheet skips its list picker default.
         openQuickAdd({ listId: listId.value });
@@ -1423,7 +1393,7 @@
                     type: 'radio',
                     model: '',
                     items: otherActiveLists.value.map((s) => ({
-                        label: s.name + (s.is_primary ? ' (primary)' : ''),
+                        label: s.name,
                         value: s.shopping_list_id,
                     })),
                 },
@@ -1868,11 +1838,7 @@
                 position: 'bottom-right',
                 message: `Finished. ${result.items_restocked} item${
                     result.items_restocked === 1 ? '' : 's'
-                } restocked.${
-                    result.new_primary_list_id
-                        ? ' Primary moved to next active list.'
-                        : ''
-                }`,
+                } restocked.`,
             });
             void router.push('/shopping-lists');
         } catch (err) {
@@ -2130,7 +2096,7 @@
                     type: 'radio',
                     model: '',
                     items: otherActiveLists.value.map((s) => ({
-                        label: s.name + (s.is_primary ? ' (primary)' : ''),
+                        label: s.name,
                         value: s.shopping_list_id,
                     })),
                 },

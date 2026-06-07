@@ -921,7 +921,7 @@
                 id: l.shopping_list_id,
                 name: l.name,
                 itemCount: l.line_count,
-                isPrimary: l.is_primary,
+                isPrimary: l.shopping_list_id === shoppingListStore.quickAddTargetListId,
             })),
             getMealPlan: () => {
                 const plans = mealStore.mealPlans;
@@ -1318,7 +1318,7 @@
                 });
                 return;
             }
-            const primary = shoppingListStore.primaryListId;
+            const primary = shoppingListStore.quickAddTargetListId;
             if (!primary) {
                 pushDoraMessage({
                     text:

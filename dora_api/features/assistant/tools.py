@@ -1883,18 +1883,25 @@ def shopping_list_contents(args: dict) -> list[dict]:
             return [{
                 "query": name,
                 "status": "ambiguous",
-                "candidates": [{"name": l.name, "is_primary": l.is_primary} for l in lists[:_MAX_CANDIDATES]],
+                "candidates": [{"name": l.name, "status": l.status} for l in lists[:_MAX_CANDIDATES]],
             }]
         shopping_list = lists[0]
     else:
-        # Default to the primary, non-archived list.
-        primary = repo.get(ShoppingList).one(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
+        # Default to the inferred quick-add target (only when exactly one draft).
+        from dora_api.features.shopping_lists.primary_target_resolver import \
+            resolve_primary_target
+        active_lists = repo.get(ShoppingList).all(
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
-        if not primary:
+        outcome = resolve_primary_target(active_lists)
+        if outcome.kind != "single":
+            return [{"status": "no_primary" if outcome.kind == "none" else "ambiguous"}]
+        target = next(
+            (l for l in active_lists if l.id == outcome.target_list_id), None
+        )
+        if target is None:
             return [{"status": "no_primary"}]
-        shopping_list = primary
+        shopping_list = target
 
     lines: list[ShoppingListLine] = repo.get(ShoppingListLine).all(
         EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID).eq(shopping_list.id)
@@ -1902,7 +1909,6 @@ def shopping_list_contents(args: dict) -> list[dict]:
     if not lines:
         return [{
             "list_name": shopping_list.name,
-            "is_primary": shopping_list.is_primary,
             "status": shopping_list.status,
             "total_lines": 0,
             "ticked": 0,
@@ -1933,7 +1939,6 @@ def shopping_list_contents(args: dict) -> list[dict]:
     ticked = sum(1 for l in lines if l.is_ticked)
     return [{
         "list_name": shopping_list.name,
-        "is_primary": shopping_list.is_primary,
         "status": shopping_list.status,
         "total_lines": len(lines),
         "ticked": ticked,

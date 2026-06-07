@@ -390,7 +390,7 @@
     async function addAllLowOrOutToPrimary() {
         const ids = lowOrOutStockItemIds.value;
         if (ids.length === 0) return;
-        const primary = shoppingListStore.primaryListId;
+        const primary = shoppingListStore.quickAddTargetListId;
         if (!primary) {
             $q.dialog({
                 title: 'No primary list',

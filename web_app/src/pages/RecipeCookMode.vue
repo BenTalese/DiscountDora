@@ -595,7 +595,7 @@
                     const item = stockItems.value.find((si) => si.stock_item_id === id);
                     return item && isLowOrOut(item.stock_level_id);
                 });
-                const primary = shoppingListStore.primaryListId;
+                const primary = shoppingListStore.quickAddTargetListId;
                 if (ranOut.length > 0 && primary) {
                     await slActions.addItems(
                         primary,

@@ -88,7 +88,7 @@
     const { commands } = useCommandsRegistry();
     const { recents } = useRecents();
     const shoppingListStore = useShoppingListStore();
-    const { primaryListId } = storeToRefs(shoppingListStore);
+    const { quickAddTargetListId } = storeToRefs(shoppingListStore);
 
     const api = new SearchApiService();
     const inputRef = ref<QInput | null>(null);
@@ -375,10 +375,10 @@
     // Used by the dark-mode command in MainLayout. Exposed so we can also flip
     // dark mode straight from here if a context command wants to.
     void $q.dark;
-    // shoppingListStore.primaryListId is referenced by the "open primary list"
+    // shoppingListStore.quickAddTargetListId is referenced by the "open primary list"
     // static command — pre-import here so the store is initialised when the
     // palette mounts.
-    void primaryListId;
+    void quickAddTargetListId;
 </script>
 
 <style scoped>

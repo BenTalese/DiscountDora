@@ -39,6 +39,28 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-060 — Chunk 2 browser smoke: 2+-draft picker, shop-now routing, set-primary removal
+- **Raised:** 2026-06-07 (P6-01 Chunk 2 implementation)
+- **Type:** finding / browser verification
+- **What:** Verify in the running app:
+  1. With 2+ drafts, the stock-overview cart click pops the disambiguation
+     dialog; the chosen draft persists across cart clicks for the rest of the
+     tab session (sessionStorage). Finishing the chosen draft clears the
+     stale-hint and the next cart click re-prompts.
+  2. With 0 drafts, the cart click shows the "No draft list" dialog → "Open
+     lists" lands on the overview.
+  3. PWA "Shop now" shortcut: 1 SHOPPING list → goes straight to shop mode; 1
+     DRAFT (and no SHOPPING) → goes to that draft's detail; anything else →
+     overview.
+  4. No "Set as primary" / "Make primary" / "Primary" badge / Primary chip is
+     visible anywhere (Shopping lists overview, Shopping list detail,
+     ShoppingListTemplates use-as-primary action, ExportPrint primary chip).
+  5. Migration `d5e9f3b2a1c8` applies cleanly on a real dev DB (alongside
+     FU-057 for the c4d8e1a6f3b9 migration).
+- **Recommended resolution:** **confirm in browser** — these are functional
+  paths a static type-check can't fully cover; FU-059's line-tick fix
+  similarly waits on browser confirmation.
+
 ## [RESOLVED] FU-059 — Shopping-list line tick/delete always 404'd (UUID-vs-str guard)
 - **Raised:** 2026-06-07 (P6-01 Chunk 1 — surfaced by new lifecycle e2e)
 - **Type:** finding → fixed this session

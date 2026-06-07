@@ -24,6 +24,75 @@ next.
 
 ---
 
+## 2026-06-07 — P6-01 Chunk 2 (contextual primary inference) — IMPLEMENTED.
+**Status:** complete.
+**What changed:**
+- **New shared resolver.** `dora_api/features/shopping_lists/primary_target_resolver.py`
+  — pure function over a list of ShoppingLists returns a typed
+  `PrimaryTargetOutcome` (`kind: "none" | "single" | "ambiguous"` + target id or
+  candidates). One source of truth for "which list does a quick-add land on?".
+- **Quick-add rewritten.** `POST /shopping-lists/primary/lines` now returns a
+  discriminated payload (`added` / `no_draft` / `ambiguous` / `hint_invalid` /
+  `item_not_found`) and accepts an optional `shopping_list_id` hint so the
+  client can disambiguate the 2+ case. SHOPPING and DONE lists never count as
+  candidates (drafts only, per plan).
+- **`is_primary` ripped out.** Column dropped (migration `d5e9f3b2a1c8`); entity
+  field removed; `make_primary` gone from create + template-instantiate;
+  `is_primary` gone from update; finish no longer auto-promotes a sibling;
+  unfinish no longer restores a prior primary; the `finish_snapshot` now carries
+  only `level_restores`; assistant `set_primary_list` action removed;
+  `get_membership` exposes `quick_add_target_list_id` (single-draft only) and
+  active-list entries carry `status` instead of `is_primary`; the auto-low-stock
+  add path uses the resolver, so it only auto-adds when there's an unambiguous
+  draft.
+- **Frontend.** Store rename: `primaryListId` → `quickAddTargetListId`,
+  `primarySummary` → `quickAddTargetSummary`, derived from the membership DTO.
+  Cart state `'on_primary'` → `'on_target'`. New `useQuickAddTargetPick`
+  composable wraps `sessionStorage` for the "remember the 2+-draft pick".
+  `useStockItemActions.addToList` handles the discriminated outcome (with stale-
+  hint retry); ShoppingListsOverview drops Primary badge, the "Set as primary"
+  menu item, and `make_primary` on create / instantiate; ShoppingListDetail
+  drops "Set primary" / Primary chip + `setPrimary()`. ShopNowRedirect now picks
+  by status: 1 SHOPPING → shop-mode; else 1 DRAFT → detail; else overview. All
+  surface labels lose the " (primary)" suffix (no stored flag to mark).
+- **Tests.** New `tests/e2e/dora_api/test_primary_target_inference.py` — 7 tests:
+  no_draft, single-draft silent add, 2+ drafts return candidates +
+  disambiguation, SHOPPING doesn't count as candidate, hint_invalid for non-
+  draft, membership target mirrors inference, `make_primary` rejected as extra
+  input. Chunk 1 lifecycle test updated (no more `make_primary` arg); still 5/5.
+**Decisions made:** Dropped the column **now** (mirroring Chunk 1; user-confirmed
+"no compat shims"). Session pick lives in `sessionStorage` (UI scope, no server
+state needed). The assistant's old "make this primary" action is removed
+outright rather than rewired; there's no longer a flag to set, and the resolver
+makes the intent meaningless. Auto-low-stock add now refuses to silently pick
+when ambiguous (the user gets a normal cart-button prompt on the next click) —
+matches "anti-creep" / no surprises.
+**Files touched:** entity `shopping_list.py`; `table_mappings.py`; migration
+`d5e9f3b2a1c8_*`; `features/shopping_lists/*` (manage_shopping_list, unfinish,
+manage_shopping_list_lines, get_shopping_lists, get_shopping_list_detail,
+get_membership, auto_generate); `features/shopping_list_templates/manage_templates`;
+`features/stock_items/update_stock_item`; `features/search/global_search`;
+`features/assistant/{confirm_actions,tools,ask_assistant}`; `persistence/seed`;
+frontend `models/shoppingList.ts`, api services (shoppingList, template),
+`stores/shoppingListStore.ts`, new `composables/useQuickAddTargetPick.ts`,
+`composables/useStockItemActions.ts`, `composables/useShoppingListActions.ts`,
+ShoppingList* pages, ShopNowRedirect, StockItemRow, StockItemChip,
+StockItemDetailPage, ShoppingListTemplates, ExportPrint, DoraChat, ProductSearch,
++ the renamed `quickAddTargetListId` callers (13 files).
+**Verification:** new inference e2e — **7/7 pass**; Chunk 1 lifecycle e2e still
+**5/5**; touched Python `py_compile`-clean; `npx vue-tsc --noEmit` clean. Broader
+e2e suite identical fail-baseline as before (122 failed / 10 errors, pre-
+existing pagination test rot — FU-048; not from this chunk). **NOT done:**
+migration not applied to a live DB; no browser smoke of the 2+-draft picker or
+shop-now.
+**Next up:** Chunk 3 — lifecycle UI (one primary-action button: Start → Finish
+→ Reopen, fold review into finish confirmation, shop-mode renders in place on
+SHOPPING). Before that: browser-verify the 2+-draft sessionStorage picker, the
+new ShopNowRedirect routing, and FU-059 line ticking (still open from Chunk 1).
+**Open questions for user:** none blocking.
+
+---
+
 ## 2026-06-07 — P6-01 Chunk 1 (shopping-list lifecycle) — IMPLEMENTED.
 **Status:** complete.
 **What changed:**

@@ -176,9 +176,9 @@ def configure_mappings(db: SQLAlchemy):
         "ShoppingList", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("name", String(255), nullable=False),
-        Column("is_primary", Boolean, nullable=False, server_default="0"),
         # P6-01 lifecycle status (draft/shopping/done) — replaces the old
-        # is_archived / is_in_progress flag pair.
+        # is_archived / is_in_progress flag pair. "Primary" is inferred from
+        # DRAFT-count at read time (Chunk 2), not stored.
         Column("status", String(16), nullable=False, server_default="draft"),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("completed_at", DateTime(timezone=True), nullable=True),

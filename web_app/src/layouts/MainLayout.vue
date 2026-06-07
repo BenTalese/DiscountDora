@@ -308,7 +308,7 @@
         }
     }
     function openPrimaryList() {
-        const id = shoppingListStore.primaryListId;
+        const id = shoppingListStore.quickAddTargetListId;
         if (id) void router.push(`/shopping-lists/${id}`);
         else void router.push('/shopping-lists');
     }
@@ -316,7 +316,7 @@
     // back to the list overview when there's no primary set, mirroring
     // the existing openPrimaryList behaviour.
     function openPrimaryShopMode() {
-        const id = shoppingListStore.primaryListId;
+        const id = shoppingListStore.quickAddTargetListId;
         if (id) void router.push(`/shopping-lists/${id}/shop`);
         else void router.push('/shopping-lists');
     }

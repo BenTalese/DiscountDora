@@ -163,9 +163,9 @@ class GlobalSearchHandler:
             def list_sub(sl: ShoppingList) -> str:
                 if sl.is_done:
                     return "Archived list"
-                if sl.is_primary:
-                    return "Primary list"
-                return "Active list"
+                if sl.is_shopping:
+                    return "Shopping in progress"
+                return "Draft list"
             results.extend(
                 self._score_and_collect(
                     query, "shopping_list", limit,

@@ -59,7 +59,20 @@ The crux (proposal §2.1, §3). Data model + the risky cross-domain path, togeth
   reverses from the audit (client snapshot no longer required); existing rows
   migrated correctly.
 
-### Chunk 2 — Contextual target inference (remove stored `is_primary` reads)
+### Chunk 2 — Contextual target inference (remove stored `is_primary` reads) ✅ IMPLEMENTED (2026-06-07)
+**Deviations from plan below:**
+- **Column dropped now, not in Chunk 7** (mirrors the Chunk 1 deviation — pre-
+  release, no compat shims). Migration `d5e9f3b2a1c8`.
+- Resolver lives in `dora_api/features/shopping_lists/primary_target_resolver.py`
+  (pure function over a list of ShoppingLists). The quick-add endpoint and the
+  membership endpoint both consume it; auto-low-stock add does too (refuses to
+  silently pick when ambiguous).
+- 2+-draft session pick is **client-side `sessionStorage`** (UI scope only) —
+  no new server state.
+- The assistant's `set_primary_list` action is removed outright (no flag to set).
+- The PWA "Shop now" shortcut routes by status: 1 SHOPPING → resume; else 1
+  DRAFT → open; else overview.
+
 Proposal §2.4. Replace the stored primary with DRAFT-count inference:
 - **Quick-add** (`/primary/lines`): 0 draft → create; 1 → use silently; 2+ → ask +
   **remember the session pick**. (This is the **same rule the C-7 cart button

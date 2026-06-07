@@ -1,5 +1,6 @@
 import { storeToRefs } from 'pinia';
 import { useQuasar } from 'quasar';
+import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -34,8 +35,12 @@ export function useStockItemActions() {
             ...(caption ? { caption } : {}),
         });
 
-    /** Add to the primary list (default) or a specific list. */
+    /** Add to the inferred quick-add target (default) or a specific list.
+     *  Chunk 2: handles the discriminated `QuickAddResult` — `no_draft` opens
+     *  the lists overview to create one; `ambiguous` prompts the user to pick
+     *  from the candidate drafts (and remembers the pick in sessionStorage). */
     async function addToList(stockItemId: string, listId?: string | null) {
+        const pick = useQuickAddTargetPick();
         try {
             if (listId) {
                 const result = await shoppingListApi.addLineAsync(listId, {
@@ -45,21 +50,78 @@ export function useStockItemActions() {
                 notifyOk(result.already_on_list ? 'Already on that list.' : 'Added to list.');
                 return;
             }
-            const result = await shoppingListApi.quickAddToPrimaryAsync(stockItemId);
-            await shoppingListStore.refreshAsync();
-            notifyOk(
-                result.already_on_list
-                    ? 'Already on your primary list.'
-                    : 'Added to primary list.',
+            const remembered = pick.load();
+            let outcome = await shoppingListApi.quickAddToPrimaryAsync(
+                stockItemId, remembered ?? undefined,
             );
-        } catch {
-            // Most likely cause: no primary list set.
-            $q.dialog({
-                title: 'No primary list',
-                message: 'Pick or create a primary shopping list to use the cart shortcut.',
-                ok: { label: 'Open lists', noCaps: true, color: 'primary' },
-                cancel: { noCaps: true },
-            }).onOk(() => void router.push('/shopping-lists'));
+            // A stale sessionStorage pick (the list got finished/deleted) →
+            // the server replies with `hint_invalid` as a 422; treat as a
+            // re-prompt by retrying without the hint.
+            if ((outcome as { result?: string }).result === undefined) {
+                // axios threw on the 422 — fall through to catch.
+                throw new Error('hint_invalid');
+            }
+            if (outcome.result === 'no_draft') {
+                $q.dialog({
+                    title: 'No draft list',
+                    message:
+                        'You have no draft shopping list. Create one to use the cart shortcut.',
+                    ok: { label: 'Open lists', noCaps: true, color: 'primary' },
+                    cancel: { noCaps: true },
+                }).onOk(() => void router.push('/shopping-lists'));
+                return;
+            }
+            if (outcome.result === 'ambiguous') {
+                const choice = await new Promise<string | null>((resolve) => {
+                    $q.dialog({
+                        title: 'Which list?',
+                        message:
+                            'You have multiple draft lists — pick one. We\'ll remember it for the rest of this tab.',
+                        options: {
+                            type: 'radio',
+                            model: outcome.result === 'ambiguous'
+                                ? outcome.candidates[0]?.shopping_list_id ?? ''
+                                : '',
+                            items: outcome.result === 'ambiguous'
+                                ? outcome.candidates.map((c) => ({
+                                      label: c.name,
+                                      value: c.shopping_list_id,
+                                  }))
+                                : [],
+                        },
+                        cancel: true,
+                        persistent: false,
+                    })
+                        .onOk((val: string) => resolve(val))
+                        .onCancel(() => resolve(null))
+                        .onDismiss(() => resolve(null));
+                });
+                if (!choice) return;
+                pick.save(choice);
+                outcome = await shoppingListApi.quickAddToPrimaryAsync(stockItemId, choice);
+                if (outcome.result !== 'added') {
+                    notifyErr('Could not add to the chosen list.');
+                    return;
+                }
+            }
+            await shoppingListStore.refreshAsync();
+            if (outcome.result === 'added') {
+                notifyOk(
+                    outcome.already_on_list
+                        ? 'Already on your list.'
+                        : 'Added to your list.',
+                );
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (message === 'hint_invalid') {
+                // The remembered pick no longer applies — clear and retry once
+                // fresh so the resolver re-evaluates from scratch.
+                pick.clear();
+                await addToList(stockItemId, listId);
+                return;
+            }
+            notifyErr('Could not add to list.', String(err));
         }
     }
 

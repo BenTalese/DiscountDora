@@ -16,7 +16,6 @@ export function isListShopping(status: ShoppingListStatus): boolean {
 export type ShoppingListSummary = {
     shopping_list_id: string;
     name: string;
-    is_primary: boolean;
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
@@ -88,7 +87,6 @@ export type ShoppingListTotals = {
 export type ShoppingListDetail = {
     shopping_list_id: string;
     name: string;
-    is_primary: boolean;
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
@@ -99,23 +97,24 @@ export type ShoppingListDetail = {
 export type ActiveListInfo = {
     shopping_list_id: string;
     name: string;
-    is_primary: boolean;
+    status: ShoppingListStatus;
 };
 
 export type StockItemMembership = {
     stock_item_id: string;
     unticked_list_ids: string[];
-    on_primary: boolean;
+    on_quick_add_target: boolean;
 };
 
 export type Membership = {
-    primary_shopping_list_id: string | null;
+    quick_add_target_list_id: string | null;
     items: StockItemMembership[];
     active_lists?: ActiveListInfo[];
 };
 
-// Cart-button colour state derived from membership.
-export type CartState = 'none' | 'on_primary' | 'on_other' | 'on_multiple';
+// Cart-button colour state derived from membership. The "target" is the
+// inferred quick-add destination (only set when exactly one DRAFT exists).
+export type CartState = 'none' | 'on_target' | 'on_other' | 'on_multiple';
 
 export function cartStateFor(
     stockItemId: string,
@@ -125,7 +124,7 @@ export function cartStateFor(
     const entry = membership.items.find((i) => i.stock_item_id === stockItemId);
     if (!entry || entry.unticked_list_ids.length === 0) return 'none';
     if (entry.unticked_list_ids.length > 1) return 'on_multiple';
-    return entry.on_primary ? 'on_primary' : 'on_other';
+    return entry.on_quick_add_target ? 'on_target' : 'on_other';
 }
 
 // Selected offer for a line OR the cheapest available offer as a fallback.

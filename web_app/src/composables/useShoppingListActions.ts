@@ -2,20 +2,21 @@ import { useQuasar } from 'quasar';
 import type { AddLineCommand } from 'src/services/api/shoppingListApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
-import { useRouter } from 'vue-router';
 
 const api = new ShoppingListApiService();
 
 /**
  * Cross-feature actions for a shopping list. Screens compose these so
- * add-items / set-primary / finish-shopping behave identically wherever they
- * are triggered (lists overview, list detail, QuickAddSheet, cook mode).
+ * add-items / finish-shopping behave identically wherever they are triggered
+ * (lists overview, list detail, QuickAddSheet, cook mode).
  *
  * Call from a component `setup`.
+ *
+ * Chunk 2: `setPrimary` is gone — "primary" is now inferred from DRAFT-count
+ * by the server resolver and the client's sessionStorage pick.
  */
 export function useShoppingListActions() {
     const $q = useQuasar();
-    const router = useRouter();
     const shoppingListStore = useShoppingListStore();
 
     const notifyOk = (message: string) =>
@@ -55,20 +56,8 @@ export function useShoppingListActions() {
         return { added, already };
     }
 
-    /** Make this list the user's primary list. */
-    async function setPrimary(listId: string) {
-        try {
-            await api.updateAsync(listId, { is_primary: true });
-            await shoppingListStore.refreshAsync();
-            notifyOk('Set as primary list.');
-        } catch (err) {
-            notifyErr('Could not set primary.', String(err));
-        }
-    }
-
     /**
-     * Finish shopping: archives the list, bumps stock levels for ticked items,
-     * and (if the backend opened one) navigates to the new primary list.
+     * Finish shopping: archives the list, bumps stock levels for ticked items.
      */
     async function finishShopping(listId: string) {
         try {
@@ -79,9 +68,6 @@ export function useShoppingListActions() {
                     result.items_restocked === 1 ? '' : 's'
                 } restocked.`,
             );
-            if (result.new_primary_list_id) {
-                void router.push(`/shopping-lists/${result.new_primary_list_id}`);
-            }
             return result;
         } catch (err) {
             notifyErr('Could not finish shopping.', String(err));
@@ -89,5 +75,5 @@ export function useShoppingListActions() {
         }
     }
 
-    return { addItems, setPrimary, finishShopping };
+    return { addItems, finishShopping };
 }

@@ -3,7 +3,7 @@
         <div class="row items-center q-mb-md">
             <div class="text-caption dora-text-muted">
                 {{ activeCount }} active, {{ archivedCount }} archived.
-                <span v-if="!primarySummary && activeCount > 0">
+                <span v-if="!quickAddTargetSummary && activeCount > 0">
                     · No primary list set — pick one for quick-add.
                 </span>
             </div>
@@ -63,7 +63,7 @@
                         </q-item-section>
                     </q-item>
                     <q-item
-                        v-if="primarySummary"
+                        v-if="quickAddTargetSummary"
                         clickable
                         v-close-popup
                         @click="onAutogenerateOntoPrimary"
@@ -75,7 +75,7 @@
                             <q-item-label>Top up the primary list</q-item-label>
                             <q-item-label caption>
                                 Adds flagged-and-low items missing from
-                                "{{ primarySummary.name }}".
+                                "{{ quickAddTargetSummary.name }}".
                             </q-item-label>
                         </q-item-section>
                     </q-item>
@@ -202,7 +202,7 @@
                     bordered
                     class="cursor-pointer shopping-list-card"
                     :class="{
-                        'shopping-list-primary': list.is_primary,
+                        'shopping-list-primary': isQuickAddTarget(list),
                         'shopping-list-archived': list.status === 'done',
                     }"
                     @click="openList(list.shopping_list_id)"
@@ -212,7 +212,7 @@
                             <div class="text-h6">
                                 {{ list.name }}
                                 <q-badge
-                                    v-if="list.is_primary"
+                                    v-if="isQuickAddTarget(list)"
                                     color="primary"
                                     text-color="white"
                                     class="q-ml-sm"
@@ -234,15 +234,6 @@
                                     <q-item clickable v-close-popup @click.stop="openList(list.shopping_list_id)">
                                         <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
                                         <q-item-section>Open</q-item-section>
-                                    </q-item>
-                                    <q-item
-                                        v-if="list.status !== 'done' && !list.is_primary"
-                                        clickable
-                                        v-close-popup
-                                        @click.stop="setPrimary(list.shopping_list_id)"
-                                    >
-                                        <q-item-section avatar><q-icon :name="ICONS.star" /></q-item-section>
-                                        <q-item-section>Set as primary</q-item-section>
                                     </q-item>
                                     <q-item
                                         v-if="list.status !== 'done'"
@@ -330,9 +321,9 @@
                     <!-- Primary card gets a richer stats strip with the
                          live dollar totals. We only fetch detail for the
                          primary list so the overview stays cheap. -->
-                    <q-separator v-if="list.is_primary" />
+                    <q-separator v-if="isQuickAddTarget(list)" />
                     <q-card-section
-                        v-if="list.is_primary"
+                        v-if="isQuickAddTarget(list)"
                         class="row q-gutter-md q-pt-sm q-pb-sm primary-stats"
                     >
                         <template v-if="primaryStats">
@@ -472,7 +463,8 @@
     const summaries = computed(() => store.summaries);
     const loading = computed(() => store.loading);
     const loadError = computed(() => store.loadError);
-    const primarySummary = computed(() => store.primarySummary);
+    const quickAddTargetSummary = computed(() => store.quickAddTargetSummary);
+    const quickAddTargetListId = computed(() => store.quickAddTargetListId);
 
     const activeCount = computed(() => summaries.value.filter((s) => s.status !== 'done').length);
     const archivedCount = computed(() => summaries.value.filter((s) => s.status === 'done').length);
@@ -505,7 +497,7 @@
     } | null>(null);
 
     async function loadPrimaryStats() {
-        const summary = primarySummary.value;
+        const summary = quickAddTargetSummary.value;
         if (!summary) {
             primaryStats.value = null;
             return;
@@ -531,7 +523,7 @@
     // action), reload its stats. We key on the id rather than the whole
     // summary object so changes to other lists don't refetch.
     watch(
-        () => primarySummary.value?.shopping_list_id ?? null,
+        () => quickAddTargetSummary.value?.shopping_list_id ?? null,
         () => {
             void loadPrimaryStats();
         },
@@ -548,6 +540,12 @@
         return Math.round((list.ticked_count / list.line_count) * 100);
     }
 
+    // Chunk 2: "primary" is whatever the server's resolver picked as the
+    // current quick-add target (non-null only when exactly one DRAFT exists).
+    function isQuickAddTarget(list: ShoppingListSummary): boolean {
+        return list.shopping_list_id === quickAddTargetListId.value;
+    }
+
     function formatDate(iso: string): string {
         try {
             return new Date(iso).toLocaleDateString();
@@ -561,14 +559,11 @@
     }
 
     async function onCreate() {
-        // First list is auto-primary so the cart button starts working
-        // immediately without a "pick a primary" hand-hold.
-        const makePrimary = activeCount.value === 0;
+        // No more "make_primary" — Chunk 2: if this is the user's only draft
+        // the resolver picks it as the quick-add target automatically.
         creating.value = true;
         try {
-            const { shopping_list_id } = await api.createAsync({
-                make_primary: makePrimary,
-            });
+            const { shopping_list_id } = await api.createAsync({});
             await store.refreshAsync();
             void router.push(`/shopping-lists/${shopping_list_id}`);
         } catch (err) {
@@ -645,8 +640,8 @@
         void runAutogen(null, source);
     }
     function onAutogenerateOntoPrimary() {
-        if (!primarySummary.value) return;
-        void runAutogen(primarySummary.value.shopping_list_id, 'flagged');
+        if (!quickAddTargetSummary.value) return;
+        void runAutogen(quickAddTargetSummary.value.shopping_list_id, 'flagged');
     }
 
     // X5 advanced modal — full multi-source picker.
@@ -656,7 +651,7 @@
         ...summaries.value
             .filter((s) => s.status !== 'done')
             .map((s) => ({
-                label: s.is_primary ? `${s.name} (primary)` : s.name,
+                label: s.name,
                 value: s.shopping_list_id,
             })),
     ]);
@@ -675,7 +670,7 @@
         advanced.flagged = false;
         advanced.frequently_added = false;
         advanced.merge_into_list_id =
-            primarySummary.value?.shopping_list_id ?? null;
+            quickAddTargetSummary.value?.shopping_list_id ?? null;
         advancedOpen.value = true;
     }
     async function runAdvancedAutogen(asNew: boolean) {
@@ -870,16 +865,13 @@
         );
     }
 
-    // Shared helper: create a fresh list (primary if none exists), then
-    // bulk-add every stock_item_id (skipping duplicates server-side).
+    // Shared helper: create a fresh list, then bulk-add every stock_item_id
+    // (skipping duplicates server-side).
     async function createListFromItems(name: string, stockItemIds: string[]) {
         if (stockItemIds.length === 0) return;
         creating.value = true;
         try {
-            const { shopping_list_id } = await api.createAsync({
-                name,
-                make_primary: !primarySummary.value,
-            });
+            const { shopping_list_id } = await api.createAsync({ name });
             let added = 0;
             let skipped = 0;
             for (const id of stockItemIds) {
@@ -997,11 +989,7 @@
         });
         if (!templateId) return;
         try {
-            // If there's no current primary, the freshly instantiated list
-            // becomes primary — matches the auto-generate convention.
-            const result = await templateApi.instantiateAsync(templateId, {
-                make_primary: !primarySummary.value,
-            });
+            const result = await templateApi.instantiateAsync(templateId, {});
             await store.refreshAsync();
             $q.notify({
                 type: 'positive',
@@ -1018,25 +1006,6 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create from template.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
-
-    async function setPrimary(id: string) {
-        try {
-            await api.updateAsync(id, { is_primary: true });
-            await store.refreshAsync();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Primary list updated.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not update primary.',
                 caption: describeApiError(err) || '',
             });
         }
@@ -1107,7 +1076,7 @@
         if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
         if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
         await Promise.all(loads);
-        // Primary stats wait for the lists refresh so primarySummary is set.
+        // Primary stats wait for the lists refresh so quickAddTargetSummary is set.
         void loadPrimaryStats();
     });
 </script>

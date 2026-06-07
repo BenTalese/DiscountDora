@@ -6,6 +6,22 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Shopping-list quick-add (P6-01 Chunk 2) — "primary" is now inferred, not stored.**
+  The `ShoppingList.is_primary` column is gone. The server resolves the quick-add
+  target by DRAFT-count: 0 drafts → `result: "no_draft"` (the client offers to
+  create one), 1 draft → silent quick-add, 2+ drafts → `result: "ambiguous"` with
+  candidate `{shopping_list_id, name}`s for the client to pick from (remembered for
+  the tab session in `sessionStorage`). `POST /api/shopping-lists/primary/lines`
+  accepts an optional `shopping_list_id` hint for the disambiguated case. Finish no
+  longer auto-promotes a sibling; Reopen no longer restores a prior primary;
+  Create-list dropped `make_primary`; PATCH-list dropped `is_primary`; the
+  assistant's `set_primary_list` action is gone (no flag to set). The PWA
+  "Shop now" shortcut now routes by status (1 SHOPPING → resume; else 1 DRAFT →
+  open; else overview). The membership endpoint replaces
+  `primary_shopping_list_id` with `quick_add_target_list_id` (non-null only when a
+  single draft exists) and active-list infos carry `status` instead of
+  `is_primary`. Migration `d5e9f3b2a1c8` drops the column.
+
 - **Shopping-list lifecycle (P6-01 Chunk 1) — one `status` field + server-owned undo.**
   The `is_archived` / `is_in_progress` boolean pair is replaced by a single `status`
   enum (`draft` / `shopping` / `done`); list summaries and detail now expose `status`

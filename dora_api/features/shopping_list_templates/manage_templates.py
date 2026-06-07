@@ -449,8 +449,6 @@ class InstantiateTemplateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # Optional name override; if absent, defaults to "<template_name> · <today>".
     name: str | None = None
-    # Optional: make the new list primary (clearing the existing primary).
-    make_primary: bool = False
 
 
 @dataclass(slots=True)
@@ -480,14 +478,7 @@ class InstantiateTemplateHandler:
         now = datetime.now(timezone.utc)
         name = (request.name or "").strip() or f"{template.name} · {now.strftime('%a %d %b')}"
 
-        if request.make_primary:
-            existing_primaries = self.repository.get(ShoppingList).all(
-                EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            )
-            for p in existing_primaries:
-                p.is_primary = False
-
-        new_list = ShoppingList(name=name, created_at=now, is_primary=request.make_primary)
+        new_list = ShoppingList(name=name, created_at=now)
         self.repository.add(new_list)
         self.repository.save_changes()
 

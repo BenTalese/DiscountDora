@@ -390,7 +390,7 @@
                         >
                             <q-item-section avatar><q-icon :name="ICONS.shopping_cart" /></q-item-section>
                             <q-item-section>
-                                {{ l.name }}<span v-if="l.is_primary"> (primary)</span>
+                                {{ l.name }}
                             </q-item-section>
                             <q-item-section side><q-icon :name="ICONS.open_in_new" size="16px" /></q-item-section>
                         </q-item>
@@ -736,7 +736,7 @@
 
     async function onAddCheapest() {
         if (!cheapestProduct.value) return;
-        const primary = shoppingListStore.primaryListId;
+        const primary = shoppingListStore.quickAddTargetListId;
         busy.value = true;
         try {
             if (primary) {
@@ -766,7 +766,7 @@
         void router.push(`/recipes/${recipeId}/cook`);
     }
     async function onAddMissing(_recipeId: string, stockItemIds: string[]) {
-        const primary = shoppingListStore.primaryListId;
+        const primary = shoppingListStore.quickAddTargetListId;
         if (!primary) {
             await actions.addToList(stockItemIds[0] ?? stockItemId.value);
             return;
@@ -827,7 +827,7 @@
         const ids = entry?.unticked_list_ids ?? [];
         const lookup = new Map((m?.active_lists ?? []).map((l) => [l.shopping_list_id, l]));
         return ids.map(
-            (lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, is_primary: false },
+            (lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const },
         );
     });
     function goToList(listId: string) {

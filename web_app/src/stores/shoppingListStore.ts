@@ -14,10 +14,17 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
-    const primaryListId = computed(() => membership.value?.primary_shopping_list_id ?? null);
-    const primarySummary = computed(() =>
-        summaries.value.find((s) => s.is_primary) ?? null
+    // Chunk 2: "primary" is inferred — the server returns the quick-add target
+    // id only when exactly one DRAFT exists; otherwise it's null and the caller
+    // must prompt the user.
+    const quickAddTargetListId = computed(
+        () => membership.value?.quick_add_target_list_id ?? null
     );
+    const quickAddTargetSummary = computed(() => {
+        const id = quickAddTargetListId.value;
+        if (!id) return null;
+        return summaries.value.find((s) => s.shopping_list_id === id) ?? null;
+    });
 
     const refreshAsync = async () => {
         loading.value = true;
@@ -41,8 +48,8 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
         membership: readonly(membership),
         loading: readonly(loading),
         loadError: readonly(loadError),
-        primaryListId,
-        primarySummary,
+        quickAddTargetListId,
+        quickAddTargetSummary,
         refreshAsync
     };
 });

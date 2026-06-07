@@ -99,7 +99,6 @@ class ShoppingListLine(BaseEntity):
 class ShoppingList(BaseEntity):
     name: str
     created_at: datetime
-    is_primary: bool = False
     # Lifecycle status (see SHOPPING_LIST_STATUS_* above). Transitions:
     #   draft    -> shopping : user clicks Start shopping
     #   shopping -> draft    : user clicks Stop shopping (no finish)
@@ -108,10 +107,10 @@ class ShoppingList(BaseEntity):
     status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
     # P6-01 server-owned undo. Set when a list is finished: a JSON snapshot of
-    # what finish changed (the list's prior is_primary, any list auto-promoted
-    # to primary, and each ticked item's stock level before restock), so Reopen
-    # reverses it without trusting a client-supplied snapshot. None when the
-    # list has never been finished or has since been reopened.
+    # each ticked item's stock level before restock, so Reopen reverses it
+    # without trusting a client-supplied snapshot. None when the list has never
+    # been finished or has since been reopened. (Chunk 2 dropped the
+    # primary-related fields from the snapshot — primary is now inferred.)
     finish_snapshot: str | None = None
     # Lines hang off the list. Loaded explicitly by handlers that need them
     # (matches the noload pattern used elsewhere — table_mappings sets
@@ -132,7 +131,6 @@ class ShoppingList(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         NAME = "name"
-        IS_PRIMARY = "is_primary"
         STATUS = "status"
         CREATED_AT = "created_at"
         COMPLETED_AT = "completed_at"

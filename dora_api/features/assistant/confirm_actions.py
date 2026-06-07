@@ -447,7 +447,8 @@ def commit_move_item(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "message": f"Done — moved {payload['stock_item_name']} to {payload['destination_name']}."}
 
 
-# ── set_primary_list ───────────────────────────────────────────────────
+# Chunk 2 removed `set_primary_list` — "primary" is now inferred from DRAFT
+# count at read time, so there's no stored flag for the assistant to set.
 
 def _find_shopping_list(repo: SqlAlchemyRepository, name: str) -> list[ShoppingList]:
     field = EntityField(ShoppingList, ShoppingList.Fields.NAME)
@@ -456,54 +457,6 @@ def _find_shopping_list(repo: SqlAlchemyRepository, name: str) -> list[ShoppingL
     if exact:
         return exact
     return repo.get(ShoppingList).all(field.contains(name) & active)
-
-
-def propose_set_primary_list(args: dict) -> dict[str, Any]:
-    name = str(args.get("name") or "").strip()
-    if not name:
-        return {"type": "set_primary_list", "status": "invalid",
-                "summary": "Which list should I make primary?", "candidates": []}
-    repo = SqlAlchemyRepository()
-    lists = _find_shopping_list(repo, name)
-    if not lists:
-        return {"type": "set_primary_list", "status": "not_found",
-                "summary": f"No active list matches \"{name}\".", "candidates": []}
-    if len(lists) > 1:
-        return {
-            "type": "set_primary_list",
-            "status": "ambiguous",
-            "summary": f"A few lists match \"{name}\" — which?",
-            "candidates": [
-                {"shopping_list_id": str(l.id), "name": l.name, "is_primary": l.is_primary}
-                for l in lists[:_MAX_CANDIDATES]
-            ],
-        }
-    target = lists[0]
-    if target.is_primary:
-        return {"type": "set_primary_list", "status": "invalid",
-                "summary": f"\"{target.name}\" is already the primary list.",
-                "candidates": []}
-    return {
-        "type": "set_primary_list",
-        "status": "ready",
-        "summary": f"Make \"{target.name}\" the primary shopping list?",
-        "payload": {
-            "shopping_list_id": str(target.id),
-            "list_name": target.name,
-        },
-        "candidates": [],
-    }
-
-
-def commit_set_primary_list(payload: dict[str, Any]) -> dict[str, Any]:
-    handler = UpdateShoppingListHandler()
-    response = handler.handle(
-        UpdateShoppingListRequest(is_primary=True),
-        shopping_list_id=UUID(payload["shopping_list_id"]),
-    )
-    if getattr(response, "shopping_list_not_found", False):
-        return {"ok": False, "message": "I lost track of that list."}
-    return {"ok": True, "message": f"Done — \"{payload['list_name']}\" is now the primary list."}
 
 
 # ── plan_meal_for_date ────────────────────────────────────────────────
@@ -887,7 +840,6 @@ PROPOSERS: dict[str, Callable[[dict], dict]] = {
     "push_expiry": propose_push_expiry,
     "tick_shopping_line": propose_tick_shopping_line,
     "move_item": propose_move_item,
-    "set_primary_list": propose_set_primary_list,
     "plan_meal_for_date": propose_plan_meal_for_date,
     "add_recipe_to_list": propose_add_recipe_to_list,
     "cook_recipe": propose_cook_recipe,
@@ -900,7 +852,6 @@ COMMITTERS: dict[str, Callable[[dict], dict]] = {
     "push_expiry": commit_push_expiry,
     "tick_shopping_line": commit_tick_shopping_line,
     "move_item": commit_move_item,
-    "set_primary_list": commit_set_primary_list,
     "plan_meal_for_date": commit_plan_meal_for_date,
     "add_recipe_to_list": commit_add_recipe_to_list,
     "cook_recipe": commit_cook_recipe,

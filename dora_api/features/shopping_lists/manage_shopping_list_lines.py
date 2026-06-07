@@ -5,10 +5,12 @@ Lines are the per-stock-item rows on a list. Endpoints:
   POST   /api/shopping-lists/<id>/lines        — add a line
   PATCH  /api/shopping-lists/<id>/lines/<lid>  — tick, quantity, selected_product
   DELETE /api/shopping-lists/<id>/lines/<lid>
-  POST   /api/shopping-lists/primary/lines     — quick-add to primary list
+  POST   /api/shopping-lists/primary/lines     — quick-add (DRAFT-count inference)
 
-The primary-list shortcut exists so the stock-overview cart button doesn't
-need to know which list is primary; the server resolves it.
+P6-01 Chunk 2: "primary" is no longer a stored flag — quick-add resolves the
+target by counting DRAFT lists (see primary_target_resolver.py). The client may
+pass `shopping_list_id` to disambiguate the 2+ case (and remember the pick in
+sessionStorage).
 """
 import logging
 from dataclasses import dataclass
@@ -21,10 +23,13 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
                                                     SHOPPING_LIST_STATUS_DONE,
+                                                    SHOPPING_LIST_STATUS_DRAFT,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists.primary_target_resolver import (
+    PrimaryTargetCandidate, resolve_primary_target)
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
@@ -324,59 +329,81 @@ def remove_line_by_stock_item(shopping_list_id: UUID, stock_item_id: UUID):
     return no_content()
 
 
-# ───── Quick-add to primary ───────────────────────────────────────────────
+# ───── Quick-add to inferred primary ──────────────────────────────────────
 
 class QuickAddRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stock_item_id: UUID
+    # If the client has resolved the ambiguous (2+ drafts) case — e.g. via the
+    # sessionStorage pick — it sends the chosen list here. The server still
+    # validates that it's a draft.
+    shopping_list_id: UUID | None = None
 
 
 @dataclass(slots=True)
 class QuickAddResponse:
+    # Discriminator on `result`: "added" | "no_draft" | "ambiguous" |
+    # "item_not_found" | "hint_invalid".
+    result: str = "added"
     line_id: UUID | None = None
     shopping_list_id: UUID | None = None
-    no_primary: bool = False
-    item_not_found: bool = False
     already_on_list: bool = False
+    candidates: list[PrimaryTargetCandidate] | None = None
 
 
 class QuickAddToPrimaryHandler:
-    """Resolves the current primary shopping list and adds a line. Used by
-    the stock-overview cart button — one round-trip from click to a
-    line-on-list, no upfront "which list?" prompt needed.
+    """Resolves the quick-add target by DRAFT-count inference (Chunk 2) and
+    adds a line. The client may pass `shopping_list_id` to resolve the
+    ambiguous (2+ drafts) case; sessionStorage on the client remembers the
+    pick for the rest of the tab session.
     """
 
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: QuickAddRequest) -> QuickAddResponse:
-        primary: ShoppingList | None = self.repository.get(ShoppingList).one(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-        )
-        if primary is None:
-            return QuickAddResponse(no_primary=True)
         item: StockItem | None = self.repository.get(StockItem).by_id(request.stock_item_id)
         if item is None:
-            return QuickAddResponse(item_not_found=True)
+            return QuickAddResponse(result="item_not_found")
+
+        target: ShoppingList | None
+        if request.shopping_list_id is not None:
+            target = self.repository.get(ShoppingList).by_id(request.shopping_list_id)
+            if target is None or target.status != SHOPPING_LIST_STATUS_DRAFT:
+                return QuickAddResponse(result="hint_invalid")
+        else:
+            active_lists = self.repository.get(ShoppingList).all(
+                EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
+            )
+            outcome = resolve_primary_target(active_lists)
+            if outcome.kind == "none":
+                return QuickAddResponse(result="no_draft")
+            if outcome.kind == "ambiguous":
+                return QuickAddResponse(result="ambiguous", candidates=outcome.candidates)
+            target = next(
+                (l for l in active_lists if l.id == outcome.target_list_id), None
+            )
+            if target is None:  # defensive; resolver guarantees this id is in `lists`
+                return QuickAddResponse(result="no_draft")
 
         existing = self.repository.get(ShoppingListLine).one(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(primary.id)
+            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
             & EntityField(ShoppingListLine, "stock_item_id").eq(request.stock_item_id)
         )
         if existing is not None:
             return QuickAddResponse(
+                result="added",
                 line_id=existing.id,
-                shopping_list_id=primary.id,
+                shopping_list_id=target.id,
                 already_on_list=True,
             )
 
         siblings = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(primary.id)
+            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
         )
         next_sequence = (max((l.sequence for l in siblings), default=-1)) + 1
         line = ShoppingListLine(
-            shopping_list_id = primary.id,
+            shopping_list_id = target.id,
             stock_item_id = request.stock_item_id,
             quantity = 1,
             sequence = next_sequence,
@@ -385,7 +412,9 @@ class QuickAddToPrimaryHandler:
         )
         self.repository.add(line)
         self.repository.save_changes()
-        return QuickAddResponse(line_id=line.id, shopping_list_id=primary.id)
+        return QuickAddResponse(
+            result="added", line_id=line.id, shopping_list_id=target.id
+        )
 
 
 @SHOPPING_LIST_ROUTER.route("/primary/lines", methods=["POST"])
@@ -394,18 +423,30 @@ def quick_add_to_primary():
     _Logger = logging.getLogger(__name__)
     _Request: QuickAddRequest = get_request_body()
     _Response = get_container().inject(QuickAddToPrimaryHandler).handle(_Request)
-    if _Response.no_primary:
-        # Specifically NOT a 404 — there are lists, just none flagged
-        # primary. The frontend uses this signal to prompt the user to
-        # pick one.
-        return business_rule_violation("No primary shopping list is set.")
-    if _Response.item_not_found:
+    if _Response.result == "item_not_found":
         return not_found("StockItem", _Request.stock_item_id)
+    if _Response.result == "hint_invalid":
+        return business_rule_violation(
+            "The chosen shopping list is not a draft."
+        )
+    if _Response.result == "no_draft":
+        # Not a 404 — there may be SHOPPING/DONE lists, just no draft. The
+        # client surfaces a "create a list?" prompt.
+        return ok({"result": "no_draft"})
+    if _Response.result == "ambiguous":
+        return ok({
+            "result": "ambiguous",
+            "candidates": [
+                {"shopping_list_id": c.shopping_list_id, "name": c.name}
+                for c in (_Response.candidates or [])
+            ],
+        })
     _Logger.info(
-        f"Quick-added stock item {_Request.stock_item_id} to primary list "
+        f"Quick-added stock item {_Request.stock_item_id} to list "
         f"{_Response.shopping_list_id} (already_on_list={_Response.already_on_list})"
     )
     return ok({
+        "result": "added",
         "shopping_list_id": _Response.shopping_list_id,
         "line_id": _Response.line_id,
         "already_on_list": _Response.already_on_list,

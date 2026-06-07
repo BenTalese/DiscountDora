@@ -11,12 +11,14 @@
     /**
      * P2-11 — PWA shortcut landing page.
      *
-     * The "Shop now" home-screen shortcut points here. We can't bake the
-     * primary list id into the manifest at build time (it's per-user),
-     * so this lightweight page resolves it on mount and `replace()`s the
-     * URL to the actual shop-mode route. Doing the redirect here (rather
-     * than as a router guard) keeps the routing config flat and gives
-     * us a visible spinner while the store warms up after a cold launch.
+     * The "Shop now" home-screen shortcut points here. We can't bake a list id
+     * into the manifest at build time (it's per-user), so this resolves it on
+     * mount and `replace()`s the URL to the right place.
+     *
+     * Chunk 2 rule (no stored "primary" anymore):
+     *   - exactly one SHOPPING list → resume it in shop mode
+     *   - else exactly one DRAFT     → open the draft so the user can Start
+     *   - else                       → overview (let them pick)
      */
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -25,24 +27,29 @@
 
     const router = useRouter();
     const shoppingListStore = useShoppingListStore();
-    const message = ref('Finding your primary list…');
+    const message = ref('Finding your shopping list…');
 
     onMounted(async () => {
         try {
             await shoppingListStore.refreshAsync();
-            const id = shoppingListStore.primaryListId;
-            if (id) {
-                await router.replace(`/shopping-lists/${id}/shop`);
+            const summaries = shoppingListStore.summaries;
+            const shoppingLists = summaries.filter((s) => s.status === 'shopping');
+            if (shoppingLists.length === 1) {
+                await router.replace(`/shopping-lists/${shoppingLists[0]!.shopping_list_id}/shop`);
                 return;
             }
-            // No primary set — drop the user at the overview so they
-            // can pick or set one. Replace() so the back button
-            // doesn't bring them back to this stub.
-            message.value = 'No primary list set. Sending you to your lists…';
+            const drafts = summaries.filter((s) => s.status === 'draft');
+            if (shoppingLists.length === 0 && drafts.length === 1) {
+                // Send to the detail so the user can hit "Start shopping". The
+                // detail page owns the transition, not us.
+                await router.replace(`/shopping-lists/${drafts[0]!.shopping_list_id}`);
+                return;
+            }
+            message.value = 'Multiple lists — pick one.';
             await router.replace('/shopping-lists');
         } catch {
-            // Even on a fetch failure, the lists page is a sane
-            // fallback — better than leaving a spinner spinning.
+            // Even on a fetch failure, the lists page is a sane fallback —
+            // better than leaving a spinner spinning.
             await router.replace('/shopping-lists');
         }
     });

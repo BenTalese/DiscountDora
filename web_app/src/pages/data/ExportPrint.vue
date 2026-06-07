@@ -52,16 +52,6 @@
                         <q-item-label>
                             {{ list.name }}
                             <q-chip
-                                v-if="list.is_primary"
-                                dense
-                                size="sm"
-                                color="primary"
-                                text-color="white"
-                                class="q-ml-sm"
-                            >
-                                Primary
-                            </q-chip>
-                            <q-chip
                                 v-if="list.status === 'done'"
                                 dense
                                 size="sm"
@@ -318,9 +308,9 @@
         } else if (listFilter.value === 'archived') {
             filtered = all.filter((s) => s.status === 'done');
         }
-        // Sort: primary first, then active by recency, archived last.
+        // Sort: active by recency, archived last. "Primary" is now inferred
+        // (Chunk 2) so there's no stored flag to sort by.
         return [...filtered].sort((a, b) => {
-            if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
             const aDone = a.status === 'done';
             const bDone = b.status === 'done';
             if (aDone !== bDone) return aDone ? 1 : -1;

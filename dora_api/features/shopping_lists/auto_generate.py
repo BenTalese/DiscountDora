@@ -240,16 +240,6 @@ class AutoGenerateHandler:
             list_name = f"Auto {n} · {now.strftime('%a %d %b')}"
 
         target = ShoppingList(name=list_name, created_at=now)
-
-        # If there's no current primary list, this one becomes primary so
-        # downstream "quick-add" buttons immediately have a target.
-        current_primary = self.repository.get(ShoppingList).one(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-        )
-        if current_primary is None:
-            target.is_primary = True
-
         self.repository.add(target)
         self.repository.save_changes()
         return target

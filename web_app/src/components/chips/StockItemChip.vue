@@ -143,7 +143,7 @@
     );
     const cartColour = computed(() => {
         switch (cartState.value) {
-            case 'on_primary':
+            case 'on_target':
                 return 'primary';
             case 'on_other':
                 return 'accent';
@@ -155,10 +155,10 @@
     });
     const cartTooltip = computed(() => {
         switch (cartState.value) {
-            case 'on_primary':
-                return 'On your primary list';
+            case 'on_target':
+                return 'On your current draft list';
             case 'on_other':
-                return 'On a non-primary list';
+                return 'On another list';
             case 'on_multiple':
                 return 'On multiple lists';
             default:

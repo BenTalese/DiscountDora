@@ -8,12 +8,10 @@ import AxiosHttpClient from './axiosHttpClient';
 
 export type CreateShoppingListCommand = {
     name?: string;
-    make_primary?: boolean;
 };
 
 export type UpdateShoppingListCommand = {
     name?: string;
-    is_primary?: boolean;
     status?: ShoppingListStatus;
 };
 
@@ -46,14 +44,27 @@ export type CopyShoppingListCommand = {
 
 export type FinishResult = {
     items_restocked: number;
-    new_primary_list_id: string | null;
 };
 
-export type QuickAddResult = {
-    shopping_list_id: string | null;
-    line_id: string | null;
-    already_on_list: boolean;
+export type QuickAddCandidate = {
+    shopping_list_id: string;
+    name: string;
 };
+
+/** Discriminated outcome of POST /api/shopping-lists/primary/lines.
+ *  Chunk 2: "primary" is inferred from DRAFT count — the server replies with
+ *  `ambiguous` when 2+ drafts exist, expecting the client to pick (and remember
+ *  the choice in sessionStorage).
+ */
+export type QuickAddResult =
+    | {
+          result: 'added';
+          shopping_list_id: string;
+          line_id: string | null;
+          already_on_list: boolean;
+      }
+    | { result: 'no_draft' }
+    | { result: 'ambiguous'; candidates: QuickAddCandidate[] };
 
 /** X5 — auto-generated shopping list provenance values. Mirrors the
  *  backend ADDED_VIA_* constants. A line on a shopping list always
@@ -191,11 +202,17 @@ export default class ShoppingListApiService {
             `/shopping-lists/${listId}/lines/by-stock-item/${stockItemId}`,
         );
 
-    quickAddToPrimaryAsync = async (stockItemId: string): Promise<QuickAddResult> =>
-        await this.httpClient.post<QuickAddResult, { stock_item_id: string }>(
-            '/shopping-lists/primary/lines',
-            { stock_item_id: stockItemId },
-        );
+    quickAddToPrimaryAsync = async (
+        stockItemId: string,
+        shoppingListId?: string,
+    ): Promise<QuickAddResult> =>
+        await this.httpClient.post<
+            QuickAddResult,
+            { stock_item_id: string; shopping_list_id?: string }
+        >('/shopping-lists/primary/lines', {
+            stock_item_id: stockItemId,
+            ...(shoppingListId ? { shopping_list_id: shoppingListId } : {}),
+        });
 
     autoGenerateAsync = async (
         command: AutoGenerateCommand,

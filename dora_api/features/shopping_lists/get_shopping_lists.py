@@ -25,7 +25,6 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class ShoppingListSummaryDto:
     shopping_list_id: UUID
     name: str
-    is_primary: bool
     status: str
     created_at: datetime
     completed_at: datetime | None
@@ -66,18 +65,16 @@ class GetShoppingListsHandler:
             out.append(ShoppingListSummaryDto(
                 shopping_list_id = lst.id,
                 name = lst.name,
-                is_primary = bool(lst.is_primary),
                 status = lst.status,
                 created_at = lst.created_at,
                 completed_at = lst.completed_at,
                 line_count = total,
                 ticked_count = ticked,
             ))
-        # Most useful default: primary first, then active (most recent first),
-        # then archived (most recent first).
+        # Active (most recent first), then archived (most recent first). With
+        # "primary" inferred client-side, there's no stored flag to sort by.
         out.sort(
             key=lambda s: (
-                not s.is_primary,
                 s.status == SHOPPING_LIST_STATUS_DONE,
                 -(s.created_at.timestamp() if s.created_at else 0),
             )

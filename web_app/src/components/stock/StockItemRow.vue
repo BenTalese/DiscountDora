@@ -57,7 +57,6 @@
                         >
                             <q-item-section>
                                 {{ l.name }}
-                                <span v-if="l.is_primary"> (primary)</span>
                             </q-item-section>
                             <q-item-section side>
                                 <q-icon :name="ICONS.open_in_new" size="16px" />
@@ -261,7 +260,7 @@
         const lookup = new Map((m?.active_lists ?? []).map((l) => [l.shopping_list_id, l]));
         return ids.map(
             (lid) =>
-                lookup.get(lid) ?? { shopping_list_id: lid, name: lid, is_primary: false },
+                lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const },
         );
     });
 
@@ -308,11 +307,11 @@
             shoppingListStore.membership as Membership | null,
         );
         if (state === 'none')
-            return { icon: ICONS.add_shopping_cart, colour: undefined, tooltip: 'Add to primary list' };
-        if (state === 'on_primary')
-            return { icon: ICONS.shopping_cart, colour: 'primary', tooltip: 'On your primary list' };
+            return { icon: ICONS.add_shopping_cart, colour: undefined, tooltip: 'Add to a draft list' };
+        if (state === 'on_target')
+            return { icon: ICONS.shopping_cart, colour: 'primary', tooltip: 'On your current draft list' };
         if (state === 'on_other')
-            return { icon: ICONS.shopping_cart, colour: 'accent', tooltip: 'On a non-primary list' };
+            return { icon: ICONS.shopping_cart, colour: 'accent', tooltip: 'On another list' };
         return {
             icon: ICONS.shopping_cart_checkout,
             colour: 'amber-9',

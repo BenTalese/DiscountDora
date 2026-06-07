@@ -579,10 +579,21 @@
             if (!stockItemId) throw new Error('Stock item id missing from response.');
 
             await stockItemApi.linkProductAsync(stockItemId, product.product_id);
-            await shoppingListApi.quickAddToPrimaryAsync(stockItemId);
+            const quick = await shoppingListApi.quickAddToPrimaryAsync(stockItemId);
             await Promise.all([stockItemStore.getStockItemsAsync(), shoppingListStore.refreshAsync()]);
 
-            $q.notify({ type: 'positive', position: 'bottom-right', message: `Tracking ${offer.name} and added to your list.` });
+            if (quick.result === 'added') {
+                $q.notify({ type: 'positive', position: 'bottom-right', message: `Tracking ${offer.name} and added to your list.` });
+            } else {
+                $q.notify({
+                    type: 'positive',
+                    position: 'bottom-right',
+                    message: `Tracking ${offer.name}.`,
+                    caption: quick.result === 'no_draft'
+                        ? 'No draft list — open Shopping lists to add it.'
+                        : 'Multiple draft lists — open Shopping lists to pick where.',
+                });
+            }
         } catch (err) {
             $q.notify({ type: 'negative', position: 'bottom-right', message: 'Quick-add failed.', caption: describeApiError(err) || '' });
         }

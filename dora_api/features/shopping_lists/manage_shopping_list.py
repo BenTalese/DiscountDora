@@ -5,6 +5,7 @@ they share the "primary list is unique" invariant — keeping them together
 makes that contract obvious. Finish + copy live here too because they're
 shopping-list-scoped actions, not line-scoped.
 """
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,8 +13,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.shopping_list import (ShoppingList,
-                                                    ShoppingListLine)
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_DRAFT,
+    SHOPPING_LIST_STATUS_SHOPPING, SHOPPING_LIST_STATUS_VALUES, ShoppingList,
+    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
@@ -92,12 +95,16 @@ class UpdateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=255)
     is_primary: bool | None = None
-    is_archived: bool | None = None
+    # Lifecycle status (draft / shopping / done). Setting it to/from `done`
+    # also manages completed_at. Note: this is the plain status edit — the
+    # restock-and-snapshot Finish flow lives in /finish, not here.
+    status: str | None = None
 
 
 @dataclass(slots=True)
 class UpdateShoppingListResponse:
     not_found: bool = False
+    invalid_status: bool = False
 
 
 class UpdateShoppingListHandler:
@@ -112,11 +119,13 @@ class UpdateShoppingListHandler:
         set_fields = request.model_fields_set
         if "name" in set_fields and request.name is not None:
             lst.name = request.name
-        if "is_archived" in set_fields and request.is_archived is not None:
-            lst.is_archived = request.is_archived
-            if request.is_archived and lst.completed_at is None:
+        if "status" in set_fields and request.status is not None:
+            if request.status not in SHOPPING_LIST_STATUS_VALUES:
+                return UpdateShoppingListResponse(invalid_status=True)
+            lst.status = request.status
+            if request.status == SHOPPING_LIST_STATUS_DONE and lst.completed_at is None:
                 lst.completed_at = datetime.now(timezone.utc)
-            elif not request.is_archived:
+            elif request.status != SHOPPING_LIST_STATUS_DONE:
                 lst.completed_at = None
 
         # When setting primary, clear the current primary first so the
@@ -146,6 +155,10 @@ def update_shopping_list(shopping_list_id: UUID):
     _Response = get_container().inject(UpdateShoppingListHandler).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
+    if _Response.invalid_status:
+        return business_rule_violation(
+            "`status` must be one of: draft, shopping, done."
+        )
     _Logger.info(f"Updated shopping list {shopping_list_id}")
     return no_content()
 
@@ -226,21 +239,31 @@ class FinishShoppingListHandler:
             self.repository.get(StockLevel).all(), StockStatus.WELL_STOCKED
         )
 
+        # Capture each restocked item's prior level so Reopen can reverse it
+        # server-side (R-003: the undo state is a server-owned domain fact, not
+        # something we trust a client snapshot for). Recorded *before* the
+        # overwrite below.
+        level_restores: list[dict[str, str]] = []
         updated = 0
         if well_stocked and ticked_lines:
             stock_item_ids = [l.stock_item_id for l in ticked_lines]
-            stock_items = self.repository.get(StockItem).all(
+            # stock_level is a noload relationship; eager-load it so we can
+            # capture each item's prior level for the reopen snapshot.
+            stock_items = self.repository.get(StockItem).include("stock_level").all(
                 EntityField(StockItem, "id").in_(stock_item_ids)
             )
             now = datetime.now(timezone.utc)
             for item in stock_items:
+                if item.stock_level is not None:
+                    level_restores.append({
+                        "stock_item_id": str(item.id),
+                        "stock_level_id": str(item.stock_level.id),
+                    })
                 item.stock_level = well_stocked
                 item.stock_level_last_updated = now
                 updated += 1
 
-        lst.is_archived = True
-        lst.is_in_progress = False
-        lst.completed_at = datetime.now(timezone.utc)
+        was_primary = bool(lst.is_primary)
 
         # If we just archived the primary list, promote the most recent
         # active list. Matches the spec: "Completing the primary default
@@ -250,13 +273,23 @@ class FinishShoppingListHandler:
         if lst.is_primary:
             lst.is_primary = False
             candidates = self.repository.get(ShoppingList).all(
-                EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+                EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
             )
             candidates = [c for c in candidates if c.id != shopping_list_id]
             candidates.sort(key=lambda c: c.created_at, reverse=True)
             if candidates:
                 candidates[0].is_primary = True
                 new_primary_id = candidates[0].id
+
+        lst.status = SHOPPING_LIST_STATUS_DONE
+        lst.completed_at = datetime.now(timezone.utc)
+        lst.finish_snapshot = json.dumps({
+            "was_primary": was_primary,
+            "promoted_primary_list_id": (
+                str(new_primary_id) if new_primary_id is not None else None
+            ),
+            "level_restores": level_restores,
+        })
 
         self.repository.save_changes()
         return FinishShoppingListResponse(
@@ -368,9 +401,9 @@ class StartShoppingHandler:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
         if lst is None:
             return StartStopResponse(not_found=True)
-        if lst.is_archived:
+        if lst.is_done:
             return StartStopResponse(archived=True)
-        lst.is_in_progress = True
+        lst.status = SHOPPING_LIST_STATUS_SHOPPING
         self.repository.save_changes()
         return StartStopResponse()
 
@@ -397,9 +430,11 @@ class StopShoppingHandler:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
         if lst is None:
             return StartStopResponse(not_found=True)
-        # Allow stop even on archived lists — it's a no-op then but the
-        # endpoint is idempotent and shouldn't error.
-        lst.is_in_progress = False
+        # Stop = "I'm no longer actively shopping", i.e. back to draft. A done
+        # list stays done (stop is a no-op there) — the endpoint is idempotent
+        # and shouldn't resurrect a finished list.
+        if lst.is_shopping:
+            lst.status = SHOPPING_LIST_STATUS_DRAFT
         self.repository.save_changes()
         return StartStopResponse()
 

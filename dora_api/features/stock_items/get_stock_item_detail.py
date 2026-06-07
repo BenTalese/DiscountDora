@@ -86,9 +86,6 @@ class StockItemDetailDto:
     is_flagged: bool
     auto_add_when_low: bool
     preferred_product_id: UUID | None
-    # Optional user-registered barcode (N5). Null when no barcode has
-    # been scanned/typed against this item yet.
-    barcode: str | None
     attention_score: int
     attention_reasons: dict
     products: List[LinkedProductDto]
@@ -244,7 +241,6 @@ class GetStockItemDetailHandler:
             is_flagged = bool(_StockItem.is_flagged),
             auto_add_when_low = bool(_StockItem.auto_add_when_low),
             preferred_product_id = _StockItem.preferred_product_id,
-            barcode = _StockItem.barcode,
             attention_score = _Reasons.score(),
             attention_reasons = asdict(_Reasons),
             products = _LinkedProducts,

@@ -4,6 +4,7 @@ export type AppSettings = {
     llm_enabled: boolean;
     llm_base_url: string;
     llm_model: string;
+    scanning_enabled: boolean;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

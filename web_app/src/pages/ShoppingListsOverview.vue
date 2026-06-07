@@ -203,7 +203,7 @@
                     class="cursor-pointer shopping-list-card"
                     :class="{
                         'shopping-list-primary': list.is_primary,
-                        'shopping-list-archived': list.is_archived,
+                        'shopping-list-archived': list.status === 'done',
                     }"
                     @click="openList(list.shopping_list_id)"
                 >
@@ -236,7 +236,7 @@
                                         <q-item-section>Open</q-item-section>
                                     </q-item>
                                     <q-item
-                                        v-if="!list.is_archived && !list.is_primary"
+                                        v-if="list.status !== 'done' && !list.is_primary"
                                         clickable
                                         v-close-popup
                                         @click.stop="setPrimary(list.shopping_list_id)"
@@ -245,7 +245,7 @@
                                         <q-item-section>Set as primary</q-item-section>
                                     </q-item>
                                     <q-item
-                                        v-if="!list.is_archived"
+                                        v-if="list.status !== 'done'"
                                         clickable
                                         v-close-popup
                                         :disable="
@@ -267,7 +267,7 @@
                                         </q-item-section>
                                     </q-item>
                                     <q-item
-                                        v-if="list.is_archived"
+                                        v-if="list.status === 'done'"
                                         clickable
                                         v-close-popup
                                         @click.stop="copyList(list.shopping_list_id, 'all')"
@@ -277,7 +277,7 @@
                                     </q-item>
                                     <q-separator />
                                     <q-item
-                                        v-if="!list.is_archived"
+                                        v-if="list.status !== 'done'"
                                         clickable
                                         v-close-popup
                                         @click.stop="archiveList(list)"
@@ -474,8 +474,8 @@
     const loadError = computed(() => store.loadError);
     const primarySummary = computed(() => store.primarySummary);
 
-    const activeCount = computed(() => summaries.value.filter((s) => !s.is_archived).length);
-    const archivedCount = computed(() => summaries.value.filter((s) => s.is_archived).length);
+    const activeCount = computed(() => summaries.value.filter((s) => s.status !== 'done').length);
+    const archivedCount = computed(() => summaries.value.filter((s) => s.status === 'done').length);
 
     // Count of stock items currently Low or Out — used by the empty state
     // and the "Auto-generate from low/out" menu entry. Computed off the
@@ -539,8 +539,8 @@
 
     const visibleLists = computed(() =>
         tab.value === 'active'
-            ? summaries.value.filter((s) => !s.is_archived)
-            : summaries.value.filter((s) => s.is_archived)
+            ? summaries.value.filter((s) => s.status !== 'done')
+            : summaries.value.filter((s) => s.status === 'done')
     );
 
     function progressValue(list: ShoppingListSummary): number {
@@ -654,7 +654,7 @@
     const mergeOptions = computed(() => [
         { label: 'Create a fresh list', value: null },
         ...summaries.value
-            .filter((s) => !s.is_archived)
+            .filter((s) => s.status !== 'done')
             .map((s) => ({
                 label: s.is_primary ? `${s.name} (primary)` : s.name,
                 value: s.shopping_list_id,
@@ -933,7 +933,7 @@
         });
         if (!ok) return;
         try {
-            await api.updateAsync(list.shopping_list_id, { is_archived: true });
+            await api.updateAsync(list.shopping_list_id, { status: 'done' });
             await store.refreshAsync();
             $q.notify({
                 type: 'positive',
@@ -1064,7 +1064,7 @@
 
     async function onDelete(list: ShoppingListSummary) {
         // Active lists require confirmation (per spec); archived ones don't.
-        if (!list.is_archived) {
+        if (list.status !== 'done') {
             const ok = await new Promise<boolean>((resolve) => {
                 $q.dialog({
                     title: `Delete "${list.name}"?`,

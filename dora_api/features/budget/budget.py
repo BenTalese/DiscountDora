@@ -33,7 +33,8 @@ from flask import session
 
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.user import (BUDGET_PERIOD_MONTHLY,
                                            BUDGET_PERIOD_WEEKLY, User)
@@ -136,16 +137,16 @@ class GetBudgetStatusHandler:
         # Archived lists whose completed_at falls in the period. Lines on
         # those lists drive `spent`.
         archived = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(True)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
             & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).gte(start_dt)
             & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).lt(end_dt)
         )
         archived_ids = [l.id for l in archived]
 
-        # Active (non-archived) lists drive `projected_active`. Their
+        # Active (non-done) lists drive `projected_active`. Their
         # lines might pick up prices from the live ProductOffer rows.
         active = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         active_ids = [l.id for l in active]
 
@@ -291,7 +292,7 @@ class GetBudgetHistoryHandler:
         full_end_dt = _as_utc_datetime(latest_end)
 
         archived = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(True)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
             & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).gte(full_start_dt)
             & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).lt(full_end_dt)
         )

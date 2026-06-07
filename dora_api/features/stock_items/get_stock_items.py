@@ -38,7 +38,6 @@ class StockItemDto:
     auto_add_when_low: bool
     is_open: bool
     opened_on: date | None
-    barcode: str | None
     last_checked_at: datetime | None
 
     @classmethod
@@ -61,7 +60,6 @@ class StockItemDto:
             auto_add_when_low = bool(stock_item.auto_add_when_low),
             is_open = bool(stock_item.is_open),
             opened_on = stock_item.opened_on,
-            barcode = stock_item.barcode,
             last_checked_at = stock_item.last_checked_at,
         )
 

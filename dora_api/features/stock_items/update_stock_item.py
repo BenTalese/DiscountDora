@@ -207,13 +207,14 @@ class UpdateStockItemHandler:
         """
         from dora_api.domain.entities.shopping_list import (
             ADDED_VIA_AUTO_LOW_STOCK,
+            SHOPPING_LIST_STATUS_DONE,
             ShoppingList,
             ShoppingListLine,
         )
 
         # Already on ANY active list? Skip — the user already knows.
         active_lists: list[ShoppingList] = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         active_ids = [l.id for l in active_lists]
         if active_ids:

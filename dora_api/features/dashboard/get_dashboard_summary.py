@@ -14,7 +14,8 @@ from sqlalchemy import func, select
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.shopping_list import ShoppingList
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
@@ -119,8 +120,8 @@ class GetDashboardSummaryHandler:
         # ── Shopping lists ────────────────────────────────────────────────
         # "Active" = non-archived. The dashboard card surfaces what's
         # actually in flight; finished shops live on the lists page.
-        is_archived_field = EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED)
-        total_lists = self.repository.get(ShoppingList).count(is_archived_field.eq(False))
+        status_field = EntityField(ShoppingList, ShoppingList.Fields.STATUS)
+        total_lists = self.repository.get(ShoppingList).count(status_field.ne(SHOPPING_LIST_STATUS_DONE))
         # "Items queued" = unticked lines. Reaching into the registry's
         # `metadata.tables` here was unreliable (the registry tracks a
         # separate MetaData from the one Flask-SQLAlchemy creates the

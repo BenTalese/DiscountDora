@@ -190,6 +190,40 @@ exceptions, which still must be commented) · **Source** (where it was establish
 - **Carve-outs:** trivially reversible, low-blast-radius writes.
 - **Source:** Charter P7/P8/P12.
 
+### R-010 — Strong types over stringly-typed matching
+- **Rule:** Where the language permits, model values with the strongest type
+  available and let the compiler/type-checker enforce correctness. Prefer enums,
+  typed IDs, and proper types to bare strings; prefer typed comparisons to
+  string-coerced ones. Don't side-step the type system (no `any`, no `# type:
+  ignore`, no `str()`-both-sides to make a comparison "work") to silence a checker
+  that is correctly objecting.
+- **Why:** The compiler/type-checker is free, always-on review. Stringly-typed
+  code pushes whole classes of bugs to runtime: this branch shipped a guard that
+  compared a `UUID` to a `str` path param and so **always** mismatched (line
+  tick/delete silently 404'd, FU-059) — a typed comparison or a coerced-at-the-
+  boundary `UUID` would have made it impossible. A `str(...) != str(...)` patch
+  fixes the symptom but keeps the values weakly typed; the root fix is to carry the
+  strong type.
+- **Apply:** New code carries the strong type end-to-end. Coerce external input
+  (HTTP path/query params, JSON, env) to its real type **once at the boundary**,
+  not by stringifying the strong side at each comparison. Reach for an enum/literal
+  union over free strings when the value has a known closed set. On the frontend,
+  prefer discriminated unions + exhaustive `switch` over string equality scattered
+  across call sites; never reintroduce `any` to dodge a `vue-tsc` error.
+- **Violation signal:** `str(x) != str(y)` (or `String(x) === String(y)`) bridging
+  two differently-typed values; comparing a domain object to a raw string; a path
+  param used as an id without coercion; `any` / `@ts-ignore` / `# type: ignore`
+  added to quiet the checker rather than fix the type.
+- **Carve-outs:** Values that are *genuinely* strings end-to-end (a name, a free-text
+  note) stay strings. Plain-string **status sentinels backed by a closed
+  `*_VALUES` set + a single validation point** (as in the shopping-list `status`
+  model) are an accepted lightweight stand-in for a DB enum **only** while every
+  read goes through the named constants and writes are validated against the set —
+  don't let raw status literals leak across the codebase. The boundary coercion
+  itself (one `UUID(raw)` / `int(raw)` at an edge) is the correct shape, not a
+  violation.
+- **Source:** ADR-003; this session's UUID-vs-str guard bug (FU-059).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -237,3 +271,49 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   grounded. The seed set is deliberately partial — more rules accrete as decisions
   recur, rather than from an exhaustive up-front sweep.
 - **Promotes rule:** R-001 through R-009 (seed set).
+
+### ADR-002 — Optional features gate on a server-owned flag surfaced via health capabilities
+- **Date / task:** 2026-06-07 (P6-02 barcode/QR cleanup)
+- **Status:** accepted
+- **Context:** Optional/off-by-default surfaces (the LLM assistant, now scanning &
+  QR labels) need one authoritative on/off switch that both the server and every
+  client entry point respect, without the client hardcoding the policy or each
+  feature inventing its own toggle mechanism. Two instances now share the shape
+  (`AppSetting.llm_enabled`, `AppSetting.scanning_enabled`).
+- **Decision:** An optional feature is gated by a single boolean on the
+  install-wide `AppSetting` singleton (default `false`), exposed to clients through
+  the health capability endpoint as `features.<name>`, and consumed by a tiny
+  composable (e.g. `useScanningEnabled()`) — **not** a new Pinia store. The admin
+  toggle lives in Settings → System and PATCHes the setting. One flag gates the
+  whole surface (anti-creep), not per-control toggles.
+- **Consequences:** Adding a gated feature is a known recipe (AppSetting field →
+  health flag → composable → admin toggle). Distribution-posture-correct: the same
+  artifact self-hosts or runs managed; the difference is config, not a build fork.
+  Rules out scattering feature policy across client code or spinning up a store per
+  flag. Health flags are the single read path — keep `_feature_flags()` honest
+  (this task fixed a latent bug where `assistant` never reflected the real setting).
+- **Promotes rule:** none (a pattern/recipe, not a new standing rule; R-003
+  state-ownership already covers "server owns domain facts").
+
+### ADR-003 — Strong types over stringly-typed matching
+- **Date / task:** 2026-06-07 (P6-01 Chunk 1; user request)
+- **Status:** accepted
+- **Context:** The new shopping-list lifecycle e2e surfaced a guard that compared a
+  `ShoppingList`/`ShoppingListLine` `UUID` against a Flask path param (always a
+  `str`); with no uuid converter registered the comparison never matched, so every
+  line tick/delete silently 404'd (FU-059). The expedient patch — `str(x) != str(y)`
+  — works but keeps both sides weakly typed and side-steps the type system rather
+  than carrying the real type. The user asked to make "prefer strong types, don't
+  side-step the compiler" a standing rule.
+- **Decision:** Adopt R-010. Model values with the strongest available type; coerce
+  external input to its real type once at the boundary; prefer enums/literal unions
+  and typed comparisons over scattered string matching; never add
+  `any`/`@ts-ignore`/`# type: ignore` to silence a checker that is correctly
+  objecting. Closed-set status sentinels backed by a `*_VALUES` set + single
+  validation point remain an accepted lightweight enum stand-in.
+- **Consequences:** Pushes a class of runtime bugs back to compile/type-check time
+  (free, always-on review). Costs a little up-front discipline (boundary coercion,
+  defining enums/unions) and means future cleanup may *strengthen* the `str()`-patched
+  line guards to typed ids rather than leave them. Rules out "stringify both sides to
+  make it pass" as an acceptable fix.
+- **Promotes rule:** R-010.

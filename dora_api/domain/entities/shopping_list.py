@@ -30,6 +30,26 @@ ADDED_VIA_VALUES = {
 }
 
 
+# P6-01 lifecycle status — the single source of truth for where a list is
+# in the shop loop, replacing the old is_archived / is_in_progress flags.
+#   draft    : being assembled / edited (the old "planning", non-archived,
+#              not-in-progress state).
+#   shopping : actively being shopped right now (was is_in_progress).
+#   done     : finished or archived (was is_archived). completed_at carries
+#              the timestamp.
+# Plain str sentinels (not Enum) so SQLAlchemy stores them as varchar,
+# matching the ADDED_VIA_* convention above.
+SHOPPING_LIST_STATUS_DRAFT = "draft"
+SHOPPING_LIST_STATUS_SHOPPING = "shopping"
+SHOPPING_LIST_STATUS_DONE = "done"
+
+SHOPPING_LIST_STATUS_VALUES = {
+    SHOPPING_LIST_STATUS_DRAFT,
+    SHOPPING_LIST_STATUS_SHOPPING,
+    SHOPPING_LIST_STATUS_DONE,
+}
+
+
 @dataclass
 class ShoppingListLine(BaseEntity):
     shopping_list_id: UUID
@@ -80,27 +100,41 @@ class ShoppingList(BaseEntity):
     name: str
     created_at: datetime
     is_primary: bool = False
-    is_archived: bool = False
-    # `is_in_progress` is the "I'm actively shopping right now" state. While
-    # true, the UI locks editing (add/remove lines, rename) and emphasises
-    # ticking off. Transitions:
-    #   planning    -> in_progress: user clicks Start shopping
-    #   in_progress -> planning   : user clicks Stop shopping (no archive)
-    #   in_progress -> archived   : user clicks Finish (the finish endpoint
-    #                               archives and `is_in_progress` becomes
-    #                               irrelevant once archived).
-    is_in_progress: bool = False
+    # Lifecycle status (see SHOPPING_LIST_STATUS_* above). Transitions:
+    #   draft    -> shopping : user clicks Start shopping
+    #   shopping -> draft    : user clicks Stop shopping (no finish)
+    #   draft/shopping -> done : Finish (restock + snapshot) or plain archive
+    #   done     -> draft    : Reopen (reverses the finish from finish_snapshot)
+    status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
+    # P6-01 server-owned undo. Set when a list is finished: a JSON snapshot of
+    # what finish changed (the list's prior is_primary, any list auto-promoted
+    # to primary, and each ticked item's stock level before restock), so Reopen
+    # reverses it without trusting a client-supplied snapshot. None when the
+    # list has never been finished or has since been reopened.
+    finish_snapshot: str | None = None
     # Lines hang off the list. Loaded explicitly by handlers that need them
     # (matches the noload pattern used elsewhere — table_mappings sets
     # lazy="noload"). Default empty so seed/in-memory construction works.
     lines: List[ShoppingListLine] = field(default_factory=list)
 
+    @property
+    def is_done(self) -> bool:
+        return self.status == SHOPPING_LIST_STATUS_DONE
+
+    @property
+    def is_shopping(self) -> bool:
+        return self.status == SHOPPING_LIST_STATUS_SHOPPING
+
+    @property
+    def is_draft(self) -> bool:
+        return self.status == SHOPPING_LIST_STATUS_DRAFT
+
     class Fields(BaseEntity.Fields):
         NAME = "name"
         IS_PRIMARY = "is_primary"
-        IS_ARCHIVED = "is_archived"
-        IS_IN_PROGRESS = "is_in_progress"
+        STATUS = "status"
         CREATED_AT = "created_at"
         COMPLETED_AT = "completed_at"
+        FINISH_SNAPSHOT = "finish_snapshot"
         LINES = "lines"

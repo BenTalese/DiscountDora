@@ -7,7 +7,7 @@
 
         <div class="row items-center q-mb-md">
             <div class="text-caption dora-text-muted">
-                Backup, import, export and barcode tools for your Dora data.
+                Backup, import, export and label tools for your Dora data.
             </div>
         </div>
 
@@ -20,7 +20,7 @@
                             Data tools
                         </q-item-label>
                         <q-item
-                            v-for="section in sections"
+                            v-for="section in visibleSections"
                             :key="section.path"
                             clickable
                             :to="section.path"
@@ -51,8 +51,9 @@
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
     import { useRoute } from 'vue-router';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
 
-    type Section = { path: string; label: string; caption: string; icon: string };
+    type Section = { path: string; label: string; caption: string; icon: string; gated?: boolean };
 
     const sections: Section[] = [
         {
@@ -75,11 +76,17 @@
         },
         {
             path: '/data/barcodes',
-            label: 'Barcodes & QR',
-            caption: 'Generate item QR codes; register product barcodes',
-            icon: 'qr_code_2'
+            label: 'Scanning & QR labels',
+            caption: 'Scan product barcodes; print item & shelf QR labels',
+            icon: 'qr_code_2',
+            gated: true
         }
     ];
+
+    const { scanningEnabled } = useScanningEnabled();
+    const visibleSections = computed(() =>
+        sections.filter((s) => !s.gated || scanningEnabled.value),
+    );
 
     const route = useRoute();
     const activeLabel = computed(() => {

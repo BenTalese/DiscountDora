@@ -41,6 +41,7 @@ from dora_api.domain.entities.shopping_list import (
     ADDED_VIA_AUTO_LOW_STOCK,
     ADDED_VIA_AUTO_MEAL_PLAN,
     ADDED_VIA_AUTO_RECIPE,
+    SHOPPING_LIST_STATUS_DONE,
     ShoppingList,
     ShoppingListLine,
 )
@@ -155,7 +156,7 @@ class AutoGenerateHandler:
         target: Optional[ShoppingList]
         if request.merge_into_list_id is not None:
             target = self.repository.get(ShoppingList).by_id(request.merge_into_list_id)
-            if target is None or target.is_archived:
+            if target is None or target.is_done:
                 return AutoGenerateResponse(list_not_found=True)
         else:
             target = self._create_list(request.name)
@@ -244,7 +245,7 @@ class AutoGenerateHandler:
         # downstream "quick-add" buttons immediately have a target.
         current_primary = self.repository.get(ShoppingList).one(
             EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         if current_primary is None:
             target.is_primary = True

@@ -39,9 +39,74 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
-## [OPEN] FU-055 — P6-02 barcode/QR: design pivoted; build-vs-defer decision pending
+## [RESOLVED] FU-059 — Shopping-list line tick/delete always 404'd (UUID-vs-str guard)
+- **Raised:** 2026-06-07 (P6-01 Chunk 1 — surfaced by new lifecycle e2e)
+- **Type:** finding → fixed this session
+- **What:** `update_line` / `delete_line` in
+  `dora_api/features/shopping_lists/manage_shopping_list_lines.py` guarded parent
+  ownership with `line.shopping_list_id != shopping_list_id`. The entity FK is a `UUID`;
+  the Flask path param is always a `str` (no uuid converter registered), so the
+  comparison never matched and **every** PATCH (tick/qty/select) and DELETE on a line
+  returned 404. Pre-existing since the file was created (commit `fa399e2`); no e2e
+  covered it until now. The frontend (`shoppingListApiService.updateLineAsync`) hits
+  exactly this route, so in-store ticking would have been broken in the running app.
+- **Resolved (symptom):** compared as strings (`str(...) != str(...)`) in both guards,
+  with an inline comment. Verified by the new e2e `test__finish_then_reopen…` (which
+  ticks a line). **Still worth a browser confirm** of shop-mode ticking.
+- **R-010 carve-out / leftover:** the `str()`-both-sides fix is the symptom fix the new
+  rule R-010 warns against — it keeps the ids weakly typed. The *root* fix is to coerce
+  the path params to `UUID` once at the route boundary (matching the codebase's existing
+  `UUID(raw)` idiom) so the comparison is typed. Deferred to avoid scope creep this
+  session; do it opportunistically when next touching `manage_shopping_list_lines.py`
+  (and audit sibling line routes for the same coercion).
+
+## [RESOLVED] FU-058 — Finish snapshot captured no level_restores (noload relationship)
+- **Raised:** 2026-06-07 (P6-01 Chunk 1)
+- **Type:** finding → fixed this session
+- **What:** the Finish handler captured each restocked item's prior level by reading
+  `item.stock_level` (the relationship). That relationship is mapped `lazy="noload"`
+  (`table_mappings.py`), so it returns `None` unless eager-loaded — meaning
+  `finish_snapshot.level_restores` was always `[]` and Reopen restored nothing (status
+  flipped back but levels stayed Well-Stocked).
+- **Resolved:** the Finish query now `.include("stock_level")` before reading the prior
+  level. Verified by the new e2e (reopen restores Out-of-Stock). R-003 (server-owned
+  undo) now actually holds.
+
+## [OPEN] FU-056 — P6-02 deferred: register-against-product UI + ingestion EAN auto-populate
+- **Raised:** 2026-06-07 (P6-02 implementation — "Cleanup now, UI later")
+- **Type:** deferred job
+- **What:** The backend `POST /api/data/barcodes/register-against-product` route exists and
+  is tested, but there is **no UI** to drive it (scan unknown barcode → pick a Product →
+  create `ProductBarcode`). Also: ingestion should auto-populate `ProductBarcode` from a
+  feed's EAN/UPC field so most barcodes resolve without manual registration.
+- **Why deferred:** `Product` has no EAN field today (only `merchant_stockcode`), so a manual
+  register UI now would be the only path and low-value. Ingestion is the natural place to
+  add an EAN field + auto-fill `ProductBarcode` at scale.
+- **Recommended resolution:** later during **Phase 2 (ingestion API)** — design is in
+  `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md` §5–§6.
+
+## [OPEN] FU-057 — P6-02: browser-verify the gated scanning surface + apply migration
+- **Raised:** 2026-06-07 (P6-02 implementation)
+- **Type:** finding
+- **What:** The scanning/QR gating was verified by static read + frontend sweep only. Not
+  confirmed in a running app: toggling `scanning_enabled` in Settings → System actually
+  shows/hides the Stock Overview scan/print buttons, stock-item "Show QR", and the Data →
+  "Scanning & QR labels" section/off-state banner. Migration `a3f1c7d2e9b4` (drops
+  `StockItem.barcode`, adds `AppSetting.scanning_enabled`) has not been applied to a live DB.
+- **Why deferred:** e2e suite pre-existing broken ([[FU-048]]); no browser smoke test this
+  session.
+- **Recommended resolution:** **confirm in browser** + run migration on a dev DB before P6-01.
+
+## [RESOLVED] FU-055 — P6-02 barcode/QR: design pivoted; build-vs-defer decision pending
 - **Raised:** 2026-06-07 (P6-02 design discussion)
 - **Type:** deferred job (blocked on user decision)
+- **State note:** RESOLVED 2026-06-07 — user chose Option 1 ("Cleanup now, UI later").
+  Dropped `StockItem.barcode` (col/routes/UI/DTOs/export), kept `ProductBarcode` +
+  Dora QR, added off-by-default `scanning_enabled` flag gating the whole surface,
+  relabelled honestly, wrote `PROPOSAL_BARCODE_SCANNING.md`, reworded CLAUDE.md. The
+  EAN question is answered (Product has no EAN, only `merchant_stockcode`) →
+  register-against-product UI + ingestion auto-populate deferred to Phase 2 ([[FU-056]]).
+  See WORKLOG 2026-06-07 "P6-02 barcode/QR — IMPLEMENTED".
 - **What:** P6-02 was going to be "remove real-world barcodes wholesale, keep only Dora QR"
   (legacy spec). A design discussion **changed the shape**: `ProductBarcode` (barcode→Product)
   is the CORRECT model and is KEPT; `StockItem.barcode` (one barcode per item) is the WRONG
@@ -549,7 +614,12 @@ long session summary. Distinct from the other two logs:
   log-nesting difference. On-disk confirmation still pending (app never run on
   this checkout); checklist added to the memo.
 
-## [OPEN] FU-026 — B9.5: precise repro for "undo behaves oddly across surfaces"
+## [PARTIALLY RESOLVED] FU-026 — B9.5: precise repro for "undo behaves oddly across surfaces"
+- **2026-06-07 update (P6-01 Chunk 1):** the *shopping-list finish→reopen* undo path is
+  now server-owned — Reopen reverses from `finish_snapshot` instead of a brittle
+  client-held `level_restores` snapshot, which directly addresses feedback L421 ("undo of
+  done list is bad"). The cross-surface staleness vector below (an originating surface
+  not refetching after an inverse runs elsewhere) is **still open** for non-list undos.
 - **Raised:** 2026-06-06 (B9.5)
 - **Type:** finding / open verification
 - **What:** `useUndo` registry is sound (per-entry inverse closures, redo

@@ -5,7 +5,46 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Shopping-list lifecycle (P6-01 Chunk 1) — one `status` field + server-owned undo.**
+  The `is_archived` / `is_in_progress` boolean pair is replaced by a single `status`
+  enum (`draft` / `shopping` / `done`); list summaries and detail now expose `status`
+  and the legacy flags are gone from the API. **Finish** marks a list `done`, restocks
+  its ticked items to Well-Stocked, and records what it changed in a server-owned
+  `finish_snapshot` (prior primary, any auto-promoted sibling, each item's prior
+  level). **Reopen** (`POST /…/unfinish`, no request body) reverses the finish straight
+  from that snapshot — the client no longer posts a level-restore snapshot. `start` /
+  `stop` move a list between `draft` and `shopping`; an invalid `status` PATCH is
+  rejected (400). Migration `c4d8e1a6f3b9` converts existing rows
+  (`is_archived→done`, `is_in_progress→shopping`, else `draft`) and drops the old
+  columns.
+
 ### Fixed
+- **Shopping-list line tick / delete always returned 404.** The parent-ownership guard
+  in `update_line` / `delete_line` compared the entity's `UUID` FK against the path
+  param (always a `str`), so the comparison never matched and every PATCH/DELETE on a
+  line 404'd. Now compared as strings. (Pre-existing; surfaced by the new lifecycle
+  e2e test.)
+
+### Changed
+- **Scanning & QR labels (P6-02) — corrected model + off-by-default gating.** A
+  real-world barcode now identifies a *Product* (`ProductBarcode`), never a stock
+  item: the `StockItem.barcode` column and its register/clear routes + wrong-model
+  UI are removed. The whole scanning + QR-label surface (Stock Overview scan/print
+  buttons, stock-item "Show QR", the Data → "Scanning & QR labels" section, and the
+  admin toggle) is gated behind a new install-wide `scanning_enabled` flag (off by
+  default), surfaced to the client via health `features.scanning`. The section is
+  relabelled to state plainly that **scanning is a navigation aid only — it never
+  looks up live prices**. Dora's own per-item QR labels and the
+  product-barcode→product lookup are kept. The register-against-product UI and the
+  scan-unknown rework are deferred to Phase 2 (ingestion). Design:
+  `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md`.
+
+### Fixed
+- **Health capability flags `features.assistant` never reflected reality.** The
+  health check called a non-existent `get_or_create_app_settings()` (plural,
+  no-arg), swallowed by a try/except, so `assistant` was always `false`. Now
+  reads the real `AppSetting` and reports both `assistant` and `scanning`.
 - **Frontend build breakage (pre-existing, surfaced during verification).** Fixed
   `//` line comments inside plain-CSS `<style>` blocks that broke Vue SFC
   compilation ("Unexpected '/'") — `LoginPage.vue` (the login route wouldn't

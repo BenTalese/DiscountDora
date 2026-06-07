@@ -1,298 +1,200 @@
 <template>
     <div class="q-gutter-md">
-        <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
+        <!-- Off state — the whole surface is gated by the install-wide flag. -->
+        <q-banner
+            v-if="scanningLoaded && !scanningEnabled"
+            class="dora-bg-sunken dora-text-secondary"
+            rounded
+        >
             <template #avatar>
-                <q-icon :name="ICONS.info" size="18px" />
+                <q-icon :name="ICONS.info" />
             </template>
-            Scan barcodes with your camera, print QR sheets for pantry items,
-            or manage registered barcodes. Camera access requires HTTPS in
-            production.
+            Scanning &amp; QR labels are turned off. An admin can enable them in
+            <router-link to="/settings/admin/system">Settings → System</router-link>.
         </q-banner>
 
-        <q-tabs
-            v-model="tab"
-            dense
-            align="left"
-            inline-label
-            no-caps
-            indicator-color="primary"
-            active-color="primary"
-        >
-            <q-tab name="scan" :icon="ICONS.qr_code_scanner" label="Scan" />
-            <q-tab name="sheets" :icon="ICONS.print" label="Print sheets" />
-            <q-tab name="manage" :icon="ICONS.list_alt" label="Manage" />
-        </q-tabs>
-        <q-separator />
+        <template v-else-if="scanningEnabled">
+            <q-banner class="dora-bg-sunken dora-text-secondary text-caption" dense rounded>
+                <template #avatar>
+                    <q-icon :name="ICONS.info" size="18px" />
+                </template>
+                Scan a real-world product barcode to jump to its linked stock item,
+                or print Dora's own QR labels for your items. Scanning is a
+                navigation aid only — it never looks up live prices. Camera access
+                requires HTTPS in production.
+            </q-banner>
 
-        <!-- ── Scan tab ──────────────────────────────────────────────── -->
-        <div v-if="tab === 'scan'">
-            <q-card flat bordered>
-                <q-card-section class="row items-center q-gutter-md">
-                    <q-icon :name="ICONS.qr_code_scanner" size="32px" class="text-primary" />
-                    <div>
-                        <div class="text-h6">Scan a barcode</div>
-                        <div class="text-caption dora-text-muted">
-                            Opens the camera in a fullscreen overlay. The first
-                            valid decode opens the matching stock item or
-                            offers to register a new barcode.
-                        </div>
-                    </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section>
-                    <q-btn
-                        color="primary"
-                        :icon="ICONS.photo_camera"
-                        label="Open camera"
-                        unelevated
-                        @click="scanOpen = true"
-                    />
-                </q-card-section>
-            </q-card>
-        </div>
+            <q-tabs
+                v-model="tab"
+                dense
+                align="left"
+                inline-label
+                no-caps
+                indicator-color="primary"
+                active-color="primary"
+            >
+                <q-tab name="scan" :icon="ICONS.qr_code_scanner" label="Scan" />
+                <q-tab name="sheets" :icon="ICONS.print" label="Print labels" />
+            </q-tabs>
+            <q-separator />
 
-        <!-- ── Print sheets tab ──────────────────────────────────────── -->
-        <div v-else-if="tab === 'sheets'">
-            <q-card flat bordered>
-                <q-card-section class="row items-center q-gutter-md">
-                    <q-icon :name="ICONS.print" size="32px" class="text-primary" />
-                    <div>
-                        <div class="text-h6">Print QR sheets</div>
-                        <div class="text-caption dora-text-muted">
-                            Pick items, choose a layout, open a printable
-                            sheet. Save as PDF from your browser's print dialog.
+            <!-- ── Scan tab ──────────────────────────────────────────────── -->
+            <div v-if="tab === 'scan'">
+                <q-card flat bordered>
+                    <q-card-section class="row items-center q-gutter-md">
+                        <q-icon :name="ICONS.qr_code_scanner" size="32px" class="text-primary" />
+                        <div>
+                            <div class="text-h6">Scan a barcode</div>
+                            <div class="text-caption dora-text-muted">
+                                Opens the camera in a fullscreen overlay. The first
+                                valid decode opens the matching stock item (via its
+                                Dora QR, or via a product barcode you've linked).
+                            </div>
                         </div>
-                    </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section>
-                    <div class="row q-col-gutter-md items-end">
-                        <q-input
-                            v-model="sheetFilter"
-                            dense
-                            outlined
-                            clearable
-                            label="Filter items"
-                            class="col-12 col-sm-6"
+                    </q-card-section>
+                    <q-separator />
+                    <q-card-section>
+                        <q-btn
+                            color="primary"
+                            :icon="ICONS.photo_camera"
+                            label="Open camera"
+                            unelevated
+                            @click="scanOpen = true"
                         />
-                        <q-select
-                            v-model="sheetLayout"
-                            :options="layoutOptions"
-                            label="Sheet layout"
-                            outlined
-                            dense
-                            emit-value
-                            map-options
-                            class="col-12 col-sm-4"
-                        />
-                        <div class="col-auto">
-                            <q-btn
-                                flat
-                                dense
-                                no-caps
-                                label="All"
-                                @click="onSelectAllVisible"
-                            />
-                            <q-btn
-                                flat
-                                dense
-                                no-caps
-                                label="None"
-                                @click="selectedItemIds = []"
-                            />
-                        </div>
-                    </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section class="q-pa-none" style="max-height: 360px; overflow: auto">
-                    <q-list dense>
-                        <q-item
-                            v-for="item in filteredStockItems"
-                            :key="item.stock_item_id"
-                            clickable
-                            @click="toggleItem(item.stock_item_id)"
-                        >
-                            <q-item-section avatar>
-                                <q-checkbox
-                                    :model-value="selectedItemIds.includes(item.stock_item_id)"
-                                    @update:model-value="toggleItem(item.stock_item_id)"
-                                    @click.stop
-                                />
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>{{ item.name }}</q-item-label>
-                                <q-item-label caption>
-                                    {{ item.stock_level_name ?? '—' }}
-                                    <span v-if="item.barcode">· {{ item.barcode }}</span>
-                                </q-item-label>
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
-                <q-separator />
-                <q-card-actions align="right">
-                    <q-btn
-                        flat
-                        no-caps
-                        label="Print all items"
-                        :icon="ICONS.print"
-                        @click="openSheet({ allItems: true })"
-                    />
-                    <q-btn
-                        color="primary"
-                        no-caps
-                        :icon="ICONS.picture_as_pdf"
-                        :label="`Open sheet (${selectedItemIds.length})`"
-                        :disable="selectedItemIds.length === 0"
-                        @click="openSheet({ allItems: false })"
-                    />
-                </q-card-actions>
-            </q-card>
-        </div>
+                    </q-card-section>
+                </q-card>
+            </div>
 
-        <!-- ── Manage tab ────────────────────────────────────────────── -->
-        <div v-else-if="tab === 'manage'">
-            <q-card flat bordered>
-                <q-card-section class="row items-center q-gutter-md">
-                    <q-icon :name="ICONS.list_alt" size="32px" class="text-primary" />
-                    <div>
-                        <div class="text-h6">Manage barcodes</div>
-                        <div class="text-caption dora-text-muted">
-                            Inline edit / clear / print individual QRs.
+            <!-- ── Print labels tab ──────────────────────────────────────── -->
+            <div v-else-if="tab === 'sheets'">
+                <q-card flat bordered>
+                    <q-card-section class="row items-center q-gutter-md">
+                        <q-icon :name="ICONS.print" size="32px" class="text-primary" />
+                        <div>
+                            <div class="text-h6">Print QR labels</div>
+                            <div class="text-caption dora-text-muted">
+                                Pick items, choose a layout, open a printable
+                                sheet. Save as PDF from your browser's print dialog.
+                            </div>
                         </div>
-                    </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section>
-                    <q-input
-                        v-model="manageFilter"
-                        dense
-                        outlined
-                        clearable
-                        label="Filter items"
-                    />
-                </q-card-section>
-                <q-list separator>
-                    <q-item
-                        v-for="item in filteredManageItems"
-                        :key="item.stock_item_id"
-                    >
-                        <q-item-section>
-                            <q-item-label>{{ item.name }}</q-item-label>
-                            <q-item-label caption>
-                                <span v-if="editingId === item.stock_item_id">
-                                    <q-input
-                                        v-model="editingValue"
-                                        dense
-                                        outlined
-                                        autofocus
-                                        @keyup.enter="commitEdit(item.stock_item_id)"
-                                        @keyup.escape="cancelEdit"
-                                    />
-                                </span>
-                                <span v-else-if="item.barcode">
-                                    <code>{{ item.barcode }}</code>
-                                </span>
-                                <span v-else class="dora-text-muted">no barcode registered</span>
-                            </q-item-label>
-                        </q-item-section>
-                        <q-item-section side>
-                            <div class="row q-gutter-xs">
+                    </q-card-section>
+                    <q-separator />
+                    <q-card-section>
+                        <div class="row q-col-gutter-md items-end">
+                            <q-input
+                                v-model="sheetFilter"
+                                dense
+                                outlined
+                                clearable
+                                label="Filter items"
+                                class="col-12 col-sm-6"
+                            />
+                            <q-select
+                                v-model="sheetLayout"
+                                :options="layoutOptions"
+                                label="Sheet layout"
+                                outlined
+                                dense
+                                emit-value
+                                map-options
+                                class="col-12 col-sm-4"
+                            />
+                            <div class="col-auto">
                                 <q-btn
-                                    v-if="editingId === item.stock_item_id"
                                     flat
                                     dense
                                     no-caps
-                                    color="primary"
-                                    :icon="ICONS.check"
-                                    label="Save"
-                                    @click="commitEdit(item.stock_item_id)"
-                                />
-                                <q-btn
-                                    v-if="editingId === item.stock_item_id"
-                                    flat
-                                    dense
-                                    no-caps
-                                    label="Cancel"
-                                    @click="cancelEdit"
-                                />
-                                <q-btn
-                                    v-else
-                                    flat
-                                    dense
-                                    no-caps
-                                    :icon="ICONS.edit"
-                                    label="Edit"
-                                    @click="startEdit(item)"
-                                />
-                                <q-btn
-                                    v-if="item.barcode && editingId !== item.stock_item_id"
-                                    flat
-                                    dense
-                                    no-caps
-                                    color="negative"
-                                    :icon="ICONS.clear"
-                                    label="Clear"
-                                    @click="clearBarcode(item)"
+                                    label="All"
+                                    @click="onSelectAllVisible"
                                 />
                                 <q-btn
                                     flat
                                     dense
                                     no-caps
-                                    :icon="ICONS.print"
-                                    label="Print one"
-                                    @click="openSingleSheet(item.stock_item_id)"
+                                    label="None"
+                                    @click="selectedItemIds = []"
                                 />
                             </div>
-                        </q-item-section>
-                    </q-item>
-                </q-list>
-            </q-card>
-        </div>
+                        </div>
+                    </q-card-section>
+                    <q-separator />
+                    <q-card-section class="q-pa-none" style="max-height: 360px; overflow: auto">
+                        <q-list dense>
+                            <q-item
+                                v-for="item in filteredStockItems"
+                                :key="item.stock_item_id"
+                                clickable
+                                @click="toggleItem(item.stock_item_id)"
+                            >
+                                <q-item-section avatar>
+                                    <q-checkbox
+                                        :model-value="selectedItemIds.includes(item.stock_item_id)"
+                                        @update:model-value="toggleItem(item.stock_item_id)"
+                                        @click.stop
+                                    />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>{{ item.name }}</q-item-label>
+                                    <q-item-label caption>
+                                        {{ item.stock_level_name ?? '—' }}
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-card-section>
+                    <q-separator />
+                    <q-card-actions align="right">
+                        <q-btn
+                            flat
+                            no-caps
+                            label="Print all items"
+                            :icon="ICONS.print"
+                            @click="openSheet({ allItems: true })"
+                        />
+                        <q-btn
+                            color="primary"
+                            no-caps
+                            :icon="ICONS.picture_as_pdf"
+                            :label="`Open sheet (${selectedItemIds.length})`"
+                            :disable="selectedItemIds.length === 0"
+                            @click="openSheet({ allItems: false })"
+                        />
+                    </q-card-actions>
+                </q-card>
+            </div>
 
-        <!-- ── Shared scan overlay ──────────────────────────────────── -->
-        <ScanOverlay
-            v-model="scanOpen"
-            @decoded="onScanDecoded"
-        />
+            <!-- ── Shared scan overlay ──────────────────────────────────── -->
+            <ScanOverlay
+                v-model="scanOpen"
+                @decoded="onScanDecoded"
+            />
 
-        <!-- ── Lookup-result dialog (after a successful scan) ───────── -->
-        <BaseDialog v-model="resultOpen" card-style="min-width: 320px; max-width: 480px">
-                <q-card-section v-if="resultKind === 'stock_item'">
-                    <div class="text-h6">{{ matchedItem?.name ?? 'Stock item' }}</div>
+            <!-- ── Lookup-result dialog (after a successful scan) ───────── -->
+            <BaseDialog v-model="resultOpen" card-style="min-width: 320px; max-width: 480px">
+                <q-card-section v-if="matchedItem">
+                    <div class="text-h6">{{ matchedItem.name }}</div>
                     <div class="text-caption dora-text-muted">
-                        {{ matchedItem?.stock_level_name ?? '—' }}
+                        {{ matchedItem.stock_level_name ?? '—' }}
                     </div>
                 </q-card-section>
-                <q-card-section v-else-if="resultKind === 'unknown'">
-                    <div class="text-h6">Unknown barcode</div>
+                <q-card-section v-else-if="resultKind === 'product'">
+                    <div class="text-h6">Product not linked</div>
                     <div class="text-caption dora-text-muted">
-                        <code>{{ lastScannedValue }}</code>
+                        This barcode is linked to a product, but that product isn't
+                        attached to any stock item yet.
                     </div>
-                    <q-separator class="q-my-md" />
-                    <div class="text-body2 q-mb-sm">
-                        Register against a stock item:
-                    </div>
-                    <q-select
-                        v-model="registerTarget"
-                        :options="stockItemOptions"
-                        outlined
-                        dense
-                        use-input
-                        clearable
-                        emit-value
-                        map-options
-                        label="Pick a stock item"
-                        @filter="filterStockItemOptions"
-                    />
                 </q-card-section>
                 <q-card-section v-else>
                     <div class="text-h6">No match</div>
+                    <div class="text-caption dora-text-muted">
+                        <code>{{ lastScannedValue }}</code> isn't linked to a product
+                        yet.
+                    </div>
                 </q-card-section>
                 <q-card-actions align="right">
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                     <q-btn
-                        v-if="resultKind === 'stock_item' && matchedItem"
+                        v-if="matchedItem"
                         flat
                         no-caps
                         :icon="ICONS.open_in_new"
@@ -300,17 +202,9 @@
                         color="primary"
                         @click="openDetail(matchedItem.stock_item_id)"
                     />
-                    <q-btn
-                        v-if="resultKind === 'unknown'"
-                        color="primary"
-                        no-caps
-                        :icon="ICONS.check"
-                        label="Register"
-                        :disable="!registerTarget"
-                        @click="registerUnknownBarcode"
-                    />
                 </q-card-actions>
-        </BaseDialog>
+            </BaseDialog>
+        </template>
     </div>
 </template>
 
@@ -325,16 +219,18 @@
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import BarcodeApiService from 'src/services/api/barcodeApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import type { StockItem } from 'src/models/stockItem';
 
     const $q = useQuasar();
     const router = useRouter();
+    const { scanningEnabled, scanningLoaded } = useScanningEnabled();
     const stockItemStore = useStockItemStore();
     const barcodeApi = new BarcodeApiService();
     const stockItemApi = new StockItemApiService();
 
-    type Tab = 'scan' | 'sheets' | 'manage';
+    type Tab = 'scan' | 'sheets';
     const tab = ref<Tab>('scan');
 
     // ── Scan ──────────────────────────────────────────────────────────
@@ -343,7 +239,6 @@
     const resultKind = ref<'stock_item' | 'product' | 'unknown' | null>(null);
     const lastScannedValue = ref('');
     const matchedItem = ref<StockItem | null>(null);
-    const registerTarget = ref<string | null>(null);
 
     async function onScanDecoded(value: string) {
         lastScannedValue.value = value;
@@ -360,7 +255,6 @@
                     : null;
             } else {
                 matchedItem.value = null;
-                registerTarget.value = null;
             }
             resultOpen.value = true;
         } catch (err) {
@@ -379,30 +273,7 @@
         void router.push(`/stock/${id}`);
     }
 
-    async function registerUnknownBarcode() {
-        if (!registerTarget.value || !lastScannedValue.value) return;
-        try {
-            await stockItemApi.registerBarcodeAsync(
-                registerTarget.value, lastScannedValue.value,
-            );
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Barcode registered.',
-            });
-            resultOpen.value = false;
-            await stockItemStore.getStockItemsAsync?.();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't register barcode.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
-
-    // ── Print sheets ──────────────────────────────────────────────────
+    // ── Print labels ──────────────────────────────────────────────────
     const sheetFilter = ref('');
     const sheetLayout = ref('a4-21up');
     const layoutOptions = [
@@ -438,100 +309,10 @@
         window.open(url, '_blank', 'noopener');
     }
 
-    function openSingleSheet(id: string) {
-        const baseUrl = resolveBaseURL('dora');
-        const url =
-            `${baseUrl}/stock-items/qr/sheet` +
-            `?layout=${encodeURIComponent(sheetLayout.value)}` +
-            `&ids=${encodeURIComponent(id)}`;
-        window.open(url, '_blank', 'noopener');
-    }
-
-    // ── Manage ────────────────────────────────────────────────────────
-    const manageFilter = ref('');
-    const editingId = ref<string | null>(null);
-    const editingValue = ref('');
-
-    const filteredManageItems = computed(() => {
-        const needle = manageFilter.value.trim().toLowerCase();
-        const all = stockItemStore.stockItems ?? [];
-        const filtered = needle
-            ? all.filter((s) =>
-                s.name.toLowerCase().includes(needle)
-                || (s.barcode ?? '').toLowerCase().includes(needle),
-            )
-            : all;
-        // Items with barcodes first so the user can see what's already wired up.
-        return [...filtered].sort((a, b) => {
-            const ab = a.barcode ? 0 : 1;
-            const bb = b.barcode ? 0 : 1;
-            if (ab !== bb) return ab - bb;
-            return a.name.localeCompare(b.name);
-        });
-    });
-
-    function startEdit(item: StockItem) {
-        editingId.value = item.stock_item_id;
-        editingValue.value = item.barcode ?? '';
-    }
-    function cancelEdit() {
-        editingId.value = null;
-        editingValue.value = '';
-    }
-    async function commitEdit(stockItemId: string) {
-        const value = editingValue.value.trim();
-        try {
-            if (!value) {
-                await stockItemApi.clearBarcodeAsync(stockItemId);
-            } else {
-                await stockItemApi.registerBarcodeAsync(stockItemId, value);
-            }
-            await stockItemStore.getStockItemsAsync?.();
-            cancelEdit();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't update barcode.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
-    async function clearBarcode(item: StockItem) {
-        try {
-            await stockItemApi.clearBarcodeAsync(item.stock_item_id);
-            await stockItemStore.getStockItemsAsync?.();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't clear barcode.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
-
-    // ── Stock-item autocomplete for register-unknown flow ────────────
-    const stockItemOptionsRaw = computed(() =>
-        (stockItemStore.stockItems ?? []).map((s) => ({
-            label: s.name, value: s.stock_item_id,
-        })),
-    );
-    const stockItemOptions = ref(stockItemOptionsRaw.value);
-    function filterStockItemOptions(val: string, update: (cb: () => void) => void) {
-        update(() => {
-            const needle = val.toLowerCase();
-            stockItemOptions.value = needle
-                ? stockItemOptionsRaw.value.filter((o) => o.label.toLowerCase().includes(needle))
-                : stockItemOptionsRaw.value;
-        });
-    }
-
     onMounted(async () => {
-        // Hydrate the store on first visit so all three tabs have items.
+        // Hydrate the store on first visit so the print tab has items.
         if ((stockItemStore.stockItems ?? []).length === 0) {
             await stockItemStore.getStockItemsAsync?.();
         }
-        stockItemOptions.value = stockItemOptionsRaw.value;
     });
 </script>

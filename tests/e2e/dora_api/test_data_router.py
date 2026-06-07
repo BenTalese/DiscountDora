@@ -549,6 +549,8 @@ def test__recipe_print_view__returns_html_with_recipe_name(api):
 # ── Barcodes & QR (N5) ─────────────────────────────────────────────────
 
 LOOKUP_URL = "http://localhost:5170/api/data/barcodes/lookup"
+REGISTER_PRODUCT_BARCODE_URL = "http://localhost:5170/api/data/barcodes/register-against-product"
+PRODUCTS_URL = "http://localhost:5170/api/products"
 STOCK_ITEMS_URL = "http://localhost:5170/api/stock-items"
 
 
@@ -575,57 +577,60 @@ def test__stock_item_qr__bad_size__is_400(api):
     assert response.status_code == 400
 
 
-def test__register_stock_item_barcode__happy_path__and_lookup(api):
+def _first_product_id() -> str:
+    products = requests.get(PRODUCTS_URL).json().get("items") or []
+    assert products, "seed data has no products"
+    return products[0]["product_id"]
+
+
+def test__dora_link_lookup__resolves_stock_item(api):
+    # A real-world barcode identifies a Product, not a stock item. The only
+    # path that resolves directly to a stock item is Dora's own QR link.
     item_id = _first_seeded_stock_item_id()
+    dora_lookup = requests.get(
+        f"{LOOKUP_URL}?value=dora://stock-item/{item_id}",
+    )
+    assert dora_lookup.status_code == 200, dora_lookup.text
+    body = dora_lookup.json()
+    assert body["kind"] == "stock_item"
+    assert body["id"] == item_id
+
+
+def test__register_product_barcode__happy_path__and_lookup(api):
+    product_id = _first_product_id()
     barcode = f"TEST-{uuid.uuid4().hex[:10]}"
 
-    # Register.
     register = requests.post(
-        f"{STOCK_ITEMS_URL}/{item_id}/barcode",
-        json={"barcode": barcode},
+        REGISTER_PRODUCT_BARCODE_URL,
+        json={"product_id": product_id, "barcode": barcode},
     )
     assert register.status_code == 200, register.text
     body = register.json()
     assert body["barcode"] == barcode
+    assert body["product_id"] == product_id
 
-    # Look up.
     lookup = requests.get(f"{LOOKUP_URL}?value={barcode}")
     assert lookup.status_code == 200, lookup.text
     lookup_body = lookup.json()
-    assert lookup_body["kind"] == "stock_item"
-    assert lookup_body["id"] == item_id
-
-    # Dora link lookup also resolves.
-    dora_lookup = requests.get(
-        f"{LOOKUP_URL}?value=dora://stock-item/{item_id}",
-    )
-    assert dora_lookup.status_code == 200
-    assert dora_lookup.json()["kind"] == "stock_item"
-
-    # Clean up so subsequent tests aren't affected.
-    requests.delete(f"{STOCK_ITEMS_URL}/{item_id}/barcode")
+    assert lookup_body["kind"] == "product"
+    assert lookup_body["id"] == product_id
 
 
-def test__register_stock_item_barcode__collision__is_409(api):
-    item_id_1 = _first_seeded_stock_item_id()
-    # Find a second item so we can collide.
-    items = requests.get(STOCK_ITEMS_URL).json()["items"]
-    item_id_2 = next(i["stock_item_id"] for i in items if i["stock_item_id"] != item_id_1)
-
+def test__register_product_barcode__collision__is_409(api):
+    product_id = _first_product_id()
     barcode = f"TEST-{uuid.uuid4().hex[:10]}"
+
     register_first = requests.post(
-        f"{STOCK_ITEMS_URL}/{item_id_1}/barcode",
-        json={"barcode": barcode},
+        REGISTER_PRODUCT_BARCODE_URL,
+        json={"product_id": product_id, "barcode": barcode},
     )
-    assert register_first.status_code == 200
+    assert register_first.status_code == 200, register_first.text
 
     register_dup = requests.post(
-        f"{STOCK_ITEMS_URL}/{item_id_2}/barcode",
-        json={"barcode": barcode},
+        REGISTER_PRODUCT_BARCODE_URL,
+        json={"product_id": product_id, "barcode": barcode},
     )
     assert register_dup.status_code == 409, register_dup.text
-
-    requests.delete(f"{STOCK_ITEMS_URL}/{item_id_1}/barcode")
 
 
 def test__barcode_lookup__unknown_value__is_unknown(api):
@@ -664,7 +669,7 @@ def test__stock_overview_export_csv__returns_csv_with_header(api):
     header = response.text.splitlines()[0]
     for col in (
         "location", "name", "level", "expiry", "is_flagged",
-        "is_open", "auto_add_when_low", "barcode", "notes",
+        "is_open", "auto_add_when_low", "notes",
     ):
         assert col in header
 

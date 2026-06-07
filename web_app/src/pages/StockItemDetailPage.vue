@@ -52,17 +52,17 @@
                 <BaseButton variant="secondary" :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
                 <BaseButton variant="primary" :icon="ICONS.add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
                 <q-space />
-                <BaseButton variant="secondary" icon="qr_code_2" label="Show QR" @click="showQrOpen = true" />
                 <BaseButton
+                    v-if="scanningEnabled"
                     variant="secondary"
-                    :icon="ICONS.qr_code_scanner"
-                    label="Register barcode"
-                    @click="registerScanOpen = true"
+                    icon="qr_code_2"
+                    label="Show QR"
+                    @click="showQrOpen = true"
                 />
                 <BaseButton variant="danger-ghost" :icon="ICONS.delete" label="Delete" @click="confirmDelete" />
             </div>
 
-            <!-- ── QR / scan overlays (N5) ──────────────────────────── -->
+            <!-- ── QR dialog ────────────────────────────────────────── -->
             <BaseDialog v-model="showQrOpen" card-style="min-width: 280px; max-width: 400px">
                     <q-card-section class="text-center">
                         <div class="text-h6 q-mb-sm">{{ detail.name }}</div>
@@ -71,12 +71,6 @@
                             alt="QR code"
                             style="width: 256px; height: 256px; max-width: 100%;"
                         />
-                        <div
-                            v-if="detail.barcode"
-                            class="text-caption dora-text-muted q-mt-sm"
-                        >
-                            Registered barcode: <code>{{ detail.barcode }}</code>
-                        </div>
                     </q-card-section>
                     <q-card-actions align="right">
                         <BaseButton variant="ghost" label="Close" v-close-popup />
@@ -88,12 +82,6 @@
                         />
                     </q-card-actions>
             </BaseDialog>
-
-            <ScanOverlay
-                v-model="registerScanOpen"
-                close-on-decode
-                @decoded="onBarcodeDecoded"
-            />
 
             <q-tabs v-model="tab" dense align="left" class="dora-text-secondary q-mb-sm" no-caps>
                 <q-tab name="overview" :icon="ICONS.info" label="Overview" />
@@ -512,9 +500,9 @@
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
-    import ScanOverlay from 'src/components/ScanOverlay.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
@@ -567,9 +555,9 @@
     const loadError = ref<string | null>(null);
     const busy = ref(false);
 
-    // ── Barcodes / QR (N5) ───────────────────────────────────────────
+    // ── QR labels (gated by the install-wide scanning flag) ──────────
+    const { scanningEnabled } = useScanningEnabled();
     const showQrOpen = ref(false);
-    const registerScanOpen = ref(false);
     const qrSrc = computed(() => {
         const baseUrl = resolveBaseURL('dora');
         // size 512 looks crisp on retina; the dialog box clamps to 256.
@@ -582,30 +570,6 @@
             `${baseUrl}/stock-items/qr/sheet?ids=${stockItemId.value}`,
             '_blank', 'noopener',
         );
-    }
-
-    async function onBarcodeDecoded(value: string) {
-        try {
-            await stockItemApi.registerBarcodeAsync(stockItemId.value, value);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Barcode registered against ${detail.value?.name ?? 'this item'}.`,
-            });
-            registerScanOpen.value = false;
-            await loadDetail();
-        } catch (err: unknown) {
-            // Conflict (already in use) lands here; surface the server's
-            // detail line so the user sees which item already has it.
-            const message =
-                err instanceof Error ? err.message : 'Could not register barcode.';
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't register barcode.",
-                caption: message,
-            });
-        }
     }
 
     const tab = ref<string>(

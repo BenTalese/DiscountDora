@@ -180,7 +180,7 @@
 
     const listOptions = computed(() =>
         summaries.value
-            .filter((s) => !s.is_archived)
+            .filter((s) => s.status !== 'done')
             .map((s) => ({
                 label: s.name + (s.is_primary ? ' (primary)' : ''),
                 value: s.shopping_list_id,

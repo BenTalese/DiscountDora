@@ -33,11 +33,6 @@ class StockItem(BaseEntity):
     # True; flipping back to False clears it.
     is_open: bool = False
     opened_on: date | None = None
-    # Optional barcode the user has registered against this item. Globally
-    # unique across the install (the schema isn't user-scoped); used by
-    # the camera-scan flow to jump straight to the item. None = no
-    # registered barcode yet.
-    barcode: str | None = None
     # X1: distinct from stock_level_last_updated. A "check" is the user
     # confirming the current level is correct without changing it.
     # Updating the level updates BOTH timestamps; clicking "Still
@@ -75,5 +70,4 @@ class StockItem(BaseEntity):
         STOCK_LEVEL_LAST_UPDATED = "stock_level_last_updated"
         STOCK_LOCATION = "stock_location"
         STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
-        BARCODE = "barcode"
         LAST_CHECKED_AT = "last_checked_at"

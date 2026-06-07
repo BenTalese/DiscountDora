@@ -184,6 +184,23 @@
                         </div>
                     </q-banner>
                 </q-card-section>
+
+                <q-separator />
+
+                <q-card-section>
+                    <q-toggle
+                        v-model="scanningDraft"
+                        label="Enable scanning & QR labels"
+                        :disable="savingScanning"
+                        @update:model-value="onScanningToggle"
+                    />
+                    <div class="text-caption dora-text-muted q-ml-sm">
+                        Camera scanning of real-world product barcodes (to jump to
+                        a linked stock item) and printing Dora's own QR labels for
+                        items and shelves. Navigation only — scanning never looks up
+                        live prices. Off by default.
+                    </div>
+                </q-card-section>
             </template>
 
             <q-separator />
@@ -331,11 +348,41 @@
     const maintenanceMode = ref(false);
     const emailerEnabled = ref(true);
 
-    function applyLoaded(s: { llm_enabled: boolean; llm_base_url: string; llm_model: string }) {
+    // Scanning & QR labels — a real install-wide flag, saved on toggle (no
+    // extra config to validate, unlike the LLM block).
+    const scanningDraft = ref(false);
+    const savingScanning = ref(false);
+
+    function applyLoaded(s: {
+        llm_enabled: boolean; llm_base_url: string; llm_model: string;
+        scanning_enabled: boolean;
+    }) {
         enabledDraft.value = s.llm_enabled;
         baseUrlDraft.value = s.llm_base_url;
         modelDraft.value = s.llm_model;
+        scanningDraft.value = s.scanning_enabled;
         saved.value = { enabled: s.llm_enabled, baseUrl: s.llm_base_url, model: s.llm_model };
+    }
+
+    async function onScanningToggle(value: boolean) {
+        savingScanning.value = true;
+        try {
+            const result = await api.updateAsync({ scanning_enabled: value });
+            scanningDraft.value = result.scanning_enabled;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: value ? 'Scanning & QR labels enabled.' : 'Scanning & QR labels disabled.',
+            });
+        } catch (err) {
+            scanningDraft.value = !value;
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save scanning setting.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            savingScanning.value = false;
+        }
     }
 
     async function onSave() {

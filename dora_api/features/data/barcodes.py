@@ -1,14 +1,19 @@
 """Barcode + QR endpoints.
 
-  GET    /api/stock-items/<id>/qr             — PNG of the item's dora:// QR
-  GET    /api/stock-items/qr/sheet            — HTML print-sheet of many QRs
-  POST   /api/stock-items/<id>/barcode        — register a barcode on an item
-  DELETE /api/stock-items/<id>/barcode        — clear it
-  GET    /api/barcodes/lookup?value=...       — disambiguate a scanned value
+  GET    /api/stock-items/<id>/qr                       — PNG of the item's dora:// QR
+  GET    /api/stock-items/qr/sheet                      — HTML print-sheet of many QRs
+  GET    /api/barcodes/lookup?value=...                 — disambiguate a scanned value
+  POST   /api/barcodes/register-against-product         — link a real barcode to a Product
 
 QR generation uses `qrcode[pil]` (pure Python + Pillow). The sheet
 endpoint is HTML so the user can print or Save-as-PDF — consistent
 with the no-server-PDF call we made in N4.
+
+Model note (P6-02): a real-world barcode (EAN/UPC) identifies a *Product*, not
+a stock item, so it lives in `ProductBarcode`. There is deliberately no
+`StockItem.barcode` — lookup resolves a real barcode to its Product, then to a
+linked stock item. Scanning is a navigation aid only; it never does live deal
+lookup.
 """
 import io
 import logging
@@ -31,12 +36,11 @@ from dora_api.features.routers import (
     DATA_ROUTER, STOCK_ITEM_ROUTER,
 )
 from dora_api.infrastructure.api_response import (
-    bad_request, business_rule_violation, no_content, not_found, ok,
+    bad_request, not_found, ok,
     unprocessable_entity, ProblemDetails,
 )
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (field_of, get_container,
-                                           get_request_body)
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -274,62 +278,6 @@ def stock_item_qr_sheet():
     return Response(html, mimetype="text/html; charset=utf-8")
 
 
-# ── POST/DELETE /api/stock-items/<id>/barcode ──────────────────────────
-
-class RegisterStockItemBarcodeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    barcode: str = Field(min_length=1, max_length=255)
-
-
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/barcode", methods=["POST"])
-@has_request_body(RegisterStockItemBarcodeRequest)
-def register_stock_item_barcode(stock_item_id: UUID):
-    _Logger = logging.getLogger(__name__)
-    _Request: RegisterStockItemBarcodeRequest = get_request_body()
-    barcode = _Request.barcode.strip()
-    if not barcode:
-        return bad_request("barcode cannot be blank.")
-
-    repo = SqlAlchemyRepository()
-    item: StockItem | None = repo.get(StockItem).by_id(stock_item_id)
-    if item is None:
-        return not_found("StockItem", stock_item_id)
-
-    # Reject if another item already holds this barcode (uniqueness is
-    # global per install — see N5 scoping decision).
-    other: StockItem | None = repo.get(StockItem).one(
-        EntityField(StockItem, "barcode").eq(barcode)
-    )
-    if other is not None and other.id != item.id:
-        return _conflict(
-            f"Barcode '{barcode}' is already registered to '{other.name}'."
-        )
-
-    item.barcode = barcode
-    try:
-        repo.save_changes()
-    except IntegrityError as exc:
-        # Belt-and-braces: covers a concurrent-insert race that the
-        # explicit check above can't catch.
-        repo.session.rollback()
-        _Logger.warning("Barcode unique-constraint conflict: %s", exc)
-        return _conflict(f"Barcode '{barcode}' is already in use.")
-
-    _Logger.info("Registered barcode on stock item %s", stock_item_id)
-    return ok({"stock_item_id": str(stock_item_id), "barcode": barcode})
-
-
-@STOCK_ITEM_ROUTER.route("/<stock_item_id>/barcode", methods=["DELETE"])
-def clear_stock_item_barcode(stock_item_id: UUID):
-    repo = SqlAlchemyRepository()
-    item: StockItem | None = repo.get(StockItem).by_id(stock_item_id)
-    if item is None:
-        return not_found("StockItem", stock_item_id)
-    item.barcode = None
-    repo.save_changes()
-    return no_content()
-
-
 def _conflict(message: str) -> Response:
     """409-style response. The codebase has no `conflict` helper yet, so
     we cosplay one via unprocessable_entity with a 409 status override."""
@@ -363,14 +311,8 @@ def barcode_lookup():
             return ok({"kind": "stock_item", "id": str(item.id)})
         return ok({"kind": "unknown", "value": raw})
 
-    # 2. Direct stock-item barcode column hit.
-    match: StockItem | None = repo.get(StockItem).one(
-        EntityField(StockItem, "barcode").eq(raw)
-    )
-    if match is not None:
-        return ok({"kind": "stock_item", "id": str(match.id)})
-
-    # 3. ProductBarcode hit → resolve linked stock item (if any).
+    # 2. ProductBarcode hit → resolve linked stock item (if any). Real-world
+    #    barcodes identify a Product, never a stock item directly.
     product_match: ProductBarcode | None = repo.get(ProductBarcode).one(
         EntityField(ProductBarcode, "barcode").eq(raw)
     )

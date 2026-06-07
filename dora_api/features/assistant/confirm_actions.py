@@ -26,7 +26,8 @@ from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
@@ -282,7 +283,7 @@ def commit_push_expiry(payload: dict[str, Any]) -> dict[str, Any]:
 def _primary_list(repo: SqlAlchemyRepository) -> ShoppingList | None:
     return repo.get(ShoppingList).one(
         EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-        & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+        & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
     )
 
 
@@ -450,11 +451,11 @@ def commit_move_item(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _find_shopping_list(repo: SqlAlchemyRepository, name: str) -> list[ShoppingList]:
     field = EntityField(ShoppingList, ShoppingList.Fields.NAME)
-    archived = EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
-    exact = repo.get(ShoppingList).all(field.eq(name) & archived)
+    active = EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
+    exact = repo.get(ShoppingList).all(field.eq(name) & active)
     if exact:
         return exact
-    return repo.get(ShoppingList).all(field.contains(name) & archived)
+    return repo.get(ShoppingList).all(field.contains(name) & active)
 
 
 def propose_set_primary_list(args: dict) -> dict[str, Any]:

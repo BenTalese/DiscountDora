@@ -64,7 +64,7 @@ class MoveUntickedHandler:
         target = self.repository.get(ShoppingList).by_id(target_id)
         if target is None:
             return MoveUntickedResponse(target_not_found=True)
-        if target.is_archived:
+        if target.is_done:
             return MoveUntickedResponse(target_archived=True)
 
         unticked: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(

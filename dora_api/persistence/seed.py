@@ -12,7 +12,9 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
+    ShoppingList, ShoppingListLine)
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine)
 from dora_api.domain.entities.stock_group import StockGroup
@@ -451,11 +453,12 @@ def seed_dev_data():
     # ---------------- SHOPPING LISTS ---------------- #
     primary = ShoppingList(name="This week", created_at=now, is_primary=True)
     in_progress = ShoppingList(
-        name="Saturday shop", created_at=now - timedelta(days=1), is_in_progress=True,
+        name="Saturday shop", created_at=now - timedelta(days=1),
+        status=SHOPPING_LIST_STATUS_SHOPPING,
     )
     archived = ShoppingList(
         name="Last week", created_at=now - timedelta(days=7),
-        completed_at=now - timedelta(days=5), is_archived=True,
+        completed_at=now - timedelta(days=5), status=SHOPPING_LIST_STATUS_DONE,
     )
     for sl in (primary, in_progress, archived):
         repo.add(sl)

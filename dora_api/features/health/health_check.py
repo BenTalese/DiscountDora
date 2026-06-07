@@ -52,18 +52,22 @@ def _feature_flags() -> dict[str, bool]:
     flags: dict[str, bool] = {
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
-        "barcodes": True,
+        "scanning": False,      # resolved below — off by default
         "multi_user": True,     # register + admin role
         "email": os.environ.get("DORA_EMAIL_ENABLED", "false").lower()
                  in {"1", "true", "yes", "on"},
         "assistant": False,     # resolved below
     }
-    # AppSettings drives the assistant flag at runtime. Wrapped so
-    # a DB hiccup doesn't take the health probe down with it.
+    # AppSettings drives the assistant + scanning flags at runtime. Wrapped
+    # so a DB hiccup doesn't take the health probe down with it.
     try:
         from dora_api.features.app_settings.access import \
-            get_or_create_app_settings
-        flags["assistant"] = bool(get_or_create_app_settings().llm_enabled)
+            get_or_create_app_setting
+        from dora_api.persistence.sqlalchemy_repository import \
+            SqlAlchemyRepository
+        setting = get_or_create_app_setting(SqlAlchemyRepository())
+        flags["assistant"] = bool(setting.llm_enabled)
+        flags["scanning"] = bool(setting.scanning_enabled)
     except Exception:
         pass
     return flags

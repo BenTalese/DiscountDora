@@ -29,7 +29,16 @@ moved toward the solution:
 
 ## 1. Chunked plan (each chunk = one reviewable PR)
 
-### Chunk 1 — Status model + server-owned finish/reopen  ★ FIRST REVIEWABLE CHUNK
+### Chunk 1 — Status model + server-owned finish/reopen  ★ FIRST REVIEWABLE CHUNK ✅ IMPLEMENTED (2026-06-07)
+**Two approved deviations from the plan below:**
+- **Old booleans dropped now, not in Chunk 7.** Pre-release = no compat shims, so
+  `is_archived` / `is_in_progress` were removed in this chunk (no dual-read). `is_primary`
+  and `completed_at` stay (primary removal is Chunk 2).
+- **Snapshot-on-list, not a separate audit table.** Finish writes a `finish_snapshot`
+  JSON-in-text column on the list (`{was_primary, promoted_primary_list_id,
+  level_restores}`); reopen reverses from it and clears it. Lighter than an audit row,
+  same server-owned-undo guarantee (R-003).
+
 The crux (proposal §2.1, §3). Data model + the risky cross-domain path, together.
 - Add a **`status` enum** column (`draft` / `shopping` / `done`) + migration:
   `is_archived→done`, `is_in_progress→shopping`, else `draft`. **Keep the old

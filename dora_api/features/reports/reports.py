@@ -48,7 +48,8 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
@@ -300,7 +301,7 @@ class SpendByMerchantHandler:
 
         # Only archived (completed) lists within the window contribute.
         list_query = select(ShoppingList.id, ShoppingList.completed_at).where(
-            ShoppingList.is_archived == True  # noqa: E712
+            ShoppingList.status == SHOPPING_LIST_STATUS_DONE
         )
         if since is not None:
             list_query = list_query.where(ShoppingList.completed_at >= since)
@@ -388,7 +389,7 @@ class MostBoughtItemsHandler:
         session = self.repository.session
 
         list_query = select(ShoppingList.id).where(
-            ShoppingList.is_archived == True  # noqa: E712
+            ShoppingList.status == SHOPPING_LIST_STATUS_DONE
         )
         if since is not None:
             list_query = list_query.where(ShoppingList.completed_at >= since)
@@ -695,7 +696,7 @@ class SavingsCapturedHandler:
 
         list_query = select(
             ShoppingList.id, ShoppingList.name, ShoppingList.completed_at
-        ).where(ShoppingList.is_archived == True)  # noqa: E712
+        ).where(ShoppingList.status == SHOPPING_LIST_STATUS_DONE)
         if since is not None:
             list_query = list_query.where(ShoppingList.completed_at >= since)
         list_rows = session.execute(list_query).all()

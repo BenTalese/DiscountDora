@@ -24,6 +24,7 @@ class UpdateAppSettingsRequest(BaseModel):
     llm_enabled: bool | None = None
     llm_base_url: str | None = Field(default=None, max_length=500)
     llm_model: str | None = Field(default=None, max_length=255)
+    scanning_enabled: bool | None = None
 
 
 @dataclass(slots=True)
@@ -46,6 +47,8 @@ class UpdateAppSettingsHandler:
             setting.llm_model = (request.llm_model or "").strip()
         if "llm_enabled" in set_fields and request.llm_enabled is not None:
             setting.llm_enabled = request.llm_enabled
+        if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
+            setting.scanning_enabled = request.scanning_enabled
 
         # Enabling without a connection is a misconfiguration — the assistant
         # would just silently fall back. Reject it so the admin gets told.
@@ -59,6 +62,7 @@ class UpdateAppSettingsHandler:
             llm_enabled=bool(setting.llm_enabled),
             llm_base_url=setting.llm_base_url or "",
             llm_model=setting.llm_model or "",
+            scanning_enabled=bool(setting.scanning_enabled),
         ))
 
 

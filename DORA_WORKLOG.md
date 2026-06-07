@@ -24,6 +24,104 @@ next.
 
 ---
 
+## 2026-06-07 — P6-01 Chunk 1 (shopping-list lifecycle) — IMPLEMENTED.
+**Status:** complete.
+**What changed:**
+- **Status model.** `ShoppingList.is_archived` + `is_in_progress` collapsed into a single
+  `status` enum (`draft` / `shopping` / `done`) on the entity (plain-string sentinels +
+  `is_draft`/`is_shopping`/`is_done` props). Migration `c4d8e1a6f3b9` converts existing
+  rows (`is_archived→done`, `is_in_progress→shopping`, else `draft`) and **drops** the two
+  old columns (no dual-read). DTOs (summaries + detail) expose `status`; the ~dozen
+  backend consumers that meant "active" now read `status != done`.
+- **Server-owned finish/reopen.** Finish writes `finish_snapshot` (JSON-in-text:
+  `{was_primary, promoted_primary_list_id, level_restores}`) capturing what it changed,
+  then restocks ticked items + marks `done`. Reopen (`POST /…/unfinish`, **no body**)
+  reverses straight from the snapshot and clears it. `start`/`stop` move draft↔shopping;
+  invalid `status` PATCH → 400.
+- **Frontend.** New `ShoppingListStatus` type + `isListDone/isListShopping` helpers;
+  every `is_archived`/`is_in_progress` read swapped to `status` comparisons across the
+  shopping-list pages, QuickAdd, recipes, products, ExportPrint; `unfinishAsync` posts an
+  empty body (client snapshot capture removed).
+- **Two bugs fixed en route** (both pre-existing, logged FU-058/FU-059):
+  (1) line tick/delete always 404'd — `update_line`/`delete_line` compared a `UUID` FK to
+  a `str` path param; now string-compared. (2) Finish captured no `level_restores` because
+  `stock_level` is a `lazy="noload"` relationship; the finish query now `.include`s it.
+**Decisions made:** Dropped old booleans **now** (pre-release = no compat shims), against
+the plan's "keep for dual-read till Chunk 7". Used a snapshot-on-list column rather than a
+separate audit table — lighter, same server-owned-undo guarantee (R-003). `is_primary` +
+`completed_at` kept (primary removal is Chunk 2). Scope held to Chunk 1; the two bug fixes
+were in-path blockers for the finish/reopen e2e, fixed minimally + logged.
+**Files touched:** entity `shopping_list.py`; `table_mappings.py`; migration
+`c4d8e1a6f3b9_*`; `features/shopping_lists/*` (manage_shopping_list, unfinish,
+get_shopping_lists, get_shopping_list_detail, manage_shopping_list_lines, auto_generate,
+list_actions, get_membership); consumers in assistant, suggestions, dashboard, reports,
+budget, search, stock_items/update_stock_item; frontend `models/shoppingList.ts`,
+`shoppingListApiService.ts`, ShoppingList* pages, QuickAddSheet, MyProductsPage,
+Recipes*, data/ExportPrint; new e2e `tests/e2e/dora_api/test_shopping_list_lifecycle.py`.
+**Verification:** new lifecycle e2e — **5/5 pass** (draft default, start/stop, invalid
+status rejected, summaries expose status, finish→reopen restores level server-side).
+Touched backend `py_compile`-clean; frontend `vue-tsc --noEmit` clean (from prior
+session). Broader e2e suite has a **pre-existing** 23-fail/10-error baseline (paginated
+endpoints read as bare lists in old fixtures, FU-048) — **confirmed identical with `git
+stash`**, so no regression from this chunk. **NOT done:** migration not applied to a live
+DB (FU-057-style); no browser smoke of the lifecycle UI.
+**Next up:** Chunk 2 — contextual target inference to remove stored `is_primary` reads
+(needs the inference resolver), then drop `is_primary`. Before that, browser-verify
+shop-mode line ticking (FU-059) and the finish/reopen flow.
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-07 — P6-02 barcode/QR — IMPLEMENTED (cleanup slice; "Cleanup now, UI later").
+**Status:** complete (the cleanup slice; deferred slices logged as follow-ups).
+**What changed:**
+- **Dropped the wrong model:** removed `StockItem.barcode` (column, mapping, entity field,
+  register/clear routes, wrong-model UI, DTOs, CSV export column). Migration
+  `a3f1c7d2e9b4` (down_revision `b2c3d4e5f6a7`, the true head — handoff's
+  `d7f4a2c98e15` was stale) drops the column + uq constraint via `batch_alter_table`
+  (R-005 SQLite portability) and adds `AppSetting.scanning_enabled`.
+- **Kept the right model:** `ProductBarcode` (barcode→Product) and its lookup branch,
+  plus Dora's own QR labels. `register-against-product` route kept + now tested.
+- **Off-by-default gating:** new `AppSetting.scanning_enabled` (default false), exposed
+  via health `features.scanning`, consumed by new `useScanningEnabled()` composable
+  (no new Pinia store). Gated: StockOverview scan/print buttons, stock-item "Show QR",
+  Data → "Scanning & QR labels" section + page (off-state banner), admin toggle wired
+  in Settings → System.
+- **Honest relabel:** "Barcodes & QR" → "Scanning & QR labels"; dropped the "Manage"
+  tab; banner states scanning is navigation-only, never live price lookup.
+- **Fixed latent bug:** health `_feature_flags()` called non-existent
+  `get_or_create_app_settings()` (swallowed by try/except) → `features.assistant` was
+  always false. Now reads real AppSetting, reports `assistant` + `scanning`.
+- **Tests:** `test_data_router.py` — removed the two `register_stock_item_barcode`
+  tests (routes gone), added `register_product_barcode` happy/collision +
+  dora-link-resolves tests, removed `barcode` from CSV-header assertion.
+- **Docs:** new `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md` (two-system design +
+  feedback coverage table); CLAUDE.md "Removed features" P6-02 line reworded; CHANGELOG.
+**Decisions made:** Implemented Option 1 ("Cleanup now, UI later") per user choice.
+ONE flag gating the whole surface (anti-creep, P10). Register-against-product UI +
+ingestion EAN auto-populate deferred to Phase 2 — Product has no EAN field today (only
+`merchant_stockcode`), so a register UI now would be manual-only; ingestion is the right
+place to auto-fill `ProductBarcode`.
+**Files touched:** see CHANGELOG; backend `app_setting.py`, `table_mappings.py`,
+`stock_item.py`, `features/app_settings/*`, `features/data/barcodes.py`,
+`features/stock_items/get_stock_item*.py`, `features/data/export_stock_overview.py`,
+`features/health/health_check.py`, migration `a3f1c7d2e9b4_*`; frontend
+`useScanningEnabled.ts`, `healthApiService.ts`, `appSettingsApiService.ts`,
+`stockItemApiService.ts`, `barcodeApiService.ts`, `stockItem.ts`, `stockItemDetail.ts`,
+`SystemSettings.vue`, `StockItemDetailPage.vue`, `StockOverview.vue`,
+`data/BarcodesQR.vue`, `DataManagement.vue`, `MainLayout.vue`; tests
+`test_data_router.py`.
+**Verification:** all touched Python `py_compile`-clean; frontend sweep confirmed no
+stray `registerBarcodeAsync`/`clearBarcodeAsync`, no `features.barcodes`, no
+stock-item `.barcode`. **NOT run:** e2e suite (pre-existing broken, FU-048); migration
+not applied against a live DB; no browser smoke test of the gated UI.
+**Next up:** P6-01 (unblocked). Before that, someone should browser-verify the gated
+scanning surface (toggle on/off in Settings → System) and run the migration on a dev DB.
+**Open questions for user:** none blocking. The deferred register-against-product UI +
+ingestion auto-populate are logged in DORA_FOLLOWUPS.
+
+---
+
 ## 2026-06-07 — P6-02 barcode/QR — DESIGN DISCUSSION (recon-only, NO code). HANDOFF: decision pending.
 **Status:** recon-only — **blocked on a user decision** (ran out of usage mid-discussion).
 **What happened:** Picked P6-02 ("barcode→QR cleanup") as the next task after the

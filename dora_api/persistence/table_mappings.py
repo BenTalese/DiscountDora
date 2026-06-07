@@ -56,6 +56,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("llm_enabled", Boolean, nullable=False),
         Column("llm_base_url", String(500), nullable=False),
         Column("llm_model", String(255), nullable=False),
+        Column("scanning_enabled", Boolean, nullable=False, server_default="0"),
     )
 
     product_offer_table = Table(
@@ -132,7 +133,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_location_id", UUIDType, ForeignKey("StockLocation.id", ondelete="SET NULL"), nullable=True),
         Column("stocktake_alerts_are_enabled", Boolean),
         Column("preferred_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
-        Column("barcode", String(255), nullable=True, unique=True),
         Column("last_checked_at", DateTime(timezone=True), nullable=True),
     )
 
@@ -177,10 +177,13 @@ def configure_mappings(db: SQLAlchemy):
         Column("id", UUIDType, primary_key=True),
         Column("name", String(255), nullable=False),
         Column("is_primary", Boolean, nullable=False, server_default="0"),
-        Column("is_archived", Boolean, nullable=False, server_default="0"),
-        Column("is_in_progress", Boolean, nullable=False, server_default="0"),
+        # P6-01 lifecycle status (draft/shopping/done) — replaces the old
+        # is_archived / is_in_progress flag pair.
+        Column("status", String(16), nullable=False, server_default="draft"),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("completed_at", DateTime(timezone=True), nullable=True),
+        # JSON snapshot of what /finish changed, for server-owned Reopen.
+        Column("finish_snapshot", String, nullable=True),
     )
 
     shopping_list_line_table = Table(

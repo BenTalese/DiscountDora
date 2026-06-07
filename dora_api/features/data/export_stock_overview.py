@@ -43,7 +43,7 @@ def _build_csv(items) -> str:
     writer = csv.writer(buffer)
     writer.writerow([
         "location", "name", "level", "expiry", "is_flagged", "is_open",
-        "auto_add_when_low", "barcode", "notes",
+        "auto_add_when_low", "notes",
     ])
     for location, group in _group_by_location(items):
         for item in group:
@@ -55,7 +55,6 @@ def _build_csv(items) -> str:
                 "true" if item.is_flagged else "false",
                 "true" if item.is_open else "false",
                 "true" if item.auto_add_when_low else "false",
-                item.barcode or "",
                 item.notes or "",
             ])
     return buffer.getvalue()

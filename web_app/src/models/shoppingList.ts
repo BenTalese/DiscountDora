@@ -1,11 +1,23 @@
 // Mirrors DTOs in dora_api/features/shopping_lists/.
 
+// P6-01 lifecycle status — single source of truth for where a list is in the
+// shop loop (mirrors SHOPPING_LIST_STATUS_* on the server). Replaces the old
+// is_archived / is_in_progress boolean pair.
+export type ShoppingListStatus = 'draft' | 'shopping' | 'done';
+
+export function isListDone(status: ShoppingListStatus): boolean {
+    return status === 'done';
+}
+
+export function isListShopping(status: ShoppingListStatus): boolean {
+    return status === 'shopping';
+}
+
 export type ShoppingListSummary = {
     shopping_list_id: string;
     name: string;
     is_primary: boolean;
-    is_archived: boolean;
-    is_in_progress: boolean;
+    status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
     line_count: number;
@@ -77,8 +89,7 @@ export type ShoppingListDetail = {
     shopping_list_id: string;
     name: string;
     is_primary: boolean;
-    is_archived: boolean;
-    is_in_progress: boolean;
+    status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
     totals: ShoppingListTotals;

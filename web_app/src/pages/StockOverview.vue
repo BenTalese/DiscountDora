@@ -4,6 +4,7 @@
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
             <BaseButton
+                v-if="scanningEnabled"
                 variant="secondary"
                 :icon="ICONS.qr_code_scanner"
                 label="Scan"
@@ -216,6 +217,7 @@
                     @click="bulkSetSubstitute"
                 />
                 <q-btn
+                    v-if="scanningEnabled"
                     flat
                     no-caps
                     icon="qr_code_2"
@@ -339,6 +341,7 @@
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -361,6 +364,7 @@
     import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
+    const { scanningEnabled } = useScanningEnabled();
     const stockGroupApi = new StockGroupApiService();
     const stockItemApi = new StockItemApiService();
     const barcodeApi = new BarcodeApiService();
@@ -589,7 +593,7 @@
                 message:
                     result.kind === 'product'
                         ? 'Product barcode not yet linked to a stock item.'
-                        : 'Unknown barcode — register it from Data → Barcodes & QR.',
+                        : "Unknown barcode — not linked to a product yet.",
             });
         } catch (err) {
             $q.notify({

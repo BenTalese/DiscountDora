@@ -329,7 +329,7 @@
         { id: 'nav.products', label: 'Go to Product Search', icon: ICONS.local_offer, section: 'Navigate', action: () => router.push('/product-search') },
         { id: 'nav.my-products', label: 'Go to My Products', icon: ICONS.favorite, section: 'Navigate', action: () => router.push('/my-products') },
         { id: 'nav.price-history', label: 'Go to Price History', icon: ICONS.show_chart, section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
-        { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'barcode'], action: () => router.push('/data') },
+        { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'scan', 'qr labels'], action: () => router.push('/data') },
         { id: 'nav.reports', label: 'Go to Reports', icon: ICONS.insights, section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
         { id: 'nav.waste', label: 'Go to Waste', icon: ICONS.expiry, section: 'Navigate', tags: ['expiring', 'rescue', 'wasted', 'use soon'], action: () => router.push('/waste') },
         { id: 'nav.settings', label: 'Go to Settings', icon: ICONS.settings, section: 'Navigate', action: () => router.push('/settings') },

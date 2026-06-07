@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
+                                                    SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
@@ -172,7 +173,9 @@ class UpdateLineHandler:
         line_id: UUID,
     ) -> UpdateLineResponse:
         line: ShoppingListLine | None = self.repository.get(ShoppingListLine).by_id(line_id)
-        if line is None or line.shopping_list_id != shopping_list_id:
+        # Path params arrive as str; the entity's FK is a UUID. Compare as
+        # strings so the parent-ownership guard doesn't always mismatch.
+        if line is None or str(line.shopping_list_id) != str(shopping_list_id):
             return UpdateLineResponse(line_not_found=True)
 
         set_fields = request.model_fields_set
@@ -250,7 +253,9 @@ class DeleteLineHandler:
 
     def handle(self, shopping_list_id: UUID, line_id: UUID) -> DeleteLineResponse:
         line: ShoppingListLine | None = self.repository.get(ShoppingListLine).by_id(line_id)
-        if line is None or line.shopping_list_id != shopping_list_id:
+        # Path params arrive as str; the entity's FK is a UUID. Compare as
+        # strings so the parent-ownership guard doesn't always mismatch.
+        if line is None or str(line.shopping_list_id) != str(shopping_list_id):
             return DeleteLineResponse(line_not_found=True)
         self.repository.remove(line)
         self.repository.save_changes()
@@ -347,7 +352,7 @@ class QuickAddToPrimaryHandler:
     def handle(self, request: QuickAddRequest) -> QuickAddResponse:
         primary: ShoppingList | None = self.repository.get(ShoppingList).one(
             EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         if primary is None:
             return QuickAddResponse(no_primary=True)

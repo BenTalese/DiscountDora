@@ -9,9 +9,9 @@ export default class BarcodeApiService {
     private httpClient = new AxiosHttpClient();
 
     /** Disambiguate a scanned value — matches the server-side lookup
-     *  table: dora:// link → stock_item, raw → stock_item.barcode,
-     *  product_barcode hit → product (with linked stock item if any),
-     *  otherwise unknown. */
+     *  table: dora:// link → stock_item, product_barcode hit → product
+     *  (with linked stock item if any), otherwise unknown. A real-world
+     *  barcode identifies a product, never a stock item directly. */
     lookupAsync = async (value: string): Promise<BarcodeLookupResult> =>
         await this.httpClient.get<BarcodeLookupResult>(
             `/data/barcodes/lookup?value=${encodeURIComponent(value)}`,

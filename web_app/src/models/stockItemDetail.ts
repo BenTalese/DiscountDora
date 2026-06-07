@@ -49,9 +49,6 @@ export type StockItemDetail = {
     is_flagged: boolean;
     auto_add_when_low: boolean;
     preferred_product_id: string | null;
-    // N5: registered barcode for this item (camera-scan flow targets it).
-    // Optional in the type because older detail responses won't include it.
-    barcode?: string | null;
     attention_score: number;
     attention_reasons: AttentionReasons;
     products: LinkedProduct[];

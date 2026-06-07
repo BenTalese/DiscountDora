@@ -161,7 +161,7 @@ class GlobalSearchHandler:
         if "shopping_list" in wanted:
             lists = self.repository.get(ShoppingList).all()
             def list_sub(sl: ShoppingList) -> str:
-                if sl.is_archived:
+                if sl.is_done:
                     return "Archived list"
                 if sl.is_primary:
                     return "Primary list"

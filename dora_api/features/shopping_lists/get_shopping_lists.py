@@ -12,7 +12,8 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -25,8 +26,7 @@ class ShoppingListSummaryDto:
     shopping_list_id: UUID
     name: str
     is_primary: bool
-    is_archived: bool
-    is_in_progress: bool
+    status: str
     created_at: datetime
     completed_at: datetime | None
     line_count: int
@@ -67,8 +67,7 @@ class GetShoppingListsHandler:
                 shopping_list_id = lst.id,
                 name = lst.name,
                 is_primary = bool(lst.is_primary),
-                is_archived = bool(lst.is_archived),
-                is_in_progress = bool(lst.is_in_progress),
+                status = lst.status,
                 created_at = lst.created_at,
                 completed_at = lst.completed_at,
                 line_count = total,
@@ -79,7 +78,7 @@ class GetShoppingListsHandler:
         out.sort(
             key=lambda s: (
                 not s.is_primary,
-                s.is_archived,
+                s.status == SHOPPING_LIST_STATUS_DONE,
                 -(s.created_at.timestamp() if s.created_at else 0),
             )
         )

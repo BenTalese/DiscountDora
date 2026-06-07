@@ -219,7 +219,7 @@
         </main>
 
         <!-- Bottom toolbar — picked count + total + Finish CTA. -->
-        <footer v-if="detail && !detail.is_archived" class="shop-mode-footer">
+        <footer v-if="detail && detail.status !== 'done'" class="shop-mode-footer">
             <div class="shop-mode-footer-totals">
                 <div>
                     <div class="text-caption dora-text-muted">Picked</div>

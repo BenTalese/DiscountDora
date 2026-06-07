@@ -62,8 +62,8 @@ prompts or proposals.
 - [OPEN] Drop the breadcrumb fluff ("Data / Backup & restore — Backup, import, export and barcode tools for your Dora data").
 - [OPEN] Schema-driven import templates (download, fill, upload).
 - [OPEN] Export & print tab utility — drop or rework.
-- [OPEN] "Scan" tab under QR codes — useful here vs only on stock overview?
-- [OPEN] "Barcodes & QR" → "QR codes" rename (paired with A8 rename trail and the P6-02 removal trail).
+- [COVERED] "Scan" tab under QR codes — useful here vs only on stock overview? → `PROPOSAL_BARCODE_SCANNING.md` §6 (open question; action-scan leans to C-1 Stock Overview, Data tab keeps label printing).
+- [COVERED] "Barcodes & QR" → "QR codes" rename → `PROPOSAL_BARCODE_SCANNING.md` §4 (renamed "Scanning & QR labels"; kept "scanning" because real-barcode→navigate survives via ProductBarcode).
 - [OPEN] Decide whether the optional/collapsed section should be the main view.
 
 **Recommended home:** new Wave-C brief `C-DATA — Data Management
@@ -132,9 +132,9 @@ No clean per-surface home; mostly future or "nice-to-have".
 - [OPEN] **Push notifications between users** (new-feature idea — alert another user, share a shopping list via notify).
 - [OPEN] **Kivy P2P sync branch** — does the user's prior experiment have a home in current Dora? Architectural question.
 - [OPEN] **Main menu bottom border** — micro polish.
-- [OPEN] **QR codes with the Dora logo in the middle** (D/D simple one).
+- [COVERED] **QR codes with the Dora logo in the middle** (D/D simple one). → `PROPOSAL_BARCODE_SCANNING.md` §6 (noted nice-to-have, opportunistic during label-render work).
 - [OPEN] **Real ALDI / IGA logos** — asset request (user said "remind me to provide"; this file is the reminder).
-- [OPEN] **QR scanning → quick-actions modal** for the scanned item — currently scan does what?
+- [COVERED] **QR scanning → quick-actions modal** for the scanned item. → `PROPOSAL_BARCODE_SCANNING.md` §5.3 (deferred to C-1 Stock Overview overhaul, where item context exists; today scan → result dialog → open detail).
 - [OPEN] **General UI consistency** — cross-cutting Wave A and the design-pass above.
 
 ---

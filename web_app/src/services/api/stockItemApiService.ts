@@ -72,19 +72,6 @@ export default class StockItemApiService {
         await this.httpClient.delete<void>(
             `/stock-items/${stockItemID}/substitutes/${substituteID}`
         );
-
-    // ── Barcodes (N5) ──────────────────────────────────────────────
-    registerBarcodeAsync = async (
-        stockItemID: string,
-        barcode: string,
-    ): Promise<{ stock_item_id: string; barcode: string }> =>
-        await this.httpClient.post<
-            { stock_item_id: string; barcode: string },
-            { barcode: string }
-        >(`/stock-items/${stockItemID}/barcode`, { barcode });
-
-    clearBarcodeAsync = async (stockItemID: string): Promise<void> =>
-        await this.httpClient.delete<void>(`/stock-items/${stockItemID}/barcode`);
 }
 
 export type CreateStockItemCommand = {

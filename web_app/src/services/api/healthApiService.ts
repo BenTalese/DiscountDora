@@ -13,7 +13,7 @@ export interface HealthInfo {
     features: {
         auth: boolean;
         audit: boolean;
-        barcodes: boolean;
+        scanning: boolean;
         multi_user: boolean;
         email: boolean;
         assistant: boolean;

@@ -18,6 +18,7 @@ class AppSettingsDto:
     llm_enabled: bool
     llm_base_url: str
     llm_model: str
+    scanning_enabled: bool
 
 
 @APP_SETTINGS_ROUTER.route("", methods=["GET"])
@@ -32,4 +33,5 @@ def get_app_settings():
         llm_enabled=bool(setting.llm_enabled),
         llm_base_url=setting.llm_base_url or "",
         llm_model=setting.llm_model or "",
+        scanning_enabled=bool(setting.scanning_enabled),
     ))

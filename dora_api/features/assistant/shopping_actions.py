@@ -16,7 +16,8 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from dora_api.domain.entities.shopping_list import ShoppingList
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.shopping_lists.manage_shopping_list_lines import (
     AddLineHandler, AddLineRequest)
@@ -87,7 +88,7 @@ def _normalise_items(raw_items: Any) -> list[dict[str, Any]]:
 def _primary_list(repo: SqlAlchemyRepository) -> ShoppingList | None:
     return repo.get(ShoppingList).one(
         EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-        & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+        & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
     )
 
 

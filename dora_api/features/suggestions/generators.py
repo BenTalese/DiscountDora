@@ -21,7 +21,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from dora_api.domain.entities.shopping_list import ShoppingListLine, ShoppingList
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
+                                                    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.persistence.field import EntityField
@@ -155,7 +157,7 @@ _LIKELY_DUE_MAX_GAP_DAYS = 90     # >90 days is "occasional" — don't pester.
 
 def generate_likely_due(repository: SqlAlchemyRepository) -> list[Suggestion]:
     archived = repository.get(ShoppingList).all(
-        EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(True)
+        EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
     )
     archived_lookup: dict[UUID, ShoppingList] = {l.id: l for l in archived}
     if not archived_lookup:

@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 from uuid import UUID
 
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -53,7 +54,7 @@ class GetMembershipHandler:
         # Active (non-archived) lists only — archived lists shouldn't paint
         # the cart button.
         active_lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         primary_id: UUID | None = next(
             (l.id for l in active_lists if l.is_primary), None

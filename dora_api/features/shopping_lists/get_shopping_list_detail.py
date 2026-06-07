@@ -146,8 +146,7 @@ class ShoppingListDetailDto:
     shopping_list_id: UUID
     name: str
     is_primary: bool
-    is_archived: bool
-    is_in_progress: bool
+    status: str
     created_at: datetime
     completed_at: datetime | None
     totals: ShoppingListTotalsDto
@@ -280,8 +279,7 @@ class GetShoppingListDetailHandler:
             shopping_list_id = _List.id,
             name = _List.name,
             is_primary = bool(_List.is_primary),
-            is_archived = bool(_List.is_archived),
-            is_in_progress = bool(_List.is_in_progress),
+            status = _List.status,
             created_at = _List.created_at,
             completed_at = _List.completed_at,
             totals = compute_list_totals(_LineDtos),

@@ -24,7 +24,8 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list import (
+    SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine)
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
@@ -1873,7 +1874,7 @@ def shopping_list_contents(args: dict) -> list[dict]:
 
     if name:
         lists = repo.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
             & EntityField(ShoppingList, ShoppingList.Fields.NAME).contains(name)
         )
         if not lists:
@@ -1889,7 +1890,7 @@ def shopping_list_contents(args: dict) -> list[dict]:
         # Default to the primary, non-archived list.
         primary = repo.get(ShoppingList).one(
             EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(False)
+            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
         if not primary:
             return [{"status": "no_primary"}]
@@ -1902,7 +1903,7 @@ def shopping_list_contents(args: dict) -> list[dict]:
         return [{
             "list_name": shopping_list.name,
             "is_primary": shopping_list.is_primary,
-            "is_in_progress": shopping_list.is_in_progress,
+            "status": shopping_list.status,
             "total_lines": 0,
             "ticked": 0,
             "outstanding": 0,
@@ -1933,7 +1934,7 @@ def shopping_list_contents(args: dict) -> list[dict]:
     return [{
         "list_name": shopping_list.name,
         "is_primary": shopping_list.is_primary,
-        "is_in_progress": shopping_list.is_in_progress,
+        "status": shopping_list.status,
         "total_lines": len(lines),
         "ticked": ticked,
         "outstanding": len(lines) - ticked,
@@ -2343,7 +2344,7 @@ def purchase_price_stats(args: dict) -> list[dict]:
     if list_ids:
         lists = repo.get(ShoppingList).all(
             EntityField(ShoppingList, "id").in_(list_ids)
-            & EntityField(ShoppingList, ShoppingList.Fields.IS_ARCHIVED).eq(True)
+            & EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
         )
         archived_ids = {l.id for l in lists}
 

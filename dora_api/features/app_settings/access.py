@@ -11,7 +11,9 @@ def get_or_create_app_setting(repository: SqlAlchemyRepository) -> AppSetting:
     existing = repository.get(AppSetting).all()
     if existing:
         return existing[0]
-    setting = AppSetting(llm_enabled=False, llm_base_url="", llm_model="")
+    setting = AppSetting(
+        llm_enabled=False, llm_base_url="", llm_model="", scanning_enabled=False,
+    )
     repository.add(setting)
     repository.save_changes()
     return setting

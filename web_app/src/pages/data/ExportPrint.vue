@@ -62,7 +62,7 @@
                                 Primary
                             </q-chip>
                             <q-chip
-                                v-if="list.is_archived"
+                                v-if="list.status === 'done'"
                                 dense
                                 size="sm"
                                 color="grey"
@@ -314,14 +314,16 @@
         const all = shoppingListStore.summaries ?? [];
         let filtered = all;
         if (listFilter.value === 'active') {
-            filtered = all.filter((s) => !s.is_archived);
+            filtered = all.filter((s) => s.status !== 'done');
         } else if (listFilter.value === 'archived') {
-            filtered = all.filter((s) => s.is_archived);
+            filtered = all.filter((s) => s.status === 'done');
         }
         // Sort: primary first, then active by recency, archived last.
         return [...filtered].sort((a, b) => {
             if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
-            if (a.is_archived !== b.is_archived) return a.is_archived ? 1 : -1;
+            const aDone = a.status === 'done';
+            const bDone = b.status === 'done';
+            if (aDone !== bDone) return aDone ? 1 : -1;
             return (b.created_at ?? '').localeCompare(a.created_at ?? '');
         });
     });

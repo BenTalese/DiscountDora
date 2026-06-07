@@ -34,11 +34,11 @@
                     {{ detail.lines.length }} item{{ detail.lines.length === 1 ? '' : 's' }} ·
                     {{ tickedCount }} ticked ·
                     Created {{ formatDate(detail.created_at) }}
-                    <span v-if="detail.is_archived"> · Archived</span>
+                    <span v-if="detail.status === 'done'"> · Archived</span>
                 </div>
             </div>
 
-            <div v-if="detail && !detail.is_archived" class="row q-gutter-sm items-center">
+            <div v-if="detail && detail.status !== 'done'" class="row q-gutter-sm items-center">
                 <!-- P2-11 — drop into shop mode (mobile-first fullscreen
                      view with big tap targets). Disabled on an empty
                      list because there'd be nothing to step through. -->
@@ -110,7 +110,6 @@
                             <q-item
                                 clickable
                                 v-close-popup
-                                :disable="detail.is_archived"
                                 @click="onAppendLowEssentials"
                             >
                                 <q-item-section avatar>
@@ -246,7 +245,7 @@
                     </q-tooltip>
                 </BaseButton>
                 <BaseButton
-                    v-if="!detail.is_in_progress"
+                    v-if="detail.status !== 'shopping'"
                     variant="primary"
                     :icon="ICONS.play_arrow"
                     label="Start shopping"
@@ -298,7 +297,7 @@
             <!-- In-progress banner — emphasises tick-mode + offers
                  a one-click stop. The picker hides while in progress. -->
             <q-banner
-                v-if="detail.is_in_progress"
+                v-if="detail.status === 'shopping'"
                 class="bg-primary dora-text-on-primary q-mb-md"
                 rounded
             >
@@ -325,7 +324,7 @@
                  suggestions and offer selection behave identically wherever
                  they're triggered from. -->
             <q-card
-                v-if="!detail.is_in_progress && !reviewMode"
+                v-if="detail.status !== 'shopping' && !reviewMode"
                 flat
                 bordered
                 class="q-mb-md"
@@ -336,7 +335,7 @@
                         no-caps
                         :icon="ICONS.add"
                         label="Quick add an item"
-                        :disable="detail.is_archived"
+                        :disable="detail.status === 'done'"
                         @click="onOpenQuickAdd"
                     />
                     <span class="text-caption dora-text-muted">
@@ -353,8 +352,8 @@
             <q-banner
                 v-if="
                     detail.lines.length > 0
-                        && !detail.is_archived
-                        && !detail.is_in_progress
+                        && detail.status !== 'done'
+                        && detail.status !== 'shopping'
                 "
                 class="q-mb-sm bulk-bar"
                 :class="{ 'bulk-bar-active': bulkMode }"
@@ -474,7 +473,7 @@
                             <q-item-section side top>
                                 <q-checkbox
                                     :model-value="line.is_ticked"
-                                    :disable="detail.is_archived"
+                                    :disable="detail.status === 'done'"
                                     @update:model-value="onToggleTicked(line.line_id, $event)"
                                 />
                             </q-item-section>
@@ -549,7 +548,7 @@
                                                 : undefined
                                         "
                                         clickable
-                                        :disable="detail.is_archived"
+                                        :disable="detail.status === 'done'"
                                         @click="onPickOffer(line.line_id, offer.product_id)"
                                     >
                                         <q-icon
@@ -599,7 +598,7 @@
                                         dense
                                         size="sm"
                                         :icon="ICONS.remove"
-                                        :disable="detail.is_archived || (line.quantity ?? 0) <= 0"
+                                        :disable="detail.status === 'done' || (line.quantity ?? 0) <= 0"
                                         @click="onAdjustQuantity(line, -1)"
                                     />
                                     <q-input
@@ -610,7 +609,7 @@
                                         :min="0"
                                         input-class="text-center shopping-line-qty-input"
                                         style="width: 48px"
-                                        :disable="detail.is_archived"
+                                        :disable="detail.status === 'done'"
                                         placeholder="—"
                                         @blur="onQuantityBlur(line, $event)"
                                         @keydown.enter.prevent="
@@ -623,7 +622,7 @@
                                         dense
                                         size="sm"
                                         :icon="ICONS.add"
-                                        :disable="detail.is_archived"
+                                        :disable="detail.status === 'done'"
                                         @click="onAdjustQuantity(line, 1)"
                                     />
                                 </div>
@@ -646,7 +645,7 @@
                                         dense
                                         no-caps
                                         size="sm"
-                                        :disable="detail.is_archived"
+                                        :disable="detail.status === 'done'"
                                         class="line-price-btn"
                                         :class="{
                                             'text-primary text-weight-medium':
@@ -659,11 +658,11 @@
                                                 : 'Set price'
                                         "
                                     >
-                                        <q-tooltip v-if="!detail.is_archived">
+                                        <q-tooltip v-if="detail.status !== 'done'">
                                             Enter the price you actually paid
                                         </q-tooltip>
                                         <q-popup-proxy
-                                            v-if="!detail.is_archived"
+                                            v-if="detail.status !== 'done'"
                                             @before-show="onOpenPriceEditor(line)"
                                             cover
                                             transition-show="scale"
@@ -747,7 +746,7 @@
                                     round
                                     dense
                                     :icon="ICONS.more_vert"
-                                    :disable="detail.is_archived"
+                                    :disable="detail.status === 'done'"
                                 >
                                     <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                                         <q-list dense style="min-width: 220px">
@@ -1045,8 +1044,8 @@
     // rather than try to be smart).
     const canReorder = computed(() =>
         !!detail.value
-            && !detail.value.is_archived
-            && !detail.value.is_in_progress
+            && detail.value.status !== 'done'
+            && detail.value.status !== 'shopping'
             && groupBy.value === 'none'
             && !bulkMode.value
             && !reviewMode.value
@@ -1313,7 +1312,7 @@
         focusedLineId.value = lines[next]?.line_id ?? null;
     }
     function tickFocusedLine() {
-        if (detail.value?.is_archived) return;
+        if (detail.value?.status === 'done') return;
         const line = orderedLines.value.find((l) => l.line_id === focusedLineId.value);
         if (line) void onToggleTicked(line.line_id, !line.is_ticked);
     }
@@ -1803,25 +1802,11 @@
         }
 
         finishing.value = true;
-        // F5: capture the pre-finish snapshot so undo can roll the levels
-        // (and the archived flag, and primary status) back. We capture
-        // *before* the finish API call so the read can't race with the
-        // restock writes.
-        const wasPrimary = detail.value.is_primary;
+        // F5: undo is server-owned — /finish writes a finish_snapshot and
+        // /unfinish reverses it, so the client doesn't capture or post any
+        // pre-finish state (R-003: derived domain facts live on the server).
         const listName = detail.value.name;
         const sourceListId = listId.value;
-        const levelRestores: { stock_item_id: string; stock_level_id: string }[] = [];
-        for (const line of detail.value.lines) {
-            if (!line.is_ticked) continue;
-            const item = stockItemStore.stockItems.find(
-                (si) => si.stock_item_id === line.stock_item_id,
-            );
-            if (!item) continue;
-            levelRestores.push({
-                stock_item_id: line.stock_item_id,
-                stock_level_id: item.stock_level_id,
-            });
-        }
         try {
             // Copy first — if the copy fails we'd rather leave the list
             // unarchived so the user can retry, than silently lose lines.
@@ -1836,11 +1821,7 @@
             registerUndo({
                 label: `Finish: ${listName}`,
                 inverse: async () => {
-                    await api.unfinishAsync(sourceListId, {
-                        was_primary: wasPrimary,
-                        demote_primary_list_id: result.new_primary_list_id ?? null,
-                        level_restores: levelRestores,
-                    });
+                    await api.unfinishAsync(sourceListId);
                     await Promise.all([
                         store.refreshAsync(),
                         stockItemStore.getStockItemsAsync(),
@@ -1910,7 +1891,7 @@
 
     const otherActiveLists = computed(() =>
         store.summaries.filter(
-            (s) => !s.is_archived && s.shopping_list_id !== listId.value
+            (s) => s.status !== 'done' && s.shopping_list_id !== listId.value
         )
     );
 

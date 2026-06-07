@@ -165,8 +165,14 @@ there is worth extracting, that's fine — no section needed.
   docs conflated the two by writing "Substitute graph (stock-item substitutes)";
   they are different things.)
 - Stock map / spatial layout. Locations is a simple tree, never spatial.
-- Product / real-world barcodes for deal lookup (P6-02). Dora's own per-item
-  QR labels are kept but off by default.
+- Real-world barcode **deal lookup** (P6-02) — scanning never looks up live
+  prices; it is a navigation aid only. **NOT removed:** `ProductBarcode` (a
+  real EAN/UPC links to a *Product*, then resolves to a linked stock item) and
+  Dora's own per-item QR labels — both kept, but the whole scanning + QR-label
+  surface is gated behind the install-wide `scanning_enabled` flag (off by
+  default). The old `StockItem.barcode` column was dropped: a real barcode
+  identifies a Product, never a stock item directly. The register-against-product
+  UI + scan-unknown rework are deferred to Phase 2 (ingestion).
 - Central retailer scraping as a hosted service (P7-01). It survives only as
   a self-hosted, off-by-default module / the standalone companion.
 

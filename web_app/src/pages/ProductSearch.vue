@@ -666,7 +666,7 @@
     });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
     .product-search {
         max-width: 1400px;
         margin: 0 auto;

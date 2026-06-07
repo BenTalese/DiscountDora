@@ -61,6 +61,18 @@ export type ShoppingListLine = {
     offers: LineProductOffer[];
 };
 
+/** Server-owned list-level money/count aggregates (state-ownership Type B).
+ *  The client reads these instead of summing `priceOfLine`/`savingsOfLine`
+ *  across the lines itself. Per-line display price stays a client concern. */
+export type ShoppingListTotals = {
+    total_price: number;
+    remaining_price: number;
+    total_savings: number;
+    unticked_count: number;
+    ticked_count: number;
+    line_count: number;
+};
+
 export type ShoppingListDetail = {
     shopping_list_id: string;
     name: string;
@@ -69,6 +81,7 @@ export type ShoppingListDetail = {
     is_in_progress: boolean;
     created_at: string;
     completed_at: string | null;
+    totals: ShoppingListTotals;
     lines: ShoppingListLine[];
 };
 

@@ -16,4 +16,10 @@ export type StockItem = {
     // Server-side level name — surfaced by get_stock_items so the print-sheet
     // labels can show "Low Stock" without a join lookup on the client.
     stock_level_name?: string | null;
+    // Server-derived stock status (§3.1 contract). The client reads these
+    // instead of matching `stock_level_name` against "Out of Stock" / "Low Stock".
+    stock_level_sequence?: number | null;
+    is_out_of_stock?: boolean;
+    is_low_stock?: boolean;
+    needs_restock?: boolean;
 };

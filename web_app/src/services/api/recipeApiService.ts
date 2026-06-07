@@ -57,6 +57,12 @@ export type RecipeFilterArgs = {
     tags_include?: string[];
     tags_exclude?: string[];
     ingredient_exclude?: string[];
+    /** State-ownership §3.3 — query cookability server-side instead of
+     *  fetching every recipe + the whole pantry to filter in the browser.
+     *  `cookable` true/false matches the recipe's `cookable` field;
+     *  `max_missing` keeps recipes with at most N missing ingredients. */
+    cookable?: boolean;
+    max_missing?: number;
 };
 
 export default class RecipeApiService {
@@ -138,6 +144,12 @@ function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
     }
     for (const term of filters.ingredient_exclude ?? []) {
         if (term) params.append('ingredient_exclude', term);
+    }
+    if (filters.cookable !== undefined) {
+        params.append('cookable', String(filters.cookable));
+    }
+    if (filters.max_missing !== undefined) {
+        params.append('max_missing', String(filters.max_missing));
     }
     const out = params.toString();
     return out ? `?${out}` : '';

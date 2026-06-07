@@ -56,9 +56,113 @@ The following is a list of Dora's planned major features. It is **not** inclusiv
 
 ## 🚀 Want to get started?
 
-As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is nothing to install yet! If you're curious how development is coming along, you can pull the repository down and deploy the docker container yourself using the included compose file.
+As Dora is 🚨 <strong><i>under active development</i></strong> 🚨, there is no packaged release yet. You can run it locally for development, or spin up the Docker container for a closer-to-production look.
 
-🚧 <i>System requirements to be documented.</i>
+---
+
+## 🛠️ Local development setup
+
+### Prerequisites
+
+| Tool | Minimum version | Notes |
+|------|----------------|-------|
+| Python | 3.11 | [python.org](https://www.python.org/downloads/) — tick "Add to PATH" on Windows |
+| Node.js | 18 LTS | [nodejs.org](https://nodejs.org) or via nvm / nvm-windows |
+| Quasar CLI | latest | `npm install -g @quasar/cli` |
+| Git | any | — |
+
+---
+
+### 1 — Clone and copy env files
+
+```bash
+git clone https://github.com/BenTalese/DiscountDora.git
+cd DiscountDora
+```
+
+Copy the two env templates and leave the defaults for local dev:
+
+**Windows (PowerShell):**
+```powershell
+Copy-Item .env.example .env
+Copy-Item web_app\.env.example web_app\.env
+```
+
+**Linux / macOS:**
+```bash
+cp .env.example .env
+cp web_app/.env.example web_app/.env
+```
+
+---
+
+### 2 — Backend (Python / Flask)
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1      # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+pip install -r requirements.txt
+flask --app dora_api.app db upgrade
+python -m dora_api.startup
+```
+
+**Linux / macOS:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+flask --app dora_api.app db upgrade
+python -m dora_api.startup
+```
+
+The API listens on **http://localhost:5170**.
+
+> **First run:** `flask db upgrade` creates the SQLite database at `data/dora.data.db`.
+> If you want a fresh database on every startup (dev only), set `DORA_ALLOW_DESTRUCTIVE=true` in `.env`.
+
+---
+
+### 3 — Frontend (Quasar / Vue 3)
+
+In a second terminal:
+
+**Windows (PowerShell):**
+```powershell
+cd web_app
+npm install
+quasar dev
+```
+
+**Linux / macOS:**
+```bash
+cd web_app
+npm install
+quasar dev
+```
+
+The SPA opens on **http://localhost:5174** and hot-reloads on file changes.
+
+> If `quasar` is not found: `npm install -g @quasar/cli` then try again.
+
+---
+
+### 4 — (Optional) Docker — full stack in one command
+
+Requires Docker Desktop (Windows/macOS) or Docker Engine + Compose v2 (Linux).
+
+```bash
+docker compose up --build
+```
+
+Ports exposed:
+- `5170` — dora_api
+- `5172` — merchant_api
+- `5174` — SPA (served by nginx)
+
+Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs`). Use `docker compose down -v` to clear them.
+
+---
 
 ### Local dev quick reference
 

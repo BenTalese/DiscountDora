@@ -314,12 +314,12 @@
         0%, 100% { transform: translateY(0) rotate(-2deg); }
         50%      { transform: translateY(-12px) rotate(2deg); }
     }
-    // B9.8: previously hid the mascot below 760px so the card had room.
-    // Hiding Dora entirely on mobile broke the brand moment on first login,
-    // so we now keep her visible but smaller and tucked above the card.
-    // `right` is set as a negative offset of half-width to centre horizontally
-    // without using `transform: translateX(...)` — the `bob` keyframe owns the
-    // transform property and would clobber any horizontal centring there.
+    /* B9.8: previously hid the mascot below 760px so the card had room.
+       Hiding Dora entirely on mobile broke the brand moment on first login,
+       so we now keep her visible but smaller and tucked above the card.
+       `right` is set as a negative offset of half-width to centre horizontally
+       without using `transform: translateX(...)` — the `bob` keyframe owns the
+       transform property and would clobber any horizontal centring there. */
     @media (max-width: 760px) {
         .login-mascot {
             top: 2%;
@@ -383,10 +383,10 @@
     .login-card :deep(.q-field__label) {
         color: var(--lp-text);
     }
-    .login-card :deep(.q-field--outlined .q-field__control:before) {
+    .login-card :deep(.q-field--outlined .q-field__control::before) {
         border-color: rgba(31, 38, 71, 0.25);
     }
-    .login-card :deep(.q-field--outlined.q-field--focused .q-field__control:after) {
+    .login-card :deep(.q-field--outlined.q-field--focused .q-field__control::after) {
         border-color: var(--lp-accent-strong);
     }
 

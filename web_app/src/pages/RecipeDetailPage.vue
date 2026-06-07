@@ -308,7 +308,7 @@
                                             {{ levelNameFor(ing.stock_item_id) ?? 'Untracked' }}
                                         </q-chip>
                                         <q-chip
-                                            v-if="isMissing(ing.stock_item_id)"
+                                            v-if="isMissingItem(ing.stock_item_id)"
                                             dense
                                             outline
                                             color="negative"
@@ -818,32 +818,40 @@
         const name = levelNameFor(stockItemId);
         return name ? getStockLevelColour(name) : null;
     }
-    function isMissing(stockItemId: string): boolean {
+    // Per-ingredient "missing" badge in the live editor. Reads the stock item's
+    // server-derived `is_out_of_stock` boolean (§3.1) rather than matching a
+    // level name; untracked / unknown items count as missing.
+    function isMissingItem(stockItemId: string): boolean {
         if (!stockItemId) return true;
-        const name = levelNameFor(stockItemId);
-        // "Missing" matches the rest of the app: not tracked OR out of stock.
-        return name === null || name === 'Out of Stock';
+        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
+        return !item || Boolean(item.is_out_of_stock);
     }
-
-    const missingIngredients = computed(() =>
-        form.ingredients
-            .filter((i) => i.stock_item_id && isMissing(i.stock_item_id))
+    // Cookability is server-owned (§3.2): the loaded recipe carries `cookable`
+    // and each ingredient carries `is_missing`. We read those off the saved
+    // recipe rather than recomputing from stock data — the summary reflects the
+    // persisted recipe and refreshes after each save (`loadRecipe`).
+    const missingIngredients = computed(() => {
+        const r = recipe.value;
+        if (!r) return [];
+        return r.ingredients
+            .filter((i) => i.is_missing)
             // Dedupe — an ingredient on multiple rows is still one shopping line.
-            .filter((i, idx, arr) => arr.findIndex((x) => x.stock_item_id === i.stock_item_id) === idx),
-    );
+            .filter((i, idx, arr) => arr.findIndex((x) => x.stock_item_id === i.stock_item_id) === idx);
+    });
 
     const trackedCount = computed(
-        () => new Set(form.ingredients.map((i) => i.stock_item_id).filter(Boolean)).size,
+        () => new Set((recipe.value?.ingredients ?? []).map((i) => i.stock_item_id).filter(Boolean)).size,
     );
     const inStockCount = computed(
         () =>
             new Set(
-                form.ingredients
+                (recipe.value?.ingredients ?? [])
+                    .filter((i) => !i.is_missing)
                     .map((i) => i.stock_item_id)
-                    .filter((id) => Boolean(id) && !isMissing(id)),
+                    .filter(Boolean),
             ).size,
     );
-    const cookableNow = computed(() => missingIngredients.value.length === 0);
+    const cookableNow = computed(() => recipe.value?.cookable ?? false);
 
     // ── Picker (autocomplete + inline create) ────────────────────────
     const ingredientFilter = ref('');

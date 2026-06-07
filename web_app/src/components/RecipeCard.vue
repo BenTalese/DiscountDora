@@ -207,10 +207,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import { storeToRefs } from 'pinia';
     import type { Recipe } from 'src/models/recipe';
-    import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed } from 'vue';
 
     const props = withDefaults(
@@ -245,42 +242,30 @@
         (e: 'add-to-meal-plan', recipeId: string): void;
     }>();
 
-    const stockItemStore = useStockItemStore();
-    const stockLevelStore = useStockLevelStore();
-    const { stockItems } = storeToRefs(stockItemStore);
-    const { stockLevels } = storeToRefs(stockLevelStore);
-
-    function levelNameFor(stockItemId: string): string | null {
-        const item = stockItems.value.find((si) => si.stock_item_id === stockItemId);
-        if (!item) return null;
-        return (
-            stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name
-                ?? null
-        );
-    }
-
-    // "Missing" — out of stock OR not tracked. Matches what the spec calls
-    // the "missing N" chip and what cook mode treats as unavailable.
-    function isMissing(stockItemId: string): boolean {
-        const name = levelNameFor(stockItemId);
-        return name === null || name === 'Out of Stock';
-    }
-
-    const missingIds = computed(() =>
-        [...new Set(props.recipe.ingredients.map((i) => i.stock_item_id))]
-            .filter((id) => Boolean(id) && isMissing(id)),
-    );
+    // Cookability is server-owned (§3.2): each ingredient carries
+    // `is_missing` / `is_low_stock`, and the recipe carries `cookable`.
+    // "Missing" = out of stock OR not tracked. We derive the deduped id
+    // list locally only because the add-missing emit needs the ids.
+    const missingIds = computed(() => [
+        ...new Set(
+            props.recipe.ingredients
+                .filter((i) => i.is_missing)
+                .map((i) => i.stock_item_id)
+                .filter(Boolean),
+        ),
+    ]);
 
     const lowCount = computed(
         () =>
             new Set(
                 props.recipe.ingredients
+                    .filter((i) => i.is_low_stock)
                     .map((i) => i.stock_item_id)
-                    .filter((id) => Boolean(id) && levelNameFor(id) === 'Low Stock'),
+                    .filter(Boolean),
             ).size,
     );
 
-    const cookableNow = computed(() => missingIds.value.length === 0);
+    const cookableNow = computed(() => props.recipe.cookable);
 
     const totalTime = computed(() => {
         if (

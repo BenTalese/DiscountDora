@@ -679,7 +679,6 @@
         // every time the user talks to someone else in the kitchen.
     }
 
-    function startListening() { voiceInput.start(); }
     function stopListening() { voiceInput.stop(); }
     function toggleListening() { voiceInput.toggle(); }
 

@@ -26,14 +26,16 @@
         defineProps<{
             variant?: Variant;
             attention?: boolean;
-            icon?: string;
-            label?: string;
-            loading?: boolean;
-            disable?: boolean;
+            // Optionals that callers commonly bind to a possibly-undefined value
+            // are typed `| undefined` so `exactOptionalPropertyTypes` permits it.
+            icon?: string | undefined;
+            label?: string | undefined;
+            loading?: boolean | undefined;
+            disable?: boolean | undefined;
             type?: 'button' | 'submit' | 'reset';
-            to?: string | object;
-            href?: string;
-            target?: string;
+            to?: string | object | undefined;
+            href?: string | undefined;
+            target?: string | undefined;
         }>(),
         {
             variant: 'primary',
@@ -46,8 +48,10 @@
         (e: 'click', event: MouseEvent): void;
     }>();
 
-    function onClick(event: MouseEvent) {
-        emit('click', event);
+    // q-btn types its @click as `(evt: Event, go?) => void`; accept `Event` here
+    // and narrow to MouseEvent for our typed emit (click events are MouseEvents).
+    function onClick(event: Event) {
+        emit('click', event as MouseEvent);
     }
 
     const qBtnAttrs = computed(() => {

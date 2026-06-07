@@ -1251,8 +1251,8 @@
     }
 
     // ── Recipe-aware helpers ─────────────────────────────────────────
-    // Missing = not tracked OR stock_level == "Out of Stock". Same
-    // definition the rest of the app uses (RecipeCard, RecipeDetailPage).
+    // Cookability is server-owned (§3.2): each ingredient carries `is_missing`.
+    // We still load stock data here for the assistant's `getStock` context.
     async function ensureRecipeData() {
         const loads: Promise<unknown>[] = [];
         if (recipes.value.length === 0) loads.push(recipeStore.getRecipesAsync());
@@ -1264,17 +1264,12 @@
     function missingIdsForRecipe(recipeId: string): { id: string; name: string }[] {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
         if (!recipe) return [];
-        const outLevelId =
-            stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null;
         const seen = new Set<string>();
         const missing: { id: string; name: string }[] = [];
         for (const ing of recipe.ingredients) {
-            if (!ing.stock_item_id || seen.has(ing.stock_item_id)) continue;
+            if (!ing.stock_item_id || seen.has(ing.stock_item_id) || !ing.is_missing) continue;
             seen.add(ing.stock_item_id);
-            const item = stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id);
-            if (!item || item.stock_level_id === outLevelId) {
-                missing.push({ id: ing.stock_item_id, name: ing.stock_item_name });
-            }
+            missing.push({ id: ing.stock_item_id, name: ing.stock_item_name });
         }
         return missing;
     }

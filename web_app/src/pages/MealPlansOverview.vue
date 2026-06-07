@@ -93,9 +93,9 @@
                                 square
                                 clickable
                                 class="cursor-grab"
-                                :color="recipeCookable(recipe.recipe_id) ? 'positive' : 'grey-4'"
-                                :text-color="recipeCookable(recipe.recipe_id) ? 'white' : 'grey-9'"
-                                :icon="recipeCookable(recipe.recipe_id) ? 'check_circle' : 'restaurant'"
+                                :color="recipeCookable(recipe) ? 'positive' : 'grey-4'"
+                                :text-color="recipeCookable(recipe) ? 'white' : 'grey-9'"
+                                :icon="recipeCookable(recipe) ? 'check_circle' : 'restaurant'"
                             >
                                 {{ recipe.name }}
                                 <span class="q-ml-xs text-caption">({{ recipe.unallocated_meals }})</span>
@@ -377,6 +377,7 @@
     import { useQuasar } from 'quasar';
     import { useMealPlanExport } from 'src/composables/useMealPlanExport';
     import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
+    import type { Recipe } from 'src/models/recipe';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
@@ -419,9 +420,7 @@
         })),
     );
     const selectedPlan = computed<MealPlan | null>(
-        () =>
-            (mealPlans.value.find((p) => p.meal_plan_id === selectedPlanId.value) ??
-                null) as MealPlan | null,
+        () => mealPlans.value.find((p) => p.meal_plan_id === selectedPlanId.value) ?? null,
     );
 
     function toIso(d: string): string {
@@ -495,22 +494,13 @@
     );
 
     // ── Cookable-now ─────────────────────────────────────────────────────
-    const outOfStockLevelId = computed(
-        () => stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null,
-    );
-    function isMissing(stockItemId: string): boolean {
-        const item = stockItems.value.find((si) => si.stock_item_id === stockItemId);
-        if (!item) return true;
-        return item.stock_level_id === outOfStockLevelId.value;
+    // Cookability is server-owned (§3.2): recipes carry `cookable`. A recipe
+    // with no ingredients is `cookable` server-side, but we don't surface an
+    // empty recipe as "cook now", so require at least one ingredient here.
+    function recipeCookable(recipe: Recipe): boolean {
+        return recipe.cookable && recipe.ingredients.length > 0;
     }
-    function recipeCookable(recipeId: string): boolean {
-        const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
-        if (!recipe || recipe.ingredients.length === 0) return false;
-        return recipe.ingredients.every((ing) => !isMissing(ing.stock_item_id));
-    }
-    const cookableRecipes = computed(() =>
-        recipes.value.filter((r) => recipeCookable(r.recipe_id)),
-    );
+    const cookableRecipes = computed(() => recipes.value.filter(recipeCookable));
 
     // ── Drag & drop planning ──────────────────────────────────────────────
     function onDragStart(recipeId: string) {

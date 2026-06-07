@@ -19,7 +19,9 @@ export type SuggestionAction = {
 };
 
 export type DoraSuggestion = {
-    kind: SuggestionKind | string;
+    // Known kinds keep their autocomplete; `string & {}` admits forward-compat
+    // server kinds without collapsing the union to a bare `string`.
+    kind: SuggestionKind | (string & {});
     dedup_key: string;
     severity: SuggestionSeverity;
     title: string;

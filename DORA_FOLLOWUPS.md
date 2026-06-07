@@ -39,6 +39,127 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-054 — Shop-mode + lists-overview still sum line prices client-side
+- **Raised:** 2026-06-07 (Phase 1 Chunk 5 — Type B)
+- **Type:** follow-up
+- **What:** Chunk 5 moved *whole-list* totals to the server (`ShoppingListDetailDto.totals`)
+  and switched the dashboard + detail page to read them. Two surfaces still sum
+  `priceOfLine`/`savingsOfLine` client-side: `ShoppingListShopMode.vue:408-411`
+  (sums over `sortedLines`/`remainingLines` — *subsets*, possibly route-ordered, so
+  not a straight `detail.totals` read) and `ShoppingListsOverview.vue:522-525` (sums
+  per-list across *multiple* lists in the overview — the overview may not fetch each
+  list's full detail, so it has no `totals` to read).
+- **Why deferred:** subset/multi-list summation needs either per-list-summary totals
+  on the lists endpoint (so the overview shows totals without full details) or
+  careful subset handling in shop mode — bigger than the named flagship (R-007).
+- **Recommended resolution:** **opportunistic / fold into the shopping-list redesign
+  pass** — expose per-list totals on the shopping-list *summary/list* endpoint for the
+  overview; for shop mode decide whether its subset totals can read `detail.totals` or
+  genuinely need a filtered sum. Per-line `priceOfLine` display stays client-side
+  (accepted Type-C).
+
+## [OPEN] FU-053 — "Best deals" card still fetches all products + sorts by discount client-side
+- **Raised:** 2026-06-07 (Phase 1 Chunk 5 — Type B / proposal §8.2)
+- **Type:** follow-up
+- **What:** The dashboard "best deals" card (`DashboardPage.vue` `bestDeals` ~L1190,
+  `loadProducts` fetches *all* products via `GET /api/products`) filters + sorts by
+  discount % in the browser and slices top-3. The discount-% is computed inline
+  (`discountPctFor`) duplicating the shared `scrapedProductOfferLogic.discountPercent`
+  (a tiny Type-C dup). Proper fix (proposal §8.2): a `?sort=discount&limit=N`
+  (or focused best-deals endpoint) so the server sorts and returns only the top N.
+- **Why deferred:** `price_now`/`price_was` come from the joined `Product.current_offer`,
+  not Product columns, so sorting by `(price_was - price_now)/price_was` is a derived
+  expression over a join — the generic field-based sort in `get_products.py` doesn't
+  support it. That's a distinct capability (expression order_by + the on-special filter
+  + null-RRP handling), riskier than the Chunk-5 flagship and best done deliberately.
+- **Recommended resolution:** **later — a focused "best deals query" unit.** Add
+  discount-sort support (or a `/products/best-deals?limit=N` endpoint) computing the
+  discount server-side; switch the card to query it; fold `discountPctFor` onto the
+  shared helper at the same time. Until then the card works (just over-fetches).
+
+## [OPEN] FU-052 — Switch cookable surfaces to the server query + optimise the helper
+- **Raised:** 2026-06-07 (Phase 1 Chunk 4 — queryable cookability)
+- **Type:** follow-up
+- **What:** Chunk 4 added the `?cookable` / `?max_missing` API + `cookable_count`,
+  but the **shared-store surfaces still fetch all recipes and filter client-side**
+  on `r.cookable` (RecipesOverview's cookable toggle / missing-max; the dashboard
+  "Cookable tonight" list). Proposal step 4 ("switch the cookable surfaces to
+  query") isn't finished. Two parts: (a) make those surfaces *query* the server
+  (tricky — the recipes Pinia store is shared and does multi-facet client filtering,
+  and the dashboard top-3 needs server-side sort+limit, currently client-sorted by
+  favourite/last-made); (b) `load_recipe_cookability` loads **all recipes + full
+  ingredient trees** on every dashboard summary and every cookable-filtered query —
+  one query (not N+1) and fine at personal scale, but a set-based `COUNT(...) GROUP
+  BY recipe` would scale better (watch SQLite/Postgres portability — avoid engine-
+  specific `FILTER`).
+- **Why deferred:** the store rewire is a real refactor needing browser verification
+  (FU-051), and the perf optimisation is premature at current scale (R-007).
+- **Recommended resolution:** **later — fold into the Type-B aggregates pass / when
+  recipe counts grow.** Backend capability already exists; this is the client
+  adoption + optimisation tail.
+
+## [OPEN] FU-051 — Chunks 3–5 client changes not type-checked / browser-verified
+- **Raised:** 2026-06-07 (Phase 1 Chunk 3); extended (Chunks 4, 5)
+- **Type:** finding
+- **What:** The Vue/TS files edited in Chunks 3, 4 **and 5** were verified only by
+  manual grep (no dangling references) + reasoning. **They were not run through
+  `eslint`/`vue-tsc` or the browser** because `web_app/node_modules` is absent on
+  this machine and the local Node is v14.17 (too old for the Quasar toolchain).
+  Risk: a type mismatch or template-binding slip could slip through. Likewise the
+  Chunk-4/5 **server** additions (cookability filter + `cookable_count`; shopping-list
+  `totals`) were unit-tested for their pure logic but **not run against real data**
+  (this env's SQLite has no migrated tables — see FU-048), so the DB-backed query
+  paths are unproven end-to-end.
+- **Why deferred:** no runnable frontend toolchain / migrated DB in this session.
+- **Recommended resolution:** **now/next session with a working env** — `npm install`
+  then `npm run lint` + `quasar dev`; exercise: Recipes overview (cookable filter +
+  footer count + compare dialog), a recipe card chip, recipe detail sidebar + editor
+  "Missing" badge, meal-plans palette, dashboard "Cookable tonight" + count, Dora's
+  "what's missing" (Chunks 3-4); **and the dashboard primary-list stats + the
+  shopping-list detail headline totals (Chunk 5) — confirm $ remaining / savings /
+  counts match what the lines imply.** On the server, hit
+  `GET /api/recipes?cookable=true|false`, `?max_missing=1`, `/api/dashboard/summary`,
+  and `GET /api/shopping-lists/<id>` (check the `totals` block) against seeded data.
+
+## [OPEN] FU-050 — Broader `'Out of Stock'` name-match smell beyond the 7 cookability copies
+- **Raised:** 2026-06-07 (Phase 1 Chunk 3)
+- **Type:** finding
+- **What:** Chunk 3 removed the 7 *recipe-cookability* client copies. A grep
+  shows `'Out of Stock'` / `'Low Stock'` name-matching still lives in non-recipe
+  surfaces: `MealPlansOverview.vue:484,494` (the meal-plan "need to buy"
+  `stockLevelName`/`needToBuy`), `ShoppingListsOverview.vue:489` (restock
+  sources), `RecipeCookMode.vue:559` (cook-mode availability), `StockItemChip.vue`,
+  `StockItemRow.vue`, `useStockFilters.ts` (stock-page filters). Some are
+  legitimately client-side (stock-page filters = state-ownership Type D) or use
+  the shared `stockLevelLogic.getStockLevelColour` helper (accepted Type C); but
+  `needToBuy`, the restock sources, and cook-mode availability are the same
+  cross-entity rule the §8.3 addendum flags as the "wider smell" and could adopt
+  the StockItem server booleans (now on the TS model) instead.
+- **Why deferred:** out of Chunk-3 scope (R-007 — Chunk 3 is specifically the 7
+  cookability copies).
+- **Recommended resolution:** **opportunistic / a follow-on state-ownership pass** —
+  migrate `needToBuy`, restock sources, and cook-mode availability to read
+  `stockItem.is_out_of_stock` / `is_low_stock` / `needs_restock`. Leave the
+  stock-page filters (Type D) and the color helper (Type C) per §8.1.
+
+## [OPEN] FU-049 — RecipeDetailPage cookability reflects saved recipe, not live edits
+- **Raised:** 2026-06-07 (Phase 1 Chunk 3)
+- **Type:** finding
+- **What:** The recipe-detail sidebar "Cookable now / Missing N" + in/tracked
+  counts now read the *loaded* `recipe.value` server fields rather than the live
+  editable `form.ingredients`. So while a user adds/removes ingredients (before
+  saving), the sidebar aggregate doesn't update until save (which reloads the
+  recipe). The per-ingredient editor "Missing" badge *does* update live (reads
+  the stock store's `is_out_of_stock`). Previously the whole sidebar updated live
+  off client-recomputed stock joins.
+- **Why deferred:** the server can't know unsaved ingredients, and recomputing
+  the aggregate client-side is exactly the duplication Chunk 3 removed. The page
+  reloads after every save, so the steady-state is correct.
+- **Recommended resolution:** **confirm acceptable in browser** (FU-051). If
+  live-while-editing is wanted, derive the aggregate from the editor rows'
+  `isMissingItem` (already server-boolean-based) instead of `recipe.value` — a
+  small, contract-clean change.
+
 ## [OPEN] FU-048 — e2e suite (`tests/e2e/dora_api/`) is pre-existing broken on this branch
 - **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
 - **Type:** finding

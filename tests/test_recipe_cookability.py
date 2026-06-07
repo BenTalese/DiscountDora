@@ -1,0 +1,133 @@
+"""Unit tests for server-owned cookability on RecipeDto.
+
+§3.2 of the state-ownership refactor: the recipe DTO exposes `missing_count`
+(ingredients whose stock item is out-of-stock / has no stock record) and
+`cookable` (missing_count == 0), computed once from the already-loaded
+ingredient tree. No client-side recomputation needed.
+
+Decision (Chunk 1 / Q1): missing = out-of-stock only.  Low-stock
+counts as "have it".
+Decision (Chunk 2 / Q2): presence only, not quantity-aware — matches the
+existing client behaviour; quantity-awareness is explicitly deferred.
+"""
+from types import SimpleNamespace
+from uuid import uuid4
+
+from dora_api.features.recipes.get_recipes import RecipeDto
+
+
+# ── stub helpers ──────────────────────────────────────────────────────────────
+
+def _level(sequence):
+    return SimpleNamespace(sequence=sequence, id=uuid4())
+
+
+def _item(level_sequence):
+    """Stock item with the given stock level (None = no level record)."""
+    return SimpleNamespace(
+        id=uuid4(),
+        name="item",
+        stock_level=_level(level_sequence) if level_sequence is not None else None,
+        stock_location=None,
+    )
+
+
+def _ingredient(item_sequence):
+    """Recipe ingredient stub. item_sequence=None → stock item has no level record."""
+    return SimpleNamespace(
+        id=uuid4(),
+        stock_item=_item(item_sequence),
+        quantity=None,
+        unit=None,
+        notes=None,
+    )
+
+
+def _recipe(*ingredient_args):
+    """Minimal recipe stub. Each positional arg is forwarded to _ingredient()."""
+    return SimpleNamespace(
+        id=uuid4(),
+        name="Test Recipe",
+        available_meals=0,
+        category=None,
+        cook_time_minutes=None,
+        cuisine=None,
+        difficulty=None,
+        instructions=None,
+        is_favourite=False,
+        last_made_on=None,
+        nutrition=None,
+        prep_time_minutes=None,
+        recipe_collection=None,
+        servings=None,
+        time_of_day=None,
+        ingredients=list(ingredient_args),
+    )
+
+
+# ── tests ─────────────────────────────────────────────────────────────────────
+
+def test__cookable_when_all_ingredients_in_stock():
+    dto = RecipeDto.from_entity(_recipe(_ingredient(0), _ingredient(1)))
+    assert dto.cookable is True
+    assert dto.missing_count == 0
+
+
+def test__not_cookable_when_one_ingredient_out_of_stock():
+    dto = RecipeDto.from_entity(_recipe(_ingredient(1), _ingredient(3)))
+    assert dto.cookable is False
+    assert dto.missing_count == 1
+
+
+def test__low_stock_does_not_count_as_missing():
+    # sequence 2 = Low Stock — ingredient is "present" for cookability
+    dto = RecipeDto.from_entity(_recipe(_ingredient(2)))
+    assert dto.cookable is True
+    assert dto.missing_count == 0
+
+
+def test__none_stock_level_counts_as_missing():
+    # Stock item exists but has no level assigned
+    dto = RecipeDto.from_entity(_recipe(_ingredient(None)))
+    assert dto.cookable is False
+    assert dto.missing_count == 1
+
+
+def test__empty_recipe_is_cookable():
+    dto = RecipeDto.from_entity(_recipe())
+    assert dto.cookable is True
+    assert dto.missing_count == 0
+
+
+def test__missing_count_counts_all_missing_ingredients():
+    dto = RecipeDto.from_entity(_recipe(
+        _ingredient(3),   # out-of-stock
+        _ingredient(3),   # out-of-stock
+        _ingredient(1),   # sufficient — not missing
+    ))
+    assert dto.cookable is False
+    assert dto.missing_count == 2
+
+
+def test__missing_count_dedupes_by_stock_item():
+    # The same out-of-stock stock item listed on two ingredient rows counts once.
+    shared = _item(3)
+    ing_a = SimpleNamespace(id=uuid4(), stock_item=shared, quantity=None, unit=None, notes=None)
+    ing_b = SimpleNamespace(id=uuid4(), stock_item=shared, quantity=None, unit=None, notes=None)
+    dto = RecipeDto.from_entity(_recipe(ing_a, ing_b))
+    assert dto.missing_count == 1
+    assert dto.cookable is False
+
+
+def test__ingredient_dto_exposes_status_booleans():
+    dto = RecipeDto.from_entity(_recipe(_ingredient(2), _ingredient(3)))
+    low, out = dto.ingredients
+    assert low.is_low_stock is True and low.is_missing is False
+    assert out.is_missing is True and out.is_low_stock is False
+
+
+def test__beyond_sequence_clamps_to_out_of_stock():
+    # A stock level with sequence > 3 (future-proof) still counts as missing
+    dto = RecipeDto.from_entity(_recipe(_ingredient(99)))
+    assert dto.cookable is False
+    assert dto.missing_count == 1

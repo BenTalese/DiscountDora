@@ -889,7 +889,6 @@
     import {
         chosenOfferFor,
         priceOfLine,
-        savingsOfLine,
         type LineProductOffer,
         type ShoppingListDetail,
         type ShoppingListLine
@@ -1191,22 +1190,14 @@
     const tickedLines = computed(() =>
         (detail.value?.lines ?? []).filter((l) => l.is_ticked)
     );
-    const remainingTotal = computed(() =>
-        (detail.value?.lines ?? [])
-            .filter((l) => !l.is_ticked)
-            .reduce((sum, l) => sum + priceOfLine(l), 0)
-    );
-    const tickedTotal = computed(() =>
-        (detail.value?.lines ?? [])
-            .filter((l) => l.is_ticked)
-            .reduce((sum, l) => sum + priceOfLine(l), 0)
-    );
-    const fullTotal = computed(() => remainingTotal.value + tickedTotal.value);
-    // List-level savings vs RRP — sum across every line (ticked + unticked)
-    // so the headline reflects the whole shop, not just what's left.
-    const savingsTotal = computed(() =>
-        (detail.value?.lines ?? []).reduce((sum, l) => sum + savingsOfLine(l), 0)
-    );
+    // List-level totals are server-owned (state-ownership Type B) — read them
+    // off `detail.totals` rather than re-summing the lines here. Per-line price
+    // display still uses `priceOfLine` (the accepted Type-C client helper).
+    const remainingTotal = computed(() => detail.value?.totals?.remaining_price ?? 0);
+    const fullTotal = computed(() => detail.value?.totals?.total_price ?? 0);
+    const tickedTotal = computed(() => fullTotal.value - remainingTotal.value);
+    // Savings vs RRP across the whole shop (ticked + unticked).
+    const savingsTotal = computed(() => detail.value?.totals?.total_savings ?? 0);
 
     function isChosen(line: ShoppingListLine, productId: string): boolean {
         const chosen = chosenOfferFor(line);

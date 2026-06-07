@@ -16,6 +16,10 @@ export type ProductSummary = {
 export type RecipeSummary = {
     total: number;
     favourites: number;
+    /** Recipes cookable right now (nothing missing, at least one ingredient).
+     *  Server-computed (§3.3) so the card shows the count without the client
+     *  fetching + joining every recipe against the whole pantry. */
+    cookable_count: number;
 };
 
 export type MealSummary = {

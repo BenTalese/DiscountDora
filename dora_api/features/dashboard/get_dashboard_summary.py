@@ -18,6 +18,7 @@ from dora_api.domain.entities.shopping_list import ShoppingList
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
@@ -47,6 +48,11 @@ class ProductSummary:
 class RecipeSummary:
     total: int
     favourites: int
+    # Recipes you can cook right now: nothing missing AND at least one
+    # ingredient (an empty recipe isn't something to "cook tonight"). Lets the
+    # dashboard show the count without the client pulling + joining every recipe
+    # against the whole pantry (state-ownership §3.3).
+    cookable_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +141,13 @@ class GetDashboardSummaryHandler:
         favourite_recipes = self.repository.get(Recipe).count(
             EntityField(Recipe, Recipe.Fields.IS_FAVOURITE).eq(True)
         )
+        # Cookable-now count via the shared cookability query (same rule the
+        # recipe DTO + `?cookable` filter use — R-003). Excludes empty recipes.
+        cookability = load_recipe_cookability(self.repository)
+        cookable_recipes = sum(
+            1 for missing, ingredient_count in cookability.values()
+            if missing == 0 and ingredient_count > 0
+        )
 
         # ── Meals ─────────────────────────────────────────────────────────
         # "Definitions" = recipes with any meals on hand. "In stock" =
@@ -182,6 +195,7 @@ class GetDashboardSummaryHandler:
             recipes = RecipeSummary(
                 total = total_recipes,
                 favourites = favourite_recipes,
+                cookable_count = cookable_recipes,
             ),
             meals = MealSummary(
                 total_definitions = int(total_meal_definitions),

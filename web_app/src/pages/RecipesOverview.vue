@@ -319,7 +319,7 @@
                                     <q-item>
                                         <q-item-section>Missing right now</q-item-section>
                                         <q-item-section side>
-                                            {{ missingCount(recipe) }}
+                                            {{ recipe.missing_count }}
                                         </q-item-section>
                                     </q-item>
                                 </q-list>
@@ -332,18 +332,10 @@
                                         v-for="ing in recipe.ingredients"
                                         :key="ing.recipe_ingredient_id"
                                         dense
-                                        :color="
-                                            missingStockItemNames(recipe).has(ing.stock_item_name)
-                                                ? 'negative'
-                                                : undefined
-                                        "
-                                        :text-color="
-                                            missingStockItemNames(recipe).has(ing.stock_item_name)
-                                                ? 'white'
-                                                : undefined
-                                        "
+                                        :color="ing.is_missing ? 'negative' : undefined"
+                                        :text-color="ing.is_missing ? 'white' : undefined"
                                         :class="
-                                            missingStockItemNames(recipe).has(ing.stock_item_name)
+                                            ing.is_missing
                                                 ? undefined
                                                 : 'dora-bg-sunken dora-text-secondary'
                                         "
@@ -381,7 +373,6 @@
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -391,7 +382,6 @@
     const route = useRoute();
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
-    const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const shoppingListApi = new ShoppingListApiService();
     const recipeApi = new RecipeApiService();
@@ -399,7 +389,6 @@
 
     const { recipes, recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
-    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const loading = ref(false);
 
@@ -436,35 +425,9 @@
     );
     const dietaryTagOptionsForExclude = computed(() => dietaryTagOptionsForInclude.value);
 
-    // ── Cookable / missing helpers ──────────────────────────────────
-    // Same definition as RecipeCard: missing = not tracked OR out of stock.
-    // Duplicated here (rather than imported from the component) so filter
-    // logic doesn't depend on a component being mounted.
-    const outOfStockLevelId = computed(
-        () => stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null,
-    );
-
-    function isMissing(stockItemId: string): boolean {
-        if (!stockItemId) return true;
-        const item = stockItems.value.find((si) => si.stock_item_id === stockItemId);
-        if (!item) return true;
-        return item.stock_level_id === outOfStockLevelId.value;
-    }
-
-    function missingCount(recipe: Recipe): number {
-        const seen = new Set<string>();
-        let count = 0;
-        for (const ing of recipe.ingredients) {
-            if (!ing.stock_item_id || seen.has(ing.stock_item_id)) continue;
-            seen.add(ing.stock_item_id);
-            if (isMissing(ing.stock_item_id)) count++;
-        }
-        return count;
-    }
-
-    function isCookable(recipe: Recipe): boolean {
-        return missingCount(recipe) === 0;
-    }
+    // Cookability is server-owned (§3.2): recipes carry `cookable` /
+    // `missing_count` and each ingredient carries `is_missing`. The client
+    // reads those fields rather than re-deriving from stock data.
 
     function totalTime(recipe: Recipe): number | null {
         if (recipe.prep_time_minutes === null && recipe.cook_time_minutes === null) {
@@ -473,20 +436,12 @@
         return (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
     }
 
-    function missingStockItemNames(recipe: Recipe): Set<string> {
-        return new Set(
-            recipe.ingredients
-                .filter((i) => isMissing(i.stock_item_id))
-                .map((i) => i.stock_item_name),
-        );
-    }
-
     // A7 — sticky footer counts over the FILTERED view.
     const footerCounts = computed(() => [
         { label: 'Shown', value: filteredRecipes.value.length, tone: 'primary' as const },
         {
             label: 'Cookable now',
-            value: filteredRecipes.value.filter(isCookable).length,
+            value: filteredRecipes.value.filter((r) => r.cookable).length,
             tone: 'positive' as const,
         },
         {
@@ -547,12 +502,12 @@
                     return false;
                 }
             }
-            if (cookableNowOnly.value && !isCookable(r)) return false;
+            if (cookableNowOnly.value && !r.cookable) return false;
             // A4: blank or non-numeric "Missing ≤" = off (Number.isFinite guards NaN).
             if (
                 missingMax.value !== null
                 && Number.isFinite(missingMax.value)
-                && missingCount(r) > missingMax.value
+                && r.missing_count > missingMax.value
             ) {
                 return false;
             }
@@ -939,7 +894,6 @@
                 recipeStore.getRecipesAsync(),
                 recipeStore.getRecipeCollectionsAsync(),
                 stockItemStore.getStockItemsAsync(),
-                stockLevelStore.getStockLevelsAsync(),
                 shoppingListStore.refreshAsync(),
                 // P2-08 — load the curated dietary-tag catalogue. Cached
                 // for the session; errors are non-fatal (the tag pickers

@@ -391,7 +391,13 @@
                 <article class="dora-card">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.restaurant_menu" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Cookable tonight</h3>
+                        <h3 class="dora-card-title">
+                            Cookable tonight
+                            <span
+                                v-if="summary && summary.recipes.cookable_count > 0"
+                                class="dora-text-muted text-body2"
+                            >({{ summary.recipes.cookable_count }})</span>
+                        </h3>
                         <a
                             class="dora-card-action dora-card-link"
                             href="#"
@@ -751,7 +757,6 @@
     import type { Product } from 'src/models/product';
     import type { Recipe } from 'src/models/recipe';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
-    import { priceOfLine, savingsOfLine } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
     import BudgetApiService, {
         type BudgetStatus,
@@ -768,8 +773,6 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
-    import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
@@ -838,13 +841,9 @@
     const shoppingListApi = new ShoppingListApiService();
 
     const recipeStore = useRecipeStore();
-    const stockItemStore = useStockItemStore();
-    const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
 
     const { recipes } = storeToRefs(recipeStore);
-    const { stockItems } = storeToRefs(stockItemStore);
-    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
@@ -1149,21 +1148,13 @@
     }
 
     // ── Cookable tonight ────────────────────────────────────────────────
-    // Same "missing = out-of-stock OR untracked" definition the rest of the
-    // app uses. Favourites bubble up first within the cookable subset so
-    // your usuals show up before the long tail.
-    const outOfStockLevelId = computed(
-        () => stockLevels.value.find((l) => l.name === 'Out of Stock')?.stock_level_id ?? null,
-    );
-
+    // Cookability is server-owned (§3.2): recipes carry `cookable`. A recipe
+    // with no ingredients is `cookable` server-side, but "cook tonight" should
+    // only suggest real recipes, so require at least one ingredient.
+    // Favourites bubble up first within the cookable subset so your usuals
+    // show up before the long tail.
     function recipeIsCookable(recipe: Recipe): boolean {
-        for (const ing of recipe.ingredients) {
-            if (!ing.stock_item_id) return false;
-            const item = stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id);
-            if (!item) return false;
-            if (item.stock_level_id === outOfStockLevelId.value) return false;
-        }
-        return recipe.ingredients.length > 0;
+        return recipe.cookable && recipe.ingredients.length > 0;
     }
 
     const cookableTonight = computed<Recipe[]>(() => {
@@ -1215,29 +1206,19 @@
     const primaryListId = computed(() => shoppingListStore.primaryListId);
     const primarySummary = computed(() => shoppingListStore.primarySummary);
 
+    // Totals are server-owned (state-ownership Type B) — read them off the
+    // detail's `totals` instead of summing `priceOfLine`/`savingsOfLine` here.
+    // Shape kept identical so the template bindings are unchanged.
     const primaryListStats = computed(() => {
-        const detail = primaryListDetail.value;
-        if (!detail) return null;
-        let remaining = 0;
-        let full = 0;
-        let savings = 0;
-        let unticked = 0;
-        for (const line of detail.lines) {
-            const price = priceOfLine(line);
-            full += price;
-            savings += savingsOfLine(line);
-            if (!line.is_ticked) {
-                remaining += price;
-                unticked++;
-            }
-        }
+        const t = primaryListDetail.value?.totals;
+        if (!t) return null;
         return {
-            remaining,
-            full,
-            savings,
-            unticked,
-            ticked: detail.lines.length - unticked,
-            total: detail.lines.length,
+            remaining: t.remaining_price,
+            full: t.total_price,
+            savings: t.total_savings,
+            unticked: t.unticked_count,
+            ticked: t.ticked_count,
+            total: t.line_count,
         };
     });
 
@@ -1322,12 +1303,6 @@
             loadBudget(),
             loadWasteRescue(),
             suggestionStore.refreshAsync(),
-            stockItems.value.length === 0
-                ? stockItemStore.getStockItemsAsync()
-                : Promise.resolve(),
-            stockLevels.value.length === 0
-                ? stockLevelStore.getStockLevelsAsync()
-                : Promise.resolve(),
             recipes.value.length === 0
                 ? recipeStore.getRecipesAsync()
                 : Promise.resolve(),
@@ -1341,7 +1316,7 @@
     onMounted(loadAll);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
     /* ───── Palette ─────────────────────────────────────────────────────
        Warm, food-y, deliberately un-corporate. Scoped to this page so it
        doesn't leak. The variables are exported as CSS custom properties on

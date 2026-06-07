@@ -65,6 +65,83 @@ class ShoppingListLineDto:
 
 
 @dataclass(frozen=True, slots=True)
+class ShoppingListTotalsDto:
+    """Server-owned list-level money/count aggregates (state-ownership Type B).
+
+    The browser used to sum these across the fetched lines (the dashboard's
+    `primaryListStats`); the server now owns the cross-line totals so the number
+    can't silently disagree. Per-line *display* price stays a client concern
+    (the accepted Type-C `priceOfLine` helper) — only the aggregate moved.
+    """
+    total_price: float        # full price of every line
+    remaining_price: float    # price of un-ticked lines only ("still to grab")
+    total_savings: float      # savings vs RRP across all lines
+    unticked_count: int
+    ticked_count: int
+    line_count: int
+
+
+def _chosen_offer(line: 'ShoppingListLineDto') -> 'LineProductOfferDto | None':
+    """The offer a line's price is based on: the explicitly-selected one, else
+    the first (the list is pre-sorted preferred→cheapest). Mirrors the client's
+    `chosenOfferFor` exactly — both operate on the same server-sorted offers."""
+    for offer in line.offers:
+        if offer.is_selected:
+            return offer
+    return line.offers[0] if line.offers else None
+
+
+def _line_price(line: 'ShoppingListLineDto') -> float:
+    """Port of `priceOfLine` (shoppingList.ts): a user-entered actual price wins,
+    else the chosen offer's `price_now`, times quantity."""
+    qty = line.quantity or 1
+    if line.actual_unit_price is not None:
+        return line.actual_unit_price * qty
+    offer = _chosen_offer(line)
+    if offer is None or offer.price_now is None:
+        return 0.0
+    return offer.price_now * qty
+
+
+def _line_savings(line: 'ShoppingListLineDto') -> float:
+    """Port of `savingsOfLine`: (chosen offer RRP − paid) × qty, floored at 0."""
+    offer = _chosen_offer(line)
+    if offer is None or offer.price_was is None:
+        return 0.0
+    paid = line.actual_unit_price if line.actual_unit_price is not None else offer.price_now
+    if paid is None:
+        return 0.0
+    diff = offer.price_was - paid
+    if diff <= 0:
+        return 0.0
+    return diff * (line.quantity or 1)
+
+
+def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotalsDto:
+    """Aggregate the per-line price/savings into list-level totals. Single source
+    for the dashboard's primary-list stats (it reads these instead of summing)."""
+    total_price = 0.0
+    remaining_price = 0.0
+    total_savings = 0.0
+    unticked = 0
+    for line in lines:
+        price = _line_price(line)
+        total_price += price
+        total_savings += _line_savings(line)
+        if not line.is_ticked:
+            remaining_price += price
+            unticked += 1
+    return ShoppingListTotalsDto(
+        total_price = total_price,
+        remaining_price = remaining_price,
+        total_savings = total_savings,
+        unticked_count = unticked,
+        ticked_count = len(lines) - unticked,
+        line_count = len(lines),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class ShoppingListDetailDto:
     shopping_list_id: UUID
     name: str
@@ -73,6 +150,7 @@ class ShoppingListDetailDto:
     is_in_progress: bool
     created_at: datetime
     completed_at: datetime | None
+    totals: ShoppingListTotalsDto
     lines: List[ShoppingListLineDto] = field(default_factory=list)
 
 
@@ -206,6 +284,7 @@ class GetShoppingListDetailHandler:
             is_in_progress = bool(_List.is_in_progress),
             created_at = _List.created_at,
             completed_at = _List.completed_at,
+            totals = compute_list_totals(_LineDtos),
             lines = _LineDtos,
         )
 

@@ -25,13 +25,13 @@
                 :label="toggleLabel"
                 @click="expanded = !expanded"
             >
-                <q-badge v-if="activeCount > 0" color="primary" floating>
+                <q-badge v-if="(activeCount ?? 0) > 0" color="primary" floating>
                     {{ activeCount }}
                 </q-badge>
             </BaseButton>
 
             <BaseButton
-                v-if="activeCount > 0"
+                v-if="(activeCount ?? 0) > 0"
                 variant="ghost"
                 :icon="ICONS.filter_alt_off"
                 label="Clear filters"
@@ -66,7 +66,9 @@
         }>(),
         {
             activeCount: 0,
-            modelValue: undefined,
+            // `modelValue` intentionally has no default — omitting it is the
+            // uncontrolled signal. (An explicit `undefined` default breaks
+            // withDefaults inference under exactOptionalPropertyTypes.)
             toggleLabel: 'Filters',
         },
     );

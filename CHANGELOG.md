@@ -5,7 +5,72 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Frontend build breakage (pre-existing, surfaced during verification).** Fixed
+  `//` line comments inside plain-CSS `<style>` blocks that broke Vue SFC
+  compilation ("Unexpected '/'") — `LoginPage.vue` (the login route wouldn't
+  compile, so the app couldn't start) converted to `/* */`; `DashboardPage.vue`
+  and `ProductSearch.vue` (which actually use SCSS nesting) corrected to
+  `<style scoped lang="scss">`. Also resolved a batch of strict-TypeScript
+  (`exactOptionalPropertyTypes`) errors and lint warnings in shared components
+  (`BaseButton`, `FilterBar`, `BulkMoveLocationDialog`) and a few pages
+  (`RecipeCookMode`, `MealPlansOverview`, `suggestionsApiService`). None were
+  related to the state-ownership work; they were latent on the branch.
+
 ### Changed
+- **Phase 1 (state-ownership) Chunk 5 — server-owned shopping-list totals
+  (Type B).** `GET /api/shopping-lists/<id>` now returns a `totals` block
+  (`total_price`, `remaining_price`, `total_savings`, `unticked_count`,
+  `ticked_count`, `line_count`) computed server-side. The dashboard's
+  "primary list" stats and the shopping-list **detail page** headline totals now
+  read these instead of each summing `priceOfLine` / `savingsOfLine` across the
+  fetched lines in the browser — so the cross-line totals can't silently diverge
+  between surfaces. Per-line *display* price stays a client concern (the accepted
+  `priceOfLine` helper). The budget card and "use soon" card were already
+  server-owned, so they needed no change. **Note:** the "best deals" card (still
+  fetches all products + sorts by discount client-side) and the shop-mode /
+  lists-overview line sums are deferred to a focused follow-up (they need a
+  discount-sort capability / per-list-summary totals).
+
+### Added
+- **Phase 1 (state-ownership) Chunk 4 — queryable cookability + dashboard
+  `cookable_count`.** `GET /api/recipes` now accepts `?cookable=true|false` and
+  `?max_missing=N` so callers can *query* for cookable / nearly-cookable recipes
+  instead of fetching every recipe + the whole pantry and filtering in the
+  browser (§3.3). `/api/dashboard/summary` gained `recipes.cookable_count` (recipes
+  with nothing missing and at least one ingredient), surfaced as a count beside
+  the "Cookable tonight" card title. The cookability rule is single-sourced in a
+  new `dora_api/domain/recipe_cookability.py` (`missing_count_for`) and the
+  per-recipe aggregation in a shared `load_recipe_cookability` query, both consumed
+  by the recipe DTO, the new filter, and the dashboard — so the definition can't
+  drift (R-003). The TS `RecipeFilterArgs` + dashboard model gained the matching
+  fields.
+
+### Changed
+- **Phase 1 (state-ownership) Chunk 3 — deleted the client-side cookability
+  copies.** Removed the ~7 browser reimplementations that matched the stock
+  level name `'Out of Stock'` and joined recipes → stock items client-side to
+  decide cookability (`RecipesOverview`, `RecipeCard`, `RecipeDetailPage`,
+  `MealPlansOverview`, `DashboardPage`, `DoraChat`). They now read the
+  server-owned fields added in Chunk 2/3: `recipe.cookable`,
+  `recipe.missing_count`, and per-ingredient `is_missing` / `is_low_stock`. As a
+  result the **Dashboard and Recipes Overview no longer fetch the entire stock
+  table + all stock levels** just to filter — the "fetch everything to compute a
+  rule" pattern is gone for cookability. The `RecipeIngredientDto` gained
+  `is_missing` / `is_low_stock`; the TS `StockItem` model gained the Chunk-1
+  derived booleans (`is_out_of_stock` / `is_low_stock` / `needs_restock` /
+  `stock_level_sequence`) so the recipe-editor's per-ingredient "Missing" badge
+  reads a server boolean instead of a level name. **Effect:** renaming a stock
+  level can no longer make the cookable filters/cards disagree with the rest of
+  the app, and cookable surfaces stop downloading the whole pantry.
+- **Phase 1 (state-ownership) Chunk 2 — server-owned cookability on `RecipeDto`.**
+  `RecipeDto` now carries `missing_count` (count of ingredients whose stock item
+  is out-of-stock or has no level record) and `cookable` (`missing_count == 0`),
+  computed server-side from the already-loaded ingredient tree using the §3.1
+  `is_missing()` contract. Decision: presence-only (not quantity-aware), matching
+  the existing client behaviour. The client currently recomputes this in 7
+  locations; those copies will be deleted in Chunk 3. New unit tests
+  (`tests/test_recipe_cookability.py`, 7 tests) pin the logic.
 - **Phase 1 (state-ownership) Chunk 1 — single server-owned stock-status
   contract.** New `dora_api/domain/stock_status.py` is the one authority for
   what a stock level *means*, keyed to the level's ordinal `sequence`, never its

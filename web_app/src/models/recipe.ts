@@ -8,6 +8,11 @@ export type RecipeIngredient = {
     quantity: number | null;
     unit: string | null;
     notes: string | null;
+    /** Server-derived stock status for this ingredient (§3.1 contract).
+     *  `is_missing` = out-of-stock or untracked; the client reads these
+     *  instead of matching a stock-level name. */
+    is_missing: boolean;
+    is_low_stock: boolean;
 };
 
 export type Recipe = {
@@ -36,6 +41,11 @@ export type Recipe = {
     /** P2-08 — canonical dietary / allergen-free / nutritional tags
      *  the recipe has been tagged with. Empty array when untagged. */
     tags: string[];
+    /** Server-owned cookability (§3.2). `missing_count` = distinct
+     *  out-of-stock/untracked ingredients; `cookable` = `missing_count === 0`.
+     *  The client reads these instead of recomputing from stock data. */
+    cookable: boolean;
+    missing_count: number;
 };
 
 export type RecipeTagDefinition = {

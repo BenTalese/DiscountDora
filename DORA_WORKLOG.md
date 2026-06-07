@@ -24,6 +24,308 @@ next.
 
 ---
 
+## 2026-06-07 — Fix pre-existing frontend build breakage (surfaced during Chunk 3-5 verify)
+**Status:** complete (fixes applied; **not compile-verified here** — see FU-051)
+**Context:** Running `quasar dev` to verify Chunks 3-5 surfaced a pile of errors —
+**all in files I never touched** (confirmed via `git status`), i.e. pre-existing on
+this WIP branch, not from the state-ownership work. Most likely surfaced by stricter
+tooling after a fresh `npm install`. Fixed them so verification can proceed.
+**What changed:**
+- **Startup blocker — `//` line comments in plain-CSS `<style>` blocks** (invalid
+  CSS → vite:vue "Unexpected '/'"). A project-wide scan found 3 files:
+  - `LoginPage.vue` — genuinely plain CSS (full `:deep()` selectors, no nesting);
+    converted the `//` block to `/* */`. Also modernised `:before`/`:after` →
+    `::before`/`::after` inside `:deep()`.
+  - `DashboardPage.vue` + `ProductSearch.vue` — these blocks use SCSS features
+    (nested `:deep(img){}` + `//`) but were tagged `<style scoped>`; corrected to
+    `<style scoped lang="scss">` (SCSS is a CSS superset — existing rules unaffected).
+- **`exactOptionalPropertyTypes` vue-tsc errors:**
+  - `BaseButton.vue` — `onClick(event: MouseEvent)` didn't match q-btn's
+    `(evt: Event,…)`; changed to `(event: Event)` + `emit('click', event as MouseEvent)`.
+    Widened optional props (`icon/label/loading/disable/to/href/target`) to `| undefined`
+    so callers can bind possibly-undefined values (fixes the BulkMove/FilterBar cascades).
+  - `FilterBar.vue` — removed the `modelValue: undefined` default (an explicit
+    `undefined` default breaks `withDefaults` inference under exactOptional, which
+    cascaded into the `activeCount`/`label` "possibly undefined" errors).
+- **Lint:** `RecipeCookMode.vue` removed the unused `startListening`;
+  `suggestionsApiService.ts` `kind: SuggestionKind | string` → `SuggestionKind | (string & {})`
+  (keeps autocomplete, satisfies `no-redundant-type-constituents`);
+  `MealPlansOverview.vue` dropped the unnecessary `as MealPlan | null` assertion.
+**Files touched:** `web_app/src/pages/LoginPage.vue`, `DashboardPage.vue`,
+`ProductSearch.vue`, `MealPlansOverview.vue`, `RecipeCookMode.vue`,
+`web_app/src/components/BaseButton.vue`, `FilterBar.vue`,
+`stock/BulkMoveLocationDialog.vue` (no change — fixed via BaseButton),
+`web_app/src/services/api/suggestionsApiService.ts`.
+**Decisions made:** these were out of the Chunk-5 scope but blocked verifying the
+work, so fixed per the user's call. Root-caused each (not just silenced): the `//`
+fix targets *plain-CSS* blocks only (SCSS blocks legitimately use `//`); the
+exactOptional fixes target the real inference break, not band-aids.
+**Verification:** **NOT run** — `web_app/node_modules` absent / Node v14 here, so no
+`eslint`/`vue-tsc`/`quasar dev`. Each fix is standards-correct and high-confidence,
+but unproven in this env. The user is running dev — these need confirmation there
+(FU-051). The `//`-scan was exhaustive (project-wide regex over non-scss `<style>`).
+**Engineering-standards gate:** R-002 (theme) untouched; R-008 (code-style) — fixes are
+minimal + root-caused. No new rule. **Possible ADR candidate:** "plain `<style>` blocks
+must not use `//` or nesting — tag `lang=\"scss\"` or use `/* */`"; deferred to the user.
+**Next up:** user confirms the app boots + verifies Chunks 3-5 in browser (FU-051),
+then resume Type-B tail (FU-053/054) → Chunk 6 (Type C).
+
+## 2026-06-07 — Phase 1 (state-ownership) Chunk 5: server-owned shopping-list totals (Type B)
+**Status:** complete (flagship Type-B slice; best-deals + shop-mode/overview deferred)
+**What changed:**
+- **Server:** `ShoppingListDetailDto` gained a `totals: ShoppingListTotalsDto`
+  block (`total_price`, `remaining_price`, `total_savings`, `unticked_count`,
+  `ticked_count`, `line_count`), computed by a new `compute_list_totals()` over
+  the already-built line DTOs. Faithful ports of the client formulas —
+  `_chosen_offer` (selected else offers[0]), `_line_price` (`priceOfLine`),
+  `_line_savings` (`savingsOfLine`) — so the numbers can't drift.
+- **Client:** the dashboard `primaryListStats` and the **shopping-list detail
+  page** totals (`remainingTotal`/`fullTotal`/`tickedTotal`/`savingsTotal`) now
+  read `detail.totals.*` instead of summing lines. Removed the now-unused
+  `priceOfLine`/`savingsOfLine` imports from the dashboard and `savingsOfLine`
+  from the detail page. `ShoppingListDetail`/`ShoppingListTotals` TS models updated.
+- **Tests:** new `tests/test_shopping_list_totals.py` (9) pin the port: price/
+  savings, ticked-excluded-from-remaining, actual-price override, no-offer/no-RRP,
+  selected-offer-wins, negative-savings floor, null-qty, empty list.
+
+**Drift found (shrinks the chunk):** the proposal's other Type-B items are
+**already server-owned on this branch** — the **budget card** reads
+`/budget/status` (server computes spent/remaining/projected; no client re-sum),
+and **use-soon** reads `/waste/rescue` (server-ordered). The proposal's stale line
+numbers predate that. So the only live client summation for *whole-list* totals
+was the dashboard primaryListStats (+ the detail page, same fix).
+
+**Decisions made:**
+- **Totals live on the shopping-list *detail* DTO**, not the dashboard summary —
+  cohesive (the list owns its own totals) and reused by both the dashboard and the
+  detail page from the one fetch. (Consistent with the earlier Q3 "extend the
+  existing payload" lean.)
+- **Server computes totals over the final, sorted line DTOs**, so `_chosen_offer`
+  sees the same `is_selected`/offers[0] ordering the client does — guaranteeing the
+  totals equal the old client sums.
+- **Per-line price math stays on the client** (`priceOfLine` — Type-C carve-out per
+  proposal §4/§8.1). Only the cross-line *aggregate* moved. The per-line formula now
+  exists in both languages (server total vs client per-line display); this is the
+  accepted carve-out, not new drift.
+- **Deferred best-deals + shop-mode/overview sums** (FU-053/FU-054) — best-deals needs
+  a discount-sort capability over the joined `current_offer` (derived expression),
+  and shop-mode/overview sum *subsets* / *multiple lists* (need per-list-summary
+  totals), both bigger + riskier than the named flagship. R-007.
+
+**Files touched:** `dora_api/features/shopping_lists/get_shopping_list_detail.py`,
+`tests/test_shopping_list_totals.py` (new), `web_app/src/models/shoppingList.ts`,
+`web_app/src/pages/DashboardPage.vue`, `web_app/src/pages/ShoppingListDetail.vue`.
+
+**Verification:**
+- 36/36 server unit tests pass (9 new totals + 27 prior). Module imports clean;
+  only one `ShoppingListDetailDto` constructor (updated). No frontend literal
+  constructions of `ShoppingListDetail` to break.
+- **Not run against real data / not type-checked / not browser-verified** (same
+  constraints: no migrated DB, no `web_app/node_modules`, Node v14). Folded into FU-051.
+
+**Engineering-standards gate:**
+- R-003 — list totals single-sourced in `compute_list_totals`, consumed by dashboard
+  + detail page; the per-line client math is the accepted Type-C carve-out.
+- R-005 — totals computed over loaded DTOs; no raw SQL.
+- R-007 — deferred best-deals + shop-mode/overview (FU-053/054).
+- ADR: none — concrete Type-B application of R-003.
+
+**Next up:** finish Type-B — **best deals** (`?sort=discount`/focused endpoint over
+`current_offer` + fold the inline discount-% onto the shared helper, FU-053) and the
+**shop-mode/lists-overview** line sums (per-list-summary totals, FU-054). Then Type-C
+(Chunk 6, offer-snapshot-at-add — overlaps the shopping-list redesign). Pending:
+browser verify of Chunks 3-5 (FU-051).
+
+## 2026-06-07 — Phase 1 (state-ownership) Chunk 4: queryable cookability + dashboard count
+**Status:** complete
+**What changed:**
+- **New `dora_api/domain/recipe_cookability.py`** — single authority for the
+  cookability *aggregation* rule: `missing_count_for(ingredients)` (distinct
+  missing stock items, built on the §3.1 `is_missing`) + `is_cookable`. The
+  Chunk-2/3 `RecipeDto.from_entity` now calls `missing_count_for` instead of
+  re-expressing the dedup inline (R-003).
+- **`?cookable=true|false` + `?max_missing=N` on `GET /api/recipes`.** Extended
+  the filters dataclass (renamed `RecipeTagFilters` → `RecipeFilters`, +`cookable`
+  /`max_missing`, +`needs_cookability`/`matches_missing`). `_restrict_query`
+  narrows the allowed-id set by a shared `load_recipe_cookability(repository)`
+  query (one eager load → `{recipe_id: (missing_count, ingredient_count)}`).
+  `_parse_tag_filters` → `_parse_recipe_filters` (+`_parse_bool` tri-state).
+- **`recipes.cookable_count` on `/api/dashboard/summary`** — recipes with nothing
+  missing AND ≥1 ingredient (cook-now semantics), via the same
+  `load_recipe_cookability` helper (R-003). Shown as a count beside the
+  "Cookable tonight" card title.
+- **Frontend (type/display only):** `RecipeFilterArgs` gained `cookable`/`max_missing`
+  + query-string encoding; `dashboard.ts` `RecipeSummary` gained `cookable_count`;
+  the dashboard card header shows it.
+- **Tests:** new `tests/test_recipe_filters.py` (12) — `_parse_bool`,
+  `_parse_recipe_filters`, `is_empty`/`needs_cookability`, and the
+  `matches_missing` predicate (cookable true/false, max_missing, composition).
+
+**Decisions made:**
+- **`?cookable=true` matches the DTO `cookable` field exactly** (missing == 0, so
+  an empty recipe qualifies) — the filter returns "recipes where `cookable` is
+  true", which is the least surprising contract.
+- **Dashboard `cookable_count` excludes empty recipes** (requires ≥1 ingredient)
+  so it matches the card's list semantics ("recipes you can actually cook"). The
+  two semantics differ only for degenerate 0-ingredient recipes; documented in
+  both code sites.
+- **Single-sourced the rule in `domain/` + the aggregation query in one helper**
+  rather than duplicating the count in the dashboard handler (R-003).
+- **Used the repository ORM eager-load, not raw SQL**, for `load_recipe_cookability`
+  so it stays portable across SQLite/Postgres (R-005). It's one query (not N+1)
+  but loads full entities; a set-based COUNT is a future optimisation (FU-052).
+- **Did NOT rewire the shared recipe-store surfaces (RecipesOverview / dashboard
+  list) to actually call the new query.** They still load all recipes + filter
+  client-side on `r.cookable`. Switching them touches shared-store fetching and
+  needs browser verification, so it's logged (FU-052) rather than done blind.
+
+**Files touched:** `dora_api/domain/recipe_cookability.py` (new),
+`dora_api/features/recipes/get_recipes.py`,
+`dora_api/features/dashboard/get_dashboard_summary.py`,
+`tests/test_recipe_filters.py` (new), `web_app/src/models/dashboard.ts`,
+`web_app/src/services/api/recipeApiService.ts`, `web_app/src/pages/DashboardPage.vue`.
+
+**Verification:**
+- 27/27 server unit tests pass (filters + cookability + stock-status). Imports
+  clean, no circular import (dashboard → recipes one-way).
+- In-process smoke confirmed `load_recipe_cookability` builds the **correct SQL**
+  (LEFT OUTER JOIN Recipe→RecipeIngredient→StockItem→StockLevel) but **could not
+  run against data** — this environment's `data/` SQLite has no migrated tables
+  ("no such table: Recipe"), same constraint as FU-048. **Not run end-to-end with
+  real data; frontend not type-checked/browser-verified** (no `web_app/node_modules`,
+  Node v14) — folded into FU-051.
+
+**Engineering-standards gate:**
+- R-003 — cookability rule + aggregation query each single-sourced; DTO/filter/
+  dashboard all consume them.
+- R-005 — ORM eager-load (portable), no raw SQL added.
+- R-007 — resisted the shared-store rewire (FU-052).
+- ADR: none — a concrete R-003 application, no new rule warranted.
+
+**Next up:** Phase 1 Type-B aggregates (proposal §4/Chunk 5) — dashboard
+primary-list $ totals / best-deals / use-soon move server-side; the §8.2 finds
+(`?sort=discount&limit=N`, budget totals on the summary). Also pending: browser
+verify of Chunks 3+4 (FU-051), and optionally rewire cookable surfaces to query
+(FU-052).
+
+## 2026-06-07 — Phase 1 (state-ownership) Chunk 3: delete client cookability copies
+**Status:** complete
+**What changed:**
+- **Server:** `RecipeIngredientDto` now carries server-derived `is_missing` /
+  `is_low_stock` (via the §3.1 `is_missing`/`is_low_stock` predicates). Reworked
+  `RecipeDto.from_entity` so `missing_count` dedups by `stock_item_id` (matching
+  the old client behaviour — an item on two rows is one missing line) and reuses
+  the ingredient DTOs.
+- **Client (6 files):** deleted every `'Out of Stock'`-name-matching cookability
+  reimplementation and switched to the server fields:
+  - `RecipesOverview.vue` — `isCookable`/`missingCount`/`missingStockItemNames`
+    gone; filters/footer/comparison-chips read `r.cookable` / `r.missing_count` /
+    `ing.is_missing`. **Dropped the `stockLevelStore` + its fetch** (no longer
+    needed; `stockItemStore` stays for the ingredient picker).
+  - `RecipeCard.vue` — `levelNameFor`/`isMissing` gone; `cookableNow` = `recipe.cookable`,
+    `missingIds`/`lowCount` derive from `ing.is_missing`/`ing.is_low_stock`.
+    **Removed both stock stores** from the component.
+  - `RecipeDetailPage.vue` — cookability summary (`missingIngredients`,
+    `cookableNow`, in/tracked counts) now reads the *loaded* `recipe.value`
+    server fields. Per-ingredient editor "Missing" badge uses a new
+    `isMissingItem` reading the stock item's server `is_out_of_stock` boolean.
+    Kept `levelNameFor`/`levelColourFor` (presentation coloring via the shared
+    `getStockLevelColour` helper).
+  - `MealPlansOverview.vue` — `recipeCookable` now `recipe.cookable && ingredients.length>0`.
+  - `DashboardPage.vue` — `recipeIsCookable` likewise; **removed both stock
+    stores + their dashboard fetches** (the dashboard no longer downloads the
+    whole pantry to compute "Cookable tonight").
+  - `DoraChat.vue` — `missingIdsForRecipe` reads `ing.is_missing` (kept
+    `ensureRecipeData`'s stock load: the assistant's separate `getStock` context
+    still needs it).
+- **Models:** `recipe.ts` gained `cookable` / `missing_count` on `Recipe` and
+  `is_missing` / `is_low_stock` on `RecipeIngredient`; `stockItem.ts` gained the
+  Chunk-1 server booleans. Added 2 server unit tests (dedup + ingredient booleans).
+
+**Decisions made:**
+- **Per-ingredient `is_missing`/`is_low_stock` on the ingredient DTO** is the
+  primitive several consumers needed (low-count, missing list, highlighting),
+  mirroring Chunk-1's StockItem booleans. The recipe-level `cookable`/`missing_count`
+  alone wasn't enough.
+- **`missing_count` dedups by stock_item_id** to preserve the displayed numbers
+  (the deleted client copies all deduped).
+- **RecipeDetailPage cookability reads the saved `recipe.value`**, not the live
+  editable `form`. Trade-off: the sidebar "Missing N" reflects the persisted
+  recipe and refreshes after save, rather than updating live mid-edit. Chosen
+  because the server can't know unsaved ingredients, and the page reloads after
+  every save. Per-ingredient editor badge still updates live (reads stock store).
+  Logged as FU-049.
+- **Empty recipe = `cookable` server-side** (missing_count 0). Dashboard/MealPlans
+  "suggest to cook" surfaces add `&& ingredients.length > 0` locally (presentation
+  filter) so an empty recipe isn't suggested — preserves prior behaviour.
+- **Left the non-cookability `'Out of Stock'` sites alone** (stock-page filters,
+  cook-mode availability, waste/restock, the shared color helper, MealPlans
+  "need to buy"). Out of Chunk-3 scope (R-007); the broader §8.3 smell logged as FU-050.
+
+**Files touched:** `dora_api/features/recipes/get_recipes.py`,
+`tests/test_recipe_cookability.py`, `web_app/src/models/recipe.ts`,
+`web_app/src/models/stockItem.ts`, `web_app/src/pages/RecipesOverview.vue`,
+`web_app/src/components/RecipeCard.vue`, `web_app/src/pages/RecipeDetailPage.vue`,
+`web_app/src/pages/MealPlansOverview.vue`, `web_app/src/pages/DashboardPage.vue`,
+`web_app/src/components/dora/DoraChat.vue`.
+
+**Verification:**
+- Server: 17/17 unit tests pass (cookability + stock-status); module imports clean.
+- Client: **could not run lint/`vue-tsc` — `web_app/node_modules` is absent and
+  local Node is v14.17 (too old for the toolchain).** Verified manually instead:
+  grepped every changed file for dangling references to the removed symbols
+  (`isMissing`, `missingCount`, `outOfStockLevelId`, removed stores) — none remain;
+  confirmed the recipe store/API service pass response fields through (no field
+  mapping that would drop the new keys). **Not type-checked / not run in browser** —
+  needs an `npm install` + `quasar dev` pass to confirm. Logged under FU-051.
+
+**Engineering-standards gate:**
+- R-003 (state-ownership) — this *is* the realisation; 6 client duplications removed.
+- R-002 (theme tokens) — touched `MealPlansOverview.vue:96-97` (`grey-4`/`grey-9`
+  palette literals) only to change the function arg; the literals are pre-existing
+  and already tracked as FU-046. Not fixed here (separate theme sweep).
+- R-007 (scope) — resisted migrating the other `'Out of Stock'` sites; logged as FU-050.
+
+**Next up:** Chunk 4 — `?cookable=true` query filter on `GET /api/recipes` +
+`cookable_count` on `/dashboard/summary` (Q3 resolved: extend the summary). Then
+the cookable surfaces can *query* instead of fetching all recipes. Also: a browser
+verify pass for this chunk (FU-051).
+
+## 2026-06-06 — Phase 1 (state-ownership) Chunk 2: RecipeDto cookability fields
+**Status:** complete
+**What changed:**
+- `RecipeDto` gains two new server-owned fields: `missing_count: int` and
+  `cookable: bool`. Computed in `RecipeDto.from_entity` from the already-eagerly-
+  loaded `ingredient → stock_item → stock_level` tree, via `is_missing()` from
+  the §3.1 contract. No new DB join needed — the base query already loads
+  `StockLevel`.
+- `dora_api/features/recipes/get_recipes.py` updated; all `dataclasses.replace`
+  hydration passes (tags, unallocated) preserve the new fields automatically.
+- New unit test `tests/test_recipe_cookability.py` (7 tests) pinning presence-only
+  cookability, low-stock-not-missing, None-level-is-missing, and sequence clamping.
+
+**Decisions made:**
+- **Presence-only, not quantity-aware** (Q2 resolved by user). Matches existing
+  client behaviour. Quantity-awareness explicitly deferred.
+- **Extend `/dashboard/summary` RecipeSummary** for `cookable_count` (Q3 resolved
+  by user). Will be added in Chunk 4.
+
+**Files touched:** `dora_api/features/recipes/get_recipes.py`,
+`tests/test_recipe_cookability.py` (new).
+
+**Verification:** 15/15 unit tests pass (7 new cookability + 8 existing
+stock-status). Module imports clean. App boots.
+
+**Engineering-standards gate:** R-003 (state-ownership) realisation —
+`missing_count`/`cookable` moved from 7 client copies to one server site.
+No new rule warranted (R-003 already covers it).
+
+**Next up:** Chunk 3 — delete the 7 client copies of `isMissing`/`isCookable`
+that currently name-match `'Out of Stock'`. Then Chunk 4 — `?cookable=true`
+query filter + `cookable_count` on `/dashboard/summary`.
+
+---
+
 ## 2026-06-06 — Phase 1 (state-ownership) Chunk 1: stock-status contract
 **Status:** complete
 **What changed:**

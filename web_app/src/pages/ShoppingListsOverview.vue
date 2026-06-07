@@ -440,8 +440,6 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import {
-        priceOfLine,
-        savingsOfLine,
         type ShoppingListSummary,
     } from 'src/models/shoppingList';
     import MealPlanApiService from 'src/services/api/mealPlanApiService';
@@ -514,17 +512,14 @@
         }
         primaryStats.value = null;
         try {
-            const detail = await api.getDetailAsync(summary.shopping_list_id);
-            let remaining = 0;
-            let full = 0;
-            let savings = 0;
-            for (const line of detail.lines) {
-                const price = priceOfLine(line);
-                full += price;
-                if (!line.is_ticked) remaining += price;
-                savings += savingsOfLine(line);
-            }
-            primaryStats.value = { remaining, full, savings };
+            // Totals are server-owned (state-ownership Type B) — read the
+            // detail's `totals` block instead of summing the lines here.
+            const { totals } = await api.getDetailAsync(summary.shopping_list_id);
+            primaryStats.value = {
+                remaining: totals.remaining_price,
+                full: totals.total_price,
+                savings: totals.total_savings,
+            };
         } catch {
             // Non-fatal — the card just shows "Loading totals…" indefinitely
             // in this case, which is benign and re-tries on next refresh.

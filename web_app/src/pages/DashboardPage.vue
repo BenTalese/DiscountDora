@@ -509,7 +509,7 @@
                                 </span>
                             </div>
                             <q-badge class="dora-deal-badge" color="negative" text-color="white">
-                                {{ discountPctFor(p) }}% off
+                                {{ discountPercent(p) }}% off
                             </q-badge>
                         </li>
                     </ul>
@@ -755,6 +755,7 @@
     } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
     import type { Product } from 'src/models/product';
+    import { discountPercent } from 'src/helpers/scrapedProductOfferLogic';
     import type { Recipe } from 'src/models/recipe';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
@@ -904,7 +905,7 @@
     // in parallel and never block each other — a slow alerts response
     // shouldn't gate the rest of the dashboard.
     const alerts = ref<Alert[]>([]);
-    const products = ref<Product[]>([]);
+    const bestDeals = ref<Product[]>([]);
     const primaryListDetail = ref<ShoppingListDetail | null>(null);
     // P2-05 — grocery budget card. Always loads (so the passive "spent
     // this week" state works for users who haven't opted in), but the
@@ -1180,25 +1181,14 @@
     }
 
     // ── Best deals on your saved products ────────────────────────────────
-    function discountPctFor(product: Product): number | null {
-        if (!product.price_was || !product.price_now) return null;
-        if (product.price_was <= product.price_now) return null;
-        return Math.round(((product.price_was - product.price_now) / product.price_was) * 100);
-    }
-
-    const bestDeals = computed<Product[]>(() =>
-        [...products.value]
-            .filter((p) => p.is_active && discountPctFor(p) !== null)
-            .sort((a, b) => (discountPctFor(b) ?? 0) - (discountPctFor(a) ?? 0))
-            .slice(0, 3),
-    );
-
-    async function loadProducts() {
+    // Ranked + sliced server-side (state-ownership §8.2) — we fetch only the
+    // top 3 instead of downloading every product to sort in the browser. The
+    // `% off` badge still uses the shared `discountPercent` helper (display).
+    async function loadBestDeals() {
         try {
-            const page = await productApi.getAllAsync();
-            products.value = page.items;
+            bestDeals.value = await productApi.getBestDealsAsync(3);
         } catch {
-            products.value = [];
+            bestDeals.value = [];
         }
     }
 
@@ -1299,7 +1289,7 @@
         await Promise.all([
             loadSummary(),
             loadAlerts(),
-            loadProducts(),
+            loadBestDeals(),
             loadBudget(),
             loadWasteRescue(),
             suggestionStore.refreshAsync(),

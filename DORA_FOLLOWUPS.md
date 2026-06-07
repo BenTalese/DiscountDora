@@ -39,9 +39,37 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
-## [OPEN] FU-054 — Shop-mode + lists-overview still sum line prices client-side
+## [OPEN] FU-055 — P6-02 barcode/QR: design pivoted; build-vs-defer decision pending
+- **Raised:** 2026-06-07 (P6-02 design discussion)
+- **Type:** deferred job (blocked on user decision)
+- **What:** P6-02 was going to be "remove real-world barcodes wholesale, keep only Dora QR"
+  (legacy spec). A design discussion **changed the shape**: `ProductBarcode` (barcode→Product)
+  is the CORRECT model and is KEPT; `StockItem.barcode` (one barcode per item) is the WRONG
+  model and is DROPPED. Real-world-barcode scanning becomes a *navigation* aid (scan product →
+  open linked stock item), complementary to Dora QR (for unbarcoded/loose items), both opt-in /
+  off-by-default, never live deal-lookup. **Full context + the verified code map + the resolved
+  decisions are in the DORA_WORKLOG.md entry dated 2026-06-07 "P6-02 barcode/QR — DESIGN
+  DISCUSSION".**
+- **Resolved already:** flag = install-wide `AppSetting` (`scanning_enabled`, default false);
+  recommend ONE flag for the whole surface.
+- **OPEN — ask the user first:** how much to build *now* vs defer? (1) [recommended] cleanup +
+  gate now, defer the register-against-product UI to Phase 2 (auto-populate from scraped EANs);
+  (2) build the full vision now; (3) pause and write the proposal/CLAUDE.md update first.
+- **Also verify:** does scraped Product data carry an EAN today? (Only `merchant_stockcode`
+  seen.) Determines whether auto-populate is feasible / whether to defer the register UI.
+- **Doc changes agreed-in-principle (not yet done):** reword CLAUDE.md "Removed features" P6-02
+  line (deal-lookup stays removed; ProductBarcode-as-navigation kept; StockItem.barcode dropped);
+  write `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md`.
+- **Recommended resolution:** **now** — first user message next session.
+
+## [RESOLVED] FU-054 — Shop-mode + lists-overview still sum line prices client-side
 - **Raised:** 2026-06-07 (Phase 1 Chunk 5 — Type B)
 - **Type:** follow-up
+- **State note:** RESOLVED 2026-06-07 (Chunk 5b). Both turned out to operate on a
+  single fetched detail (shop-mode = the open list; overview `loadPrimaryStats` =
+  the *primary* list — not multi-list), so they now read `detail.totals` (added in
+  Chunk 5) directly. Removed the client sums + the unused `priceOfLine`/
+  `savingsOfLine` imports. Per-line `priceOfLine` display retained in the detail page.
 - **What:** Chunk 5 moved *whole-list* totals to the server (`ShoppingListDetailDto.totals`)
   and switched the dashboard + detail page to read them. Two surfaces still sum
   `priceOfLine`/`savingsOfLine` client-side: `ShoppingListShopMode.vue:408-411`
@@ -58,9 +86,16 @@ long session summary. Distinct from the other two logs:
   genuinely need a filtered sum. Per-line `priceOfLine` display stays client-side
   (accepted Type-C).
 
-## [OPEN] FU-053 — "Best deals" card still fetches all products + sorts by discount client-side
+## [RESOLVED] FU-053 — "Best deals" card still fetches all products + sorts by discount client-side
 - **Raised:** 2026-06-07 (Phase 1 Chunk 5 — Type B / proposal §8.2)
 - **Type:** follow-up
+- **State note:** RESOLVED 2026-06-07 (Chunk 5b). Added `GET /api/products/best-deals?limit=N`
+  (`GetBestDealsHandler`, ranks on-special products by discount % server-side via the
+  new `dora_api/domain/product_offer.discount_percent`); the dashboard queries it for
+  the top 3 instead of downloading all products. Inline `discountPctFor` removed; the
+  `% off` badge uses the shared `discountPercent` (widened to accept a `Product`).
+  Future optimisation (noted, not done): a SQL `ORDER BY` on the discount expression
+  instead of loading all products + ranking in Python — fine at current scale.
 - **What:** The dashboard "best deals" card (`DashboardPage.vue` `bestDeals` ~L1190,
   `loadProducts` fetches *all* products via `GET /api/products`) filters + sorts by
   discount % in the browser and slices top-3. The discount-% is computed inline

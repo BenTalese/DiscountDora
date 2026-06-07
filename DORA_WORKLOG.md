@@ -24,6 +24,168 @@ next.
 
 ---
 
+## 2026-06-07 — P6-02 barcode/QR — DESIGN DISCUSSION (recon-only, NO code). HANDOFF: decision pending.
+**Status:** recon-only — **blocked on a user decision** (ran out of usage mid-discussion).
+**What happened:** Picked P6-02 ("barcode→QR cleanup") as the next task after the
+state-ownership refactor. Mapped all barcode/QR code (see "Code map" below), then a
+design discussion **changed the shape of P6-02** — do NOT just run the legacy spec.
+
+### The pivot (important — the legacy P6-02 spec is now partly WRONG)
+The legacy spec (`docs/06_legacy_prompt_plans/PROMPT_PLAN_PART_6_POLISH.md` §P6-02) says
+"remove real-world barcodes wholesale, keep only Dora QR." The user re-litigated this and
+we reached a **better model** (user agreed; I agreed it's a real modeling bug):
+- A real-world barcode (EAN/UPC) identifies a **Product** (a saved SKU), not a stock item.
+  A stock item maps to *many* products → many barcodes. So:
+  - **`ProductBarcode` (barcode→Product) is the CORRECT model — KEEP it** (legacy spec wanted
+    it deleted; that's wrong).
+  - **`StockItem.barcode` (single barcode column on the item) is the WRONG model — DROP it.**
+- Real-world barcode scanning is a **navigation aid** (scan packaged product → resolve
+  ProductBarcode→Product→linked StockItem → open it), useful for a niche of users who want
+  scanning. Pairs with **Dora QR** for items with no real-world barcode (loose produce, deli,
+  decanted staples) + containers/shelves.
+- **Two complementary systems**, framed by use-case ("Scan a product" vs "Print Dora labels"),
+  **opt-in / off-by-default**, with a clear explainer of why both exist.
+- **HARD BOUNDARY (unchanged from the removal):** scanning = navigation only (open YOUR stock
+  item). It must NEVER do live "deal lookup" (that's the removed hosted-scraping concern;
+  live prices come via the companion/ingestion API, not barcode lookup).
+
+### Decisions RESOLVED this session (by user)
+- **`qr_labels_enabled` / scanning flag → install-wide AppSetting** (admin, single row, alongside
+  `llm_enabled` in `dora_api/domain/entities/app_setting.py`). NOT a per-user preference.
+- Flag shape (one vs two flags): **user had no preference → I recommend ONE flag**
+  (`scanning_enabled`, off by default) gating the whole scanning+labels surface (one mental
+  feature, simplest UX).
+
+### OPEN QUESTION FOR USER (blocks proceeding) — ask this first next session:
+**How much to build under P6-02 NOW vs defer?** Three options put to the user (unanswered):
+  1. **(My recommendation) Cleanup now, build UI later:** Now → drop `StockItem.barcode` (column +
+     register/clear routes + the wrong-model UI), KEEP `ProductBarcode` + its resolution branch,
+     KEEP Dora QR, add the off-by-default flag, relabel honestly. Defer the *register-against-
+     product* UI + scan-unknown rework to **Phase 2 (ingestion)** — ideally auto-populate
+     `ProductBarcode` from scraped EANs so manual registration becomes a freebie. Keeps P6-02 a
+     surface-*reduction*; unblocks P6-01.
+  2. Build the full vision now (net-new register-against-product UI + scan-unknown rework + two-
+     system UX before P6-01).
+  3. Pause P6-02; write `PROPOSAL_BARCODE_SCANNING.md` + update CLAUDE.md first, then decide.
+
+### Also unconfirmed (factual): does the scraper/Product data capture an EAN today?
+Products have `merchant_stockcode` (merchant SKU), but I did NOT find a scannable EAN field.
+If absent, manual registration is the only path now → strengthens "defer the UI until ingestion
+can auto-fill it." Next agent should verify before planning the register UI.
+
+### Doc changes AGREED IN PRINCIPLE (do once build-vs-defer is decided — NOT done yet):
+- **CLAUDE.md "Removed features" P6-02 line:** reword — "barcode *deal lookup*" stays removed,
+  but clarify `ProductBarcode` (barcode→product *navigation*) is KEPT as the correct model;
+  `StockItem.barcode` is what's dropped. (Currently it implies all real-world barcodes are cut.)
+- Write **`docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md`**: two-system design, corrected model,
+  off-by-default gating, navigation-not-deal-lookup boundary, deferred register-against-product
+  UI + ingestion auto-populate idea. (Wave-C proposal shape; end with the feedback coverage
+  table per CLAUDE.md if it targets feedback bullets — this is architecture-motivated, so map
+  the INV-5 QR-vs-barcode item.)
+
+### Code map (verified current state — source of truth; legacy spec file refs are partly stale):
+- **`dora_api/features/data/barcodes.py`** (451 lines) — all routes:
+  - KEEP: `GET /api/stock-items/<id>/qr` (PNG, L123-141), `GET /api/stock-items/qr/sheet`
+    (HTML print sheet, L228-274).
+  - `GET /api/barcodes/lookup` (L350-401) — 3 branches: (1) `dora://` link → stock item
+    [KEEP], (2) `StockItem.barcode` direct hit [DROP with the column], (3) `ProductBarcode`
+    → Product → StockItem via `preferred_product_id` or StockItemProduct m2m [KEEP].
+  - DROP: `POST/DELETE /api/stock-items/<id>/barcode` (register/clear, L284-330).
+  - KEEP (it's the correct model): `POST /api/barcodes/register-against-product` (L412-450).
+- **`dora_api/domain/entities/product_barcode.py`** — ProductBarcode entity. **KEEP.**
+- **`dora_api/domain/entities/stock_item.py`** — `barcode` field (L40) + `Fields.BARCODE` (L78).
+  **DROP both.**
+- **`dora_api/persistence/table_mappings.py`** — `StockItem.barcode` column (L135) **DROP**;
+  ProductBarcode table (L139-148) + mapper (L475-478) **KEEP**.
+- **Migration head = `d7f4a2c98e15`** (`..._20260526_barcodes.py`). New migration must chain off
+  it and: DROP `StockItem.barcode` column (+ its `uq_StockItem_barcode` unique constraint);
+  KEEP the ProductBarcode table; add `scanning_enabled` (bool, default false) to AppSetting.
+- Other server refs to `StockItem.barcode`: `export_stock_overview.py` (L46/58 CSV column —
+  remove), `get_stock_items.py` StockItemDto.barcode (L41 — remove), `get_stock_item_detail.py`
+  (detail DTO barcode — remove), `restore_shared.py` (product_barcodes section L109/163/173 —
+  KEEP, it's ProductBarcode), `health_check.py` (L55 `"barcodes": True` hardcoded → drive from
+  the new setting or rename to `"scanning"`).
+- **Frontend:** `ScanOverlay.vue` (KEEP, gate), `pages/data/BarcodesQR.vue` (538 lines — Scan/
+  Print/Manage tabs; the Manage tab + scan-unknown register-against-**stock-item** flow is the
+  WRONG model → rework/remove), `services/api/barcodeApiService.ts` (lookupAsync KEEP;
+  registerAgainstProductAsync KEEP), `services/api/stockItemApiService.ts` registerBarcodeAsync/
+  clearBarcodeAsync (L77-87 — DROP), `StockItemDetailPage.vue` (L59 register-barcode action,
+  L75-78 show barcode — DROP/rework), `StockOverview.vue` (ScanOverlay + lookup — KEEP, gate),
+  `router/routes.ts` (L136-139 `/data/barcodes` — gate), `MainLayout.vue` (L332 command-palette
+  'barcode' tag — relabel/gate), `models/stockItem.ts` (L13-15 barcode field — DROP).
+- **Settings infra:** `AppSetting` (`app_setting.py`) only has LLM fields today; admin-only
+  single row via `app_settings/get|update_app_settings.py`. PreferencesSettings.vue is per-USER
+  (theme/font) — NOT where this flag goes. Need the admin/system-settings surface (or wherever
+  `llm_enabled` is edited) for `scanning_enabled`.
+- **Tests:** `tests/e2e/dora_api/test_data_router.py` L549-669 (8 barcode/QR tests + CSV) — will
+  need updating; note the e2e suite is pre-existing broken (FU-048).
+- INV-5 writeup: `docs/05_investigations/FEATURE_CLARIFICATIONS.md` §(a) — the QR-vs-barcode
+  clarification that informed this (it flagged StockItem.barcode scan-to-jump as distinct).
+
+### Engineering-standards / scope notes for next agent:
+- R-006 (clean migrations): the migration must apply up AND down on a seeded DB. **Can't be
+  verified in this env** (no migrated DB — FU-048). Verify on a machine with the DB.
+- R-005 (portable data access): column drop must work on SQLite + Postgres (FU-045) — SQLite
+  pre-3.35 can't `DROP COLUMN`; check the Alembic batch-mode pattern used by existing migrations.
+- Frontend can't be type-checked/browser-verified by the agent that lacks node_modules (see
+  FU-051) — but the USER now has a working `quasar dev`, so lean on them to verify.
+
+**Next up:** Resume by asking the user the OPEN build-vs-defer question above. Then (per answer)
+either (1) update CLAUDE.md + write PROPOSAL_BARCODE_SCANNING.md and implement the cleanup slice,
+(2) build the full vision, or (3) write the proposal only. Logged as FU-055.
+
+## 2026-06-07 — Phase 1 Chunk 5b: Type-B tail (best-deals + remaining list sums)
+**Status:** complete (resolves FU-053 + FU-054)
+**What changed:**
+- **FU-053 best-deals server-side:** new `GET /api/products/best-deals?limit=N`
+  (default 3, max 20). `GetBestDealsHandler` loads products, filters active +
+  on-special, ranks by discount % desc, slices N, stamps linked stock items.
+  Extracted the linked-stock stamping out of `GetProductsHandler` into a shared
+  `stamp_linked_stock_items()`. The discount rule is single-sourced in new
+  `dora_api/domain/product_offer.py` (`discount_percent`), mirroring the client.
+  - Client: `ProductApiService.getBestDealsAsync(limit)`; the dashboard fetches the
+    top-3 into a `bestDeals` ref (replacing the `products` ref + `loadProducts` that
+    downloaded everything + the `bestDeals` computed). Deleted the inline
+    `discountPctFor`; the `% off` badge uses the shared `discountPercent`, whose
+    signature widened to `{ price_now; price_was }` so a `Product` works (dedup).
+- **FU-054 remaining list sums:** shop-mode (`estimatedTotalAll`/`estimatedRemainingTotal`)
+  and the lists-overview `loadPrimaryStats` now read the server `totals` block
+  (Chunk 5) instead of re-summing `priceOfLine`/`savingsOfLine`. Both turned out to
+  operate on a single fetched detail (shop-mode = the list; overview = the *primary*
+  list — not multi-list as the FU feared), so they map 1:1 to `totals`. Removed the
+  now-unused `priceOfLine`/`savingsOfLine` imports from both.
+- **Tests:** new `tests/test_product_offer.py` (3) pin `discount_percent`
+  (genuine special → %, not-on-special/zero/None → None).
+**Decisions made:**
+- **Best-deals = a focused endpoint**, not a `?sort=discount` on the generic
+  products query — discount is a derived expression over the joined `current_offer`,
+  which the field-based sort can't express. The handler loads products and ranks in
+  Python (one query; "honest at our scale"); a SQL `ORDER BY` is a future optimisation.
+- **Route lives in `get_products.py`** (already route-scanned) to avoid any
+  blueprint-discovery uncertainty; `/best-deals` is unique among product GETs
+  (the `<product_id>` routes are PATCH / price-history).
+- **`discount_percent` mirrors the client** (server owns the *ranking*, client keeps
+  `discountPercent` for *display* — the accepted Type-C cross-language carve-out).
+- Left `savingsOfLine` in `shoppingList.ts` (now unused) — a coherent public model
+  helper paralleling `priceOfLine`; not worth removing an export.
+**Files touched:** `dora_api/domain/product_offer.py` (new),
+`dora_api/features/products/get_products.py`, `tests/test_product_offer.py` (new),
+`web_app/src/helpers/scrapedProductOfferLogic.ts`,
+`web_app/src/services/api/productApiService.ts`, `web_app/src/pages/DashboardPage.vue`,
+`web_app/src/pages/ShoppingListShopMode.vue`, `web_app/src/pages/ShoppingListsOverview.vue`.
+**Verification:** 39/39 server unit tests pass; module + route import clean. Frontend
+**not type-checked/browser-verified here** (no node_modules / Node v14) — but the user
+now has a working dev env; needs a quick check of the dashboard "Best deals" card
+(order + `% off`), shop-mode totals, and the lists-overview primary-list stats. Server
+`GET /api/products/best-deals?limit=3` unproven against real data (no migrated DB here).
+**Engineering-standards gate:** R-003 (discount rule + stamping each single-sourced),
+R-005 (ORM, no raw SQL), R-007 (focused endpoint, didn't over-build a generic
+derived-sort). ADR candidate: none.
+**Next up:** Type B is now complete (budget + use-soon were already server-owned).
+Remaining proposal items: **Chunk 6 — Type C** (snapshot offer at *add* time;
+`manage_shopping_list_lines.py` — overlaps the shopping-list redesign) and **Chunk 7
+— Type D** (persist sorts/filters to URL/localStorage, optional/lowest priority).
+
 ## 2026-06-07 — Fix pre-existing frontend build breakage (surfaced during Chunk 3-5 verify)
 **Status:** complete (fixes applied; **not compile-verified here** — see FU-051)
 **Context:** Running `quasar dev` to verify Chunks 3-5 surfaced a pile of errors —

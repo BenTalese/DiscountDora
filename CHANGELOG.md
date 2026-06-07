@@ -18,6 +18,15 @@ semver — major bumps signal schema or breaking-config changes.
   related to the state-ownership work; they were latent on the branch.
 
 ### Changed
+- **Phase 1 (state-ownership) Chunk 5b — finished the Type-B tail.** (1) **Best
+  deals**: new `GET /api/products/best-deals?limit=N` ranks on-special products by
+  discount % and returns only the top N — the dashboard card now queries it instead
+  of downloading *every* product to sort in the browser. The ranking rule lives in
+  one server helper (`dora_api/domain/product_offer.py`); the client keeps the
+  shared `discountPercent` only for the `% off` display (the inline `discountPctFor`
+  copy is gone). (2) **List totals everywhere**: shop-mode and the lists-overview
+  primary-list stats now read the server `totals` block (added in Chunk 5) instead
+  of re-summing lines client-side, matching the dashboard + detail page.
 - **Phase 1 (state-ownership) Chunk 5 — server-owned shopping-list totals
   (Type B).** `GET /api/shopping-lists/<id>` now returns a `totals` block
   (`total_price`, `remaining_price`, `total_savings`, `unticked_count`,

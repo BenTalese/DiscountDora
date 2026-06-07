@@ -347,7 +347,6 @@
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import {
         chosenOfferFor,
-        priceOfLine,
         type ShoppingListDetail,
         type ShoppingListLine,
     } from 'src/models/shoppingList';
@@ -404,12 +403,11 @@
 
     const upcomingPreview = computed(() => remainingLines.value.slice(1, 3));
 
-    const estimatedTotalAll = computed(() =>
-        sortedLines.value.reduce((sum, l) => sum + priceOfLine(l), 0),
-    );
-    const estimatedRemainingTotal = computed(() =>
-        remainingLines.value.reduce((sum, l) => sum + priceOfLine(l), 0),
-    );
+    // Totals are server-owned (state-ownership Type B) — read them off
+    // `detail.totals` rather than re-summing the lines. `total_price` covers
+    // every line; `remaining_price` covers the un-ticked ones.
+    const estimatedTotalAll = computed(() => detail.value?.totals?.total_price ?? 0);
+    const estimatedRemainingTotal = computed(() => detail.value?.totals?.remaining_price ?? 0);
 
     async function load() {
         loading.value = true;

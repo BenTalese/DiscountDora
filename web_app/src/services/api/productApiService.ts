@@ -20,6 +20,11 @@ export default class ProductApiService {
     getAllAsync = async (): Promise<Page<Product>> =>
         await this.dapiHttpClient.get<Page<Product>>('/products');
 
+    /** Top-N on-special products by discount %, ranked + sliced server-side
+     *  (state-ownership §8.2) so the dashboard needn't download every product. */
+    getBestDealsAsync = async (limit = 3): Promise<Product[]> =>
+        await this.dapiHttpClient.get<Product[]>(`/products/best-deals?limit=${limit}`);
+
     getPriceHistoryAsync = async (productId: string): Promise<PriceHistory> =>
         await this.dapiHttpClient.get<PriceHistory>(`/products/${productId}/price-history`);
 

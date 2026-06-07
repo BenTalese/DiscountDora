@@ -7,8 +7,9 @@ from sqlalchemy import select
 
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.product_offer import discount_percent
 from dora_api.features.routers import PRODUCT_ROUTER
-from dora_api.infrastructure.api_response import bad_request, paginated
+from dora_api.infrastructure.api_response import bad_request, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
 from dora_api.infrastructure.utils import get_container
@@ -75,6 +76,38 @@ _FIELD_MAP: dict[str, EntityField] = {
 }
 
 
+def stamp_linked_stock_items(repository, dtos: list[ProductDto]) -> None:
+    """Stamp `linked_stock_item_*` on each DTO in place via the m2m join.
+
+    One bulk query against the join, then a single StockItem lookup for the
+    names. Shared by the products list and the best-deals query so the
+    enrichment lives in one place.
+    """
+    if not dtos:
+        return
+    product_ids = [p.product_id for p in dtos]
+    assoc = db.metadata.tables["StockItemProduct"]
+    rows = repository.session.execute(
+        select(assoc.c.product_id, assoc.c.stock_item_id)
+        .where(assoc.c.product_id.in_(product_ids))
+    ).all()
+    product_to_stock: dict[UUID, UUID] = {row[0]: row[1] for row in rows}
+    stock_ids = list({sid for sid in product_to_stock.values()})
+    stock_lookup: dict[UUID, StockItem] = {}
+    if stock_ids:
+        items = repository.get(StockItem).all(
+            EntityField(StockItem, "id").in_(stock_ids)
+        )
+        stock_lookup = {s.id: s for s in items}
+    for dto in dtos:
+        stock_id = product_to_stock.get(dto.product_id)
+        if stock_id is None:
+            continue
+        dto.linked_stock_item_id = stock_id
+        item = stock_lookup.get(stock_id)
+        dto.linked_stock_item_name = item.name if item else None
+
+
 class GetProductsHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
@@ -87,34 +120,42 @@ class GetProductsHandler:
             .include(Product.Fields.MERCHANT)
             .paginate(options, ProductDto.from_entity, field_map=_FIELD_MAP)
         )
-        # ── Enrich with the linked stock item ────────────────────────
-        # One bulk query against the m2m join, then a single StockItem
-        # lookup for the names. The whole product page is in memory and
-        # this side-trip is two indexed reads — well within budget.
-        if page.items:
-            product_ids = [p.product_id for p in page.items]
-            assoc = db.metadata.tables["StockItemProduct"]
-            session = self.repository.session
-            rows = session.execute(
-                select(assoc.c.product_id, assoc.c.stock_item_id)
-                .where(assoc.c.product_id.in_(product_ids))
-            ).all()
-            product_to_stock: dict[UUID, UUID] = {row[0]: row[1] for row in rows}
-            stock_ids = list({sid for sid in product_to_stock.values()})
-            stock_lookup: dict[UUID, StockItem] = {}
-            if stock_ids:
-                items = self.repository.get(StockItem).all(
-                    EntityField(StockItem, "id").in_(stock_ids)
-                )
-                stock_lookup = {s.id: s for s in items}
-            for dto in page.items:
-                stock_id = product_to_stock.get(dto.product_id)
-                if stock_id is None:
-                    continue
-                dto.linked_stock_item_id = stock_id
-                item = stock_lookup.get(stock_id)
-                dto.linked_stock_item_name = item.name if item else None
+        stamp_linked_stock_items(self.repository, page.items)
         return page
+
+
+class GetBestDealsHandler:
+    """Top-N active products currently on special, ranked by discount %.
+
+    State-ownership Type B (§8.2): the dashboard used to download *every*
+    product and sort/slice in the browser. The server now owns the rank + slice
+    and returns only the top N, using the one `discount_percent` rule (R-003).
+    """
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, limit: int) -> list[ProductDto]:
+        products = (
+            self.repository
+            .get(Product)
+            .include(Product.Fields.CURRENT_OFFER)
+            .include(Product.Fields.MERCHANT)
+            .all()
+        )
+        scored: list[tuple[int, Product]] = []
+        for product in products:
+            offer = product.current_offer
+            if not product.is_active or offer is None:
+                continue
+            pct = discount_percent(offer.price_now, offer.price_was)
+            if pct is None:
+                continue
+            scored.append((pct, product))
+        # Highest discount first; matches the client's old discount-% sort.
+        scored.sort(key=lambda t: t[0], reverse=True)
+        dtos = [ProductDto.from_entity(p) for _, p in scored[:limit]]
+        stamp_linked_stock_items(self.repository, dtos)
+        return dtos
 
 
 @PRODUCT_ROUTER.route("")
@@ -127,3 +168,22 @@ def get_products():
         return bad_request(str(exc))
     _Logger.info(f"Retrieved {len(_Page.items)} of {_Page.total} products.")
     return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)
+
+
+@PRODUCT_ROUTER.route("/best-deals")
+def get_best_deals():
+    """Top-N on-special products by discount %. `?limit=N` (default 3, max 20)."""
+    _Logger = logging.getLogger(__name__)
+    _RawLimit = request.args.get("limit")
+    _Limit = 3
+    if _RawLimit is not None and _RawLimit.strip():
+        try:
+            _Limit = int(_RawLimit)
+        except ValueError:
+            return bad_request("`limit` must be an integer.")
+    if _Limit < 1:
+        return bad_request("`limit` must be at least 1.")
+    _Limit = min(_Limit, 20)
+    _Deals = get_container().inject(GetBestDealsHandler).handle(_Limit)
+    _Logger.info(f"Retrieved {len(_Deals)} best deals (limit={_Limit}).")
+    return ok(_Deals)

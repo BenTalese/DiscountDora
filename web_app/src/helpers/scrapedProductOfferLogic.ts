@@ -108,8 +108,10 @@ export function unitPrice(offer: ScrapedProductOffer): { price: number; group: s
     return { price: offer.price_now / normalised.base, group: normalised.group };
 }
 
-/** Discount percentage (0–100) when on special, else null. */
-export function discountPercent(offer: ScrapedProductOffer): number | null {
+/** Discount percentage (0–100) when on special, else null. Accepts anything with
+ *  `price_now`/`price_was` (a scraped offer OR a saved Product) so the one rule
+ *  serves every surface. */
+export function discountPercent(offer: { price_now: number; price_was: number }): number | null {
     if (offer.price_was <= 0 || offer.price_now <= 0 || offer.price_now >= offer.price_was) {
         return null;
     }

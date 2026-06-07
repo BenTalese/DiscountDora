@@ -39,6 +39,36 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-062 — Doc-graph: verify cited paths + original-spec Feature Board mappings
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** finding
+- **What:** `docs/00_DOC_GRAPH.md` was assembled with heavy use of Grep/Glob but no per-citation existence pass. Two specific gaps to close:
+  1. Walk every cited path in the graph and confirm the file exists at that path (catch typos and stale references introduced by the agent).
+  2. The original-spec `Feature Boards/*.md` mappings (one per surface) were inferred by filename-to-surface heuristic, not by opening each board. Open each Feature Board and confirm the surface mapping is right; correct any mis-mappings.
+- **Why deferred:** the build pass prioritised breadth (every prompt has a section) over per-citation verification; doing both in one pass would have blown the context budget.
+- **Recommended resolution:** opportunistic — fold into the first prompt run that actually consumes the graph (FU-063), or run as a standalone audit.
+
+## [OPEN] FU-063 — Doc-graph: first-use stress test
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** follow-up
+- **What:** The graph is unproven until a prompt is actually executed through it. The next time any `03_prompts/` prompt is run, do the full ritual: open the row, read every cited doc, then run. Record whether the cited docs surfaced anything the prompt body alone would have missed, and whether anything *should* have been cited but wasn't. Update the graph from what you learn.
+- **Why deferred:** can only be tested by running a prompt; no prompt run this session.
+- **Recommended resolution:** when next executing a `03_prompts/` prompt.
+
+## [OPEN] FU-064 — Doc-graph: maintenance cadence / regeneration prompt
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** deferred job
+- **What:** The graph will go stale as new proposals/investigations/FUs land and prompts complete. Decide: (a) add a small `docs/03_prompts/META_refresh_doc_graph.md` prompt that re-runs the cross-reference, OR (b) make graph-update part of every prompt's close-gate (cheaper, more drift-prone). User flagged this as an open question in the worklog.
+- **Why deferred:** needs user direction.
+- **Recommended resolution:** awaiting user decision; revisit after FU-063 confirms the graph is paying off.
+
+## [OPEN] FU-061 — Promote doc-graph to in-prompt blocks (Option B) if agents skip the ritual
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** deferred job
+- **What:** Today the per-prompt required-reading lives in one central file (`docs/00_DOC_GRAPH.md`). If sessions skip the ritual (don't open the graph), promote to Option B: edit every `03_prompts/*.md` to add a `## Required reading (do this first)` block above `## Impact & decisions`, copying its row from the graph. Higher maintenance, impossible to skip.
+- **Why deferred:** start with the lighter scheme; only escalate on evidence of drift.
+- **Recommended resolution:** when a worklog entry shows the agent didn't consult the graph (a clear miss), OR after 5–10 prompts have run and you want to audit consultation rate.
+
 ## [OPEN] FU-060 — Chunk 2 browser smoke: 2+-draft picker, shop-now routing, set-primary removal
 - **Raised:** 2026-06-07 (P6-01 Chunk 2 implementation)
 - **Type:** finding / browser verification

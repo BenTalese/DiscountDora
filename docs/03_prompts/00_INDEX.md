@@ -54,5 +54,10 @@ Generated from `Feedback / Fixes (MASTER).md` via `FEEDBACK_TRIAGE_AND_PLAN.md`.
 ## Deferred (do NOT design yet — you said you'll revisit)
 dashboard, reports, waste, settings, mobile view. The app is interconnected; prompts above flag where they ripple into these.
 
-## The per-prompt ritual (unchanged)
-Read **Impact & decisions** → resolve choices → run → review the diff → next. For 🔵 briefs, the output is a proposal doc; nothing is implemented until you approve it.
+## The per-prompt ritual
+1. Open this prompt's section in `../00_DOC_GRAPH.md` and read every cited doc (charter anchors, engineering rules, feedback bullets, related proposals/investigations, open follow-ups, cross-prompt dependencies). If the cited docs and the prompt body disagree, the cited docs usually win — confirm with the user.
+2. Read **Impact & decisions** in the prompt itself.
+3. Resolve any open choices with the user.
+4. Run → review the diff → close-gate against `../01_charter/ENGINEERING_STANDARDS.md` → worklog + follow-up updates → next.
+
+For 🔵 briefs, the output is a proposal doc; nothing is implemented until you approve it.

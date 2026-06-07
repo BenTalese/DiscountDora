@@ -16,6 +16,12 @@ To keep handoffs clean:
 2. **Planning docs live at `docs/` in this repo, organised by lifecycle.**
    Entry points:
    - `docs/00_DOCS_INDEX.md` — top-level navigation.
+   - `docs/00_DOC_GRAPH.md` — **per-prompt required-reading map.** Before
+     running any `03_prompts/` prompt, open its section here and read every
+     cited doc (charter anchors, engineering rules, feedback bullets, related
+     proposals/investigations, open follow-ups, cross-prompt dependencies).
+     This is the anti-drift spine — skipping it is how prompts ship in
+     isolation and silently violate the charter.
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
      `STATUS.md`, `ENGINEERING_STANDARDS.md` — the code/architecture rules

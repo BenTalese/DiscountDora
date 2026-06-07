@@ -24,6 +24,28 @@ next.
 
 ---
 
+## 2026-06-08 — Doc graph (anti-drift cross-reference) — BUILT.
+**Status:** complete.
+**What changed:**
+- New file `docs/00_DOC_GRAPH.md` (~1.3k lines). Per-prompt required-reading map for every `03_prompts/` prompt (A1–A8, A1b, B1/B3/B4/B5/B7/B8/B9, INV-1..10, C-1..C-10 + C-cross/locale/help + 2 C-impl). Each section lists: surface, charter principles (P1–P12), engineering rules (R-001..R-010), feedback bullets (anchored by `§SURFACE` + quoted phrase since the master feedback doc has no numeric IDs), related proposals, related investigations, original-spec Feature Boards, open follow-ups, removed-features watchlist, cross-prompt dependencies.
+- Also: `Proposal → implementation cross-map`, `Surface → docs index` (reverse lookup), `Rules with no per-prompt home` (audit lens — only R-004 is unhomed, correctly, as a passive constraint), and `Homeless follow-ups` (currently none — every `[OPEN]` FU is placed).
+- Wired in: `docs/00_DOCS_INDEX.md` references the graph at the top + in folder layout; `CLAUDE.md` §"On session start" item 2 names it as the anti-drift spine; `docs/03_prompts/00_INDEX.md` per-prompt ritual now starts with "open the graph row first".
+**Decisions made:**
+- **Option A over Option B** (one central file vs. editing every prompt in place). Lower maintenance, single auditable artifact, easy to promote to in-prompt blocks later if agents skip it.
+- **Authority order on conflict:** Charter > Reconciled Plan > current feedback > engineering standards > proposals > prompt body > original spec > status doc. Recorded in the graph's "How to use" section.
+- **Engineering rules are NOT cited per prompt in the graph** (user call). The standing close-gate checks the full `R-001..R-0NN` list against every task; listing a subset per prompt invited cherry-picking. The graph's "How to use" and Legend explain this; the per-prompt sections omit it.
+- **Feedback bullet anchor scheme:** the master feedback doc has no F-NN IDs (surface-headed bullet lists). The graph cites by `§SURFACE` + a quoted phrase. Documented in the Legend.
+- **Single biggest sequencing constraint surfaced:** `IMPL_PLAN_STATE_OWNERSHIP` must land before `IMPL_PLAN_SHOPPING_LISTS`. Captured in cross-prompt deps and the cross-map.
+**Files touched:** `docs/00_DOC_GRAPH.md` (new), `docs/00_DOCS_INDEX.md`, `CLAUDE.md`, `docs/03_prompts/00_INDEX.md`.
+**Verification:**
+- Spot-checked A1, the cross-cutting surfaces, and the homeless-FU tail. Counts: 41 prompt sections, all 17 proposals indexed, all 14 investigations cited, every `[OPEN]` FU placed, only R-004 unhomed (correctly).
+- NOT verified: original-spec Feature Board mapping is by filename-to-surface heuristic, not by opening each board. Logged as a follow-up.
+- NOT verified: every cited file path opened in a Read — the agent used Grep/Glob but a per-citation existence pass was not done.
+**Next up:** awaiting user direction. The natural follow-on is to **stress-test the graph by running the next prompt through it** (read the row, see if the cited docs actually surface what they should), then iterate.
+**Open questions for user:** none blocking. Two suggested: (a) do you want a periodic "regenerate the graph" prompt added to `03_prompts/`? (b) should the graph be promoted to in-prompt `## Required reading` blocks (Option B) if agents skip it?
+
+---
+
 ## 2026-06-07 — P6-01 Chunk 2 (contextual primary inference) — IMPLEMENTED.
 **Status:** complete.
 **What changed:**

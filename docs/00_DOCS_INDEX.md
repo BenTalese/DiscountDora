@@ -2,6 +2,13 @@
 
 The single entry point to this planning library. Read this first.
 
+> **Per-prompt required reading lives in `00_DOC_GRAPH.md`.** Before executing
+> any prompt in `03_prompts/`, open its section there for the cross-reference
+> map (charter anchors, engineering rules, feedback bullets, related
+> proposals/investigations, open follow-ups, removed-features watchlist,
+> cross-prompt dependencies). The graph is the anti-drift spine of this
+> library.
+
 > **Product name:** **Dashy Dora** (formerly *Discount Dora*). The rename is
 > performed in code by **P8-01**. Until that lands, **code identifiers,
 > package names, and the repo still read "DiscountDora"** — so the prompt
@@ -16,6 +23,7 @@ The single entry point to this planning library. Read this first.
 ```
 docs/
 ├── 00_DOCS_INDEX.md            this file
+├── 00_DOC_GRAPH.md             per-prompt required-reading cross-reference
 ├── 00_original_spec/           the project's FIRST spec (historical, non-authoritative)
 ├── 01_charter/                 vision + governance — read on demand
 ├── 02_feedback/                INPUTS — source of truth

@@ -84,7 +84,53 @@ const routes: RouteRecordRaw[] = [
             { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
             { path: 'recipes/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },
-            { path: 'shopping-lists', component: () => import('pages/ShoppingListsOverview.vue'), meta: { title: 'Shopping lists' } },
+            {
+                path: 'shopping-lists',
+                component: () => import('pages/ShoppingListsOverview.vue'),
+                meta: { title: 'Shopping lists' },
+                // P6-01 Chunk 5 — the detail page is the canonical surface
+                // (with a list-selector in its header). The landing's job is
+                // to pick a target list and route there. We do it as a
+                // **route-level `beforeEnter`** rather than an
+                // in-component `router.replace` in `onMounted`: the
+                // MainLayout wraps the router-view in <FadeTransition
+                // mode="out-in">, and a mount-time redirect unmounts the
+                // entering component mid-transition, which wedges the
+                // global transition state and renders subsequent pages
+                // blank. A route guard resolves before the component
+                // mounts, so no transition is ever in flight to wedge.
+                beforeEnter: async () => {
+                    const { useShoppingListStore } = await import('src/stores/shoppingListStore');
+                    const store = useShoppingListStore();
+                    if (store.summaries.length === 0 && !store.loading) {
+                        try {
+                            await store.refreshAsync();
+                        } catch {
+                            // Fall through — Overview will render the
+                            // empty / error state.
+                        }
+                    }
+                    const summaries = store.summaries;
+                    if (summaries.length === 0) return; // empty state
+                    const shopping = summaries.find((s) => s.status === 'shopping');
+                    if (shopping) return `/shopping-lists/${shopping.shopping_list_id}`;
+                    const today = new Date().toISOString().slice(0, 10);
+                    const drafts = summaries
+                        .filter((s) => s.status === 'draft')
+                        .slice()
+                        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+                    const todayDraft = drafts.find((s) => s.planned_shop_date === today);
+                    if (todayDraft) return `/shopping-lists/${todayDraft.shopping_list_id}`;
+                    if (drafts[0]) return `/shopping-lists/${drafts[0].shopping_list_id}`;
+                    const done = summaries
+                        .filter((s) => s.status === 'done')
+                        .slice()
+                        .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
+                    if (done[0]) return `/shopping-lists/${done[0].shopping_list_id}`;
+                    // Truly nothing — render the empty state.
+                    return;
+                },
+            },
             { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping list templates' } },
             { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping list' } },
             { path: 'shopping-lists/:id/shop', component: () => import('pages/ShoppingListShopMode.vue'), meta: { title: 'Shop mode' } },

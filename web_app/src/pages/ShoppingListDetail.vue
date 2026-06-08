@@ -296,9 +296,10 @@
                     </q-menu>
                 </BaseButton>
                 <!-- One primary-action button per lifecycle phase:
-                     DRAFT → Start shopping → SHOPPING → Finish & restock → DONE → Reopen.
-                     SHOPPING is the shop-mode surface, reached via auto-redirect,
-                     so the SHOPPING-phase button doesn't render here. -->
+                     DRAFT → Start shopping → SHOPPING → Continue → DONE → Reopen.
+                     The SHOPPING button is a user-initiated nav to /shop
+                     (not a mount-time auto-redirect — that wedged the
+                     global FadeTransition; see goToShopMode). -->
                 <BaseButton
                     v-if="detail.status === 'draft'"
                     variant="primary"
@@ -309,6 +310,15 @@
                     @click="onStartShopping"
                 >
                     <q-tooltip>Switch to shop mode and tick items off as you grab them</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    v-else-if="detail.status === 'shopping'"
+                    variant="primary"
+                    :icon="ICONS.shopping_cart_checkout"
+                    label="Continue shopping"
+                    @click="goToShopMode"
+                >
+                    <q-tooltip>Resume in shop mode</q-tooltip>
                 </BaseButton>
                 <BaseButton
                     v-else-if="detail.status === 'done'"
@@ -989,7 +999,7 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -1584,25 +1594,26 @@
         openQuickAdd({ listId: listId.value });
     }
 
-    // Status watcher: SHOPPING phase IS the shop-mode surface — when a list
-    // becomes SHOPPING, route to it. Covers status flips from any path
-    // (assistant action, another tab, the start-shopping button, etc.).
+    // No status watcher / auto-redirect to /shop on mount.
     //
-    // **Important**: the redirect MUST be deferred. `MainLayout.vue` wraps
-    // the router-view in `<FadeTransition mode="out-in">`; calling
-    // `router.replace` synchronously after `load()` populates `detail`
-    // can unmount this component mid-enter-transition, leaving the
-    // global transition state stuck and rendering subsequent pages
-    // blank. `nextTick` lets the entering transition settle first.
-    watch(
-        () => detail.value?.status,
-        async (status) => {
-            if (status === 'shopping') {
-                await nextTick();
-                await router.replace(`/shopping-lists/${listId.value}/shop`);
-            }
-        },
-    );
+    // The original Chunk 3 design had this watcher redirect to /shop when
+    // detail.status became 'shopping'. In practice that fires synchronously
+    // after load() resolves on initial mount — which means the entering
+    // route is being unmounted *while still mid-enter-transition* through
+    // MainLayout's <FadeTransition mode="out-in">. The transition state
+    // wedges globally and every page goes blank after.
+    //
+    // Replaced by an explicit **"Continue shopping"** button in the action
+    // area (rendered when status === 'shopping'). User clicks → router push
+    // happens on a fully-mounted page, no transition race.
+    //
+    // The status-change-mid-page case (assistant flips status, cross-tab
+    // edit) is rare; users see the CTA and click to go to /shop. Acceptable
+    // UX trade-off for ending the blank-screen cascade.
+
+    function goToShopMode() {
+        void router.push(`/shopping-lists/${listId.value}/shop`);
+    }
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
     const orderedLines = computed(() => lineGroups.value.flatMap((g) => g.lines));

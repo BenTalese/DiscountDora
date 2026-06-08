@@ -40,7 +40,6 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
             // Surface to the console explicitly — the catch used to set
             // `loadError` silently and the UI rendered nothing useful,
             // which read as a "blank screen" bug.
-            // eslint-disable-next-line no-console
             console.error('[shoppingListStore] refreshAsync failed', err);
             loadError.value = err instanceof Error ? err.message : String(err);
         } finally {

@@ -1275,9 +1275,6 @@
     const untickedCount = computed(() =>
         (detail.value?.lines ?? []).filter((l) => !l.is_ticked).length
     );
-    const tickedLines = computed(() =>
-        (detail.value?.lines ?? []).filter((l) => l.is_ticked)
-    );
     // List-level totals are server-owned (state-ownership Type B) — read them
     // off `detail.totals` rather than re-summing the lines here. Per-line price
     // display still uses `priceOfLine` (the accepted Type-C client helper).

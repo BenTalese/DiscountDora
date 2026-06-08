@@ -447,7 +447,7 @@
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { ICONS } from 'src/style/icons';
-    import { computed, onMounted, reactive, ref } from 'vue';
+    import { computed, nextTick, onMounted, reactive, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
@@ -520,8 +520,13 @@
         // SHOPPING is the only phase that should render this surface. If a
         // PWA shortcut or stale link lands here on a DRAFT/DONE list,
         // bounce to the detail page so editing/reopen is available.
+        // **Important**: `nextTick` defers the redirect until after the
+        // MainLayout's <FadeTransition> finishes entering — without
+        // this, unmounting mid-transition wedges the global transition
+        // state and renders subsequent pages blank.
         if (detail.value && detail.value.status !== 'shopping') {
-            void router.replace(`/shopping-lists/${listId.value}`);
+            await nextTick();
+            await router.replace(`/shopping-lists/${listId.value}`);
             return;
         }
         // Pull focus to the root so the global keyboard shortcuts fire

@@ -989,7 +989,7 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { computed, onMounted, reactive, ref, watch } from 'vue';
+    import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -1587,11 +1587,19 @@
     // Status watcher: SHOPPING phase IS the shop-mode surface — when a list
     // becomes SHOPPING, route to it. Covers status flips from any path
     // (assistant action, another tab, the start-shopping button, etc.).
+    //
+    // **Important**: the redirect MUST be deferred. `MainLayout.vue` wraps
+    // the router-view in `<FadeTransition mode="out-in">`; calling
+    // `router.replace` synchronously after `load()` populates `detail`
+    // can unmount this component mid-enter-transition, leaving the
+    // global transition state stuck and rendering subsequent pages
+    // blank. `nextTick` lets the entering transition settle first.
     watch(
         () => detail.value?.status,
-        (status) => {
+        async (status) => {
             if (status === 'shopping') {
-                void router.replace(`/shopping-lists/${listId.value}/shop`);
+                await nextTick();
+                await router.replace(`/shopping-lists/${listId.value}/shop`);
             }
         },
     );

@@ -57,7 +57,7 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
-    import { computed, onMounted, ref, watch } from 'vue';
+    import { computed, nextTick, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
     const router = useRouter();
@@ -97,22 +97,31 @@
         return done[0]?.shopping_list_id ?? null;
     }
 
-    function redirectIfPossible() {
+    // **Important**: redirects MUST be deferred via `nextTick` (or longer).
+    // `MainLayout.vue` wraps the router-view in a `<FadeTransition
+    // mode="out-in">`; calling `router.replace` synchronously inside
+    // `onMounted` here unmounts this component while it's still mid-
+    // enter-transition, which can leave the global transition state
+    // stuck and every subsequent page renders blank. The nextTick lets
+    // the entering transition settle before we trigger the next route
+    // change. Same fix is applied to Detail's status watcher.
+    async function redirectIfPossible() {
         const id = pickTargetList();
-        if (id) {
-            void router.replace(`/shopping-lists/${id}`);
-        }
+        if (!id) return;
+        await nextTick();
+        await router.replace(`/shopping-lists/${id}`);
     }
 
-    function onListCreated({ listId }: { listId: string }) {
-        void router.replace(`/shopping-lists/${listId}`);
+    async function onListCreated({ listId }: { listId: string }) {
+        await nextTick();
+        await router.replace(`/shopping-lists/${listId}`);
     }
 
     onMounted(async () => {
         if (store.summaries.length === 0 && !store.loading) {
             await store.refreshAsync();
         }
-        redirectIfPossible();
+        await redirectIfPossible();
     });
 
     // If summaries arrive after mount (in-flight refresh), redirect as
@@ -120,7 +129,7 @@
     watch(
         () => store.summaries.length,
         (count, prev) => {
-            if (count > 0 && prev === 0) redirectIfPossible();
+            if (count > 0 && prev === 0) void redirectIfPossible();
         },
     );
 </script>

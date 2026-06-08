@@ -24,6 +24,406 @@ next.
 
 ---
 
+## 2026-06-08 — C-3 cook-mode decisions resolved + C-4 structured-steps section added.
+**Status:** complete (design pass — no code).
+**What changed:**
+- **`docs/04_proposals/PROPOSAL_COOK_MODE.md`** — added a new `§5a Resolved
+  decisions (2026-06-08)` table closing out the 5 open items in §5:
+  - **DEC-1** Ticking — **removed entirely**; per-step highlight replaces it.
+  - **DEC-2** Structured steps — **modelled in C-4** (closes FU-040). C-3's
+    highlight/per-step features (§2.4/§2.5/§2.6/§2.7) are now gated on the
+    C-4 step-model landing first.
+  - **DEC-3** Unit attach list — **metric + US customary attach** (`ml, g,
+    kg, l, mg, oz, lb, floz, pt, qt`); culinary spaced (`tsp, tbsp, cup,
+    clove, scoop, …`). User's framing taken verbatim.
+  - **DEC-4** Scaled-qty display — **round sensibly** (1.5 eggs → 2 eggs;
+    0.66 cups → ⅔ cup); never raw decimals.
+  - **DEC-5** Finish-flow level picker — **quick chips + full picker**
+    ("↓ one level / Out / Unchanged" + level dropdown override).
+  - Header status flipped to "Decisions resolved 2026-06-08".
+- **`docs/04_proposals/PROPOSAL_COOKBOOK.md`** — added new `§2.6a
+  Structured recipe steps (2026-06-08; C-3 dependency, closes FU-040)`.
+  Models `RecipeStep` as `{ id, recipe_id, sequence, text, sub_steps?, hint?,
+  ingredient_refs[], tool_refs[] }`; `Recipe.instructions` kept as the
+  fallback for unstructured / freshly-imported recipes. Editor + importer
+  story sketched. Added sequencing slot **5a** in §6 marking it as a blocker
+  for C-3 highlight features. Header status updated.
+- **`DORA_FOLLOWUPS.md`** — FU-040 flipped to `[RESOLVED]` with a state
+  note pointing at C-3 DEC-2 + the new C-4 §2.6a; explicit caveat that
+  *implementation* (model migration, etc.) is still outstanding and a
+  fresh implementation-FU should be raised when work begins.
+**Decisions made:**
+- All 5 user-confirmed during the session — no Claude-guessed answers.
+- For DEC-3 the user's framing was tighter than the brief's initial
+  recommendation (metric + tsp/tbsp). Recorded verbatim: *"metric and US
+  makes most sense; culinary like tsp/teaspoon should have a space."*
+  C-3 §2.8 still says "ml, g, kg, l, mg, tsp, tbsp"; the resolution in
+  §5a overrides that. Implementation should follow §5a, not §2.8.
+- The C-4 structured-steps section was kept tight on purpose — model +
+  editor + importer + sequencing only. Field-by-field column types and
+  the exact join-table shape are an implementation-time concern; the
+  proposal stays at "this is the model" not "here are the DDL columns".
+**Files touched:**
+- `docs/04_proposals/PROPOSAL_COOK_MODE.md` (header + new §5a)
+- `docs/04_proposals/PROPOSAL_COOKBOOK.md` (header + new §2.6a + new §6
+  item 5a)
+- `DORA_FOLLOWUPS.md` (FU-040 → RESOLVED)
+**Verification:** none needed — proposal docs only.
+**Next up:** none blocking. The natural follow-on is an **IMPL plan for
+cook-mode**, mirroring `IMPL_PLAN_SHOPPING_LISTS.md` — chunked,
+self-contained, no code yet. That plan needs §2.6a (structured steps,
+in C-4) to land or to be co-sequenced. Logged as FU-077.
+**Open questions for user:** none.
+
+---
+
+## 2026-06-08 — P6-01 Chunk 7 (planned shop day + cleanup) — IMPLEMENTED.
+**Status:** complete. P6-01 phase plan now closes out.
+**What changed:**
+- **Backend**
+  - `ShoppingList.planned_shop_date: date | None` added to the entity + `Fields.PLANNED_SHOP_DATE`.
+  - `table_mappings.shopping_list_table` gets a nullable `Date` column.
+  - New Alembic migration `e1a4c7b2f9d0` adds the column with `batch_alter_table` for SQLite portability (R-005).
+  - `CreateShoppingListRequest` + handler accept the field on POST.
+  - `UpdateShoppingListRequest` + handler set/clear it on PATCH (`null` explicit = clear; absent = no change).
+  - `ShoppingListSummaryDto` + `ShoppingListDetailDto` expose `planned_shop_date`.
+- **Frontend**
+  - `models/shoppingList.ts` adds `planned_shop_date: string | null` to `ShoppingListSummary` + `ShoppingListDetail`.
+  - `shoppingListApiService.ts` adds the field to `CreateShoppingListCommand` + `UpdateShoppingListCommand`.
+  - `NewListDialog.vue` gains a date picker in the "create new" branch, passed straight through to `createAsync`.
+  - `ShoppingListDetail.vue`:
+    - Header caption gets a clickable chip showing `"Shop day: today"` / `"Shop day: tomorrow"` / `"Shop day: 15 Jul (overdue)"` / `"No shop day"`.
+    - New shopping-day banner appears above the lines when planned date is today (info tone) or has passed without finishing (warning tone).
+    - `BaseDialog`-backed editor with `<q-input type="date">` for set/save/clear.
+    - Selector's `activeSummaries` sort now: SHOPPING first → planned date asc (scheduled ahead of unscheduled) → created_at desc.
+  - `ShoppingListsOverview.vue` (landing) picks a DRAFT whose `planned_shop_date === today` ahead of the freshest-DRAFT fallback.
+- **Tests**
+  - New e2e `tests/e2e/dora_api/test_shopping_list_planned_shop_date.py` — 4 cases (create with date, create without, PATCH set + clear via explicit null, PATCH preserves an existing date when the field isn't sent).
+
+**Decisions made:**
+- **Banner, not a dedicated alert type yet.** The IMPL plan says Chunk 7 "feeds C-9's new alert types" — full alert wiring (push, suggestion feed, etc.) is the C-9 surface. For Chunk 7, an in-detail banner is the visible affordance; C-9 can register the same date condition as a real alert later. Logged as FU-074.
+- **No "Today" badge in the selector rows** — the chip + banner already surface the planned date; doubling it inside the selector dropdown is polish, not function. If feedback wants it, trivial to add.
+- **Explicit `null` clears, absent leaves it alone.** Mirrors the existing PATCH semantics for `status` / `name` (`model_fields_set` check), so the API stays consistent.
+- **Date stored as `date`, not `datetime`.** Shop day is a calendar day, not a timestamp; comparing "today" against a `datetime` would force a TZ-of-the-day argument we don't need. The DTO returns the ISO date string.
+- **Engineering close-gate:**
+  - R-001 — reused `BaseDialog` for the editor, kept `BaseButton` for the actions.
+  - R-003 — server owns the field; client never recomputes "is today" against anything other than `Date.now()`.
+  - R-005 — migration in `batch_alter_table` for SQLite, also valid on Postgres.
+  - R-007 — held to the chunk's scope; didn't bolt the alert pipeline on (deferred to C-9).
+  - R-010 — typed everything (`date | None` server-side, `string | null` client-side).
+
+**Files touched:**
+- `dora_api/domain/entities/shopping_list.py`
+- `dora_api/persistence/table_mappings.py`
+- `dora_api/persistence/migrations/versions/e1a4c7b2f9d0_20260613_shopping_list_planned_shop_date.py` (new)
+- `dora_api/features/shopping_lists/manage_shopping_list.py`
+- `dora_api/features/shopping_lists/get_shopping_lists.py`
+- `dora_api/features/shopping_lists/get_shopping_list_detail.py`
+- `web_app/src/models/shoppingList.ts`
+- `web_app/src/services/api/shoppingListApiService.ts`
+- `web_app/src/components/dialogs/NewListDialog.vue`
+- `web_app/src/pages/ShoppingListDetail.vue`
+- `web_app/src/pages/ShoppingListsOverview.vue`
+- `tests/e2e/dora_api/test_shopping_list_planned_shop_date.py` (new)
+- `CHANGELOG.md`
+
+**Verification:**
+- `python -m py_compile` clean on all touched .py files + new migration + new test.
+- `npx vue-tsc --noEmit` clean (exit 0).
+- **e2e test not executed** — no live server in this session. Logged FU-075 to run once a dev environment is up.
+- **Migration not applied** to a live DB.
+
+**Next up:**
+- **Browser smoke** of Chunks 3/4/5/6/7 (FU-066/068/069/072/073/076).
+- Apply migration `e1a4c7b2f9d0` to local DB + run the new e2e (FU-075).
+- After verification, P6-01 closes. Phase 2 next.
+
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-08 — P6-01 Chunk 6 (in-store polish) — IMPLEMENTED (subset).
+**Status:** complete (the five smaller in-store wins + FU-070). Pricing-as-you-go and group-by-aisle audit kept as findings.
+**What changed:**
+- **Skip persistence** ([ShoppingListShopMode.vue](web_app/src/pages/ShoppingListShopMode.vue)).
+  `skipForNow` and `jumpTo` were client-only — they bumped `line.sequence`
+  locally and reverted on refresh (feedback §SHOPPING MODE "the position of
+  the items keeps changing"). Both now optimistically rewrite local
+  sequences and post `reorderLinesAsync` so the new order survives. New
+  helpers `persistReorderedIds`, `persistMoveToEnd`, `persistMoveToFront`;
+  the front-move inserts the line just before the first unticked id so it
+  surfaces as the next "Got it" without leapfrogging already-picked items.
+- **Tap-to-type quantity.** The centre `<div>` of the qty row became a
+  `<button>` styled to look identical; tap opens a small **Quantity** dialog
+  with a numeric input + Save. `qtyEditorOpen` / `qtyEditorLine` /
+  `qtyEditorDraft` mirror the existing price-editor shape, and
+  `saveQtyEditor` does the same optimistic-update-then-revert-on-error dance
+  as `adjustQuantity`. Keyboard handler now also ignores arrow keys while
+  the qty editor (or peek dialog) is open.
+- **Whole-list peek.** New `q-btn` next to the kebab opens a dialog of all
+  lines (ticked + unticked, sorted by `sortKey`). Unticked rows are
+  clickable — `onPeekJump` closes the peek and calls `jumpTo`, which is now
+  persisted (so the chosen line becomes next-up across refreshes).
+- **DnD off-by-one fix** ([ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue)).
+  Removed the `fromIdx < toIdx ? toIdx - 1 : toIdx` adjustment in
+  `onLineDrop` — `insertAt = toIdx` in every case now puts the dropped line
+  at the dragged-over row's visual slot, matching feedback L414 ("Drag and
+  drop is an index off").
+- **FU-070 back-arrow removed.** The `goBack()` function + its arrow button
+  were a self-bounce through the landing once Chunk 5 turned the detail
+  page into the canonical surface. Both gone.
+
+**Decisions made:**
+- **Persist on click, not on debounce.** Skip / jump are inherently
+  user-initiated single actions; debouncing to coalesce repeated taps would
+  delay the cross-refresh persistence guarantee that was the whole point.
+- **Whole-list peek as a `BaseDialog`**, not a side-sheet. A bottom-anchored
+  Quasar sheet would be ergonomic on mobile but adds a different chrome
+  pattern. The dialog already works fullscreen-ish on small viewports and
+  matches the price/qty editor pattern — same shape, three buttons,
+  predictable for the user. If feedback later wants a real bottom sheet,
+  it's a one-component swap.
+- **Tap-to-type uses a `<button>` reset**, not a `q-btn`, so the visual is
+  byte-for-byte identical to the old `<div>` apart from focus/hover affordance.
+- **Pricing-as-you-go and group-by-aisle audit deferred.** The price editor
+  already exists on shop mode (`openPriceEditor`); the feedback ask is for
+  it to remain accessible mid-shop, which it does. Group-by-location on the
+  detail page is already a derived view (`lineGroups` reads but never
+  writes `sequence`). Both noted as FU-072 to confirm in browser + close.
+- **Engineering close-gate:** R-001 (reused `BaseDialog`), R-003 (skip /
+  jump now actually persist via the server — no shadow client truth, fixes
+  a long-standing R-003 nibble), R-007 (held to the chunk's stated polish
+  list, no creep), R-008 (terse comments only where the WHY isn't obvious).
+
+**Files touched:**
+- `web_app/src/pages/ShoppingListShopMode.vue` (skip persistence, qty editor, whole-list peek, keyboard guard, styles)
+- `web_app/src/pages/ShoppingListDetail.vue` (DnD off-by-one fix, back-arrow + `goBack` removed)
+- `CHANGELOG.md`
+
+**Verification:**
+- `npx vue-tsc --noEmit` → clean (exit 0).
+- **Not verified in browser** — logged FU-073.
+
+**Next up:**
+- **Browser smoke** of Chunks 3/4/5/6 (FU-066, FU-068, FU-069, FU-073).
+- **Chunk 7 — planned shop day + cleanup.** Adds `planned_shop_date` (and
+  feeds C-9's new alert types), then once `status` has proven itself in
+  production, drops the deferred-from-Chunk-1/2 boolean columns. (The
+  `is_in_progress` / `is_archived` / `is_primary` drops already happened in
+  Chunks 1 & 2, so Chunk 7 reduces to the new field + the shopping-day
+  alert.) That closes out the P6-01 phase plan.
+
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-08 — P6-01 Chunk 5 (merge overview into detail) — IMPLEMENTED.
+**Status:** complete.
+**What changed:**
+- **Extracted `NewListDialog.vue`** ([web_app/src/components/dialogs/NewListDialog.vue](web_app/src/components/dialogs/NewListDialog.vue)) — the unified Chunk-4 dialog now lives in its own component with `v-model` + `presetLowOrOut` / `presetMergeIntoListId` props and a `@created` event. Owns the form state, lazy-loads template/recipe/meal-plan options on open, and runs the same `createAsync → instantiate/bulk-add → autoGenerateAsync` pipeline. Detail and the new router landing both mount it.
+- **Detail becomes the canonical surface** ([web_app/src/pages/ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue)):
+  - New **list selector** dropdown in the header (`q-btn-dropdown` with the list-icon), showing all summaries grouped as **Active** (SHOPPING first, then newest-created) and **Archived** (newest-completed), the current list highlighted via `active-class`. Each row has a side-kebab with **Copy unticked → new** (active) / **Copy archived → new** (archived) / **Archive list** / **Delete list**. Top entry: **+ New list**. Bottom entry: **Manage templates…** link.
+  - Wired in: `activeSummaries` / `archivedSummaries` computed sorters, `switchToList`, `onListCreated`, and the moved-from-Overview handlers `archiveSummary` / `deleteSummary` / `copyListUnticked` / `copyListAll` / `copySummary`. Imports `ShoppingListSummary` type + the new `NewListDialog` component.
+  - The new dialog is mounted at the end of the template, controlled by a local `newListOpen` ref.
+- **Overview is now a router landing** ([web_app/src/pages/ShoppingListsOverview.vue](web_app/src/pages/ShoppingListsOverview.vue)):
+  - Rewritten from scratch. On mount: if `store.summaries` is empty, refresh; then call `pickTargetList()` (SHOPPING → newest DRAFT → newest DONE) and `router.replace` to that list's detail. A `watch(summaries.length)` covers the async-refresh-after-mount case.
+  - When no lists exist, renders a centred empty state with one **New list** button. The dialog's `@created` event triggers another `router.replace` to the freshly-created list.
+  - Old per-card UI, tab switching, kebab menus, autogen handlers, recipe/meal-plan pickers — **all gone**. ~970 LoC → ~110 LoC.
+
+**Decisions made:**
+- **One dropdown for both desktop and mobile**, not a desktop right-panel + mobile-top-dropdown split. The proposal asks for the split as polish; a `q-btn-dropdown` works on every viewport and shaves a meaningful chunk of work for Chunk 5. The right-panel polish is logged as a follow-up — fold into Chunk 6 in-store polish or later layout work.
+- **Sort by `created_at` / `completed_at` for now.** `planned_shop_date` arrives in Chunk 7; once it exists, the sort + the "keyed to today's date" pick get a real input. Documented in the code comment so it's obvious where to slot the field in.
+- **Component extraction over copy-paste.** Both surfaces need the dialog and the dialog has non-trivial state (lazy-loaded option lists, form, submit pipeline). A shared `NewListDialog` keeps the two consumers in lockstep and matches R-001 (componentisation when the pattern recurs).
+- **`goBack()` left alone** — it still pushes `/shopping-lists`, which now bounces back to a chosen list. Slightly odd, but the back button is genuinely useful as an "out of this surface" handle and the bounce isn't broken. Logged as FU-070.
+- **Engineering close-gate:** R-001 (extracted `NewListDialog`, reused `BaseDialog` chrome), R-003 (no domain logic copied — both surfaces drive the same backing endpoints), R-007 (scope held: the old overview's responsibilities split exactly into selector + landing; no new features), R-008 (terse comments only where the "why" isn't obvious).
+
+**Files touched:**
+- `web_app/src/components/dialogs/NewListDialog.vue` (new, ~430 LoC — extracted from Overview)
+- `web_app/src/pages/ShoppingListDetail.vue` (selector + new-list dialog + handlers added)
+- `web_app/src/pages/ShoppingListsOverview.vue` (rewritten as landing, ~970 → ~110 LoC)
+- `CHANGELOG.md`
+
+**Verification:**
+- `npx vue-tsc --noEmit` → clean (exit 0).
+- **Not verified in browser** — sizeable surface, lots to eyeball. See FU-069 for the matrix.
+
+**Next up:**
+- **Browser smoke** of Chunks 3/4/5 (FU-066, FU-068, FU-069).
+- Then **Chunk 6 — in-store polish** (skip persistence, tap-to-type qty, whole-list peek, group-by-aisle as a view, drag-and-drop off-by-one fix, pricing-as-you-go).
+
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-08 — P6-01 Chunk 4 (one creation surface) — IMPLEMENTED.
+**Status:** complete.
+**What changed:**
+- **Overview** ([ShoppingListsOverview.vue](web_app/src/pages/ShoppingListsOverview.vue)):
+  - Replaced the `q-btn-dropdown` "New list" menu (7 items) and the standalone
+    "Advanced auto-generate…" `BaseDialog` with **one** consolidated "New shopping
+    list" `BaseDialog`. Toolbar is now a single primary "New list" button + a
+    small "Manage templates" icon shortcut.
+  - The new dialog has three sections:
+    1. **Start from**: radio across `empty / template / recipe / meal_plan`; the
+       template/recipe/meal-plan branches reveal a `q-select` that lazy-loads on
+       first dialog open (parallel `getAllAsync` for all three, errors swallowed
+       to "no options" hints).
+    2. **Auto-fill from stock**: checkboxes for low-or-out, "...only flagged
+       essentials" sub-option (gated on low-or-out), always-include flagged, and
+       frequently-added — mapping straight onto the `sources` payload of
+       `/auto-generate`.
+    3. **Target**: radio `new / merge`, with either a free-form **Name** input
+       (new) or a `q-select` over active lists (merge).
+  - `submitNewList` resolves the target list first (existing id, or a fresh
+    `createAsync({name?})` shell), then pre-seeds from the start-from source
+    (template via `instantiateAsync`; recipe / meal plan via bulk `addLineAsync`),
+    then optionally calls `autoGenerateAsync` for the auto-fill checkboxes. One
+    summary notify reports the combined added/skipped/nothing-matched outcome.
+  - Empty-state "kickstart" UI shrunk from two buttons (Auto-generate from low/out
+    + Empty list) to **one** "New list" button that opens the dialog with
+    `presetLowOrOut: true` pre-ticked.
+- **Detail** ([ShoppingListDetail.vue](web_app/src/pages/ShoppingListDetail.vue)):
+  - Removed the kebab menu's "Append low + essentials" item and the
+    `onAppendLowEssentials` handler — that was the 5th of the proposal's "five
+    doors" and is now reachable as a single click in the unified dialog
+    (Target = "Add to this list", Auto-fill = "low or out" + "essentials only").
+
+**Decisions made:**
+- **Template merge via temp-list + bulk-add.** The `instantiateAsync` endpoint
+  always creates its own list; there's no "merge template into list" API. Rather
+  than touch the backend (Chunk 4 is "pure frontend"), the dialog's template+merge
+  path instantiates a temp list, reads its lines, bulk-adds them to the target,
+  then deletes the temp. Documented in an in-code comment naming the constraint.
+- **Recipe / meal-plan pre-seed stays client-side.** `/auto-generate` only knows
+  flagged/low sources, so cooking sources resolve via `getIngredientsAsync` +
+  bulk `addLineAsync`. Same pattern as the old `createListFromItems` helper,
+  preserved as `bulkAddToList`.
+- **`appendLowStockEssentialsAsync` endpoint kept.** It still exists on the API;
+  the only frontend consumer is gone, but ripping out the backend endpoint is
+  out-of-scope for a "pure frontend consolidation" chunk. Logged as
+  [FU-067](#) for a later sweep (or natural cleanup when Chunk 7 lands).
+- **Engineering close-gate:** R-001 (kept `BaseDialog` + native Quasar inputs;
+  no new chrome), R-003 (server-owned creation + auto-generate endpoints —
+  client only composes the calls), R-007 (no scope creep — only the 5 doors
+  collapsed; templates manage page still its own route via icon shortcut), R-008
+  (terse, no over-commenting).
+  - One smell deferred as a finding (FU-067): the unused
+    `/shopping-lists/{id}/append-low-essentials` endpoint + its API method.
+
+**Files touched:**
+- `web_app/src/pages/ShoppingListsOverview.vue`
+- `web_app/src/pages/ShoppingListDetail.vue`
+- `CHANGELOG.md` (Unreleased § Changed)
+
+**Verification:**
+- `npx vue-tsc --noEmit` → clean (exit 0). Caught + fixed one type error
+  (a `@click="openNewListDialog"` bound the click event into the optional opts
+  arg — switched to `openNewListDialog()` so the default opts is used).
+- **Not verified in browser** — six flows to eyeball:
+  1. Toolbar *New list* → dialog → *Empty + Create new* → empty list created.
+  2. *Empty + auto-fill low-or-out + new* → matches the old "From all low/out".
+  3. *Template + new* → matches the old "From a template…".
+  4. *Recipe + new* → matches the old "From a recipe…".
+  5. *Meal plan + new* → matches the old "From a meal plan…".
+  6. *Empty + auto-fill flagged + merge into existing* → matches old "Top up
+     the primary list".
+  7. Empty-state "New list" button → dialog opens with **low or out** pre-ticked.
+  Logged as FU-068.
+
+**Next up:**
+- **Browser smoke** of Chunk 4 (FU-068) plus the still-pending Chunk 3 smoke
+  (FU-066).
+- Then **Chunk 5 — merge overview into detail** (the bigger structural shift:
+  no standalone overview page; detail-with-list-selector is the surface).
+
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-08 — P6-01 Chunk 3 (shopping-list lifecycle UI) — IMPLEMENTED.
+**Status:** complete.
+**What changed:**
+- **Detail page** (`web_app/src/pages/ShoppingListDetail.vue`):
+  - Removed the "Shop mode", "Review mode", "Start shopping", "Stop shopping",
+    "Finish shopping" buttons and the "Finish review" menu item. Replaced with a
+    single status-driven primary-action button: **Start shopping** on DRAFT,
+    **Reopen** on DONE (calls `unfinishAsync`; restock changes server-reverse from
+    the finish snapshot). SHOPPING has no button on this surface — it's covered by
+    the routing flip below.
+  - Added a `watch(detail.status)` that `router.replace`s to `/shopping-lists/:id/shop`
+    whenever the list becomes SHOPPING (covers start-shopping, assistant actions,
+    cross-tab flips). The "Shopping in progress" banner is gone — the user never
+    sees this surface in SHOPPING state.
+  - Dropped `reviewMode` ref + `toggleReviewMode` + the review-mode preview card,
+    `onReviewComplete`, `openShopMode`, `StocktakeApiService` import. `baseLines` /
+    `canReorder` lose the review-mode branch.
+  - **Folded review into the finish confirmation:** `onFinish` now lists the first
+    8 ticked items (plus "and N more") that will bump to Well-Stocked, before the
+    user confirms. The unticked-handling (copy-or-archive radio) is preserved.
+  - Added `onReopen` for DONE → DRAFT, with a positive notify.
+- **Shop mode page** (`web_app/src/pages/ShoppingListShopMode.vue`):
+  - Back-arrow now reads "Back to editing" (aria + tooltip) and calls
+    `stopShoppingAsync` before navigating — otherwise the Detail page's status
+    watcher would bounce the user straight back into shop mode.
+  - `onFinish` now shows the same folded-review confirmation dialog before
+    archiving. The footer **Finish & restock** button is always visible (was
+    `v-if="remainingLines.length === 0"`); when items remain it reads
+    "Finish early & restock".
+  - Removed the kebab menu's "Open full list" entry (redundant with back-arrow now
+    that the routes are status-coupled).
+  - `onMounted` redirects to `/shopping-lists/:id` if the list isn't SHOPPING on
+    arrival (e.g. PWA shortcut hits /shop for a DRAFT/DONE list).
+
+**Decisions made:**
+- **Two routes, one logical surface.** The proposal asks for SHOPPING to render
+  shop-mode "in place". Two real options: (a) inline-embed the 1100-line shop-mode
+  template inside Detail behind a `v-if`, or (b) keep both routes but make the
+  status drive which one the user sees. Picked (b) for Chunk 3 — same UX (no
+  toggle, the user never thinks about "modes"), tiny diff, no risk of breaking
+  shop-mode's keyboard / offline-queue / focus plumbing. If a future chunk wants
+  a single literal page, the routing layer is the only thing to revisit.
+- **"← Back to editing" must flip status, not just navigate.** Without
+  `stopShoppingAsync` in `exit()`, the Detail watcher re-routes immediately and
+  the back arrow looks broken. Spelled out in a comment in `exit()` so future
+  edits don't drop the call.
+- **Finish is now allowed mid-shop.** The proposal's "fold review into finish"
+  + the new dialog showing exactly what restocks make this safe — the user sees
+  the consequence before committing, and unticked items still get the
+  copy-to-new-list option.
+- **Engineering close-gate:** changes honour R-001 (used `BaseButton`), R-003
+  (server-owned reopen via `unfinishAsync`; no client snapshot), R-009 (preview
+  → confirm → commit on finish). One minor smell — the ticked-summary string is
+  built in both pages' `onFinish` (Detail + ShopMode). Logged as a finding
+  (FU-065) rather than over-extracting a one-line helper right now.
+
+**Files touched:**
+- `web_app/src/pages/ShoppingListDetail.vue`
+- `web_app/src/pages/ShoppingListShopMode.vue`
+- `CHANGELOG.md` (Unreleased § Changed)
+
+**Verification:**
+- `npx vue-tsc --noEmit` → clean (exit 0).
+- **Not verified in browser** — the full lifecycle still needs an eyeball pass:
+  - DRAFT detail → click *Start shopping* → routes to /shop.
+  - SHOPPING /shop → tick items → footer *Finish early & restock* / kebab
+    *Finish & restock* → confirmation lists ticked items → confirm → archived.
+  - SHOPPING /shop → back-arrow → status flips to DRAFT → detail page.
+  - DONE detail → *Reopen* → status flips to DRAFT → restock reversed.
+  - PWA "Shop now" routing still picks SHOPPING / DRAFT / overview correctly.
+  - Open in Pesto Light + a dark theme to confirm dialog/button styling still
+    reads.
+
+**Next up:**
+- **Browser smoke** of the lifecycle (above bullets). Open as FU-066 if anything
+  needs tuning.
+- Then **Chunk 4 — one creation surface.** Collapse the 5 "create" buttons on
+  the overview into one composable form mapped onto `/auto-generate`. Pure
+  frontend.
+
+**Open questions for user:** none blocking.
+
+---
+
 ## 2026-06-08 — Doc graph (anti-drift cross-reference) — BUILT.
 **Status:** complete.
 **What changed:**

@@ -7,7 +7,7 @@ client-side from the offers so we don't have to round-trip on tick.
 """
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -149,6 +149,7 @@ class ShoppingListDetailDto:
     created_at: datetime
     completed_at: datetime | None
     totals: ShoppingListTotalsDto
+    planned_shop_date: date | None = None
     lines: List[ShoppingListLineDto] = field(default_factory=list)
 
 
@@ -280,6 +281,7 @@ class GetShoppingListDetailHandler:
             status = _List.status,
             created_at = _List.created_at,
             completed_at = _List.completed_at,
+            planned_shop_date = _List.planned_shop_date,
             totals = compute_list_totals(_LineDtos),
             lines = _LineDtos,
         )

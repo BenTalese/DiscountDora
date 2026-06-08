@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -106,6 +106,11 @@ class ShoppingList(BaseEntity):
     #   done     -> draft    : Reopen (reverses the finish from finish_snapshot)
     status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
+    # P6-01 Chunk 7. Optional shopping day the user is planning this list
+    # for. Drives the landing-page pick (today's list wins), the selector's
+    # sort, and the shopping-day banner. Never required — a list without a
+    # planned date still behaves the same as today.
+    planned_shop_date: date | None = None
     # P6-01 server-owned undo. Set when a list is finished: a JSON snapshot of
     # each ticked item's stock level before restock, so Reopen reverses it
     # without trusting a client-supplied snapshot. None when the list has never
@@ -135,4 +140,5 @@ class ShoppingList(BaseEntity):
         CREATED_AT = "created_at"
         COMPLETED_AT = "completed_at"
         FINISH_SNAPSHOT = "finish_snapshot"
+        PLANNED_SHOP_DATE = "planned_shop_date"
         LINES = "lines"

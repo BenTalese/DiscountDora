@@ -8,11 +8,15 @@ import AxiosHttpClient from './axiosHttpClient';
 
 export type CreateShoppingListCommand = {
     name?: string;
+    /** P6-01 Chunk 7 — ISO date (YYYY-MM-DD). Optional. */
+    planned_shop_date?: string | null;
 };
 
 export type UpdateShoppingListCommand = {
     name?: string;
     status?: ShoppingListStatus;
+    /** P6-01 Chunk 7 — explicit `null` clears; omitting leaves it alone. */
+    planned_shop_date?: string | null;
 };
 
 export type AddLineCommand = {

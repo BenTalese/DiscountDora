@@ -6,7 +6,7 @@ products) lives on GET /api/shopping-lists/<id>.
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -28,6 +28,7 @@ class ShoppingListSummaryDto:
     status: str
     created_at: datetime
     completed_at: datetime | None
+    planned_shop_date: date | None
     line_count: int
     ticked_count: int
 
@@ -68,6 +69,7 @@ class GetShoppingListsHandler:
                 status = lst.status,
                 created_at = lst.created_at,
                 completed_at = lst.completed_at,
+                planned_shop_date = lst.planned_shop_date,
                 line_count = total,
                 ticked_count = ticked,
             ))

@@ -10,9 +10,12 @@
                 dense
                 size="md"
                 :icon="ICONS.arrow_back"
-                aria-label="Exit shop mode"
+                :loading="exiting"
+                aria-label="Back to editing"
                 @click="exit"
-            />
+            >
+                <q-tooltip>← Back to editing (reopens the list for changes)</q-tooltip>
+            </q-btn>
             <div class="col">
                 <div class="text-subtitle1 ellipsis">
                     {{ detail?.name ?? 'Loading…' }}
@@ -24,6 +27,20 @@
                     </span>
                 </div>
             </div>
+            <!-- P6-01 Chunk 6 — "Peek list" lets the shopper see the full
+                 remaining list without leaving shop mode (feedback
+                 §SHOPPING MODE / proposal §2.5). -->
+            <q-btn
+                flat
+                round
+                dense
+                size="md"
+                :icon="ICONS.list_alt"
+                aria-label="Peek the whole list"
+                @click="peekOpen = true"
+            >
+                <q-tooltip>Peek the whole list</q-tooltip>
+            </q-btn>
             <q-btn
                 flat
                 round
@@ -36,19 +53,12 @@
                     <q-list dense style="min-width: 220px">
                         <q-item
                             clickable
-                            :disable="remainingLines.length === 0"
                             @click="onFinish"
                         >
                             <q-item-section avatar>
                                 <q-icon :name="ICONS.check" color="positive" />
                             </q-item-section>
-                            <q-item-section>Finish shopping</q-item-section>
-                        </q-item>
-                        <q-item clickable @click="goToFullList">
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.list_alt ?? ICONS.menu" />
-                            </q-item-section>
-                            <q-item-section>Open full list</q-item-section>
+                            <q-item-section>Finish &amp; restock</q-item-section>
                         </q-item>
                     </q-list>
                 </q-menu>
@@ -122,7 +132,10 @@
                         </span>
                     </div>
 
-                    <!-- Quantity stepper — big tap targets, kept centered. -->
+                    <!-- Quantity stepper — big tap targets, kept centered.
+                         P6-01 Chunk 6 / feedback §SHOPPING MODE: the centre
+                         number is now itself tappable to type the count
+                         directly, instead of mashing + ten times. -->
                     <div class="shop-mode-qty-row">
                         <q-btn
                             unelevated
@@ -135,9 +148,14 @@
                             :disable="(currentLine.quantity ?? 0) <= 0"
                             @click="adjustQuantity(-1)"
                         />
-                        <div class="shop-mode-qty-value">
+                        <button
+                            type="button"
+                            class="shop-mode-qty-value shop-mode-qty-button"
+                            aria-label="Type a quantity"
+                            @click="openQtyEditor"
+                        >
                             {{ currentLine.quantity ?? '—' }}
-                        </div>
+                        </button>
                         <q-btn
                             unelevated
                             round
@@ -231,17 +249,93 @@
                 </div>
             </div>
             <q-btn
-                v-if="remainingLines.length === 0"
                 unelevated
                 color="positive"
                 no-caps
                 :icon="ICONS.check"
-                label="Finish"
+                :label="remainingLines.length === 0 ? 'Finish &amp; restock' : 'Finish early &amp; restock'"
                 size="lg"
                 class="shop-mode-finish-btn"
+                :loading="finishing"
                 @click="onFinish"
             />
         </footer>
+
+        <!-- Whole-list peek (Chunk 6). The user reviews the full remaining
+             list without leaving shop mode; tapping an unticked item jumps
+             it to the front (persisted via reorder). -->
+        <BaseDialog v-model="peekOpen" card-style="min-width: 320px; max-width: 480px">
+            <q-card-section>
+                <div class="text-h6">Whole list</div>
+                <div class="text-caption dora-text-muted">
+                    {{ pickedCount }} / {{ totalCount }} picked.
+                    Tap an unticked item to jump to it.
+                </div>
+            </q-card-section>
+            <q-card-section style="max-height: 60vh; overflow: auto" class="q-pt-none">
+                <q-list dense separator>
+                    <q-item
+                        v-for="line in sortedLines"
+                        :key="line.line_id"
+                        :clickable="!line.is_ticked"
+                        :class="line.is_ticked ? 'dora-text-muted' : ''"
+                        @click="onPeekJump(line)"
+                    >
+                        <q-item-section avatar>
+                            <q-icon
+                                :name="line.is_ticked ? ICONS.check_circle : ICONS.check_box_outline_blank"
+                                :color="line.is_ticked ? 'positive' : 'grey'"
+                            />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label :class="line.is_ticked ? 'text-strike' : ''">
+                                {{ line.stock_item_name }}
+                            </q-item-label>
+                            <q-item-label v-if="line.quantity != null" caption>
+                                ×{{ line.quantity }}
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton variant="ghost" label="Close" v-close-popup />
+            </q-card-actions>
+        </BaseDialog>
+
+        <!-- Tap-to-type qty (Chunk 6) — opens when the centre number on
+             the qty row is tapped. Lets the user enter "8" rather than
+             tapping + eight times. -->
+        <BaseDialog v-model="qtyEditorOpen" card-style="min-width: 240px">
+            <q-card-section>
+                <div class="text-h6">Quantity</div>
+                <div v-if="qtyEditorLine" class="text-caption dora-text-muted">
+                    {{ qtyEditorLine.stock_item_name }}
+                </div>
+            </q-card-section>
+            <q-card-section>
+                <q-input
+                    v-model.number="qtyEditorDraft"
+                    autofocus
+                    outlined
+                    type="number"
+                    step="1"
+                    min="0"
+                    label="Quantity"
+                    input-class="text-h5"
+                    @keydown.enter.prevent="saveQtyEditor"
+                />
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
+                    label="Save"
+                    v-close-popup
+                    @click="saveQtyEditor"
+                />
+            </q-card-actions>
+        </BaseDialog>
 
         <!-- Inline price editor — reuses the same logic as the list page
              but with a larger touch target for shop-mode use. -->
@@ -421,8 +515,15 @@
         }
     }
 
-    onMounted(() => {
-        void load();
+    onMounted(async () => {
+        await load();
+        // SHOPPING is the only phase that should render this surface. If a
+        // PWA shortcut or stale link lands here on a DRAFT/DONE list,
+        // bounce to the detail page so editing/reopen is available.
+        if (detail.value && detail.value.status !== 'shopping') {
+            void router.replace(`/shopping-lists/${listId.value}`);
+            return;
+        }
         // Pull focus to the root so the global keyboard shortcuts fire
         // without the user having to tap first.
         setTimeout(() => rootEl.value?.focus(), 50);
@@ -460,6 +561,48 @@
         }
     }
 
+    // Whole-list peek (Chunk 6).
+    const peekOpen = ref(false);
+
+    async function onPeekJump(line: ShoppingListLine) {
+        if (line.is_ticked) return;
+        peekOpen.value = false;
+        await jumpTo(line.line_id);
+    }
+
+    // Tap-to-type qty editor (Chunk 6).
+    const qtyEditorOpen = ref(false);
+    const qtyEditorLine = ref<ShoppingListLine | null>(null);
+    const qtyEditorDraft = ref<number | null>(null);
+
+    function openQtyEditor() {
+        if (!currentLine.value) return;
+        qtyEditorLine.value = currentLine.value;
+        qtyEditorDraft.value = currentLine.value.quantity ?? 0;
+        qtyEditorOpen.value = true;
+    }
+
+    async function saveQtyEditor() {
+        const line = qtyEditorLine.value;
+        if (!line) return;
+        const next = qtyEditorDraft.value;
+        if (next == null || Number.isNaN(next) || next < 0) return;
+        const previous = line.quantity;
+        if (previous === next) return;
+        line.quantity = next;
+        try {
+            await api.updateLineAsync(listId.value, line.line_id, { quantity: next });
+        } catch (err) {
+            line.quantity = previous;
+            $q.notify({
+                type: 'negative',
+                position: 'top',
+                message: 'Could not update quantity.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
     async function adjustQuantity(delta: number) {
         if (!currentLine.value) return;
         const line = currentLine.value;
@@ -480,29 +623,71 @@
         }
     }
 
-    function skipForNow() {
-        // "Skip" in shop mode just moves to the next item without
-        // touching the data. The current line stays unticked; we
-        // rely on the order coming back the same way from the
-        // server, so we re-sort with the skipped line shoved
-        // alphabetically to the end of its section by mutating its
-        // local sequence — purely client-side so it's instantly
-        // visible and we don't need a backend round-trip for a
-        // "I'll come back to this" gesture.
-        if (!currentLine.value) return;
+    async function skipForNow() {
+        // P6-01 Chunk 6 — skip now persists. Optimistic local sequence
+        // bump (so the card visibly flips immediately) followed by a
+        // reorder API call so the new order survives a refresh.
+        // Pre-Chunk-6 this was client-only and reverted on refresh
+        // (feedback §SHOPPING MODE "the position of the items keeps
+        // changing").
+        if (!detail.value || !currentLine.value) return;
         const line = currentLine.value;
-        const max = Math.max(...sortedLines.value.map((l) => l.sequence), 0);
-        line.sequence = max + 1;
+        await persistMoveToEnd(line.line_id);
     }
 
-    function jumpTo(lineId: string) {
-        // Re-order so the chosen line becomes the next-up. Local-only
-        // (same reasoning as skipForNow); the canonical sequence on
-        // the server stays whatever it was.
-        const line = (detail.value?.lines ?? []).find((l) => l.line_id === lineId);
-        if (!line) return;
-        const min = Math.min(...sortedLines.value.map((l) => l.sequence), 0);
-        line.sequence = min - 1;
+    async function jumpTo(lineId: string) {
+        // Move the chosen line to the *front* of the queue (next-up)
+        // and persist. Same persistence story as skip — pre-Chunk-6
+        // this was local-only.
+        if (!detail.value) return;
+        await persistMoveToFront(lineId);
+    }
+
+    async function persistReorderedIds(ids: string[]) {
+        if (!detail.value) return;
+        // Optimistic: rewrite local sequences so sortedLines re-orders
+        // instantly; if the API call fails, reload from the server.
+        const lookup = new Map(detail.value.lines.map((l) => [l.line_id, l]));
+        ids.forEach((id, idx) => {
+            const line = lookup.get(id);
+            if (line) line.sequence = idx;
+        });
+        try {
+            await api.reorderLinesAsync(listId.value, ids);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'top',
+                message: 'Could not save the new order.',
+                caption: describeApiError(err) || '',
+            });
+            await load();
+        }
+    }
+
+    async function persistMoveToEnd(lineId: string) {
+        const allIds = [...sortedLines.value.map((l) => l.line_id)];
+        const idx = allIds.indexOf(lineId);
+        if (idx < 0) return;
+        allIds.splice(idx, 1);
+        allIds.push(lineId);
+        await persistReorderedIds(allIds);
+    }
+
+    async function persistMoveToFront(lineId: string) {
+        // "Front" = before the first un-ticked line, so jumped lines
+        // become the next "Got it" candidate without leapfrogging
+        // already-picked ones.
+        const allIds = [...sortedLines.value.map((l) => l.line_id)];
+        const idx = allIds.indexOf(lineId);
+        if (idx < 0) return;
+        allIds.splice(idx, 1);
+        const firstUntickedIdx = allIds.findIndex(
+            (id) => !(detail.value?.lines.find((l) => l.line_id === id)?.is_ticked),
+        );
+        const insertAt = firstUntickedIdx < 0 ? 0 : firstUntickedIdx;
+        allIds.splice(insertAt, 0, lineId);
+        await persistReorderedIds(allIds);
     }
 
     // ── Price editor ────────────────────────────────────────────────────
@@ -627,7 +812,38 @@
     }
 
     // ── Finish ──────────────────────────────────────────────────────────
+    const finishing = ref(false);
+    const exiting = ref(false);
+
     async function onFinish() {
+        if (!detail.value) return;
+        const ticked = (detail.value.lines ?? []).filter((l) => l.is_ticked);
+        const unticked = (detail.value.lines.length ?? 0) - ticked.length;
+        // Fold the old standalone "review mode" into the finish confirmation
+        // (Chunk 3): list the items that will bump to Well-Stocked so the
+        // user can sanity-check before archiving the list.
+        const tickedNames = ticked.map((l) => l.stock_item_name).slice(0, 8);
+        const tickedSummary = ticked.length === 0
+            ? 'No items are ticked — nothing will be restocked.'
+            : `${ticked.length} item${ticked.length === 1 ? '' : 's'} will be bumped to ` +
+              `Well-Stocked: ${tickedNames.join(', ')}` +
+              (ticked.length > tickedNames.length ? `, and ${ticked.length - tickedNames.length} more.` : '.');
+        const untickedMsg = unticked > 0
+            ? `\n\n${unticked} unticked item${unticked === 1 ? '' : 's'} will be archived with the list.`
+            : '';
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: 'Finish & restock?',
+                message: `${tickedSummary}${untickedMsg}`,
+                ok: { label: 'Finish & restock', color: 'positive', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        finishing.value = true;
         try {
             await api.finishAsync(listId.value);
             $q.notify({
@@ -643,17 +859,40 @@
                 message: 'Could not finish shopping.',
                 caption: describeApiError(err) || '',
             });
+        } finally {
+            finishing.value = false;
         }
     }
 
-    function exit() {
-        // Send the user back to the full list view of this shop, not
-        // to the lists overview — that's where they came from.
-        void router.push(`/shopping-lists/${listId.value}`);
-    }
-
-    function goToFullList() {
-        void router.push(`/shopping-lists/${listId.value}`);
+    async function exit() {
+        // "← Back to editing" reopens the list (SHOPPING → DRAFT) before
+        // routing back to the detail page. If we skipped the status flip,
+        // the detail page's status-watcher would bounce us straight back
+        // into shop mode.
+        if (!detail.value) {
+            void router.push(`/shopping-lists/${listId.value}`);
+            return;
+        }
+        if (detail.value.status !== 'shopping') {
+            // Already not shopping (e.g. user landed here on a DONE list);
+            // just navigate.
+            void router.replace(`/shopping-lists/${listId.value}`);
+            return;
+        }
+        exiting.value = true;
+        try {
+            await api.stopShoppingAsync(listId.value);
+            void router.replace(`/shopping-lists/${listId.value}`);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'top',
+                message: 'Could not exit shop mode.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            exiting.value = false;
+        }
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────
@@ -663,13 +902,13 @@
     function onKeyDown(event: KeyboardEvent) {
         // Don't intercept while a dialog has focus — those have their
         // own Enter/Esc semantics (Save / Cancel).
-        if (priceEditorOpen.value || offerPickerOpen.value) return;
+        if (priceEditorOpen.value || offerPickerOpen.value || qtyEditorOpen.value || peekOpen.value) return;
         if (event.key === ' ' || event.key === 'Enter') {
             event.preventDefault();
             void markPicked();
         } else if (event.key === 'ArrowDown' || event.key === 's') {
             event.preventDefault();
-            skipForNow();
+            void skipForNow();
         } else if (event.key === 'ArrowUp' || event.key === 'u') {
             event.preventDefault();
             void undoLastPick();
@@ -780,6 +1019,24 @@
         font-weight: 700;
         min-width: 48px;
         text-align: center;
+    }
+    .shop-mode-qty-button {
+        /* Make the centre number itself a tap target (Chunk 6). The
+           button reset keeps the visual identical to the old <div>. */
+        background: transparent;
+        border: none;
+        padding: 8px 4px;
+        cursor: pointer;
+        color: inherit;
+        font: inherit;
+        border-radius: 8px;
+    }
+    .shop-mode-qty-button:hover {
+        background: var(--overlay-hover);
+    }
+    .shop-mode-qty-button:focus-visible {
+        outline: 2px solid var(--q-primary);
+        outline-offset: 2px;
     }
     .shop-mode-pick-btn {
         width: 100%;

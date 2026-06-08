@@ -1,6 +1,6 @@
 # Proposal — Recipes / Cookbook Redesign (C-4)
 
-**Status:** Draft for discussion · **Date:** 2026-06-06 · Changes NO code.  
+**Status:** Draft for discussion · **Date drafted:** 2026-06-06 · **§2.6a Structured steps added 2026-06-08** (closes FU-040; pulled in from C-3 DEC-2) · Changes NO code.  
 **Scope:** Redesign the recipe domain (post meals→recipes merge): naming, tags,
 images, versions, multi-part recipes, tools, source, cost, nutrition, the card,
 filters, and the detail page. **Recipe comparison is CUT per INV-6.** Heavy ripple
@@ -97,6 +97,53 @@ Optional **tools list** per recipe (food processor, 5L pot, …), from a
 **configurable catalogue in settings** (like tags — C-cross). Inclusion/exclusion
 **filter** on the overview. Cook mode highlights tools per step (C-3 consumes
 this).
+
+### 2.6a Structured recipe steps (added 2026-06-08; C-3 dependency, closes FU-040)
+
+Today's `Recipe.instructions` is a freeform text blob split on newlines.
+That's the root cause of cook mode's cross-step highlight bug (PROPOSAL_COOK_MODE
+§2.4, L327): text-matching breaks when an ingredient appears in steps 1/2/3.
+Cook mode's per-step **tools (§2.5)**, **per-step hints (§2.6)**, and **per-step
+timers (§2.7)** also have nowhere to attach. C-3 resolved this by promoting
+the model change here.
+
+**Model:** `Recipe.steps` becomes an ordered list of structured steps:
+
+```
+RecipeStep
+  id
+  recipe_id
+  sequence
+  text              # the prose for this step
+  sub_steps[]       # optional ordered list (RecipeStep again, one level deep)
+  hint              # optional one-line tip rendered as a footer on this step
+  ingredient_refs[] # FK→RecipeIngredient ids (which ingredients this step uses)
+  tool_refs[]       # FK→RecipeTool ids (which tools this step needs)
+```
+
+The freeform `instructions` column stays for backwards compatibility and
+**imports**: a recipe with no `steps[]` falls back to splitting `instructions`
+on newlines, with text-matched ingredient highlighting — exactly today's
+behaviour. **A recipe is "structured" once a user (or importer) populates
+`steps[]`**; cook mode then renders the rich per-step behaviour.
+
+**Editor:** in the recipe detail page (§2.13), instructions become a step
+list. Each step has its text, an "add hint" affordance, ingredient/tool
+multi-select pickers (from the recipe's own ingredient + tool lists), and a
+"+ sub-step" affordance.
+
+**Importer:** the URL importer (§2.7) emits structured steps when the source
+exposes them in JSON-LD `recipeInstructions` (most schema.org recipe sources
+do); otherwise it stores the joined text in `instructions` and leaves
+`steps[]` empty.
+
+**Migration:** new tables `RecipeStep` and join tables for the refs. No
+data migration of existing recipes — they keep `instructions` and degrade
+gracefully. Users opt in by editing.
+
+**Sequencing impact:** in §6 below, **structured-steps lands as its own
+chunk** (after detail cleanup §2.13, before C-3's highlight/per-step
+features). Without it, C-3 chunks beyond the finish-flow are blocked.
 
 ### 2.7 Source field + importer guidance (L295, L296)
 - **`source` becomes its own field** (URL or free text) — stop appending it to the
@@ -238,6 +285,9 @@ L252) are moot once cut.
 4. **Detail cleanup** (§2.13) — validation, source field, button layout, log-cook,
    notes.
 5. **Images** (§2.3, gated on FU-039) and **tools** (§2.6).
+5a. **Structured recipe steps** (§2.6a, added 2026-06-08) — new tables + editor
+    swap on the detail page. **Blocker for C-3 highlight/per-step features**;
+    independent of versions and multi-part, so it can land in parallel.
 6. **Versions** (§2.4) — its own model + UI.
 7. **Cost** (§2.8) and **nutrition simple** (§2.9) — behind the money/nutrition
    opt-ins (C-cross).

@@ -5,7 +5,78 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Planned shopping day (P6-01 Chunk 7).** Shopping lists now carry an
+  optional `planned_shop_date` (ISO date, nullable). The **New shopping
+  list** dialog accepts the field; the detail header surfaces it as a
+  clickable chip with a dedicated date-editor dialog (set / change /
+  clear); the router landing prefers a DRAFT whose planned date is today
+  when picking which list to open; the in-detail list selector sorts
+  scheduled lists ahead of unscheduled. When today is the planned day (or
+  the day has passed without finishing), a banner appears at the top of
+  the list detail. Backend: nullable `Date` column + migration
+  `e1a4c7b2f9d0`, create + update endpoints accept the field (explicit
+  `null` clears).
+
 ### Changed
+- **In-store polish (P6-01 Chunk 6).** Several shop-mode UX gripes from the
+  feedback resolved together:
+  - **Skip / jump persist now.** Skipping the current item or jumping to a
+    later one used to be client-only and reverted on refresh; both now call
+    `reorderLinesAsync` so the new order survives. "Jump to" places the item
+    just before the first unticked line so it becomes the next "Got it"
+    candidate.
+  - **Tap-to-type quantity.** The centre number in the qty row is now itself
+    a tap target — opens a numeric input dialog, so a count of 8 is one tap
+    + one type rather than eight + presses.
+  - **Whole-list peek.** New "Peek the whole list" button in the shop-mode
+    header opens a dialog of every line (ticked + unticked). Tapping an
+    unticked item jumps it to the front of the queue and closes the peek.
+  - **Drag-and-drop off-by-one fixed** on the detail page. The dropped line
+    now lands at the visual slot of the dragged-over row (feedback L414).
+- **Detail page back-arrow removed** (Chunk 6 / FU-070). Pre-Chunk-5 it
+  pointed at the standalone overview; with Detail now the canonical surface
+  and a list selector in the header, the arrow only ever bounced through
+  the landing.
+
+- **Shopping-list overview merged into detail (P6-01 Chunk 5).**
+  The standalone overview page is gone as a destination: `/shopping-lists` is now a
+  router landing that picks a list by status priority (SHOPPING → newest DRAFT →
+  newest DONE) and `replace`s to its detail. The detail page is the canonical
+  surface — its header gains a **list selector** dropdown showing every list
+  (active, then archived, with the current list highlighted), per-list kebab
+  actions (Archive list / Delete list / Copy unticked → new / Copy archived → new)
+  moved from the old overview cards, a **"+ New list"** entry that opens the
+  unified dialog inline, and a *Manage templates…* link. When the user has zero
+  lists, the landing renders a one-button empty state ("New list"). The new-list
+  dialog is now a shared component (`NewListDialog.vue`) used by both pages.
+
+- **Shopping-list creation (P6-01 Chunk 4) — one composable form replaces the five doors.**
+  The overview's auto-generate menu (From flagged · Advanced auto-generate · From all
+  low/out · Top up the primary list) and the detail page's "Append low + essentials" are
+  consolidated into a single **New shopping list** dialog: pick a *start-from* source
+  (empty / template / recipe / meal plan) plus optional *auto-fill* checkboxes
+  (low/out, essentials-only sub-option, flagged, frequently added), then pick a *target*
+  (create new / add to existing). All paths land on the same backing endpoints —
+  `createAsync`, `instantiateAsync`, `addLineAsync`, `autoGenerateAsync` — so behaviour
+  matches the old buttons for any single combination. The toolbar shrinks to one
+  "New list" button plus a small "Manage templates" icon shortcut; the empty-state CTA
+  now opens the same dialog with **Low / out of stock** pre-ticked.
+
+- **Shopping-list lifecycle UI (P6-01 Chunk 3) — one primary-action button per phase.**
+  The detail page now shows a single status-driven CTA: **Start shopping** on DRAFT,
+  **Reopen** on DONE. SHOPPING isn't a button — it's the *surface*: starting shopping
+  routes directly to shop mode, and a status watcher takes the user there if the list
+  flips to SHOPPING by any other path (assistant action, another tab). Shop mode's
+  back-arrow now reads as **"← Back to editing"** and actually reopens the list (status
+  → DRAFT) before navigating, so it can't bounce back. The standalone **Shop mode**,
+  **Review mode**, **Start / Stop / Finish shopping**, and **Finish review** affordances
+  on the detail page are gone, as is the "Shopping in progress" banner and shop mode's
+  redundant "Open full list" menu item. **Review is folded into the Finish confirmation**
+  on both surfaces: the dialog lists the ticked items that will be bumped to Well-Stocked
+  (preview-before-commit, R-009) so the user sanity-checks at the moment of decision.
+  Finish & restock is now reachable mid-shop, not just when every item is picked.
+
 - **Shopping-list quick-add (P6-01 Chunk 2) — "primary" is now inferred, not stored.**
   The `ShoppingList.is_primary` column is gone. The server resolves the quick-add
   target by DRAFT-count: 0 drafts → `result: "no_draft"` (the client offers to

@@ -19,6 +19,10 @@ export type ShoppingListSummary = {
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
+    /** P6-01 Chunk 7 — optional ISO date (YYYY-MM-DD) this list is planned
+     *  for. Drives landing-page pick, selector sort, and shopping-day
+     *  banner. `null` = unscheduled. */
+    planned_shop_date: string | null;
     line_count: number;
     ticked_count: number;
 };
@@ -90,6 +94,8 @@ export type ShoppingListDetail = {
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
+    /** P6-01 Chunk 7 — see ShoppingListSummary. */
+    planned_shop_date: string | null;
     totals: ShoppingListTotals;
     lines: ShoppingListLine[];
 };

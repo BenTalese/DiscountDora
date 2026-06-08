@@ -39,6 +39,135 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-077 — Write IMPL plan for C-3 cook-mode
+- **Raised:** 2026-06-08 (C-3 decision pass)
+- **Type:** follow-up
+- **What:** With C-3's open decisions resolved (`PROPOSAL_COOK_MODE.md §5a`) and the structured-steps dependency homed in C-4 (`PROPOSAL_COOKBOOK.md §2.6a`), the natural next document is an implementation plan mirroring `IMPL_PLAN_SHOPPING_LISTS.md` — chunked, self-contained, no code. Chunks suggested by C-3 §6 + §5a: (1) finish-flow + click-out + celebration + meals-cooked-from-zero, (2) timer polish + unit fix + sous-chef discoverability, (3) location grouping + ingredient-UI rebuild, (4) structured-steps (lives in C-4 but lands as a co-sequenced cook-mode-blocker), (5) highlight-instead-of-tick + per-step tools + per-step hints + per-step timers, (6) serving auto-adjust (gated on C-5 onboarding default).
+- **Why deferred:** the IMPL plan is its own self-contained document; producing it now would have doubled the C-3 turn. Better to land it as a focused next session.
+- **Recommended resolution:** opportunistic, before the first C-3 implementation chunk runs.
+
+## [OPEN] FU-076 — P6-01 Chunk 7 browser smoke
+- **Raised:** 2026-06-08 (Chunk 7 impl)
+- **Type:** follow-up
+- **What:** Run the migration locally (`alembic upgrade head` lands `e1a4c7b2f9d0`), restart the API + web app, then:
+  1. Open a list → header chip reads "No shop day" → click → date dialog → save 2026-07-01 → chip updates → refresh → still set.
+  2. Clear the date via the dialog's *Clear* button → chip → "No shop day".
+  3. Create a list via **New list** dialog with a date → detail loads → chip shows the date.
+  4. Set a DRAFT's date to today → navigate to `/shopping-lists` → lands on that draft (priority pick).
+  5. With today set: the in-detail banner appears with info-tone "Shopping day is today."
+  6. With a past date (e.g. yesterday) set + status still DRAFT: warning-tone banner says "Planned shop day was … — still unfinished."
+  7. Selector dropdown: a list with a planned date sorts ahead of unscheduled lists; today's list sits at the top of its band.
+  8. Cross-theme: Pesto Light + Pesto Dark + Cherry Cola Dark.
+- **Why deferred:** no live API/DB in this session.
+- **Recommended resolution:** now (alongside FU-066/068/069/072/073).
+
+## [OPEN] FU-075 — Run the new `test_shopping_list_planned_shop_date` e2e
+- **Raised:** 2026-06-08 (Chunk 7 impl)
+- **Type:** follow-up
+- **What:** Apply migration `e1a4c7b2f9d0` to the test DB, then `pytest tests/e2e/dora_api/test_shopping_list_planned_shop_date.py -v`. Four cases (create-with-date, create-without, PATCH set-and-clear-with-null, PATCH preserves the date when not sent).
+- **Why deferred:** no live server in the implementation session; py_compile is not a runtime check.
+- **Recommended resolution:** now, with FU-076.
+
+## [OPEN] FU-074 — Wire planned-shop-day into the real alert pipeline (C-9)
+- **Raised:** 2026-06-08 (Chunk 7 impl)
+- **Type:** finding (deferred-by-design)
+- **What:** Chunk 7 surfaces planned-shop-day as a banner on the list detail. The IMPL plan says it "feeds C-9's new alert types" — the actual alert pipeline (alerts bell badge, suggestion-feed insertions, optional push) belongs to the C-9 prompt's surface. When C-9 runs, register a new `shopping_day_today` / `shopping_day_overdue` alert type that fires on the same condition as the banner, and de-dupe so the banner stays the in-page hint while the alerts list / bell badge handle global notification.
+- **Why deferred:** alert types + their dedupe semantics live in C-9, not in P6-01 Chunk 7.
+- **Recommended resolution:** when C-9 (alerts) executes.
+
+## [OPEN] FU-073 — P6-01 Chunk 6 browser smoke
+- **Raised:** 2026-06-08 (Chunk 6 impl)
+- **Type:** follow-up
+- **What:** Verify the in-store polish behaves in the real browser:
+  1. Start shopping → tap *Skip* → next item shows → refresh page → the skipped item is still at the end (persisted).
+  2. Tap the centre qty number → dialog opens → type "12" → Save → qty row shows 12; refresh → still 12.
+  3. Tap **Peek list** (header) → modal lists ticked + unticked → tap an unticked item → modal closes + that item is now next-up → refresh → still next-up.
+  4. Detail page (DRAFT): drag line from position 1 onto position 5 → it lands at index 5 (visual slot of the row it was dropped on). Drag from 5 to 1 → lands at index 1. Off-by-one no longer present (feedback L414).
+  5. Detail page header: confirm the old back-arrow is gone (replaced by the list selector).
+  6. Cross-theme: open in Pesto Light + Pesto Dark + Cherry Cola Dark.
+- **Why deferred:** vue-tsc clean is not a UX test; no dev server in this session.
+- **Recommended resolution:** now (alongside FU-066/FU-068/FU-069).
+
+## [OPEN] FU-072 — Chunk 6 audit: pricing-as-you-go + group-by-aisle still respect their contracts
+- **Raised:** 2026-06-08 (Chunk 6 impl)
+- **Type:** finding
+- **What:** Two Chunk 6 line items in the IMPL plan were observed as already-implemented in code (`openPriceEditor` exposed from the shop-mode card; `lineGroups` on the detail page reads `stock_location_breadcrumb` and never writes `sequence`). They need a five-minute browser confirmation that (a) the price editor still opens mid-shop and saves `actual_unit_price`, (b) toggling group-by-location → none → group-by-merchant doesn't quietly mutate the saved order. Once confirmed, flip this to `[RESOLVED]`.
+- **Why deferred:** no dev server in the implementation session; pure static read isn't enough proof per CLAUDE.md.
+- **Recommended resolution:** confirm in browser (alongside FU-073).
+
+## [RESOLVED] FU-070 — `goBack()` in Detail is now a self-bounce
+- **Raised:** 2026-06-08 (Chunk 5 impl)
+- **Type:** finding (UX)
+- **What:** The back-arrow in `ShoppingListDetail.vue` pushes `/shopping-lists`, which the new router landing immediately `replace`s back to a chosen list — usually the same one. So the back button now effectively no-ops (or, worse, picks a different list than the user expected). Two reasonable resolutions: (a) point it at `/`, or (b) drop the button entirely now that the in-page list selector exists.
+- **State note:** 2026-06-08 — resolved option (b) in Chunk 6: dropped the `<BaseButton variant="icon">` back-arrow + the `goBack()` function from `ShoppingListDetail.vue`. The in-page list selector replaces it; the sidebar nav still exits the shopping-lists surface.
+
+## [OPEN] FU-069 — P6-01 Chunk 5 browser smoke
+- **Raised:** 2026-06-08 (Chunk 5 impl)
+- **Type:** follow-up
+- **What:** Verify the merged surface end-to-end:
+  1. `/shopping-lists` with multiple lists → lands on SHOPPING list if any, else newest DRAFT, else newest DONE.
+  2. `/shopping-lists` with zero lists → empty-state renders the **New list** button; clicking opens the dialog; submitting routes to the created list.
+  3. Detail list-selector: dropdown opens with **Active** group (current highlighted), **Archived** group below the separator, **+ New list** at the top, **Manage templates…** at the bottom.
+  4. Active row kebab → Copy unticked / Archive / Delete each behave correctly. Archived row kebab → Copy archived / Delete.
+  5. Deleting the currently-open list bounces to the landing and the landing picks the next list.
+  6. **+ New list** in the selector opens the dialog; submit routes to the created list.
+  7. Switching to a different list via the selector loads its detail (status watcher / shop-mode redirect still works for SHOPPING).
+  8. Cross-theme: open in Pesto Light + Pesto Dark + Cherry Cola Dark.
+  9. Mobile width: the dropdown is still usable (the proposal eventually wants a dedicated mobile dropdown surface — see FU-071).
+- **Why deferred:** vue-tsc clean is not a UX test; no dev server in this session.
+- **Recommended resolution:** now (alongside FU-066/FU-068).
+
+## [OPEN] FU-071 — Desktop right-panel + mobile-top-dropdown list selector
+- **Raised:** 2026-06-08 (Chunk 5 impl)
+- **Type:** finding (UX polish per proposal §2.3 / feedback L405-L406)
+- **What:** Proposal calls for a desktop **right panel** (always visible) and a mobile **top dropdown**. Chunk 5 ships a single `q-btn-dropdown` shared across viewports as a viable interim. The dedicated right-panel layout (always visible on >=md, the dropdown collapses below that) is the next step.
+- **Why deferred:** would have nearly doubled Chunk 5's edit surface; the dropdown is the same UX *capability* on both viewports, just less ambient on desktop.
+- **Recommended resolution:** opportunistic — pair with Chunk 7 (planned shop day + cleanup) or as standalone polish.
+
+## [OPEN] FU-068 — P6-01 Chunk 4 browser smoke
+- **Raised:** 2026-06-08 (Chunk 4 impl)
+- **Type:** follow-up
+- **What:** Verify the unified "New shopping list" dialog handles every old door correctly:
+  1. Toolbar *New list* → *Empty + Create new* → produces an empty list, routes into it.
+  2. *Empty + auto-fill: low-or-out + new* → equivalent of the old "From all low/out stock".
+  3. *Template + new* → uses `instantiateAsync`; lines match the template.
+  4. *Recipe + new* → bulk-adds the recipe's ingredient stock items.
+  5. *Meal plan + new* → bulk-adds `getIngredientsAsync` results.
+  6. *Empty + auto-fill: flagged + essentials-only + merge into existing* → equivalent of old "Top up the primary list".
+  7. *Template + merge*: confirm the temp-list-then-delete dance leaves no orphan list in the overview (refresh after).
+  8. Empty-state — when no active lists and stock has low/out items, the kickstart "New list" button opens the dialog with *low-or-out* pre-ticked.
+  9. Cancel button discards the form (re-open shows defaults again).
+  10. Cross-theme: open in Pesto Light + Pesto Dark + Cherry Cola Dark.
+- **Why deferred:** vue-tsc clean is not a UX test; no dev server in this session.
+- **Recommended resolution:** now (alongside FU-066).
+
+## [OPEN] FU-067 — Drop unused `appendLowStockEssentialsAsync` endpoint
+- **Raised:** 2026-06-08 (Chunk 4 impl)
+- **Type:** finding (R-007 scope-discipline housekeeping)
+- **What:** The detail page's "Append low + essentials" menu (the 5th of the proposal's five doors) is gone, but the underlying API method `appendLowStockEssentialsAsync` and its backend route `/shopping-lists/{id}/append-low-essentials` are still present with no UI consumer. The unified `New list` dialog covers the same use case via *auto-fill: low + flagged + essentials-only + merge into this list*.
+- **Why deferred:** Chunk 4 is scoped as "pure frontend consolidation" per `IMPL_PLAN_SHOPPING_LISTS.md`; removing a backend endpoint sits outside that scope. The endpoint is harmless while it lives — `/auto-generate` is preferred.
+- **Recommended resolution:** opportunistic — fold into Chunk 7's deferred-cleanup migration, or any later prompt that touches `features/shopping_lists/auto_generate.py`.
+
+## [OPEN] FU-066 — P6-01 Chunk 3 browser smoke
+- **Raised:** 2026-06-08 (Chunk 3 impl)
+- **Type:** follow-up
+- **What:** Eyeball the lifecycle end-to-end in the running app:
+  1. DRAFT detail → *Start shopping* button → confirm router lands on /shop directly.
+  2. SHOPPING /shop → tick a few items → kebab *Finish & restock* AND footer button → confirm the dialog lists the ticked items (capped at 8 + "and N more") → confirm restock + archive.
+  3. SHOPPING /shop → back-arrow → confirm tooltip reads "Back to editing", confirm status flips to DRAFT, confirm route lands on detail (not bouncing back).
+  4. DONE detail → *Reopen* → confirm restock changes reverse and status returns to DRAFT.
+  5. PWA "Shop now" — confirm the existing status-driven routing (1 SHOPPING → resume; else 1 DRAFT → open; else overview) still works end-to-end.
+  6. Open in Pesto Light + Pesto Dark + Cherry Cola Dark to confirm dialog / primary-button styling still reads.
+- **Why deferred:** dev server not run in this session; vue-tsc clean is not a UX test.
+- **Recommended resolution:** now (before Chunk 4).
+
+## [OPEN] FU-065 — Ticked-summary string duplicated across both finish dialogs
+- **Raised:** 2026-06-08 (Chunk 3 impl)
+- **Type:** finding (R-003 lite — same display string built in two places)
+- **What:** `ShoppingListDetail.vue` and `ShoppingListShopMode.vue` each build the "N items will be bumped to Well-Stocked: a, b, c, and N more." string for their respective Finish-and-restock dialog. Identical algorithm, two copies. If the wording or cap-count changes, both need editing.
+- **Why deferred:** extracting a single helper is one line of value today; both copies are 4-line, Type-C display logic, and the two dialogs *do* differ (Detail has the copy-unticked-to-new-list radio, ShopMode appends a one-line note). Worth a helper only if a third caller appears, or if the wording becomes prose worth localising.
+- **Recommended resolution:** opportunistic — when C-locale (FU-043) lands, fold both summaries through one localised builder. Otherwise leave alone.
+
 ## [OPEN] FU-062 — Doc-graph: verify cited paths + original-spec Feature Board mappings
 - **Raised:** 2026-06-08 (doc-graph build)
 - **Type:** finding
@@ -459,7 +588,7 @@ long session summary. Distinct from the other two logs:
   and the seed checkboxes are enabled. If it DOES appear, find what's seeding user
   groups/locations and fix. Folded into the C-5 §2.6 design either way.
 
-## [OPEN] FU-040 — C-4 should model structured recipe steps (C-3 depends on it)
+## [RESOLVED] FU-040 — C-4 should model structured recipe steps (C-3 depends on it)
 - **Raised:** 2026-06-06 (C-3 brief)
 - **Type:** follow-up (design dependency)
 - **What:** Recipe instructions are a freeform text blob (`recipe.py` instructions;
@@ -469,11 +598,7 @@ long session summary. Distinct from the other two logs:
   **structured steps** (step = text + optional sub-steps + hint + the
   ingredients/tools it uses). This is a recipe-model change that belongs in **C-4**
   (adjacent to its multi-part "sections"), not cook mode.
-- **Why deferred:** C-3 is a proposal; the model change is C-4's to own. Flagged so
-  C-4 picks it up if/when revisited.
-- **Recommended resolution:** fold a structured-steps model into the C-4 design
-  (it's listed as C-3 open decision 2 and cross-ref'd in `PROPOSAL_COOK_MODE.md
-  §2.6`). Cook mode degrades gracefully to freeform if a recipe has no structure.
+- **State note:** 2026-06-08 — resolved at the design level: C-3 DEC-2 chose "Structured steps in C-4 + remove ticks", and `PROPOSAL_COOKBOOK.md §2.6a` was added with the model (`RecipeStep`: text, sub_steps, hint, ingredient_refs, tool_refs), the editor + importer story, and a §6 sequencing slot (item 5a) flagging it as a blocker for C-3 highlight/per-step features. Freeform recipes degrade gracefully. Code implementation is still outstanding (no model migration written yet) — flip to a fresh implementation FU when work begins.
 
 ## [OPEN] FU-039 — Wire up `Recipe.image` (parallels StockItem.image)
 - **Raised:** 2026-06-06 (C-4 brief)

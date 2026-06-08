@@ -1,6 +1,6 @@
 # Proposal — Cook Mode Redesign (C-3)
 
-**Status:** Draft for discussion · **Date:** 2026-06-06 · Changes NO code.  
+**Status:** **Decisions resolved 2026-06-08** (see §5a) · brief otherwise unchanged · **Date drafted:** 2026-06-06 · Changes NO code.  
 **Scope:** Redesign cook mode — the finish-cooking loop, serving auto-adjust,
 location-grouped ingredients, tools, highlight-vs-tick, timer, unit formatting,
 the "sous chef" voice affordance, and a finish celebration. Ripples to recipes
@@ -176,6 +176,27 @@ No change; cross-reference only.
    quantities (round / fractions / show as-is)?
 5. **Finish-flow level controls** — per-item "set any level" (proposed) vs simpler
    "↓ one / Out / unchanged" quick choices only?
+
+---
+
+## 5a. Resolved decisions (2026-06-08)
+
+Decisions §5 closed out with the user. The canonical answers below override
+the "proposed" hints in §5.
+
+| # | Topic | Resolution |
+|---|---|---|
+| **DEC-1** | Ticking in cook mode | **Removed entirely.** Per-step highlight of the current step's ingredients/tools replaces tick boxes. No optional "mark done". |
+| **DEC-2** | Sub-steps / structured steps | **Model structured steps in C-4.** Recipe instructions become a list of `{ text, sub_steps?, hint?, ingredient_refs[], tool_refs[] }`. Cook mode renders steps richly when structured; degrades to one-step-per-line + text-matched highlight as the fallback for freeform recipes. **Closes FU-040.** C-3's per-step features (reliable highlight §2.4, per-step tools §2.5, per-step timers §2.7, per-step hints §2.6) are gated on this C-4 model change landing first. |
+| **DEC-3** | Quantity-unit attach list | **Metric + US customary attach (no space); culinary attaches with a space.** No-space units: `ml, g, kg, l, mg, oz, lb, floz, pt, qt`. Spaced (always): `tsp, tbsp, teaspoon, tablespoon, cup, cups, clove, cloves, scoop, scoops, slice, slices, …` (any word-shaped unit). User's framing: *"metric and US makes most sense; culinary like tsp/teaspoon should have a space."* |
+| **DEC-4** | Fractional scaled qty | **Round sensibly.** 1.5 eggs → 2 eggs; 0.66 cups → ⅔ cup (or "2/3 cup"); never show raw decimals. Cooking is forgiving (P1 Effortless). |
+| **DEC-5** | Finish-flow level picker | **Quick chips + full picker.** Each row carries chips "↓ one level / Out / Unchanged" plus a level-dropdown override. Fast for the common case, full control when needed. |
+
+**Sequencing impact:** DEC-2 promotes the C-4 structured-steps work to a
+*blocker* for C-3 sub-features §2.4/§2.5/§2.6/§2.7. Adjust the §6
+sequence accordingly: the C-4 step-model change lands before C-3 chunks 4
+(highlight) and onward. Chunk 1 (finish flow §2.1) and chunk 2 (polish
+§2.7–2.9) stay independent and can ship first.
 
 ---
 

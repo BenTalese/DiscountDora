@@ -8,7 +8,7 @@ shopping-list-scoped actions, not line-scoped.
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,6 +35,8 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 class CreateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, max_length=255)
+    # P6-01 Chunk 7. Optional shop day for this list.
+    planned_shop_date: date | None = None
 
 
 @dataclass(slots=True)
@@ -51,7 +53,11 @@ class CreateShoppingListHandler:
         # Default name = today's date — most users want a list-per-shop.
         # Auto-naming keeps the create UX one click.
         name = (request.name or "").strip() or now.strftime("%a %d %b")
-        new_list = ShoppingList(name=name, created_at=now)
+        new_list = ShoppingList(
+            name=name,
+            created_at=now,
+            planned_shop_date=request.planned_shop_date,
+        )
         self.repository.add(new_list)
         self.repository.save_changes()
         return CreateShoppingListResponse(shopping_list_id=new_list.id)
@@ -83,6 +89,9 @@ class UpdateShoppingListRequest(BaseModel):
     # also manages completed_at. Note: this is the plain status edit — the
     # restock-and-snapshot Finish flow lives in /finish, not here.
     status: str | None = None
+    # P6-01 Chunk 7. Pass an ISO date to set, or `null` (explicit) to clear.
+    # Field unset on the wire = leave the existing value alone.
+    planned_shop_date: date | None = None
 
 
 @dataclass(slots=True)
@@ -111,6 +120,9 @@ class UpdateShoppingListHandler:
                 lst.completed_at = datetime.now(timezone.utc)
             elif request.status != SHOPPING_LIST_STATUS_DONE:
                 lst.completed_at = None
+        # Chunk 7: explicit `null` clears the date; field absent = no change.
+        if "planned_shop_date" in set_fields:
+            lst.planned_shop_date = request.planned_shop_date
 
         self.repository.save_changes()
         return UpdateShoppingListResponse()

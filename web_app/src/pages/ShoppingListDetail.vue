@@ -1,7 +1,120 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
+            <!-- P6-01 Chunk 5 — list selector. The detail page is the
+                 canonical shopping-list surface; switching between lists
+                 happens here, not via a separate overview. Includes active
+                 and archived (separator), and a "+ New list" entry. -->
+            <q-btn-dropdown
+                :icon="ICONS.list_alt"
+                aria-label="Switch list"
+                flat
+                no-caps
+                dense
+                class="q-mr-sm"
+            >
+                <q-list dense style="min-width: 260px">
+                    <q-item clickable v-close-popup @click="newListOpen = true">
+                        <q-item-section avatar><q-icon :name="ICONS.add" color="primary" /></q-item-section>
+                        <q-item-section class="text-primary text-weight-medium">
+                            New list
+                        </q-item-section>
+                    </q-item>
+                    <q-separator />
+                    <template v-if="activeSummaries.length > 0">
+                        <q-item-label header class="q-pb-none">Active</q-item-label>
+                        <q-item
+                            v-for="s in activeSummaries"
+                            :key="s.shopping_list_id"
+                            clickable
+                            v-close-popup
+                            :active="s.shopping_list_id === listId"
+                            active-class="dora-bg-info-soft"
+                            @click="switchToList(s.shopping_list_id)"
+                        >
+                            <q-item-section avatar>
+                                <q-icon
+                                    :name="s.status === 'shopping' ? ICONS.shopping_cart_checkout : ICONS.list"
+                                    :color="s.status === 'shopping' ? 'positive' : 'primary'"
+                                />
+                            </q-item-section>
+                            <q-item-section>
+                                <q-item-label>{{ s.name }}</q-item-label>
+                                <q-item-label caption>
+                                    {{ s.line_count }} item{{ s.line_count === 1 ? '' : 's' }} ·
+                                    {{ s.ticked_count }} ticked
+                                </q-item-label>
+                            </q-item-section>
+                            <q-item-section side @click.stop>
+                                <q-btn flat round dense size="sm" :icon="ICONS.more_vert">
+                                    <q-menu auto-close anchor="bottom right" self="top right">
+                                        <q-list dense style="min-width: 200px">
+                                            <q-item
+                                                clickable
+                                                :disable="s.line_count - s.ticked_count === 0"
+                                                @click.stop="copyListUnticked(s)"
+                                            >
+                                                <q-item-section avatar><q-icon :name="ICONS.content_copy" /></q-item-section>
+                                                <q-item-section>Copy unticked → new</q-item-section>
+                                            </q-item>
+                                            <q-item clickable @click.stop="archiveSummary(s)">
+                                                <q-item-section avatar><q-icon :name="ICONS.archive" /></q-item-section>
+                                                <q-item-section>Archive list</q-item-section>
+                                            </q-item>
+                                            <q-item clickable @click.stop="deleteSummary(s)">
+                                                <q-item-section avatar><q-icon :name="ICONS.delete" color="negative" /></q-item-section>
+                                                <q-item-section class="text-negative">Delete list</q-item-section>
+                                            </q-item>
+                                        </q-list>
+                                    </q-menu>
+                                </q-btn>
+                            </q-item-section>
+                        </q-item>
+                    </template>
+                    <template v-if="archivedSummaries.length > 0">
+                        <q-separator />
+                        <q-item-label header class="q-pb-none">Archived</q-item-label>
+                        <q-item
+                            v-for="s in archivedSummaries"
+                            :key="s.shopping_list_id"
+                            clickable
+                            v-close-popup
+                            :active="s.shopping_list_id === listId"
+                            active-class="dora-bg-info-soft"
+                            @click="switchToList(s.shopping_list_id)"
+                        >
+                            <q-item-section avatar><q-icon :name="ICONS.archive" /></q-item-section>
+                            <q-item-section>
+                                <q-item-label>{{ s.name }}</q-item-label>
+                                <q-item-label caption>
+                                    Finished {{ s.completed_at ? formatDate(s.completed_at) : '' }}
+                                </q-item-label>
+                            </q-item-section>
+                            <q-item-section side @click.stop>
+                                <q-btn flat round dense size="sm" :icon="ICONS.more_vert">
+                                    <q-menu auto-close anchor="bottom right" self="top right">
+                                        <q-list dense style="min-width: 200px">
+                                            <q-item clickable @click.stop="copyListAll(s)">
+                                                <q-item-section avatar><q-icon :name="ICONS.content_copy" /></q-item-section>
+                                                <q-item-section>Copy archived → new</q-item-section>
+                                            </q-item>
+                                            <q-item clickable @click.stop="deleteSummary(s)">
+                                                <q-item-section avatar><q-icon :name="ICONS.delete" color="negative" /></q-item-section>
+                                                <q-item-section class="text-negative">Delete list</q-item-section>
+                                            </q-item>
+                                        </q-list>
+                                    </q-menu>
+                                </q-btn>
+                            </q-item-section>
+                        </q-item>
+                    </template>
+                    <q-separator v-if="activeSummaries.length > 0 || archivedSummaries.length > 0" />
+                    <q-item clickable v-close-popup to="/shopping-lists/templates">
+                        <q-item-section avatar><q-icon :name="ICONS.bookmarks" /></q-item-section>
+                        <q-item-section>Manage templates…</q-item-section>
+                    </q-item>
+                </q-list>
+            </q-btn-dropdown>
             <div class="q-ml-sm col">
                 <div class="text-h5">
                     <AppSkeleton
@@ -35,22 +148,21 @@
                     {{ tickedCount }} ticked ·
                     Created {{ formatDate(detail.created_at) }}
                     <span v-if="detail.status === 'done'"> · Archived</span>
+                    <!-- P6-01 Chunk 7 — inline planned-shop-date chip. Click
+                         to set / change / clear the planned day. The banner
+                         below also surfaces when it's today/tomorrow. -->
+                    ·
+                    <a
+                        href="#"
+                        class="dora-link"
+                        @click.prevent="openPlannedDateEditor"
+                    >
+                        {{ plannedShopLabel }}
+                    </a>
                 </div>
             </div>
 
-            <div v-if="detail && detail.status !== 'done'" class="row q-gutter-sm items-center">
-                <!-- P2-11 — drop into shop mode (mobile-first fullscreen
-                     view with big tap targets). Disabled on an empty
-                     list because there'd be nothing to step through. -->
-                <BaseButton
-                    variant="primary"
-                    :icon="ICONS.shopping_cart"
-                    label="Shop mode"
-                    :disable="detail.lines.length === 0"
-                    @click="openShopMode"
-                >
-                    <q-tooltip>Big-button, one-item-at-a-time view for in-store use</q-tooltip>
-                </BaseButton>
+            <div v-if="detail" class="row q-gutter-sm items-center">
                 <BaseButton
                     variant="icon"
                     :icon="ICONS.more_vert"
@@ -88,22 +200,6 @@
                                     <q-item-label>Refresh deals</q-item-label>
                                     <q-item-label caption>
                                         Re-check linked product offers
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                            <q-item
-                                clickable
-                                v-close-popup
-                                @click="onAppendLowEssentials"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.bolt" color="primary" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>Append low + essentials</q-item-label>
-                                    <q-item-label caption>
-                                        Top up this list with essential items
-                                        that are low or out of stock.
                                     </q-item-label>
                                 </q-item-section>
                             </q-item>
@@ -153,23 +249,6 @@
                             <q-item
                                 clickable
                                 v-close-popup
-                                :disable="tickedCount === 0"
-                                @click="onReviewComplete"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.fact_check" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>Finish review</q-item-label>
-                                    <q-item-label caption>
-                                        Mark every ticked item as Well-Stocked
-                                        (and stamp them as checked)
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                            <q-item
-                                clickable
-                                v-close-popup
                                 :disable="detail.lines.length === 0"
                                 @click="onExportCsv"
                             >
@@ -216,41 +295,31 @@
                         </q-list>
                     </q-menu>
                 </BaseButton>
+                <!-- One primary-action button per lifecycle phase:
+                     DRAFT → Start shopping → SHOPPING → Finish & restock → DONE → Reopen.
+                     SHOPPING is the shop-mode surface, reached via auto-redirect,
+                     so the SHOPPING-phase button doesn't render here. -->
                 <BaseButton
-                    variant="ghost"
-                    :icon="reviewMode ? 'visibility_off' : 'preview'"
-                    :label="reviewMode ? 'Exit review' : 'Review mode'"
-                    :disable="tickedCount === 0"
-                    @click="toggleReviewMode"
-                >
-                    <q-tooltip>
-                        Show only ticked items and preview what will restock
-                        when you finish.
-                    </q-tooltip>
-                </BaseButton>
-                <BaseButton
-                    v-if="detail.status !== 'shopping'"
+                    v-if="detail.status === 'draft'"
                     variant="primary"
-                    :icon="ICONS.play_arrow"
+                    :icon="ICONS.shopping_cart"
                     label="Start shopping"
+                    :disable="detail.lines.length === 0"
                     :loading="togglingProgress"
                     @click="onStartShopping"
-                />
+                >
+                    <q-tooltip>Switch to shop mode and tick items off as you grab them</q-tooltip>
+                </BaseButton>
                 <BaseButton
-                    v-else
-                    variant="ghost"
-                    :icon="ICONS.pause"
-                    label="Stop shopping"
-                    :loading="togglingProgress"
-                    @click="onStopShopping"
-                />
-                <BaseButton
+                    v-else-if="detail.status === 'done'"
                     variant="primary"
-                    :icon="ICONS.check_circle"
-                    label="Finish shopping"
-                    :loading="finishing"
-                    @click="onFinish"
-                />
+                    :icon="ICONS.undo"
+                    label="Reopen"
+                    :loading="reopening"
+                    @click="onReopen"
+                >
+                    <q-tooltip>Reopen this list to keep editing it; restock changes are reversed</q-tooltip>
+                </BaseButton>
             </div>
             <div v-else-if="detail" class="row q-gutter-sm">
                 <BaseButton
@@ -278,37 +347,30 @@
         </div>
 
         <div v-else-if="detail" key="sld-content">
-            <!-- In-progress banner — emphasises tick-mode + offers
-                 a one-click stop. The picker hides while in progress. -->
+            <!-- P6-01 Chunk 7 — shopping-day banner. Surfaces when the
+                 planned date is today (or has passed without finishing).
+                 Full alert-type wiring (push, suggestion feed) is C-9. -->
             <q-banner
-                v-if="detail.status === 'shopping'"
-                class="bg-primary dora-text-on-primary q-mb-md"
+                v-if="shoppingDayBanner"
+                dense
                 rounded
+                :class="shoppingDayBanner.tone === 'today' ? 'dora-bg-info-soft text-primary' : 'dora-bg-warning-soft'"
+                class="q-mb-md"
             >
                 <template #avatar>
-                    <q-icon :name="ICONS.shopping_cart_checkout" size="24px" />
+                    <q-icon :name="ICONS.event_note" />
                 </template>
-                <strong>Shopping in progress.</strong>
-                Tick items off as you grab them. The list is locked from edits.
+                {{ shoppingDayBanner.text }}
                 <template #action>
-                    <q-btn
-                        flat
-                        no-caps
-                        color="white"
-                        :icon="ICONS.pause"
-                        label="Stop shopping"
-                        :loading="togglingProgress"
-                        @click="onStopShopping"
-                    />
+                    <q-btn flat no-caps label="Edit" @click="openPlannedDateEditor" />
                 </template>
             </q-banner>
 
-            <!-- Add-item bar (hidden mid-shop and during review). The actual
-                 picker lives in <QuickAddSheet> so search, frequently-added
-                 suggestions and offer selection behave identically wherever
-                 they're triggered from. -->
+            <!-- Add-item bar (hidden mid-shop). The actual picker lives in
+                 <QuickAddSheet> so search, frequently-added suggestions and
+                 offer selection behave identically wherever it's triggered. -->
             <q-card
-                v-if="detail.status !== 'shopping' && !reviewMode"
+                v-if="detail.status !== 'shopping'"
                 flat
                 bordered
                 class="q-mb-md"
@@ -784,45 +846,6 @@
                 </div>
             </template>
 
-            <!-- Review-mode preview: what will bump to Well-Stocked on
-                 finish, so the user can sanity-check before archiving. -->
-            <q-card
-                v-if="reviewMode && detail.lines.length > 0"
-                flat
-                bordered
-                class="q-mt-md dora-bg-info-soft"
-            >
-                <q-card-section>
-                    <div class="row items-center q-mb-sm">
-                        <q-icon :name="ICONS.preview" class="q-mr-sm" />
-                        <div class="text-subtitle1">
-                            Review — {{ tickedCount }} item{{ tickedCount === 1 ? '' : 's' }} ready to finish
-                        </div>
-                    </div>
-                    <div v-if="tickedCount === 0" class="dora-text-muted">
-                        Nothing is ticked yet — tick the items you've actually
-                        picked up to preview what will restock.
-                    </div>
-                    <div v-else>
-                        <div class="text-caption dora-text-muted q-mb-xs">
-                            These items will be bumped to <strong>Well-Stocked</strong>
-                            when you finish:
-                        </div>
-                        <div class="row q-gutter-xs">
-                            <template
-                                v-for="line in tickedLines"
-                                :key="line.line_id"
-                            >
-                                <StockItemChip
-                                    v-if="stockItemFor(line.stock_item_id)"
-                                    :stock-item="stockItemFor(line.stock_item_id)!"
-                                />
-                            </template>
-                        </div>
-                    </div>
-                </q-card-section>
-            </q-card>
-
             <!-- Totals -->
             <q-card v-if="detail.lines.length > 0" flat bordered class="q-mt-md">
                 <q-card-section class="row items-center q-gutter-md">
@@ -851,6 +874,55 @@
             </q-card>
         </div>
         </FadeTransition>
+
+        <!-- P6-01 Chunk 5 — the New-list dialog lives on the detail page now
+             that Detail is the canonical surface. The router landing page
+             also mounts this dialog for the no-lists empty state. -->
+        <NewListDialog
+            v-model="newListOpen"
+            @created="onListCreated"
+        />
+
+        <!-- P6-01 Chunk 7 — planned-shop-date editor. Sets/changes/clears
+             the planned day for this list. Sort + banner + landing pick
+             all read from it. -->
+        <BaseDialog v-model="plannedDateOpen" card-style="min-width: 280px">
+            <q-card-section>
+                <div class="text-h6">Plan this shop for</div>
+                <div class="text-caption dora-text-muted">
+                    Sets which list opens first on shopping day, and
+                    surfaces a banner when the day arrives.
+                </div>
+            </q-card-section>
+            <q-card-section>
+                <q-input
+                    v-model="plannedDateDraft"
+                    type="date"
+                    outlined
+                    dense
+                    autofocus
+                    label="Shop day"
+                    clearable
+                    @keydown.enter.prevent="savePlannedDate"
+                />
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    v-if="detail?.planned_shop_date"
+                    variant="ghost"
+                    label="Clear"
+                    class="text-negative"
+                    @click="clearPlannedDate"
+                />
+                <BaseButton
+                    variant="primary"
+                    label="Save"
+                    :disable="!plannedDateDraft"
+                    @click="savePlannedDate"
+                />
+            </q-card-actions>
+        </BaseDialog>
     </q-page>
 </template>
 
@@ -858,14 +930,15 @@
     import { ICONS } from 'src/style/icons';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
+    import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import { useQuasar } from 'quasar';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { notifyUndoable } from 'src/composables/useNotifyUndoable';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
-    import StocktakeApiService from 'src/services/api/stocktakeApiService';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { register as registerUndo } from 'src/composables/useUndo';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
@@ -874,7 +947,8 @@
         priceOfLine,
         type LineProductOffer,
         type ShoppingListDetail,
-        type ShoppingListLine
+        type ShoppingListLine,
+        type ShoppingListSummary
     } from 'src/models/shoppingList';
     import type { StockItem } from 'src/models/stockItem';
     import type { Substitute } from 'src/models/stockItemDetail';
@@ -918,27 +992,19 @@
         { value: 'merchant', label: 'Merchant' },
     ];
 
-    // Review mode: hides unticked lines and surfaces the bump-to-Well-Stocked
-    // preview so the user can sanity-check before pulling the trigger on
-    // Finish shopping.
-    const reviewMode = ref(false);
-    function toggleReviewMode() {
-        reviewMode.value = !reviewMode.value;
-    }
-
     // ── Start/stop shopping ───────────────────────────────────────────
     const togglingProgress = ref(false);
+    const reopening = ref(false);
 
     async function onStartShopping() {
         togglingProgress.value = true;
         try {
             await api.startShoppingAsync(listId.value);
-            await load();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Shopping started. Tick items off as you go.',
-            });
+            // SHOPPING is the shop-mode surface — route there directly so
+            // the user lands in the in-store view without an intermediate
+            // page flash here. The status watcher below also covers the
+            // case where the status flips elsewhere (assistant action, etc).
+            void router.replace(`/shopping-lists/${listId.value}/shop`);
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -951,20 +1017,29 @@
         }
     }
 
-    async function onStopShopping() {
-        togglingProgress.value = true;
+    async function onReopen() {
+        if (!detail.value) return;
+        reopening.value = true;
         try {
-            await api.stopShoppingAsync(listId.value);
-            await load();
+            await api.unfinishAsync(listId.value);
+            await Promise.all([
+                refreshAll(),
+                stockItemStore.getStockItemsAsync(),
+            ]);
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Reopened. Restock changes reversed.',
+            });
         } catch (err) {
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not stop shopping.',
+                message: 'Could not reopen.',
                 caption: describeApiError(err) || '',
             });
         } finally {
-            togglingProgress.value = false;
+            reopening.value = false;
         }
     }
 
@@ -1032,7 +1107,6 @@
             && detail.value.status !== 'shopping'
             && groupBy.value === 'none'
             && !bulkMode.value
-            && !reviewMode.value
     );
 
     const dragLineId = ref<string | null>(null);
@@ -1064,17 +1138,21 @@
         if (!draggedId || draggedId === targetLineId || !detail.value) return;
         event.preventDefault();
 
-        // Build the new ordering: take the current line ids, remove the
-        // dragged one, re-insert it before the target.
+        // Build the new ordering. P6-01 Chunk 6 / feedback L414 — the old
+        // logic subtracted 1 when dragging down, which left the dropped
+        // line one row *before* the drag-over target (the "off-by-one"
+        // bug). The user's mental model is: the dropped line lands at the
+        // visual slot of the row they dragged over. Achieve that by
+        // inserting at `toIdx` (the target's original DOM index) in every
+        // case — for downward drags the target shifts up to make room,
+        // for upward drags the target shifts down.
         const lines = detail.value.lines;
         const ids = lines.map((l) => l.line_id);
         const fromIdx = ids.indexOf(draggedId);
         const toIdx = ids.indexOf(targetLineId);
         if (fromIdx < 0 || toIdx < 0) return;
         ids.splice(fromIdx, 1);
-        // If we removed before the target, the target index shifts back by 1.
-        const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
-        ids.splice(insertAt, 0, draggedId);
+        ids.splice(toIdx, 0, draggedId);
 
         // Optimistic local update so the UI reflects the move immediately.
         const lookup = new Map(lines.map((l) => [l.line_id, l]));
@@ -1113,10 +1191,7 @@
         return line.stock_location_breadcrumb.join(' › ');
     }
 
-    const baseLines = computed(() => {
-        const lines = detail.value?.lines ?? [];
-        return reviewMode.value ? lines.filter((l) => l.is_ticked) : lines;
-    });
+    const baseLines = computed(() => detail.value?.lines ?? []);
 
     const lineGroups = computed<LineGroup[]>(() => {
         const lines = baseLines.value;
@@ -1205,8 +1280,227 @@
         }
     }
 
-    function goBack() {
-        void router.push('/shopping-lists');
+    // ── Planned shop date (Chunk 7) ──────────────────────────────────
+    // Display label + banner + edit dialog. Banner only fires on lists
+    // that aren't archived — a done list's planned date is historical.
+    const plannedDateOpen = ref(false);
+    const plannedDateDraft = ref<string | null>(null);
+
+    function todayIso(): string {
+        return new Date().toISOString().slice(0, 10);
+    }
+    function tomorrowIso(): string {
+        const t = new Date();
+        t.setDate(t.getDate() + 1);
+        return t.toISOString().slice(0, 10);
+    }
+    function daysFromToday(iso: string): number {
+        const a = new Date(`${todayIso()}T00:00:00`);
+        const b = new Date(`${iso}T00:00:00`);
+        return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+    }
+
+    const plannedShopLabel = computed(() => {
+        const d = detail.value?.planned_shop_date ?? null;
+        if (!d) return 'No shop day';
+        if (d === todayIso()) return 'Shop day: today';
+        if (d === tomorrowIso()) return 'Shop day: tomorrow';
+        const days = daysFromToday(d);
+        if (days < 0) return `Shop day: ${formatDate(d)} (overdue)`;
+        return `Shop day: ${formatDate(d)}`;
+    });
+
+    const shoppingDayBanner = computed<{ text: string; tone: 'today' | 'overdue' } | null>(() => {
+        const d = detail.value?.planned_shop_date ?? null;
+        if (!d || detail.value?.status === 'done') return null;
+        if (d === todayIso()) {
+            return { text: 'Shopping day is today.', tone: 'today' };
+        }
+        if (daysFromToday(d) < 0) {
+            return { text: `Planned shop day was ${formatDate(d)} — still unfinished.`, tone: 'overdue' };
+        }
+        return null;
+    });
+
+    function openPlannedDateEditor() {
+        plannedDateDraft.value = detail.value?.planned_shop_date ?? null;
+        plannedDateOpen.value = true;
+    }
+
+    async function savePlannedDate() {
+        if (!detail.value || !plannedDateDraft.value) return;
+        const next = plannedDateDraft.value;
+        try {
+            await api.updateAsync(listId.value, { planned_shop_date: next });
+            await Promise.all([load(), store.refreshAsync()]);
+            plannedDateOpen.value = false;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save shop day.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    async function clearPlannedDate() {
+        if (!detail.value) return;
+        try {
+            await api.updateAsync(listId.value, { planned_shop_date: null });
+            await Promise.all([load(), store.refreshAsync()]);
+            plannedDateOpen.value = false;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not clear shop day.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    // ── List selector (Chunk 5) ──────────────────────────────────────
+    // Detail is now the canonical surface — the dropdown next to the title
+    // is the user's "go look at a different list" affordance, with per-list
+    // archive/delete/copy actions inline (the old overview's kebab moved
+    // here). The proposal eventually wants this as a desktop right-panel
+    // and mobile dropdown; for Chunk 5 a single dropdown carries both.
+    const newListOpen = ref(false);
+
+    const activeSummaries = computed(() =>
+        store.summaries
+            .filter((s) => s.status !== 'done')
+            // SHOPPING first, then by planned_shop_date (asc, scheduled
+            // lists ahead of unscheduled — Chunk 7), then by created_at
+            // desc as a final tiebreak.
+            .slice()
+            .sort((a, b) => {
+                if (a.status !== b.status) {
+                    if (a.status === 'shopping') return -1;
+                    if (b.status === 'shopping') return 1;
+                }
+                const aDate = a.planned_shop_date;
+                const bDate = b.planned_shop_date;
+                if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
+                if (aDate && !bDate) return -1;
+                if (!aDate && bDate) return 1;
+                return (b.created_at ?? '').localeCompare(a.created_at ?? '');
+            }),
+    );
+    const archivedSummaries = computed(() =>
+        store.summaries
+            .filter((s) => s.status === 'done')
+            .slice()
+            .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '')),
+    );
+
+    function switchToList(id: string) {
+        if (id === listId.value) return;
+        void router.push(`/shopping-lists/${id}`);
+    }
+
+    function onListCreated({ listId: newId }: { listId: string }) {
+        void store.refreshAsync();
+        switchToList(newId);
+    }
+
+    // Per-list actions, moved from the old Overview kebab.
+    async function archiveSummary(s: ShoppingListSummary) {
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: `Archive "${s.name}"?`,
+                message:
+                    'Archived lists are read-only and move to the Archived section. '
+                    + 'No stock levels are bumped — use Finish & restock for that.',
+                ok: { label: 'Archive', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        try {
+            await api.updateAsync(s.shopping_list_id, { status: 'done' });
+            await store.refreshAsync();
+            if (s.shopping_list_id === listId.value) await load();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'List archived.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not archive.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    async function deleteSummary(s: ShoppingListSummary) {
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: `Delete "${s.name}"?`,
+                message: 'This permanently removes the list and all its items.',
+                ok: { label: 'Delete', color: 'negative', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        try {
+            await api.deleteAsync(s.shopping_list_id);
+            await store.refreshAsync();
+            // If we deleted the list we're currently viewing, bounce to the
+            // landing — it'll pick the next sensible target.
+            if (s.shopping_list_id === listId.value) {
+                void router.replace('/shopping-lists');
+                return;
+            }
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'List deleted.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not delete.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
+    async function copyListUnticked(s: ShoppingListSummary) {
+        await copySummary(s, 'unticked');
+    }
+    async function copyListAll(s: ShoppingListSummary) {
+        await copySummary(s, 'all');
+    }
+    async function copySummary(s: ShoppingListSummary, include: 'all' | 'unticked') {
+        try {
+            const { shopping_list_id } = await api.copyAsync(s.shopping_list_id, { include });
+            await store.refreshAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'List copied.',
+            });
+            void router.push(`/shopping-lists/${shopping_list_id}`);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not copy.',
+                caption: describeApiError(err) || '',
+            });
+        }
     }
 
     async function load() {
@@ -1263,12 +1557,17 @@
         openQuickAdd({ listId: listId.value });
     }
 
-    // P2-11 — drop into shop mode. Just a router push; the shop-mode
-    // page loads its own copy of the detail so the user can hit it
-    // directly from a PWA shortcut without bouncing through here.
-    function openShopMode() {
-        void router.push(`/shopping-lists/${listId.value}/shop`);
-    }
+    // Status watcher: SHOPPING phase IS the shop-mode surface — when a list
+    // becomes SHOPPING, route to it. Covers status flips from any path
+    // (assistant action, another tab, the start-shopping button, etc.).
+    watch(
+        () => detail.value?.status,
+        (status) => {
+            if (status === 'shopping') {
+                void router.replace(`/shopping-lists/${listId.value}/shop`);
+            }
+        },
+    );
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
     const orderedLines = computed(() => lineGroups.value.flatMap((g) => g.lines));
@@ -1717,6 +2016,19 @@
     async function onFinish() {
         if (!detail.value) return;
         const unticked = detail.value.lines.length - tickedCount.value;
+        const ticked = tickedCount.value;
+
+        // Fold the old standalone "review mode" into the finish confirmation:
+        // the dialog lists the ticked items that will be bumped to Well-Stocked
+        // so the user sees exactly what restocks before they confirm.
+        const tickedNames = tickedLines.value
+            .map((l) => l.stock_item_name)
+            .slice(0, 8);
+        const tickedSummary = ticked === 0
+            ? 'No items are ticked — nothing will be restocked.'
+            : `${ticked} item${ticked === 1 ? '' : 's'} will be bumped to ` +
+              `Well-Stocked: ${tickedNames.join(', ')}` +
+              (ticked > tickedNames.length ? `, and ${ticked - tickedNames.length} more.` : '.');
 
         // When there are unticked items, give the user a three-way choice:
         //   - Cancel
@@ -1726,8 +2038,9 @@
         if (unticked > 0) {
             const choice = await new Promise<'copy' | 'finish' | null>((resolve) => {
                 $q.dialog({
-                    title: 'Finish shopping?',
+                    title: 'Finish & restock?',
                     message:
+                        `${tickedSummary}\n\n` +
                         `${unticked} unticked item${unticked === 1 ? '' : 's'} ` +
                         `${unticked === 1 ? 'is' : 'are'} still on this list. ` +
                         `Copy ${unticked === 1 ? 'it' : 'them'} to a new active list, ` +
@@ -1746,7 +2059,7 @@
                             },
                         ],
                     },
-                    ok: { label: 'Finish', color: 'positive', noCaps: true },
+                    ok: { label: 'Finish & restock', color: 'positive', noCaps: true },
                     cancel: { noCaps: true },
                 })
                     .onOk((value: 'copy' | 'finish') => resolve(value || 'finish'))
@@ -1758,10 +2071,9 @@
         } else {
             const ok = await new Promise<boolean>((resolve) => {
                 $q.dialog({
-                    title: 'Finish shopping?',
-                    message:
-                        'Archives the list and resets ticked items\' stock level to Well-Stocked.',
-                    ok: { label: 'Finish', color: 'positive', noCaps: true },
+                    title: 'Finish & restock?',
+                    message: `${tickedSummary}\n\nThe list is then archived.`,
+                    ok: { label: 'Finish & restock', color: 'positive', noCaps: true },
                     cancel: { noCaps: true },
                 })
                     .onOk(() => resolve(true))
@@ -1861,38 +2173,6 @@
         )
     );
 
-    // X5 — "Append low + essentials" routes through the dedicated endpoint
-    // so the list grows with the same dedupe semantics as auto-generate.
-    async function onAppendLowEssentials() {
-        try {
-            const result = await api.appendLowStockEssentialsAsync(listId.value);
-            await load();
-            if (result.nothing_to_add) {
-                $q.notify({
-                    type: 'info',
-                    position: 'bottom-right',
-                    message:
-                        'Nothing to append — no essentials are low or out of stock.',
-                });
-                return;
-            }
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Appended ${result.added_count} item${
-                    result.added_count === 1 ? '' : 's'
-                }.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not append items.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
-
     function addedViaLabel(via: string): string {
         switch (via) {
             case 'auto_low_stock':
@@ -1941,39 +2221,6 @@
     // Export actions — both pull from the shared composable so this page
     // and ExportPrint.vue stay in lockstep on URL shape and filename.
     const exportActions = useShoppingListExport();
-
-    // X1: "Finish review" — bulk-mark ticked items as Well-Stocked.
-    const stocktakeApi = new StocktakeApiService();
-    async function onReviewComplete() {
-        if (tickedCount.value === 0) return;
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: 'Finish review?',
-                message:
-                    `Mark all ${tickedCount.value} ticked item(s) as `
-                    + `Well-Stocked and stamp them as checked?`,
-                ok: { label: 'Finish', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false));
-        });
-        if (!ok) return;
-        try {
-            const result = await stocktakeApi.reviewCompleteAsync(listId.value, true);
-            await refreshAll();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Marked ${result.set_well_stocked} item(s) as Well-Stocked.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't finish review.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
 
     function onExportCsv() {
         void exportActions.downloadCsv(listId.value);

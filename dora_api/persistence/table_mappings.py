@@ -184,6 +184,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("completed_at", DateTime(timezone=True), nullable=True),
         # JSON snapshot of what /finish changed, for server-owned Reopen.
         Column("finish_snapshot", String, nullable=True),
+        # P6-01 Chunk 7. Optional shop day the user is planning this list
+        # for. Nullable because most lists don't have one — null reads as
+        # "no shop day set", not "today".
+        Column("planned_shop_date", Date, nullable=True),
     )
 
     shopping_list_line_table = Table(

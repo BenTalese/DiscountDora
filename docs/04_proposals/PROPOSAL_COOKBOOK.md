@@ -1,6 +1,6 @@
 # Proposal — Recipes / Cookbook Redesign (C-4)
 
-**Status:** Draft for discussion · **Date drafted:** 2026-06-06 · **§2.6a Structured steps added 2026-06-08** (closes FU-040; pulled in from C-3 DEC-2) · Changes NO code.  
+**Status:** **Decisions resolved 2026-06-08** (see §5a) · **§2.6a Structured steps added 2026-06-08** (closes FU-040; pulled in from C-3 DEC-2) · **Date drafted:** 2026-06-06 · Changes NO code.  
 **Scope:** Redesign the recipe domain (post meals→recipes merge): naming, tags,
 images, versions, multi-part recipes, tools, source, cost, nutrition, the card,
 filters, and the detail page. **Recipe comparison is CUT per INV-6.** Heavy ripple
@@ -272,6 +272,35 @@ L252) are moot once cut.
    math caveat? (§2.8)
 6. **Substitute "status"** (L300) — add an "available substitutes" status, or skip
    as over-complication (proposed skip)? (§2.13)
+
+---
+
+## 5a. Resolved decisions (2026-06-08)
+
+Decisions §5 closed out with the user. The answers below override the
+"Proposed" hints in §5 and §2 narratives.
+
+| # | Topic | Resolution |
+|---|---|---|
+| **DEC-1** | Cuisine vs category fate | **Keep both as single-selects.** Recipe carries one `cuisine` and one `category`; both vocabularies user-configurable in settings (C-cross). Multi-select rejected. No collapse. |
+| **DEC-2** | Versions UX | **"New version" = renamed Duplicate.** Creating a version copies the recipe into a new standalone recipe linked to the original via a shared `version_group_id`. No "current" pointer — versions are equal siblings, not historic. The recipe detail page lists linked versions; clicking opens the sibling. Deleting a version removes only that recipe (the group dissolves naturally if it leaves one or zero entries). **Allocations stay per-recipe** — when meal-planning "Fried Rice", the user picks a specific version-recipe; the link is a discovery affordance, not allocation magic. User's framing: *"different versions of fried rice — they're all equal, it's not historic."* |
+| **DEC-3** | Multi-part model | **Sections within one recipe (option A).** Named ingredient/step groups inside one recipe. Linked sub-recipes (option B) deferred — log as a finding when there's real-world signal that section reuse matters. |
+| **DEC-4** | Nutrition scope | **Off + simple now; complex deferred.** Simple = one kcal field per recipe, sortable. Complex (auto-derived from stock-item nutrition data) waits until the quantity→nutrition math is solved elsewhere. |
+| **DEC-5** | Cost estimate | **Ship as labelled estimate.** Compute from linked-product prices + receipts; render with a clear "estimate" badge so users don't read it as gospel. Behind the money opt-in (C-cross). |
+| **DEC-6** | Substitute "status" | **Skip.** Adding an "available substitutes" status on cookable rows would re-add the complexity the user is asking to remove. Cook mode keeps the B8 session-only swap; the recipe detail keeps the simple substitutes-list affordance. |
+
+**Sequencing impact:**
+
+- DEC-2 changes the data shape from the brief's "snapshot + pointer" to a
+  flatter "siblings via `version_group_id`" model. §2.4 narrative still
+  applies in spirit (the New Version action replaces Duplicate); the
+  implementation is simpler than the brief implied. Reflected in
+  `IMPL_PLAN_COOKBOOK.md` Chunk for versions.
+- DEC-3 confirms sections-first; the §6 sequencing already had multi-part
+  sections as the last chunk and that holds.
+- DEC-4 / DEC-5 / DEC-6 confirm the brief's anti-creep defaults — the
+  smaller features ship behind opt-ins (cost / nutrition) or get skipped
+  (substitute status).
 
 ---
 

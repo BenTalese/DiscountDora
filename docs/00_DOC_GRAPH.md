@@ -917,6 +917,54 @@ Then the per-prompt list below.
 - **Cross-prompt dependencies:** depends on state-ownership impl
   landing first; consumed by C-7.
 
+### IMPL — Cookbook → `IMPL_PLAN_COOKBOOK.md`
+- **Surface:** recipe domain (overview filters, card, detail, versions,
+  tools, images, source, structured steps, sections, cost, nutrition)
+- **Produces:** `04_proposals/IMPL_PLAN_COOKBOOK.md`.
+- **Charter principles:** P1 Effortless · P5 Loop (recipes = loop's hub) ·
+  P10 Anti-creep (opt-in money/nutrition; comparison cut; substitute
+  status skipped).
+- **Feedback bullets:** all of `§RECIPES OVERVIEW` + `§RECIPE DETAIL`
+  (L228-L315).
+- **Related proposals:** source proposal `04_proposals/PROPOSAL_COOKBOOK.md`
+  (decisions resolved §5a 2026-06-08); `04_proposals/PROPOSAL_COOK_MODE.md`
+  (C-3 consumes Chunk 6 structured steps + Chunk 5 tools);
+  `04_proposals/PROPOSAL_CART_BUTTON.md` (C-7 on ingredient rows L288);
+  `04_proposals/IMPL_PLAN_STATE_OWNERSHIP.md` (cookability source-of-truth
+  lands ahead).
+- **Related investigations:** `05_investigations/RECIPE_COMPARISON_ASSESSMENT.md`
+  (INV-6 — drives Chunk 1 comparison cut).
+- **Original spec:** `00_original_spec/Feature Boards/Recipes.md`.
+- **Open follow-ups:** **FU-039** (resolved by Chunk 5); **FU-040**
+  (resolved 2026-06-08 — structured steps in Chunk 6); **FU-078**
+  (resolved 2026-06-08 — this doc).
+- **Removed-features watchlist:** **recipe comparison** (Chunk 1 cuts it,
+  per INV-6).
+- **Cross-prompt dependencies:** Chunk 6 **blocks** C-3 Chunk 5; Chunk 2
+  + Chunk 5 + Chunk 9 depend on C-cross config surface (vocabularies +
+  opt-ins); Chunks 4 + 7 consume A3 modal, A4 filter, A7 footer when they
+  land.
+
+### IMPL — Cook Mode → `IMPL_PLAN_COOK_MODE.md`
+- **Surface:** cook mode page + recipe step model (C-4 ripple)
+- **Produces:** `04_proposals/IMPL_PLAN_COOK_MODE.md`.
+- **Charter principles:** P5 Loop (closes cook→consume) · P1 Effortless ·
+  P6 One-action · P7 Preview/undo (finish dialog is preview→commit).
+- **Feedback bullets:** all of `§COOK MODE` (L317-L338).
+- **Related proposals:** source proposal
+  `04_proposals/PROPOSAL_COOK_MODE.md` (decisions resolved §5a);
+  `04_proposals/PROPOSAL_COOKBOOK.md` §2.6a (structured steps —
+  co-sequenced as Chunk 4); `04_proposals/PROPOSAL_CART_BUTTON.md`
+  (C-7 consumer at finish row).
+- **Related investigations:** none direct.
+- **Original spec:** `00_original_spec/Feature Boards/Recipes.md`.
+- **Open follow-ups:** **FU-077** (resolved 2026-06-08 — this doc is
+  what closes it).
+- **Removed-features watchlist:** none.
+- **Cross-prompt dependencies:** Chunk 5 blocked on Chunk 4 (C-4
+  structured steps); Chunk 6 depends on C-5 onboarding headcount;
+  Chunk 1 consumes C-7 cart button when available.
+
 ### IMPL — State ownership → `IMPL_PLAN_STATE_OWNERSHIP.md`
 - **Surface:** server-owned domain facts (stock status, cookable,
   offer snapshots)
@@ -954,8 +1002,10 @@ When implementing a proposal, read every doc in the right-hand column first.
 |---|---|
 | `PROPOSAL_STOCK_OVERVIEW.md` | A2, A4, A7 prompts · `PROPOSAL_CART_BUTTON.md` · `PROPOSAL_BARCODE_SCANNING.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` + `IMPL_PLAN_STATE_OWNERSHIP.md` · `STOCK_OVERVIEW_PERF.md` · `ORPHANED_FIELDS_AUDIT.md` · `ESSENTIAL_FLAG_FINDINGS.md` · FU-035, FU-033, FU-050 |
 | `PROPOSAL_MEAL_PLANS.md` | `PROPOSAL_COOKBOOK.md` · `PROPOSAL_COOK_MODE.md` · `SHOPPING_LIST_REDESIGN_PROPOSAL.md` + `IMPL_PLAN_SHOPPING_LISTS.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `IMPL_PLAN_STATE_OWNERSHIP.md` · FU-032, FU-049 |
-| `PROPOSAL_COOK_MODE.md` | `PROPOSAL_COOKBOOK.md` · `PROPOSAL_ONBOARDING.md` · `PROPOSAL_CART_BUTTON.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · FU-040 (structured steps) |
-| `PROPOSAL_COOKBOOK.md` | `RECIPE_COMPARISON_ASSESSMENT.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `PROPOSAL_MEAL_PLANS.md` · `PROPOSAL_COOK_MODE.md` · `ORPHANED_FIELDS_AUDIT.md` · FU-039, FU-040 |
+| `PROPOSAL_COOK_MODE.md` | `PROPOSAL_COOKBOOK.md` (esp. §2.6a structured steps) · `PROPOSAL_ONBOARDING.md` · `PROPOSAL_CART_BUTTON.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `IMPL_PLAN_COOK_MODE.md` (chunking + DEC resolutions) · FU-040 (RESOLVED — structured steps now in C-4) |
+| `PROPOSAL_COOKBOOK.md` | `RECIPE_COMPARISON_ASSESSMENT.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `PROPOSAL_MEAL_PLANS.md` · `PROPOSAL_COOK_MODE.md` · `IMPL_PLAN_COOKBOOK.md` (chunking + DEC resolutions) · `IMPL_PLAN_COOK_MODE.md` (Chunk 6 = C-4 §2.6a structured steps, must land before C-3 Chunk 5) · `ORPHANED_FIELDS_AUDIT.md` · FU-039 |
+| `IMPL_PLAN_COOK_MODE.md` | `PROPOSAL_COOK_MODE.md` (§5a resolved decisions) · `PROPOSAL_COOKBOOK.md` §2.6a · `IMPL_PLAN_COOKBOOK.md` (Chunk 6 sequencing) · `PROPOSAL_CART_BUTTON.md` · `PROPOSAL_ONBOARDING.md` (Chunk 6 headcount default) · A1 theme tokens · A3 modal standard · B8 (substitute swaps kept) |
+| `IMPL_PLAN_COOKBOOK.md` | `PROPOSAL_COOKBOOK.md` (§5a resolved decisions) · `IMPL_PLAN_COOK_MODE.md` (Chunk 6 of this plan blocks Chunk 5 of that one) · `RECIPE_COMPARISON_ASSESSMENT.md` (INV-6 drives Chunk 1) · `PROPOSAL_CART_BUTTON.md` (C-7 on ingredient rows) · `IMPL_PLAN_STATE_OWNERSHIP.md` (cookability) · A1/A3/A4/A7/A8 prompt outputs · B3 PATCH semantics · B8 substitute swaps · C-cross config surface |
 | `PROPOSAL_ONBOARDING.md` | `PROPOSAL_CONFIG_AND_OPTINS.md` · `PROPOSAL_HELP_OVERLAY.md` · `PROPOSAL_COOK_MODE.md` · `EMAIL_SETUP_FINDINGS.md` · FU-041, FU-015 |
 | `PROPOSAL_CART_BUTTON.md` | `SHOPPING_LIST_REDESIGN_PROPOSAL.md` + `IMPL_PLAN_SHOPPING_LISTS.md` · `IMPL_PLAN_STATE_OWNERSHIP.md` · A2 (BaseButton) · FU-038 |
 | `PROPOSAL_ALERTS.md` | `PROPOSAL_CONFIG_AND_OPTINS.md` · `IMPL_PLAN_STATE_OWNERSHIP.md` · FU-042 |

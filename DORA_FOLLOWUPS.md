@@ -39,12 +39,29 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
-## [OPEN] FU-077 — Write IMPL plan for C-3 cook-mode
+## [OPEN] FU-079 — Confirm hotfix resolves the blank-screen report
+- **Raised:** 2026-06-08 (user reported blank screen on /shopping-lists with no console errors)
+- **Type:** follow-up
+- **What:** A hotfix landed in this session: Overview + Detail now surface `loadError` via banners with Retry buttons, the store explicitly `console.error`s API failures, Detail's FadeTransition gained a v-else "list isn't available" fallback so the content area is never blank, and three lint errors were cleared (duplicate v-else-if, dead `onFinish`, floating-promise on Esc).
+  - **Leading suspect for the original blank screen:** the `e1a4c7b2f9d0` migration (Chunk 7 `planned_shop_date` column) was not applied on the user's Linux machine. The API's `SELECT` on `ShoppingList` would 500 with "no such column"; the store caught silently; the UI rendered nothing.
+- **Recommended resolution:**
+  1. Pull the hotfix.
+  2. `alembic upgrade head` to apply `e1a4c7b2f9d0`.
+  3. Restart the API + Quasar dev.
+  4. Navigate to `/shopping-lists`. Confirm: either the redirect to a list works, or the new red banner shows an actual error message (no more blank).
+  5. Open the browser dev console — any `[shoppingListStore] refreshAsync failed` lines surface what's actually broken.
+
+## [RESOLVED] FU-078 — Write IMPL plan for C-4 cookbook
+- **Raised:** 2026-06-08 (after FU-077 closed)
+- **Type:** follow-up
+- **What:** Natural next document after the C-4 design decisions closed (PROPOSAL_COOKBOOK §5a) — chunked IMPL plan mirroring `IMPL_PLAN_SHOPPING_LISTS.md` and `IMPL_PLAN_COOK_MODE.md`. Bigger than C-3 (nine design sections, ~10 chunks expected).
+- **State note:** 2026-06-08 — wrote `docs/04_proposals/IMPL_PLAN_COOKBOOK.md` (10 chunks + verify-state, first-chunk DoD, risks, feedback coverage, run order). All 6 open decisions had been closed in PROPOSAL_COOKBOOK §5a beforehand; DEC-2 deviated meaningfully from the brief (siblings via `version_group_id` instead of snapshot+pointer) and the plan reflects the user's flatter model. Wired into the doc-graph (new C-impl row + cross-map row).
+
+## [RESOLVED] FU-077 — Write IMPL plan for C-3 cook-mode
 - **Raised:** 2026-06-08 (C-3 decision pass)
 - **Type:** follow-up
 - **What:** With C-3's open decisions resolved (`PROPOSAL_COOK_MODE.md §5a`) and the structured-steps dependency homed in C-4 (`PROPOSAL_COOKBOOK.md §2.6a`), the natural next document is an implementation plan mirroring `IMPL_PLAN_SHOPPING_LISTS.md` — chunked, self-contained, no code. Chunks suggested by C-3 §6 + §5a: (1) finish-flow + click-out + celebration + meals-cooked-from-zero, (2) timer polish + unit fix + sous-chef discoverability, (3) location grouping + ingredient-UI rebuild, (4) structured-steps (lives in C-4 but lands as a co-sequenced cook-mode-blocker), (5) highlight-instead-of-tick + per-step tools + per-step hints + per-step timers, (6) serving auto-adjust (gated on C-5 onboarding default).
-- **Why deferred:** the IMPL plan is its own self-contained document; producing it now would have doubled the C-3 turn. Better to land it as a focused next session.
-- **Recommended resolution:** opportunistic, before the first C-3 implementation chunk runs.
+- **State note:** 2026-06-08 — wrote `docs/04_proposals/IMPL_PLAN_COOK_MODE.md` (6 chunks + verify-state, first-chunk DoD, risks, feedback coverage, run-order). Wired into the doc-graph (new C-impl row + cross-map row for the IMPL plan). Open decisions all closed in PROPOSAL_COOK_MODE §5a; no co-design questions remain for the implementation phase.
 
 ## [OPEN] FU-076 — P6-01 Chunk 7 browser smoke
 - **Raised:** 2026-06-08 (Chunk 7 impl)

@@ -5,32 +5,45 @@
          redirects to its detail. When there are no lists yet, this page
          renders a one-button empty state. -->
     <q-page padding>
-        <FadeTransition mode="out-in">
-            <div v-if="loading && store.summaries.length === 0" key="sll-loading" class="text-center q-py-xl">
-                <AppSpinner size="48px" />
+        <!-- Load error banner is surfaced first so failures aren't silent
+             (was a blank-screen root cause). -->
+        <q-banner
+            v-if="loadError"
+            class="dora-bg-negative-soft text-negative q-mb-md"
+            dense
+            rounded
+        >
+            <strong>Couldn't load your shopping lists.</strong>
+            {{ loadError }}
+            <template #action>
+                <q-btn flat no-caps label="Retry" @click="retryLoad" />
+            </template>
+        </q-banner>
+
+        <div v-if="loading && summariesEmpty" class="text-center q-py-xl">
+            <AppSpinner size="48px" />
+        </div>
+        <div v-else-if="summariesEmpty" class="text-center dora-text-muted q-py-xl">
+            <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
+            <div class="text-h6">No shopping lists yet.</div>
+            <div class="q-mt-md">
+                Get started by creating your first list — empty, from a
+                template, or auto-filled from your stock.
             </div>
-            <div v-else-if="store.summaries.length === 0" key="sll-empty" class="text-center dora-text-muted q-py-xl">
-                <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
-                <div class="text-h6">No shopping lists yet.</div>
-                <div class="q-mt-md">
-                    Get started by creating your first list — empty, from a
-                    template, or auto-filled from your stock.
-                </div>
-                <div class="q-mt-md">
-                    <q-btn
-                        color="primary"
-                        no-caps
-                        :icon="ICONS.add"
-                        label="New list"
-                        @click="newListOpen = true"
-                    />
-                </div>
+            <div class="q-mt-md">
+                <q-btn
+                    color="primary"
+                    no-caps
+                    :icon="ICONS.add"
+                    label="New list"
+                    @click="newListOpen = true"
+                />
             </div>
-            <div v-else key="sll-redirecting" class="text-center q-py-xl dora-text-muted">
-                <AppSpinner size="32px" />
-                <div class="q-mt-sm">Opening your list…</div>
-            </div>
-        </FadeTransition>
+        </div>
+        <div v-else class="text-center q-py-xl dora-text-muted">
+            <AppSpinner size="32px" />
+            <div class="q-mt-sm">Opening your list…</div>
+        </div>
 
         <NewListDialog
             v-model="newListOpen"
@@ -42,7 +55,6 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
-    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, ref, watch } from 'vue';
@@ -52,7 +64,14 @@
     const store = useShoppingListStore();
 
     const loading = computed(() => store.loading);
+    const loadError = computed(() => store.loadError);
+    const summariesEmpty = computed(() => store.summaries.length === 0);
     const newListOpen = ref(false);
+
+    async function retryLoad() {
+        await store.refreshAsync();
+        redirectIfPossible();
+    }
 
     // Priority for landing: an in-flight shop wins (resume), then a DRAFT
     // whose `planned_shop_date` is today (Chunk 7 "keyed to today's

@@ -320,9 +320,12 @@
                 >
                     <q-tooltip>Reopen this list to keep editing it; restock changes are reversed</q-tooltip>
                 </BaseButton>
-            </div>
-            <div v-else-if="detail" class="row q-gutter-sm">
+                <!-- Copy-to-new is also reachable from the list selector
+                     on archived rows (Chunk 5), but keep an inline
+                     affordance when the user is already on the done
+                     list — saves a trip through the selector. -->
                 <BaseButton
+                    v-if="detail.status === 'done'"
                     variant="ghost"
                     :icon="ICONS.content_copy"
                     label="Copy to new list"
@@ -332,7 +335,11 @@
         </div>
 
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
+            <strong>Couldn't load this list.</strong>
             {{ loadError }}
+            <template #action>
+                <q-btn flat no-caps label="Retry" @click="load" />
+            </template>
         </q-banner>
 
         <FadeTransition mode="out-in">
@@ -873,6 +880,31 @@
                 </q-card-section>
             </q-card>
         </div>
+
+        <!-- Fallback so the content area is never blank — e.g. when
+             load() fails (loadError banner above carries the message)
+             or the listId in the URL doesn't resolve. Pre-Chunk-7 this
+             template had no fallback branch and silently rendered
+             nothing when both `loading=false` and `detail=null` were
+             true. -->
+        <div v-else key="sld-empty" class="text-center dora-text-muted q-py-xl">
+            <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
+            <div v-if="loadError" class="text-h6">Couldn't open this list.</div>
+            <div v-else class="text-h6">This list isn't available.</div>
+            <div class="q-mt-md">
+                Pick another list from the selector at the top, or create
+                a new one.
+            </div>
+            <div class="q-mt-md">
+                <q-btn
+                    color="primary"
+                    no-caps
+                    :icon="ICONS.add"
+                    label="New list"
+                    @click="newListOpen = true"
+                />
+            </div>
+        </div>
         </FadeTransition>
 
         <!-- P6-01 Chunk 5 — the New-list dialog lives on the detail page now
@@ -975,8 +1007,6 @@
     const detail = ref<ShoppingListDetail | null>(null);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-    const finishing = ref(false);
-
     const editingName = ref(false);
     const nameDraft = ref('');
 
@@ -2013,157 +2043,10 @@
         }
     }
 
-    async function onFinish() {
-        if (!detail.value) return;
-        const unticked = detail.value.lines.length - tickedCount.value;
-        const ticked = tickedCount.value;
-
-        // Fold the old standalone "review mode" into the finish confirmation:
-        // the dialog lists the ticked items that will be bumped to Well-Stocked
-        // so the user sees exactly what restocks before they confirm.
-        const tickedNames = tickedLines.value
-            .map((l) => l.stock_item_name)
-            .slice(0, 8);
-        const tickedSummary = ticked === 0
-            ? 'No items are ticked — nothing will be restocked.'
-            : `${ticked} item${ticked === 1 ? '' : 's'} will be bumped to ` +
-              `Well-Stocked: ${tickedNames.join(', ')}` +
-              (ticked > tickedNames.length ? `, and ${ticked - tickedNames.length} more.` : '.');
-
-        // When there are unticked items, give the user a three-way choice:
-        //   - Cancel
-        //   - Copy unticked to a new list (carries them over) then finish
-        //   - Finish anyway (unticked are archived with the list)
-        let copyUnticked = false;
-        if (unticked > 0) {
-            const choice = await new Promise<'copy' | 'finish' | null>((resolve) => {
-                $q.dialog({
-                    title: 'Finish & restock?',
-                    message:
-                        `${tickedSummary}\n\n` +
-                        `${unticked} unticked item${unticked === 1 ? '' : 's'} ` +
-                        `${unticked === 1 ? 'is' : 'are'} still on this list. ` +
-                        `Copy ${unticked === 1 ? 'it' : 'them'} to a new active list, ` +
-                        `or finish anyway?`,
-                    options: {
-                        type: 'radio',
-                        model: 'copy',
-                        items: [
-                            {
-                                label: `Copy unticked to a new list, then finish`,
-                                value: 'copy',
-                            },
-                            {
-                                label: `Finish anyway (unticked archived too)`,
-                                value: 'finish',
-                            },
-                        ],
-                    },
-                    ok: { label: 'Finish & restock', color: 'positive', noCaps: true },
-                    cancel: { noCaps: true },
-                })
-                    .onOk((value: 'copy' | 'finish') => resolve(value || 'finish'))
-                    .onCancel(() => resolve(null))
-                    .onDismiss(() => resolve(null));
-            });
-            if (choice === null) return;
-            copyUnticked = choice === 'copy';
-        } else {
-            const ok = await new Promise<boolean>((resolve) => {
-                $q.dialog({
-                    title: 'Finish & restock?',
-                    message: `${tickedSummary}\n\nThe list is then archived.`,
-                    ok: { label: 'Finish & restock', color: 'positive', noCaps: true },
-                    cancel: { noCaps: true },
-                })
-                    .onOk(() => resolve(true))
-                    .onCancel(() => resolve(false))
-                    .onDismiss(() => resolve(false));
-            });
-            if (!ok) return;
-        }
-
-        finishing.value = true;
-        // F5: undo is server-owned — /finish writes a finish_snapshot and
-        // /unfinish reverses it, so the client doesn't capture or post any
-        // pre-finish state (R-003: derived domain facts live on the server).
-        const listName = detail.value.name;
-        const sourceListId = listId.value;
-        try {
-            // Copy first — if the copy fails we'd rather leave the list
-            // unarchived so the user can retry, than silently lose lines.
-            let copiedListId: string | null = null;
-            if (copyUnticked) {
-                const copy = await api.copyAsync(listId.value, { include: 'unticked' });
-                copiedListId = copy.shopping_list_id;
-            }
-            const result = await api.finishAsync(listId.value);
-            // Register the undo *after* we know the server succeeded —
-            // includes the new-primary-list-id so undo can demote it.
-            registerUndo({
-                label: `Finish: ${listName}`,
-                inverse: async () => {
-                    await api.unfinishAsync(sourceListId);
-                    await Promise.all([
-                        store.refreshAsync(),
-                        stockItemStore.getStockItemsAsync(),
-                    ]);
-                    // After unfinishing we're back on an active list —
-                    // route the user there so they can resume.
-                    void router.push(`/shopping-lists/${sourceListId}`);
-                },
-                // Redo is the same shape as finish, but the list-promotion
-                // logic on the server side might pick a different "new
-                // primary" candidate this time — that's acceptable for a
-                // redo (user explicitly asked to refire the action).
-                redo: async () => {
-                    await api.finishAsync(sourceListId);
-                    await Promise.all([
-                        store.refreshAsync(),
-                        stockItemStore.getStockItemsAsync(),
-                    ]);
-                },
-            });
-            if (copiedListId) {
-                $q.notify({
-                    type: 'positive',
-                    position: 'bottom-right',
-                    message:
-                        `Finished. ${result.items_restocked} item${
-                            result.items_restocked === 1 ? '' : 's'
-                        } restocked. Unticked items copied to a new list.`,
-                    actions: [
-                        {
-                            label: 'Open new list',
-                            color: 'white',
-                            handler: () => { void router.push(`/shopping-lists/${copiedListId}`); },
-                        },
-                    ],
-                });
-                await Promise.all([store.refreshAsync(), stockItemStore.getStockItemsAsync()]);
-                void router.push(`/shopping-lists/${copiedListId}`);
-                return;
-            }
-            await Promise.all([store.refreshAsync(), stockItemStore.getStockItemsAsync()]);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Finished. ${result.items_restocked} item${
-                    result.items_restocked === 1 ? '' : 's'
-                } restocked.`,
-            });
-            void router.push('/shopping-lists');
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not finish.',
-                caption: describeApiError(err) || '',
-            });
-        } finally {
-            finishing.value = false;
-        }
-    }
+    // Chunk 3 moved the finish-and-restock flow to ShoppingListShopMode.vue
+    // (SHOPPING phase is the shop-mode surface; the detail's status watcher
+    // routes the user there). The old `onFinish` on this page is gone with
+    // the button that fired it.
 
     // ── Detail-page extra actions ─────────────────────────────────────
 

@@ -24,6 +24,216 @@ next.
 
 ---
 
+## 2026-06-08 — Hotfix: three eslint errors + blank-screen defensive surfacing.
+**Status:** complete.
+**What changed:**
+- **`ShoppingListDetail.vue` — duplicate v-else-if fixed.** Chunk 3 changed the outer wrapper to `v-if="detail"` (any status) but left a `v-else-if="detail"` branch for the "Copy to new list" button when done. Unreachable. Folded the Copy button into the main row gated by `v-if="detail.status === 'done'"`.
+- **`ShoppingListDetail.vue` — dead `onFinish` + `finishing` ref removed.** Chunk 3 moved the finish-and-restock flow to `ShoppingListShopMode.vue`; the old detail-page `onFinish` was orphaned. Dropped the function (~150 lines), the `finishing = ref(false)` declaration, and the comment explaining what's now where. `registerUndo` import kept — still used by the line-tick undo.
+- **`ShoppingListShopMode.vue` — floating-promise on Esc key.** The keyboard handler called `exit()` directly; `exit()` is async since Chunk 3 (it calls `stopShoppingAsync` before navigating). Prepended `void`.
+- **Defensive surfacing for the blank-screen bug:**
+  - **`ShoppingListsOverview.vue`** — dropped the `<FadeTransition>` wrapper (it added a transition state that masked errors with momentary opacity 0) and replaced it with plain `v-if/v-else-if/v-else`. Added a `loadError` banner at the top with a Retry button — previously the store's catch set `loadError` silently and nothing rendered it.
+  - **`ShoppingListDetail.vue`** — added a `v-else` fallback branch to the FadeTransition (`key="sld-empty"`) showing a "This list isn't available" message with a New-list CTA. Pre-hotfix, when `loading=false && detail=null` (e.g. load failed, listId stale, or backend 500), the content area rendered nothing and the page looked blank. The loadError banner also gained a Retry button and a "Couldn't load this list." headline.
+  - **`stores/shoppingListStore.ts`** — added an explicit `console.error('[shoppingListStore] refreshAsync failed', err)` in the catch. Pre-hotfix, the catch only set `loadError` and the user reported "no errors in console" while seeing nothing on the page. Errors now surface to console + the UI banner.
+
+**Decisions made:**
+- **Drop the FadeTransition on Overview rather than fix it.** The transition added value when the page had real per-state content (the old overview's list-of-cards); on a redirect-landing it's just a brief opacity flicker between states the user shouldn't see anyway. Simpler reads better.
+- **Fallback branch on Detail is a "this list isn't available" empty state**, not a redirect to the landing. Redirecting would loop if the landing also can't pick a valid list; the empty state is honest and offers two recovery actions (selector + new list).
+- **Console.error in the store is intentionally direct** (no logger abstraction). The point is to break the silence; a logger that proxies through some queue is exactly what made this hard to spot.
+- **Engineering close-gate:**
+  - R-001 — kept BaseDialog + q-banner chrome.
+  - R-003 — server still owns load failure; client now just renders it visibly.
+  - R-008 — comments explain the WHY of each defensive change (esp. why we added the v-else fallback) so a future agent doesn't "tidy" them away.
+
+**Most-likely root cause for the user-reported blank screen:** the `e1a4c7b2f9d0` migration (Chunk 7 `planned_shop_date` column) hadn't been applied on the user's machine. The API's SELECT statements on `ShoppingList` would 500 with "no such column"; `store.refreshAsync()` caught it silently; Overview rendered nothing useful because `loadError` wasn't surfaced; Detail's content area rendered nothing because the FadeTransition had no v-else branch. **With this hotfix the user will see the actual error text** and a Retry button — which makes the missing-migration diagnosable in one glance. Logged as FU-079 to verify in browser once the user pulls these changes.
+
+**Files touched:**
+- `web_app/src/pages/ShoppingListDetail.vue` (duplicate v-else-if fix, dead onFinish removed, v-else fallback, retry button)
+- `web_app/src/pages/ShoppingListShopMode.vue` (void exit())
+- `web_app/src/pages/ShoppingListsOverview.vue` (FadeTransition removed, loadError surfaced, retry button)
+- `web_app/src/stores/shoppingListStore.ts` (console.error in catch)
+
+**Verification:**
+- `npx vue-tsc --noEmit` → clean (exit 0).
+- **Not verified in browser.** Logged FU-079 — after the user pulls and runs `alembic upgrade head`, the Overview + Detail should both render correctly; if the migration is missing or any other API error occurs, the new error banners surface the actual message instead of going blank.
+
+**Next up:**
+- User to pull + apply migration (`alembic upgrade head`), confirm Overview + Detail render. If they still see the loadError banner after migrating, the message will identify what's still wrong.
+- The original Chunks 3/4/5/6/7 browser smoke (FU-066/068/069/072/073/076) still pending.
+
+**Open questions for user:** has the migration `e1a4c7b2f9d0` been applied on the Linux machine? That's the leading suspect for the blank screen.
+
+---
+
+## 2026-06-08 — C-4 decisions resolved + IMPL_PLAN_COOKBOOK.md drafted (FU-078 resolved).
+**Status:** complete (design pass — no code).
+**What changed:**
+- **`docs/04_proposals/PROPOSAL_COOKBOOK.md`** — new `§5a Resolved
+  decisions (2026-06-08)` table closing out all 6 open items:
+  - **DEC-1** Cuisine vs category — **keep both, single-select each**,
+    both vocabularies user-configurable in settings.
+  - **DEC-2** Versions UX — **diverged from the brief.** User reframed:
+    "New version" = renamed Duplicate that copies into a new standalone
+    recipe linked via shared `version_group_id`. No "current" pointer
+    (versions are equal siblings, not historic); allocations stay
+    per-recipe. Recorded verbatim in §5a.
+  - **DEC-3** Multi-part — **sections within one recipe**; sub-recipes
+    deferred.
+  - **DEC-4 / DEC-5 / DEC-6** — all per the brief: nutrition off+simple
+    now, cost shipped as labelled estimate, substitute-status skipped.
+  - Header status flipped to "Decisions resolved 2026-06-08".
+- **New `docs/04_proposals/IMPL_PLAN_COOKBOOK.md`** (~430 LoC). Mirrors
+  `IMPL_PLAN_SHOPPING_LISTS.md` / `IMPL_PLAN_COOK_MODE.md` shape:
+  verify-state audit against `recipe.py`, `table_mappings.py:297-327`, and
+  the two big Vue pages; 10 chunked PRs; first-chunk DoD; risks; full
+  feedback-coverage table for L228-L315; suggested run order; parallel-
+  agent safety notes.
+- **Ten chunks (high level):**
+  1. ★ Comparison cut + filter/sort axes (no model change; visible win).
+  2. Tag taxonomy overhaul — new `Cuisine` / `Category` / `DietaryTag`
+     tables; FK-ify; +/−/neutral filter cycle.
+  3. Card redesign + Cookbook/Mark-cooked naming.
+  4. Detail page cleanup (biggest single-file diff; L283-L315).
+  5. Images + tools (closes FU-039; introduces `Tool` table for Chunk 6).
+  6. **Structured recipe steps** (closes FU-040 implementation;
+     ★ blocker for C-3 Chunk 5). `RecipeStep` table self-referential for
+     one level of sub-steps; join tables for ingredient + tool refs;
+     editor + freeform fallback; URL-importer mapping to schema.org
+     `HowToStep`/`HowToSection`.
+  7. Source field + URL importer cleanup.
+  8. Versions per DEC-2 — siblings via nullable `version_group_id`; New
+     Version action copies; detail page lists siblings; no current
+     pointer; allocations stay per-recipe.
+  9. Cost estimate + simple nutrition, behind C-cross opt-ins.
+  10. Multi-part sections (last; biggest ripple — `RecipeSection` table +
+      optional `section_id` on ingredients/steps).
+- **Doc-graph:**
+  - New `### IMPL — Cookbook` row in §C-impl with dependencies + crosses.
+  - New proposal→implementation cross-map row for `IMPL_PLAN_COOKBOOK.md`.
+  - Updated `PROPOSAL_COOKBOOK` + `IMPL_PLAN_COOK_MODE` rows to point at
+    each other (the C-3 / C-4 Chunk-6 dependency now visible from both
+    sides).
+- **`DORA_FOLLOWUPS.md`** — new FU-078 minted directly as `[RESOLVED]`
+  (raised + resolved this turn); state note documents the DEC-2
+  divergence.
+**Decisions made:**
+- **DEC-2 reframe accepted verbatim.** The brief's "snapshot + current
+  pointer + allocations follow current" model would have introduced
+  meaningful state (which version is current?), undermined the user's
+  framing ("they're all equal"), and complicated meal-plan allocation.
+  The flatter sibling model — a nullable `version_group_id` + per-recipe
+  allocations + a discovery affordance on the detail page — is simpler to
+  build and matches the user's mental model.
+- **Chunk 1 is first, not Chunk 6.** Chunk 6 (structured steps) is the
+  biggest and the only dependency-gating chunk; Chunk 1 is the smallest
+  visible win. Order matches IMPL_PLAN_COOK_MODE.md's reasoning: ship
+  the user-visible improvement first, then tackle the heavy migration as
+  its own focused PR.
+- **No bundling Chunk 4 (detail cleanup) with Chunk 5 (images + tools)**
+  — both touch RecipeDetailPage.vue; combined diff would exceed review
+  bandwidth.
+- **Chunk 8's allocation behaviour is intentionally simple.** Per DEC-2,
+  there's no version-aware allocation logic — meal-plan slots reference a
+  specific recipe; the version link is discovery-only. If feedback later
+  asks "I want my Tuesday plan to flex between fried-rice v1 and v2"
+  that's a follow-up, not Chunk 8 work.
+- **Engineering close-gate:** R-001 (extract level-styled list +
+  +/−/neutral filter chip when 2nd use shows up), R-003 (server owns
+  cookability + cost; client renders), R-005 (every migration uses batch
+  mode for SQLite portability), R-007 (sub-recipes per DEC-3 explicitly
+  deferred — no creep), R-008 terse comments only where the WHY isn't
+  obvious, R-010 (typed FK migrations cuisine/category/dietary).
+**Files touched:**
+- `docs/04_proposals/PROPOSAL_COOKBOOK.md` (header + new §5a)
+- `docs/04_proposals/IMPL_PLAN_COOKBOOK.md` (new)
+- `docs/00_DOC_GRAPH.md` (new C-impl row + cross-map updates on
+  PROPOSAL_COOKBOOK, IMPL_PLAN_COOK_MODE, and the new IMPL_PLAN_COOKBOOK
+  row)
+- `DORA_FOLLOWUPS.md` (FU-078 minted as RESOLVED)
+**Verification:** none needed — proposal docs only.
+**Next up:** none blocking. Phase 1 design surface is now complete for
+the recipe + cook-mode + shopping-list axis (all three IMPL plans
+written). Natural follow-ons (browser-free if you're still between
+machines):
+- IMPL plans for the other C-* proposals that don't have one yet
+  (`PROPOSAL_MEAL_PLANS.md` C-2; `PROPOSAL_STOCK_OVERVIEW.md` C-1;
+  `PROPOSAL_ONBOARDING.md` C-5; `PROPOSAL_ALERTS.md` C-9).
+- Smaller open FUs: FU-061 (doc-graph promotion), FU-067 (drop dead
+  appendLowStockEssentialsAsync endpoint + route), FU-062 (verify
+  doc-graph cited paths).
+- An INV investigation (INV-6 done; INV-7 / INV-9 / INV-10 still open).
+**Open questions for user:** none.
+
+---
+
+## 2026-06-08 — IMPL_PLAN_COOK_MODE.md drafted (FU-077 resolved).
+**Status:** complete (design pass — no code).
+**What changed:**
+- New `docs/04_proposals/IMPL_PLAN_COOK_MODE.md` (~310 LoC). Mirrors the
+  shape of `IMPL_PLAN_SHOPPING_LISTS.md`: verify-state-first audit against
+  `RecipeCookMode.vue` + `recipe.py`, six chunked PRs, definition-of-done
+  for the first chunk, risks & open-decisions section, feedback-coverage
+  table, suggested run order.
+- **Chunks:**
+  1. Finish-flow rewrite (★ first reviewable) — per-row level chips + full
+     picker per DEC-5, per-row add-to-list (C-7 proxy), meals_cooked
+     defaults 0, click-out cancels, celebration. Closes the three blanket
+     toggles.
+  2. Cook-mode polish — timer fill-bar + reset + sound + theme; unit
+     formatter per DEC-3 (metric+US no-space; culinary spaced); rename
+     "Enable voice" → "Sous Chef" with a commands popover.
+  3. Mid-cook ingredients UI — group by base location, drop level chips
+     mid-cook, A1 token rebuild.
+  4. **Structured recipe steps** (C-4 §2.6a work, co-sequenced as a
+     blocker) — `RecipeStep` table + join tables + migration + recipe-
+     detail step editor + URL importer mapping.
+  5. Highlight + per-step features — rip tick state entirely (DEC-1), per-
+     step ingredient + tool highlight using the new refs, per-step hints,
+     per-step timers. Gated on Chunk 4.
+  6. Serving auto-adjust — `cookingFor` ref with sensible rounding (DEC-4:
+     ½/⅓/⅔/¼/¾ snapping), default from C-5 onboarding headcount, session-
+     only.
+- Doc-graph: new `### IMPL — Cook Mode` row in the C-impl section; new
+  proposal→implementation cross-map row for `IMPL_PLAN_COOK_MODE.md`;
+  `PROPOSAL_COOK_MODE.md` + `PROPOSAL_COOKBOOK.md` cross-map rows updated
+  to point at the new IMPL plan and flag FU-040 as resolved.
+- `DORA_FOLLOWUPS.md` — **FU-077 flipped to RESOLVED** with a state note
+  pointing at the new IMPL plan + the doc-graph wiring.
+**Decisions made:**
+- **Chunk 1 first, not Chunk 4.** Chunk 4 (structured steps) is the
+  largest by line count and the only dependency-gating one. Sequencing it
+  first would put the biggest review on the critical path with no
+  user-visible win. Chunk 1 ships an obvious "the finish dialog is much
+  better" moment in the smallest PR, so it leads.
+- **No compat shims at the tick-state removal (Chunk 5).** Pre-release
+  discipline: rip `usedIds` / `doneSteps` outright when Chunk 5 lands;
+  don't ship both behaviours behind a flag. Documented in §1 Chunk 5.
+- **Server-side bulk level update deferred.** Chunk 1's per-row update is
+  N network calls for N ingredients. Logged as a "wait for the signal"
+  P10 anti-creep note — if a lag complaint surfaces, build the bulk
+  endpoint then, not now.
+- **Run-order published in §5** so two agents can't accidentally pick
+  blocked chunks in parallel.
+- **Engineering close-gate:** the plan honours R-001 (BaseDialog +
+  BaseButton + A1 tokens), R-003 (server owns stock + cooked transitions;
+  client is a presenter), R-005 (Chunk 4 migration uses batch mode),
+  R-007 (no scope creep — the six chunks map 1:1 to C-3 §6 + §5a, no
+  extras).
+**Files touched:**
+- `docs/04_proposals/IMPL_PLAN_COOK_MODE.md` (new)
+- `docs/00_DOC_GRAPH.md` (new C-impl row + updated cross-map)
+- `DORA_FOLLOWUPS.md` (FU-077 → RESOLVED)
+**Verification:** none needed — proposal docs only.
+**Next up:** none blocking. When you want to start the cook-mode build,
+**Chunk 1** is the first reviewable PR per §2 DoD. Until then, the natural
+follow-on is whichever you prefer of: (a) more design — C-4 IMPL plan,
+which would split C-4's nine sub-sections into chunked PRs; (b) start
+clearing the small open FUs (FU-061 doc-graph promotion, FU-067 dead
+endpoint, FU-062 graph citation audit); (c) one of the still-open
+INV investigations (INV-6 / INV-7 / INV-9 / INV-10).
+**Open questions for user:** none.
+
+---
+
 ## 2026-06-08 — C-3 cook-mode decisions resolved + C-4 structured-steps section added.
 **Status:** complete (design pass — no code).
 **What changed:**

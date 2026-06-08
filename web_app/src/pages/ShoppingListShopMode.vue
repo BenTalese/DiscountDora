@@ -914,7 +914,7 @@
             void undoLastPick();
         } else if (event.key === 'Escape') {
             event.preventDefault();
-            exit();
+            void exit();
         }
     }
 

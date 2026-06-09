@@ -41,7 +41,11 @@ class LineProductOfferDto:
 @dataclass(frozen=True, slots=True)
 class ShoppingListLineDto:
     line_id: UUID
-    stock_item_id: UUID
+    # C-7 Chunk 3 — a line is anchored by stock_item_id OR product_id
+    # (or both, when a product is nested under a stock item). NULL
+    # stock_item_id ⇒ standalone-product line ("product only").
+    stock_item_id: UUID | None
+    product_id: UUID | None
     stock_item_name: str
     stock_level_name: str | None
     stock_location_id: UUID | None
@@ -170,7 +174,9 @@ class GetShoppingListDetailHandler:
 
         # Pre-load all referenced stock items + their linked products in
         # bulk so we render N rows without N round-trips.
-        _StockItemIds = list({l.stock_item_id for l in _Lines})
+        # C-7 Chunk 3 — product-only lines have no stock_item_id; skip
+        # those when assembling the stock-item id set.
+        _StockItemIds = list({l.stock_item_id for l in _Lines if l.stock_item_id})
         _StockItems: dict[UUID, StockItem] = {}
         if _StockItemIds:
             _Loaded = (
@@ -184,6 +190,21 @@ class GetShoppingListDetailHandler:
                 .all(EntityField(StockItem, "id").in_(_StockItemIds))
             )
             _StockItems = {s.id: s for s in _Loaded}
+
+        # C-7 Chunk 3 — bulk-load product names for product-only lines
+        # so the DTO can fall back to the product name when there's
+        # no anchor stock item to ask. Keep it minimal — just name +
+        # id; the offers list comes from the linked-stock-item path
+        # when the line has both anchors.
+        _ProductIds = list({l.product_id for l in _Lines if l.product_id})
+        _ProductNames: dict[UUID, str] = {}
+        if _ProductIds:
+            from dora_api.domain.entities.product import Product
+            _LoadedProducts = (
+                self.repository.get(Product)
+                .all(EntityField(Product, "id").in_(_ProductIds))
+            )
+            _ProductNames = {p.id: p.name for p in _LoadedProducts}
 
         # Location lookup powers the per-line breadcrumb used to group lines
         # by shopper's route through the store. Loaded once and walked
@@ -223,7 +244,7 @@ class GetShoppingListDetailHandler:
 
         _LineDtos: List[ShoppingListLineDto] = []
         for line in _Lines:
-            item = _StockItems.get(line.stock_item_id)
+            item = _StockItems.get(line.stock_item_id) if line.stock_item_id else None
             offers: List[LineProductOfferDto] = []
             preferred_id: UUID | None = item.preferred_product_id if item else None
             if item is not None:
@@ -249,10 +270,18 @@ class GetShoppingListDetailHandler:
                     o.price_now if o.price_now is not None else float("inf"),
                     o.merchant_name.lower(),
                 ))
+            # C-7 Chunk 3 — fall back to the product name for
+            # product-only lines (no anchor stock item to ask).
+            _line_display_name = (
+                item.name if item
+                else (_ProductNames.get(line.product_id, "(missing item)")
+                      if line.product_id else "(missing item)")
+            )
             _LineDtos.append(ShoppingListLineDto(
                 line_id = line.id,
                 stock_item_id = line.stock_item_id,
-                stock_item_name = item.name if item else "(missing item)",
+                product_id = line.product_id,
+                stock_item_name = _line_display_name,
                 stock_level_name = (
                     item.stock_level.name if item and item.stock_level else None
                 ),

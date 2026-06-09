@@ -20,7 +20,10 @@ export type UpdateShoppingListCommand = {
 };
 
 export type AddLineCommand = {
-    stock_item_id: string;
+    /** C-7 Chunk 3 — a line may anchor on a stock item, a product, or
+     *  both. At least one MUST be set; server returns 400 otherwise. */
+    stock_item_id?: string | null;
+    product_id?: string | null;
     quantity?: number | null;
     selected_product_id?: string | null;
 };

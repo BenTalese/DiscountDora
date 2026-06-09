@@ -16,6 +16,59 @@ semver — major bumps signal schema or breaking-config changes.
   Vue 3.4 `defineModel()` + a `Screen.setDebounce()` boot file. (FU-087)
 
 ### Added
+- **Standalone-product shopping-list lines (Cart Button Chunk 3 / L191
+  / L130).** A shopping-list line now anchors on a **stock item, a
+  product, or both**. Schema: `ShoppingListLine.stock_item_id` is
+  nullable, new nullable `product_id` (FK→Product), plus a CHECK
+  requiring at least one anchor. Behavioural rules wired:
+  - **Rule 1 — standalone add:** adding a product whose linked
+    stock item isn't on the list creates a product-only line ("on
+    the list as a product, no stock-item row").
+  - **Rule 2 — auto-nest on link:** linking a product to a stock
+    item later (`POST /stock-items/<id>/products`) hunts active
+    draft lists for any orphan product-only lines anchored on
+    that product and **upgrades them in place** — folding into an
+    existing stock-item line if one exists, or stamping
+    `stock_item_id` on the orphan otherwise.
+  - **Rule 3 — cascade remove:** deleting a stock-item line
+    cascades-removes nested product-only lines whose product is
+    linked to that stock item. Same rule applies on the
+    cart-button quick-remove path.
+  - **Rule 4 (TBD):** prompting "also remove the stock item?" when
+    a product-only line is removed is the UI side of this chunk;
+    logged as FU-131 alongside the inline-product variant + nested
+    display.
+  Migration is pre-release (no data preserve); existing dev/test
+  rows recreate cleanly.
+
+### Changed
+- **Cart button routes through the combined modal when there's a real
+  choice to make (Cart Button Chunk 2 / L84, decision 2).** Hitting
+  "add to list" on a stock item with **2+ linked products** now opens
+  the existing `QuickAddSheet` (one combined surface: target list +
+  offer + quantity) instead of adding silently with no offer picked.
+  Items with 0 or 1 linked product still use the silent quick-add
+  path. **Quantity stays modal-only** (decision 5) — quick paths
+  remain qty-1. Backed by a new `linked_product_count` field on the
+  stock-item DTO (bulk-hydrated alongside `has_image`).
+
+### Added
+- **Unified cart button (Cart Button Chunk 1).** A new `AddToListButton`
+  component owns every "add this to my shopping list" interaction
+  app-wide. It's **state-aware** — the icon and colour reflect whether
+  the item's already on your draft list (or two; the multi-list popover
+  shows you exactly which) — and **toggles**: clicking an already-on
+  row removes it silently when it's on one list, or opens a small
+  popover with explicit Remove / Add-to-another when it's on
+  multiple. Bulk variant resolves the target list **once** for the
+  whole batch and surfaces a single summary toast ("5 added, 2
+  already on list") instead of N per-item toasts. Adopted on the
+  stock overview row, stock item detail toolbar, recipe detail
+  ingredient rows, and the stock overview bulk action. **Fixes
+  FU-038** — the old "0 added, 1 already" + "Added to your primary
+  list" double-toast collision is no longer reachable.
+
+### Added
 - **Stock item images (Stock Overview Chunk 6 / FU-033 / L74).** Stock
   items now carry their own image, uploaded from the **detail page**
   (Overview tab, top of the right column). When a stock item has no

@@ -5,6 +5,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from dora_api.domain.entities.product import Product
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList,
+                                                    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import (entity_existence_failure,
@@ -54,6 +57,46 @@ class LinkProductToStockItemHandler:
             return LinkProductResponse(already_linked = True)
 
         _StockItem.products.append(_Product)
+
+        # C-7 Chunk 3, rule 2 — any standalone-product line on a
+        # NOT-DONE list anchored on this product gets upgraded to
+        # nest under a stock-item line for this item. Two paths:
+        #   - the list already has a stock-item line for this item:
+        #     fold the product anchor into that line (set its
+        #     product_id, drop the orphan).
+        #   - no stock-item line yet: convert the orphan in place by
+        #     setting `stock_item_id` (still keeping `product_id`).
+        # Either way the SPA gets a single nested row instead of two
+        # disconnected rows next time it refreshes.
+        orphan_lines = (
+            self.repository.get(ShoppingListLine).all(
+                EntityField(ShoppingListLine, "product_id").eq(_Product.id)
+            )
+        )
+        for orphan in orphan_lines:
+            # Ignore orphans on finished lists — historic data.
+            parent_list = self.repository.get(ShoppingList).by_id(
+                orphan.shopping_list_id,
+            )
+            if parent_list is None or parent_list.status == SHOPPING_LIST_STATUS_DONE:
+                continue
+            if orphan.stock_item_id is not None:
+                continue  # already nested
+            existing_stock_line = self.repository.get(ShoppingListLine).one(
+                EntityField(ShoppingListLine, "shopping_list_id").eq(orphan.shopping_list_id)
+                & EntityField(ShoppingListLine, "stock_item_id").eq(_StockItem.id)
+                & EntityField(ShoppingListLine, "product_id").is_null()
+            )
+            if existing_stock_line is not None:
+                # Fold: keep the stock line, set its product anchor,
+                # drop the orphan.
+                existing_stock_line.product_id = _Product.id
+                self.repository.remove(orphan)
+            else:
+                # Convert in place — orphan keeps `product_id` and
+                # gains `stock_item_id`, becoming a single nested row.
+                orphan.stock_item_id = _StockItem.id
+
         self.repository.save_changes()
         return LinkProductResponse()
 

@@ -9,6 +9,388 @@ next.
 
 ---
 
+## 2026-06-12 — IMPL_PLAN_CART_BUTTON Chunk 3 (standalone-product lines + rules 1–3 backend) — IMPLEMENTED
+**Status:** complete (backend + schema + DTO + minimal frontend
+plumbing). **Static-only — no env.** Closes L191 + L130 + couples
+L195 on the backend side. **The UI side (rule 4 modal, inline-product
+variant, nested display) is logged as FU-131** — held risk by
+landing the schema change without bloating the diff with UI churn.
+
+**What changed — Schema + entity:**
+- **`ShoppingListLine.stock_item_id`** flipped to **nullable**.
+- **`product_id: UUID | None`** added as a new column on the table
+  + entity + Fields constant. FK→Product, ON DELETE CASCADE
+  (consistent with the existing stock-item cascade — a deleted
+  product never leaves an orphan line).
+- **`CheckConstraint('stock_item_id IS NOT NULL OR product_id IS NOT NULL')`**
+  enforces the "at least one anchor" rule at the DB. The handler
+  also validates upstream so the SPA gets a clean 400 instead of
+  a 500 mid-write.
+- **Migration `d7c9e4a8c2b1`** (down_rev = `f6c8e3a9b1d2`).
+  Batch-mode for SQLite portability; pre-release semantics so the
+  upgrade doesn't try to fabricate `product_id` values for
+  existing rows (still works with empty/dev data).
+
+**What changed — Backend handlers:**
+- **`AddLineRequest`**: `stock_item_id` + `product_id` both
+  optional + nullable; handler returns `no_anchor` 400 when both
+  are null. Dedupe logic now checks **stock_item_id OR product_id**
+  on the same list — a nested product line carrying both columns
+  still dedupes against either match.
+- **`link_product_to_stock_item`**: rule 2 wiring. After
+  appending the product to the stock item's `products`
+  relationship, scans all `ShoppingListLine` rows anchored on
+  that product (`product_id == P`). For each orphan on a
+  not-DONE list:
+  - if a stock-item line for S already exists with no product
+    anchor, the orphan **folds** into it (`existing.product_id =
+    P`, orphan deleted);
+  - otherwise the orphan **converts in place** (`stock_item_id =
+    S`), becoming a single nested row.
+- **`DeleteLineHandler` + `RemoveLineByStockItemHandler`**: rule
+  3 wiring. When the deleted line is anchored on a stock item
+  with `product_id` null, look up the stock item's linked
+  products and cascade-remove any product-only lines (
+  `stock_item_id IS NULL AND product_id IN (linked_products)`)
+  on the same list. Idempotent — runs in the same transaction
+  as the parent delete.
+
+**What changed — DTOs + service:**
+- **`ShoppingListLineDto`**: `stock_item_id: UUID | None`, new
+  `product_id: UUID | None`. Display name falls back to the
+  product name for product-only lines via a new bulk product-name
+  lookup keyed by `product_id`.
+- **`AddLineCommand`** (frontend): both `stock_item_id` and
+  `product_id` optional. The `?` on a server boundary doesn't
+  change wire shape (omit vs null both work as "unset").
+- **`ShoppingListLine` model** (frontend): `stock_item_id: string
+  | null`, new `product_id: string | null`. `cartStateFor`
+  accepts a nullable id and returns 'none' for null inputs.
+- **`ShoppingListDetail.vue`** null-guarded in 3 places:
+  - `stockItemFor(stockItemId | null)` early-returns undefined
+    on null (existing call sites untouched);
+  - `onSwapSubstitute` bails early on product-only lines
+    (substitutes don't apply);
+  - the substitute on-list dedupe set filters out null stock
+    item ids before checking membership.
+
+**Decisions made:**
+- **Anchor model: nullable both, CHECK 'at least one'.** Plan
+  spec'd this exactly. Alternative would be a polymorphic
+  `anchor_kind` column + single nullable id, but two FKs read
+  cleaner in the query builder and lets the DB enforce
+  referential integrity per side.
+- **Rule 2 folds rather than always-convert.** The plan says
+  "auto-add the stock line + nest the product under it". If a
+  stock-item line already exists, "adding" it again would either
+  no-op the dedupe or double-insert; folding the product anchor
+  into the existing line is the only correct read.
+- **Rule 3 cascade lives in the handler, not the FK.** A
+  `Product` deletion still cascades the line via the existing FK,
+  but rule 3 is about a *stock-item line* removal cascading its
+  *nested product* siblings — the DB has no edge for that. Doing
+  it in the handler keeps the rule explicit and testable.
+- **No frontend "inline-product" variant yet.** The plan asks for
+  `AddToListButton variant="inline-product"` + nested display on
+  the list detail; these are substantial UI changes that don't
+  belong in the schema-change PR. Logged as **FU-131** with a
+  clear scope.
+- **Pre-release semantics** — no data preservation in the
+  migration. Matches the plan's *"pre-release → clean, non-
+  preserving OK"* note.
+
+**Files touched:**
+- `dora_api/persistence/table_mappings.py`
+- `dora_api/persistence/migrations/versions/d7c9e4a8c2b1_20260612_shopping_list_line_product_anchor.py` (new)
+- `dora_api/domain/entities/shopping_list.py`
+- `dora_api/features/shopping_lists/manage_shopping_list_lines.py`
+- `dora_api/features/shopping_lists/get_shopping_list_detail.py`
+- `dora_api/features/stock_items/link_product_to_stock_item.py`
+- `web_app/src/models/shoppingList.ts`
+- `web_app/src/services/api/shoppingListApiService.ts`
+- `web_app/src/pages/ShoppingListDetail.vue`
+- `CHANGELOG.md` (Unreleased Added)
+- `DORA_FOLLOWUPS.md` (FU-131 + FU-132 logged)
+
+**Verification:**
+- Static only. Cross-checked the CHECK constraint name +
+  `is_null()` API on `EntityField` (existed); confirmed
+  `repository.remove` is the delete primitive (not `delete`).
+  Traced the cascade path through DeleteLine + RemoveByStockItem
+  to make sure they share the same lookup logic.
+- **NOT yet verified in browser.** FU-132 owns the smoke pass —
+  needs a real DB to exercise the migration + rule wiring.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — no new components; the cascade logic
+  exists in 2 places (DeleteLine + RemoveByStockItem) by design
+  (separate request shapes, same rule body); could be
+  extracted to a helper next time. Logged inline in FU-131's
+  ambit.
+- **R-003 state ownership** — anchor logic + cascade live
+  server-side; the client reads `stock_item_id` + `product_id`
+  off the DTO without recomputing.
+- **R-005 distribution posture** — schema change uses batch-
+  mode (SQLite friendly); CHECK constraint syntax portable to
+  Postgres.
+- **R-007 scope discipline** — held the line on the UI side
+  (FU-131). Backend rules 1–3 are coherent without the UI.
+- **R-008 terse comments** — chunk-line citations + one-line
+  whys.
+- **R-011 framework-idiomatic** — Alembic batch-mode + Quasar
+  `q-popup-proxy` (existing) + Pydantic optional fields, all
+  documented patterns.
+- No new ADRs.
+
+**Next up:**
+1. **FU-132 / FU-131 + earlier browser-verify backlog** (deferred
+   per user). FU-132 is high-priority because the migration +
+   cascade need a real DB.
+2. **Cart Button Chunk 4** — meal-plan "generate" routes through
+   Axis B (small, post-Chunk 3).
+3. **State Ownership Chunk 1** — the architectural rock. Unblocks
+   FU-081 + Stock Overview Chunk 8.
+4. **Stock Overview Chunk 7** — unified scan-mode (small).
+5. Verify backlog: now 17 items (Cookbook 1–10, C-cross 1–5,
+   Cook Mode 1–6, Stock Overview 1–6, Cart Button 1–3).
+
+**Open questions for user:** FU-131 is a UI-side follow-up the
+plan technically asks for in Chunk 3. Want it pulled forward
+(another focused session on the SPA), or roll Cart Button Chunk
+4 first to close that plan's backend story before circling back?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_CART_BUTTON Chunk 2 (combined QuickAddSheet for 2+ products) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env).
+Closes §2.3 + L84 + decision 2 (2+ products → combined modal) +
+decision 5 (quantity only in the combined modal).
+
+**What changed — Backend:**
+- **`StockItemDto.linked_product_count: int`** — new field, default
+  0. Hydrated by **`_hydrate_linked_product_count`**: one GROUP BY
+  against `StockItemProduct` joining the displayed item ids. Cost
+  class identical to `_hydrate_has_image`; runs alongside it in
+  both `handle` (list) and `handle_by_id` (detail).
+- Pipeline shape:
+  `paginate → _hydrate_has_image → _hydrate_linked_product_count`.
+  No new server-owned state — the count just exposes what the
+  link table already knows so the client doesn't N+1 fetch detail
+  pages to find out.
+
+**What changed — Frontend:**
+- **`models/stockItem.ts`** + the StockItem store automatically
+  carry `linked_product_count?: number` (default 0 on consumers
+  that haven't migrated).
+- **`AddToListButton.vue`** gains:
+  - `linkedProductCount` computed off the stockItem store.
+  - `draftCount` computed off `membership.active_lists`
+    (status === 'draft').
+  - `shouldUseCombinedModal`: true when `linkedProductCount >= 2`
+    OR (`linkedProductCount === 0|1` AND `draftCount >= 2`).
+    Note: the proposal §2.3 spec'd "both ambiguous", but
+    decision 2 explicitly promotes 2+ products to the modal
+    unconditionally. Both routes share the same UX so they share
+    the gate.
+  - `onPrimaryClick` `cartState === 'none'` branch:
+    `shouldUseCombinedModal → openQuickAdd({ stockItemId })`;
+    otherwise the existing `actions.addToList` flow.
+
+**Decisions made:**
+- **Re-use `QuickAddSheet`, no new modal.** The proposal says
+  "Never stack two modals; route through the existing combined
+  surface." That surface already exists (mounted once in
+  `MainLayout`) and already accepts a preset stock item via
+  `useQuickAdd`. Nothing to build, just route here.
+- **`linked_product_count` on the list DTO** rather than fetching
+  the detail endpoint on click. The detail fetch would be a
+  per-click network round-trip in the row-tap critical path; a
+  bulk SELECT alongside the rest of the list metadata is
+  cheaper + correctly cached with the row.
+- **Bulk variant unchanged.** A bulk-add hitting a 2+-product
+  item shouldn't spawn a modal mid-batch — that defeats the
+  "one summary toast" rule (decision 6). Users wanting per-item
+  offer selection can do it from the list detail after the
+  batch lands. Documented in FU-130.
+- **No follow-up to consolidate `shouldUseCombinedModal` logic.**
+  The two branches map 1:1 onto the decisions; collapsing them
+  would obscure why each escalates.
+
+**Files touched:**
+- `dora_api/features/stock_items/get_stock_items.py`
+- `web_app/src/models/stockItem.ts`
+- `web_app/src/components/AddToListButton.vue`
+- `CHANGELOG.md` (Unreleased Changed)
+- `DORA_FOLLOWUPS.md` (FU-130 logged)
+
+**Verification:**
+- Static only. Cross-checked `QuickAddSheet`'s preset path
+  (`presetStockItemId` ref via `useQuickAdd`) — confirmed it
+  hops straight to the offer/quantity step when a stock item
+  is pre-selected.
+- Confirmed `linked_product_count` defaults to 0 on the model
+  (optional field) so call sites that don't supply it (e.g.
+  legacy fixtures, cached responses pre-deploy) degrade to "no
+  modal" — safer than "always modal".
+- **NOT yet verified in browser.** FU-130 owns the smoke pass.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — `QuickAddSheet` already existed;
+  re-used not forked.
+- **R-003 state ownership** — count derived server-side from
+  the canonical link table; client never recomputes.
+- **R-005 distribution posture** — raw SQL uses `bindparam(expanding=True)`
+  (Postgres + SQLite both parse it; matches sibling hydrates).
+- **R-007 scope discipline** — touched the two files that
+  needed touching (DTO + button); didn't reshape QuickAddSheet
+  itself or extend the chunk into the standalone-product line
+  model (that's Chunk 3).
+- **R-008 terse comments** — chunk-line + decision-line
+  citations.
+- **R-011 framework-idiomatic** — `useQuickAdd` is the
+  documented Vue-side composable pattern; reused unchanged.
+- No new ADRs.
+
+**Next up:**
+1. **FU-130 / FU-127** browser-verify (deferred per user).
+2. **Cart Button Chunk 3** (standalone-product line model — the
+   big rock; schema change: `ShoppingListLine.stock_item_id`
+   nullable + new `product_id` anchor + nested display +
+   cascade rules). **Biggest chunk of the cart-button plan.**
+3. **Cart Button Chunk 4** (meal-plan "generate" routes through
+   Axis B — small, post-Chunk 3).
+4. **State Ownership Chunk 1** as the alternative
+   architectural-rock pivot.
+5. **Stock Overview Chunk 7** (unified scan-mode) — small,
+   isolated.
+6. Verify backlog: 16 items now (Cookbook 1–10, C-cross 1–5,
+   Cook Mode 1–6, Stock Overview 1–6, Cart Button 1–2).
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_CART_BUTTON Chunk 1 (AddToListButton + double-toast fix) — IMPLEMENTED
+**Status:** complete (frontend-only, no schema — static, no env).
+**Resolves FU-038.** Closes L83 / L154 / L196 / L288 / L380 / L381 +
+partial coverage of the proposal §1 13-surface adoption (4 highest-
+traffic surfaces; rest logged as **FU-128**).
+
+**What changed — new files:**
+- **`web_app/src/components/AddToListButton.vue`** — the unified
+  cart button. Four chrome variants (`row | toolbar | menu | bulk`)
+  with identical behaviour. Owns:
+  - **State-aware render** via `cartStateFor`: not-on /
+    on_target (primary draft) / on_other (a draft) / on_multiple.
+  - **Decision tree** (proposal §7a): `none` → `actions.addToList`
+    (existing single-item flow handles 0-draft / ambiguous prompts);
+    on exactly 1 list → `listActions.removeFromList` (silent);
+    on 2+ → inline `MultiListPopover` (Remove from each / Remove
+    from all / Add to another).
+  - **Bulk variant**: emits `bulk-done` for parent cleanup; uses
+    `quick_add_target_list_id` (no prompt needed when unambiguous)
+    OR routes the first item through the prompt flow + batches
+    the rest. Single summary toast in either case.
+
+**What changed — composable:**
+- **`useShoppingListActions.ts`** gains `removeFromList(listId,
+  stockItemId)` + `removeFromAllLists(stockItemId, listIds[])`. Both
+  refresh the store + emit one summary toast; the bulk variant
+  composes per-list calls + aggregates.
+
+**Surfaces adopted (4 of ~9 spec'd):**
+- **StockItemRow** (row variant) — replaces the hand-rolled
+  `cart` computed + `onCartClick`; removed stale
+  `cartStateFor` + `useShoppingListStore` imports from the row.
+- **StockItemDetailPage** (toolbar variant) — replaces the
+  `BaseButton` "Add to list" in the page header.
+- **RecipeDetailPage** ingredient rows (row variant) — replaces
+  the per-row "Add to primary shopping list" button; retired the
+  dead `onAddRowToList` handler.
+- **StockOverview** bulk action (bulk variant) — replaces the
+  `bulkAddToPrimary`-driven q-btn (loop-per-item, N toasts) with
+  the unified single-summary-toast flow. Legacy
+  `bulkAddToPrimary` function kept for the `a` keyboard shortcut
+  (`addFocusedOrSelected`).
+
+**Surfaces NOT adopted (FU-128):**
+- MyProductsPage (#6), MealPlansOverview (#7), ProductSearch (#11),
+  QuickAddSheet (#13). Plan said "one PR" but I held the line on
+  risk: 4 high-traffic surfaces is a safe Chunk-1 boundary; the
+  rest are mechanical and logged. Doing them all in one go would
+  bloat the diff into unreviewable territory and the FU-038
+  toggle behaviour ships from the new component on day one.
+
+**Decisions made:**
+- **Inline `MultiListPopover` as a functional Vue component**
+  inside `AddToListButton.vue` (`h()` calls), not a separate
+  file. Tight scope, reads the popover state from the parent's
+  refs, no extraction yet (R-001 single-consumer).
+- **Bulk variant pre-checks `quick_add_target_list_id`** to skip
+  the prompt entirely in the common case. Falls through to the
+  full prompt flow on the first item only when ambiguous.
+- **Kept the keyboard-shortcut path** (`addFocusedOrSelected →
+  bulkAddToPrimary`) using the legacy loop. Switching it would
+  conflate UX work with this chunk's component-adoption scope;
+  the user-facing behaviour is unchanged (still adds the
+  selection) and the `a` shortcut produces individual toasts,
+  which is acceptable for a keyboard power-user path.
+- **Cart-state import retired** from StockItemRow and
+  StockOverview (the latter still uses it via `useStockFilters`
+  internally for filter routing; not removed there).
+- **No new ADRs.** The component pattern is the R-001 standard
+  hit; FU-126 (image rename) is the parallel.
+
+**Files touched:**
+- `web_app/src/components/AddToListButton.vue` (new)
+- `web_app/src/composables/useShoppingListActions.ts`
+- `web_app/src/components/stock/StockItemRow.vue`
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `CHANGELOG.md` (Unreleased Added)
+- `DORA_FOLLOWUPS.md` (FU-038 → RESOLVED; FU-127 + FU-128 logged)
+
+**Verification:**
+- Static only. Cross-checked the new emits + props against each
+  adopting surface; the bulk variant's `bulk-done` event fires
+  cancelBulk; the row variant's silent click-to-remove path uses
+  `removeFromList` with the entry from `onLists[0]`.
+- **NOT yet verified in browser.** FU-127 owns the smoke pass.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — built the component first, then
+  adopted; the second/third consumer happened in the same change.
+- **R-003 state ownership** — cart membership is server-derived
+  (`Membership`); the button reads, never recomputes.
+- **R-007 scope discipline** — held to 4 surfaces, logged the
+  other 5 as FU-128. Bulk q-btn legacy + keyboard shortcut left
+  intact (small additive risk vs. full removal).
+- **R-008 terse comments** — chunk-line + decision-line
+  citations only.
+- **R-011 framework-idiomatic** — `q-popup-proxy` + `q-btn` +
+  Quasar's `h()`-based functional component patterns; no
+  hand-rolled equivalents.
+
+**Next up:**
+1. **FU-127** browser-verify of the new button.
+2. **FU-128** opportunistic adoption sweep for the remaining 5
+   surfaces.
+3. **Cart Button Chunk 2** (combined QuickAddSheet modal — the
+   both-axes-ambiguous case + quantity).
+4. **Cart Button Chunk 3** (standalone-product line model — the
+   schema work; the big rock).
+5. **State Ownership Chunk 1** as the alternative
+   architectural-rock path that unblocks Shopping Lists + Stock
+   Overview Chunk 8.
+6. Verify backlog: Cookbook 1–10, C-cross 1–5, Cook Mode 1–6,
+   Stock Overview 1–6, Cart Button 1.
+
+**Open questions for user:** none — the FU-128 split is the only
+non-obvious call and it's logged with rationale.
+
+---
+
 ## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 6 (stock images + product fallback) — IMPLEMENTED
 **Status:** complete (backend + frontend, static-only — no env).
 **Resolves FU-033** end-to-end. Closes §2.5 + L74. Effectively builds

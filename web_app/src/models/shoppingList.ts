@@ -51,7 +51,11 @@ export type AddedVia =
 
 export type ShoppingListLine = {
     line_id: string;
-    stock_item_id: string;
+    /** C-7 Chunk 3 — a line is anchored by `stock_item_id` OR
+     *  `product_id` (or both, when a product is nested under a stock
+     *  item). NULL `stock_item_id` ⇒ standalone "product only" line. */
+    stock_item_id: string | null;
+    product_id: string | null;
     stock_item_name: string;
     stock_level_name: string | null;
     stock_location_id: string | null;
@@ -123,10 +127,10 @@ export type Membership = {
 export type CartState = 'none' | 'on_target' | 'on_other' | 'on_multiple';
 
 export function cartStateFor(
-    stockItemId: string,
+    stockItemId: string | null,
     membership: Membership | null,
 ): CartState {
-    if (!membership) return 'none';
+    if (!stockItemId || !membership) return 'none';
     const entry = membership.items.find((i) => i.stock_item_id === stockItemId);
     if (!entry || entry.unticked_list_ids.length === 0) return 'none';
     if (entry.unticked_list_ids.length > 1) return 'on_multiple';

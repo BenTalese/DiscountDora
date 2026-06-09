@@ -45,6 +45,12 @@ class StockItemDto:
     # `GET /stock-items/<id>/image`, which itself falls back to a linked
     # Product's image when the stock item has none. Hydrated below.
     has_image: bool = False
+    # C-7 Chunk 2 — count of linked products. Drives the "2+ products →
+    # combined choice modal" decision in `AddToListButton`. 0 = generic
+    # stock-item line (no offer); 1 = preselect; 2+ = open QuickAddSheet
+    # so the user picks the offer + (if relevant) the target list in one
+    # combined surface instead of stacking two prompts.
+    linked_product_count: int = 0
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
@@ -92,6 +98,43 @@ class GetStockItemsHandler:
             .include(StockItem.Fields.STOCK_LOCATION)
             .include(StockItem.Fields.STOCK_GROUP)
         )
+
+    def _hydrate_linked_product_count(
+        self, dtos: list[StockItemDto]
+    ) -> list[StockItemDto]:
+        """C-7 Chunk 2 — bulk-count linked products per stock item. Same
+        cost class as `_hydrate_has_image` (a single GROUP BY against
+        the link table); kept as its own pass so callers can read the
+        intent on the call site."""
+        if not dtos:
+            return dtos
+        import dataclasses
+        from sqlalchemy import bindparam, text
+        from dora_api.app import db
+
+        ids = [str(d.stock_item_id) for d in dtos]
+        stmt = text(
+            'SELECT stock_item_id, COUNT(*) AS n '
+            'FROM "StockItemProduct" '
+            'WHERE stock_item_id IN :ids '
+            'GROUP BY stock_item_id'
+        ).bindparams(bindparam("ids", expanding=True))
+        rows = db.session.execute(stmt, {"ids": ids}).all()
+
+        def _key(v) -> str:
+            if isinstance(v, UUID):
+                return str(v)
+            if isinstance(v, bytes):
+                return str(UUID(bytes=v))
+            return str(v)
+        count_by_id = {_key(row[0]): int(row[1]) for row in rows}
+        return [
+            dataclasses.replace(
+                d,
+                linked_product_count=count_by_id.get(str(d.stock_item_id), 0),
+            )
+            for d in dtos
+        ]
 
     def _hydrate_has_image(self, dtos: list[StockItemDto]) -> list[StockItemDto]:
         """C-1 Chunk 6 / FU-033 — bulk-derive `has_image` from a single SQL
@@ -141,14 +184,19 @@ class GetStockItemsHandler:
         page = self._base_query().paginate(
             options, StockItemDto.from_entity, field_map=_FIELD_MAP
         )
-        return dataclasses.replace(page, items=self._hydrate_has_image(page.items))
+        items = self._hydrate_linked_product_count(
+            self._hydrate_has_image(page.items)
+        )
+        return dataclasses.replace(page, items=items)
 
     def handle_by_id(self, stock_item_id: UUID) -> StockItemDto | None:
         entity = self._base_query().by_id(stock_item_id)
         if entity is None:
             return None
         dto = StockItemDto.from_entity(entity)
-        return self._hydrate_has_image([dto])[0]
+        return self._hydrate_linked_product_count(
+            self._hydrate_has_image([dto])
+        )[0]
 
 
 @STOCK_ITEM_ROUTER.route("")

@@ -224,21 +224,14 @@
                 </q-tooltip>
             </q-btn>
 
-            <!-- Cart button — C-7 component will replace this when it
-                 ships. For now the existing add-to-list flow stays so
-                 the row isn't dead; the visual treatment matches the
-                 rest of the right cluster (no chip, no count). -->
-            <q-btn
-                flat
-                dense
-                size="sm"
-                :icon="cart.icon"
-                :color="cart.colour"
-                :loading="cartBusy"
-                @click.stop="onCartClick"
-            >
-                <q-tooltip>{{ cart.tooltip }}</q-tooltip>
-            </q-btn>
+            <!-- Cart button — unified AddToListButton (C-7 Chunk 1).
+                 Owns the state-aware render + already-on-list toggle
+                 (popover when on multiple lists); kills the row's
+                 hand-rolled double-toast path (FU-038). -->
+            <AddToListButton
+                variant="row"
+                :stock-item-id="item.stock_item_id"
+            />
         </q-card-section>
     </q-card>
 </template>
@@ -247,15 +240,14 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import { cartStateFor, type Membership } from 'src/models/shoppingList';
     import type { StockItem } from 'src/models/stockItem';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
-    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
@@ -293,7 +285,6 @@
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
     const locationStore = useLocationStore();
-    const shoppingListStore = useShoppingListStore();
     const recipeStore = useRecipeStore();
     const { showStockImages } = useImagePrefs();
 
@@ -453,34 +444,8 @@
         }
     }
 
-    // ── Cart button ─────────────────────────────────────────────────────
-    const cart = computed(() => {
-        const state = cartStateFor(
-            props.item.stock_item_id,
-            shoppingListStore.membership as Membership | null,
-        );
-        if (state === 'none')
-            return { icon: ICONS.add_shopping_cart, colour: undefined, tooltip: 'Add to a draft list' };
-        if (state === 'on_target')
-            return { icon: ICONS.shopping_cart, colour: 'primary', tooltip: 'On your current draft list' };
-        if (state === 'on_other')
-            return { icon: ICONS.shopping_cart, colour: 'accent', tooltip: 'On another list' };
-        return {
-            icon: ICONS.shopping_cart_checkout,
-            colour: 'amber-9',
-            tooltip: 'On multiple lists',
-        };
-    });
-
-    const cartBusy = ref(false);
-    async function onCartClick() {
-        cartBusy.value = true;
-        try {
-            await actions.addToList(props.item.stock_item_id);
-        } finally {
-            cartBusy.value = false;
-        }
-    }
+    // C-7 Chunk 1 — cart button is now `AddToListButton`; the dead
+    // `cart` computed + `onCartClick` + `cartStateFor` import retired.
 
     // ── Open / in-use toggle ────────────────────────────────────────────
     const openBusy = ref(false);

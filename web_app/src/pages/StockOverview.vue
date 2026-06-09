@@ -195,14 +195,13 @@
             {{ bulkSelection.size }} selected
             <template #action>
                 <q-btn flat no-caps label="Select visible" color="white" @click="selectVisible" />
-                <q-btn
-                    flat
-                    no-caps
-                    label="Add to list"
-                    color="white"
-                    :loading="bulkBusy"
-                    :disable="bulkSelection.size === 0"
-                    @click="bulkAddToPrimary"
+                <!-- C-7 Chunk 1 — unified bulk add: resolves the target
+                     once + emits one summary toast (decision 6). -->
+                <AddToListButton
+                    variant="bulk"
+                    class="text-white"
+                    :items="[...bulkSelection]"
+                    @bulk-done="cancelBulk"
                 />
                 <q-btn
                     flat
@@ -372,6 +371,7 @@
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';

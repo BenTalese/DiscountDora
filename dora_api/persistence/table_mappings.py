@@ -208,7 +208,16 @@ def configure_mappings(db: SQLAlchemy):
         "ShoppingListLine", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("shopping_list_id", UUIDType, ForeignKey("ShoppingList.id", ondelete="CASCADE"), nullable=False),
-        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
+        # C-7 Chunk 3 — a line is anchored by `stock_item_id` OR
+        # `product_id` (or both, when a product is nested under a
+        # stock item). Both columns are nullable individually; a
+        # CHECK enforces that at least one is set.
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=True),
+        Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), nullable=True),
+        CheckConstraint(
+            "stock_item_id IS NOT NULL OR product_id IS NOT NULL",
+            name="ck_shopping_list_line_anchor",
+        ),
         Column("quantity", Integer, nullable=True),
         Column("is_ticked", Boolean, nullable=False, server_default="0"),
         Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),

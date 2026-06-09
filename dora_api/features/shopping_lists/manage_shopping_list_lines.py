@@ -42,7 +42,13 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 class AddLineRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    stock_item_id: UUID
+    # C-7 Chunk 3 — a line may anchor on a stock item, a product, or
+    # both. At least one MUST be set; validated below + at the DB
+    # (CHECK ck_shopping_list_line_anchor). `product_id` enables the
+    # "standalone product line" path (L130 / L191 rule 1): a product
+    # whose linked stock item isn't on the list adds as its own row.
+    stock_item_id: UUID | None = None
+    product_id: UUID | None = None
     quantity: int | None = Field(default=1, ge=0)
     selected_product_id: UUID | None = None
 
@@ -52,6 +58,8 @@ class AddLineResponse:
     line_id: UUID | None = None
     list_not_found: bool = False
     item_not_found: bool = False
+    product_not_found: bool = False
+    no_anchor: bool = False
     already_on_list: bool = False
 
 
@@ -60,33 +68,57 @@ class AddLineHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: AddLineRequest, shopping_list_id: UUID) -> AddLineResponse:
+        # C-7 Chunk 3 — anchor validation. At least one of
+        # stock_item_id/product_id is required; the DB enforces it too
+        # but failing early gives the SPA a clean 400.
+        if request.stock_item_id is None and request.product_id is None:
+            return AddLineResponse(no_anchor=True)
+
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
         if lst is None:
             return AddLineResponse(list_not_found=True)
 
-        item: StockItem | None = self.repository.get(StockItem).by_id(request.stock_item_id)
-        if item is None:
-            return AddLineResponse(item_not_found=True)
+        if request.stock_item_id is not None:
+            item: StockItem | None = self.repository.get(StockItem).by_id(request.stock_item_id)
+            if item is None:
+                return AddLineResponse(item_not_found=True)
+        if request.product_id is not None:
+            product: Product | None = self.repository.get(Product).by_id(request.product_id)
+            if product is None:
+                return AddLineResponse(product_not_found=True)
 
-        # Prevent adding the same stock item to a list twice — the spec
-        # treats lines as unique-per-item and folds quantity into the same
-        # row instead.
-        existing = self.repository.get(ShoppingListLine).one(
+        # C-7 Chunk 3 — dedupe by anchor. Same stock_item_id OR same
+        # product_id on the same list = already on list. (A product
+        # nested under a stock item carries both columns; either
+        # match counts.)
+        sibling_lines = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
-            & EntityField(ShoppingListLine, "stock_item_id").eq(request.stock_item_id)
         )
+        existing = None
+        for sibling in sibling_lines:
+            if (
+                request.stock_item_id is not None
+                and sibling.stock_item_id == request.stock_item_id
+                and sibling.product_id is None
+            ):
+                existing = sibling
+                break
+            if (
+                request.product_id is not None
+                and sibling.product_id == request.product_id
+            ):
+                existing = sibling
+                break
         if existing is not None:
             return AddLineResponse(line_id=existing.id, already_on_list=True)
 
         # Sequence = current max + 1 so new lines append.
-        siblings = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
-        )
-        next_sequence = (max((l.sequence for l in siblings), default=-1)) + 1
+        next_sequence = (max((l.sequence for l in sibling_lines), default=-1)) + 1
 
         line = ShoppingListLine(
             shopping_list_id = shopping_list_id,
             stock_item_id = request.stock_item_id,
+            product_id = request.product_id,
             quantity = request.quantity,
             selected_product_id = request.selected_product_id,
             sequence = next_sequence,
@@ -106,8 +138,14 @@ def add_line(shopping_list_id: UUID):
     _Response = get_container().inject(AddLineHandler).handle(_Request, shopping_list_id)
     if _Response.list_not_found:
         return not_found("ShoppingList", shopping_list_id)
-    if _Response.item_not_found:
+    if _Response.no_anchor:
+        return business_rule_violation(
+            "A line needs at least one of stock_item_id or product_id."
+        )
+    if _Response.item_not_found and _Request.stock_item_id is not None:
         return not_found("StockItem", _Request.stock_item_id)
+    if _Response.product_not_found and _Request.product_id is not None:
+        return not_found("Product", _Request.product_id)
     _Logger.info(
         f"Added line {_Response.line_id} to shopping list {shopping_list_id} "
         f"(stock_item={_Request.stock_item_id}, already_on_list={_Response.already_on_list})"
@@ -262,6 +300,28 @@ class DeleteLineHandler:
         # strings so the parent-ownership guard doesn't always mismatch.
         if line is None or str(line.shopping_list_id) != str(shopping_list_id):
             return DeleteLineResponse(line_not_found=True)
+        # C-7 Chunk 3, rule 3 — when a stock-item-anchored line is
+        # removed, cascade-remove any nested product-only lines on
+        # the same list whose product is linked to that stock item.
+        # A "nested product line" here = product_id set, stock_item_id
+        # null, on the same list, where the product appears under the
+        # removed item's `products` relationship.
+        if line.stock_item_id is not None and line.product_id is None:
+            stock_item = (
+                self.repository.get(StockItem)
+                .include(StockItem.Fields.PRODUCTS)
+                .by_id(line.stock_item_id)
+            )
+            if stock_item is not None:
+                product_ids = {p.id for p in (stock_item.products or [])}
+                if product_ids:
+                    nested = self.repository.get(ShoppingListLine).all(
+                        EntityField(ShoppingListLine, "shopping_list_id").eq(line.shopping_list_id)
+                        & EntityField(ShoppingListLine, "stock_item_id").is_null()
+                        & EntityField(ShoppingListLine, "product_id").in_(list(product_ids))
+                    )
+                    for child in nested:
+                        self.repository.remove(child)
         self.repository.remove(line)
         self.repository.save_changes()
         return DeleteLineResponse()
@@ -306,6 +366,24 @@ class RemoveLineByStockItemHandler:
             & EntityField(ShoppingListLine, "stock_item_id").eq(stock_item_id)
         )
         if existing is not None:
+            # C-7 Chunk 3, rule 3 — cascade-remove nested product
+            # lines (same rule as the by-line delete; see comment
+            # above DeleteLineHandler).
+            stock_item = (
+                self.repository.get(StockItem)
+                .include(StockItem.Fields.PRODUCTS)
+                .by_id(stock_item_id)
+            )
+            if stock_item is not None:
+                product_ids = {p.id for p in (stock_item.products or [])}
+                if product_ids:
+                    nested = self.repository.get(ShoppingListLine).all(
+                        EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
+                        & EntityField(ShoppingListLine, "stock_item_id").is_null()
+                        & EntityField(ShoppingListLine, "product_id").in_(list(product_ids))
+                    )
+                    for child in nested:
+                        self.repository.remove(child)
             self.repository.remove(existing)
             self.repository.save_changes()
             return RemoveByStockItemResponse(removed=True)

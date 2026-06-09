@@ -53,7 +53,11 @@ SHOPPING_LIST_STATUS_VALUES = {
 @dataclass
 class ShoppingListLine(BaseEntity):
     shopping_list_id: UUID
-    stock_item_id: UUID
+    # C-7 Chunk 3 — a line is anchored by stock_item_id OR product_id
+    # (or both, when a product is nested under a stock item). At least
+    # one MUST be set; enforced by a DB CHECK + the add-line validator.
+    stock_item_id: UUID | None = None
+    product_id: UUID | None = None
     quantity: int | None = None
     is_ticked: bool = False
     selected_product_id: UUID | None = None
@@ -83,6 +87,7 @@ class ShoppingListLine(BaseEntity):
     class Fields(BaseEntity.Fields):
         SHOPPING_LIST_ID = "shopping_list_id"
         STOCK_ITEM_ID = "stock_item_id"
+        PRODUCT_ID = "product_id"
         QUANTITY = "quantity"
         IS_TICKED = "is_ticked"
         SELECTED_PRODUCT_ID = "selected_product_id"

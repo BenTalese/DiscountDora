@@ -1278,7 +1278,14 @@
 
     // Stock items keyed by id, looked up from the store, so we can hand
     // the right StockItem to <StockItemChip> per line.
-    function stockItemFor(stockItemId: string): StockItem | undefined {
+    function stockItemFor(stockItemId: string | null | undefined): StockItem | undefined {
+        if (!stockItemId) return undefined;
+        // Re-use the body below; the early-return keeps the rest unchanged.
+        // (eslint disable: re-used local var name in closure is fine here.)
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+        return _lookupStockItem(stockItemId);
+    }
+    function _lookupStockItem(stockItemId: string): StockItem | undefined {
         return stockItemStore.stockItems.find(
             (si) => si.stock_item_id === stockItemId
         );
@@ -1656,6 +1663,9 @@
         // Pull substitutes from the stock item's detail — we don't keep
         // them in the line DTO because they're a per-item attribute and
         // would bloat every line.
+        // C-7 Chunk 3 — product-only lines have no stock_item_id;
+        // substitutes don't apply, so bail early.
+        if (!line.stock_item_id) return;
         let subs: Substitute[] = [];
         try {
             const itemDetail = await stockItemApi.getDetailAsync(line.stock_item_id);
@@ -1680,7 +1690,13 @@
         }
         // Filter out subs already on this list — swapping into a duplicate
         // would just delete the line.
-        const onListIds = new Set(detail.value?.lines.map((l) => l.stock_item_id) ?? []);
+        // C-7 Chunk 3 — drop product-only lines (null stock_item_id) from
+        // the dedupe set; they don't anchor a substitute swap.
+        const onListIds = new Set(
+            (detail.value?.lines ?? [])
+                .map((l) => l.stock_item_id)
+                .filter((id): id is string => !!id),
+        );
         const choosable = subs.filter((s) => !onListIds.has(s.stock_item_id));
         if (choosable.length === 0) {
             $q.notify({

@@ -39,6 +39,150 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-132 — Browser-verify Cart Button Chunk 3 (standalone-product lines + rules 1–3)
+- **Raised:** 2026-06-12 (Cart Button Chunk 3 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Migration applies cleanly** (`d7c9e4a8c2b1`) on both SQLite +
+     Postgres; `verify_mappings()` passes for the now-nullable
+     `stock_item_id` and the new `product_id` FK.
+  2. **Rule 1** — POST `/api/shopping-lists/<id>/lines` with only
+     `product_id` (no `stock_item_id`) creates a line; list-detail
+     DTO carries `product_id` + null `stock_item_id`. CHECK
+     constraint rejects a body with neither anchor (400 from the
+     handler before DB).
+  3. **Rule 2** — preconditions: a draft list contains a
+     product-only line for product P; product P is not yet linked
+     to any stock item. POST `/api/stock-items/<S>/products` with
+     `product_id=P`. After: the orphan line is upgraded — its
+     `stock_item_id` is now S (or it's been folded into an
+     existing stock-item line for S, with that line's `product_id`
+     set to P).
+  4. **Rule 3** — preconditions: a stock-item line for S exists,
+     plus a separate product-only line for P (where P is linked to
+     S). DELETE the stock-item line by line-id → the nested
+     product line is gone too. Same for the cart-button
+     remove-by-stock-item path.
+  5. **No regressions** on stock-item-only adds (the dominant
+     case): existing dedupe by stock_item_id still wins.
+  6. **TS compile**: `ShoppingListLine.stock_item_id: string | null`
+     no longer breaks consumers (the obvious 3 spots in
+     `ShoppingListDetail.vue` were null-guarded this chunk; FU-131
+     covers the remaining inline-product surfaces).
+- **Why:** schema change + multi-rule wiring + cascade is the
+  highest-risk single chunk in the cart-button plan; the rules
+  interact with the link-product handler + by-line + by-item delete
+  paths.
+- **Recommended resolution:** now (next session). Requires a real
+  DB to exercise.
+
+---
+
+## [OPEN] FU-131 — Cart Button Chunk 3 frontend UI (rule 4 modal + inline-product variant + nested display)
+- **Raised:** 2026-06-12 (Cart Button Chunk 3 deliberate scope-down)
+- **Type:** rollout
+- **What:** Backend rules 1–3 + schema + DTO are wired this chunk.
+  The UI side of Chunk 3 was deliberately scoped down to keep the
+  schema-change PR reviewable. Remaining UI work:
+  - **Rule 4 modal**: removing a product-only line should prompt
+    "Also remove the stock item from this list?". Hook into the
+    existing DeleteLine + RemoveByStockItem paths from the SPA.
+  - **`AddToListButton variant="inline-product"`** + a
+    `product-id` anchor path (couples with the **My Products**
+    page link affordance, L195) — current `AddToListButton` only
+    accepts `stockItemId`; this chunk needs a parallel
+    `productId` prop.
+  - **Nested display on the shopping-list detail page** — render
+    a product line that shares a `stock_item_id` with another
+    line as a child of that line, not a sibling. Render
+    product-only lines with a "product only" badge.
+  - **Backup / restore round-trip** — verify the snapshot JSON
+    survives the new column (the table is already part of the
+    snapshot but the field set changed).
+- **Recommended resolution:** opportunistic — pair with the next
+  shopping-list-detail polish pass, or do as one focused UI sweep
+  before Cart Button Chunk 4.
+
+---
+
+## [OPEN] FU-130 — Browser-verify Cart Button Chunk 2 (combined modal for 2+ products)
+- **Raised:** 2026-06-12 (Cart Button Chunk 2 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **0 linked products** → row cart click adds silently via the
+     existing single-item flow (no modal). One toast.
+  2. **1 linked product** → same silent add. No modal.
+  3. **2+ linked products** → row cart click opens `QuickAddSheet`
+     pre-populated with the stock item; target-list dropdown +
+     offer radio + quantity editable; Add → one toast.
+  4. **2+ products AND 2+ drafts** → still routes through the same
+     `QuickAddSheet` (single surface, no stacked modals).
+  5. `linked_product_count` shows up on the `/stock-items` JSON
+     response (network panel); 0 with no `StockItemProduct` rows;
+     count increments as products are linked.
+  6. Bulk variant unaffected — still resolves target once + one
+     summary toast regardless of per-item product counts.
+- **Why:** the modal-routing gate is new code; verify the count
+  hydration stays O(1) DB calls per list page (single GROUP BY).
+- **Recommended resolution:** now (next session).
+
+---
+
+## [OPEN] FU-127 — Browser-verify Cart Button Chunk 1 (AddToListButton + double-toast fix)
+- **Raised:** 2026-06-12 (Cart Button Chunk 1 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Stock overview row cart button** behaves: not-on → adds (one
+     toast); on exactly 1 list → click removes silently; on 2+ →
+     popover with each list's "Remove from <name>" + "Remove from
+     all" + "Add to another list".
+  2. **Recipe detail ingredient row** cart button: same behaviour.
+  3. **Stock item detail toolbar** "Add to list" button: same
+     behaviour at a larger size + label.
+  4. **Bulk-add from Stock Overview**: select N items → toolbar "Add
+     N to list" → resolves the target ONCE (uses sessionStorage
+     pick or membership's quick_add_target) and surfaces a single
+     summary toast (no per-item toasts).
+  5. **FU-038 specifically**: re-adding an already-on-list item via
+     the row button **never** produces the contradictory pair
+     ("0 added, 1 already" + "Added").
+  6. **No regressions**: keyboard shortcut `a` (add focused or
+     selected) still works via the legacy `bulkAddToPrimary`
+     pathway (kept for keyboard ergonomics).
+- **Why:** ~3 visible surfaces adopted in this chunk; the popover
+  + bulk variants are new code paths. The remaining hand-rolled
+  cart paths on other surfaces (Cookbook overview card,
+  MyProductsPage, MealPlansOverview, QuickAddSheet entry,
+  ProductSearch) will be adopted opportunistically — they were
+  left in-place this chunk for risk control. **Logged as FU-128.**
+- **Recommended resolution:** now (next session).
+
+---
+
+## [OPEN] FU-128 — Adopt `AddToListButton` on remaining cart surfaces
+- **Raised:** 2026-06-12 (Cart Button Chunk 1 scope cap)
+- **Type:** rollout
+- **What:** Chunk 1 spec'd ~9 surfaces from proposal §1 (#1, #3, #5,
+  #6, #7, #11 row/toolbar/menu + #2, #9, #13 bulk). This commit
+  adopted **#1 StockItemRow**, **#3 StockItemDetailPage toolbar**,
+  **#5 RecipeDetailPage ingredient row**, **#9 StockOverview bulk**.
+  The remaining surfaces still carry hand-rolled add buttons:
+  - **#6 MyProductsPage**
+  - **#7 MealPlansOverview**
+  - **#11 ProductSearch**
+  - **#13 QuickAddSheet** (entry buttons elsewhere)
+  Each is mechanically the same change: swap the hand-rolled q-btn
+  for `<AddToListButton variant="row|toolbar" :stock-item-id="..." />`
+  and delete the dead handler.
+- **Why deferred:** plan says "do them in one PR so the old paths
+  all die together" — I held the line on risk by adopting only the
+  highest-traffic surfaces. The rest are mechanical follow-ups.
+- **Recommended resolution:** opportunistic — pair with the next
+  edit to each surface, or do them as one tidy sweep before
+  Chunk 2.
+
+---
+
 ## [OPEN] FU-126 — Rename `RecipeImageField` → `ImageUploadField`
 - **Raised:** 2026-06-12 (Stock Overview Chunk 6 / FU-033 impl)
 - **Type:** tidy-up
@@ -2020,18 +2164,15 @@ long session summary. Distinct from the other two logs:
   Reusable `RecipeImageField.vue` handles pick/preview/clear.
   See [[stockitem-image-substitute-notes-intent]].
 
-## [OPEN] FU-038 — Cart button fires contradictory double-toast on already-on-list
+## [RESOLVED] FU-038 — Cart button fires contradictory double-toast on already-on-list
 - **Raised:** 2026-06-06 (C-7 brief; feedback L154)
-- **Type:** finding (reported bug)
-- **What:** Adding an already-listed item shows two toasts at once — "0 added, 1
-  already on list" AND "<item> added to your primary list" (feedback L154). The
-  `addToList` path (`useStockItemActions.ts:38-64`) and a caller both notify. The
-  C-7 proposal makes the button idempotent/state-aware, but this double-toast can
-  be fixed independently and sooner.
-- **Why deferred:** C-7 is a proposal (no code). The full state-aware button is a
-  bigger build; the toast dedupe is a small standalone fix.
-- **Recommended resolution:** opportunistic / quick win — dedupe to one toast in
-  `addToList`; confirm in browser. Or fold into C-7 implementation phase 1.
+- **Resolved:** 2026-06-12 by Cart Button Chunk 1. The blind re-add
+  path is gone — already-on-list now **toggles** (remove silently on
+  1 list; popover with explicit Remove / Add-to-another on 2+). No
+  more "0 added, 1 already on list" + "Added to your primary list"
+  collision because the button never fires the add path when the
+  item is already on a list. Static-only impl; browser-verify is
+  **FU-127**.
 
 ## [OPEN] FU-037 — `.secret_key` hardcoded to `./data/`, ignores DORA_DATA_DIR
 - **Raised:** 2026-06-06 (INV-3 re-verification)

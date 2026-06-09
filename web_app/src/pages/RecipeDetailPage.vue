@@ -518,18 +518,16 @@
                                 </q-item-section>
 
                                 <q-item-section side top>
-                                    <div class="row q-gutter-xs">
-                                        <q-btn
-                                            flat
-                                            round
-                                            dense
-                                            :icon="ICONS.add_shopping_cart"
-                                            color="primary"
-                                            :disable="!ing.stock_item_id"
-                                            @click="onAddRowToList(ing)"
-                                        >
-                                            <q-tooltip>Add to primary shopping list</q-tooltip>
-                                        </q-btn>
+                                    <div class="row q-gutter-xs items-center">
+                                        <!-- C-7 Chunk 1 — unified AddToListButton.
+                                             State-aware + toggle behaviour;
+                                             replaces the row's hand-rolled
+                                             "add to primary" path. -->
+                                        <AddToListButton
+                                            v-if="ing.stock_item_id"
+                                            variant="row"
+                                            :stock-item-id="ing.stock_item_id"
+                                        />
                                         <q-btn
                                             flat
                                             round
@@ -1051,6 +1049,7 @@
     import { ICONS } from 'src/style/icons';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
@@ -1694,10 +1693,8 @@
         if (!isDirty.value && !nameError.value) goToCookMode();
     }
 
-    function onAddRowToList(ing: IngredientForm) {
-        if (!ing.stock_item_id) return;
-        void stockActions.addToList(ing.stock_item_id);
-    }
+    // C-7 Chunk 1 — `onAddRowToList` retired; the per-row
+    // AddToListButton owns the click now.
 
     // Add-all-missing â†’ opens a small target-list picker dialog.
     const targetListOpen = ref(false);

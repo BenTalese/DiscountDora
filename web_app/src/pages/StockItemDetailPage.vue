@@ -50,7 +50,12 @@
                 <BaseButton variant="secondary" :icon="ICONS.refresh" label="Restock" :loading="busy" @click="onRestock" />
                 <BaseButton variant="secondary" :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
                 <BaseButton variant="secondary" :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
-                <BaseButton variant="primary" :icon="ICONS.add_shopping_cart" label="Add to list" :loading="busy" @click="onAddToList" />
+                <!-- C-7 Chunk 1 — unified AddToListButton (toolbar). -->
+                <AddToListButton
+                    v-if="detail"
+                    variant="toolbar"
+                    :stock-item-id="detail.stock_item_id"
+                />
                 <q-space />
                 <BaseButton
                     v-if="scanningEnabled"
@@ -511,6 +516,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

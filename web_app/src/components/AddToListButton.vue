@@ -1,0 +1,429 @@
+<template>
+    <!--
+        C-7 Chunk 1 — the unified add-to-list button.
+
+        Owns the decision tree for "add to a draft list" + "toggle off when
+        already on a list" so every consumer (stock row, recipe ingredient,
+        bulk action, …) reads the same behaviour. Visual variants below are
+        chrome only — `behaviour is identical across them`.
+
+          row      — flat round icon button (default; sits in dense lists)
+          toolbar  — flat dense labelled button (page toolbars + detail pages)
+          menu     — q-item entry (inside a q-menu)
+          bulk     — variant for batch-add of `items[]`; one summary toast
+
+        State-aware render via `cartStateFor` (generalised from
+        useStockFilters): not-on / on_target (current draft) / on_other
+        (a draft we're not currently picking) / on_multiple (>1 unticked
+        list — popover).
+    -->
+
+    <!-- ── Bulk variant ─────────────────────────────────────────────────
+         Resolves the target ONCE for the whole batch via the existing
+         pick flow (sessionStorage-remembered), adds everything, surfaces
+         one summary toast. -->
+    <q-btn
+        v-if="variant === 'bulk'"
+        flat
+        no-caps
+        :icon="ICONS.add_shopping_cart"
+        :label="bulkLabel"
+        :loading="busy"
+        :disable="!hasItems"
+        @click.stop="onBulkAdd"
+    />
+
+    <!-- ── Menu variant ─────────────────────────────────────────────────
+         Lives inside a q-menu; renders as a q-item. -->
+    <q-item
+        v-else-if="variant === 'menu'"
+        clickable
+        :disable="busy"
+        @click="onPrimaryClick"
+    >
+        <q-item-section avatar>
+            <q-icon :name="iconFor" :color="iconColour ?? undefined" />
+        </q-item-section>
+        <q-item-section>{{ menuLabel }}</q-item-section>
+    </q-item>
+
+    <!-- ── Toolbar variant ──────────────────────────────────────────────
+         Flat labelled button (recipe detail "add to list", stock detail
+         toolbar, etc.). Wears a popover on `on_multiple`. -->
+    <q-btn
+        v-else-if="variant === 'toolbar'"
+        flat
+        no-caps
+        dense
+        :icon="iconFor"
+        :color="iconColour ?? undefined"
+        :label="toolbarLabel"
+        :loading="busy"
+        :aria-label="toolbarLabel"
+        @click.stop="onPrimaryClick"
+    >
+        <q-popup-proxy
+            v-if="multiPopoverOpen"
+            v-model="multiPopoverOpen"
+            anchor="bottom right"
+            self="top right"
+        >
+            <component :is="MultiListPopover" />
+        </q-popup-proxy>
+    </q-btn>
+
+    <!-- ── Row variant (default) ────────────────────────────────────────
+         Flat round icon — fits in a dense list row. -->
+    <q-btn
+        v-else
+        flat
+        dense
+        size="sm"
+        :icon="iconFor"
+        :color="iconColour ?? undefined"
+        :loading="busy"
+        :aria-label="tooltip"
+        @click.stop="onPrimaryClick"
+    >
+        <q-tooltip>{{ tooltip }}</q-tooltip>
+        <q-popup-proxy
+            v-if="multiPopoverOpen"
+            v-model="multiPopoverOpen"
+            anchor="bottom middle"
+            self="top middle"
+        >
+            <component :is="MultiListPopover" />
+        </q-popup-proxy>
+    </q-btn>
+</template>
+
+<script setup lang="ts">
+    import { computed, h, ref, type Component } from 'vue';
+    import { storeToRefs } from 'pinia';
+    import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator } from 'quasar';
+    import { ICONS } from 'src/style/icons';
+    import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { useStockItemActions } from 'src/composables/useStockItemActions';
+    import { cartStateFor, type ActiveListInfo, type Membership } from 'src/models/shoppingList';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+
+    /**
+     * `stockItemId` — single-anchor variants (row / toolbar / menu).
+     * `items` — bulk variant; each entry is a stock item id (later: optional
+     *   product + quantity carried by `Chunk 2`'s QuickAddSheet).
+     */
+    const props = withDefaults(
+        defineProps<{
+            stockItemId?: string;
+            items?: string[];
+            variant?: 'row' | 'toolbar' | 'menu' | 'bulk';
+            /** Optional override for the row tooltip / toolbar / menu label. */
+            label?: string;
+        }>(),
+        { variant: 'row' },
+    );
+
+    const shoppingListStore = useShoppingListStore();
+    const { membership: storeMembership } = storeToRefs(shoppingListStore);
+    const membership = computed<Membership | null>(
+        () => (storeMembership.value as Membership | null) ?? null,
+    );
+    const stockItemStore = useStockItemStore();
+    const { stockItems } = storeToRefs(stockItemStore);
+    const actions = useStockItemActions();
+    const listActions = useShoppingListActions();
+    const { openQuickAdd } = useQuickAdd();
+
+    // C-7 Chunk 2 — decision 2: 2+ linked products → always open the
+    // combined `QuickAddSheet` modal (the user picks the offer + target
+    // list in one surface). 0/1 products go through the existing
+    // single-item flow. Read off the StockItem store, which carries the
+    // count alongside the rest of the row state.
+    const linkedProductCount = computed<number>(() => {
+        if (!props.stockItemId) return 0;
+        const item = stockItems.value.find(
+            (s) => s.stock_item_id === props.stockItemId,
+        );
+        return item?.linked_product_count ?? 0;
+    });
+    const draftCount = computed<number>(() => {
+        const lists = membership.value?.active_lists ?? [];
+        return lists.filter((l) => l.status === 'draft').length;
+    });
+    /** Either axis ambiguous → open the combined modal. The proposal
+     *  spec'd "both ambiguous" but decision 2 promotes the 2+ products
+     *  case unconditionally; both share the same UX so route them
+     *  through QuickAddSheet rather than maintaining two paths. */
+    const shouldUseCombinedModal = computed<boolean>(() => {
+        if (linkedProductCount.value >= 2) return true;
+        if (linkedProductCount.value === 0 || linkedProductCount.value === 1) {
+            // Only escalate to the combined modal when BOTH axes are
+            // ambiguous (matches the §2.3 language). With 0/1 products
+            // the existing single-item flow already handles
+            // ambiguous-drafts via the radio dialog without stacking.
+            return false;
+        }
+        return draftCount.value >= 2;
+    });
+
+    const busy = ref(false);
+    const multiPopoverOpen = ref(false);
+
+    // ── State derivation ────────────────────────────────────────────────
+    const cartState = computed(() => {
+        if (!props.stockItemId) return 'none' as const;
+        return cartStateFor(props.stockItemId, membership.value);
+    });
+
+    // List of unticked lists this stock item sits on (for the multi popover).
+    const onLists = computed<ActiveListInfo[]>(() => {
+        if (!props.stockItemId || !membership.value) return [];
+        const entry = membership.value.items.find(
+            (i) => i.stock_item_id === props.stockItemId,
+        );
+        if (!entry) return [];
+        const lookup = new Map(
+            (membership.value.active_lists ?? []).map((l) => [l.shopping_list_id, l]),
+        );
+        return entry.unticked_list_ids
+            .map((id) => lookup.get(id))
+            .filter((l): l is ActiveListInfo => !!l);
+    });
+
+    const iconFor = computed(() => {
+        switch (cartState.value) {
+            case 'on_target':
+                return ICONS.shopping_cart;
+            case 'on_other':
+                return ICONS.shopping_cart;
+            case 'on_multiple':
+                return ICONS.shopping_cart_checkout;
+            case 'none':
+            default:
+                return ICONS.add_shopping_cart;
+        }
+    });
+    const iconColour = computed<string | null>(() => {
+        switch (cartState.value) {
+            case 'on_target':
+                return 'primary';
+            case 'on_other':
+                return 'accent';
+            case 'on_multiple':
+                return 'amber-9';
+            case 'none':
+            default:
+                return null;
+        }
+    });
+    const tooltip = computed(() => {
+        switch (cartState.value) {
+            case 'on_target':
+                return 'On your draft list — click to remove';
+            case 'on_other':
+                return 'On a draft list — click to remove';
+            case 'on_multiple':
+                return 'On multiple lists — click to manage';
+            case 'none':
+            default:
+                return 'Add to a draft list';
+        }
+    });
+    const toolbarLabel = computed(() => {
+        if (props.label) return props.label;
+        switch (cartState.value) {
+            case 'on_target':
+            case 'on_other':
+                return 'On list';
+            case 'on_multiple':
+                return `On ${onLists.value.length} lists`;
+            case 'none':
+            default:
+                return 'Add to list';
+        }
+    });
+    const menuLabel = computed(() => {
+        if (props.label) return props.label;
+        if (cartState.value === 'none') return 'Add to a list';
+        return 'Remove from list';
+    });
+
+    // ── Bulk variant ────────────────────────────────────────────────────
+    const hasItems = computed(() => (props.items?.length ?? 0) > 0);
+    const bulkLabel = computed(() => {
+        if (props.label) return props.label;
+        const n = props.items?.length ?? 0;
+        if (n === 0) return 'Add to list';
+        return `Add ${n} to list`;
+    });
+    const emit = defineEmits<{ (e: 'bulk-done'): void }>();
+
+    async function onBulkAdd() {
+        if (!hasItems.value) return;
+        busy.value = true;
+        try {
+            // Decision 6: one summary toast for the whole batch. Resolve
+            // the target up-front via the existing single-item flow on
+            // the FIRST item (handles 0-draft / ambiguous prompts +
+            // remembers the pick), then drop the rest through the bulk
+            // `addItems` helper which already aggregates into a single
+            // toast. The first item's toast is suppressed here because
+            // addItems will emit a combined one covering everything.
+            const ids = props.items ?? [];
+            // Prefer the membership-inferred target if there's exactly
+            // one draft (no prompt needed). Otherwise route the first
+            // item through the prompt flow and then batch the rest.
+            const targetFromMembership =
+                membership.value?.quick_add_target_list_id ?? null;
+            if (targetFromMembership) {
+                await listActions.addItems(
+                    targetFromMembership,
+                    ids.map((id) => ({ stock_item_id: id })),
+                );
+                emit('bulk-done');
+                return;
+            }
+            // Ambiguous / no-draft path — let the single-item flow
+            // resolve the target (it prompts + remembers in
+            // sessionStorage). After the first item lands, batch the
+            // rest into the now-known target.
+            await actions.addToList(ids[0]!);
+            const targetAfter = membership.value?.quick_add_target_list_id ?? null;
+            if (targetAfter && ids.length > 1) {
+                await listActions.addItems(
+                    targetAfter,
+                    ids.slice(1).map((id) => ({ stock_item_id: id })),
+                );
+            }
+            emit('bulk-done');
+        } finally {
+            busy.value = false;
+        }
+    }
+
+    // ── Primary click ───────────────────────────────────────────────────
+    // Decision tree (proposal §7a):
+    //   - state === 'none' → add via the existing single-item flow.
+    //   - state === 'on_target' or 'on_other' (exactly 1 list) → remove
+    //     silently from that list.
+    //   - state === 'on_multiple' (2+ lists) → open popover with
+    //     "Add to another" / "Remove from <list>" / "Remove from all".
+    async function onPrimaryClick() {
+        if (!props.stockItemId) return;
+        const stockItemId = props.stockItemId;
+        if (cartState.value === 'none') {
+            // C-7 Chunk 2 — 2+ products (and/or both axes ambiguous)
+            // → combined modal so the user makes both picks in one
+            // surface. Quantity lives only here (decision 5); quick
+            // paths stay qty-1.
+            if (shouldUseCombinedModal.value) {
+                openQuickAdd({ stockItemId });
+                return;
+            }
+            busy.value = true;
+            try {
+                await actions.addToList(stockItemId);
+            } finally {
+                busy.value = false;
+            }
+            return;
+        }
+        if (cartState.value === 'on_target' || cartState.value === 'on_other') {
+            const listId = onLists.value[0]?.shopping_list_id;
+            if (!listId) return;
+            busy.value = true;
+            try {
+                await listActions.removeFromList(listId, stockItemId);
+            } finally {
+                busy.value = false;
+            }
+            return;
+        }
+        // on_multiple — open popover
+        multiPopoverOpen.value = true;
+    }
+
+    // ── Multi-list popover (decision 1) ─────────────────────────────────
+    // Inline functional component — keeps the popover tightly scoped to
+    // this button without a separate file. Renders the per-list rows +
+    // "Add to another" + "Remove from all" actions.
+    const MultiListPopover: Component = {
+        setup() {
+            return () => h(QCard, { style: 'min-width: 240px' }, {
+                default: () => [
+                    h(QCardSection, { class: 'text-subtitle2' }, () => 'On these lists'),
+                    h(QSeparator),
+                    h(QList, { dense: true }, () =>
+                        onLists.value.map((l) =>
+                            h(QItem, {
+                                clickable: true,
+                                'v-close-popup': true,
+                                onClick: async () => {
+                                    if (!props.stockItemId) return;
+                                    multiPopoverOpen.value = false;
+                                    busy.value = true;
+                                    try {
+                                        await listActions.removeFromList(
+                                            l.shopping_list_id,
+                                            props.stockItemId,
+                                        );
+                                    } finally {
+                                        busy.value = false;
+                                    }
+                                },
+                            }, {
+                                default: () => [
+                                    h(QItemSection, () => `Remove from ${l.name}`),
+                                ],
+                            }),
+                        ),
+                    ),
+                    h(QSeparator),
+                    h(QItem, {
+                        clickable: true,
+                        onClick: async () => {
+                            if (!props.stockItemId) return;
+                            multiPopoverOpen.value = false;
+                            busy.value = true;
+                            try {
+                                await listActions.removeFromAllLists(
+                                    props.stockItemId,
+                                    onLists.value.map((l) => l.shopping_list_id),
+                                );
+                            } finally {
+                                busy.value = false;
+                            }
+                        },
+                    }, {
+                        default: () => [
+                            h(QItemSection, { class: 'text-negative' }, () =>
+                                `Remove from all (${onLists.value.length})`,
+                            ),
+                        ],
+                    }),
+                    h(QItem, {
+                        clickable: true,
+                        onClick: async () => {
+                            if (!props.stockItemId) return;
+                            multiPopoverOpen.value = false;
+                            busy.value = true;
+                            try {
+                                // "Add to another" — defer to the existing
+                                // add-to-list flow, which prompts for a target.
+                                await actions.addToList(props.stockItemId);
+                            } finally {
+                                busy.value = false;
+                            }
+                        },
+                    }, {
+                        default: () => [
+                            h(QItemSection, { class: 'text-primary' }, () => 'Add to another list'),
+                        ],
+                    }),
+                ],
+            });
+        },
+    };
+</script>

@@ -161,7 +161,11 @@ export default defineConfig((ctx): any => {
             // you can manually specify Quasar components/directives to be available everywhere:
             //
             // components: [],
-            // directives: [],
+            // C-1 Chunk 5 / L72 — long-press on a stock row enters bulk-
+            // select on mobile. Quasar tree-shakes directives; registering
+            // here makes `v-touch-hold` available without an explicit
+            // import per consumer.
+            directives: ['TouchHold'],
 
             // Quasar plugins
             plugins: [

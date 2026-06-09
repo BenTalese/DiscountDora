@@ -56,6 +56,17 @@
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.star_outline">
                     {{ recipe.difficulty }}
                 </q-chip>
+                <!-- C-4 Chunk 10 — section-count badge. Surfaced only when the
+                     recipe has >1 named section so flat recipes stay unchanged. -->
+                <q-chip
+                    v-if="(recipe.section_count ?? 0) > 1"
+                    dense
+                    outline
+                    color="primary"
+                    :icon="ICONS.list"
+                >
+                    {{ recipe.section_count }} parts
+                </q-chip>
             </div>
         </q-card-section>
 

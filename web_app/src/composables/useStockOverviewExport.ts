@@ -10,10 +10,18 @@ import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 export function useStockOverviewExport() {
     const baseUrl = resolveBaseURL('dora');
 
-    async function downloadCsv(): Promise<void> {
+    /** C-1 Chunk 1 / L67 — when `ids` is provided, the server filters the
+     *  export to that set so CSV mirrors the on-screen filtered list. An
+     *  empty array intentionally exports zero rows (matches what the
+     *  filter shows); pass `undefined` to export everything. */
+    async function downloadCsv(ids?: string[]): Promise<void> {
         try {
+            const idsParam =
+                ids !== undefined
+                    ? `&ids=${encodeURIComponent(ids.join(','))}`
+                    : '';
             const response = await fetch(
-                `${baseUrl}/stock-items/export?format=csv`,
+                `${baseUrl}/stock-items/export?format=csv${idsParam}`,
                 { method: 'GET', credentials: 'include' },
             );
             if (!response.ok) throw new Error(`Export failed (${response.status})`);
@@ -32,8 +40,14 @@ export function useStockOverviewExport() {
         }
     }
 
-    function openPrintView(): void {
-        window.open(`${baseUrl}/stock-items/print-view`, '_blank', 'noopener');
+    /** C-1 Chunk 1 / L67 — print-view honours the same `ids` filter as
+     *  the CSV export. Pass `undefined` to print everything. */
+    function openPrintView(ids?: string[]): void {
+        const idsParam =
+            ids !== undefined
+                ? `?ids=${encodeURIComponent(ids.join(','))}`
+                : '';
+        window.open(`${baseUrl}/stock-items/print-view${idsParam}`, '_blank', 'noopener');
     }
 
     function openQrSheet(ids: string[]): void {

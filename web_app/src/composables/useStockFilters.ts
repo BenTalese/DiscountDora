@@ -52,7 +52,9 @@ export function useStockFilters(sources: {
     const essentialsOnly = ref(false);
     const openOnly = ref(false);
     const hasAlertOnly = ref(false);
-    const usedInRecipeOnly = ref(false);
+    // C-1 Chunk 2 / L96 — `usedInRecipeOnly` filter retired. The cross-
+    // feature index (`recipesByStockItem`) survives because per-row
+    // "used in N recipes" badges still consume it.
     // X5 — "items that will silently jump onto my list when low". Surfaced
     // as its own chip so users can audit / find auto-add-prone items.
     const autoAddOnly = ref(false);
@@ -183,12 +185,6 @@ export function useStockFilters(sources: {
             if (autoAddOnly.value && !item.auto_add_when_low) return false;
             if (openOnly.value && !item.is_open) return false;
             if (hasAlertOnly.value && !hasAlert(item)) return false;
-            if (
-                usedInRecipeOnly.value
-                && (recipesByStockItem.value.get(item.stock_item_id)?.length ?? 0) === 0
-            ) {
-                return false;
-            }
             if (tokens.length > 0) {
                 const haystack = item.name.toLowerCase();
                 if (!tokens.some((t) => haystack.includes(t))) return false;
@@ -254,7 +250,6 @@ export function useStockFilters(sources: {
         if (autoAddOnly.value) n++;
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
-        if (usedInRecipeOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
         return n;
     });
@@ -279,8 +274,20 @@ export function useStockFilters(sources: {
             if (it.auto_add_when_low) autoAdd++;
             if (hasAlert(it)) attention++;
         }
+        // C-1 Chunk 2 / L93 — minified labels; matches the plan's order
+        // Shown · Well-stocked · Sufficient · Low · Out · Flagged ·
+        // Auto-add · Needs-attention. Stock-level names are shortened
+        // for the chip ("Sufficient Stock" → "Sufficient", "Low Stock"
+        // → "Low", "Out of Stock" → "Out") so they fit in a single
+        // sticky row.
+        const shortLabel = (name: string): string =>
+            name
+                .replace(/\bWell-Stocked\b/i, 'Well-stocked')
+                .replace(/\bSufficient Stock\b/i, 'Sufficient')
+                .replace(/\bLow Stock\b/i, 'Low')
+                .replace(/\bOut of Stock\b/i, 'Out');
         const levelStats = sources.stockLevels().map((l) => ({
-            label: l.name,
+            label: shortLabel(l.name),
             value: byLevel.get(l.stock_level_id) ?? 0,
             tone: toneForLevel(l.name),
         }));
@@ -306,7 +313,6 @@ export function useStockFilters(sources: {
         autoAddOnly.value = false;
         openOnly.value = false;
         hasAlertOnly.value = false;
-        usedInRecipeOnly.value = false;
         cartFilter.value = 'all';
     }
 
@@ -320,7 +326,6 @@ export function useStockFilters(sources: {
         autoAddOnly,
         openOnly,
         hasAlertOnly,
-        usedInRecipeOnly,
         cartFilter,
         sortBy,
         // option lists

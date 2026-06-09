@@ -1,8 +1,44 @@
 <template>
     <div class="q-pa-md">
-        <!-- Header bar ───────────────────────────────────────────────── -->
+        <!-- Header bar — C-1 Chunk 2 / L94: one button group across the
+             top in this order: New item · Export · Bulk select · Scan ·
+             Stocktake. Search stays separate on the right (L99). -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
+            <q-btn-dropdown flat no-caps :icon="ICONS.more_horiz" label="Export">
+                <q-list dense style="min-width: 200px">
+                    <!-- C-1 Chunk 1 / L67 — both exports respect the
+                         currently filtered set. `filteredIds` is undefined
+                         when no filters are active so the server-side
+                         fast-path stays "export everything". -->
+                    <q-item clickable v-close-popup @click="overviewExport.downloadCsv(filteredIds)">
+                        <q-item-section avatar>
+                            <q-icon :name="ICONS.file_download" />
+                        </q-item-section>
+                        <q-item-section>Export as CSV</q-item-section>
+                    </q-item>
+                    <q-item clickable v-close-popup @click="overviewExport.openPrintView(filteredIds)">
+                        <q-item-section avatar>
+                            <q-icon :name="ICONS.print" />
+                        </q-item-section>
+                        <q-item-section>Print / Save as PDF</q-item-section>
+                    </q-item>
+                </q-list>
+            </q-btn-dropdown>
+            <BaseButton
+                v-if="!bulkMode"
+                variant="secondary"
+                :icon="ICONS.checklist"
+                label="Bulk select"
+                @click="bulkMode = true"
+            />
+            <BaseButton
+                v-else
+                variant="secondary"
+                :icon="ICONS.close"
+                label="Cancel"
+                @click="cancelBulk"
+            />
             <BaseButton
                 v-if="scanningEnabled"
                 variant="secondary"
@@ -17,30 +53,32 @@
                 :attention="stocktakeOverdue > 0"
                 to="/stocktake"
             />
-            <q-btn-dropdown flat no-caps :icon="ICONS.more_horiz" label="Export">
-                <q-list dense style="min-width: 200px">
-                    <q-item clickable v-close-popup @click="overviewExport.downloadCsv()">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.file_download" />
-                        </q-item-section>
-                        <q-item-section>Export as CSV</q-item-section>
-                    </q-item>
-                    <q-item clickable v-close-popup @click="overviewExport.openPrintView()">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.print" />
-                        </q-item-section>
-                        <q-item-section>Print / Save as PDF</q-item-section>
-                    </q-item>
-                </q-list>
-            </q-btn-dropdown>
             <q-space />
+            <!-- C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the
+                 per-user `show_stock_images` flag; the row's image
+                 slot collapses out of the layout when off. Sits next
+                 to the search input so it's reachable without
+                 expanding filters. -->
+            <q-btn
+                flat
+                dense
+                round
+                :icon="showStockImages ? ICONS.image : ICONS.image_not_supported"
+                :aria-label="showStockImages ? 'Hide row images' : 'Show row images'"
+                :loading="imageToggleBusy"
+                @click="onToggleStockImages"
+            >
+                <q-tooltip>
+                    {{ showStockImages ? 'Hide row images (denser rows)' : 'Show row images' }}
+                </q-tooltip>
+            </q-btn>
             <q-input
                 ref="searchInputRef"
                 v-model="filters.searchText.value"
                 outlined
                 dense
                 debounce="150"
-                placeholder='Search ("tomato pasta" matches either)'
+                placeholder="Search"
                 clearable
                 autofocus
                 style="min-width: 280px"
@@ -54,51 +92,27 @@
         <!-- Summary counts moved to the sticky PageCountsFooter (A7). -->
 
         <!-- Quick filters ─ standardised via FilterBar (A4) ────────────── -->
+        <!-- C-1 Chunk 2 / L94: Bulk-select moved up to the top button
+             group; the filter bar no longer hosts page actions. -->
         <FilterBar :active-count="filters.activeFilterCount.value" @clear="filters.clearFilters">
-            <template #actions>
-                <q-btn
-                    v-if="bulkMode"
-                    flat
-                    no-caps
-                    :icon="ICONS.close"
-                    label="Cancel"
-                    @click="cancelBulk"
-                />
-                <q-btn
-                    v-else
-                    flat
-                    no-caps
-                    :icon="ICONS.checklist"
-                    label="Bulk select"
-                    @click="bulkMode = true"
-                />
-            </template>
             <template #filters>
             <div class="row q-gutter-sm items-center">
-            <q-chip
-                v-for="level in stockLevels"
-                :key="level.stock_level_id"
-                clickable
-                :selected="filters.levelFilter.value === level.stock_level_id"
-                :color="
-                    filters.levelFilter.value === level.stock_level_id
-                        ? getStockLevelColour(level.name)
-                        : undefined
-                "
-                :text-color="filters.levelFilter.value === level.stock_level_id ? 'white' : undefined"
-                outline
-                @click="filters.toggleLevelFilter(level.stock_level_id)"
-            >
-                <q-icon
-                    v-if="filters.levelFilter.value === level.stock_level_id"
-                    name="check"
-                    class="q-mr-xs"
-                />
-                {{ level.name }}
-                <q-badge floating color="grey" text-color="white">
-                    {{ filters.countByLevel.value.get(level.stock_level_id) ?? 0 }}
-                </q-badge>
-            </q-chip>
+            <!-- C-1 Chunk 2 / L97 — single dropdown defaults to "Any level".
+                 Per-level chips with count badges retired; counts live in
+                 the sticky footer now (PageCountsFooter). -->
+            <q-select
+                v-model="filters.levelFilter.value"
+                :options="levelFilterOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                dense
+                outlined
+                clearable
+                label="Any level"
+                style="min-width: 180px"
+            />
 
             <q-separator vertical class="q-mx-sm" />
 
@@ -118,9 +132,8 @@
                 Needs attention
             </FilterChip>
 
-            <FilterChip v-model="filters.usedInRecipeOnly.value" :icon="ICONS.menu_book" active-color="primary">
-                Used in a recipe
-            </FilterChip>
+            <!-- C-1 Chunk 2 / L96 — "Used in a recipe" filter removed
+                 (low signal; the recipe pages own that view). -->
 
             <q-chip
                 v-if="filters.cartFilter.value !== 'all'"
@@ -239,8 +252,14 @@
         >
             <template #before>
                 <div class="q-pr-md">
+                    <!-- C-1 Chunk 1 — small lists keep the glide-in
+                         ListTransition (DS4 perceived-perf masking, see
+                         STOCK_OVERVIEW_PERF.md); large lists swap to
+                         q-virtual-scroll so a >50-item pantry actually
+                         renders smoothly. Threshold matches the legacy
+                         page-1 cap so behaviour stays familiar below it. -->
                     <ListTransition
-                        v-if="filters.filteredStockItems.value.length > 0"
+                        v-if="filters.filteredStockItems.value.length > 0 && filters.filteredStockItems.value.length <= VIRTUAL_SCROLL_THRESHOLD"
                         tag="div"
                         class="q-list q-gutter-y-sm"
                     >
@@ -255,9 +274,30 @@
                             @click="onRowClick"
                             @bulk-toggle="toggleBulk"
                             @filter-location="filters.locationFilter.value = $event"
-                            @go-to-list="goToList"
+                            @long-press="onRowLongPress"
                         />
                     </ListTransition>
+                    <q-virtual-scroll
+                        v-else-if="filters.filteredStockItems.value.length > VIRTUAL_SCROLL_THRESHOLD"
+                        :items="filters.filteredStockItems.value"
+                        :virtual-scroll-item-size="VIRTUAL_SCROLL_ITEM_SIZE"
+                        :virtual-scroll-slice-size="30"
+                        class="stock-virtual-scroll q-list q-gutter-y-sm"
+                        v-slot="{ item, index }"
+                    >
+                        <StockItemRow
+                            :key="item.stock_item_id"
+                            :item="item"
+                            :bulk-mode="bulkMode"
+                            :selected="bulkSelection.has(item.stock_item_id)"
+                            :focused="focusedIndex === index"
+                            :peeking="peekId === item.stock_item_id"
+                            @click="onRowClick"
+                            @bulk-toggle="toggleBulk"
+                            @filter-location="filters.locationFilter.value = $event"
+                            @long-press="onRowLongPress"
+                        />
+                    </q-virtual-scroll>
 
                     <!-- Empty state ───────────────────────────────────── -->
                     <q-banner v-else class="dora-bg-sunken q-mt-md" rounded>
@@ -341,11 +381,11 @@
     import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
+    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShortcut } from 'src/composables/useShortcut';
     import { useStockFilters, STOCK_SORT_OPTIONS } from 'src/composables/useStockFilters';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Membership } from 'src/models/shoppingList';
     import type { StockGroup } from 'src/models/stockGroup';
     import { useStockOverviewExport } from 'src/composables/useStockOverviewExport';
@@ -360,7 +400,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
-    import { onMounted, ref, watch } from 'vue';
+    import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
@@ -400,6 +440,34 @@
     // dropdown on this page.
     const stockGroups = ref<StockGroup[]>([]);
 
+    // C-1 Stock Overview Chunk 1 — virtualisation tuning. Below the
+    // threshold we keep the existing ListTransition glide-in so small
+    // pantries feel unchanged; above it we hand off to q-virtual-scroll
+    // so a 500-item pantry renders smoothly. Item-size is a rough
+    // average — Quasar self-corrects after the first measure.
+    const VIRTUAL_SCROLL_THRESHOLD = 50;
+    const VIRTUAL_SCROLL_ITEM_SIZE = 72;
+
+    // C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the per-user
+    // `show_stock_images` flag via the C-cross composable.
+    const { showStockImages, setStockImages } = useImagePrefs();
+    const imageToggleBusy = ref(false);
+    async function onToggleStockImages() {
+        imageToggleBusy.value = true;
+        try {
+            await setStockImages(!showStockImages.value);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save image preference.',
+            });
+            void err;
+        } finally {
+            imageToggleBusy.value = false;
+        }
+    }
+
     const filters = useStockFilters({
         stockItems: () => stockItems.value,
         stockLevels: () => stockLevels.value,
@@ -409,17 +477,57 @@
         membership: () => shoppingListStore.membership as Membership | null,
     });
 
+    // C-1 Chunk 2 / L97 — options for the level dropdown. Built off the
+    // stockLevelStore so order matches the rest of the app.
+    const levelFilterOptions = computed(() =>
+        stockLevels.value.map((l) => ({
+            value: l.stock_level_id,
+            label: l.name,
+        })),
+    );
+
+    // C-1 Chunk 1 / L67 — id list passed to the export endpoint when ANY
+    // filter (text, level, location, …) is active. `undefined` keeps the
+    // server-side "export everything" fast-path so unfiltered exports
+    // don't push a URL with hundreds of UUIDs.
+    const filteredIds = computed<string[] | undefined>(() => {
+        const hasFilter =
+            (filters.searchText.value ?? '').trim().length > 0
+            || filters.activeFilterCount.value > 0;
+        if (!hasFilter) return undefined;
+        return filters.filteredStockItems.value.map((i) => i.stock_item_id);
+    });
+
     // ── Splitter peek ────────────────────────────────────────────────────
     const peekId = ref<string | null>(null);
     const splitPct = ref(100);
     watch(peekId, (v) => (splitPct.value = v ? 58 : 100));
 
+    // C-1 Chunk 5 / L68 / L71 — two-frame detail nav:
+    //   Desktop  → splitter peek (the embedded drawer).
+    //   Mobile   → full page navigation (`/stock/<id>`), no drawer.
+    // One shared `StockItemDetailPage` powers both (L69). Bulk mode
+    // wins over either; long-press enters bulk mode on mobile (see
+    // `onRowLongPress` below).
     function onRowClick(stockItemId: string) {
         if (bulkMode.value) {
             toggleBulk(stockItemId);
             return;
         }
+        if ($q.screen.lt.md) {
+            void router.push(`/stock/${stockItemId}`);
+            return;
+        }
         peekId.value = peekId.value === stockItemId ? null : stockItemId;
+    }
+
+    // L72 — long-press on a stock row (mobile) enters bulk-select with
+    // the held item already ticked. v-touch-hold on the row emits this
+    // event; no-op on desktop where bulk-mode lives in the top toolbar.
+    function onRowLongPress(stockItemId: string) {
+        if (!$q.screen.lt.md) return;
+        if (!bulkMode.value) bulkMode.value = true;
+        if (!bulkSelection.value.has(stockItemId)) toggleBulk(stockItemId);
     }
 
     // ── Keyboard shortcuts (S5) ──────────────────────────────────────────
@@ -544,9 +652,8 @@
     }
 
     // ── Navigation ───────────────────────────────────────────────────────
-    function goToList(listId: string) {
-        void router.push(`/shopping-lists/${listId}`);
-    }
+    // C-1 Chunk 3 — `goToList` retired with the "On N lists" chip; the
+    // cart button owns the list interaction now.
     function goToRecipes() {
         void router.push('/recipes');
     }
@@ -680,6 +787,14 @@
     }
     .stock-peek {
         max-height: 80vh;
+        overflow-y: auto;
+    }
+    /* C-1 Chunk 1 — virtualised list needs a sized scroll container.
+       The viewport-relative height keeps the footer + top toolbar
+       visible while the rows scroll inside the splitter pane. */
+    .stock-virtual-scroll {
+        max-height: calc(100vh - 320px);
+        min-height: 240px;
         overflow-y: auto;
     }
 </style>

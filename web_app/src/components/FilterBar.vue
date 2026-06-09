@@ -51,7 +51,6 @@
 
 <script setup lang="ts">
     import { getCurrentInstance } from 'vue';
-    import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
 
@@ -71,17 +70,17 @@
     // instead.)
     const expanded = defineModel<boolean>({ default: false });
 
-    // "Open on desktop, closed on mobile" — applied once at setup unless the
-    // parent has bound v-model (then the parent owns the state). Quasar's
-    // Screen plugin is activated in `boot/quasarScreen.ts`, so `gt.sm` is
-    // reactive and accurate.
-    const $q = useQuasar();
+    // C-1 Chunk 2 / L95 — filter panel hidden by default on desktop too.
+    // Previously opened automatically on >sm; flipped to always start
+    // closed so the page header reads as one tidy toolbar (the user
+    // toggles the panel when they actually want to filter). Parents
+    // that v-model the expanded state still own it.
     const instance = getCurrentInstance();
     const parentBound =
         !!instance?.vnode.props &&
         ('modelValue' in instance.vnode.props ||
             'onUpdate:modelValue' in instance.vnode.props);
     if (!parentBound) {
-        expanded.value = $q.screen.gt.sm;
+        expanded.value = false;
     }
 </script>

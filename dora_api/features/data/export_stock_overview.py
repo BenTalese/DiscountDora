@@ -12,12 +12,15 @@ import io
 import logging
 from datetime import datetime, timezone
 
+from uuid import UUID
+
 from flask import Response, render_template_string, request
 
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.data.export_shared import PRINT_CSS, PRINT_TOOLBAR
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import bad_request
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -113,14 +116,44 @@ _PRINT_TEMPLATE = """<!doctype html>
 """
 
 
-def _all_items():
+def _all_items(ids: list[UUID] | None = None):
+    """Load stock items (with the joins both exporters need). When `ids`
+    is provided, restricts the result to that set so CSV / print mirror
+    the on-screen filtered selection (C-1 Stock Overview Chunk 1 / L67).
+    An empty list returns no items (the caller has filtered everything
+    out, intentionally); `None` means "no filter, export everything".
+    """
     repo = SqlAlchemyRepository()
-    return (
+    query = (
         repo.get(StockItem)
         .include("stock_level")
         .include("stock_location")
-        .all()
     )
+    if ids is not None:
+        if not ids:
+            return []
+        query = query.where(EntityField(StockItem, "id").in_(list(ids)))
+    return query.all()
+
+
+def _parse_ids(raw: str | None) -> list[UUID] | None:
+    """Parse a comma-separated `ids=` param into a list of UUIDs. Returns
+    `None` when absent (= export everything) and an empty list when the
+    param is present but empty (= caller filtered everything out). Bad
+    UUIDs are dropped silently; the export of zero items is still a
+    legitimate response (matches what the on-screen filter would show)."""
+    if raw is None:
+        return None
+    out: list[UUID] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            out.append(UUID(token))
+        except (ValueError, TypeError):
+            continue
+    return out
 
 
 @STOCK_ITEM_ROUTER.route("/export", methods=["GET"])
@@ -131,7 +164,7 @@ def export_stock_overview():
             f"Unsupported export format '{fmt}'. Supported: csv. "
             "For PDF, open the print-view and 'Save as PDF' from your browser."
         )
-    items = _all_items()
+    items = _all_items(_parse_ids(request.args.get("ids")))
     body = _build_csv(items)
     today = datetime.now(timezone.utc).date().isoformat()
     filename = f"stock-overview-{today}.csv"
@@ -145,7 +178,7 @@ def export_stock_overview():
 
 @STOCK_ITEM_ROUTER.route("/print-view", methods=["GET"])
 def print_view_stock_overview():
-    items = _all_items()
+    items = _all_items(_parse_ids(request.args.get("ids")))
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     html = render_template_string(
         _PRINT_TEMPLATE,

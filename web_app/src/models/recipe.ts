@@ -13,6 +13,18 @@ export type RecipeIngredient = {
      *  instead of matching a stock-level name. */
     is_missing: boolean;
     is_low_stock: boolean;
+    /** C-4 Chunk 10 — nullable section grouping. NULL = implicit "main"
+     *  group; otherwise references one of `Recipe.sections[].section_id`. */
+    section_id: string | null;
+};
+
+/** C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).
+ *  Optional — a recipe with no sections renders flat, with all
+ *  ingredients/steps under no header. */
+export type RecipeSection = {
+    section_id: string;
+    sequence: number;
+    name: string;
 };
 
 export type Recipe = {
@@ -83,6 +95,12 @@ export type Recipe = {
     estimated_cost: number | null;
     estimated_cost_priced_count: number;
     estimated_cost_total_count: number;
+    /** C-4 Chunk 10 — named sections (DEC-3 option A). The list endpoint
+     *  populates only `section_count` for the card badge; the detail
+     *  endpoint also hydrates `sections[]`. Empty sections +
+     *  `section_count === 0` ⇒ recipe is flat. */
+    section_count: number;
+    sections: RecipeSection[];
 };
 
 /** Lightweight view of another recipe in the same version group —
@@ -106,6 +124,9 @@ export type RecipeStep = {
     ingredient_ids: string[];
     /** References Tool.id from the user's tools vocabulary. */
     tool_ids: string[];
+    /** C-4 Chunk 10 — section grouping for top-level steps. Sub-steps
+     *  carry the same id as their parent so the read path stays flat. */
+    section_id: string | null;
 };
 
 export type RecipeTagDefinition = {

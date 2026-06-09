@@ -39,6 +39,12 @@ class StockItemDto:
     is_open: bool
     opened_on: date | None
     last_checked_at: datetime | None
+    # C-1 Chunk 6 / FU-033 — whether the row has an image to render. The
+    # bytes themselves never travel in the list/detail JSON (the `image`
+    # column is deferred); the SPA fetches them via
+    # `GET /stock-items/<id>/image`, which itself falls back to a linked
+    # Product's image when the stock item has none. Hydrated below.
+    has_image: bool = False
 
     @classmethod
     def from_entity(cls, stock_item: StockItem) -> 'StockItemDto':
@@ -87,14 +93,62 @@ class GetStockItemsHandler:
             .include(StockItem.Fields.STOCK_GROUP)
         )
 
+    def _hydrate_has_image(self, dtos: list[StockItemDto]) -> list[StockItemDto]:
+        """C-1 Chunk 6 / FU-033 — bulk-derive `has_image` from a single SQL
+        pass that never touches the deferred image blob. The flag is true
+        when **either** the stock item carries its own image **or** any
+        linked product carries one (the product-image fallback). Mirrors
+        the get-image route's fallback rule so the SPA's "show thumbnail"
+        decision matches what the bytes endpoint will actually serve.
+        """
+        if not dtos:
+            return dtos
+        import dataclasses
+        from sqlalchemy import bindparam, text
+        from dora_api.app import db
+
+        ids = [str(d.stock_item_id) for d in dtos]
+        # Own-image OR (linked product with an image). LEFT JOIN keeps
+        # rows that have no link rows at all (own-image only path); the
+        # GROUP BY collapses the multi-product case to one row per item.
+        stmt = text(
+            'SELECT si.id, '
+            '       CASE WHEN si.image IS NOT NULL THEN 1 '
+            '            WHEN MAX(CASE WHEN p.image IS NOT NULL THEN 1 ELSE 0 END) = 1 THEN 1 '
+            '            ELSE 0 END AS has_image '
+            'FROM "StockItem" si '
+            'LEFT JOIN "StockItemProduct" sip ON sip.stock_item_id = si.id '
+            'LEFT JOIN "Product" p ON p.id = sip.product_id '
+            'WHERE si.id IN :ids '
+            'GROUP BY si.id, si.image'
+        ).bindparams(bindparam("ids", expanding=True))
+        rows = db.session.execute(stmt, {"ids": ids}).all()
+
+        def _key(v) -> str:
+            if isinstance(v, UUID):
+                return str(v)
+            if isinstance(v, bytes):
+                return str(UUID(bytes=v))
+            return str(v)
+        flag_by_id = {_key(row[0]): bool(row[1]) for row in rows}
+        return [
+            dataclasses.replace(d, has_image=flag_by_id.get(str(d.stock_item_id), False))
+            for d in dtos
+        ]
+
     def handle(self, options) -> Page[StockItemDto]:
-        return self._base_query().paginate(
+        import dataclasses
+        page = self._base_query().paginate(
             options, StockItemDto.from_entity, field_map=_FIELD_MAP
         )
+        return dataclasses.replace(page, items=self._hydrate_has_image(page.items))
 
     def handle_by_id(self, stock_item_id: UUID) -> StockItemDto | None:
         entity = self._base_query().by_id(stock_item_id)
-        return StockItemDto.from_entity(entity) if entity else None
+        if entity is None:
+            return None
+        dto = StockItemDto.from_entity(entity)
+        return self._hydrate_has_image([dto])[0]
 
 
 @STOCK_ITEM_ROUTER.route("")

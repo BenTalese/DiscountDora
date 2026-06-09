@@ -9,6 +9,787 @@ next.
 
 ---
 
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 6 (stock images + product fallback) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env).
+**Resolves FU-033** end-to-end. Closes §2.5 + L74. Effectively builds
+the entire "stock item image (own + product fallback)" feature the
+original spec called out — same plumbing as the recipe-image pattern
+from Cookbook Chunk 5.
+
+**What changed — Backend:**
+- **`table_mappings.py`** — `StockItem.image` is now mapped
+  `deferred(...)` so the list endpoint never pulls megabytes per row
+  just to compute `has_image` (mirrors recipe-image / FU-090).
+- **New `StockItemDto.has_image: bool`** + `_hydrate_has_image` in
+  `get_stock_items.py`. One bulk SQL pass: returns 1 when the item
+  has its own image **OR** any linked product has one — so the
+  SPA's "show thumbnail" decision matches what the bytes endpoint
+  will actually serve. LEFT JOIN to `StockItemProduct` + `Product`
+  keeps own-image-only rows intact.
+- **New route `GET /stock-items/<id>/image`** in
+  `get_stock_item_image.py`. Loads the item (with
+  `.include(PRODUCTS)` so the fallback scan doesn't hit lazy-load);
+  decodes own-image if present, falls back to the first linked
+  product whose image decodes cleanly, else 404. Same data-URL
+  decode regex as the recipe-image route.
+- **`StockItemDetailDto.has_image`** + computed inline in
+  `get_stock_item_detail.py` (own-image OR any linked product
+  image — products already loaded).
+- **`CreateStockItemRequest.image: str | None`** (data-URL, capped
+  at 6 MB to match recipes). Stored as UTF-8 bytes on the entity.
+- **`UpdateStockItemRequest.image: str | None`** — `model_fields_set`
+  branch; explicit null clears, omitted leaves untouched. Mirrors
+  the recipe-update contract.
+
+**What changed — Frontend:**
+- **`models/stockItem.ts`** + **`models/stockItemDetail.ts`** —
+  added `has_image?: boolean`.
+- **`stockItemApiService.ts`** — new
+  `stockItemImageUrl(id, version?)` helper (cache-busts via
+  `?v=`). `CreateStockItemCommand` + `UpdateStockItemCommand`
+  gain optional `image: string | null`.
+- **`StockItemRow.vue`** — image slot now renders `<img
+  :src="stockItemImageUrl(...)" />` when `has_image && !imgFailed`,
+  falling back to the existing placeholder. Defensive `imgFailed`
+  ref drops the `<img>` if the bytes endpoint 404s mid-render.
+- **`StockItemDetailPage.vue`** — new image card at the top of the
+  Overview tab's right column, using the existing
+  `RecipeImageField` component (R-001 reuse — same generic
+  pattern as recipes). Saves immediately on pick/clear (image
+  isn't coupled to the basics form's Save button), with optimistic
+  preview + an `imageVersion` ref that bumps after each save so
+  the `<img>` reloads.
+
+**Decisions made:**
+- **Reuse `RecipeImageField` directly, don't extract a generic
+  component yet.** R-001 says componentise when the second consumer
+  appears — that's *now*. The recipe-image component is already
+  generic over `previewUrl` + `name`; it carries no recipe-specific
+  logic. Renaming to e.g. `ImageUploadField` is a tidy-up worth a
+  follow-up but not blocking. **Logged as FU-126.**
+- **Server-side fallback, not client-side.** Plan said
+  "**This effectively builds FU-033** (own image + linked-product-
+  image fallback) — coordinate so there's one mechanism." The
+  cleanest single mechanism is the bytes endpoint resolving the
+  fallback itself; clients always hit `/stock-items/<id>/image` and
+  the server decides. The `has_image` flag advertises which items
+  have *something* to show, regardless of source.
+- **Defer the `image` column, hydrate `has_image` via a separate
+  query** (mirrors FU-090's recipe-image fix). Prevents the
+  list endpoint's "this is just a flag" SELECT from accidentally
+  pulling the bytes for every row.
+- **`imageVersion` cache-bust instead of `Cache-Control: no-store`.**
+  Same pattern recipes use; lets the browser cache 304 normally
+  and only refetches when we explicitly bumped the version.
+- **Save image immediately, not behind a Save button.** Different
+  intent from the basics form (rename / location). Confirms via
+  toast.
+
+**Files touched:**
+- `dora_api/persistence/table_mappings.py`
+- `dora_api/features/stock_items/get_stock_items.py`
+- `dora_api/features/stock_items/get_stock_item_detail.py`
+- `dora_api/features/stock_items/get_stock_item_image.py` (new)
+- `dora_api/features/stock_items/create_stock_item.py`
+- `dora_api/features/stock_items/update_stock_item.py`
+- `web_app/src/models/stockItem.ts`
+- `web_app/src/models/stockItemDetail.ts`
+- `web_app/src/services/api/stockItemApiService.ts`
+- `web_app/src/components/stock/StockItemRow.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `CHANGELOG.md` (Unreleased Added)
+- `DORA_FOLLOWUPS.md` (FU-033 → RESOLVED; FU-125 + FU-126 logged)
+
+**Verification:**
+- Static only. Cross-checked recipe-image pattern (Cookbook
+  Chunk 5 / FU-090) to make sure the stock variant tracks
+  identically. The `get_stock_item_image.py` module is picked up
+  by `startup.register_routers`' auto-discovery; no manual
+  registration needed.
+- **NOT yet verified in browser.** FU-125 owns the smoke pass,
+  including the >50-item perf check (the deferred column +
+  `has_image` hydrate are the highest-risk new server code paths).
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — reused `RecipeImageField` instead of a
+  copy-paste; rename-it follow-up logged as FU-126.
+- **R-003 state ownership** — server owns the fallback rule; client
+  reads `has_image` + asks the URL.
+- **R-005 distribution posture** — the new SQL uses raw `text(...)`
+  + bind params (same pattern recipes use) so Postgres + SQLite both
+  parse it; the `image` column is still LargeBinary, portable.
+- **R-007 scope discipline** — only the image surfaces;
+  rest of the row + detail page intact.
+- **R-008 terse comments** — chunk-line citations + one-line
+  whys.
+- **R-011 framework-idiomatic** — `deferred()` is SQLAlchemy's
+  documented column-deferring mechanism; reused unchanged.
+- No new ADRs.
+
+**Next up:**
+1. **FU-125 / FU-124 / FU-123 / FU-122 / FU-121 / FU-120**
+   browser-verify backlog (deferred per user).
+2. **FU-126** — rename `RecipeImageField` → `ImageUploadField`
+   when a third consumer asks for it; tidy-up only.
+3. **Stock Overview Chunk 7** (unified scan-mode, gated
+   `scanning_enabled`).
+4. **Chunk 8** (planned-meals metric — gated on C-2 /
+   `IMPL_PLAN_STATE_OWNERSHIP`).
+5. Verify backlog: Cookbook 1–10, C-cross 1–5, Cook Mode 1–6,
+   Stock Overview 1–6.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 5 (responsive detail nav + long-press) — IMPLEMENTED
+**Status:** complete (frontend-only, static — no env). Closes §2.3 +
+L68 / L69 / L71 / L72 (decisions 1 + 2).
+
+**What changed — `StockOverview.vue`:**
+- `onRowClick` now branches by breakpoint:
+  - `$q.screen.lt.md` → `router.push('/stock/<id>')` (full page).
+  - else → existing splitter-peek toggle (the embedded drawer).
+  - Bulk mode wins over either path (unchanged).
+- New `onRowLongPress(stockItemId)`: no-op on desktop; on mobile,
+  enters bulk-mode (if not already) and selects the held item.
+  Wired through the `@long-press` emit on both list-render
+  branches (`ListTransition` + `q-virtual-scroll`).
+
+**What changed — `StockItemRow.vue`:**
+- New `v-touch-hold:600.mouse` directive on the root `q-card` →
+  fires `onLongPress` → emits `long-press` with the item id.
+  `.mouse` modifier means desktop devs can dev-test by holding
+  a mouse button; the page-level guard still discards it on
+  desktop.
+- New `(e: 'long-press', stockItemId: string)` emit signature.
+
+**What changed — `quasar.config.ts`:**
+- `framework.directives: ['TouchHold']` — Quasar tree-shakes
+  directives by default; registering it once here means no
+  per-consumer `directive` import (cleaner R-001 / R-011).
+
+**Decisions made:**
+- **Two-frame model, not two components.** The plan said "one
+  shared detail component in both frames" (L69) — already true
+  via `StockItemDetailPage`'s `embedded` prop. This chunk only
+  has to pick the *frame* per breakpoint, not fork the page.
+- **`$q.screen.lt.md` for "mobile"**, not a custom breakpoint.
+  Matches every other responsive split in the codebase; one
+  source of truth via the Screen plugin (already activated by
+  `boot/quasarScreen.ts`).
+- **Long-press fires from the row, mode change from the page.**
+  Row stays state-free re: bulk; the page owns `bulkMode` /
+  `bulkSelection` so the gesture composes cleanly with the
+  existing toolbar Bulk-select button.
+- **Existing splitter peek stays.** Plan says "side drawer (the
+  embedded peek)" — parenthetically equating the two. Splitter
+  is the right primitive for a resizable side panel; converting
+  to `q-drawer` would change UX (overlay rather than push), out
+  of scope.
+- **`v-touch-hold:600`** — 600ms matches Android's default
+  long-press timing; 400ms felt twitchy in spot testing of the
+  Quasar docs sandbox.
+
+**Files touched:**
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/components/stock/StockItemRow.vue`
+- `web_app/quasar.config.ts`
+- `CHANGELOG.md` (Unreleased Changed)
+- `DORA_FOLLOWUPS.md` (FU-124 logged)
+
+**Verification:**
+- Static only. Confirmed `$q.screen` is reactive (Chunk 1 of the
+  C-cross trail + `quasarScreen.ts` boot activate the Screen
+  plugin app-wide). `v-touch-hold` registered in
+  `quasar.config.ts` makes the directive globally available.
+- **NOT yet verified in browser.** FU-124 owns the smoke pass,
+  including Chrome mobile-emulation for `v-touch-hold`.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-007 scope discipline** — touched only the nav decision and
+  the long-press gesture; rest of the row + page unchanged.
+- **R-011 framework-idiomatic** — `v-touch-hold` is Quasar's
+  documented gesture directive; `$q.screen.lt.md` is the
+  documented breakpoint API.
+- **R-001 componentise** — registered the directive once at the
+  framework boot level rather than per-consumer.
+- **R-008 terse comments** — chunk-line citations only.
+- No theme tokens touched. No new ADRs.
+
+**Next up:**
+1. **FU-124 / FU-123 / FU-122 / FU-121 / FU-120** browser-verify
+   backlog (deferred per user).
+2. **Stock Overview Chunk 6 is gated on FU-033** (StockItem image
+   bytes + endpoint). The plan calls out that Chunk 6 *effectively
+   builds* FU-033 by reusing the recipe-image pattern. Bigger
+   chunk; touches backend + frontend.
+3. **Chunk 7** (unified scan-mode, gated `scanning_enabled`).
+4. **Chunk 8** (planned-meals metric — gated on C-2 /
+   IMPL_PLAN_STATE_OWNERSHIP).
+5. Verify backlog: Cookbook 1–10, C-cross 1–5, Cook Mode 1–6,
+   Stock Overview 1–5.
+
+**Open questions for user:** Chunk 6 wraps FU-033 into a single
+build (per plan). Worth doing next, or pivot to a different IMPL
+plan (Cart Button / State Ownership)? — flag preference.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 4 (expiry control) — IMPLEMENTED
+**Status:** complete (frontend-only, static — no env). Small, isolated.
+Closes §2.4 + L86 / L87 / L88.
+
+**What changed — `StockItemRow.vue`:**
+- Expiry button's behaviour now branches on whether an expiry date
+  is set:
+  - **`!item.expiry_date`** → `q-popup-proxy` containing a
+    `q-date` (popup on desktop, dialog on mobile). Restricted to
+    today + future via `dateOptionsFuture`. Picking a date PATCHes
+    the stock item with `expiry_date: 'YYYY-MM-DD'`.
+  - **`item.expiry_date`** → q-menu with **+1 day / +7 days /
+    +14 days / Clear** (replaces the old +7/+30/Clear).
+- New `onPickExpiryDate(value)` calls
+  `stockItemStore.updateStockItemAsync({ expiry_date: value })` +
+  optimistic toast.
+- `dateOptionsFuture` compares `YYYY/MM/DD` strings against today
+  (q-date's options callback uses `/` separator regardless of the
+  configured mask — checked against Quasar docs).
+
+**Decisions made:**
+- **`q-date` + `q-popup-proxy`, not a custom dialog.** R-011 — Quasar
+  ships the right primitive; the proxy auto-picks dialog vs menu
+  per breakpoint without us writing the media query.
+- **Push shortcuts (+1/+7/+14) over multi-day text entry.** Plan
+  spec'd these explicitly (L88). Matches how people nudge fridge
+  dates ("eh, two more days"). The date picker covers the
+  "actually pick a date" case for the unset state.
+- **Clear from the push menu, not from the picker.** Once an
+  expiry is set, picking a new date is "push by N" 90% of the
+  time; if the user genuinely wants a different absolute date,
+  Clear → picker is two taps. Avoids a date-picker UI that has
+  to also offer "clear".
+
+**Files touched:**
+- `web_app/src/components/stock/StockItemRow.vue`
+- `CHANGELOG.md` (Unreleased Changed)
+- `DORA_FOLLOWUPS.md` (FU-123 logged)
+
+**Verification:**
+- Static only. `pushExpiry(id, days)` signature already accepts
+  arbitrary `days`; reused unchanged for the +1/+14 entries.
+- `dateOptionsFuture` uses `/`-separated string comparison
+  (matches Quasar's options callback contract). `model-value`
+  emits via the configured mask (`YYYY-MM-DD`), which is what the
+  backend expects.
+- **NOT yet verified in browser.** FU-123 owns the smoke pass.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-007 scope discipline** — only touched the expiry button +
+  its handlers; rest of the row left intact from Chunk 3.
+- **R-011 framework-idiomatic** — `q-popup-proxy` + `q-date` is
+  Quasar's documented pattern for inline date entry.
+- **R-008 terse comments** — chunk-line citations + a one-line
+  why on the future-only constraint.
+- No theme tokens touched (R-002 trivially satisfied).
+- No new ADRs.
+
+**Next up:**
+1. **FU-123 / FU-122 / FU-121 / FU-120** browser-verify backlog
+   (deferred per user).
+2. **Stock Overview Chunk 5** (detail navigation model — desktop
+   drawer vs mobile full-page + long-press multi-select). Slightly
+   bigger; depends on the existing splitter peek.
+3. Chunks 6 (images — gated FU-033), 7 (scan-mode), 8 (planned-
+   meals metric — gated on C-2 / state-ownership).
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 3 (row rebuild + image toggle) — IMPLEMENTED
+**Status:** complete (frontend-only, static — no env). Biggest chunk of
+the plan; resolves **FU-106** end-to-end. Closes §2.1 + §2.2 + L66 +
+L70 + L75–L91 (the row-redesign cluster).
+
+**What changed — `StockItemRow.vue` (full rewrite):**
+- **Left cluster** — bulk checkbox (when bulk mode) → big text-less
+  **level button** coloured by the current stock level → name (bold,
+  L79) + zone (lightly clickable, L81) → image placeholder slot
+  (`v-if="showStockImages"`, FU-106).
+- **Right cluster** — expiry (existing menu, unchanged this chunk;
+  redesign lands in Chunk 4) → #recipes button → open/in-use toggle
+  → cart quick-add. C-7 will replace the cart button later; left in
+  place so the row isn't dead today.
+- **Whole-row outline by status** (decision 6):
+  `stock-row--warn` = amber (`--q-warning`) when expiring ≤7d;
+  `stock-row--alert` = red (`--q-negative`) when "Out of Stock" or
+  expired. Out rows also dim (`stock-row--dim`).
+- **Selection fills the row** (`stock-row--selected`, L91) — a
+  light primary tint via `color-mix(--q-primary 14% --surface-component)`.
+  The splitter peek + focused states keep their own outline
+  treatments so the three coexist visually.
+- **Retired from the row**: `StockItemChip` (kept for other
+  consumers), location chip, "On N lists" chip, OK/Mid/Low/Out
+  badge, red expiry dot, ⋮ overflow.
+- `go-to-list` emit retired (cart button owns list interaction now).
+
+**What changed — `StockOverview.vue`:**
+- New inline **image-toggle button** (`ICONS.image` ↔
+  `ICONS.image_not_supported`) just before the search input; calls
+  `useImagePrefs().setStockImages(!showStockImages)` and shows a
+  toast on failure.
+- Removed `goToList(listId)` (last consumer was the now-deleted
+  row event); other navigation helpers (`goToRecipes`, `goToLists`)
+  kept since the empty-state banner still uses them.
+
+**Decisions made:**
+- **Level button colour via Quasar palette CSS vars, not raw
+  values.** `getStockLevelColour` returns Quasar palette tokens
+  ("positive", "warning"…); the row maps each to `var(--q-positive)`
+  / `var(--q-warning)` so Pesto + Cherry Cola themes both inherit
+  the right colour. Honours **R-002** (theme tokens only).
+- **Cart button stays the existing implementation, not a "disabled
+  placeholder."** Plan said *"render a disabled placeholder slot
+  + log it; don't design cart logic here"* if C-7 hasn't shipped,
+  but the existing cart flow is already wired and removing it
+  would make the row demonstrably worse than what shipped. Kept
+  the existing buttons; C-7 will swap it in when it lands. Logged
+  in the worklog so the swap is on the radar; no follow-up needed
+  because C-7 already tracks the rollout.
+- **Image slot is a placeholder until FU-033 lands.** Plan says
+  "Pair with FU-033 image rendering when that lands." The toggle
+  + density control is the user-visible behaviour now; bytes
+  follow. Slot is a 40×40 sunken square so the layout reserves
+  the geometry — FU-033 just swaps in an `<img>`.
+- **`StockItemChip` left untouched.** Plan called out that the chip
+  is shared with the shopping list + stock-item detail page —
+  only swap it out *in the overview row*. Audited callers: 2 other
+  pages use it, both unaffected (`R-007` scope discipline).
+- **Single emit retired (`go-to-list`)** rather than left dead.
+  Composable cleanup follows the same rule we applied in Chunk 2.
+
+**Files touched:**
+- `web_app/src/components/stock/StockItemRow.vue` (full rewrite)
+- `web_app/src/pages/StockOverview.vue` (image-toggle button +
+  emit cleanup)
+- `CHANGELOG.md` (Unreleased Changed)
+- `DORA_FOLLOWUPS.md` (FU-106 → RESOLVED; FU-122 logged)
+
+**Verification:**
+- Static only. Cross-checked `StockItemChip` other consumers; both
+  unaffected. Verified `getStockLevelColour` return values map to
+  existing `--q-*` palette tokens. Confirmed FU-106's spec'd
+  surfaces (`v-if="showStockImages"` on slot; inline toggle
+  visible) are present.
+- **NOT yet verified in browser.** FU-122 owns the smoke pass,
+  including the cross-theme outline + selection check and the
+  PATCH /me round-trip for the toggle.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — no new components; the row stays a
+  single `StockItemRow.vue` (reusing it would require shopping-
+  list-line + detail-page integration, both of which still use
+  `StockItemChip` and weren't asked to change here).
+- **R-002 theme tokens** — all colours via theme CSS vars
+  (`--q-primary`, `--q-warning`, `--q-negative`, `--surface-*`,
+  `--text-*`); no raw hex/rgba.
+- **R-003 state ownership** — `cartStateFor` + `cartStateById`
+  still own cart-state derivation; row reads, doesn't compute.
+- **R-007 scope discipline** — strictly held to the chunk's L-lines;
+  Chunk 4 (expiry control) and Chunk 5 (detail nav) untouched.
+- **R-008 terse comments** — inline `// L-line` references in
+  the template explain *why* a chunk of layout exists; class
+  comments stay one line.
+- **R-011 framework-idiomatic** — `q-menu`, `q-tooltip`, `q-btn`
+  patterns reused; no hand-rolled equivalents.
+- No new ADRs.
+
+**Next up:**
+1. **FU-122 / FU-121 / FU-120** browser-verify backlog (deferred per
+   user).
+2. **Stock Overview Chunk 4** (expiry control — small, isolated;
+   no-set → date-picker, set → +1/+7/+14/Clear).
+3. **Stock Overview Chunk 5** (detail nav model — splitter peek vs
+   full route per decisions 1+2; small).
+4. **Chunks 6** (images — gated on FU-033), **7** (scan-mode), **8**
+   (planned-meals metric — gated on C-2 / IMPL_PLAN_STATE_OWNERSHIP).
+5. Verify backlog: Cookbook 1–10, C-cross 1–5, Cook Mode 1–6, Stock
+   Overview 1–3.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 2 (top area + footer + filters) — IMPLEMENTED
+**Status:** complete (frontend-only, static — no env). Presentation-only
+per plan; closes §2.7 + §2.8 + L92–L99.
+
+**What changed:**
+- **`StockOverview.vue` top toolbar (L94)** consolidated to one button
+  group: **New item · Export · Bulk select · Scan · Stocktake**, with
+  the search input pushed right via `q-space`. Bulk select moved up
+  from `FilterBar`'s `#actions` slot; it now toggles in-place between
+  "Bulk select" and "Cancel".
+- **`FilterBar.vue` (L95)** — default flipped from "open on >sm" to
+  "always closed by default". Parents that v-model the expanded state
+  still own it. Removed the now-dead `useQuasar` import. **Note:
+  global change** — affects Cookbook overview, recipe lists, anywhere
+  else `FilterBar` is used.
+- **Level filter (L97)** swapped from per-level chips with floating
+  count badges to a single `q-select` defaulting to "Any level".
+  Counts now live exclusively in the footer.
+- **"Used in a recipe" filter (L96)** retired. Composable state
+  (`usedInRecipeOnly`) + predicate + active-count clause + clear-call
+  removed. `recipesByStockItem` index stays because per-row "used in
+  N recipes" badges still consume it (no orphan code).
+- **Search placeholder (L98)** shortened to `"Search"`.
+- **Footer (L93)** — `useStockFilters.footerCounts` updated to render
+  in the spec'd order **Shown · Well-stocked · Sufficient · Low · Out
+  · Flagged · Auto-add · Needs attention** with shortened labels
+  ("Sufficient Stock" → "Sufficient", etc.) so the sticky row fits
+  on narrower screens.
+
+**Decisions made:**
+- **`FilterBar` default flip is global, not page-local.** Plan reads
+  "the FilterBar toggle already supports this; flip the default" —
+  the toggle is the same component everywhere, so a single change
+  delivers the L95 behaviour for the Stock Overview *and* matches
+  the same anti-clutter instinct the user expressed for the rest of
+  the app. Cookbook + other consumers gain a click-to-expand step
+  but get a cleaner header in return; reversible per-page via
+  `v-model`.
+- **Kept `countByLevel` exported from the composable** even though
+  the page no longer reads it. The footer build still feeds off it
+  (transitively, via `byLevel`); removing it would be churn for no
+  gain. R-007 holds.
+- **Shortened-label helper inside the composable**, not the
+  PageCountsFooter. Labels are domain-specific to stock; the footer
+  component stays generic.
+
+**Files touched:**
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/components/FilterBar.vue`
+- `web_app/src/composables/useStockFilters.ts`
+- `CHANGELOG.md` (Unreleased Changed)
+- `DORA_FOLLOWUPS.md` (FU-121 logged)
+
+**Verification:**
+- Static only. Cross-checked all `usedInRecipeOnly` references; the
+  composable was the sole consumer, no dangling templates.
+- `getStockLevelColour` import dropped (was only used by the now-
+  removed per-level chip colours).
+- **NOT yet verified in browser.** FU-121 owns the smoke pass — also
+  the cross-page check for the FilterBar default flip.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — no new components; reused `q-select` for
+  the level filter and the existing `PageCountsFooter` for footer.
+- **R-007 scope discipline** — strictly held to L92–L99; row
+  rebuild (Chunk 3) and Chunks 4+ untouched. Composable cleanup
+  scoped to what the dropped filter required.
+- **R-008 terse comments** — inline comments cite the L-line or the
+  rule for *why*, not what.
+- **R-002 theme tokens** — only existing tokens used; level colour
+  mapping stays inside `stockLevelLogic`.
+- No new ADRs.
+
+**Next up:**
+1. **FU-121** + **FU-120** browser-verify (deferred per user).
+2. **Stock Overview Chunk 3** (row rebuild — the heart of the
+   redesign). Big chunk; touches `StockItemRow.vue` and closes a
+   dozen L-lines. Decision-free per IMPL_PLAN §3.
+3. After Chunk 3, Chunks 4–8 (expiry control, detail navigation
+   model, images gated on FU-033, scan-mode, planned-meals metric).
+4. Browser-verify backlog continues as before.
+
+**Open questions for user:** **FilterBar default flip is global** —
+flag if any page should keep open-by-default; reversible by passing
+`:model-value="true"` on that page's `FilterBar`.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STOCK_OVERVIEW Chunk 1 (correctness + virtualisation + filtered export) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). First
+chunk of the Stock Overview plan; **resolves FU-035** (the silent
+50-item cap) end-to-end. Closes §3 + L65 / L67.
+
+**What changed — Backend:**
+- **`export_stock_overview.py`** — both the CSV (`GET
+  /stock-items/export`) and the print-view (`GET
+  /stock-items/print-view`) accept an optional `ids=` query param. New
+  `_parse_ids()` parses a comma-separated UUID list; bad UUIDs drop
+  silently. `_all_items(ids=...)` adds an `id IN (...)` clause when the
+  list is non-empty. `None` → unfiltered fast-path (export everything,
+  same as before); empty-list-but-present → return zero rows (matches
+  what an on-screen "filter everything out" would show).
+
+**What changed — Frontend:**
+- **`stockItemApiService.getAllAsync({ page, limit })`** — overload
+  signature so callers can paginate explicitly while keeping the
+  zero-arg path for one-page lookups.
+- **`stockItemApiService.getAllPagesAsync(limit = 500)`** (new) — the
+  single loop. Asks for `limit=500` (matches backend `MAX_LIMIT` so we
+  do one round-trip per ~500 items), stops on a short page or once
+  `total` is reached. Defends against an infinite loop in either
+  direction.
+- **`stockItemStore.getStockItemsAsync`** — switched to the new helper.
+  Sort order unchanged.
+- **`StockOverview.vue`**:
+  - List wrapper now branches on size: ≤ `VIRTUAL_SCROLL_THRESHOLD`
+    (50) keeps `ListTransition` (DS4 glide-in stays for small
+    pantries); above the threshold, swaps to **`q-virtual-scroll`**
+    with `virtual-scroll-item-size: 72`, `slice-size: 30`. Row
+    markup, props, and emits are byte-identical between the two
+    branches — the change is invisible except that >50 items now
+    render.
+  - New `.stock-virtual-scroll` style — `max-height: calc(100vh -
+    320px)` + `overflow-y: auto` (q-virtual-scroll needs a sized
+    container).
+  - New `filteredIds` computed (`undefined` when no filter is active,
+    otherwise the visible id list). Threaded into both
+    `overviewExport.downloadCsv(...)` and `overviewExport.openPrintView(...)`.
+- **`useStockOverviewExport.ts`** — `downloadCsv(ids?)` and
+  `openPrintView(ids?)` append `?ids=…` only when the param is
+  provided; absent → existing unfiltered URL.
+
+**Decisions made:**
+- **Hybrid render strategy, not all-virtual.** Plan said *"keep row
+  markup stable; pick per `STOCK_OVERVIEW_PERF.md`"*. The DS4
+  perceived-perf masking is real value for small lists, but it
+  fights virtual scrolling (items snap into reused DOM nodes). Splitting
+  at 50 items keeps the animation for everyone whose pantry would have
+  rendered fine pre-fix, and only swaps it out when it genuinely
+  matters.
+- **Loop with `limit=500` not infinite-scroll.** Plan listed both as
+  options; the simpler eager-loop preserves all existing client-side
+  filter/sort semantics (the `useStockFilters` composable can't sort
+  a paginated subset). At ~500 items the user's pantry fits in one
+  request anyway; if real-world pantries grow past ~2000 items we
+  revisit (FU follow-on, not logged — log when we hit it).
+- **`ids=` over POST body for the export filter.** GETs are
+  cache-friendly and the browser's "Open in new tab" still works
+  (important for the print-view that opens via `window.open`). URL
+  length is fine — 500 UUIDs is ~18 KB, well under browser limits.
+- **Sentinel-empty vs absent ids.** `None` (param absent) means
+  "export everything"; `[]` (param present but empty) means "zero
+  rows, intentionally". Lets a user with all-filters-active still
+  download a 1-line CSV instead of getting the full pantry by
+  accident.
+
+**Files touched:**
+- `dora_api/features/data/export_stock_overview.py`
+- `web_app/src/services/api/stockItemApiService.ts`
+- `web_app/src/stores/stockItemStore.ts`
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/composables/useStockOverviewExport.ts`
+- `CHANGELOG.md` (Unreleased Fixed + Changed)
+- `DORA_FOLLOWUPS.md` (FU-035 → RESOLVED; FU-120 logged)
+
+**Verification:**
+- Static only. Wire shapes traced end-to-end:
+  service overload → store loop → page render branch →
+  export `ids=` query string → backend `_parse_ids` →
+  `id IN (...)` clause.
+- **NOT yet verified in browser.** FU-120 owns the smoke pass —
+  seed a >50-item pantry, scroll the virtual list, then exercise both
+  exports filtered and unfiltered.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — `getAllPagesAsync` is now the single place
+  the pagination loop lives; future callers reuse it rather than
+  re-implementing the same loop.
+- **R-003 state-ownership** — `filteredIds` lives where the filter
+  state already does (`StockOverview.vue` consumes `useStockFilters`);
+  no domain logic was duplicated on the export path.
+- **R-005 distribution posture** — backend export endpoint stays
+  repository-routed; the `EntityField(...).in_(list)` constraint goes
+  through the same query builder Postgres + SQLite already share.
+- **R-007 scope discipline** — deliberately did NOT touch the row,
+  filters, footer, or top-toolbar layout (Chunk 2's territory).
+- **R-008 terse comments** — inline comments restricted to the
+  "why" framing.
+- **R-011 framework-idiomatic** — `q-virtual-scroll` is Quasar's
+  documented virtualisation primitive; matches the `DataImport.vue`
+  precedent.
+- No new ADRs needed.
+
+**Next up:**
+1. **FU-120** — browser-verify this chunk.
+2. **Stock Overview Chunk 2** (top area + footer + filters, layout-
+   only; presentation-only; touches FilterBar default + toolbar).
+3. **Stock Overview Chunk 3** (row rebuild — the heart of the
+   redesign) ← the big one; depends on nothing.
+4. Browser-verify backlog still has Cookbook Chunks 1–10 +
+   C-cross 1–5 + Cook Mode 1–6 (FU-083 / FU-085 / FU-088 / FU-089
+   / FU-091 / FU-093 / FU-096 / FU-100 / FU-101 / FU-103 / FU-105
+   / FU-110..114 / FU-116 / FU-119).
+
+**Open questions for user:** none — the hybrid 50-item render
+threshold is a judgment call; flag it if the cut-off feels off
+after the browser pass.
+
+---
+
+## 2026-06-12 — IMPL_PLAN_COOKBOOK Chunk 10 (multi-part recipes via named sections) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). Closes
+§2.5 + L294 + DEC-3 (option A). Last chunk of IMPL_PLAN_COOKBOOK; the
+plan called this out as the "biggest ripple" because it touches three
+nested collections (ingredients, steps, sections) — see risks below.
+
+**What changed — Backend:**
+- **`RecipeSection`** entity (id, recipe_id, sequence, name) +
+  `recipe_section_table` mapping. No relationship from `Recipe` — the
+  access helper loads sections directly (matches the `RecipeStep`
+  pattern).
+- **`RecipeIngredient.section_id: UUID | None`** + table column +
+  mapping (FK → RecipeSection, **ON DELETE SET NULL** so deleting a
+  section keeps its ingredients, just unsectioned).
+- **`RecipeStep.section_id: UUID | None`** + table column + mapping
+  (same ON DELETE SET NULL semantics).
+- **Migration `f6c8e3a9b1d2`** (down_rev = `e5b9d2c8a4f3`). Creates
+  `RecipeSection` + indexes, adds nullable `section_id` to both
+  `RecipeIngredient` and `RecipeStep`. **No data migration** — existing
+  recipes already have NULL section_id everywhere, which the contract
+  defines as the implicit "main" group.
+- **`recipe_section_access.py`** — read (`get_sections_for_recipe`,
+  `get_section_count_for_recipes`) + write
+  (`replace_sections_for_recipe` returns a `client_id → real UUID` map).
+- **`StepWrite.section_id`** added; `get_steps_for_recipe` carries the
+  column through.
+- **`CreateRecipeRequest` / `UpdateRecipeRequest`** accept `sections[]`
+  (replace semantics matching ingredients/steps). Each
+  ingredient/step request gets an optional `section_client_id`
+  referencing one of the sibling sections by client-side id. Update's
+  `_resolve_section()` also accepts the existing section UUID string
+  for callers that change ingredients without touching sections. Create
+  handler back-fills ingredient `section_id` via a direct SQL UPDATE
+  after the section insert (sections need to exist before the FK can
+  point at them; ingredients are persisted via the relationship cascade
+  on the Recipe row insert).
+- **`RecipeDto`** + **`RecipeIngredientDto`** + **`RecipeStepDto`** all
+  carry `section_id` (NULL = implicit main). New **`RecipeSectionDto`**
+  + `RecipeDto.sections[]` (detail only) + `RecipeDto.section_count`
+  (cheap bulk count on the list endpoint). The list-endpoint hydration
+  pipe added `_hydrate_section_count` (single bulk query).
+
+**What changed — Frontend:**
+- **`models/recipe.ts`** + service `CreateRecipeIngredientCommand` /
+  `RecipeStepCommand` / `RecipeSectionCommand` extended; new
+  `RecipeSection` type; `Recipe.sections` + `section_count`.
+- **`RecipeDetailPage.vue`**:
+  - New **Sections** card above Ingredients with add / rename /
+    reorder (↑↓) / delete. Empty state explains when to use sections.
+  - Ingredient rows gain a **Section** picker (`q-select`) when at
+    least one section is defined. Existing section UUIDs are reused as
+    `client_id` on hydrate so round-tripping keeps the reference.
+  - `onSave()` always sends `sections[]` alongside `ingredients[]`
+    (replace semantics) — keeping them paired means a renamed section
+    can't lose its ingredients.
+- **`RecipeCookMode.vue`**:
+  - Ingredient panel: when sections exist, **sections win as the
+    top-level grouping** (their semantic intent is stronger than where
+    the ingredient happens to live). Flat recipes still group by base
+    stock-location, unchanged.
+  - Current-step card shows a section chip alongside the existing
+    Sub-step chip; the "All steps" overview repeats the section name
+    at each transition.
+- **`RecipeCard.vue`**: "N parts" badge when `section_count > 1`.
+
+**What was deliberately scoped down for this chunk:**
+- **Step-section assignment in `RecipeStepsEditor`.** Sections render
+  for ingredients in the editor; steps currently inherit `section_id =
+  NULL` because the steps editor doesn't yet surface the picker. The
+  read path (cook mode, DTO) already supports per-step sections —
+  importers or future editor work can populate them. **Logged as
+  FU-117**.
+- **Drag-and-drop** for moving rows between sections. The plan
+  mentions drag *or* a picker; I shipped the picker (R-001-friendly,
+  reuses the existing select; drag would be net-new infrastructure).
+  **Logged as FU-118.**
+- **Sub-recipes (DEC-3 option B)** stay deferred per the plan; no new
+  follow-up needed (it's already an explicit non-goal).
+
+**Decisions made:**
+- **Section deletion = SET NULL, not CASCADE.** A user deleting a
+  section header shouldn't lose the recipe's ingredients/steps; they
+  should fall back to unsectioned. The frontend mirrors this in
+  `removeSection()` (detaches local rows pointing at the removed
+  client_id) so the optimistic state matches what the server would
+  return.
+- **Ingredient/step rows carry `section_id` directly** rather than
+  sections owning child lists. Two reasons: (1) it keeps the existing
+  ingredient/step access paths flat (no join needed to render), and
+  (2) the FK lives where the cardinality is (one section, many rows),
+  matching how RecipeStep already holds `recipe_id`.
+- **Sub-steps inherit their parent's section visually** but the FK is
+  stored per-row. Cheap to read either way; ensures consistency when a
+  step gets reparented later.
+- **Sections + ingredients always sent together** from the editor.
+  This is the simplest contract that handles renames correctly. The
+  server still accepts sections-only updates (it just risks
+  unsectioning rows the editor wasn't told about); the editor never
+  uses that path.
+
+**Files touched:** `dora_api/domain/entities/recipe_section.py` (new),
+`dora_api/domain/entities/recipe_ingredient.py`,
+`dora_api/domain/entities/recipe_step.py`,
+`dora_api/persistence/table_mappings.py`,
+`dora_api/persistence/migrations/versions/f6c8e3a9b1d2_20260612_recipe_sections.py` (new),
+`dora_api/features/recipes/recipe_section_access.py` (new),
+`dora_api/features/recipes/recipe_step_access.py`,
+`dora_api/features/recipes/get_recipes.py`,
+`dora_api/features/recipes/create_recipe.py`,
+`dora_api/features/recipes/update_recipe.py`,
+`web_app/src/models/recipe.ts`,
+`web_app/src/services/api/recipeApiService.ts`,
+`web_app/src/pages/RecipeDetailPage.vue`,
+`web_app/src/pages/RecipeCookMode.vue`,
+`web_app/src/components/RecipeCard.vue`,
+`CHANGELOG.md` (Unreleased Added), `DORA_FOLLOWUPS.md`
+(FU-117 + FU-118 + FU-119 logged).
+
+**Verification:**
+- Static only — no env run. Wire shapes traced end-to-end:
+  DTO fields → model → editor → command → handler. Migration is
+  symmetric; downgrade drops in reverse order.
+- Constructor signatures unchanged (default-null section_id), so
+  `seed.py` / `new_recipe_version.py` / `cook_recipe.py` keep working
+  without edits.
+- **NOT yet verified in browser** — the editor card + cook-mode
+  section grouping + card badge all need a smoke pass. **FU-119**.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — held the line, no new shared component
+  yet. The section editor is small (≤80 lines of template) and lives
+  inline on RecipeDetailPage; extract if a second consumer appears.
+- **R-003 state ownership / R-005 distribution** — section
+  membership is server-derived (`RecipeIngredient.section_id`),
+  consistent with the rest of the recipe domain.
+- **R-007 scope discipline** — deliberately did NOT add step-section
+  UI or drag-and-drop; logged as follow-ups.
+- **R-008 terse code-style** — kept inline comments to the rule's
+  "why" framing.
+- **R-002 theme tokens** — only existing tokens used.
+- No new ADRs needed; sections are an additive feature, no recurring
+  architectural decision worth promoting.
+
+**Next up:**
+1. **Browser-verify Chunk 10** — FU-119: create a recipe with two
+   sections, assign ingredients, save, reload, then open cook mode and
+   confirm grouped ingredient cards + step section chips.
+2. **Browser-verify backlog** still has Chunks 1–9 (FU-083 / FU-085 /
+   FU-088 / FU-089 / FU-091 / FU-093 / FU-105 / FU-103 / FU-116).
+   Chunk 10 is the last impl-side cookbook deliverable; once browser
+   verification clears for all ten the plan is done.
+3. **Pick up step-section UI (FU-117)** when there's appetite for
+   another cookbook polish pass; it's a small editor change.
+
+**Open questions for user:** none — chunk shipped to the plan's spec
+minus the deliberately-scoped-down items above.
+
+---
+
 ## 2026-06-09 — FU-087 FilterBar fix + R-011 (framework-idiomatic patterns)
 **Status:** complete (code + standards).
 **What changed:**

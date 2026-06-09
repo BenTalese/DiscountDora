@@ -16,6 +16,121 @@ semver — major bumps signal schema or breaking-config changes.
   Vue 3.4 `defineModel()` + a `Screen.setDebounce()` boot file. (FU-087)
 
 ### Added
+- **Stock item images (Stock Overview Chunk 6 / FU-033 / L74).** Stock
+  items now carry their own image, uploaded from the **detail page**
+  (Overview tab, top of the right column). When a stock item has no
+  image of its own, it **falls back to the image of any linked
+  Product** — so connecting an item to a product auto-fills the photo
+  without you doing anything. If neither has one, the row shows a
+  neutral placeholder. The row's thumbnail respects the existing
+  Show/hide images toggle (denser rows when off). Plumbing mirrors
+  the recipe image pattern (data-URL storage, dedicated
+  `/stock-items/<id>/image` bytes endpoint, `has_image` flag on the
+  DTO, deferred SQL column so the list endpoint never loads
+  megabytes per row).
+
+### Changed
+- **Stock Overview detail navigation is now responsive (Chunk 5 / L68–
+  L72, decisions 1 + 2).** **Desktop** keeps the embedded side-
+  drawer peek when you tap a row. **Mobile** routes to the full
+  detail page instead — the drawer made no sense at narrow widths.
+  One shared `StockItemDetailPage` component renders in both frames
+  so the detail UI never forks. **Long-pressing a row on mobile**
+  enters bulk-select mode with that row already ticked, matching
+  the native multi-select gesture people expect from list apps.
+
+- **Stock Overview expiry control reworked (Chunk 4 / L86–L88).** The
+  expiry button now does two distinct things based on state. **No
+  expiry set →** tapping opens a date picker (restricted to today +
+  future) so you can pin a real date in one tap, instead of
+  guessing with +7 / +30 shortcuts. **Expiry already set →** the
+  menu now offers **+1 day · +7 days · +14 days · Clear** (replacing
+  the old +7/+30/Clear), matching the cadence people actually use
+  for nudging fridge dates.
+
+- **Stock Overview row redesigned (Chunk 3).** Each row now reads
+  left-to-right as **[■ LEVEL button] · Name (bold) · Zone · [img?]
+  · · · [⏰ expiry] [🍽 #recipes] [open/in-use] [🛒 cart]**. The
+  level button is the only place you change a level (no chip avatar,
+  no right-side dropdown — one focus, L70); the level dot's colour
+  carries the status. Retired the standalone `StockItemChip` from
+  this row, the location chip (zone now lives inline next to the
+  name and is lightly clickable), the "On N lists" chip, the
+  OK/Mid/Low/Out badge, and the small red dot. Status now drives a
+  **whole-row outline** — neutral by default, amber when expiring
+  within 7 days, red when out-of-stock or expired (out rows also
+  dim). **Selection fills the row** instead of outlining it so bulk
+  ticks read clearly. Rows are taller and the name is emphasised
+  (L78 / L79). `StockItemChip` itself stays in place for the
+  shopping-list + detail-page consumers.
+- **Stock Overview gains an inline "Hide row images" toggle (FU-106 /
+  C-cross §2.8).** A small icon button next to the search input
+  flips the per-user `show_stock_images` flag; with it off the
+  row's image slot collapses out of the layout for denser rows.
+  The toggle works today even though the actual image bytes
+  haven't been wired (FU-033) — the slot is a neutral placeholder
+  until then.
+
+- **Stock Overview top toolbar consolidated (Chunk 2 / L94).** One tidy
+  button group across the top: **New item · Export · Bulk select ·
+  Scan · Stocktake**; search stays separate on the right. "Bulk
+  select" moved up from inside the filter bar so it's reachable
+  without expanding filters first.
+- **Filter panels start closed by default everywhere (Chunk 2 / L95).**
+  `FilterBar` no longer auto-opens on desktop — the page header now
+  reads as one clean toolbar; click "Filters" to expand when you
+  actually want to filter. Parents that own the expanded state
+  (`v-model`) are unaffected.
+- **Stock level filter → single "Any level" dropdown (Chunk 2 / L97).**
+  The per-level filter chips with floating count badges were retired;
+  one `q-select` replaces them. Per-level counts now live in the
+  sticky page-counts footer (Shown · Well-stocked · Sufficient · Low
+  · Out · Flagged · Auto-add · Needs attention).
+- **Stock Overview "Used in a recipe" filter retired (Chunk 2 / L96).**
+  Low-signal; recipe pages own that question. Cross-feature index
+  (`recipesByStockItem`) survives because per-row "used in N recipes"
+  badges still consume it.
+- **Stock Overview search placeholder shortened (Chunk 2 / L98).**
+  Compact "Search" replaces the cramped multi-word hint.
+
+### Fixed
+- **Stock Overview no longer silently caps at 50 items (FU-035 / Stock
+  Overview Chunk 1).** The overview was fetching only page 1 of the
+  stock-items endpoint and ignoring `page.total`, so any pantry past
+  the first 50 items silently lost the rest. The store now pages until
+  exhausted (asking for `limit=500` per call to minimise round-trips,
+  matching the backend's `MAX_LIMIT`). A new `getAllPagesAsync`
+  helper on the service is the single place that loop lives; callers
+  that only want a quick page (autocomplete, snapshot) still use the
+  one-page `getAllAsync`.
+
+### Changed
+- **Stock Overview virtualises large pantries.** Above 50 visible items
+  the list switches to `q-virtual-scroll` so a 500-item pantry stays
+  smooth; below the threshold the existing `ListTransition` glide-in
+  is preserved so small pantries feel unchanged. Row markup is
+  unchanged — every existing filter, footer count, bulk-select, and
+  per-row action keeps working.
+- **Stock Overview CSV + Print/PDF exports honour the current
+  filter.** Previously both exported every item regardless of what
+  was on screen. Now the on-screen filtered id list travels with the
+  export request (`?ids=…`); no filter → the unfiltered fast path,
+  same as before.
+
+### Added
+- **Multi-part recipes via named sections (Cookbook Chunk 10).** A recipe
+  can now be split into named groups — "Sauce", "Filling", "Dressing" —
+  via the new **Sections** card on the recipe detail editor. Add one or
+  more sections, then pick a section per ingredient row with the new
+  Section picker. Existing recipes are unchanged (no sections = the same
+  flat list as before). Cook mode picks up on this: the ingredient panel
+  groups under section headers instead of by stock-location when sections
+  exist, and the current-step card + all-steps overview show which
+  section each step belongs to. The recipe card surfaces a "N parts"
+  badge when a recipe has more than one section. Sub-recipes (reusable
+  components across recipes) remain deferred — log a follow-up if the
+  named-section flow turns out to be insufficient for real meals.
+
 - **Recipe cost estimate + simple nutrition (Cookbook Chunk 9).**
   - When **Money & budgets** is on (Settings → Account, or System →
     Features for the install layer), the recipe detail page shows an

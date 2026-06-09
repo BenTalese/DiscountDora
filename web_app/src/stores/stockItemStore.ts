@@ -45,9 +45,13 @@ export const useStockItemStore = defineStore('stockItem', () => {
     const stockItems: Ref<StockItem[]> = ref([]);
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
+    /** C-1 Stock Overview Chunk 1 — page until exhausted so a pantry of
+     *  >50 items doesn't silently get truncated to the first page
+     *  (FU-035). Callers that only need a quick prefix (autocomplete-
+     *  style) should hit `getAllAsync` on the service directly. */
     const getStockItemsAsync = () =>
-        stockItemApiService.getAllAsync().then((page) => {
-            stockItems.value = [...page.items].sort((si1, si2) =>
+        stockItemApiService.getAllPagesAsync().then((items) => {
+            stockItems.value = [...items].sort((si1, si2) =>
                 collator.compare(si1.name, si2.name)
             );
         });

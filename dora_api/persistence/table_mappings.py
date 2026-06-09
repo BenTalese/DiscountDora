@@ -20,6 +20,7 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.recipe_section import RecipeSection
 from dora_api.domain.entities.recipe_step import RecipeStep
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.shopping_list_template import (
@@ -387,6 +388,16 @@ def configure_mappings(db: SQLAlchemy):
         Column("tool_id", UUIDType, ForeignKey("Tool.id", ondelete="CASCADE"), primary_key=True),
     )
 
+    # C-4 Chunk 10 — named groups within a recipe (DEC-3 option A). Optional;
+    # ingredients/steps with NULL section_id are the implicit "main" group.
+    recipe_section_table = Table(
+        "RecipeSection", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("name", String(255), nullable=False),
+    )
+
     recipe_ingredient_table = Table(
         "RecipeIngredient", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -395,6 +406,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="RESTRICT"), nullable=False),
         Column("unit", String(50), nullable=True),
+        # C-4 Chunk 10 — nullable section grouping (ON DELETE SET NULL so
+        # removing a section keeps its ingredients, just unsectioned).
+        Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
     )
 
     # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`
@@ -411,6 +425,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
         Column("text", String, nullable=False),
         Column("hint", String, nullable=True),
+        # C-4 Chunk 10 — nullable section grouping. Top-level steps may
+        # belong to a section; sub-steps inherit visually but the FK is
+        # stored per-row to keep reads flat.
+        Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
     )
 
     recipe_step_ingredient_table = Table(
@@ -551,6 +569,12 @@ def configure_mappings(db: SQLAlchemy):
         "_stock_level_id": stock_item_table.c.stock_level_id,
         "_stock_location_id": stock_item_table.c.stock_location_id,
         "id": stock_item_table.c.id,
+        # C-1 Chunk 6 / FU-033 — defer the image blob so the list endpoint
+        # never pulls megabytes per row just to set `has_image`. The
+        # dedicated `/stock-items/<id>/image` route triggers the load on
+        # attribute access; `has_image` is hydrated via a separate SELECT
+        # (mirrors the recipe-image pattern from Cookbook Chunk 5 / FU-090).
+        "image": deferred(stock_item_table.c.image),
         "stock_group": relationship(StockGroup, lazy="noload"),
         "stock_level": relationship(StockLevel, lazy="noload"),
         "stock_location": relationship(StockLocation, lazy="noload"),
@@ -609,7 +633,21 @@ def configure_mappings(db: SQLAlchemy):
         "_recipe_id": recipe_ingredient_table.c.recipe_id,
         "_stock_item_id": recipe_ingredient_table.c.stock_item_id,
         "id": recipe_ingredient_table.c.id,
+        # C-4 Chunk 10 — section_id is a real domain attribute (nullable),
+        # mapped publicly so it round-trips through `from_entity`.
+        "section_id": recipe_ingredient_table.c.section_id,
         "stock_item": relationship(StockItem, lazy="noload"),
+    })
+
+    # C-4 Chunk 10 — recipe sections (named groups). No relationship from
+    # Recipe; sections are loaded directly by the access helper (matches
+    # the RecipeStep pattern).
+    _mapper_registry.map_imperatively(RecipeSection, recipe_section_table, properties={
+        "_id_col": recipe_section_table.c.id,
+        "id": recipe_section_table.c.id,
+        "recipe_id": recipe_section_table.c.recipe_id,
+        "sequence": recipe_section_table.c.sequence,
+        "name": recipe_section_table.c.name,
     })
 
     # C-4 Chunk 6 — structured step rows. Ingredient + tool links are not
@@ -625,6 +663,8 @@ def configure_mappings(db: SQLAlchemy):
         "sequence": recipe_step_table.c.sequence,
         "text": recipe_step_table.c.text,
         "hint": recipe_step_table.c.hint,
+        # C-4 Chunk 10 — nullable section grouping for top-level steps.
+        "section_id": recipe_step_table.c.section_id,
     })
 
     _mapper_registry.map_imperatively(Cuisine, cuisine_table, properties={

@@ -301,6 +301,73 @@
                         </q-card-section>
                     </q-card>
 
+                    <!-- ── Sections (C-4 Chunk 10) ─────────────────────
+                         Optional named groups. Empty = flat recipe (existing
+                         behaviour). Rows are assigned to a section via the
+                         per-ingredient picker below. Renaming/reordering is
+                         in-place; deleting a section unsections its rows. -->
+                    <q-card flat bordered class="q-mb-md">
+                        <q-card-section class="row items-center q-pb-sm">
+                            <div class="text-subtitle1">
+                                Sections
+                                <span class="text-caption dora-text-muted q-ml-sm">
+                                    {{ form.sections.length }}
+                                </span>
+                            </div>
+                            <q-space />
+                            <q-btn
+                                flat
+                                dense
+                                no-caps
+                                :icon="ICONS.add"
+                                label="Add section"
+                                @click="addSection"
+                            />
+                        </q-card-section>
+                        <q-separator v-if="form.sections.length > 0" />
+                        <q-list v-if="form.sections.length > 0" separator>
+                            <q-item v-for="(sec, sIdx) in form.sections" :key="sec.client_id">
+                                <q-item-section>
+                                    <q-input
+                                        v-model="sec.name"
+                                        dense
+                                        outlined
+                                        label="Section name"
+                                        placeholder="e.g. Sauce"
+                                        @update:model-value="markDirty"
+                                    />
+                                </q-item-section>
+                                <q-item-section side>
+                                    <div class="row q-gutter-xs">
+                                        <q-btn
+                                            flat round dense
+                                            icon="arrow_upward"
+                                            :disable="sIdx === 0"
+                                            @click="moveSection(sIdx, -1)"
+                                        />
+                                        <q-btn
+                                            flat round dense
+                                            icon="arrow_downward"
+                                            :disable="sIdx === form.sections.length - 1"
+                                            @click="moveSection(sIdx, 1)"
+                                        />
+                                        <q-btn
+                                            flat round dense
+                                            :icon="ICONS.delete"
+                                            color="negative"
+                                            @click="removeSection(sIdx)"
+                                        />
+                                    </div>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                        <q-card-section v-else class="dora-text-muted text-caption">
+                            No sections. Add one if your recipe has named parts
+                            (e.g. "Sauce", "Filling"); ingredients without a
+                            section render as one flat list.
+                        </q-card-section>
+                    </q-card>
+
                     <!-- â”€â”€ Ingredients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
                     <q-card flat bordered class="q-mb-md">
                         <q-card-section class="row items-center q-pb-sm">
@@ -426,6 +493,26 @@
                                         dense
                                         outlined
                                         label="Notes"
+                                        @update:model-value="markDirty"
+                                    />
+                                </q-item-section>
+
+                                <!-- C-4 Chunk 10 — section picker, only when
+                                     the recipe has named sections. -->
+                                <q-item-section
+                                    v-if="form.sections.length > 0"
+                                    style="max-width: 160px"
+                                >
+                                    <q-select
+                                        v-model="ing.section_client_id"
+                                        :options="sectionOptions"
+                                        option-value="value"
+                                        option-label="label"
+                                        emit-value
+                                        map-options
+                                        dense
+                                        outlined
+                                        label="Section"
                                         @update:model-value="markDirty"
                                     />
                                 </q-item-section>
@@ -1090,6 +1177,17 @@
         // C-4 Chunk 9 — simple nutrition kcal. Editor input renders only
         // when nutrition is enabled; the form field exists regardless.
         kcal: number | null;
+        // C-4 Chunk 10 — named sections. Empty list = flat recipe.
+        // Hydrated from `recipe.sections`; the existing section_id is
+        // reused as client_id so unchanged sections round-trip and
+        // ingredient `section_client_id` references stay valid.
+        sections: SectionForm[];
+    };
+
+    type SectionForm = {
+        client_id: string;
+        sequence: number;
+        name: string;
     };
 
     function newClientId(): string {
@@ -1129,6 +1227,7 @@
         steps: [],
         steps_mode: 'structured',
         kcal: null,
+        sections: [],
     });
 
     const form = reactive<RecipeForm>(emptyForm());
@@ -1144,6 +1243,14 @@
             unit: i.unit,
             notes: i.notes,
             client_id: i.recipe_ingredient_id,
+            // C-4 Chunk 10 — re-use the existing section UUID as client_id
+            // (see hydrate below) so round-tripping keeps the reference.
+            section_client_id: i.section_id,
+        }));
+        const sections: SectionForm[] = (source.sections ?? []).map((s) => ({
+            client_id: s.section_id,
+            sequence: s.sequence,
+            name: s.name,
         }));
         const steps: EditableRecipeStep[] = (source.steps ?? []).map((s) => ({
             client_id: s.step_id,
@@ -1177,6 +1284,7 @@
             // surprise the user with an empty editor.
             steps_mode: source.has_structured_steps ? 'structured' : 'freeform',
             kcal: source.kcal,
+            sections,
         });
         imageDirty.value = false;
         isDirty.value = false;
@@ -1328,9 +1436,52 @@
             // C-4 Chunk 6 — every ingredient row needs a stable client_id so
             // a step can highlight it before the server assigns a real UUID.
             client_id: newClientId(),
+            section_client_id: null,
         });
         markDirty();
     }
+
+    // C-4 Chunk 10 — section helpers.
+    function addSection() {
+        form.sections.push({
+            client_id: newClientId(),
+            sequence: form.sections.length,
+            name: '',
+        });
+        markDirty();
+    }
+    function removeSection(idx: number) {
+        const removed = form.sections[idx];
+        if (!removed) return;
+        form.sections.splice(idx, 1);
+        // Resequence so server-side sort stays tight.
+        form.sections.forEach((s, i) => { s.sequence = i; });
+        // Detach any ingredients that pointed at it.
+        for (const ing of form.ingredients) {
+            if (ing.section_client_id === removed.client_id) {
+                ing.section_client_id = null;
+            }
+        }
+        markDirty();
+    }
+    function moveSection(idx: number, delta: -1 | 1) {
+        const target = idx + delta;
+        if (target < 0 || target >= form.sections.length) return;
+        const a = form.sections[idx];
+        const b = form.sections[target];
+        if (!a || !b) return;
+        form.sections[idx] = b;
+        form.sections[target] = a;
+        form.sections.forEach((s, i) => { s.sequence = i; });
+        markDirty();
+    }
+    const sectionOptions = computed(() => [
+        { value: null, label: '(Main)' },
+        ...form.sections.map((s) => ({
+            value: s.client_id,
+            label: s.name.trim() || '(Unnamed section)',
+        })),
+    ]);
     function removeIngredient(idx: number) {
         const removed = form.ingredients[idx];
         form.ingredients.splice(idx, 1);
@@ -1434,11 +1585,20 @@
             // L286 — true PATCH semantics: only send scalar fields that
             // actually changed, so re-saving an unchanged name can't trip the
             // name-uniqueness check. Arrays are always sent (replace semantics).
+            // C-4 Chunk 10 — sections always go with the ingredient
+            // replace so a renamed section keeps its rows. Empty array =
+            // clear all sections; rows fall back to the implicit main
+            // group via ON DELETE SET NULL on the server.
             const command: UpdateRecipeCommand = {
                 recipe_id: src.recipe_id,
                 ingredients: form.ingredients,
                 dietary_tag_ids: form.dietary_tag_ids,
                 tool_ids: form.tool_ids,
+                sections: form.sections.map((s, i) => ({
+                    client_id: s.client_id,
+                    sequence: i,
+                    name: (s.name || '').trim() || 'Untitled section',
+                })),
             };
             // Only touch the image when the user actually changed it.
             const didImageChange = imageDirty.value;

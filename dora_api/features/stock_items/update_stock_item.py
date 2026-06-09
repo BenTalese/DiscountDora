@@ -45,6 +45,9 @@ class UpdateStockItemRequest(BaseModel):
     opened_on: date | None = None
     # The linked product the user prefers to buy. Present-but-None clears it.
     preferred_product_id: UUID | None = None
+    # C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
+    # clear, omit to leave untouched. Mirrors the recipe-update contract.
+    image: str | None = Field(default = None, max_length = 6_000_000)
 
 
 @dataclass(slots=True)
@@ -130,6 +133,12 @@ class UpdateStockItemHandler:
 
         if "expiry_date" in _SetFields:
             _StockItem.expiry_date = request.expiry_date
+
+        # C-1 Chunk 6 / FU-033 — explicit null clears, data-URL string sets.
+        if "image" in _SetFields:
+            _StockItem.image = (
+                request.image.encode("utf-8") if request.image else None
+            )
 
         if "is_flagged" in _SetFields and request.is_flagged is not None:
             _StockItem.is_flagged = request.is_flagged

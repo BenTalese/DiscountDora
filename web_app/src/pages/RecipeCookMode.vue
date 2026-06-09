@@ -96,6 +96,16 @@
             <q-card flat bordered class="step-card q-mb-md">
                 <q-card-section>
                     <div class="row items-center q-gutter-xs q-mb-xs">
+                        <!-- C-4 Chunk 10 — section header for the current step. -->
+                        <q-chip
+                            v-if="currentStepObject?.sectionName"
+                            dense
+                            outline
+                            color="primary"
+                            :icon="ICONS.list"
+                        >
+                            {{ currentStepObject.sectionName }}
+                        </q-chip>
                         <q-chip
                             v-if="currentStepObject?.isSubStep"
                             dense
@@ -326,7 +336,17 @@
                         :class="{ 'all-steps-row--sub': step.isSubStep }"
                     >
                         <q-item-section side>{{ idx + 1 }}.</q-item-section>
-                        <q-item-section>{{ step.text }}</q-item-section>
+                        <q-item-section>
+                            <!-- C-4 Chunk 10 — show the section header at the
+                                 first step of each section in the overview. -->
+                            <div
+                                v-if="step.sectionName && (idx === 0 || cookSteps[idx - 1]?.sectionName !== step.sectionName)"
+                                class="text-caption text-primary q-mb-xs"
+                            >
+                                {{ step.sectionName }}
+                            </div>
+                            {{ step.text }}
+                        </q-item-section>
                     </q-item>
                 </q-list>
             </q-expansion-item>
@@ -602,10 +622,19 @@
         ingredientIds: string[]; // references RecipeIngredient.recipe_ingredient_id
         toolIds: string[];       // references Tool.tool_id
         isSubStep: boolean;
+        // C-4 Chunk 10 — name of the section this step belongs to (the
+        // sub-step inherits its parent's section so the header doesn't
+        // flicker mid-group). Null when the step is unsectioned.
+        sectionName: string | null;
     };
 
     const cookSteps = computed<CookStep[]>(() => {
         const structured = recipe.value?.steps ?? [];
+        const sectionById = new Map(
+            (recipe.value?.sections ?? []).map((s) => [s.section_id, s]),
+        );
+        const sectionName = (id: string | null) =>
+            id ? (sectionById.get(id)?.name ?? null) : null;
         if (structured.length > 0) {
             const flat: CookStep[] = [];
             const tops = structured
@@ -618,6 +647,7 @@
                     ingredientIds: [...top.ingredient_ids],
                     toolIds: [...top.tool_ids],
                     isSubStep: false,
+                    sectionName: sectionName(top.section_id),
                 });
                 const subs = structured
                     .filter((s) => s.parent_step_id === top.step_id)
@@ -629,6 +659,7 @@
                         ingredientIds: [...sub.ingredient_ids],
                         toolIds: [...sub.tool_ids],
                         isSubStep: true,
+                        sectionName: sectionName(top.section_id),
                     });
                 }
             }
@@ -643,6 +674,7 @@
                 ingredientIds: [],
                 toolIds: [],
                 isSubStep: false,
+                sectionName: null,
             }];
         }
         const parts = raw
@@ -656,6 +688,7 @@
             ingredientIds: [],
             toolIds: [],
             isSubStep: false,
+            sectionName: null,
         }));
     });
 
@@ -684,8 +717,43 @@
     // top-level node of the breadcrumb). Sub-areas collapse into their parent
     // — "Pantry > Spice Rack" reads as "Pantry" — keeping the mid-cook view
     // calm. Ingredients with no location land in a final "No location" group.
+    //
+    // C-4 Chunk 10 — when the recipe defines named sections, sections win as
+    // the top-level grouping (their semantic intent — "this is the sauce" —
+    // is stronger than where the ingredient lives). Falls back to location
+    // grouping for flat recipes so existing recipes render unchanged.
     type IngredientGroup = { key: string; label: string; rows: IngredientRow[] };
     const ingredientGroups = computed<IngredientGroup[]>(() => {
+        const sections = recipe.value?.sections ?? [];
+        if (sections.length > 0) {
+            // Section grouping. Order follows `sequence` (server already
+            // sorted); unsectioned ingredients drop into "Main" at the end.
+            const sectionById = new Map(sections.map((s) => [s.section_id, s]));
+            const groups = new Map<string, IngredientGroup>();
+            const orderedKeys: string[] = [];
+            const ensure = (key: string, label: string) => {
+                if (!groups.has(key)) {
+                    groups.set(key, { key, label, rows: [] });
+                    orderedKeys.push(key);
+                }
+                return groups.get(key)!;
+            };
+            for (const s of sections) {
+                ensure(`s:${s.section_id}`, s.name);
+            }
+            for (const row of ingredientRows.value) {
+                const sid = row.ingredient.section_id;
+                const sec = sid ? sectionById.get(sid) : null;
+                if (sec) {
+                    ensure(`s:${sec.section_id}`, sec.name).rows.push(row);
+                } else {
+                    ensure('__main__', 'Main').rows.push(row);
+                }
+            }
+            return orderedKeys
+                .map((k) => groups.get(k)!)
+                .filter((g) => g.rows.length > 0);
+        }
         const groups = new Map<string, IngredientGroup>();
         const orderedKeys: string[] = [];
         for (const row of ingredientRows.value) {

@@ -37,6 +37,10 @@ class StepWrite:
     hint: str | None
     ingredient_ids: list[UUID]
     tool_ids: list[UUID]
+    # C-4 Chunk 10 — optional section grouping (resolved by the caller
+    # from the matching section's client_id before this write). NULL
+    # keeps the step in the implicit "main" group.
+    section_id: UUID | None = None
 
 
 def _step_table():
@@ -96,6 +100,7 @@ def get_steps_for_recipe(recipe_id: UUID) -> list[dict]:
             steps_tbl.c.sequence,
             steps_tbl.c.text,
             steps_tbl.c.hint,
+            steps_tbl.c.section_id,
         )
         .where(steps_tbl.c.recipe_id == recipe_id)
         # ORDER BY parent IS NULL DESC puts NULLs first portably (SQLite +
@@ -134,6 +139,7 @@ def get_steps_for_recipe(recipe_id: UUID) -> list[dict]:
             "sequence": row[2],
             "text": row[3],
             "hint": row[4],
+            "section_id": row[5],
             "ingredient_ids": ing_map.get(row[0], []),
             "tool_ids": tool_map.get(row[0], []),
         }
@@ -245,6 +251,7 @@ def replace_steps_for_recipe(
             "sequence": s.sequence,
             "text": s.text.strip(),
             "hint": (s.hint or "").strip() or None,
+            "section_id": s.section_id,
         }
         if s.parent_client_id is None:
             parent_rows.append(row)

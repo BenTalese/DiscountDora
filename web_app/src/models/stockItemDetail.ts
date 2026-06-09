@@ -55,6 +55,10 @@ export type StockItemDetail = {
     recipes: LinkedRecipe[];
     substitutes: Substitute[];
     level_history: LevelChange[];
+    /** C-1 Chunk 6 / FU-033 — true when the item has its own image OR a
+     *  linked product carries one. Bytes served via
+     *  `GET /stock-items/<id>/image`. */
+    has_image?: boolean;
 };
 
 export type PricePoint = {

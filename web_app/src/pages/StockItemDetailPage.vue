@@ -159,6 +159,19 @@
                         </div>
 
                         <div class="col-12 col-md-6">
+                            <!-- C-1 Chunk 6 / FU-033 — image upload + clear.
+                                 Reuses the RecipeImageField pattern so the
+                                 stock + recipe surfaces look the same.
+                                 Saves immediately (no "Save" coupling with
+                                 the basics form) — uploading a photo isn't
+                                 the same intent as renaming. -->
+                            <RecipeImageField
+                                :preview-url="imagePreviewUrl"
+                                :name="detail?.name"
+                                class="q-mb-md"
+                                @pick="onPickImage"
+                                @clear="onClearImage"
+                            />
                             <q-form @submit.prevent="onSaveBasics" class="q-gutter-md">
                                 <q-input
                                     v-model="form.name"
@@ -506,6 +519,7 @@
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
+    import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -519,7 +533,7 @@
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
     import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import StockItemApiService, { stockItemImageUrl } from 'src/services/api/stockItemApiService';
     import { useProductStore } from 'src/stores/productStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -619,6 +633,53 @@
             form.is_flagged !== detail.value.is_flagged
         );
     });
+    // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
+    // Saves immediately — uploading a photo isn't coupled to the basics
+    // form's Save button. `imageVersion` busts the <img> cache after a
+    // save so the new bytes show without a hard reload.
+    const pendingImage = ref<string | null>(null);
+    const imageCleared = ref(false);
+    const imageVersion = ref(0);
+    const imagePreviewUrl = computed<string | null>(() => {
+        if (pendingImage.value) return pendingImage.value;
+        if (imageCleared.value) return null;
+        if (!detail.value?.has_image) return null;
+        return stockItemImageUrl(detail.value.stock_item_id, imageVersion.value);
+    });
+    async function onPickImage(dataUrl: string) {
+        if (!detail.value) return;
+        pendingImage.value = dataUrl;
+        try {
+            await stockItemStore.updateStockItemAsync({
+                stock_item_id: detail.value.stock_item_id,
+                image: dataUrl,
+            });
+            imageCleared.value = false;
+            pendingImage.value = null;
+            imageVersion.value++;
+            await loadDetail();
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image updated.' });
+        } catch (err) {
+            pendingImage.value = null;
+            notifyErr('Could not save image.', err);
+        }
+    }
+    async function onClearImage() {
+        if (!detail.value) return;
+        try {
+            await stockItemStore.updateStockItemAsync({
+                stock_item_id: detail.value.stock_item_id,
+                image: null,
+            });
+            imageCleared.value = true;
+            imageVersion.value++;
+            await loadDetail();
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image removed.' });
+        } catch (err) {
+            notifyErr('Could not remove image.', err);
+        }
+    }
+
     async function onSaveBasics() {
         if (!detail.value) return;
         savingBasics.value = true;

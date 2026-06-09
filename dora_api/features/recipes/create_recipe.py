@@ -18,6 +18,9 @@ from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
 )
+from dora_api.features.recipes.recipe_section_access import (
+    SectionWrite, replace_sections_for_recipe,
+)
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
@@ -42,6 +45,10 @@ class CreateRecipeIngredientRequest(BaseModel):
     # `steps[].ingredient_client_ids` to point at this ingredient before the
     # server has assigned its UUID. Omit when no step references it.
     client_id: str | None = Field(default = None, max_length = 64)
+    # C-4 Chunk 10 — optional section grouping; the client_id of one of the
+    # sections in the same payload. Omit/null to leave in the implicit
+    # "main" group.
+    section_client_id: str | None = Field(default = None, max_length = 64)
 
 
 class CreateRecipeStepRequest(BaseModel):
@@ -60,6 +67,18 @@ class CreateRecipeStepRequest(BaseModel):
     hint: str | None = None
     ingredient_client_ids: List[str] = Field(default_factory = list)
     tool_ids: List[UUID] = Field(default_factory = list)
+    # C-4 Chunk 10 — optional section grouping; resolved against the sibling
+    # `sections[]` entry with the same client_id.
+    section_client_id: str | None = Field(default = None, max_length = 64)
+
+
+class CreateRecipeSectionRequest(BaseModel):
+    """C-4 Chunk 10 — a named section in the create payload."""
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str = Field(min_length = 1, max_length = 64)
+    sequence: int = Field(default = 0, ge = 0)
+    name: str = Field(min_length = 1, max_length = 255)
 
 
 class CreateRecipeRequest(BaseModel):
@@ -97,6 +116,11 @@ class CreateRecipeRequest(BaseModel):
     # step's `ingredient_client_ids` references its sibling ingredients via
     # the `client_id` field above.
     steps: List[CreateRecipeStepRequest] = Field(default_factory = list)
+    # C-4 Chunk 10 — named sections (optional). When non-empty, the server
+    # creates RecipeSection rows; ingredients and steps reference them by
+    # `section_client_id`. Unreferenced sections still get created (empty
+    # group) so the user can type the name first, then drop rows into it.
+    sections: List[CreateRecipeSectionRequest] = Field(default_factory = list)
 
 
 @dataclass(slots=True)
@@ -109,6 +133,7 @@ class CreateRecipeResponse:
     missing_stock_item_ids: tuple[UUID, ...] = ()
     invalid_tag_message: str | None = None
     invalid_step_message: str | None = None
+    invalid_section_message: str | None = None
 
 
 class CreateRecipeHandler:
@@ -201,6 +226,50 @@ class CreateRecipeHandler:
         # Save first so the recipe row exists before the tag FK insert.
         self.repository.save_changes()
 
+        # C-4 Chunk 10 — insert sections, then back-fill ingredient
+        # rows with their resolved section_id. Sections live as their
+        # own table so the FK from RecipeIngredient.section_id is
+        # satisfiable; the back-fill keeps the rest of the request
+        # logic (steps replace below) on the same map.
+        _SectionClientToReal: dict[str, UUID] = {}
+        if request.sections:
+            try:
+                _SectionWrites = [
+                    SectionWrite(
+                        client_id=section.client_id,
+                        sequence=section.sequence,
+                        name=section.name,
+                    )
+                    for section in request.sections
+                ]
+                _SectionClientToReal = {
+                    str(k): v
+                    for k, v in replace_sections_for_recipe(
+                        _NewRecipe.id, _SectionWrites
+                    ).items()
+                }
+            except ValueError as exc:
+                return CreateRecipeResponse(
+                    new_recipe_id=_NewRecipe.id,
+                    invalid_section_message=str(exc),
+                )
+            # Back-fill section_id on the freshly-inserted ingredients.
+            if _SectionClientToReal:
+                from dora_api.app import db
+                _IngTable = db.metadata.tables["RecipeIngredient"]
+                for ing_req, (_cid, ing_ent) in zip(request.ingredients, _IngredientPairs):
+                    if not ing_req.section_client_id:
+                        continue
+                    real = _SectionClientToReal.get(ing_req.section_client_id)
+                    if real is None:
+                        continue
+                    db.session.execute(
+                        _IngTable.update()
+                        .where(_IngTable.c.id == ing_ent.id)
+                        .values(section_id=real)
+                    )
+            self.repository.save_changes()
+
         if request.dietary_tag_ids or request.tool_ids:
             try:
                 if request.dietary_tag_ids:
@@ -231,6 +300,10 @@ class CreateRecipeHandler:
                             if c in _IngredientClientToReal
                         ],
                         tool_ids=list(step.tool_ids),
+                        section_id=(
+                            _SectionClientToReal.get(step.section_client_id)
+                            if step.section_client_id else None
+                        ),
                     )
                     for step in request.steps
                 ]
@@ -297,6 +370,10 @@ def create_recipe():
     if _Response.invalid_step_message:
         _Logger.warning(f"Invalid recipe step: {_Response.invalid_step_message}")
         return bad_request(_Response.invalid_step_message)
+
+    if _Response.invalid_section_message:
+        _Logger.warning(f"Invalid recipe section: {_Response.invalid_section_message}")
+        return bad_request(_Response.invalid_section_message)
 
     _Logger.info(f"Successfully created recipe with ID: {_Response.new_recipe_id}")
     from dora_api.features.recipes.get_recipes import GetRecipesHandler

@@ -92,6 +92,10 @@ class StockItemDetailDto:
     recipes: List[LinkedRecipeDto]
     substitutes: List[SubstituteDto]
     level_history: List[LevelChangeDto]
+    # C-1 Chunk 6 / FU-033 — image presence flag (own-image OR linked-
+    # product image fallback). Bytes served via
+    # `GET /stock-items/<id>/image`; never inlined in the JSON.
+    has_image: bool = False
 
 
 class GetStockItemDetailHandler:
@@ -247,6 +251,11 @@ class GetStockItemDetailHandler:
             recipes = _LinkedRecipes,
             substitutes = _Substitutes,
             level_history = _LevelHistory,
+            # C-1 Chunk 6 / FU-033 — own-image OR any linked product image.
+            # `_LinkedProducts` already loaded above; checks are cheap.
+            has_image = bool(_StockItem.image) or any(
+                bool(getattr(p, "image", None)) for p in (_StockItem.products or [])
+            ),
         )
 
 

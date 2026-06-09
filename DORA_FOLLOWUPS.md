@@ -39,6 +39,285 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-126 — Rename `RecipeImageField` → `ImageUploadField`
+- **Raised:** 2026-06-12 (Stock Overview Chunk 6 / FU-033 impl)
+- **Type:** tidy-up
+- **What:** `RecipeImageField` is now used by both
+  `RecipeDetailPage` and `StockItemDetailPage` — it carries no
+  recipe-specific logic, just `previewUrl` + `name` props +
+  `pick` / `clear` emits. R-001's threshold (second consumer)
+  has been hit; rename to `ImageUploadField` + move to
+  `components/` (not `components/recipes/`). Touch points:
+  the component file, the two import sites, and the inline
+  "Recipe image" alt text (parameterise via a prop).
+- **Why deferred:** scope discipline this chunk. Trivial rename,
+  no behavioural change.
+- **Recommended resolution:** opportunistic — pair with the next
+  image-touching change, or do as a standalone tidy when convenient.
+
+---
+
+## [OPEN] FU-125 — Browser-verify Stock Overview Chunk 6 / FU-033 (stock images + product fallback)
+- **Raised:** 2026-06-12 (Chunk 6 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Upload from detail page.** Open a stock item → Overview tab.
+     Upload a photo via the new image field at the top of the right
+     column → saves immediately, row in the overview gains a
+     thumbnail on next load. "Remove" clears it.
+  2. **Product fallback.** Pick a stock item with no own image but a
+     linked product that has one → the row's thumbnail shows the
+     product's image. The detail page's `has_image` flag should
+     still be true. Unlink the product → flag goes false, row drops
+     back to placeholder.
+  3. **Both empty.** Stock item with no own image + no linked
+     product image → row shows the neutral placeholder; the bytes
+     endpoint 404s (check Network tab — no broken-image icon).
+  4. **List endpoint performance.** With a >50-item pantry, watch
+     the network panel during overview load — `GET /stock-items`
+     response should be small, no image bytes inlined. Bytes only
+     load when the row actually mounts an `<img>`.
+  5. **Show/hide toggle from Chunk 3** still flips the image
+     column on/off (denser rows).
+  6. **Race protection** — uploading while the row is mounted
+     should bump `imageVersion` and the row should refetch the
+     new image on the next list refresh (the toggle does that, or
+     reload the page).
+- **Why:** the image route + fallback query are new server code;
+  the deferred-column mapping is a SQLAlchemy behaviour change.
+  Both need a real DB to confirm.
+- **Recommended resolution:** now (next session).
+
+---
+
+## [OPEN] FU-124 — Browser-verify Stock Overview Chunk 5 (responsive detail nav + long-press)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 5 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Desktop (≥ md breakpoint):** tap a row → splitter peek opens
+     with the shared `StockItemDetailPage` embedded; tap again →
+     closes. Same behaviour as before.
+  2. **Mobile (< md breakpoint):** tap a row → full-page navigation
+     to `/stock/<id>`; no drawer/peek. Same `StockItemDetailPage`
+     renders in non-`embedded` mode. The back button returns to the
+     overview with state preserved.
+  3. **Bulk mode (any breakpoint):** tap toggles selection (no nav,
+     no peek).
+  4. **Long-press a row on mobile:** enters bulk-select mode and
+     ticks the held item. Subsequent taps add/remove items. Cancel
+     button exits bulk mode.
+  5. **Long-press on desktop:** is a no-op (the `<md` guard in
+     `onRowLongPress`). Desktop users have the toolbar's Bulk
+     select button.
+  6. **Resize browser across the md breakpoint** while a peek is
+     open — peek stays attached to the row's existing state; future
+     row-taps then use the new breakpoint's behaviour.
+- **Why:** `v-touch-hold` was newly registered in `quasar.config.ts`
+  this chunk; verify it actually fires on touch devices (Chrome
+  mobile emulation works). The breakpoint branching uses
+  `$q.screen.lt.md` — confirm that `boot/quasarScreen.ts`'s
+  `Screen.setDebounce(100)` has the plugin active (it does for
+  every other consumer, but a sanity check costs nothing).
+- **Recommended resolution:** now (next session).
+
+---
+
+## [OPEN] FU-123 — Browser-verify Stock Overview Chunk 4 (expiry control)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 4 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **No expiry set** → tap the row's expiry button → q-date picker
+     appears (popup on desktop, dialog on mobile). Picking a future
+     date PATCHes the stock item and the row immediately reflects the
+     new date (icon switches to a coloured "ok" / "soon" tone via
+     existing logic). Picking past dates is blocked by
+     `dateOptionsFuture`.
+  2. **Expiry set** → tap the row's expiry button → menu shows
+     **+1 day · +7 days · +14 days · Clear** (no +30 anymore).
+     +1/+7/+14 each PATCH the right ISO date; Clear nulls it and
+     the button reverts to the "no expiry" date-picker state.
+  3. **Tone outline still flips correctly**: setting a date <7 days
+     in the future triggers `stock-row--warn` (amber); a past date
+     should not be settable but if one exists from earlier data,
+     `stock-row--alert` (red) still applies.
+  4. **No regressions** on the surrounding right-cluster buttons
+     (#recipes, open/in-use, cart).
+- **Why:** date-picker swap is the highest-risk part; q-date's
+  `options` function uses `YYYY/MM/DD` strings while the emitted
+  `model-value` uses the configured `mask` — verify both code paths
+  actually agree on what "today" means.
+- **Recommended resolution:** now (next session).
+
+---
+
+## [OPEN] FU-122 — Browser-verify Stock Overview Chunk 3 (row rebuild + image toggle)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 3 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Row layout** reads left→right: bulk-checkbox (when in bulk mode)
+     → coloured level square → name (bold) + zone (inline) → image
+     placeholder (if `show_stock_images` is on) → ... → expiry → #recipes
+     (when >0) → open/in-use → cart.
+  2. **Level button** click opens the picker; selection updates the
+     row's colour immediately (optimistic).
+  3. **Zone** is clickable and filters the list to that location.
+  4. **Status outline:** healthy row has no coloured border; an item
+     expiring within 7 days gets an amber border; "Out of Stock" or
+     expired items get a red border AND dim. Cross-theme check
+     (Pesto light/dark, Cherry Cola dark — colours come from
+     `--q-warning` / `--q-negative`).
+  5. **Selection fills the row** (light primary tint) when bulk-mode
+     selected; the splitter-peek state still draws its own solid
+     outline; focus still draws the dashed accent outline.
+  6. **Image toggle** at the top right flips between image / image-off
+     icon; the row's image slot disappears when off and the row
+     becomes visibly denser; reload-survives (server PATCH /me).
+  7. **No regressions:** chip-shaped StockItemChip is GONE from rows
+     but still renders on shopping-list lines + the stock-item
+     detail page. "On N lists" chip is gone. The cart button still
+     adds the item to the active draft list (C-7 will replace this
+     properly later).
+  8. **Virtualised list** still works after the row-size change — the
+     `VIRTUAL_SCROLL_ITEM_SIZE = 72` constant in StockOverview.vue
+     may need a tweak if rows feel too compact/spacious; q-virtual-
+     scroll self-corrects after the first measure but tune the hint
+     to match what you see.
+- **Why:** static-only impl. Row rebuild is the biggest chunk of the
+  plan; cross-theme + cross-state checks are the highest-risk
+  verification. The image toggle is the FU-106 surface and needs an
+  end-to-end PATCH /me confirmation.
+- **Recommended resolution:** now (next session) — confirm and mark
+  RESOLVED, or log defects.
+
+---
+
+## [OPEN] FU-121 — Browser-verify Stock Overview Chunk 2 (top toolbar + filters + footer)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 2 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Top toolbar order**: New item · Export · Bulk select · Scan ·
+     Stocktake · (spacer) · Search. Bulk select shows "Cancel" once
+     bulk-mode is on.
+  2. **Filter bar closed by default** on every page that uses
+     `FilterBar` (Stock Overview, Cookbook overview, anywhere else
+     it appears). Click "Filters" → panel expands; clicking again →
+     collapses. Active-filter badge still surfaces while collapsed.
+  3. **Level filter** is a single "Any level" dropdown; selecting a
+     level filters; clearable. No floating count badges visible.
+  4. **"Used in a recipe" filter is gone.**
+  5. **Search placeholder** reads "Search" (no parenthesised hint).
+  6. **Footer counts** in order: Shown · Well-stocked · Sufficient ·
+     Low · Out · Flagged · Auto-add · Needs attention. Counts reflect
+     the filtered set; recompute live when filters change.
+  7. **No console errors** from the dropped `usedInRecipeOnly` /
+     `getStockLevelColour` references.
+- **Why:** static-only impl; the FilterBar default flip is a global
+  change that touches every consumer, the level dropdown swap touches
+  the most-used filter, and the composable's filter set lost one
+  field (other callers might still expect it).
+- **Recommended resolution:** now (next session). Includes the
+  cross-page smoke pass for the FilterBar default flip.
+
+---
+
+## [OPEN] FU-120 — Browser-verify Stock Overview Chunk 1 (50-cap fix + virtualisation + filtered export)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 1 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. With a pantry of ≤50 items, the overview renders inside the existing
+     `ListTransition` (glide-in still works); switch the threshold or load
+     more items to confirm the swap to `q-virtual-scroll` above 50.
+  2. Create / seed a pantry with **>50 items** (e.g. 120) and confirm
+     every item is now reachable in the list (scroll the virtual list);
+     `filteredStockItems.length` matches the backend count.
+  3. **Filtered CSV export** — apply a level/location filter, hit Export
+     → CSV, open the file → only the filtered rows appear. Repeat with
+     **no filter active** → confirm the URL has no `ids=` param (the
+     "everything" fast-path stays cheap).
+  4. **Filtered Print/PDF** — same workflow against the print-view tab.
+  5. Bulk-select + per-row actions still work inside the virtualised
+     list (Quasar reuses DOM nodes; the row's emit handlers should
+     fire normally).
+  6. Splitter "peek" still opens when clicking a row in the virtualised
+     list.
+- **Why:** static-only impl. `q-virtual-scroll` swaps in-place for the
+  existing list wrapper; row markup is unchanged but the wrapper change
+  is the riskiest part. The filtered export round-trip also needs a
+  real-DB pass.
+- **Recommended resolution:** now (next session) — confirm and mark
+  RESOLVED, or log defects.
+
+---
+
+## [OPEN] FU-119 — Browser-verify Cookbook Chunk 10 (multi-part recipes via named sections)
+- **Raised:** 2026-06-12 (Chunk 10 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. `alembic upgrade head` applies migration `f6c8e3a9b1d2` on SQLite
+     + Postgres; app boots; `verify_mappings()` passes for the new
+     `RecipeSection` mapping + the `section_id` column on
+     `RecipeIngredient` / `RecipeStep`.
+  2. Existing recipes still load and render unchanged (no sections =
+     same flat ingredient list, same cook-mode location grouping).
+  3. **Create a recipe with two sections** ("Sauce", "Filling"); add
+     ingredients, pick a section per row; save; reload → sections +
+     section assignments persist; `RecipeCard` shows "2 parts" badge.
+  4. **Cook mode:** ingredient panel groups under "Sauce" / "Filling"
+     instead of by location; step card shows the section name as a
+     chip; "All steps" overview repeats the header at each transition.
+  5. **Delete a section** in the editor → its rows fall back to
+     "Main" (FK SET NULL), save, reload → no orphans, no FK error.
+  6. **Rename a section** in the editor (without touching ingredient
+     rows) → server keeps the rows pinned because editor always sends
+     `ingredients[]` + `sections[]` together; confirm no rows
+     unsectioned themselves.
+- **Why:** static-only impl; the section back-fill SQL UPDATE in the
+  create handler and the `_resolve_section` UUID-vs-client_id branch
+  in the update handler are the highest-risk new code paths and both
+  need a real-DB pass.
+- **Recommended resolution:** now (next session) — confirm in
+  browser, then mark RESOLVED with whatever surfaces.
+
+---
+
+## [OPEN] FU-118 — Drag-and-drop for moving ingredients between sections
+- **Raised:** 2026-06-12 (Chunk 10 deliberate scope-down)
+- **Type:** enhancement
+- **What:** Right now the only way to move an ingredient between
+  sections is the per-row Section picker (`q-select`). The chunk plan
+  also mentioned "drag", but the picker is already R-001-friendly
+  (reuses the existing select) and ships the feature without net-new
+  infra. Add drag-and-drop reorder + section reassignment when the
+  same instinct hits the steps editor (see FU-094 for the parallel
+  steps DnD work).
+- **Why:** Power users with many ingredients in many sections will
+  want bulk reassignment; the picker is fine for a few rows.
+- **Recommended resolution:** later, opportunistic — pair with
+  FU-094 (steps DnD) so we ship one DnD library / pattern.
+
+---
+
+## [OPEN] FU-117 — `RecipeStepsEditor` should let you pick a step's section
+- **Raised:** 2026-06-12 (Chunk 10 deliberate scope-down)
+- **Type:** enhancement
+- **What:** Chunk 10 wired `section_id` on `RecipeStep` end-to-end
+  (entity, table, DTO, cook-mode read path), but the steps editor
+  doesn't yet surface a section picker. Hand-entered steps ship with
+  `section_id = NULL` until this lands; URL importers can populate
+  the field directly if they detect `HowToSection`. Surface should
+  be: a small chip / select on each top-level step row in
+  `RecipeStepsEditor` mirroring the ingredient row picker; sub-steps
+  inherit visually so no picker needed there.
+- **Why:** Without it, multi-part recipes still render correctly in
+  cook mode if the importer (or a future bulk tool) sets `section_id`
+  on steps — but a user editing in the SPA can't move a step into a
+  named section.
+- **Recommended resolution:** later, when there's another
+  cookbook-polish session; small change, isolated to
+  `RecipeStepsEditor.vue` + a `sectionOptions` prop.
+
+---
+
 ## [OPEN] FU-116 — Browser-verify Cookbook Chunk 9 (cost + simple nutrition, opt-in)
 - **Raised:** 2026-06-11 (Chunk 9 impl; static-only, no env)
 - **Type:** finding / verification
@@ -449,28 +728,16 @@ long session summary. Distinct from the other two logs:
   its own focused PR with a tested verification list of every dated
   field.
 
-## [OPEN] FU-106 — Stock Overview image collapse/expand inline button (C-cross §2.8 surface)
-- **Raised:** 2026-06-10 (C-cross IMPL plan revision; user clarified
-  toggles are inline per-surface, not in Settings)
-- **Type:** deferred frontend wiring (backend lands in C-cross Chunk 5)
-- **What:** C-cross Chunk 5 ships the User-level `show_stock_images`
-  flag + the `useImagePrefs()` composable + `PATCH /me` round-trip.
-  The **stock-overview inline button** that flips that flag (and the
-  row layout's image column collapsing/expanding from the toggle)
-  is **deliberately deferred** to the next C-1 Stock Overview chunk
-  that redoes the row layout. Doing the button inside the row-
-  rebuild chunk means the geometry decisions live in one place
-  instead of fighting a retrofit later.
-- **Where it lands:** **C-1 Stock Overview IMPL plan, Chunk 3 (row
-  rebuild)** — the IMPL plan has been updated to call this out so
-  whoever picks up Chunk 3 wires the button + the
-  `v-if="showStockImages"` guard on the row's image slot as part of
-  that work. Pair with FU-033 (StockItem.image render) — the toggle
-  is useful even before images exist (density control), and becomes
-  the primary photo toggle once FU-033 ships.
-- **Recommended resolution:** **when C-1 Stock Overview Chunk 3
-  runs.** Not earlier — the chunk owns the row layout the toggle
-  affects.
+## [RESOLVED] FU-106 — Stock Overview image collapse/expand inline button (C-cross §2.8 surface)
+- **Raised:** 2026-06-10
+- **Resolved:** 2026-06-12 by Stock Overview Chunk 3 — inline image
+  toggle next to the search input flips `show_stock_images` via the
+  existing `useImagePrefs()` composable; the row's image slot is
+  `v-if="showStockImages"` so density actually changes when toggled.
+  Slot is currently a neutral placeholder (40×40 sunken square); it
+  becomes the real photo container when FU-033 wires
+  `StockItem.image` bytes. Static-only impl; browser-verify is
+  **FU-122**.
 
 ## [OPEN] FU-105 — Browser-verify Cookbook Chunk 8 (versions + detail-endpoint fix)
 - **Raised:** 2026-06-10 (Chunk 8 impl; static-only, no env)
@@ -1796,20 +2063,17 @@ long session summary. Distinct from the other two logs:
   on a line and verify it changes the offer/merchant (not the stock item). If it
   actually swaps the item, INV-8's recommendation changes.
 
-## [OPEN] FU-035 — Stock overview silently shows only the first 50 items
+## [RESOLVED] FU-035 — Stock overview silently shows only the first 50 items
 - **Raised:** 2026-06-06 (INV-2)
-- **Type:** finding (likely real bug)
-- **What:** `stockItemStore.getStockItemsAsync` (`stockItemStore.ts:48`) calls
-  `getAllAsync()` → `GET /stock-items` with no query string. Backend defaults to
-  page 1, `DEFAULT_LIMIT = 50` (`query_options.py:24`; `MAX_LIMIT = 500`). The
-  store takes `page.items` and never reads `page.total` or loops further pages —
-  so a pantry with >50 items shows only the first 50 (alphabetically). Filters
-  and counts operate on the truncated set. Found via static read.
-- **Why deferred:** INV-2 is investigation-only; this is a code fix.
-- **Recommended resolution:** confirm in browser (create >50 stock items, check
-  the overview shows them all), then fix — cheapest is requesting `?limit=500`;
-  better long-term is paging or virtualised infinite-scroll. See
-  `STOCK_OVERVIEW_PERF.md`.
+- **Type:** finding (real bug)
+- **What:** `stockItemStore.getStockItemsAsync` paged once and ignored
+  `page.total`, so pantries with >50 items lost the tail.
+- **Resolved:** 2026-06-12 by Stock Overview Chunk 1 — added
+  `stockItemApiService.getAllPagesAsync()` (loops until a short page
+  or `total` is reached, asks for `limit=500` per call), and switched
+  the store to use it. Pairs with `q-virtual-scroll` so the now-larger
+  list still renders smoothly. Static-only impl; browser-verify is
+  **FU-120**.
 
 ## [OPEN] FU-034 — Wire up `StockItemSubstitute.notes` (substitution notes)
 - **Raised:** 2026-06-06 (INV-1)
@@ -1824,23 +2088,27 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** later — fold into **INV-8** (substitute
   swap-into-list assessment) or **B8** cook-mode temporary-swap work.
 
-## [OPEN] FU-033 — Wire up `StockItem.image` (own image + product fallback)
+## [RESOLVED] FU-033 — Wire up `StockItem.image` (own image + product fallback)
 - **Raised:** 2026-06-06 (INV-1)
-- **Type:** deferred job
-- **What:** `StockItem.image` (LargeBinary) exists but is always set to `None`
-  (`create_stock_item.py:84`), never returned in any DTO, no frontend.
-  **Intended feature** (user confirmed): a stock item should carry its own
-  image, and when it has none but a *linked product* has an image, fall back to
-  the product's image. Neither half is built.
-- **Why deferred:** it's a feature (upload + fallback + display), not a clean-up.
-  Needs design Qs resolved first (precedence, size limits, list-view display).
-- **Recommended resolution:** later — its own prompt, or a stock-item-detail
-  polish chunk.
-- **State note:** 2026-06-06 — corroborated by the original spec note
-  *"When I link a product to a stock item, if the stock item has no picture it
-  takes the product's picture automatically… otherwise a 'no pic' fallback"*
-  (`docs/00_original_spec/Feature Notes/`). Confirms own-image + product-image
-  fallback is a designed feature, not dead code. Still `[OPEN]`.
+- **Resolved:** 2026-06-12 by Stock Overview Chunk 6. End-to-end:
+  - Backend: `image` column deferred on the mapping (list endpoint
+    no longer pulls megabytes per row). New `has_image` field on
+    `StockItemDto` + `StockItemDetailDto`, hydrated by a single bulk
+    SELECT that **OR**s the item's own image with any linked
+    product's image — so the SPA's "show thumbnail?" decision
+    matches what the bytes route will serve. New
+    `GET /stock-items/<id>/image` route mirrors the recipe-image
+    pattern; resolves own-image first, falls back to the first
+    linked product that decodes cleanly, 404s if both miss.
+  - Backend: `CreateStockItemRequest` and `UpdateStockItemRequest`
+    accept `image` as a data-URL string (~6 MB cap); update treats
+    explicit null as "clear".
+  - Frontend: new `stockItemImageUrl(id, version?)` helper; row
+    renders `<img>` with placeholder fallback (gated on
+    `showStockImages`); `StockItemDetailPage` overview tab gets a
+    `RecipeImageField` (reused, R-001) that saves immediately and
+    bumps an `imageVersion` to bust the browser cache.
+  - Static-only impl; browser-verify is **FU-125**.
 
 ## [OPEN] FU-032 — C-2: confirm B6 allocation works end-to-end in browser
 - **Raised:** 2026-06-06 (C-2 recon)

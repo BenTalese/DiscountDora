@@ -24,6 +24,9 @@ from dora_api.features.recipes.recipe_tool_access import (
 from dora_api.features.recipes.recipe_step_access import (
     get_steps_for_recipe, has_structured_steps_for_recipes,
 )
+from dora_api.features.recipes.recipe_section_access import (
+    get_section_count_for_recipes, get_sections_for_recipe,
+)
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import bad_request, not_found, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -51,6 +54,10 @@ class RecipeIngredientDto:
     # client never matches a stock-level name to decide cookability.
     is_missing: bool
     is_low_stock: bool
+    # C-4 Chunk 10 — nullable section grouping. NULL = implicit "main"
+    # group; the client uses this to bucket ingredients under the named
+    # section headers from `RecipeDto.sections`.
+    section_id: UUID | None
 
     @classmethod
     def from_entity(cls, ingredient: RecipeIngredient) -> 'RecipeIngredientDto':
@@ -69,6 +76,7 @@ class RecipeIngredientDto:
             notes = ingredient.notes,
             is_missing = is_missing(_Level),
             is_low_stock = is_low_stock(_Level),
+            section_id = getattr(ingredient, "section_id", None),
         )
 
 
@@ -100,6 +108,22 @@ class RecipeStepDto:
     hint: str | None
     ingredient_ids: List[UUID]
     tool_ids: List[UUID]
+    # C-4 Chunk 10 — top-level steps may belong to a section; NULL = main.
+    # Sub-steps carry the same section_id as their parent for cheap reads.
+    section_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeSectionDto:
+    """C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).
+
+    Sections are optional; a recipe with zero sections renders the same
+    as it always did, with all ingredients/steps in the implicit "main"
+    group (their `section_id` is NULL).
+    """
+    section_id: UUID
+    sequence: int
+    name: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +199,12 @@ class RecipeDto:
     # as an estimate, not a quote.
     estimated_cost_priced_count: int = 0
     estimated_cost_total_count: int = 0
+    # C-4 Chunk 10 — named sections (DEC-3 option A). The list endpoint
+    # populates only `section_count` (cheap), the detail endpoint also
+    # hydrates `sections[]`. Empty sections + section_count == 0 ⇒ the
+    # recipe is flat; ingredients/steps render under no header.
+    section_count: int = 0
+    sections: List['RecipeSectionDto'] = field(default_factory=list)
 
     @classmethod
     def from_entity(cls, recipe: Recipe, dietary_tag_ids: list[UUID] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
@@ -505,6 +535,19 @@ class GetRecipesHandler:
             for d in dtos
         ]
 
+    def _hydrate_section_count(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """List endpoint only — one bulk query for the section-count
+        badge on each recipe card. Detail endpoint loads the full
+        `sections[]` instead."""
+        if not dtos:
+            return dtos
+        import dataclasses
+        counts = get_section_count_for_recipes([d.recipe_id for d in dtos])
+        return [
+            dataclasses.replace(d, section_count=counts.get(d.recipe_id, 0))
+            for d in dtos
+        ]
+
     def _hydrate_structured_steps_flag(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """List endpoint only — set `has_structured_steps` via one bulk
         existence query. Detail endpoint (handle_by_id) goes further and
@@ -599,7 +642,9 @@ class GetRecipesHandler:
         import dataclasses
         _Hydrated = self._hydrate_unallocated(
             self._hydrate_has_image(
-                self._hydrate_structured_steps_flag(self._hydrate_tags(page.items))
+                self._hydrate_section_count(
+                    self._hydrate_structured_steps_flag(self._hydrate_tags(page.items))
+                )
             )
         )
         return dataclasses.replace(page, items=_Hydrated)
@@ -621,8 +666,18 @@ class GetRecipesHandler:
                 hint=row["hint"],
                 ingredient_ids=row["ingredient_ids"],
                 tool_ids=row["tool_ids"],
+                section_id=row.get("section_id"),
             )
             for row in step_rows
+        ]
+        section_rows = get_sections_for_recipe(recipe_id)
+        section_dtos = [
+            RecipeSectionDto(
+                section_id=row["id"],
+                sequence=row["sequence"],
+                name=row["name"],
+            )
+            for row in section_rows
         ]
         # C-4 Chunk 8 — sibling versions for the Versions card. One small
         # query; skipped entirely when the recipe has no group id.
@@ -654,6 +709,8 @@ class GetRecipesHandler:
             steps=step_dtos,
             has_structured_steps=bool(step_dtos),
             version_siblings=sibling_dtos,
+            sections=section_dtos,
+            section_count=len(section_dtos),
         )
         _Hydrated = self._hydrate_unallocated(
             self._hydrate_has_image([_WithAssoc])

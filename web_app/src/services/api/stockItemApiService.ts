@@ -1,8 +1,18 @@
 import type { StockItem } from 'src/models/stockItem';
 import type { StockItemDetail } from 'src/models/stockItemDetail';
 import type { CreatedResponse } from './axiosHttpClient';
-import AxiosHttpClient from './axiosHttpClient';
+import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
 import { createQueryString, FilterOperator, type Page } from './queryStringBuilder';
+
+/** C-1 Chunk 6 / FU-033 — URL for a stock item's image (served as raw
+ *  bytes; falls back to a linked product's image server-side). Pass a
+ *  `version` (e.g. a counter bumped after upload) to bust the
+ *  browser cache after a re-upload. */
+export function stockItemImageUrl(stockItemId: string, version?: number | string): string {
+    const base = resolveBaseURL('dora');
+    const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
+    return `${base}/stock-items/${stockItemId}/image${suffix}`;
+}
 
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
@@ -36,8 +46,41 @@ export default class StockItemApiService {
         return page.items[0]!;
     };
 
-    getAllAsync = async (): Promise<Page<StockItem>> =>
-        await this.httpClient.get<Page<StockItem>>('/stock-items');
+    /** Fetch a specific page of stock items. Callers that want every item
+     *  use `getAllPagesAsync` below — `getAllAsync` keeps the original
+     *  single-page shape for callers that only need page 1 (e.g. quick
+     *  lookups that don't paginate). */
+    getAllAsync = async (
+        pagination?: { page: number; limit: number },
+    ): Promise<Page<StockItem>> => {
+        const qs = pagination
+            ? createQueryString(undefined, undefined, pagination)
+            : '';
+        return await this.httpClient.get<Page<StockItem>>(`/stock-items${qs}`);
+    };
+
+    /** C-1 Stock Overview Chunk 1 — load every stock item by paging until
+     *  the server stops returning a full page. The backend caps `limit`
+     *  at 500 (`query_options.MAX_LIMIT`); we ask for that to minimise
+     *  round-trips and stop as soon as a short page arrives (or we've
+     *  collected `total`). The overview store calls this so a pantry of
+     *  >50 items is no longer silently truncated (FU-035). */
+    getAllPagesAsync = async (limit: number = 500): Promise<StockItem[]> => {
+        const collected: StockItem[] = [];
+        let page = 1;
+        while (true) {
+            const result = await this.getAllAsync({ page, limit });
+            collected.push(...result.items);
+            if (
+                result.items.length < limit
+                || collected.length >= (result.total ?? collected.length)
+            ) {
+                break;
+            }
+            page += 1;
+        }
+        return collected;
+    };
 
     getDetailAsync = async (stockItemID: string): Promise<StockItemDetail> =>
         await this.httpClient.get<StockItemDetail>(`/stock-items/${stockItemID}/detail`);
@@ -83,6 +126,9 @@ export type CreateStockItemCommand = {
     is_flagged?: boolean;
     auto_add_when_low?: boolean;
     is_open?: boolean;
+    /** C-1 Chunk 6 / FU-033 — image as a data-URL string, or
+     *  null/omitted for none. */
+    image?: string | null;
 };
 
 export type RestoreStockItemCommand = {
@@ -112,4 +158,7 @@ export type UpdateStockItemCommand = {
     is_open?: boolean;
     opened_on?: string | null;
     preferred_product_id?: string | null;
+    /** C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
+     *  clear, omit to leave untouched. */
+    image?: string | null;
 };

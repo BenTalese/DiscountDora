@@ -16,6 +16,9 @@ from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
 )
+from dora_api.features.recipes.recipe_section_access import (
+    SectionWrite, replace_sections_for_recipe,
+)
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
@@ -40,6 +43,10 @@ class UpdateRecipeIngredientRequest(BaseModel):
     # client-side identifier so `steps[].ingredient_client_ids` can point at
     # this row before the server hands back a real id.
     client_id: str | None = Field(default = None, max_length = 64)
+    # C-4 Chunk 10 — optional section grouping; client_id of one of the
+    # sections in the same payload, OR the existing section's UUID string
+    # when leaving sections untouched. Null = unsectioned.
+    section_client_id: str | None = Field(default = None, max_length = 64)
 
 
 class UpdateRecipeStepRequest(BaseModel):
@@ -52,6 +59,16 @@ class UpdateRecipeStepRequest(BaseModel):
     hint: str | None = None
     ingredient_client_ids: List[str] = Field(default_factory = list)
     tool_ids: List[UUID] = Field(default_factory = list)
+    section_client_id: str | None = Field(default = None, max_length = 64)
+
+
+class UpdateRecipeSectionRequest(BaseModel):
+    """C-4 Chunk 10 — a named section on the update payload."""
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str = Field(min_length = 1, max_length = 64)
+    sequence: int = Field(default = 0, ge = 0)
+    name: str = Field(min_length = 1, max_length = 255)
 
 
 class UpdateRecipeRequest(BaseModel):
@@ -92,6 +109,11 @@ class UpdateRecipeRequest(BaseModel):
     # step set is replaced. Omit to leave existing steps untouched. An empty
     # list clears all structure (recipe falls back to plain `instructions`).
     steps: List[UpdateRecipeStepRequest] | None = None
+    # C-4 Chunk 10 — present (even as []) = replace the full section set.
+    # Empty list clears all sections; ingredients/steps fall back to the
+    # implicit "main" group via ON DELETE SET NULL. Omit to leave
+    # existing sections untouched.
+    sections: List[UpdateRecipeSectionRequest] | None = None
 
 
 @dataclass(slots=True)
@@ -104,6 +126,7 @@ class UpdateRecipeResponse:
     missing_stock_item_ids: tuple[UUID, ...] = ()
     invalid_tag_message: str | None = None
     invalid_step_message: str | None = None
+    invalid_section_message: str | None = None
 
 
 # Attributes that may safely be assigned from the request as-is, including
@@ -168,6 +191,44 @@ class UpdateRecipeHandler:
                     return UpdateRecipeResponse(category_not_found = True)
                 _Recipe.category = _Category
 
+        # C-4 Chunk 10 — sections replace first so the new ingredient/step
+        # FKs can target the freshly-inserted rows. Empty list clears (rows
+        # fall back to the implicit "main" group via ON DELETE SET NULL).
+        _SectionClientToReal: dict[str, UUID] = {}
+        _SectionsReplaced = False
+        if "sections" in _SetFields and request.sections is not None:
+            try:
+                _SectionWrites = [
+                    SectionWrite(
+                        client_id=section.client_id,
+                        sequence=section.sequence,
+                        name=section.name,
+                    )
+                    for section in request.sections
+                ]
+                _SectionClientToReal = {
+                    str(k): v
+                    for k, v in replace_sections_for_recipe(
+                        recipe_id, _SectionWrites
+                    ).items()
+                }
+                _SectionsReplaced = True
+            except ValueError as exc:
+                return UpdateRecipeResponse(invalid_section_message=str(exc))
+
+        def _resolve_section(token: str | None) -> UUID | None:
+            if not token:
+                return None
+            if token in _SectionClientToReal:
+                return _SectionClientToReal[token]
+            # Caller is leaving sections untouched and passed an existing
+            # section UUID directly — trust it; the FK + ondelete=SET NULL
+            # already protects us from dangling references.
+            try:
+                return UUID(token)
+            except (ValueError, TypeError):
+                return None
+
         _IngredientClientToReal: dict[str, UUID] = {}
         if "ingredients" in _SetFields and request.ingredients is not None:
             _NewIngredients: List[RecipeIngredient] = []
@@ -183,6 +244,7 @@ class UpdateRecipeHandler:
                     quantity = _IngredientRequest.quantity,
                     stock_item = _StockItem,
                     unit = _IngredientRequest.unit,
+                    section_id = _resolve_section(_IngredientRequest.section_client_id),
                 )
                 _NewIngredients.append(_NewIngredient)
                 _NewPairs.append((_IngredientRequest.client_id, _NewIngredient))
@@ -246,6 +308,7 @@ class UpdateRecipeHandler:
                             if resolved is not None
                         ],
                         tool_ids=list(step.tool_ids),
+                        section_id=_resolve_section(step.section_client_id),
                     )
                     for step in request.steps
                 ]
@@ -319,6 +382,10 @@ def update_recipe(recipe_id: UUID):
     if _Response.invalid_step_message:
         _Logger.warning(f"Invalid recipe step on update: {_Response.invalid_step_message}")
         return bad_request(_Response.invalid_step_message)
+
+    if _Response.invalid_section_message:
+        _Logger.warning(f"Invalid recipe section on update: {_Response.invalid_section_message}")
+        return bad_request(_Response.invalid_section_message)
 
     _Logger.info(f"Successfully updated recipe with ID: {recipe_id}")
     return no_content()

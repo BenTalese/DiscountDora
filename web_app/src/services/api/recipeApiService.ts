@@ -21,6 +21,17 @@ export type CreateRecipeIngredientCommand = {
      *  assigned a real UUID. Any unique string works; the editor uses crypto
      *  randomUUID. Omit when no step references this ingredient. */
     client_id?: string;
+    /** C-4 Chunk 10 — optional section grouping; references one of the
+     *  sibling sections by `client_id` (or its real UUID when sections
+     *  are not being replaced in this payload). Omit/null = unsectioned. */
+    section_client_id?: string | null;
+};
+
+/** C-4 Chunk 10 — a named section on the create/update payload. */
+export type RecipeSectionCommand = {
+    client_id: string;
+    sequence: number;
+    name: string;
 };
 
 /** C-4 Chunk 6 — one structured step (or sub-step) on a create/update
@@ -38,6 +49,8 @@ export type RecipeStepCommand = {
     hint: string | null;
     ingredient_client_ids: string[];
     tool_ids: string[];
+    /** C-4 Chunk 10 — optional section grouping for top-level steps. */
+    section_client_id?: string | null;
 };
 
 export type CreateRecipeCommand = {
@@ -66,6 +79,8 @@ export type CreateRecipeCommand = {
     steps?: RecipeStepCommand[];
     /** C-4 Chunk 9 — simple nutrition kcal. */
     kcal?: number | null;
+    /** C-4 Chunk 10 — named sections. Empty/omitted = flat recipe. */
+    sections?: RecipeSectionCommand[];
 };
 
 export type UpdateRecipeCommand = {
@@ -98,6 +113,10 @@ export type UpdateRecipeCommand = {
     steps?: RecipeStepCommand[];
     /** C-4 Chunk 9 — simple nutrition kcal. Explicit null clears it. */
     kcal?: number | null;
+    /** C-4 Chunk 10 — named sections. Present (even as []) = replace; an
+     *  empty list clears all sections and rows fall back to the implicit
+     *  "main" group via ON DELETE SET NULL. Omit to leave untouched. */
+    sections?: RecipeSectionCommand[];
 };
 
 /** P2-08 — query filters for the recipes endpoint. Mirrors the

@@ -6,19 +6,26 @@ from uuid import UUID
 
 from flask import request
 
+from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.recipe_tags import (RECIPE_TAG_CATALOGUE,
-                                         RECIPE_TAG_DISCLAIMER)
+from dora_api.domain.recipe_tags import RECIPE_TAG_DISCLAIMER
 from dora_api.domain.recipe_cookability import missing_count_for
 from dora_api.domain.stock_status import is_low_stock, is_missing
 from dora_api.features.recipes.recipe_tag_access import (
     find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
-    get_tags_for_recipes,
+    get_tag_ids_for_recipes,
+)
+from dora_api.features.recipes.recipe_tool_access import (
+    find_recipe_ids_with_all_tools, find_recipe_ids_with_any_tools,
+    get_tool_ids_for_recipes,
+)
+from dora_api.features.recipes.recipe_step_access import (
+    get_steps_for_recipe, has_structured_steps_for_recipes,
 )
 from dora_api.features.routers import RECIPE_ROUTER
-from dora_api.infrastructure.api_response import bad_request, ok, paginated
+from dora_api.infrastructure.api_response import bad_request, not_found, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
                                                    parse_query_options)
 from dora_api.infrastructure.utils import get_container
@@ -66,14 +73,53 @@ class RecipeIngredientDto:
 
 
 @dataclass(frozen=True, slots=True)
+class RecipeVersionSiblingDto:
+    """C-4 Chunk 8 — a light view of a sibling version. The detail endpoint
+    embeds an array of these so the UI can render a "Versions" card
+    without a second round-trip; the fields are the minimum needed for the
+    card row (name + last-made + meals-on-hand)."""
+    recipe_id: UUID
+    name: str
+    last_made_on: datetime | None
+    available_meals: int
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeStepDto:
+    """C-4 Chunk 6 — one structured step or sub-step.
+
+    Flat shape; the frontend reassembles the tree from `parent_step_id`.
+    `ingredient_ids` references the recipe's own `RecipeIngredient` rows
+    (highlight which row this step uses); `tool_ids` references the Tool
+    vocab.
+    """
+    step_id: UUID
+    parent_step_id: UUID | None
+    sequence: int
+    text: str
+    hint: str | None
+    ingredient_ids: List[UUID]
+    tool_ids: List[UUID]
+
+
+@dataclass(frozen=True, slots=True)
 class RecipeDto:
     recipe_id: UUID
     name: str
     available_meals: int
     unallocated_meals: int
-    category: str | None
+    # Sum of future, un-consumed meal-plan servings for this recipe (the raw
+    # commitment — NOT floored, unlike unallocated_meals). Lets the UI show a
+    # shortfall (committed > available) in red. Hydrated post-query.
+    committed_meals: int
+    # C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
+    # edit-form selects + client filters; the name is carried for cheap
+    # display (card subtitle, search, export) without a client-side join.
+    cuisine_id: UUID | None
+    cuisine_name: str | None
+    category_id: UUID | None
+    category_name: str | None
     cook_time_minutes: int | None
-    cuisine: str | None
     difficulty: str | None
     instructions: str | None
     is_favourite: bool
@@ -82,20 +128,56 @@ class RecipeDto:
     prep_time_minutes: int | None
     recipe_collection_id: UUID | None
     servings: int | None
+    # C-4 Chunk 7 — origin URL when the recipe was imported.
+    source: str | None
     time_of_day: str | None
+    # C-4 Chunk 8 — version sibling group. NULL means singleton. List
+    # endpoint sets `version_group_id` (cheap); detail endpoint also
+    # populates `version_siblings[]` (the other recipes sharing the id).
+    version_group_id: UUID | None
+    # C-4 Chunk 9 — simple nutrition (kcal). Stored per-recipe; the
+    # client gates the render on the C-cross nutrition opt-in. NULL when
+    # the user hasn't typed one.
+    kcal: int | None
     ingredients: List[RecipeIngredientDto]
     # Server-owned cookability — computed once from the already-loaded
     # ingredient tree (§3.2 state-ownership refactor).
     missing_count: int
     cookable: bool
-    # P2-08 — canonical dietary / allergen-free / nutritional tags. Empty
-    # list when the recipe has none. Set by the handler after the base
-    # query — the field is mutable to keep `from_entity` agnostic of
-    # tag loading.
-    tags: List[str] = field(default_factory=list)
+    # C-4 Chunk 5: whether the recipe has an image (the bytes are served via
+    # GET /recipes/<id>/image, never inlined in list/detail JSON).
+    has_image: bool
+    # C-4 Chunk 2/5: dietary tag + tool ids. Empty list when none. Hydrated by
+    # the handler after the base query — mutable so `from_entity` stays
+    # agnostic of association loading.
+    dietary_tag_ids: List[UUID] = field(default_factory=list)
+    tool_ids: List[UUID] = field(default_factory=list)
+    # C-4 Chunk 6: structured steps. The list endpoint sets only
+    # `has_structured_steps` (cheap existence check); detail hydrates
+    # `steps[]` from the link tables. Empty steps + has_structured_steps
+    # false ⇒ recipe is unstructured; cook-mode falls back to splitting
+    # `instructions` on newline.
+    has_structured_steps: bool = False
+    steps: List['RecipeStepDto'] = field(default_factory=list)
+    # C-4 Chunk 8 — populated only by `handle_by_id` (detail). List endpoint
+    # leaves this empty; the client uses `version_group_id` on the list DTO
+    # to know whether siblings exist at all.
+    version_siblings: List['RecipeVersionSiblingDto'] = field(default_factory=list)
+    # C-4 Chunk 9 — server-derived cost estimate (DEC-5). Populated only
+    # on the detail endpoint and only when at least one ingredient has
+    # a linked product offer; client gates render on the C-cross money
+    # opt-in. NULL when no estimate could be computed (no linked
+    # products in the recipe).
+    estimated_cost: float | None = None
+    # Companion to estimated_cost: count of ingredients we *couldn't*
+    # price (no linked product / no current offer). Lets the UI add a
+    # "based on N of M ingredients" disclaimer so the estimate is read
+    # as an estimate, not a quote.
+    estimated_cost_priced_count: int = 0
+    estimated_cost_total_count: int = 0
 
     @classmethod
-    def from_entity(cls, recipe: Recipe, tags: list[str] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
+    def from_entity(cls, recipe: Recipe, dietary_tag_ids: list[UUID] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
         _Available = recipe.available_meals or 0
         _IngDtos = [RecipeIngredientDto.from_entity(i) for i in (recipe.ingredients or [])]
         # Distinct missing stock items via the shared cookability rule (R-003) —
@@ -106,9 +188,12 @@ class RecipeDto:
             name = recipe.name,
             available_meals = _Available,
             unallocated_meals = _Available if unallocated_meals is None else unallocated_meals,
-            category = recipe.category,
+            committed_meals = 0,
+            cuisine_id = recipe.cuisine.id if recipe.cuisine else None,
+            cuisine_name = recipe.cuisine.name if recipe.cuisine else None,
+            category_id = recipe.category.id if recipe.category else None,
+            category_name = recipe.category.name if recipe.category else None,
             cook_time_minutes = recipe.cook_time_minutes,
-            cuisine = recipe.cuisine,
             difficulty = recipe.difficulty,
             instructions = recipe.instructions,
             is_favourite = recipe.is_favourite,
@@ -117,11 +202,19 @@ class RecipeDto:
             prep_time_minutes = recipe.prep_time_minutes,
             recipe_collection_id = recipe.recipe_collection.id if recipe.recipe_collection else None,
             servings = recipe.servings,
+            source = recipe.source,
             time_of_day = recipe.time_of_day,
+            version_group_id = recipe.version_group_id,
+            kcal = recipe.kcal,
             ingredients = _IngDtos,
             missing_count = _Missing,
             cookable = _Missing == 0,
-            tags = tags or [],
+            # FU-090 — `image` is now a deferred column; accessing
+            # `recipe.image` here would trigger N+1 lazy loads on the
+            # list path. Default False and let the handler hydrate
+            # via a bulk SELECT below.
+            has_image = False,
+            dietary_tag_ids = dietary_tag_ids or [],
         )
 
 
@@ -150,6 +243,8 @@ class RecipeFilters:
     """
     tags_include: tuple[str, ...] = ()
     tags_exclude: tuple[str, ...] = ()
+    tools_include: tuple[str, ...] = ()
+    tools_exclude: tuple[str, ...] = ()
     ingredient_exclude: tuple[str, ...] = ()
     cookable: bool | None = None
     max_missing: int | None = None
@@ -159,6 +254,8 @@ class RecipeFilters:
         return not (
             self.tags_include
             or self.tags_exclude
+            or self.tools_include
+            or self.tools_exclude
             or self.ingredient_exclude
             or self.cookable is not None
             or self.max_missing is not None
@@ -273,6 +370,10 @@ class GetRecipesHandler:
             allowed &= find_recipe_ids_with_all_tags(filters.tags_include)
         if filters.tags_exclude:
             allowed -= find_recipe_ids_with_any_tags(filters.tags_exclude)
+        if filters.tools_include:
+            allowed &= find_recipe_ids_with_all_tools(filters.tools_include)
+        if filters.tools_exclude:
+            allowed -= find_recipe_ids_with_any_tools(filters.tools_exclude)
         if filters.ingredient_exclude:
             allowed -= self._ingredient_excluded_recipe_ids(filters.ingredient_exclude)
 
@@ -291,17 +392,150 @@ class GetRecipesHandler:
         query = query.where(EntityField(Recipe, "id").in_(list(allowed)))
         return query, False
 
+    def _compute_estimated_cost(self, dto: RecipeDto) -> RecipeDto:
+        """C-4 Chunk 9 / DEC-5 — server-side cost estimate. For each
+        ingredient that has a linked product carrying a current offer,
+        sum `quantity * (offer.price_now / product.size_value)` to get
+        an estimate. Ingredients without a linked-product offer aren't
+        priced; the caller surfaces "based on N of M" so the user reads
+        the number as an estimate, not a quote.
+
+        Stays server-side (DEC-5 / R-003 — domain math owned by the
+        server, never duplicated on the client). Only the detail path
+        triggers this; lists stay cheap.
+        """
+        import dataclasses
+        from sqlalchemy import bindparam, text
+        from dora_api.app import db
+
+        if not dto.ingredients:
+            return dto
+
+        # One query: pull each ingredient's stock-item id paired with the
+        # most plausible current-offer price + product size_value (the
+        # denominator for "price per unit"). Join chain:
+        #   RecipeIngredient → StockItemProduct → Product → ProductOffer
+        # If a stock item links to >1 product, pick the cheapest current
+        # offer (simple heuristic; the user can override via favourite
+        # products in a later pass — out of scope for Chunk 9).
+        stock_item_ids = [str(i.stock_item_id) for i in dto.ingredients]
+        stmt = text(
+            'SELECT sip.stock_item_id, p.size_value, MIN(po.price_now) AS price_now '
+            'FROM "StockItemProduct" sip '
+            'JOIN "Product" p ON p.id = sip.product_id '
+            'JOIN "ProductOffer" po ON po.product_id = p.id '
+            'WHERE sip.stock_item_id IN :ids '
+            '  AND p.is_active = 1 '
+            '  AND po.price_now IS NOT NULL '
+            'GROUP BY sip.stock_item_id, p.size_value'
+        ).bindparams(bindparam("ids", expanding=True))
+        rows = db.session.execute(stmt, {"ids": stock_item_ids}).all()
+
+        def _key(v) -> str:
+            if isinstance(v, UUID):
+                return str(v)
+            if isinstance(v, bytes):
+                return str(UUID(bytes=v))
+            return str(v)
+        price_by_stock_item: dict[str, tuple[float, float | None]] = {}
+        for sid, size_value, price in rows:
+            if price is None:
+                continue
+            # If multiple products link to the same stock item we'll see
+            # multiple rows here (different size_values); keep the
+            # cheapest unit-price one as a rough heuristic.
+            unit_price = float(price) / float(size_value) if size_value else float(price)
+            prev = price_by_stock_item.get(_key(sid))
+            if prev is None or unit_price < prev[0]:
+                price_by_stock_item[_key(sid)] = (unit_price, float(size_value or 0) or None)
+
+        total = 0.0
+        priced = 0
+        for ing in dto.ingredients:
+            sid = str(ing.stock_item_id)
+            entry = price_by_stock_item.get(sid)
+            if entry is None:
+                continue
+            unit_price, _size = entry
+            qty = float(ing.quantity) if ing.quantity is not None else 1.0
+            # Ingredient unit vs product unit reconciliation is hand-wavy
+            # — pass-through math is the documented rough heuristic from
+            # the IMPL plan. Users see this clearly labelled as an
+            # *estimate*.
+            total += qty * unit_price
+            priced += 1
+
+        return dataclasses.replace(
+            dto,
+            estimated_cost=round(total, 2) if priced > 0 else None,
+            estimated_cost_priced_count=priced,
+            estimated_cost_total_count=len(dto.ingredients),
+        )
+
+    def _hydrate_has_image(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """FU-090 — bulk-derive `has_image` from a single SQL pass that
+        never touches the deferred image blob column. SQL `image IS NOT
+        NULL` does the work; the wire shape ends up the same as before
+        but the recipe-list query no longer loads megabytes of bytes
+        per row just to set a boolean.
+        """
+        if not dtos:
+            return dtos
+        import dataclasses
+        from sqlalchemy import bindparam, text
+        from dora_api.app import db
+
+        ids = [str(d.recipe_id) for d in dtos]
+        stmt = text(
+            'SELECT id, image IS NOT NULL AS has_image '
+            'FROM "Recipe" '
+            "WHERE id IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        rows = db.session.execute(stmt, {"ids": ids}).all()
+
+        def _key(v) -> str:
+            if isinstance(v, UUID):
+                return str(v)
+            if isinstance(v, bytes):
+                return str(UUID(bytes=v))
+            return str(v)
+        flag_by_id = {_key(row[0]): bool(row[1]) for row in rows}
+        return [
+            dataclasses.replace(d, has_image=flag_by_id.get(str(d.recipe_id), False))
+            for d in dtos
+        ]
+
+    def _hydrate_structured_steps_flag(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """List endpoint only — set `has_structured_steps` via one bulk
+        existence query. Detail endpoint (handle_by_id) goes further and
+        loads the full `steps[]` list."""
+        if not dtos:
+            return dtos
+        import dataclasses
+        ids = [d.recipe_id for d in dtos]
+        with_steps = has_structured_steps_for_recipes(ids)
+        return [
+            dataclasses.replace(d, has_structured_steps=d.recipe_id in with_steps)
+            for d in dtos
+        ]
+
     def _hydrate_tags(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
-        """After paginate returns, bulk-load tags and rebuild the DTOs
-        with them populated. The DTO is frozen, so we replace rather
+        """After paginate returns, bulk-load dietary tag + tool ids and rebuild
+        the DTOs with them populated. The DTO is frozen, so we replace rather
         than mutate."""
         if not dtos:
             return dtos
         import dataclasses
 
-        tag_map = get_tags_for_recipes([d.recipe_id for d in dtos])
+        ids = [d.recipe_id for d in dtos]
+        tag_map = get_tag_ids_for_recipes(ids)
+        tool_map = get_tool_ids_for_recipes(ids)
         return [
-            dataclasses.replace(d, tags=tag_map.get(d.recipe_id, []))
+            dataclasses.replace(
+                d,
+                dietary_tag_ids=tag_map.get(d.recipe_id, []),
+                tool_ids=tool_map.get(d.recipe_id, []),
+            )
             for d in dtos
         ]
 
@@ -343,6 +577,7 @@ class GetRecipesHandler:
         return [
             dataclasses.replace(
                 d,
+                committed_meals = _Committed.get(str(d.recipe_id), 0),
                 unallocated_meals = max(d.available_meals - _Committed.get(str(d.recipe_id), 0), 0),
             )
             for d in dtos
@@ -362,7 +597,11 @@ class GetRecipesHandler:
             options, RecipeDto.from_entity, field_map=_FIELD_MAP
         )
         import dataclasses
-        _Hydrated = self._hydrate_unallocated(self._hydrate_tags(page.items))
+        _Hydrated = self._hydrate_unallocated(
+            self._hydrate_has_image(
+                self._hydrate_structured_steps_flag(self._hydrate_tags(page.items))
+            )
+        )
         return dataclasses.replace(page, items=_Hydrated)
 
     def handle_by_id(self, recipe_id: UUID) -> RecipeDto | None:
@@ -370,10 +609,56 @@ class GetRecipesHandler:
         if entity is None:
             return None
         dto = RecipeDto.from_entity(entity)
-        tag_map = get_tags_for_recipes([recipe_id])
+        tag_map = get_tag_ids_for_recipes([recipe_id])
+        tool_map = get_tool_ids_for_recipes([recipe_id])
+        step_rows = get_steps_for_recipe(recipe_id)
+        step_dtos = [
+            RecipeStepDto(
+                step_id=row["id"],
+                parent_step_id=row["parent_step_id"],
+                sequence=row["sequence"],
+                text=row["text"],
+                hint=row["hint"],
+                ingredient_ids=row["ingredient_ids"],
+                tool_ids=row["tool_ids"],
+            )
+            for row in step_rows
+        ]
+        # C-4 Chunk 8 — sibling versions for the Versions card. One small
+        # query; skipped entirely when the recipe has no group id.
+        sibling_dtos: list[RecipeVersionSiblingDto] = []
+        if entity.version_group_id is not None:
+            siblings = (
+                self.repository
+                .get(Recipe)
+                .all(
+                    EntityField(Recipe, Recipe.Fields.VERSION_GROUP_ID).eq(entity.version_group_id),
+                )
+            )
+            sibling_dtos = [
+                RecipeVersionSiblingDto(
+                    recipe_id=sib.id,
+                    name=sib.name,
+                    last_made_on=sib.last_made_on,
+                    available_meals=sib.available_meals or 0,
+                )
+                for sib in siblings
+                if sib.id != recipe_id
+            ]
+            sibling_dtos.sort(key=lambda s: s.name.lower())
         import dataclasses
-        _WithTags = dataclasses.replace(dto, tags=tag_map.get(recipe_id, []))
-        return self._hydrate_unallocated([_WithTags])[0]
+        _WithAssoc = dataclasses.replace(
+            dto,
+            dietary_tag_ids=tag_map.get(recipe_id, []),
+            tool_ids=tool_map.get(recipe_id, []),
+            steps=step_dtos,
+            has_structured_steps=bool(step_dtos),
+            version_siblings=sibling_dtos,
+        )
+        _Hydrated = self._hydrate_unallocated(
+            self._hydrate_has_image([_WithAssoc])
+        )[0]
+        return self._compute_estimated_cost(_Hydrated)
 
 
 def _parse_bool(raw: str | None) -> bool | None:
@@ -421,10 +706,30 @@ def _parse_recipe_filters(args) -> RecipeFilters:
     return RecipeFilters(
         tags_include=collect("tags_include"),
         tags_exclude=collect("tags_exclude"),
+        tools_include=collect("tools_include"),
+        tools_exclude=collect("tools_exclude"),
         ingredient_exclude=collect("ingredient_exclude"),
         cookable=_parse_bool(args.get("cookable")),
         max_missing=max_missing,
     )
+
+
+# ── GET /api/recipes/<id> ───────────────────────────────────────────────
+# Real detail endpoint added in C-4 Chunk 8: the previous SPA path —
+# filtering the list endpoint by id — only returned the list-shape DTO
+# (no `steps[]`, no `version_siblings[]`). Detail views need the fully
+# hydrated DTO that `handle_by_id` builds; this is its first dedicated
+# route. The old filter-by-id path on the list endpoint still works as
+# the cookbook overview's primary call (cheap list shape is fine there).
+
+@RECIPE_ROUTER.route("/<recipe_id>", methods=["GET"])
+def get_recipe(recipe_id: UUID):
+    handler = get_container().inject(GetRecipesHandler)
+    dto = handler.handle_by_id(recipe_id)
+    if dto is None:
+        from dora_api.domain.entities.recipe import Recipe as _Recipe
+        return not_found(_Recipe.__name__, recipe_id)
+    return ok(dto)
 
 
 @RECIPE_ROUTER.route("")
@@ -450,17 +755,53 @@ def get_recipes():
 
 
 # ── GET /api/recipes/tags ───────────────────────────────────────────────
-# The SPA pulls the curated tag list at runtime so the picker stays in
-# sync with the backend constants. The disclaimer travels with the list
-# so any client surfacing the picker can show the "planning aid, not a
-# safety guarantee" framing without hardcoding the wording.
+# The SPA pulls the dietary-tag vocabulary at runtime so the picker stays in
+# sync with the DB. The disclaimer travels with the list so any client can
+# show the "planning aid, not a safety guarantee" framing without hardcoding
+# the wording. The dedicated CRUD endpoints (/api/dietary-tags) own editing;
+# this read stays here as the recipe-facing catalogue.
+
+# ── GET /api/recipes/<id>/image ─────────────────────────────────────────
+# Images are stored as a data-URL string (UTF-8 bytes) on the recipe row and
+# served here as raw bytes so the SPA can use a plain <img src> without
+# inlining megabytes of base64 into every list/detail JSON payload.
+
+@RECIPE_ROUTER.route("/<recipe_id>/image", methods=["GET"])
+def get_recipe_image(recipe_id):
+    import base64
+    import re as _re
+    from flask import Response
+
+    repository = SqlAlchemyRepository()
+    recipe = repository.get(Recipe).by_id(recipe_id)
+    if recipe is None or not recipe.image:
+        return not_found(Recipe.__name__, recipe_id)
+    data_url = recipe.image.decode("utf-8", "ignore")
+    match = _re.match(r"^data:(?P<mime>[\w/+.-]+);base64,(?P<data>.+)$", data_url, _re.DOTALL)
+    if not match:
+        return not_found(Recipe.__name__, recipe_id)
+    try:
+        raw = base64.b64decode(match.group("data"), validate=False)
+    except (ValueError, TypeError):
+        return not_found(Recipe.__name__, recipe_id)
+    return Response(
+        raw,
+        mimetype=match.group("mime"),
+        headers={"Cache-Control": "no-cache"},
+    )
+
 
 @RECIPE_ROUTER.route("/tags", methods=["GET"])
 def get_recipe_tag_catalogue():
+    repository = SqlAlchemyRepository()
+    tags = sorted(
+        repository.get(DietaryTag).all(),
+        key=lambda t: (t.sequence, t.name.lower()),
+    )
     return ok({
         "tags": [
-            {"value": t.value, "label": t.label, "category": t.category}
-            for t in RECIPE_TAG_CATALOGUE
+            {"value": str(t.id), "label": t.name, "category": t.category}
+            for t in tags
         ],
         "disclaimer": RECIPE_TAG_DISCLAIMER,
     })

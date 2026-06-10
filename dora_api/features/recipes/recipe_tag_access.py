@@ -1,15 +1,14 @@
-"""P2-08 — read/write helpers for the `RecipeTag` association table.
+"""C-4 Chunk 2 — read/write helpers for the `RecipeTag` association table.
 
-The table is a pure (recipe_id, tag) link without a standalone entity,
-matching the StockItemSubstitute / StockItemProduct pattern. Handlers
-access it via `db.metadata.tables["RecipeTag"]`; we centralise the
-queries here so create/update/get can share one implementation and
-ingest validation stays in one place.
+The table is a pure (recipe_id, dietary_tag_id) link without a standalone
+entity, matching the StockItemSubstitute / StockItemProduct pattern.
+Handlers access it via `db.metadata.tables["RecipeTag"]`; we centralise the
+queries here so create/update/get share one implementation and validation
+stays in one place.
 
-All write helpers expect tags to be pre-validated against
-`ALLOWED_RECIPE_TAGS` (in `dora_api/domain/recipe_tags.py`). Invalid
-tags raise `ValueError`; the request layer catches it and returns a
-422 with the bad value.
+Tags are now the user-configurable `DietaryTag` vocabulary (was an in-code
+catalogue). Write helpers validate ids against existing DietaryTag rows;
+unknown ids raise `ValueError`, which the request layer turns into a 400.
 """
 from collections import defaultdict
 from typing import Iterable
@@ -18,110 +17,162 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from dora_api.app import db
-from dora_api.domain.recipe_tags import ALLOWED_RECIPE_TAGS
 
 
 def _table():
     return db.metadata.tables["RecipeTag"]
 
 
-def _normalise(tag: str) -> str:
-    """Lowercase + strip — defensive against client mis-casing. Real
-    validation against the curated catalogue happens in `validate_tags`."""
-    return tag.strip().lower()
+def _tag_table():
+    return db.metadata.tables["DietaryTag"]
 
 
-def validate_tags(tags: Iterable[str]) -> list[str]:
-    """Return a deduped list of canonical tags. Raises ValueError on the
-    first tag not in the curated catalogue so the caller can surface a
-    precise error message."""
-    seen: set[str] = set()
-    out: list[str] = []
-    for raw in tags:
-        canonical = _normalise(raw)
-        if canonical not in ALLOWED_RECIPE_TAGS:
+def _coerce_uuid(value) -> UUID | None:
+    """Best-effort coercion to UUID; returns None on anything unparseable so
+    filter paths can skip junk rather than 500."""
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _all_tag_ids() -> set[UUID]:
+    tags = _tag_table()
+    rows = db.session.execute(select(tags.c.id)).all()
+    return {row[0] for row in rows}
+
+
+def _name_to_id() -> dict[str, UUID]:
+    tags = _tag_table()
+    rows = db.session.execute(select(tags.c.name, tags.c.id)).all()
+    return {name.strip().lower(): tag_id for name, tag_id in rows}
+
+
+def validate_tag_ids(tag_ids: Iterable) -> list[UUID]:
+    """Return a deduped list of valid DietaryTag ids. Raises ValueError on
+    the first id that doesn't exist so the caller can surface a precise error."""
+    known = _all_tag_ids()
+    seen: set[UUID] = set()
+    out: list[UUID] = []
+    for raw in tag_ids:
+        coerced = _coerce_uuid(raw)
+        if coerced is None or coerced not in known:
             raise ValueError(
-                f"'{raw}' is not a recognised recipe tag. "
-                f"See /api/recipes/tags for the canonical list."
+                f"'{raw}' is not a recognised dietary tag. "
+                f"See /api/recipes/tags for the available list."
             )
-        if canonical in seen:
+        if coerced in seen:
             continue
-        seen.add(canonical)
-        out.append(canonical)
+        seen.add(coerced)
+        out.append(coerced)
     return out
 
 
-def get_tags_for_recipe(recipe_id: UUID) -> list[str]:
-    """Single-recipe load. For pages that render N recipes, prefer
-    `get_tags_for_recipes` to avoid N round-trips."""
+def resolve_tag_filter_values(values: Iterable[str]) -> set[UUID]:
+    """Map filter inputs (tag ids OR human-friendly names) to ids, silently
+    dropping anything that matches neither. Lets the SPA pass ids and Dora's
+    tools pass names through the same filter path without erroring on a typo."""
+    known = _all_tag_ids()
+    by_name = _name_to_id()
+    out: set[UUID] = set()
+    for raw in values:
+        coerced = _coerce_uuid(raw)
+        if coerced is not None and coerced in known:
+            out.add(coerced)
+            continue
+        named = by_name.get(str(raw).strip().lower())
+        if named is not None:
+            out.add(named)
+    return out
+
+
+def get_tag_ids_for_recipe(recipe_id: UUID) -> list[UUID]:
+    """Single-recipe load. For pages rendering N recipes, prefer
+    `get_tag_ids_for_recipes` to avoid N round-trips."""
     table = _table()
     rows = db.session.execute(
-        select(table.c.tag).where(table.c.recipe_id == recipe_id).order_by(table.c.tag)
+        select(table.c.dietary_tag_id).where(table.c.recipe_id == recipe_id)
     ).all()
     return [row[0] for row in rows]
 
 
-def get_tags_for_recipes(recipe_ids: Iterable[UUID]) -> dict[UUID, list[str]]:
-    """Bulk fetch — returns {recipe_id: [tag, ...]}. Missing keys mean
-    the recipe has no tags (not an error). Sorted alphabetically for a
-    stable order in the SPA chip row."""
+def get_tag_ids_for_recipes(recipe_ids: Iterable[UUID]) -> dict[UUID, list[UUID]]:
+    """Bulk fetch — returns {recipe_id: [dietary_tag_id, ...]}. Missing keys
+    mean the recipe has no tags (not an error)."""
     ids = list(recipe_ids)
     if not ids:
         return {}
     table = _table()
     rows = db.session.execute(
-        select(table.c.recipe_id, table.c.tag)
+        select(table.c.recipe_id, table.c.dietary_tag_id)
         .where(table.c.recipe_id.in_(ids))
-        .order_by(table.c.recipe_id, table.c.tag)
+        .order_by(table.c.recipe_id)
     ).all()
-    bucketed: dict[UUID, list[str]] = defaultdict(list)
-    for recipe_id, tag in rows:
-        bucketed[recipe_id].append(tag)
+    bucketed: dict[UUID, list[UUID]] = defaultdict(list)
+    for recipe_id, tag_id in rows:
+        bucketed[recipe_id].append(tag_id)
     return dict(bucketed)
 
 
-def set_tags_for_recipe(recipe_id: UUID, tags: Iterable[str]) -> None:
-    """Replace the tag set for a recipe. Idempotent — calling with the
-    same set is a no-op. Validates against the curated catalogue;
-    caller is responsible for catching ValueError.
-    """
-    canonical = validate_tags(tags)
+def get_tag_names_for_recipes(recipe_ids: Iterable[UUID]) -> dict[UUID, list[str]]:
+    """Bulk fetch of human-readable tag names per recipe — for surfaces that
+    show names rather than ids (e.g. the assistant). {recipe_id: [name, ...]}."""
+    ids = list(recipe_ids)
+    if not ids:
+        return {}
+    table = _table()
+    tags = _tag_table()
+    rows = db.session.execute(
+        select(table.c.recipe_id, tags.c.name)
+        .select_from(table.join(tags, table.c.dietary_tag_id == tags.c.id))
+        .where(table.c.recipe_id.in_(ids))
+        .order_by(tags.c.name)
+    ).all()
+    bucketed: dict[UUID, list[str]] = defaultdict(list)
+    for recipe_id, name in rows:
+        bucketed[recipe_id].append(name)
+    return dict(bucketed)
+
+
+def set_tag_ids_for_recipe(recipe_id: UUID, tag_ids: Iterable) -> None:
+    """Replace the tag set for a recipe. Idempotent. Validates each id exists;
+    caller is responsible for catching ValueError."""
+    valid = validate_tag_ids(tag_ids)
     table = _table()
     db.session.execute(table.delete().where(table.c.recipe_id == recipe_id))
-    if canonical:
+    if valid:
         db.session.execute(
             table.insert(),
-            [{"recipe_id": recipe_id, "tag": tag} for tag in canonical],
+            [{"recipe_id": recipe_id, "dietary_tag_id": tag_id} for tag_id in valid],
         )
 
 
-def find_recipe_ids_with_all_tags(tags: Iterable[str]) -> set[UUID]:
-    """Recipes that carry *every* tag in the input set. Used by the
-    `tags_include` filter — semantics are "intersection", not "union",
-    because the user's intent on a multi-select is "fits all of these"."""
-    canonical = list({_normalise(t) for t in tags})
-    if not canonical:
+def find_recipe_ids_with_all_tags(tag_ids: Iterable) -> set[UUID]:
+    """Recipes that carry *every* tag in the input set (intersection — the
+    user's intent on a multi-select is "fits all of these")."""
+    wanted = list(resolve_tag_filter_values(tag_ids))
+    if not wanted:
         return set()
     table = _table()
-    # group-by + having-count is the canonical SQL for "must have all of".
     rows = db.session.execute(
         select(table.c.recipe_id)
-        .where(table.c.tag.in_(canonical))
+        .where(table.c.dietary_tag_id.in_(wanted))
         .group_by(table.c.recipe_id)
-        .having(func.count(table.c.tag.distinct()) == len(canonical))
+        .having(func.count(table.c.dietary_tag_id.distinct()) == len(wanted))
     ).all()
     return {row[0] for row in rows}
 
 
-def find_recipe_ids_with_any_tags(tags: Iterable[str]) -> set[UUID]:
-    """Recipes that carry at least one of the tags. Used by
-    `tags_exclude` — we exclude any recipe matching ANY of the
-    exclusion tags (semantics: "none of these")."""
-    canonical = list({_normalise(t) for t in tags})
-    if not canonical:
+def find_recipe_ids_with_any_tags(tag_ids: Iterable) -> set[UUID]:
+    """Recipes carrying at least one of the tags (union — used by the exclude
+    axis: drop any recipe matching ANY exclusion tag)."""
+    wanted = list(resolve_tag_filter_values(tag_ids))
+    if not wanted:
         return set()
     table = _table()
     rows = db.session.execute(
-        select(table.c.recipe_id.distinct()).where(table.c.tag.in_(canonical))
+        select(table.c.recipe_id.distinct()).where(table.c.dietary_tag_id.in_(wanted))
     ).all()
     return {row[0] for row in rows}

@@ -224,6 +224,44 @@ exceptions, which still must be commented) · **Source** (where it was establish
   violation.
 - **Source:** ADR-003; this session's UUID-vs-str guard bug (FU-059).
 
+### R-011 — Use the framework's idiomatic, current-recommended pattern
+- **Rule:** Solve problems with the framework's first-party feature, not a
+  hand-rolled workaround — and use the *current-recommended* version of that
+  feature for the framework version pinned in `package.json` / `pyproject.toml`.
+  For Vue 3.4+ that means `defineModel()` over manual `modelValue` prop +
+  `update:modelValue` emit pairs; `<script setup>` over Options API; composables
+  + `provide/inject` over ad-hoc global state. For Quasar that means using its
+  plugins (`Screen`, `Dark`, `Dialog`, `Notify`) and **activating them per
+  Quasar's docs** (e.g. `Screen.setDebounce()` in a boot file) before relying
+  on their reactivity. For Flask/SQLAlchemy that means the ORM patterns the
+  installed major version recommends, not pre-2.0 query idioms.
+- **Why:** Hand-rolled equivalents drift from the framework's evolution,
+  miss bug fixes shipped upstream, and produce subtle bugs that only show up
+  at runtime. This session caught two at once in `FilterBar`: a manual
+  controlled/uncontrolled `modelValue` computed silently failed because Vue
+  coerces unset Boolean props to `false` (defeating the `=== undefined`
+  sentinel), and `$q.screen.gt.sm` was being read without the Screen plugin
+  ever being activated, so every viewport check returned `false`. The
+  idiomatic patch — `defineModel()` + a `Screen.setDebounce()` boot file —
+  is shorter, type-safer, and tracks Quasar/Vue upstream.
+- **Apply:** Before writing custom state-sync, lifecycle, reactivity, or
+  responsive code, check whether the framework already ships the primitive.
+  When using a Quasar plugin that requires activation (`Screen`, `AddressbarColor`,
+  etc.), wire the activation in `src/boot/` and register it in
+  `quasar.config.ts`. When the framework has multiple ways to do a thing,
+  pick the one the current major-version docs recommend.
+- **Violation signal:** manual `modelValue` + `update:modelValue` plumbing in
+  new code; reading `$q.screen.*` without a Screen activation boot file;
+  custom resize listeners replicating Quasar's; Options API in a new
+  component; a hand-rolled `ref` pattern that mirrors `defineModel` /
+  `useTemplateRef` / `toRefs`; SQLAlchemy 1.x-style `Query.filter_by` in new
+  code on a 2.x install.
+- **Carve-outs:** A framework primitive that genuinely doesn't fit (rare —
+  document with an inline comment + ADR). Legacy code that pre-dates the
+  framework version bump can stay until it's next touched (no opportunistic
+  rewrites).
+- **Source:** ADR-004; this session's FilterBar bug (FU-087).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -317,3 +355,92 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   line guards to typed ids rather than leave them. Rules out "stringify both sides to
   make it pass" as an acceptable fix.
 - **Promotes rule:** R-010.
+
+### ADR-004 — Use the framework's idiomatic, current-recommended pattern
+- **Date / task:** 2026-06-09 (FU-087 FilterBar bug; user request)
+- **Status:** accepted
+- **Context:** `FilterBar.vue` shipped a hand-rolled controlled/uncontrolled
+  `modelValue` pattern (manual prop + `update:modelValue` emit + a `computed`
+  getter/setter), and read `$q.screen.gt.sm` without the Quasar Screen plugin
+  being activated in any boot file. Two latent bugs collided in production:
+  Vue 3 coerces an unset Boolean prop to `false`, so the `props.modelValue ===
+  undefined` sentinel that distinguished controlled-vs-uncontrolled never
+  fired (every consumer got `false`, the panel never opened, clicks went to
+  a dead getter); and `$q.screen` returns `width: 0` until `setSizes()` /
+  `setDebounce()` activates the listener, so the "open on desktop" default
+  silently failed on every viewport. Both regressions were invisible to
+  static type-checking and produced no console output. Vue 3.4 ships
+  `defineModel()` (the recommended v-model macro) and Quasar 2.x documents
+  Screen activation in a boot file; using both fixes the bugs and shortens
+  the code.
+- **Decision:** Adopt R-011. When the framework ships a primitive for the
+  problem, use it; when a plugin needs activation per the framework docs
+  (Quasar Screen, etc.), wire it in `src/boot/` and register in
+  `quasar.config.ts`. Prefer current-recommended patterns for the pinned
+  framework version (Vue 3.4+ → `defineModel`, `<script setup>`;
+  Quasar 2.x → its plugin activation conventions).
+- **Consequences:** New code tracks Vue/Quasar/Flask upstream and benefits
+  from upstream bug fixes automatically. Reviewers can spot violations
+  quickly (manual `update:modelValue` plumbing, unactivated plugin reads).
+  Legacy hand-rolled equivalents stay until next touched — no opportunistic
+  rewrite sweep.
+- **Promotes rule:** R-011.
+
+### ADR-005 — Opt-in / capability flag reads go through one composable per family
+- **Date / task:** 2026-06-11 (C-cross Chunk 1)
+- **Status:** accepted
+- **Context:** C-cross's install-wide feature flags (proposal §2.6) plus
+  the per-user opt-ins (money, nutrition, image display) need a uniform
+  client read path. Without one, every new flag risks a new Pinia store
+  + a new health probe + a new read site convention. The
+  `useScanningEnabled` / `llm_enabled` pair already shipped under
+  ADR-002 with a single-flag composable each — that's fine for one or
+  two flags, but C-cross is bringing in five install flags + two per-user
+  flags + a reserved nutrition seam. Multiplying single-flag
+  composables is the wrong path.
+- **Decision:** **One composable per feature *family***, not per flag.
+  Install-wide flags live behind **`useFeatureFlags()`** which reads
+  `/api/health features.*` once per session and exposes a named
+  computed per flag (`features.money`, `features.nutrition`, etc.).
+  Per-user flags live behind tiny family composables —
+  `useMoneyEnabled()` / `useNutritionMode()` / `useImagePrefs()` — that
+  layer the install bool from `useFeatureFlags()` with the per-user
+  value read from `/api/users/me`, returning a single ready-to-render
+  boolean or enum. Consumers never read AppSetting or User columns
+  directly; they call the composable. The composable owns the cache
+  refresh (`refresh()` after an admin PATCH; user-flag composables
+  refresh after `authStore.updateMeAsync()`).
+- **Consequences:** Adding a flag is a known recipe (column → DTO →
+  `_feature_flags()` map → composable key → consumer). Eliminates a
+  class of "two surfaces read the same flag and one misses a
+  refresh" bugs. Costs one indirection between consumer and store,
+  but the indirection is the point — the layering rule (install AND
+  per-user) lives in one place.
+- **Promotes rule:** none directly; reinforces R-001 (single shared
+  primitive) + R-003 (server owns the fact, client doesn't shadow it)
+  + ADR-002 (this is the consolidated form of the per-flag composable
+  pattern ADR-002 seeded).
+
+---
+
+## Known fixes / things to try
+
+A non-binding cookbook of solutions to recurring problems. Not rules — just a
+"if you're chasing X, here are previously-found answers worth trying first."
+
+### Snap / jump at the end of a `q-slide-transition` close
+- **Symptom:** The collapsing panel slides smoothly, then a small gap
+  disappears in one frame at the very end (or appears, on open).
+- **Cause:** `q-slide-transition` animates the element's `height`. Any
+  margin/padding that contributes to layout *outside* the animated height
+  doesn't shrink with the animation — it's still there at `height: 0`, and
+  then `v-if` removes it instantly. `box-sizing: content-box` makes
+  `padding` part of this problem too: `height: 0` + `padding-top: 8px`
+  still occupies 8px until removal.
+- **Try first:** put **all** vertical spacing on the *non-transitioning*
+  parent (`q-py-md` on the outer wrapper, etc.) and leave the
+  height-animating element with **zero margin/padding** of its own. Fixed
+  on FilterBar 2026-06-09.
+- **If that's not viable:** `box-sizing: border-box` + `padding` (no
+  `margin`) on the transitioning element can also work, but the parent-padding
+  approach is simpler and has been the reliable answer.

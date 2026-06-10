@@ -117,6 +117,9 @@
                      Falls back to "Other" when unlocated. -->
                 <div class="shop-mode-section text-caption dora-text-muted">
                     {{ currentSection }}
+                    <q-tooltip v-if="currentSectionHasDetail">
+                        {{ currentSectionFull }}
+                    </q-tooltip>
                 </div>
 
                 <article class="shop-mode-card">
@@ -446,6 +449,7 @@
     } from 'src/models/shoppingList';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
     import { ICONS } from 'src/style/icons';
     import { computed, nextTick, onMounted, reactive, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -489,11 +493,22 @@
     const currentLine = computed<ShoppingListLine | null>(() => remainingLines.value[0] ?? null);
     const currentOffer = computed(() => currentLine.value ? chosenOfferFor(currentLine.value) : null);
     const hasOffers = computed(() => (currentLine.value?.offers.length ?? 0) > 1);
+    // C-cross Chunk 4 — display the zone (top-level), not the full
+    // breadcrumb. The full path is shown in a tooltip on the section
+    // header in the template; the sortKey above still uses the full
+    // breadcrumb as its stable grouping key.
     const currentSection = computed(() => {
         if (!currentLine.value) return '';
         const crumbs = currentLine.value.stock_location_breadcrumb ?? [];
-        return crumbs.length > 0 ? crumbs.join(' › ') : 'Other';
+        return crumbs.length > 0 ? formatLocation(crumbs, 'zone') : 'Other';
     });
+    const currentSectionFull = computed(() => {
+        const crumbs = currentLine.value?.stock_location_breadcrumb ?? [];
+        return crumbs.length > 0 ? formatLocation(crumbs, 'full') : '';
+    });
+    const currentSectionHasDetail = computed(() =>
+        locationHasDetail(currentLine.value?.stock_location_breadcrumb),
+    );
 
     const upcomingPreview = computed(() => remainingLines.value.slice(1, 3));
 

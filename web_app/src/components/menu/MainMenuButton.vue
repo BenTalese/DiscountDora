@@ -1,8 +1,7 @@
 <template>
     <q-item
         :to="link"
-        :class="{ 'is-expanded': isExpanded }"
-        active-class="dora-mainMenuButton-active"
+        :class="{ 'is-expanded': isExpanded, 'dora-mainMenuButton-active': isActive }"
         class="dora-mainMenuButton"
         no-caps
     >
@@ -15,8 +14,10 @@
 
 <script setup lang="ts">
     import type { MenuButtonProps } from './menuButtonProps';
+    import { useMenuLinkActive } from './useMenuLinkActive';
 
-    defineProps<MenuButtonProps & { isExpanded: boolean }>();
+    const props = defineProps<MenuButtonProps & { isExpanded: boolean }>();
+    const isActive = useMenuLinkActive(() => props.link, () => props.activePrefixes);
 </script>
 
 <style scoped lang="scss">

@@ -242,6 +242,86 @@ to it.
 - Does **not** touch merchant/provider enable-disable (companion / C-8 scope,
   though the original spec lists it as a global option — see §6).
 
+### 2.8 Image-display opt-in — recipe + stock-item photos
+
+Recipes (C-4 Chunk 5) and stock items (FU-033, deferred) can both carry
+**images** uploaded by the user. The *upload + storage* path is owned by
+those surfaces; **whether the app actually renders the images** is a
+C-cross per-user opt-in — so users can run a text-dense, fast, low-
+bandwidth UI without losing the underlying data.
+
+- **Storage:** per-user on `User`, two boolean columns —
+  - `show_recipe_images: bool` (governs recipe cards, recipe detail
+    header, recipe-edit dialog preview, cook mode, print/export view);
+  - `show_stock_images: bool` (governs stock-item rows on the overview,
+    stock-item detail, ingredient rows on recipe detail / cook mode).
+- **Where the toggle lives:** **inline on each surface, not in a
+  central Settings page.** The user flips photos on/off from the page
+  they're looking at — a small icon button in the surface's
+  toolbar/header. The state is still **persisted on `User`** so it
+  rides across sessions and devices; the button is just the local UX
+  affordance for changing that flag. Concretely:
+  - **Recipes overview (Cookbook)** — an icon button in the page
+    header next to "Import from URL" / "New recipe". Pressed-state
+    look when photos are off. Tooltip explains the cross-session
+    persistence.
+  - **Stock overview** — a button in the row area that **collapses /
+    expands** the image strip on each row (when off, rows render
+    without the image column; when on, the placeholder/photo column
+    shows). Doubles as a density control even when no item has a
+    photo yet, which is the typical FU-033-deferred state. The
+    backend flag still lands in this chunk; the stock-overview
+    **frontend wiring is deferred** to whenever the C-1 redesign
+    next touches the row layout (logged as a follow-up).
+  - **Recipe detail / cook mode / print** — these surfaces consume
+    `show_recipe_images` but do **not** carry their own toggle (you
+    set the preference from the overview; the detail surfaces just
+    obey). Otherwise we'd have N toggles for one preference.
+  - **No Settings page entry** — the inline buttons are the only
+    write surface (mirrors how Quasar's own dark-mode toggle is
+    usually placed in the top bar, not buried in a settings page).
+- **Default (open §4-6):** **on** for both — Charter P1 Effortless leans
+  toward visual richness as the default; users who prefer a text-only UI
+  flip the switch. The alternative reading — P10 Anti-creep keeps
+  visuals off until a user asks — is also defensible. Pick one and stay
+  consistent across both flags.
+- **What "off" means:** the surface renders the existing **placeholder**
+  (coloured-initial tile for recipes; the established C-1 stock-row
+  placeholder for items), or — for stock overview specifically — collapses
+  the image column out of the row entirely so the row gets denser. Image
+  upload + change + delete *still work* in the editor (so the user can
+  manage their photos without flipping the flag on); only the *display*
+  is suppressed. The image-bytes endpoint (`GET /api/recipes/<id>/image`,
+  equivalent for stock items) is not called when the flag is off —
+  bandwidth savings are real, not just CSS.
+- **Independence from C-cross §2.6 install flag:** these are *per-user
+  rendering preferences*, not install-wide capability gates. They sit
+  alongside §2.2 money / §2.3 nutrition / §2.5 location-detail —
+  personal UI choices, never policy. The install-level flag panel
+  (§2.6) does **not** carry an "images" entry; suppressing images is
+  not the same as removing the feature.
+- **Boundary with C-4 / FU-033:**
+  - **C-cross** owns the two boolean columns + the `/api/users/me`
+    field + the `useImagePrefs()` composable + the **recipes-overview
+    inline toggle button** (because that surface is shipped today
+    and has the bandwidth-cost problem now). One write site for
+    `show_recipe_images`.
+  - **C-4 (cookbook)** consumer surfaces (card, detail, edit dialog,
+    cook mode, print) gate on the composable; no per-surface toggle.
+  - **FU-033 / stock-item images** wires the stock-side render
+    gates + the **stock-overview inline collapse toggle** when that
+    work happens. The C-cross chunk lands the backend flag + the
+    composable; the stock-overview button itself is deferred to the
+    next C-1 row redesign. Logged in the IMPL plan so FU-033 knows
+    not to re-introduce the storage.
+- **Performance ripple:** with the flag off, the list endpoints'
+  `has_image` flag is still hydrated (cheap existence check); the
+  client just decides not to fetch the bytes. FU-090 (recipe list query
+  loads the full image blob even though only `has_image` is needed)
+  becomes more pressing when images-off users would still pay that
+  query cost — fold the deferred-column fix into the same chunk that
+  ships this opt-in.
+
 ---
 
 ## 3. Data-model summary
@@ -253,6 +333,8 @@ to it.
 | `nutrition_mode: str{off,simple,complex}` (new) | `User` | `off` | §2.3 |
 | `nutrition_db_source` (new, reserved) | `AppSetting` | empty | §2.3 complex (later) |
 | `location_detail: str{zone,full}` (new, optional) | `User` | `zone` | §2.5 |
+| `show_recipe_images: bool` (new) | `User` | `True` (open §4-6) | §2.8 — recipe image rendering |
+| `show_stock_images: bool` (new) | `User` | `True` (open §4-6) | §2.8 — stock-item image rendering |
 | Taxonomy tables: dietary-tag, cuisine, category, tool (new) | install-wide | seeded defaults | §2.4 |
 | Feature-flag booleans (new; fold in existing `llm_enabled`) | `AppSetting` | conservative | §2.6 |
 
@@ -278,20 +360,32 @@ discipline.
    (recommended), or also add the per-user `location_detail` toggle now?
 5. **Nutrition complex scope (§2.3)** — confirm **off + simple now, complex
    (nutrition-DB) deferred** as a reserved seam, mirroring C-10/C-8.
+6. **Image-display default (§2.8)** — default both `show_recipe_images` /
+   `show_stock_images` to **on** (P1 Effortless / visual richness), or
+   default to **off** (P10 Anti-creep / lean-by-default). Recommend **on**
+   because users who never upload images see only placeholders anyway —
+   nothing to opt out of when there's no content. Also confirm: one
+   shared flag for both surfaces, or two flags so users can show recipe
+   photos but not stock photos (recommended: two, low cost, real use
+   case — recipes carry hero photos, stock items rarely do).
 
 ---
 
 ## 5. Ripple & dependencies
 
 - **C-4 (cookbook)** — consumes every taxonomy editor (§2.4), the money opt-in for
-  cost estimate (§2.2), the nutrition mode (§2.3). C-4 should land *after* the
-  C-cross editors exist, or stub them.
+  cost estimate (§2.2), the nutrition mode (§2.3). The already-shipped
+  Chunk 5 image surfaces (card, detail header, edit dialog, print) become
+  consumers of §2.8's `show_recipe_images` once C-cross lands. C-4 should
+  land *after* the C-cross editors exist, or stub them.
 - **C-5 (onboarding)** — its first-login feature step (§2.3 there) writes the §2.6
   flags; the two must agree on the flag set (§4-2).
 - **C-2 (meal plans)** — plan budgets hidden when money off (§2.2).
 - **C-3 (cook mode)** — tools list (§2.4) drives per-step tool highlighting;
   base-zone ingredient grouping shares §2.5's zone policy.
-- **C-1 (stock overview)** — location chip shows the zone per §2.5.
+- **C-1 (stock overview)** — location chip shows the zone per §2.5;
+  stock-item images on rows + detail respect §2.8's `show_stock_images`
+  (consumes the C-cross flag + the FU-033 image bytes when that lands).
 - **C-9 (alerts)** — coarse alerts on/off may sit in §2.6; the per-type matrix
   stays in C-9.
 - **State-ownership** — every flag/mode is a **server-owned fact** the client
@@ -353,6 +447,12 @@ location-edit interaction (stock-detail polish); merchant enable/disable (C-8 /
 companion); cuisine-vs-category keep/collapse (C-4 open-decision 1); nutrition-DB
 integration build (reserved seam, later layer).
 
+**Net-new (post-feedback-file) requests folded in:**
+
+| Source | Summary | Where |
+|---|---|---|
+| 2026-06-10 user ask | Image-display opt-in for recipe + stock-item photos (per-user, can render text-only UI) | §2.8 |
+
 ---
 
 ## 8. Suggested sequencing
@@ -368,6 +468,12 @@ integration build (reserved seam, later layer).
    nutrition-DB source seam, don't build complex.
 5. **Location-display policy (§2.5)** — rendering change + optional pref; coordinate
    with C-1 and C-3 so the zone rule is applied once.
+6. **Image-display opt-in (§2.8)** — two booleans on `User` + the
+   `useImagePrefs()` composable + the settings switches. Low risk; lands
+   after the surfaces it gates exist, so it slots in after C-4 image
+   work (already shipped) and around FU-033 / C-1 stock images. Fold
+   FU-090 (deferred-column fix for recipe-list image blobs) into the
+   same chunk so the "off" path realises the bandwidth saving end-to-end.
 
 No code until approved — this is a brief. On approval, each numbered item becomes
 its own implementation prompt (or folds into the consuming per-surface prompt).

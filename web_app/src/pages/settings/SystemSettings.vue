@@ -205,48 +205,33 @@
 
             <q-separator />
 
-            <!-- Existing install-wide placeholders (not yet wired) ─────── -->
+            <!-- C-cross Chunk 1 — install-wide feature flags. Each toggle
+                 is wired to AppSetting via PATCH /api/app-settings; the
+                 server-side `_feature_flags()` exposes them through
+                 `/api/health features.*` for consumer composables. -->
+            <q-card-section>
+                <div class="text-subtitle1 text-weight-medium">
+                    <q-icon :name="ICONS.tune" size="20px" class="q-mr-xs" />
+                    Features
+                </div>
+                <div class="text-caption dora-text-muted">
+                    Turn whole features on or off for this install. When a feature is off
+                    here, it's hidden for everyone — per-user preferences only apply when
+                    the install allows the feature at all.
+                </div>
+            </q-card-section>
             <q-list separator>
-                <q-item>
+                <q-item v-for="flag in featureFlagItems" :key="flag.key">
                     <q-item-section>
-                        <q-item-label>Allow new registrations</q-item-label>
-                        <q-item-label caption>
-                            When off, the public sign-up form is hidden and the
-                            register endpoint refuses new users.
-                        </q-item-label>
+                        <q-item-label>{{ flag.label }}</q-item-label>
+                        <q-item-label caption>{{ flag.caption }}</q-item-label>
                     </q-item-section>
                     <q-item-section side>
-                        <q-toggle v-model="allowRegistrations" disable>
-                            <q-tooltip>Backed by a future setting — UI placeholder</q-tooltip>
-                        </q-toggle>
-                    </q-item-section>
-                </q-item>
-
-                <q-item>
-                    <q-item-section>
-                        <q-item-label>Maintenance mode</q-item-label>
-                        <q-item-label caption>
-                            Show a banner and disable writes while running migrations.
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <q-toggle v-model="maintenanceMode" disable>
-                            <q-tooltip>Backed by a future setting — UI placeholder</q-tooltip>
-                        </q-toggle>
-                    </q-item-section>
-                </q-item>
-
-                <q-item>
-                    <q-item-section>
-                        <q-item-label>Weekly emailer enabled</q-item-label>
-                        <q-item-label caption>
-                            Globally enable/disable the weekly deals emailer job.
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                        <q-toggle v-model="emailerEnabled" disable>
-                            <q-tooltip>Backed by a future setting — UI placeholder</q-tooltip>
-                        </q-toggle>
+                        <q-toggle
+                            :model-value="flag.value"
+                            :disable="savingFeatures.has(flag.key)"
+                            @update:model-value="(next: boolean) => onFeatureFlagToggle(flag.key, next)"
+                        />
                     </q-item-section>
                 </q-item>
             </q-list>
@@ -260,8 +245,14 @@
     import { useQuasar } from 'quasar';
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+
+    // C-cross Chunk 1 — when the admin flips a flag, refresh the cached
+    // `/api/health features.*` answer so every consumer composable picks
+    // up the new value without a page reload.
+    const { refresh: featureFlags$refresh } = useFeatureFlags();
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -344,24 +335,117 @@
     });
 
     // Placeholder state for the not-yet-wired toggles.
-    const allowRegistrations = ref(true);
-    const maintenanceMode = ref(false);
-    const emailerEnabled = ref(true);
+    // (the old `allowRegistrations` / `maintenanceMode` / `emailerEnabled`
+    //  placeholder refs were removed when the Features panel replaced their
+    //  list. Re-add if/when those flags graduate to real install settings.)
 
     // Scanning & QR labels — a real install-wide flag, saved on toggle (no
     // extra config to validate, unlike the LLM block).
     const scanningDraft = ref(false);
     const savingScanning = ref(false);
 
-    function applyLoaded(s: {
+    // C-cross Chunk 1 — install-wide feature flags.
+    type FeatureFlagKey =
+        | 'meal_planning_enabled'
+        | 'money_enabled'
+        | 'nutrition_enabled'
+        | 'companion_ingestion_enabled'
+        | 'deals_email_enabled';
+    const featureFlags = reactive<Record<FeatureFlagKey, boolean>>({
+        meal_planning_enabled: true,
+        money_enabled: false,
+        nutrition_enabled: false,
+        companion_ingestion_enabled: false,
+        deals_email_enabled: false,
+    });
+    const savingFeatures = ref<Set<FeatureFlagKey>>(new Set());
+
+    type LoadedSettings = {
         llm_enabled: boolean; llm_base_url: string; llm_model: string;
         scanning_enabled: boolean;
-    }) {
+        meal_planning_enabled?: boolean;
+        money_enabled?: boolean;
+        nutrition_enabled?: boolean;
+        companion_ingestion_enabled?: boolean;
+        deals_email_enabled?: boolean;
+    };
+    function applyLoaded(s: LoadedSettings) {
         enabledDraft.value = s.llm_enabled;
         baseUrlDraft.value = s.llm_base_url;
         modelDraft.value = s.llm_model;
         scanningDraft.value = s.scanning_enabled;
         saved.value = { enabled: s.llm_enabled, baseUrl: s.llm_base_url, model: s.llm_model };
+        // The new feature-flag fields might be absent on older /api/app-settings
+        // responses (server-side default in the dataclass means they always
+        // come through post-Chunk-1, but the optional types here keep the
+        // frontend tolerant during a partial-deploy window).
+        if (s.meal_planning_enabled !== undefined) featureFlags.meal_planning_enabled = s.meal_planning_enabled;
+        if (s.money_enabled !== undefined) featureFlags.money_enabled = s.money_enabled;
+        if (s.nutrition_enabled !== undefined) featureFlags.nutrition_enabled = s.nutrition_enabled;
+        if (s.companion_ingestion_enabled !== undefined) featureFlags.companion_ingestion_enabled = s.companion_ingestion_enabled;
+        if (s.deals_email_enabled !== undefined) featureFlags.deals_email_enabled = s.deals_email_enabled;
+    }
+
+    const featureFlagItems = computed(() => [
+        {
+            key: 'meal_planning_enabled' as const,
+            label: 'Meal planning',
+            caption: 'Plan recipes against days of the week + headcount. Hides the meal-plans surface when off.',
+            value: featureFlags.meal_planning_enabled,
+        },
+        {
+            key: 'money_enabled' as const,
+            label: 'Money & budgets',
+            caption: 'Per-recipe cost estimates, budget tracking on the dashboard, and shopping-list totals. Per-user opt-in still applies.',
+            value: featureFlags.money_enabled,
+        },
+        {
+            key: 'nutrition_enabled' as const,
+            label: 'Nutrition',
+            caption: 'Per-recipe kcal field + filters. Per-user opt-in still applies.',
+            value: featureFlags.nutrition_enabled,
+        },
+        {
+            key: 'companion_ingestion_enabled' as const,
+            label: 'Companion ingestion',
+            caption: 'Accept data feeds from a self-hosted Dora companion app (retailer scraping, URL imports). Off here means the companion can\'t push anything in.',
+            value: featureFlags.companion_ingestion_enabled,
+        },
+        {
+            key: 'deals_email_enabled' as const,
+            label: 'Weekly deals emailer',
+            caption: 'Sends per-user weekly summary emails of low-stock items and deals. Requires DORA_EMAIL_ENABLED in the environment too.',
+            value: featureFlags.deals_email_enabled,
+        },
+    ]);
+
+    async function onFeatureFlagToggle(key: FeatureFlagKey, next: boolean) {
+        const previous = featureFlags[key];
+        savingFeatures.value.add(key);
+        // Reassign to trigger reactivity on the Set.
+        savingFeatures.value = new Set(savingFeatures.value);
+        // Optimistic flip for snappy feel; rollback on failure.
+        featureFlags[key] = next;
+        try {
+            await api.updateAsync({ [key]: next });
+            await featureFlags$refresh();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: next ? 'Feature enabled.' : 'Feature disabled.',
+            });
+        } catch (err) {
+            featureFlags[key] = previous;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save feature flag.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            savingFeatures.value.delete(key);
+            savingFeatures.value = new Set(savingFeatures.value);
+        }
     }
 
     async function onScanningToggle(value: boolean) {

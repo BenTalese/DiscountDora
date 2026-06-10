@@ -203,8 +203,43 @@
             </q-card-section>
         </q-card>
 
-        <!-- Grocery budget (P2-05) ─────────────────────────────────── -->
+        <!-- C-cross Chunk 2 — Money features opt-in.
+             Layered with the install-wide `money_enabled` flag (admin
+             owns that one in Settings → System → Features). The Grocery
+             budget card below stays hidden until both layers are on.
+             Saved `budget_amount` survives toggling this off. -->
         <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Money & budgets</div>
+                <div class="text-caption dora-text-muted">
+                    Show dollar surfaces — recipe cost estimates, shopping-list
+                    totals, the dashboard budget card. Off by default; turn on
+                    to opt in. Your saved budget number is kept either way.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="currentUser.money_features_enabled"
+                    :disable="!moneyInstallEnabled || saving"
+                    label="Show money features"
+                    @update:model-value="onMoneyFeaturesChange"
+                />
+                <div
+                    v-if="!moneyInstallEnabled"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    This install has money features turned off. Ask an admin
+                    to enable them in System → Features.
+                </div>
+            </q-card-section>
+        </q-card>
+
+        <!-- Grocery budget (P2-05) ─────────────────────────────────── -->
+        <!-- C-cross Chunk 2 — hidden when money features are off
+             (install-wide OR per-user). Saved value preserved. -->
+        <q-card v-if="moneyEnabled" flat bordered>
             <q-card-section>
                 <div class="text-h6">Grocery budget</div>
                 <div class="text-caption dora-text-muted">
@@ -254,6 +289,51 @@
                         ]"
                         @update:model-value="onBudgetPeriodChange"
                     />
+                </div>
+            </q-card-section>
+        </q-card>
+
+        <!-- C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
+             Three-way toggle. `complex` is disabled when the install
+             admin hasn't configured a nutrition source (the reserved
+             seam). The per-recipe kcal field + cookbook kcal sort axis
+             are C-4 Chunk 9, gated on this composable. -->
+        <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Nutrition</div>
+                <div class="text-caption dora-text-muted">
+                    Off by default. <strong>Simple</strong> adds a single kcal
+                    number per recipe that you type in.
+                    <strong>Complex</strong> would derive nutrition from a
+                    nutrition database — not built yet, and disabled until an
+                    admin configures a source.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <div class="row items-center q-gutter-md">
+                    <q-btn-toggle
+                        :model-value="currentUser.nutrition_mode"
+                        :options="nutritionToggleOptions"
+                        no-caps
+                        toggle-color="primary"
+                        :disable="!nutritionInstallEnabled || saving"
+                        @update:model-value="onNutritionModeChange"
+                    />
+                </div>
+                <div
+                    v-if="!nutritionInstallEnabled"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    This install has nutrition turned off. Ask an admin to
+                    enable it in System → Features.
+                </div>
+                <div
+                    v-else-if="currentUser.nutrition_mode === 'complex' && !complexAvailable"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    Complex mode needs an admin-configured nutrition source.
                 </div>
             </q-card-section>
         </q-card>
@@ -428,12 +508,36 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import {
+        useNutritionMode,
+        type NutritionMode,
+    } from 'src/composables/useNutritionMode';
     import { computed, ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+    // C-cross Chunk 2 — money opt-in layering. The Settings page exposes
+    // both layers explicitly so the user can see why the budget card
+    // might be missing (install off vs. their own toggle off).
+    const {
+        moneyEnabled,
+        installEnabled: moneyInstallEnabled,
+    } = useMoneyEnabled();
+    // C-cross Chunk 3 — nutrition opt-in layering. `complexAvailable`
+    // gates the third toggle button + caption; the install flag gates
+    // the whole control.
+    const {
+        installEnabled: nutritionInstallEnabled,
+        complexAvailable,
+    } = useNutritionMode();
+    const nutritionToggleOptions = computed(() => [
+        { label: 'Off', value: 'off' as NutritionMode },
+        { label: 'Simple', value: 'simple' as NutritionMode },
+        { label: 'Complex', value: 'complex' as NutritionMode, disable: !complexAvailable.value },
+    ]);
 
     const dayOptions = [
         { value: 0, label: 'Monday' },
@@ -664,6 +768,31 @@
         await update(
             value ? 'Dora will speak her replies.' : 'Dora\'s voice muted.',
             () => authStore.updateMeAsync({ voice_output_enabled: value }),
+        );
+    }
+
+    // C-cross Chunk 2 — per-user money-features opt-in. The save-saved
+    // budget value isn't touched (proposal §2.2: "data preserved").
+    async function onMoneyFeaturesChange(value: boolean) {
+        await update(
+            value ? 'Money features turned on.' : 'Money features turned off.',
+            () => authStore.updateMeAsync({ money_features_enabled: value }),
+        );
+    }
+
+    // C-cross Chunk 3 — per-user nutrition mode. Server rejects
+    // `complex` when no nutrition source is configured; the toggle
+    // option is also disabled in that state so this should never
+    // 422 in normal use.
+    async function onNutritionModeChange(value: NutritionMode) {
+        const labelByMode: Record<NutritionMode, string> = {
+            off: 'Nutrition turned off.',
+            simple: 'Simple nutrition turned on.',
+            complex: 'Complex nutrition turned on.',
+        };
+        await update(
+            labelByMode[value],
+            () => authStore.updateMeAsync({ nutrition_mode: value }),
         );
     }
 

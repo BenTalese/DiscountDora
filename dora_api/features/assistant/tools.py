@@ -156,11 +156,13 @@ TOOL_SCHEMAS: list[dict] = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": (
-                            "Recipe must carry ALL of these curated tags. Valid "
-                            "values: vegetarian, vegan, pescatarian, gluten-free, "
-                            "dairy-free, nut-free, egg-free, soy-free, "
-                            "shellfish-free, low-carb, low-fat, low-sugar, "
-                            "low-sodium, keto, paleo, whole-30, halal, kosher."
+                            "Recipe must carry ALL of these dietary tags. The "
+                            "vocabulary is user-configurable; defaults include "
+                            "Vegetarian, Vegan, Pescatarian, Gluten-free, "
+                            "Dairy-free, Nut-free, Egg-free, Soy-free, "
+                            "Shellfish-free, Low-carb, Low-fat, Low-sugar, "
+                            "Low-sodium, Keto, Paleo, Whole30, Halal, Kosher. "
+                            "Match by tag name (case-insensitive)."
                         ),
                     },
                     "tags_exclude": {
@@ -972,8 +974,6 @@ def search_recipes(args: dict) -> list[dict]:
     keyword_condition = _keyword_condition(Recipe, Recipe.Fields.NAME, args.get("keywords", ""))
     if keyword_condition is not None:
         conditions.append(keyword_condition)
-    if args.get("cuisine"):
-        conditions.append(EntityField(Recipe, Recipe.Fields.CUISINE).contains(str(args["cuisine"])))
     if args.get("difficulty"):
         conditions.append(EntityField(Recipe, Recipe.Fields.DIFFICULTY).contains(str(args["difficulty"])))
     if args.get("max_cook_time_minutes"):
@@ -987,12 +987,20 @@ def search_recipes(args: dict) -> list[dict]:
         conditions.append(EntityField(Recipe, Recipe.Fields.IS_FAVOURITE).eq(True))
 
     recipes: list[Recipe] = query.all(_combine_and(conditions))
+    # cuisine is an FK relationship (selectin-loaded), so it's filtered in
+    # Python rather than via a SQL `.contains` on a string column.
+    cuisine_arg = str(args["cuisine"]).strip().lower() if args.get("cuisine") else None
+    if cuisine_arg:
+        recipes = [
+            r for r in recipes
+            if r.cuisine and cuisine_arg in r.cuisine.name.lower()
+        ]
     return [
         {
             "name": recipe.name,
-            "cuisine": recipe.cuisine,
+            "cuisine": recipe.cuisine.name if recipe.cuisine else None,
             "difficulty": recipe.difficulty,
-            "category": recipe.category,
+            "category": recipe.category.name if recipe.category else None,
             "cook_time_minutes": recipe.cook_time_minutes,
             "prep_time_minutes": recipe.prep_time_minutes,
             "servings": recipe.servings,
@@ -1002,18 +1010,20 @@ def search_recipes(args: dict) -> list[dict]:
     ]
 
 
-def _recipe_keyword_condition(text: str) -> BoolOperation | None:
-    """Match any token against recipe name, category or cuisine — broad on
-    purpose so a mood term ('salad', 'curry') surfaces relevant recipes."""
-    tokens = [t for t in str(text or "").split() if t]
+def _recipe_matches_keywords(recipe: Recipe, text: str) -> bool:
+    """True when any keyword token appears in the recipe's name, category, or
+    cuisine name. Done in Python (not SQL) because category/cuisine are now FK
+    relationships — broad on purpose so a mood term ('salad', 'curry')
+    surfaces relevant recipes. Empty/blank text matches everything."""
+    tokens = [t.lower() for t in str(text or "").split() if t]
     if not tokens:
-        return None
-    clauses: list[BoolOperation] = []
-    for token in tokens:
-        clauses.append(EntityField(Recipe, Recipe.Fields.NAME).contains(token))
-        clauses.append(EntityField(Recipe, Recipe.Fields.CATEGORY).contains(token))
-        clauses.append(EntityField(Recipe, Recipe.Fields.CUISINE).contains(token))
-    return _combine_or(clauses)
+        return True
+    haystack = " ".join(filter(None, [
+        recipe.name or "",
+        recipe.category.name if recipe.category else "",
+        recipe.cuisine.name if recipe.cuisine else "",
+    ])).lower()
+    return any(token in haystack for token in tokens)
 
 
 def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
@@ -1044,11 +1054,8 @@ def suggest_recipes(args: dict) -> list[dict]:
     )
 
     conditions: list[BoolOperation] = []
-    keyword_condition = _recipe_keyword_condition(args.get("keywords", ""))
-    if keyword_condition is not None:
-        conditions.append(keyword_condition)
-    if args.get("cuisine"):
-        conditions.append(EntityField(Recipe, Recipe.Fields.CUISINE).contains(str(args["cuisine"])))
+    # keyword + cuisine are filtered in Python after load (category/cuisine are
+    # FK relationships, not string columns). difficulty stays a string column.
     if args.get("difficulty"):
         conditions.append(EntityField(Recipe, Recipe.Fields.DIFFICULTY).contains(str(args["difficulty"])))
     if args.get("max_cook_time_minutes"):
@@ -1067,7 +1074,7 @@ def suggest_recipes(args: dict) -> list[dict]:
     # `conditions` list. Empty result short-circuits before the DB hit.
     from dora_api.features.recipes.recipe_tag_access import (
         find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
-        get_tags_for_recipes,
+        get_tag_names_for_recipes,
     )
 
     def _coerce_list(value: Any) -> list[str]:
@@ -1099,6 +1106,13 @@ def suggest_recipes(args: dict) -> list[dict]:
     recipes: list[Recipe] = query.all(_combine_and(conditions))
     based_on_stock = _truthy(args.get("based_on_stock"))
 
+    # Python-side keyword + cuisine filtering (FK relationships).
+    keywords = args.get("keywords", "")
+    recipes = [r for r in recipes if _recipe_matches_keywords(r, keywords)]
+    cuisine_arg = str(args["cuisine"]).strip().lower() if args.get("cuisine") else None
+    if cuisine_arg:
+        recipes = [r for r in recipes if r.cuisine and cuisine_arg in r.cuisine.name.lower()]
+
     # If the user excluded ingredients, drop recipes that contain any
     # matching ingredient name (case-insensitive substring).
     if ingredient_exclude:
@@ -1114,7 +1128,7 @@ def suggest_recipes(args: dict) -> list[dict]:
 
     # Tag lookup for the response. Bulk-fetch once so each row can
     # surface its tags without N round-trips.
-    tag_map = get_tags_for_recipes([r.id for r in recipes]) if recipes else {}
+    tag_map = get_tag_names_for_recipes([r.id for r in recipes]) if recipes else {}
 
     rows: list[dict] = []
     for recipe in recipes:
@@ -1122,7 +1136,7 @@ def suggest_recipes(args: dict) -> list[dict]:
         coverage = (in_stock / total) if total else 0.0
         rows.append({
             "name": recipe.name,
-            "cuisine": recipe.cuisine,
+            "cuisine": recipe.cuisine.name if recipe.cuisine else None,
             "difficulty": recipe.difficulty,
             "cook_time_minutes": recipe.cook_time_minutes,
             "servings": recipe.servings,
@@ -1673,7 +1687,7 @@ def recipes_using_item(args: dict) -> list[dict]:
         if used:
             matches.append({
                 "name": recipe.name,
-                "cuisine": recipe.cuisine,
+                "cuisine": recipe.cuisine.name if recipe.cuisine else None,
                 "difficulty": recipe.difficulty,
                 "cook_time_minutes": recipe.cook_time_minutes,
                 "is_favourite": bool(recipe.is_favourite),
@@ -1823,7 +1837,7 @@ def recipe_detail(args: dict) -> list[dict]:
         return [{
             "query": name,
             "status": "ambiguous",
-            "candidates": [{"name": c.name, "cuisine": c.cuisine} for c in candidates[:_MAX_CANDIDATES]],
+            "candidates": [{"name": c.name, "cuisine": c.cuisine.name if c.cuisine else None} for c in candidates[:_MAX_CANDIDATES]],
         }]
     recipe: Recipe = result[0]
 
@@ -1838,8 +1852,8 @@ def recipe_detail(args: dict) -> list[dict]:
 
     return [{
         "name": recipe.name,
-        "cuisine": recipe.cuisine,
-        "category": recipe.category,
+        "cuisine": recipe.cuisine.name if recipe.cuisine else None,
+        "category": recipe.category.name if recipe.category else None,
         "difficulty": recipe.difficulty,
         "cook_time_minutes": recipe.cook_time_minutes,
         "prep_time_minutes": recipe.prep_time_minutes,
@@ -1972,7 +1986,7 @@ def meal_detail(args: dict) -> list[dict]:
     return [{
         "name": recipe.name,
         "available_meals": recipe.available_meals or 0,
-        "cuisine": recipe.cuisine,
+        "cuisine": recipe.cuisine.name if recipe.cuisine else None,
         "cook_time_minutes": recipe.cook_time_minutes,
         "difficulty": recipe.difficulty,
         "servings": recipe.servings,
@@ -2629,8 +2643,8 @@ _OCCASION_PROFILES: dict[str, dict[str, Any]] = {
     "healthy": {"keywords": "salad bowl grilled fish steamed vegetable"},
     "light": {"keywords": "salad soup wrap fish"},
     "spicy": {"keywords": "curry chilli laksa kimchi sichuan"},
-    "vegetarian": {"keywords": "vegetable tofu lentil chickpea pasta", "category": "vegetarian"},
-    "vego": {"keywords": "vegetable tofu lentil chickpea pasta", "category": "vegetarian"},
+    "vegetarian": {"keywords": "vegetable tofu lentil chickpea pasta", "tags_include": "Vegetarian"},
+    "vego": {"keywords": "vegetable tofu lentil chickpea pasta", "tags_include": "Vegetarian"},
     "party": {"keywords": "platter dip skewer wing slider"},
     "breakfast": {"keywords": "pancake omelette toastie smoothie porridge"},
     "brunch": {"keywords": "pancake eggs benedict fritter shakshuka avocado"},

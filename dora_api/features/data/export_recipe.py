@@ -54,8 +54,8 @@ _PRINT_TEMPLATE = """<!doctype html>
     <h1>{{ recipe.name }}</h1>
     <div class="meta">
       Generated {{ generated_at }}
-      {% if recipe.category %} · {{ recipe.category }}{% endif %}
-      {% if recipe.cuisine %} · {{ recipe.cuisine }}{% endif %}
+      {% if recipe.category_name %} · {{ recipe.category_name }}{% endif %}
+      {% if recipe.cuisine_name %} · {{ recipe.cuisine_name }}{% endif %}
     </div>
     <div>
       {% if recipe.servings %}

@@ -1,6 +1,6 @@
 # Proposal — The Shopping-Cart Button (C-7)
 
-**Status:** Draft for discussion · **Date:** 2026-06-06 · Changes NO code.  
+**Status:** **Decisions resolved 2026-06-09** (see §7a) · **Date:** 2026-06-06 · Changes NO code.  
 **Scope:** Unify every "add to shopping list" / cart control across the app into
 **one componentised button with a defined decision tree.** Folds in the
 products-without-stock-items rule. Aligns with `SHOPPING_LIST_REDESIGN_PROPOSAL.md`
@@ -238,6 +238,26 @@ toasts) and L380 (see each item's list status).
 7. **Swipe-to-choose-list** (from the original spec, §9) — add swipe-right on the
    row cart button to open the list picker (tap = inferred target), plus a
    success animation? Or keep touch interactions to the popover only?
+
+---
+
+## 7a. Resolved decisions (2026-06-09)
+
+| # | Decision | Resolution |
+|---|---|---|
+| 1 | Already-on-list click | **Toggle model.** On **exactly one** list → a click **removes** it (no popup). On **2+** lists → a **popover** (which list / Add to another / Remove). Kills the blind re-add + double toast (L154); single-list common case is a frictionless toggle. |
+| 2 | >1 linked product | **Always show the choice modal on 2+** (cheapest highlighted, every product has its own pick affordance; pre-select `preferred_product_id` if set but still show the modal). User wants the offer choice explicit, not silent. |
+| 3 | Standalone-product line model | **Nullable `product_id` on the existing line** (a line is anchored by `stock_item_id` OR `product_id`, may carry both when nested). L191 cascade rules confirmed: add product w/o its stock item → standalone "product only" line; link stock item later → auto-add stock line + nest; remove stock line → cascade-remove nested products; remove product line → modal "also remove the stock item?". |
+| 4 | Remember the list pick | **App-wide for the session** — once picked, every cart button adds there (with an "adding to <list> ▾" switcher) until changed or reload. |
+| 5 | Quantity | **Never asked in quick paths** (default 1, edit on the list). Only the full combined QuickAddSheet (both axes ambiguous) may carry quantity. |
+| 6 | Bulk mixed-state reporting | **One summary toast** ("5 added, 2 already on list"). Resolve target once for the batch, add all, single summary. |
+| 7 | Swipe-to-choose-list | **Deferred.** Tap = inferred target + the popover; no swipe-right gesture / success animation in the initial build. Revisit later. |
+
+**Dependency note (confirmed 2026-06-09):** the shopping-list **status model
+(P6-01) has landed** (`ShoppingListStatus = draft/shopping/done` + an inferred
+single-DRAFT quick-add destination), so **Axis B uses draft-list inference
+directly** — the `is_primary` adapter in §6/§8 is no longer needed (§8 step 4 is
+already satisfied).
 
 ---
 

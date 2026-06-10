@@ -965,6 +965,85 @@ Then the per-prompt list below.
   structured steps); Chunk 6 depends on C-5 onboarding headcount;
   Chunk 1 consumes C-7 cart button when available.
 
+### IMPL — Cart Button → `IMPL_PLAN_CART_BUTTON.md`
+- **Surface:** the unified add-to-list / cart control (every quick-add + bulk
+  surface app-wide) + standalone-product shopping-list lines
+- **Produces:** `04_proposals/IMPL_PLAN_CART_BUTTON.md`.
+- **Charter principles:** P1 Effortless (minimum prompts) · P10 Anti-creep
+  (one component, 13 → 1) · P11 Fast UX.
+- **Feedback bullets:** the cart/add-to-list cluster — L83/L84/L108/L130/L154/
+  L191/L195/L196/L288/L380/L381/L382.
+- **Related proposals:** source proposal `04_proposals/PROPOSAL_CART_BUTTON.md`
+  (decisions resolved §7a 2026-06-09); `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`
+  + `IMPL_PLAN_SHOPPING_LISTS.md` (status model + draft inference — **landed**,
+  powers Axis B); `IMPL_PLAN_STOCK_OVERVIEW.md` (C-1 row consumes this);
+  `IMPL_PLAN_STATE_OWNERSHIP.md` (membership/`cartStateFor`).
+- **Related investigations:** none direct.
+- **Original spec:** `00_original_spec/Feature Boards/Shopping.md` (cart
+  colour-on-add, quick-remove, swipe — proposal §9; swipe deferred).
+- **Open follow-ups:** **FU-038** (cart double-toast — Chunk 1 closes it).
+- **Removed-features watchlist:** no stored `is_primary` — draft inference only.
+- **Cross-prompt dependencies:** Chunk 3 (standalone-product model) is the
+  schema rock; consumed by C-1 (stock row), C-3 (cook-mode finish), recipe
+  detail, My Products; couples L195 My-Products link affordance.
+
+### IMPL — Stock Overview → `IMPL_PLAN_STOCK_OVERVIEW.md`
+- **Surface:** stock overview (row, top area, filters, footer, detail nav,
+  expiry, images, scan-mode, per-item metric)
+- **Produces:** `04_proposals/IMPL_PLAN_STOCK_OVERVIEW.md`.
+- **Charter principles:** P1 Effortless · P10 Anti-creep (kill the chip,
+  net-less surface) · P11 Fast UX (most-used screen).
+- **Feedback bullets:** all of `§STOCK OVERVIEW` (L63-L99).
+- **Related proposals:** source proposal
+  `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (decisions resolved §7a
+  2026-06-09); `04_proposals/PROPOSAL_CART_BUTTON.md` (C-7 — row cart
+  control, unbuilt); `04_proposals/IMPL_PLAN_STATE_OWNERSHIP.md`
+  (server-owned status/counts); `04_proposals/IMPL_PLAN_COOKBOOK.md`
+  Chunk 5 (image pattern reused for stock images / FU-033).
+- **Related investigations:** `05_investigations/STOCK_OVERVIEW_PERF.md`
+  (the 50-item-cap / virtualisation analysis — drives Chunk 1).
+- **Original spec:** `00_original_spec/Feature Boards/Stock.md` (level
+  button, footer summary, missing-picture placeholder — §6 of the proposal).
+- **Open follow-ups:** **FU-035** (50-item cap — Chunk 1 closes it);
+  **FU-033** (StockItem.image — folded into Chunk 6).
+- **Removed-features watchlist:** stock map / spatial layout stays removed;
+  scanning surface stays gated behind `scanning_enabled`.
+- **Cross-prompt dependencies:** Chunk 3 hosts C-7 cart (placeholder until
+  built); Chunk 6 needs FU-033; Chunk 8 (metric) gated on C-2 allocation;
+  location display → C-cross.
+
+### IMPL — Config & Opt-ins (C-cross) → `IMPL_PLAN_CONFIG_AND_OPTINS.md`
+- **Surface:** cross-cutting config + per-user / install-wide opt-ins
+  (money, nutrition, location-display, image-display, install feature
+  flag panel). Taxonomy editors already shipped via C-4 Chunks 2 + 5
+  (verify-only here).
+- **Produces:** `04_proposals/IMPL_PLAN_CONFIG_AND_OPTINS.md` (drafted
+  2026-06-10).
+- **Charter principles:** P1 Effortless · P10 Anti-creep (defaults off
+  for money/nutrition; defaults on for visual richness) · P8 Ownership
+  (user picks visibility).
+- **Feedback bullets:** the cross-cutting set from
+  `PROPOSAL_CONFIG_AND_OPTINS.md §7` — L42 / L81 / L107 / L128 / L254
+  / L262 / L263 / L287 / L321 / L441 plus the 2026-06-10 user ask
+  (image-display opt-in).
+- **Related proposals:** source proposal
+  `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` (§4 decisions
+  answered inline in the IMPL plan); the five per-surface
+  C-proposals defer to this one.
+- **Related investigations:** none direct.
+- **Original spec:**
+  `00_original_spec/Feature Boards/User & Global Options.md` (§6 of
+  the proposal).
+- **Open follow-ups:** **FU-090** folded into Chunk 5 (deferred-column
+  fix for recipe-list image blobs); **FU-033** consumed as a no-op by
+  Chunk 5's stock-image guard (no work pulled forward).
+- **Removed-features watchlist:** none.
+- **Cross-prompt dependencies:** **foundational** — consumed by
+  C-4 Chunk 9 (money + nutrition gates), C-2 (plan budgets), C-1
+  (location chip + stock images), C-5 (onboarding wizard feature
+  step writes the install flags), C-9 (coarse alerts on/off may
+  live here).
+
 ### IMPL — State ownership → `IMPL_PLAN_STATE_OWNERSHIP.md`
 - **Surface:** server-owned domain facts (stock status, cookable,
   offer snapshots)
@@ -1006,6 +1085,8 @@ When implementing a proposal, read every doc in the right-hand column first.
 | `PROPOSAL_COOKBOOK.md` | `RECIPE_COMPARISON_ASSESSMENT.md` · `PROPOSAL_CONFIG_AND_OPTINS.md` · `PROPOSAL_MEAL_PLANS.md` · `PROPOSAL_COOK_MODE.md` · `IMPL_PLAN_COOKBOOK.md` (chunking + DEC resolutions) · `IMPL_PLAN_COOK_MODE.md` (Chunk 6 = C-4 §2.6a structured steps, must land before C-3 Chunk 5) · `ORPHANED_FIELDS_AUDIT.md` · FU-039 |
 | `IMPL_PLAN_COOK_MODE.md` | `PROPOSAL_COOK_MODE.md` (§5a resolved decisions) · `PROPOSAL_COOKBOOK.md` §2.6a · `IMPL_PLAN_COOKBOOK.md` (Chunk 6 sequencing) · `PROPOSAL_CART_BUTTON.md` · `PROPOSAL_ONBOARDING.md` (Chunk 6 headcount default) · A1 theme tokens · A3 modal standard · B8 (substitute swaps kept) |
 | `IMPL_PLAN_COOKBOOK.md` | `PROPOSAL_COOKBOOK.md` (§5a resolved decisions) · `IMPL_PLAN_COOK_MODE.md` (Chunk 6 of this plan blocks Chunk 5 of that one) · `RECIPE_COMPARISON_ASSESSMENT.md` (INV-6 drives Chunk 1) · `PROPOSAL_CART_BUTTON.md` (C-7 on ingredient rows) · `IMPL_PLAN_STATE_OWNERSHIP.md` (cookability) · A1/A3/A4/A7/A8 prompt outputs · B3 PATCH semantics · B8 substitute swaps · C-cross config surface |
+| `IMPL_PLAN_STOCK_OVERVIEW.md` | `PROPOSAL_STOCK_OVERVIEW.md` (§7a resolved decisions) · `STOCK_OVERVIEW_PERF.md` (INV-2 — 50-cap/virtualisation drives Chunk 1) · `PROPOSAL_CART_BUTTON.md` (C-7 row cart, unbuilt) · `IMPL_PLAN_COOKBOOK.md` Chunk 5 (image pattern → FU-033) · `IMPL_PLAN_STATE_OWNERSHIP.md` (server-owned status/counts) · A1/A4/A7 prompt outputs · C-2 (planned-meals metric) · C-cross (location display) · FU-035, FU-033 |
+| `IMPL_PLAN_CART_BUTTON.md` | `PROPOSAL_CART_BUTTON.md` (§7a resolved decisions) · `SHOPPING_LIST_REDESIGN_PROPOSAL.md` + `IMPL_PLAN_SHOPPING_LISTS.md` (status model + draft inference, landed → Axis B) · `IMPL_PLAN_STOCK_OVERVIEW.md` (C-1 row consumes it) · `IMPL_PLAN_COOK_MODE.md` (finish add-to-list reuses it) · `IMPL_PLAN_STATE_OWNERSHIP.md` (membership) · B1 (link/save errors, out of scope) · FU-038 |
 | `PROPOSAL_ONBOARDING.md` | `PROPOSAL_CONFIG_AND_OPTINS.md` · `PROPOSAL_HELP_OVERLAY.md` · `PROPOSAL_COOK_MODE.md` · `EMAIL_SETUP_FINDINGS.md` · FU-041, FU-015 |
 | `PROPOSAL_CART_BUTTON.md` | `SHOPPING_LIST_REDESIGN_PROPOSAL.md` + `IMPL_PLAN_SHOPPING_LISTS.md` · `IMPL_PLAN_STATE_OWNERSHIP.md` · A2 (BaseButton) · FU-038 |
 | `PROPOSAL_ALERTS.md` | `PROPOSAL_CONFIG_AND_OPTINS.md` · `IMPL_PLAN_STATE_OWNERSHIP.md` · FU-042 |

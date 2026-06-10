@@ -68,6 +68,16 @@ class AuthenticatedUserDto:
     # boot to seed the per-page mic / volume toggles.
     voice_input_enabled: bool
     voice_output_enabled: bool
+    # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
+    # Layered with install `money_enabled` via useMoneyEnabled().
+    money_features_enabled: bool
+    # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
+    # `complex` (complex requires admin-configured nutrition source).
+    nutrition_mode: str
+    # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+    # Both default True (visual richness on; users opt out).
+    show_recipe_images: bool
+    show_stock_images: bool
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -97,6 +107,10 @@ class AuthenticatedUserDto:
             budget_period=user.budget_period,
             voice_input_enabled=bool(user.voice_input_enabled),
             voice_output_enabled=bool(user.voice_output_enabled),
+            money_features_enabled=bool(user.money_features_enabled),
+            nutrition_mode=user.nutrition_mode,
+            show_recipe_images=bool(user.show_recipe_images),
+            show_stock_images=bool(user.show_stock_images),
         )
 
 

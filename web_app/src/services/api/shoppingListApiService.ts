@@ -226,14 +226,6 @@ export default class ShoppingListApiService {
             command,
         );
 
-    appendLowStockEssentialsAsync = async (
-        listId: string,
-    ): Promise<AutoGenerateResult> =>
-        await this.httpClient.post<AutoGenerateResult, Record<string, never>>(
-            `/shopping-lists/${listId}/append-low-stock-essentials`,
-            {},
-        );
-
     moveUntickedToAsync = async (
         sourceId: string,
         targetId: string,

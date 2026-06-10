@@ -5,13 +5,19 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.category import Category
+from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.recipes.get_recipes import get_recipes
-from dora_api.features.recipes.recipe_tag_access import set_tags_for_recipe
+from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
+from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
+from dora_api.features.recipes.recipe_step_access import (
+    StepWrite, replace_steps_for_recipe,
+)
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
@@ -32,27 +38,65 @@ class CreateRecipeIngredientRequest(BaseModel):
     quantity: float | None = None
     unit: str | None = Field(default = None, max_length = 50)
     notes: str | None = Field(default = None, max_length = 255)
+    # C-4 Chunk 6 — optional client-side identifier (any string) used by
+    # `steps[].ingredient_client_ids` to point at this ingredient before the
+    # server has assigned its UUID. Omit when no step references it.
+    client_id: str | None = Field(default = None, max_length = 64)
+
+
+class CreateRecipeStepRequest(BaseModel):
+    """C-4 Chunk 6 — one structured step on a create payload.
+
+    `client_id` is required (any string the client picks) so steps can
+    refer to one another (parent_client_id) and to ingredients
+    (ingredient_client_ids) before the server has issued real ids.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: str = Field(min_length = 1, max_length = 64)
+    parent_client_id: str | None = Field(default = None, max_length = 64)
+    sequence: int = Field(default = 0, ge = 0)
+    text: str = Field(min_length = 1)
+    hint: str | None = None
+    ingredient_client_ids: List[str] = Field(default_factory = list)
+    tool_ids: List[UUID] = Field(default_factory = list)
 
 
 class CreateRecipeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length = 1, max_length = 255)
-    category: str | None = Field(default = None, max_length = 255)
+    # C-4 Chunk 2: cuisine + category are FK vocabularies (single-select each).
+    category_id: UUID | None = None
     cook_time_minutes: int | None = Field(default = None, ge = 0)
-    cuisine: str | None = Field(default = None, max_length = 255)
+    cuisine_id: UUID | None = None
     difficulty: str | None = Field(default = None, max_length = 50)
     instructions: str | None = None
     nutrition: str | None = None
     prep_time_minutes: int | None = Field(default = None, ge = 0)
     recipe_collection_id: UUID | None = None
     servings: int | None = Field(default = None, ge = 1)
+    # C-4 Chunk 7 — origin URL for imported recipes.
+    source: str | None = Field(default = None, max_length = 2048)
     time_of_day: str | None = Field(default = None, max_length = 50)
+    # C-4 Chunk 9 — simple nutrition (kcal). Gated on the C-cross
+    # nutrition opt-in client-side; the server stores whatever's sent.
+    kcal: int | None = Field(default = None, ge = 0, le = 100_000)
     ingredients: List[CreateRecipeIngredientRequest] = Field(default_factory = list)
-    # P2-08 — curated tags (see `dora_api/domain/recipe_tags.py`).
-    # Validated server-side against the canonical catalogue; invalid
-    # values surface as a 400 with the offending tag.
-    tags: List[str] = Field(default_factory = list)
+    # C-4 Chunk 2 — dietary tag ids (FK to DietaryTag). Validated server-side
+    # against existing rows; unknown ids surface as a 400.
+    dietary_tag_ids: List[UUID] = Field(default_factory = list)
+    # C-4 Chunk 5 — tool ids (FK to Tool).
+    tool_ids: List[UUID] = Field(default_factory = list)
+    # C-4 Chunk 5 — optional image as a data-URL string ("data:image/...;
+    # base64,..."). Stored as UTF-8 bytes; served back via GET /recipes/<id>/
+    # image. Capped to keep the row sane (~4MB raw image).
+    image: str | None = Field(default = None, max_length = 6_000_000)
+    # C-4 Chunk 6 — structured steps. Empty list = unstructured recipe
+    # (cook-mode falls back to splitting `instructions` on newline). Each
+    # step's `ingredient_client_ids` references its sibling ingredients via
+    # the `client_id` field above.
+    steps: List[CreateRecipeStepRequest] = Field(default_factory = list)
 
 
 @dataclass(slots=True)
@@ -60,8 +104,11 @@ class CreateRecipeResponse:
     new_recipe_id: UUID = EMPTY_UUID
     recipe_already_exists: bool = False
     recipe_collection_not_found: bool = False
+    cuisine_not_found: bool = False
+    category_not_found: bool = False
     missing_stock_item_ids: tuple[UUID, ...] = ()
     invalid_tag_message: str | None = None
+    invalid_step_message: str | None = None
 
 
 class CreateRecipeHandler:
@@ -84,33 +131,55 @@ class CreateRecipeHandler:
             if not _Collection:
                 return CreateRecipeResponse(recipe_collection_not_found = True)
 
+        _Cuisine: Cuisine | None = None
+        if request.cuisine_id:
+            _Cuisine = self.repository.get(Cuisine).by_id(request.cuisine_id)
+            if not _Cuisine:
+                return CreateRecipeResponse(cuisine_not_found = True)
+
+        _Category: Category | None = None
+        if request.category_id:
+            _Category = self.repository.get(Category).by_id(request.category_id)
+            if not _Category:
+                return CreateRecipeResponse(category_not_found = True)
+
         _Ingredients: List[RecipeIngredient] = []
+        _IngredientPairs: List[tuple[str | None, RecipeIngredient]] = []
         _MissingIds: List[UUID] = []
         for _IngredientRequest in request.ingredients:
             _StockItem = self.repository.get(StockItem).by_id(_IngredientRequest.stock_item_id)
             if not _StockItem:
                 _MissingIds.append(_IngredientRequest.stock_item_id)
                 continue
-            _Ingredients.append(RecipeIngredient(
+            _NewIngredient = RecipeIngredient(
                 notes = _IngredientRequest.notes,
                 quantity = _IngredientRequest.quantity,
                 stock_item = _StockItem,
                 unit = _IngredientRequest.unit,
-            ))
+            )
+            _Ingredients.append(_NewIngredient)
+            _IngredientPairs.append((_IngredientRequest.client_id, _NewIngredient))
 
         if _MissingIds:
             return CreateRecipeResponse(missing_stock_item_ids = tuple(_MissingIds))
 
+        # `add()` assigns the real id (uuid4), so the client→real map for
+        # structured-step ingredient linkage must be built AFTER this loop.
         for _Ingredient in _Ingredients:
             self.repository.add(_Ingredient)
+        _IngredientClientToReal: dict[str, UUID] = {
+            client_id: ing.id
+            for client_id, ing in _IngredientPairs
+            if client_id
+        }
 
         _NewRecipe = Recipe(
             available_meals = 0,
-            category = request.category,
+            category = _Category,
             cook_time_minutes = request.cook_time_minutes,
-            cuisine = request.cuisine,
+            cuisine = _Cuisine,
             difficulty = request.difficulty,
-            image = None,
+            image = request.image.encode("utf-8") if request.image else None,
             ingredients = _Ingredients,
             instructions = request.instructions,
             is_favourite = False,
@@ -120,25 +189,56 @@ class CreateRecipeHandler:
             prep_time_minutes = request.prep_time_minutes,
             recipe_collection = _Collection,
             servings = request.servings,
+            source = request.source,
             time_of_day = request.time_of_day,
+            # C-4 Chunk 8 — singletons get NULL; the new-version endpoint
+            # is the only path that populates this.
+            version_group_id = None,
+            kcal = request.kcal,
         )
 
         self.repository.add(_NewRecipe)
         # Save first so the recipe row exists before the tag FK insert.
         self.repository.save_changes()
 
-        if request.tags:
+        if request.dietary_tag_ids or request.tool_ids:
             try:
-                set_tags_for_recipe(_NewRecipe.id, request.tags)
+                if request.dietary_tag_ids:
+                    set_tag_ids_for_recipe(_NewRecipe.id, request.dietary_tag_ids)
+                if request.tool_ids:
+                    set_tool_ids_for_recipe(_NewRecipe.id, request.tool_ids)
             except ValueError as exc:
-                # Roll back the assoc inserts (none yet committed) and
-                # surface the bad tag to the caller. The recipe row
-                # stays — invalid tag input shouldn't fail the whole
-                # create after a clean validation pass would have
-                # caught it earlier in the request lifecycle.
+                # The recipe row stays — invalid tag/tool input shouldn't fail
+                # the whole create; surface the bad id to the caller.
                 return CreateRecipeResponse(
                     new_recipe_id=_NewRecipe.id,
                     invalid_tag_message=str(exc),
+                )
+            self.repository.save_changes()
+
+        if request.steps:
+            try:
+                _StepWrites = [
+                    StepWrite(
+                        client_id=step.client_id,
+                        parent_client_id=step.parent_client_id,
+                        sequence=step.sequence,
+                        text=step.text,
+                        hint=step.hint,
+                        ingredient_ids=[
+                            _IngredientClientToReal[c]
+                            for c in step.ingredient_client_ids
+                            if c in _IngredientClientToReal
+                        ],
+                        tool_ids=list(step.tool_ids),
+                    )
+                    for step in request.steps
+                ]
+                replace_steps_for_recipe(_NewRecipe.id, _StepWrites)
+            except ValueError as exc:
+                return CreateRecipeResponse(
+                    new_recipe_id=_NewRecipe.id,
+                    invalid_step_message=str(exc),
                 )
             self.repository.save_changes()
 
@@ -166,6 +266,22 @@ def create_recipe():
             _Request.recipe_collection_id,
         )
 
+    if _Response.cuisine_not_found and _Request.cuisine_id:
+        _Logger.warning(f"Cuisine not found: {_Request.cuisine_id}")
+        return entity_existence_failure(
+            Cuisine.__name__,
+            field_of(CreateRecipeRequest, 'cuisine_id'),
+            _Request.cuisine_id,
+        )
+
+    if _Response.category_not_found and _Request.category_id:
+        _Logger.warning(f"Category not found: {_Request.category_id}")
+        return entity_existence_failure(
+            Category.__name__,
+            field_of(CreateRecipeRequest, 'category_id'),
+            _Request.category_id,
+        )
+
     if _Response.missing_stock_item_ids:
         _Logger.warning(f"Stock items not found: {_Response.missing_stock_item_ids}")
         return entity_existence_failures(
@@ -177,6 +293,10 @@ def create_recipe():
     if _Response.invalid_tag_message:
         _Logger.warning(f"Invalid recipe tag: {_Response.invalid_tag_message}")
         return bad_request(_Response.invalid_tag_message)
+
+    if _Response.invalid_step_message:
+        _Logger.warning(f"Invalid recipe step: {_Response.invalid_step_message}")
+        return bad_request(_Response.invalid_step_message)
 
     _Logger.info(f"Successfully created recipe with ID: {_Response.new_recipe_id}")
     from dora_api.features.recipes.get_recipes import GetRecipesHandler

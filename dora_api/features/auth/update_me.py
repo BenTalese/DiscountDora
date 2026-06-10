@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.user import (ALLOWED_BUDGET_PERIODS,
                                            ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES, ALLOWED_THEMES,
-                                           User)
+                                           NUTRITION_MODE_COMPLEX,
+                                           NUTRITION_MODE_VALUES, User)
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
                                                   SESSION_USER_ID_KEY)
 from dora_api.features.routers import AUTH_ROUTER
@@ -44,6 +46,15 @@ class UpdateMeRequest(BaseModel):
     # the feature is two-state per setting.
     voice_input_enabled: bool | None = None
     voice_output_enabled: bool | None = None
+    # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
+    money_features_enabled: bool | None = None
+    # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
+    # Validated against NUTRITION_MODE_VALUES at the boundary
+    # (R-010 carve-out for closed-set sentinels).
+    nutrition_mode: str | None = None
+    # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+    show_recipe_images: bool | None = None
+    show_stock_images: bool | None = None
 
 
 class UpdateMeHandler:
@@ -120,6 +131,38 @@ class UpdateMeHandler:
             _User.voice_input_enabled = request.voice_input_enabled
         if "voice_output_enabled" in _SetFields and request.voice_output_enabled is not None:
             _User.voice_output_enabled = request.voice_output_enabled
+
+        # C-cross Chunk 2 — per-user money opt-in. Plain bool; the
+        # saved `budget_amount` survives toggling off (data preserved).
+        if "money_features_enabled" in _SetFields and request.money_features_enabled is not None:
+            _User.money_features_enabled = request.money_features_enabled
+
+        # C-cross Chunk 3 — per-user nutrition mode. R-010 carve-out: a
+        # closed-set sentinel validated at this single boundary point
+        # against `NUTRITION_MODE_VALUES`. `complex` is additionally
+        # gated by the install-wide `AppSetting.nutrition_db_source`
+        # being non-empty — a user can't pick a mode the install
+        # can't support.
+        if "nutrition_mode" in _SetFields and request.nutrition_mode is not None:
+            mode = request.nutrition_mode
+            if mode not in NUTRITION_MODE_VALUES:
+                return None, f"Invalid nutrition mode '{mode}'."
+            if mode == NUTRITION_MODE_COMPLEX:
+                _Setting = get_or_create_app_setting(self.repository)
+                if not _Setting.nutrition_db_source:
+                    return None, (
+                        "Complex nutrition mode needs a nutrition data "
+                        "source configured by an admin first."
+                    )
+            _User.nutrition_mode = mode
+
+        # C-cross Chunk 5 — image-display opt-ins. Plain bools; null is
+        # ignored. Saved image bytes survive a toggle (only the render
+        # is suppressed).
+        if "show_recipe_images" in _SetFields and request.show_recipe_images is not None:
+            _User.show_recipe_images = request.show_recipe_images
+        if "show_stock_images" in _SetFields and request.show_stock_images is not None:
+            _User.show_stock_images = request.show_stock_images
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

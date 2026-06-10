@@ -48,7 +48,13 @@ _SCHEMA_HEAD = _resolve_schema_head()
 def _feature_flags() -> dict[str, bool]:
     """Surface what the backend can do, for client capability gating.
     Reads runtime state cheaply — DB-backed flags pull from the
-    AppSettings singleton; env-driven flags read the env var directly."""
+    AppSettings singleton; env-driven flags read the env var directly.
+
+    Key contract: keys never *removed*. New install-wide flags get
+    added here whenever C-cross §2.6 grows its admin panel. Per ADR-002,
+    every consumer reads the truth through this endpoint, not direct
+    AppSetting access on the client.
+    """
     flags: dict[str, bool] = {
         "auth": True,           # always — session cookies + login flow
         "audit": True,          # always — audit_log + audit panel
@@ -57,9 +63,23 @@ def _feature_flags() -> dict[str, bool]:
         "email": os.environ.get("DORA_EMAIL_ENABLED", "false").lower()
                  in {"1", "true", "yes", "on"},
         "assistant": False,     # resolved below
+        # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
+        # Each pairs with a per-user opt-in (where one exists) — install
+        # off ⇒ feature hidden for everyone; install on ⇒ per-user opt-in
+        # still applies. Resolved below from AppSetting.
+        "meal_planning": True,
+        "money": False,
+        "nutrition": False,
+        "companion_ingestion": False,
+        "deals_email": False,
+        # C-cross Chunk 3 — derived capability. True when an admin has
+        # configured a nutrition source (reserved seam — the integration
+        # itself ships later). The per-user Settings page gates the
+        # `complex` toggle on this flag; never leaks the source string.
+        "nutrition_complex_available": False,
     }
-    # AppSettings drives the assistant + scanning flags at runtime. Wrapped
-    # so a DB hiccup doesn't take the health probe down with it.
+    # AppSettings drives every install-wide flag at runtime. Wrapped so a
+    # DB hiccup doesn't take the health probe down with it.
     try:
         from dora_api.features.app_settings.access import \
             get_or_create_app_setting
@@ -68,6 +88,16 @@ def _feature_flags() -> dict[str, bool]:
         setting = get_or_create_app_setting(SqlAlchemyRepository())
         flags["assistant"] = bool(setting.llm_enabled)
         flags["scanning"] = bool(setting.scanning_enabled)
+        flags["meal_planning"] = bool(setting.meal_planning_enabled)
+        flags["money"] = bool(setting.money_enabled)
+        flags["nutrition"] = bool(setting.nutrition_enabled)
+        flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
+        flags["deals_email"] = bool(setting.deals_email_enabled)
+        # C-cross Chunk 3 — derived from the seam value; never publish the
+        # source string itself.
+        flags["nutrition_complex_available"] = bool(
+            (setting.nutrition_db_source or "").strip()
+        )
     except Exception:
         pass
     return flags

@@ -1,6 +1,6 @@
 # Proposal — Stock Overview Redesign (C-1)
 
-**Status:** Draft for discussion · **Date:** 2026-06-06 · Changes NO code.  
+**Status:** **Decisions resolved 2026-06-09** (see §7a) · **Date:** 2026-06-06 · Changes NO code.  
 **Scope:** Redesign the stock overview — top area, the row (kill the "chip", make
 stock-level the focus action), the detail-navigation model, filters, footer
 counts, scan mode, images, and the per-item metric. Defers the cart button to
@@ -230,6 +230,20 @@ Non-authoritative; included where it adds or corroborates. Tagged keep / conside
    / amber expiring / red out) and that selection = row fill.
 7. **50-item cap fix** — quick `?limit` bump now vs virtualised paging (ties to
    `STOCK_OVERVIEW_PERF.md`).
+
+---
+
+## 7a. Resolved decisions (2026-06-09)
+
+| # | Decision | Resolution |
+|---|---|---|
+| 1 | Detail nav model | **Desktop side-drawer + mobile full-page**, one shared detail component in two frames. L68 read as "mobile = full-page, no drawer" (NOT "remove desktop detail"). Long-press = multi-select on mobile; row-tap is the nav to detail. |
+| 2 | Miss-tap risk | **Rely on well-sized buttons.** Row-tap opens detail; a stray open is harmless (read-only). No extra open affordance; revisit only if real friction shows. |
+| 3 | Open/in-use toggle | **Keep a one-tap "mark opened" in the row** (diverged from the proposal's "move to detail"). User wants the fast in-row toggle; it stays in the right cluster. |
+| 4 | Scan mode vs stocktake | **One unified, action-first scan-mode** that also offers stock-level actions (covers the stocktake scan-to-check case) — don't build two scanners. Stays gated behind the install-wide `scanning_enabled` flag (off by default). |
+| 5 | Planned-meals metric fallback | **Keep "# recipes" until C-2 allocation ships**, then swap to "# upcoming planned meals". No misleading count, no churn. |
+| 6 | Outline colour scheme | **Confirmed:** whole-row outline — neutral default / amber expiring-soon / red out-or-expired; out-of-stock rows dim; **selection fills the row** (never clashes with the status outline); "essential" stays a filter, not a row badge. |
+| 7 | 50-item cap fix | **Virtualised / infinite-scroll paging** (diverged from the quick `?limit` bump). Proper windowed rendering so large pantries stay fast; per `STOCK_OVERVIEW_PERF.md`. |
 
 ---
 

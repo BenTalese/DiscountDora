@@ -82,8 +82,24 @@ SECTIONS: tuple[Section, ...] = (
     Section("shopping_list_templates", "ShoppingListTemplate", "Shopping list templates", "Core data", True, _name_key),
     Section("shopping_list_template_lines", "ShoppingListTemplateLine", "Template lines", "Core data", True),
     Section("recipe_collections", "RecipeCollection", "Recipe collections", "Core data", True, _name_key),
+    # C-4 Chunk 2 — recipe vocabularies. Parents of Recipe (cuisine_id /
+    # category_id FKs) so they precede it in restore order.
+    Section("cuisines", "Cuisine", "Cuisines", "Core data", True, _name_key),
+    Section("categories", "Category", "Recipe categories", "Core data", True, _name_key),
+    Section("dietary_tags", "DietaryTag", "Dietary tags", "Core data", True, _name_key),
+    Section("tools", "Tool", "Kitchen tools", "Core data", True, _name_key),
     Section("recipes", "Recipe", "Recipes", "Core data", True, _name_key),
     Section("recipe_ingredients", "RecipeIngredient", "Recipe ingredients", "Core data", True),
+    Section("recipe_dietary_tags", "RecipeTag", "Recipe ↔ dietary-tag links", "Core data", True),
+    Section("recipe_tools", "RecipeTool", "Recipe ↔ tool links", "Core data", True),
+    # C-4 Chunk 6 — structured steps + their two link tables. Steps must be
+    # inserted before their link rows; sub-steps reference parent_step_id on
+    # the same table, but rows insert in any order on restore (the FK is
+    # deferred by SQLite when reset+restored in one txn, and Postgres tolerates
+    # the same-table reference once all rows are present).
+    Section("recipe_steps", "RecipeStep", "Recipe steps", "Core data", True),
+    Section("recipe_step_ingredients", "RecipeStepIngredient", "Recipe step ↔ ingredient links", "Core data", True),
+    Section("recipe_step_tools", "RecipeStepTool", "Recipe step ↔ tool links", "Core data", True),
     Section("meal_plans", "MealPlan", "Meal plans", "Core data", True, _name_key),
     Section("meal_plan_entries", "MealPlanEntry", "Meal plan entries", "Core data", True),
     # ── Optional (off by default) ──
@@ -132,6 +148,10 @@ HARD_FK_PULL_IN: dict[tuple[str, str], str] = {
     ("stock_items", "stock_level_id"): "stock_levels",
     ("stock_locations", "parent_id"): "stock_locations",
     ("recipes", "recipe_collection_id"): "recipe_collections",
+    # C-4 Chunk 2 — pull the cuisine/category vocab row in if a selected
+    # recipe references it.
+    ("recipes", "cuisine_id"): "cuisines",
+    ("recipes", "category_id"): "categories",
 }
 
 # Soft FKs (nullable in schema): if the target is missing at insert time and
@@ -151,6 +171,15 @@ REQUIRED_FKS: set[tuple[str, str]] = {
     ("shopping_list_template_lines", "stock_item_id"),
     ("recipe_ingredients", "recipe_id"),
     ("recipe_ingredients", "stock_item_id"),
+    ("recipe_dietary_tags", "recipe_id"),
+    ("recipe_dietary_tags", "dietary_tag_id"),
+    ("recipe_tools", "recipe_id"),
+    ("recipe_tools", "tool_id"),
+    ("recipe_steps", "recipe_id"),
+    ("recipe_step_ingredients", "step_id"),
+    ("recipe_step_ingredients", "recipe_ingredient_id"),
+    ("recipe_step_tools", "step_id"),
+    ("recipe_step_tools", "tool_id"),
     ("meal_plan_entries", "meal_id"),
     ("meal_plan_entries", "meal_plan_id"),
     ("product_stock_item_links", "stock_item_id"),
@@ -168,6 +197,7 @@ CHILD_AUTO_INCLUDE: tuple[tuple[str, str, str], ...] = (
     ("shopping_lists", "shopping_list_items", "shopping_list_id"),
     ("shopping_list_templates", "shopping_list_template_lines", "template_id"),
     ("recipes", "recipe_ingredients", "recipe_id"),
+    ("recipes", "recipe_steps", "recipe_id"),
     ("meal_plans", "meal_plan_entries", "meal_plan_id"),
     ("saved_products", "product_historic_offers", "product_id"),
     ("saved_products", "product_barcodes", "product_id"),

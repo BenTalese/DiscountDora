@@ -822,7 +822,7 @@
         "Recipes greyed out on the list? At least one ingredient is fully out.",
         "Cook mode auto-detects 'X minutes' in your steps and offers a timer.",
         "Setting your default shopping list makes the cart button one-tap.",
-        "The 'Mark Made' button on a recipe also bumps its last-cooked date.",
+        "Logging a cook on a recipe also bumps its last-cooked date.",
         "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now.",
         "A meal plan entry's servings can exceed the recipe's; quantities scale."
     ];

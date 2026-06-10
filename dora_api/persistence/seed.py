@@ -9,6 +9,10 @@ from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
+from dora_api.domain.entities.category import Category
+from dora_api.domain.entities.cuisine import Cuisine
+from dora_api.domain.entities.dietary_tag import DietaryTag
+from dora_api.domain.entities.tool import Tool
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
@@ -303,6 +307,55 @@ def seed_dev_data():
     for c in (weeknight, to_try, breakfast):
         repo.add(c)
 
+    # ---------------- RECIPE VOCABULARIES (C-4 Chunk 2) ---------------- #
+    # Mirror the migration's default seed so a create_all dev DB matches a
+    # migrated prod DB. Only the values the seed recipes reference are bound
+    # to locals; the rest still exist so the settings editor shows a full set.
+    _cuisine_names = [
+        "Italian", "Asian", "Chinese", "Japanese", "Thai", "Indian",
+        "Mexican", "Mediterranean", "American", "French", "Middle Eastern",
+        "Other",
+    ]
+    cuisines = {n: Cuisine(name=n, sequence=i) for i, n in enumerate(_cuisine_names)}
+    for c in cuisines.values():
+        repo.add(c)
+
+    _category_names = [
+        "Main", "Pasta", "Rice", "Stir fry", "Soup", "Salad", "Side",
+        "Breakfast", "Dessert", "Snack", "Drink", "Sauce",
+    ]
+    categories = {n: Category(name=n, sequence=i) for i, n in enumerate(_category_names)}
+    for c in categories.values():
+        repo.add(c)
+
+    _dietary_tags = [
+        ("Vegetarian", "Dietary pattern"), ("Vegan", "Dietary pattern"),
+        ("Pescatarian", "Dietary pattern"), ("Gluten-free", "Allergen-free"),
+        ("Dairy-free", "Allergen-free"), ("Nut-free", "Allergen-free"),
+        ("Egg-free", "Allergen-free"), ("Soy-free", "Allergen-free"),
+        ("Shellfish-free", "Allergen-free"), ("Low-carb", "Nutritional"),
+        ("Low-fat", "Nutritional"), ("Low-sugar", "Nutritional"),
+        ("Low-sodium", "Nutritional"), ("Keto", "Diet pattern"),
+        ("Paleo", "Diet pattern"), ("Whole30", "Diet pattern"),
+        ("Halal", "Religious"), ("Kosher", "Religious"),
+    ]
+    dietary_tags = {
+        name: DietaryTag(name=name, category=cat, sequence=i)
+        for i, (name, cat) in enumerate(_dietary_tags)
+    }
+    for t in dietary_tags.values():
+        repo.add(t)
+
+    _tool_names = [
+        "Frypan", "Saucepan", "Large pot", "Baking tray", "Oven dish",
+        "Mixing bowl", "Food processor", "Blender", "Stand mixer",
+        "Hand mixer", "Wok", "Slow cooker", "Air fryer", "Grater",
+        "Whisk", "Colander", "Rolling pin", "Knife & board",
+    ]
+    tools = {n: Tool(name=n, sequence=i) for i, n in enumerate(_tool_names)}
+    for t in tools.values():
+        repo.add(t)
+
     # ---------------- RECIPES ---------------- #
     def ingredient(item, qty, unit, notes=None):
         ri = RecipeIngredient(notes=notes, quantity=qty, stock_item=item, unit=unit)
@@ -312,9 +365,9 @@ def seed_dev_data():
     def make_recipe(*, name, collection, ingredients, instructions, **kw):
         recipe = Recipe(
             available_meals=kw.get("available_meals", 0),
-            category=kw.get("category"),
+            category=categories.get(kw["category"]) if kw.get("category") else None,
             cook_time_minutes=kw.get("cook", 20),
-            cuisine=kw.get("cuisine"),
+            cuisine=cuisines.get(kw["cuisine"]) if kw.get("cuisine") else None,
             difficulty=kw.get("difficulty", "Easy"),
             image=None,
             ingredients=ingredients,
@@ -326,7 +379,10 @@ def seed_dev_data():
             prep_time_minutes=kw.get("prep", 10),
             recipe_collection=collection,
             servings=kw.get("servings", 2),
+            source=kw.get("source"),
             time_of_day=kw.get("time_of_day", "Dinner"),
+            version_group_id=None,
+            kcal=kw.get("kcal"),
         )
         repo.add(recipe)
         return recipe
@@ -507,6 +563,41 @@ def seed_dev_data():
         template_line(staples.id, item, seq)
     for seq, item in enumerate((rice, soy, olive_oil, garlic, tomatoes)):
         template_line(taco.id, item, seq)
+
+    # ---------------- RECIPE DIETARY TAGS (C-4 Chunk 2) ---------------- #
+    # Recipes + dietary tags both have ids by now (saved above). Write the
+    # association directly — RecipeTag has no standalone entity.
+    repo.save_changes()
+    recipe_tag_assoc = db.metadata.tables["RecipeTag"]
+    _tag_links = [
+        (aglio, "Vegetarian"),
+        (stir_fry, "Dairy-free"),
+        (fried_rice, "Vegetarian"),
+        (fried_rice, "Dairy-free"),
+        (garlic_bread, "Vegetarian"),
+    ]
+    db.session.execute(
+        recipe_tag_assoc.insert(),
+        [
+            {"recipe_id": recipe.id, "dietary_tag_id": dietary_tags[tag].id}
+            for recipe, tag in _tag_links
+        ],
+    )
+
+    # ---------------- RECIPE TOOLS (C-4 Chunk 5) ---------------- #
+    recipe_tool_assoc = db.metadata.tables["RecipeTool"]
+    _tool_links = [
+        (aglio, "Large pot"), (aglio, "Frypan"),
+        (stir_fry, "Wok"), (fried_rice, "Wok"),
+        (garlic_bread, "Baking tray"), (simple_pasta, "Large pot"),
+    ]
+    db.session.execute(
+        recipe_tool_assoc.insert(),
+        [
+            {"recipe_id": recipe.id, "tool_id": tools[tool].id}
+            for recipe, tool in _tool_links
+        ],
+    )
 
     db.session.autoflush = True
     repo.save_changes()

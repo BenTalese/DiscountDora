@@ -128,8 +128,13 @@
                                 </q-item>
                                 <q-item>
                                     <q-item-section>Location</q-item-section>
+                                    <!-- C-cross Chunk 4 — zone-default
+                                         + hover for the full breadcrumb. -->
                                     <q-item-section side class="dora-text-primary">
-                                        {{ detail.stock_location_breadcrumb.join(' › ') || '—' }}
+                                        {{ formatLocation(detail.stock_location_breadcrumb, 'zone') || '—' }}
+                                        <q-tooltip v-if="locationHasDetail(detail.stock_location_breadcrumb)">
+                                            {{ formatLocation(detail.stock_location_breadcrumb, 'full') }}
+                                        </q-tooltip>
                                     </q-item-section>
                                 </q-item>
                                 <q-item>
@@ -329,9 +334,10 @@
                         >
                             <RecipeCard
                                 :recipe="r"
-                                :highlight-stock-item-id="detail.stock_item_id"
+                                :highlight-stock-item-ids="[detail.stock_item_id]"
                                 @open="goToRecipe"
                                 @cook="goToCook"
+                                @adjust-meals="onAdjustRecipeMeals"
                                 @add-missing="onAddMissing"
                             />
                         </div>
@@ -520,6 +526,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
+    import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -764,6 +771,13 @@
     }
     function goToCook(recipeId: string) {
         void router.push(`/recipes/${recipeId}/cook`);
+    }
+    async function onAdjustRecipeMeals(recipeId: string, delta: number) {
+        try {
+            await recipeStore.adjustMealsAsync(recipeId, delta);
+        } catch {
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update meals.' });
+        }
     }
     async function onAddMissing(_recipeId: string, stockItemIds: string[]) {
         const primary = shoppingListStore.quickAddTargetListId;

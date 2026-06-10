@@ -5,6 +5,393 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Filter panels everywhere now open.** The "Filters" toggle on Cookbook,
+  Stock Overview and every page using `FilterBar` rendered a dead button — the
+  panel never opened on click and the desktop "open by default" rule never
+  fired. Two latent bugs collided: Vue 3 coerces an unset Boolean prop to
+  `false`, defeating the manual controlled/uncontrolled `modelValue ===
+  undefined` sentinel; and Quasar's `$q.screen` was being read without ever
+  being activated, so every viewport check returned `false`. Replaced with
+  Vue 3.4 `defineModel()` + a `Screen.setDebounce()` boot file. (FU-087)
+
+### Added
+- **Recipe cost estimate + simple nutrition (Cookbook Chunk 9).**
+  - When **Money & budgets** is on (Settings → Account, or System →
+    Features for the install layer), the recipe detail page shows an
+    **Estimated cost** card in the sidebar. The number is server-
+    derived: each ingredient that has a linked product offer is priced
+    at `quantity × current offer price ÷ pack size`, summed across the
+    recipe. The card labels itself an *estimate* loudly and says
+    "based on N of M ingredients priced" so you know the coverage.
+  - When **Nutrition** is set to Simple (Settings → Account, gated
+    by System → Features → Nutrition), the recipe detail editor gains
+    a **kcal per serving** field next to servings / prep / cook. The
+    recipe detail sidebar shows a read-only Nutrition card when a
+    value is set, and the cookbook overview adds a **Kcal** sort axis
+    + a **Kcal ≤** filter input.
+  - Both features hide entirely when their opt-ins are off — no
+    surface change at all for users who haven't opted in.
+  - The old free-form Nutrition expansion on the detail page is no
+    longer rendered or editable; the column survives in the DB for
+    now (FU-115) until we're sure no user has typed something
+    irreplaceable in there.
+
+- **Per-user image-display opt-in (C-cross Chunk 5).**
+  - Recipes overview now has an **image / image-off icon button**
+    next to "Import from URL" — flip it to hide photos on recipe
+    cards and the detail-page header (the placeholder tile shows
+    instead). The choice is saved per user across sessions and
+    devices via `/api/users/me`. Defaults to on so you see photos
+    out of the box.
+  - When photos are off, the bytes endpoint isn't called at all —
+    real bandwidth saving, not just CSS hiding.
+  - Stock-side per-user flag also ships (`show_stock_images`) but
+    has no inline toggle yet — the C-1 Stock Overview row redesign
+    will wire its collapse/expand button when that chunk runs
+    (FU-106).
+  - Editor still works regardless: image upload, change, and delete
+    keep functioning even with photos hidden.
+
+### Fixed
+- **Recipe list endpoint no longer loads image blobs.** The query
+  used to fetch every recipe's image bytes just to compute the
+  `has_image: bool` flag. The `image` column is now lazy-loaded and
+  `has_image` comes from a single `image IS NOT NULL` SQL pass —
+  removes a real bandwidth cost on the cookbook overview, especially
+  for users who turn photos off via the new opt-in. (FU-090)
+
+### Changed (C-cross Chunk 4 — location display policy)
+- **Location chips now show the zone, with the full breadcrumb on
+  hover.** "Right shelf" / "Left side" out of context was meaningless;
+  every location chip across the app now displays the top-level zone
+  ("Pantry" / "Fridge" / "Freezer") and reveals the full path
+  ("Pantry › Middle shelf › Left side") in a tooltip when one exists.
+  Applied on the stock overview row, the stock-item detail page's
+  Location row, shopping-list line chips, and shop mode's section
+  label.
+
+### Added
+- **Per-user Nutrition mode (C-cross Chunk 3).**
+  - Settings → Account → **Nutrition** lets you pick **Off** (default),
+    **Simple** (a single kcal number per recipe — coming in a future
+    chunk), or **Complex** (auto-derive from a nutrition database).
+  - Complex is a placeholder for now and stays disabled until an admin
+    configures a nutrition source; the per-recipe kcal field + cookbook
+    kcal sort axis will land in a future Cookbook chunk and gate on this
+    opt-in.
+  - Layered with the admin install-wide flag the same way Money is — if
+    your install has Nutrition off (System → Features), the per-user
+    control reads as disabled with a caption pointing at the admin
+    setting.
+
+- **Per-user "Money & budgets" opt-in (C-cross Chunk 2).**
+  - Settings → Account → **Money & budgets** lets you turn dollar
+    surfaces on or off for your account — recipe cost estimates,
+    shopping-list totals, the dashboard budget card. Off by default
+    (you opt in).
+  - The existing Grocery budget card now lives under this toggle. When
+    you turn money features off, the Grocery budget card hides
+    automatically; your saved amount and period are kept, ready to come
+    back the next time you turn it on.
+  - Layered with the admin install-wide flag — if your install has
+    money features off (System → Features), the per-user toggle reads as
+    disabled with a caption pointing at the admin setting.
+  - Future cost-estimate / budget surfaces (Cookbook cost, dashboard
+    budget) will gate on this opt-in.
+
+- **Install-wide feature flags + admin Features panel (C-cross Chunk 1).**
+  - Settings → **System → Features** lets admins turn whole features on
+    or off for the install. Five new flags: **Meal planning** (on by
+    default, preserves existing behaviour), **Money & budgets**,
+    **Nutrition**, **Companion ingestion**, and **Weekly deals emailer**
+    (all off by default). When a feature is off here, it's hidden for
+    everyone — per-user preferences only apply when the install allows
+    the feature at all.
+  - `/api/health` now carries the full `features.*` set so every
+    client surface reads a single source of truth.
+  - New `useFeatureFlags()` composable on the SPA returns named
+    reactive booleans (`features.money`, `features.nutrition`, etc.).
+    Consumers gate renders by reading this composable instead of
+    AppSetting or their own probe.
+
+- **Recipe versions (Cookbook Chunk 8).**
+  - Recipes can now be **versioned**. A new **"New version"** action in
+    the detail kebab makes a sibling copy — same ingredients, tools,
+    steps, vocabulary, image, source URL, with the name pre-suffixed
+    `(v2)`, `(v3)`, etc. The original and the copy become equal peers
+    (no "current" version, no master pointer); pick whichever you want
+    when scheduling a meal.
+  - A new **"Other versions"** card appears in the detail-page sidebar
+    when a recipe has siblings, listing their names + last-made + meals
+    on hand. Click to jump straight to the sibling's detail page.
+  - Deleting a version is the same as deleting any recipe — the
+    remaining siblings stay linked.
+
+### Fixed
+- **"Planned" filter no longer surfaces yesterday's meals.** The
+  recipes-overview "Planned" chip was string-comparing
+  `scheduled_for` without parsing — yesterday's date sometimes
+  passed the check, and consumed-but-past entries were never
+  excluded. Now parses `YYYY-MM-DD` into a local-midnight `Date`,
+  skips entries with `consumed_at` set, and gates on `>= today`
+  proper. (FU-083)
+
+### Changed (FU-083 follow-up — TriStateFilter gains a sort selector)
+- **`TriStateFilter` now optionally accepts sort axes.** Pass a
+  `sortOptions` array (each with `value` / `label` / `compare`) and a
+  small inline `q-btn-toggle` appears under the search bar. The
+  filter sorts the options live before grouping; existing call sites
+  that don't pass `sortOptions` get the same behaviour as before.
+- **Ingredients filter (Cookbook overview)** now exposes **Name** and
+  **Stock level** sort axes — flip to *Stock level* to surface
+  Out-of-stock / Low-stock ingredients first when planning around
+  what needs using up.
+
+### Changed (FU-083 follow-up — shared TriStateFilter + label tweaks)
+- **One shared `TriStateFilter` component** for include/exclude filter
+  controls. Dietary tags, Tools, and the new **"Ingredients"** filter
+  all run through it. The component supports an optional **search
+  typeahead** (essential at stock-item scale) and **per-row coloured
+  dot** (the stock-level signal you asked to keep). The old paired
+  "Uses ingredients" + "Doesn't use" `q-select`s collapse into a
+  single button — click an ingredient once to require it, again to
+  exclude it, again to clear.
+- **"Missing ≤" → "Missing ingredients ≤"** label.
+
+### Changed (recipes overview UX — FU-083 feedback pass)
+- **Sort direction toggle** next to the Sort by dropdown — asc/desc
+  with axis-aware tooltips ("Oldest first" / "Most recent first" /
+  "A → Z" / etc.). Switching axis snaps direction to the
+  conventional default (name = A→Z, recently-made = newest first,
+  meals = most first, time = fastest first). Null values still sink
+  to the bottom regardless of direction.
+- **"Planned in" → "Planned"** (the "in" added nothing).
+- **"Uses stock items" → "Uses ingredients"**.
+- **New "Doesn't use" picker** pairs with "Uses ingredients" as a +/-
+  filter on the same stock-item search. Replaces the old free-text
+  "Free from ingredient(s)" chip-input.
+- **Filter row de-cluttered** — hints removed from the `Meals ≥` /
+  `Missing ≤` inputs; ingredient picker dropdown no longer carries
+  the level-name caption (the colour dot was already the meaning).
+  Row height stops jittering when those filters are active.
+- **Recipe-card dim removed.** The "restocking this item alone
+  wouldn't make it cookable" dim semantics wasn't legible without a
+  legend; the card already says "missing N ingredients" on its face.
+
+### Added
+- **Recipe detail — "Last cooked" card** in the sidebar. Reads the
+  recipe's `last_made_on`; shows "Never" when null. Closes the loop
+  with the top-toolbar Mark cooked / Log cook actions.
+
+### Fixed
+- **Recipe detail load now returns structured steps + versions.** The
+  detail-page fetch was filtering the list endpoint by id, which only
+  returned the cheap list-shape DTO (no `steps[]`, no version siblings).
+  New dedicated `GET /api/recipes/<id>` returns the fully hydrated
+  detail; cookbook detail, cook mode, and the new versions card all read
+  the right data now.
+
+### Added
+- **Recipe Source URL + smarter URL importer (Cookbook Chunk 7).**
+  - Recipes now have a dedicated **Source URL** field on the detail page —
+    typed in, or auto-filled when imported. A small **Open** button next
+    to the field jumps to the original page. The URL importer no longer
+    appends a `Source: <url>` line to Instructions; the URL goes straight
+    to its own field.
+  - **Import from URL is now on the Cookbook overview** as well as the
+    detail page. Click the new "Import from URL" button next to "New
+    recipe" — paste a URL, and a fresh recipe is created and opened for
+    editing. Ingredients that couldn't be auto-matched to your stock
+    items are called out in the success toast so you can add them by
+    hand.
+  - **Graceful degradation** for pages without schema.org JSON-LD: the
+    importer falls back to scraping the page title and body text into
+    Instructions and shows a "couldn't auto-structure — review and edit"
+    banner. Cleaner than the old "Could not parse that URL" rejection.
+  - The import dialog copy now names a few representative sites
+    (BBC Good Food, NYT Cooking, Serious Eats, AllRecipes…) so you can
+    set expectations before pasting.
+
+- **Cook mode — Cooking-for headcount auto-rescale (Cook Mode Chunk 6).**
+  - The cook-mode header now has a compact **"Cooking for ___"** number
+    input. Bump it up or down and every ingredient quantity rescales on
+    the fly — 4-serving lasagne becomes 6 servings without doing the
+    arithmetic in your head. Defaults to the recipe's saved servings
+    on entry.
+  - Quantities round into kitchen-friendly buckets: countable units
+    (eggs / cloves / scoops / pinches / etc.) round to whole numbers
+    (minimum 1); mass / volume snap to **½ / ⅓ / ⅔ / ¼ / ¾** when close,
+    otherwise nearest one decimal place. "1½ cups", "2⅔ tbsp",
+    "300g" — not "1.5 cups", "2.667 tbsp", "300.0g".
+  - **Session-only** — the saved recipe never changes. Exit and come
+    back, you're back at the original servings.
+
+- **Cook mode — per-step highlight + tools panel + step hints (Cook Mode Chunk 5).**
+  - Structured-step recipes (set up via the Cookbook Chunk 6 editor) now
+    drive cook mode directly: walking through the recipe, the ingredients
+    a step uses are **highlighted** in the ingredient panel and the tools
+    that step needs are highlighted in the new **Tools panel** below it.
+    Untouched tools dim out so the eye lands on what's needed right now.
+    Recipes without structured steps fall back to today's text-matched
+    highlight (which is still the smarter-than-nothing default).
+  - Each structured step can carry a **hint** — a small lightbulb-marked
+    line under the step text — and **sub-steps** display a "Sub-step" chip
+    so the cook knows they're nested inside the parent.
+  - The **per-step "done" checkboxes** and the **mark-used** checkboxes
+    on each ingredient row are gone. Cooking a recipe implies using all
+    its ingredients; the finish flow now ranges over every recipe
+    ingredient automatically. ("Done" voice command is retired alongside
+    the checkboxes.)
+
+- **Cook mode overhaul — finish flow + polish + ingredient list (Cook Mode Chunks 1–3).**
+  - **Finish dialog rewrite (Chunk 1).** The old "Finished cooking?" dialog
+    with three blanket toggles is gone. Each ingredient you marked used now
+    gets its own row in the finish list with quick chips — **Down one
+    level** (default), **Out**, or **Unchanged** — plus an override drop-down
+    if you want a specific level, plus a per-row **Add to list** button.
+    The "How many meals?" field defaults to **0** (because "I just ate it"
+    is the common case) and lands a celebratory toast — *"You saved N meals
+    — enjoy."* or *"All eaten — hope it was good."* when zero. Clicking
+    outside the dialog now cancels cleanly without touching stock.
+  - **Cook-mode polish (Chunk 2).** The step timer now shows a horizontal
+    fill-bar that empties as time runs out and changes tone when it
+    finishes, plus a short beep (silent fallback if the browser denies
+    audio). The voice button is renamed **Sous Chef** with a help popover
+    listing every hands-free command — Next, Previous, Repeat, Start
+    timer, Pause / Reset timer, Done, Exit — so you don't have to discover
+    the verbs by trial and error. Unit spacing is centralised through a
+    new `formatQuantity()` helper (250g, 2ml, 1 tbsp, 2 cloves — the
+    no-space units list is one source of truth).
+  - **Mid-cook ingredient list (Chunk 3).** Ingredients are now grouped
+    by their **base** stock location (a sub-area like "Pantry > Spice
+    Rack" collapses to "Pantry"), each group its own card. Stock-level
+    chips no longer render during cooking — the decision to cook is
+    already made, and the noise belongs on the finish surface instead.
+    Ingredients with no location land in a final "No location" group.
+
+- **Structured recipe steps (Cookbook Chunk 6).**
+  - The recipe detail page now has a **Structured / Freeform** toggle for
+    instructions. Structured mode gives you a per-step editor: each step has
+    its own text field, an optional **hint** line, a multi-select for the
+    **ingredients** it uses, and a multi-select for the **tools** it needs.
+    You can add **sub-steps** under any top-level step (one level deep),
+    reorder steps within their siblings, and remove steps cleanly (any
+    references from other steps stop pointing at deleted ingredients).
+  - Freeform mode keeps the original textarea behaviour for recipes you
+    just want to type out. Switching between modes preserves what you've
+    written; saving in freeform clears the structured set on the server.
+    Structured-mode users also get an **Advanced** disclosure with the
+    freeform textarea, kept as a cook-mode fallback for now.
+  - **URL importer** now reads schema.org `HowToStep` / `HowToSection` and
+    pre-fills the structured editor automatically when the source publishes
+    them; sites without structured markup still drop into the freeform
+    textarea as before.
+  - **Backup / restore** round-trips the new step structure end-to-end.
+  - Unblocks cook-mode's per-step highlight + per-step tools/hints (C-3
+    Chunk 5). Recipes without structured steps continue to work everywhere
+    unchanged — cook mode keeps splitting the freeform `instructions` on
+    newlines until a recipe is edited into structure.
+
+- **Recipe images + tools (Cookbook Chunk 5).**
+  - **Recipe images:** upload a photo on the recipe detail page (and the New-
+    recipe dialog); it shows on the recipe card and detail, with a coloured-
+    initial placeholder when there's none. Change/remove supported; ~4MB cap.
+  - **Tools:** recipes can list the kitchen tools they need (frypan, food
+    processor, …) — a **user-configurable vocabulary** edited in
+    **Settings → Recipe tags & categories → Tools**, multi-selectable on a
+    recipe, with an **include/exclude tri-state filter** on the cookbook
+    overview (same control as dietary tags).
+
+- **Recipe detail page cleanup (Cookbook Chunk 4).**
+  - Actions now sit in a **sticky toolbar across the top** (no more buttons
+    stranded at the bottom on mobile): a prominent **Mark cooked**, Cook mode,
+    Log cook, Print, then Save + a kebab. **Delete moved into the kebab**, well
+    away from Mark cooked. **CSV export removed** from this page.
+  - The recipe **name is now its own clearly-labelled field** (was a heading
+    that didn't look editable).
+  - **Starting cook mode is guarded:** a confirm appears if there are unsaved
+    changes or the recipe isn't cookable now. The dialog has a real **Cancel**,
+    clicking outside no longer navigates, and you can't enter cook mode if the
+    save failed. **Exiting cook mode returns to the recipe** (not the overview).
+  - **Saving** no longer silently eats a half-filled ingredient row (it blocks
+    with a prompt), and an unchanged name can no longer block the save.
+  - Ingredient rows show **one status chip** ("Missing" wins) and tint the row
+    when missing, instead of stacking two chips.
+  - The cookable/missing summary box is **theme-aware** (readable in dark mode).
+  - "Meals on hand" renamed to **"Available meals"**.
+
+### Fixed
+- The recipe meal +/− no longer flashes a not-allowed cursor (uses a proper
+  disabled state).
+
+### Added (continued)
+- **Cookbook card redesign + naming (Chunk 3).**
+  - Recipe cards get an **image placeholder** tile (real images land in
+    Chunk 5), an emphasised name, and a clearer **meals box** with an inline
+    ± stepper to adjust the cooked-meals pool right from the overview.
+  - A recipe with meals committed to upcoming plans now shows an
+    **"allocated" badge** that turns **red on a shortfall** (more committed
+    than cooked) — backed by a new server-derived `committed_meals` field.
+  - **Cook is the card's only primary action.** Edit/Duplicate/Delete are
+    gone from the card — clicking a card opens its detail page (the edit +
+    delete surface).
+  - Collection groups on the overview are now **collapsible, rounded boxes**.
+  - **Naming:** the main-menu item, command-palette/keyboard "go to" actions,
+    and the recipe-detail breadcrumb now read **"Cookbook"**.
+  - **Dietary tags are now editable on the recipe detail page** (previously
+    only on the New-recipe modal).
+
+- **Recipe tag taxonomy overhaul (Cookbook Chunk 2).** Cuisine, category,
+  and dietary tags are now **user-configurable vocabularies** instead of
+  free text / a hardcoded list:
+  - **Cuisine** and **Category** are distinct **single-select** fields on
+    recipes (no longer lumped into one "tags" filter), each backed by an
+    editable table.
+  - **Dietary tags** move from an in-code catalogue to an editable table,
+    and the overview filter is now a single **tri-state control** — click a
+    tag to cycle must-have (green +) → must-not (red −) → neutral, and the
+    dropdown stays open while you set several.
+  - New **Settings → "Recipe tags & categories"** page to add / rename /
+    delete cuisines, categories, and dietary tags (with recipe-usage counts
+    and delete warnings).
+  - The recipe edit form and detail page use single-select dropdowns for
+    cuisine/category sourced from these tables; the URL importer matches a
+    scraped cuisine/category against existing rows when it can.
+  - **Breaking schema change (pre-release):** `Recipe.cuisine` /
+    `Recipe.category` string columns become `cuisine_id` / `category_id`
+    FKs; the `RecipeTag` link swaps its `tag` string for a `dietary_tag_id`
+    FK. New `Cuisine` / `Category` / `DietaryTag` tables, seeded with the
+    previous defaults (migration `a7d2f4c9e1b8`). Existing recipe
+    cuisine/category text and old tag rows are discarded, not converted —
+    re-tag recipes after upgrading.
+
+- **Recipes overview — sort axes + new filters (Cookbook Chunk 1).** The
+  recipes overview gains a **Sort by** dropdown (Name, Recently made,
+  Meals in pool, Prep + cook time) and four new chip filters
+  (Favourites / Cookable now / Have meals in pool / Planned in) plus a
+  numeric **Meals ≥ N** input. The existing **Uses stock item** picker
+  is now **multi-select**, with each option row carrying a small dot
+  coloured by current stock level. "Planned in" reads loaded meal plans
+  client-side for now (any entry from today onward); moves server-side
+  when state-ownership lands.
+
+### Removed
+- **Recipe comparison mode (Cookbook Chunk 1).** The Compare / Show
+  comparison buttons, per-card checkbox, and side-by-side comparison
+  dialog are gone — INV-6 found the feature wasn't pulling its weight,
+  and the new sort + filter axes cover the comparisons the user was
+  actually doing.
+
+### Fixed
+- **Menu items now highlight on subroutes.** Top nav + side drawer items
+  driven off Vue Router's route-record matching went dark on flat
+  sibling subroutes (`/recipes/:id`, `/stock/:id`,
+  `/shopping-lists/:id`, etc.); they now use path-prefix matching so
+  any route under the page highlights the parent. The Recipes menu link
+  also re-targets `/cookbook` directly (with `/recipes` as a secondary
+  prefix) so the highlight works on the actual landing page.
+
 ### Added
 - **Planned shopping day (P6-01 Chunk 7).** Shopping lists now carry an
   optional `planned_shop_date` (ISO date, nullable). The **New shopping

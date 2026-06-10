@@ -210,6 +210,11 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Stock groups' }
                     },
                     {
+                        path: 'recipe-vocab',
+                        component: () => import('pages/settings/RecipeVocabSettings.vue'),
+                        meta: { title: 'Recipe tags & categories' }
+                    },
+                    {
                         path: 'account',
                         component: () => import('pages/settings/AccountSettings.vue'),
                         meta: { title: 'Account' }

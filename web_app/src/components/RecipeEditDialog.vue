@@ -23,9 +23,30 @@
                         autofocus
                     />
 
+                    <!-- L255/L260 — cuisine + category are distinct
+                         single-selects sourced from the editable vocab
+                         tables (no longer free-text). -->
                     <div class="row q-col-gutter-md">
-                        <q-input class="col-12 col-sm-6" outlined label="Cuisine" v-model="form.cuisine" />
-                        <q-input class="col-12 col-sm-6" outlined label="Category" v-model="form.category" />
+                        <q-select
+                            class="col-12 col-sm-6"
+                            outlined
+                            label="Cuisine"
+                            v-model="form.cuisine_id"
+                            :options="cuisineOptions"
+                            emit-value
+                            map-options
+                            clearable
+                        />
+                        <q-select
+                            class="col-12 col-sm-6"
+                            outlined
+                            label="Category"
+                            v-model="form.category_id"
+                            :options="categoryOptions"
+                            emit-value
+                            map-options
+                            clearable
+                        />
                     </div>
 
                     <div class="row q-col-gutter-md">
@@ -97,9 +118,9 @@
                         v-model="form.nutrition"
                     />
 
-                    <!-- P2-08 — dietary / allergen-free / nutritional tag
-                         editor. Multi-select chips drawn from the canonical
-                         catalogue. Surfaced disclaimer keeps the framing
+                    <!-- C-4 Chunk 2 — dietary tag editor. Multi-select chips
+                         drawn from the editable DietaryTag vocabulary
+                         (option value = tag id). Disclaimer keeps the framing
                          honest: tags are a planning aid, not a safety claim. -->
                     <div>
                         <q-select
@@ -108,7 +129,7 @@
                             use-chips
                             emit-value
                             map-options
-                            v-model="form.tags"
+                            v-model="form.dietary_tag_ids"
                             :options="tagOptionsByCategory"
                             label="Dietary tags (optional)"
                         />
@@ -120,6 +141,25 @@
                             {{ tagCatalogue.disclaimer }}
                         </div>
                     </div>
+
+                    <!-- C-4 Chunk 5 — tools (multi-select) + image. -->
+                    <q-select
+                        outlined
+                        multiple
+                        use-chips
+                        emit-value
+                        map-options
+                        v-model="form.tool_ids"
+                        :options="toolOptions"
+                        label="Tools (optional)"
+                    />
+
+                    <RecipeImageField
+                        :preview-url="form.image"
+                        :name="form.name"
+                        @pick="(url) => { form.image = url; }"
+                        @clear="() => { form.image = null; }"
+                    />
 
                     <q-separator />
 
@@ -186,12 +226,14 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
+    import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, {
         type CreateRecipeIngredientCommand,
     } from 'src/services/api/recipeApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
 
@@ -203,16 +245,18 @@
 
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
+    const recipeVocabStore = useRecipeVocabStore();
     const { recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
+    const { cuisines, categories, tools } = storeToRefs(recipeVocabStore);
 
     type IngredientForm = CreateRecipeIngredientCommand;
 
     type RecipeForm = {
         name: string;
-        category: string | null;
+        category_id: string | null;
         cook_time_minutes: number | null;
-        cuisine: string | null;
+        cuisine_id: string | null;
         difficulty: string | null;
         instructions: string | null;
         nutrition: string | null;
@@ -221,14 +265,16 @@
         servings: number | null;
         time_of_day: string | null;
         ingredients: IngredientForm[];
-        tags: string[];
+        dietary_tag_ids: string[];
+        tool_ids: string[];
+        image: string | null;
     };
 
     const emptyForm = (): RecipeForm => ({
         name: '',
-        category: null,
+        category_id: null,
         cook_time_minutes: null,
-        cuisine: null,
+        cuisine_id: null,
         difficulty: null,
         instructions: null,
         nutrition: null,
@@ -237,7 +283,9 @@
         servings: null,
         time_of_day: null,
         ingredients: [],
-        tags: [],
+        dietary_tag_ids: [],
+        tool_ids: [],
+        image: null,
     });
 
     const form = reactive<RecipeForm>(emptyForm());
@@ -259,11 +307,20 @@
     const collectionOptions = computed(() =>
         recipeCollections.value.map((c) => ({ label: c.name, value: c.recipe_collection_id }))
     );
+    // C-4 Chunk 2 — cuisine/category single-selects sourced from the vocab store.
+    const cuisineOptions = computed(() =>
+        cuisines.value.map((c) => ({ label: c.name, value: c.cuisine_id })),
+    );
+    const categoryOptions = computed(() =>
+        categories.value.map((c) => ({ label: c.name, value: c.category_id })),
+    );
+    const toolOptions = computed(() =>
+        tools.value.map((t) => ({ label: t.name, value: t.tool_id })),
+    );
 
-    // P2-08 — tag catalogue is fetched once per dialog open. Labels are
-    // prefixed with the category so a flat single-list q-select still
-    // reads as grouped ("Dietary pattern: Vegan", "Allergen-free:
-    // Gluten-free", …).
+    // Dietary tag catalogue (value = tag id). Labels are prefixed with the
+    // grouping category so a flat single-list q-select still reads as grouped
+    // ("Dietary pattern: Vegan", "Allergen-free: Gluten-free", …).
     const recipeApi = new RecipeApiService();
     const tagCatalogue = ref<RecipeTagCatalogue | null>(null);
     const tagOptionsByCategory = computed(() =>
@@ -274,6 +331,8 @@
     );
 
     onMounted(async () => {
+        // Vocab lists for the cuisine/category selects (load if not already cached).
+        recipeVocabStore.getAllAsync().catch(() => undefined);
         try {
             tagCatalogue.value = await recipeApi.getTagCatalogueAsync();
         } catch {
@@ -292,9 +351,9 @@
             fieldErrors.value = {};
             if (props.recipe) {
                 form.name = props.recipe.name;
-                form.category = props.recipe.category;
+                form.category_id = props.recipe.category_id;
                 form.cook_time_minutes = props.recipe.cook_time_minutes;
-                form.cuisine = props.recipe.cuisine;
+                form.cuisine_id = props.recipe.cuisine_id;
                 form.difficulty = props.recipe.difficulty;
                 form.instructions = props.recipe.instructions;
                 form.nutrition = props.recipe.nutrition;
@@ -308,7 +367,11 @@
                     unit: i.unit,
                     notes: i.notes
                 }));
-                form.tags = [...(props.recipe.tags ?? [])];
+                form.dietary_tag_ids = [...(props.recipe.dietary_tag_ids ?? [])];
+                form.tool_ids = [...(props.recipe.tool_ids ?? [])];
+                // Image isn't loaded into the create/edit dialog (it lives on
+                // the detail page); leave form.image null so an edit here never
+                // clobbers an existing image.
             }
         }
     );
@@ -331,9 +394,9 @@
                 await recipeStore.updateRecipeAsync({
                     recipe_id: props.recipe.recipe_id,
                     name: form.name,
-                    category: form.category,
+                    category_id: form.category_id,
                     cook_time_minutes: form.cook_time_minutes,
-                    cuisine: form.cuisine,
+                    cuisine_id: form.cuisine_id,
                     difficulty: form.difficulty,
                     instructions: form.instructions,
                     nutrition: form.nutrition,
@@ -342,14 +405,16 @@
                     servings: form.servings,
                     time_of_day: form.time_of_day,
                     ingredients,
-                    tags: form.tags,
+                    dietary_tag_ids: form.dietary_tag_ids,
+                    tool_ids: form.tool_ids,
+                    // image deliberately omitted on edit (managed on detail page).
                 });
             } else {
                 await recipeStore.createRecipeAsync({
                     name: form.name,
-                    category: form.category,
+                    category_id: form.category_id,
                     cook_time_minutes: form.cook_time_minutes,
-                    cuisine: form.cuisine,
+                    cuisine_id: form.cuisine_id,
                     difficulty: form.difficulty,
                     instructions: form.instructions,
                     nutrition: form.nutrition,
@@ -358,7 +423,9 @@
                     servings: form.servings,
                     time_of_day: form.time_of_day,
                     ingredients,
-                    tags: form.tags,
+                    dietary_tag_ids: form.dietary_tag_ids,
+                    tool_ids: form.tool_ids,
+                    image: form.image,
                 });
             }
             emit('saved');

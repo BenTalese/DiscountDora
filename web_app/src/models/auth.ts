@@ -62,4 +62,18 @@ export type AuthenticatedUser = {
     // per-page mic / volume toggles from these on boot.
     voice_input_enabled: boolean;
     voice_output_enabled: boolean;
+    // C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
+    // Layered with the install-wide `money_enabled` flag via
+    // `useMoneyEnabled()`. `budget_amount` above stays the per-user
+    // budget — saved value survives toggling this off (data preserved).
+    money_features_enabled: boolean;
+    // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
+    // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
+    // the composable layers this with install `features.nutrition`.
+    nutrition_mode: 'off' | 'simple' | 'complex';
+    // C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+    // Both default true (visual richness on). Use `useImagePrefs()` to
+    // read + write — the composable owns the optimistic-flip + rollback.
+    show_recipe_images: boolean;
+    show_stock_images: boolean;
 };

@@ -149,7 +149,7 @@
                             </q-chip>
                         </q-item-label>
                         <q-item-label caption>
-                            <span v-if="recipe.category">{{ recipe.category }}</span>
+                            <span v-if="recipe.category_name">{{ recipe.category_name }}</span>
                             <span v-if="recipe.servings">
                                 · {{ recipe.servings }} serving(s)
                             </span>

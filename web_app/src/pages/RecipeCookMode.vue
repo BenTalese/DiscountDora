@@ -6,18 +6,42 @@
         </div>
 
         <template v-else>
-            <div class="row items-center q-mb-md">
+            <div class="row items-center q-mb-md cook-header q-gutter-sm">
                 <BaseButton variant="ghost" :icon="ICONS.arrow_back" label="Exit" @click="exitCookMode" />
                 <q-space />
                 <div class="text-h5 ellipsis">{{ recipe.name }}</div>
                 <q-space />
+                <!-- C-3 Chunk 6 — headcount control. Session-only; the
+                     saved recipe stays at `recipe.servings`. -->
+                <div class="row items-center q-gutter-xs cooking-for">
+                    <q-icon :name="ICONS.group" size="20px" class="dora-text-muted" />
+                    <span class="text-caption dora-text-muted">Cooking for</span>
+                    <q-input
+                        v-model.number="cookingFor"
+                        type="number"
+                        min="1"
+                        dense
+                        outlined
+                        hide-bottom-space
+                        :style="{ width: '72px' }"
+                        @blur="onCookingForBlur"
+                    >
+                        <q-tooltip>
+                            Rescales quantities for this cook only — the saved recipe stays at {{ recipe.servings ?? '?' }} serving{{ recipe.servings === 1 ? '' : 's' }}.
+                        </q-tooltip>
+                    </q-input>
+                </div>
+                <!-- C-3 Chunk 2 — Sous Chef. Single labelled button activates
+                     speech + listening; the popover lists the hands-free
+                     commands so users don't have to discover them. -->
                 <BaseButton
-                    variant="icon"
-                    :icon="speechEnabled ? 'volume_up' : 'volume_off'"
+                    variant="ghost"
+                    :icon="ICONS.record_voice_over"
+                    :label="speechEnabled ? 'Sous Chef on' : 'Sous Chef'"
                     :class="{ 'text-primary': speechEnabled, 'dora-text-muted': !speechEnabled }"
                     @click="toggleSpeech"
                 >
-                    <q-tooltip>{{ speechEnabled ? 'Disable voice' : 'Enable voice' }}</q-tooltip>
+                    <q-tooltip>{{ speechEnabled ? 'Disable Sous Chef voice' : 'Enable Sous Chef voice — Dora reads each step aloud' }}</q-tooltip>
                 </BaseButton>
                 <BaseButton
                     v-if="speechRecognitionAvailable"
@@ -26,7 +50,34 @@
                     :class="{ 'text-negative': listening, 'dora-text-muted': !listening }"
                     @click="toggleListening"
                 >
-                    <q-tooltip>{{ listening ? 'Stop listening' : 'Listen for "next" / "previous" / "repeat"' }}</q-tooltip>
+                    <q-tooltip>{{ listening ? 'Stop listening' : 'Listen for hands-free commands' }}</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    variant="icon"
+                    :icon="ICONS.help_outline"
+                    aria-label="Sous Chef commands"
+                >
+                    <q-tooltip>What can I say?</q-tooltip>
+                    <q-menu>
+                        <q-card class="sous-chef-help" flat>
+                            <q-card-section>
+                                <div class="text-subtitle1 q-mb-sm">Sous Chef commands</div>
+                                <div class="text-caption dora-text-muted q-mb-sm">
+                                    With listening on, say any of these. Sous Chef stays quiet for anything else — chat with someone in the kitchen freely.
+                                </div>
+                                <q-list dense>
+                                    <q-item v-for="cmd in sousChefCommands" :key="cmd.label">
+                                        <q-item-section>
+                                            <div class="row items-baseline q-gutter-xs">
+                                                <span class="text-weight-medium">{{ cmd.label }}</span>
+                                                <span class="text-caption dora-text-muted">— {{ cmd.does }}</span>
+                                            </div>
+                                        </q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-card-section>
+                        </q-card>
+                    </q-menu>
                 </BaseButton>
             </div>
 
@@ -44,13 +95,31 @@
 
             <q-card flat bordered class="step-card q-mb-md">
                 <q-card-section>
+                    <div class="row items-center q-gutter-xs q-mb-xs">
+                        <q-chip
+                            v-if="currentStepObject?.isSubStep"
+                            dense
+                            color="primary"
+                            text-color="white"
+                            :icon="ICONS.subdirectory_arrow_right"
+                        >
+                            Sub-step
+                        </q-chip>
+                    </div>
                     <div class="text-h4 step-text">{{ currentStep }}</div>
+                    <div
+                        v-if="currentStepObject?.hint"
+                        class="step-hint q-mt-sm dora-text-muted text-body2"
+                    >
+                        <q-icon :name="ICONS.lightbulb" size="16px" class="q-mr-xs" />
+                        {{ currentStepObject.hint }}
+                    </div>
                 </q-card-section>
 
                 <q-card-section v-if="detectedTimerMinutes !== null" class="dora-bg-sunken">
                     <div class="row items-center q-gutter-sm">
                         <q-icon :name="ICONS.timer" size="32px" color="primary" />
-                        <div class="text-h6">
+                        <div class="text-h6 timer-text">
                             {{ formatTimer(timerRemaining ?? detectedTimerMinutes * 60) }}
                         </div>
                         <q-space />
@@ -68,14 +137,25 @@
                             label="Pause"
                             @click="pauseTimer"
                         />
-                        <q-btn
+                        <BaseButton
                             v-if="timerRemaining !== null"
-                            flat
+                            variant="ghost"
                             :icon="ICONS.restart_alt"
                             label="Reset"
                             @click="resetTimer"
                         />
                     </div>
+                    <!-- C-3 Chunk 2 — fill-bar that empties as time passes.
+                         Tone shifts to negative when finished so the bar
+                         itself confirms the toast/audio. -->
+                    <q-linear-progress
+                        v-if="timerTotal !== null && timerTotal > 0"
+                        :value="timerProgress"
+                        :color="timerRemaining === 0 ? 'negative' : 'primary'"
+                        rounded
+                        size="10px"
+                        class="q-mt-sm timer-bar"
+                    />
                 </q-card-section>
             </q-card>
 
@@ -103,6 +183,13 @@
                 />
             </div>
 
+            <!-- C-3 Chunk 3 — ingredients grouped by base stock location.
+                 Stock-level chips intentionally removed mid-cook: the
+                 decision to cook this recipe is already made; visual noise
+                 about what's low/out only belongs on the finish surface
+                 (Chunk 1). The expansion stays for collapse, but the
+                 inner list is a card per location group rather than one
+                 long flat list. -->
             <q-expansion-item
                 default-opened
                 :icon="ICONS.kitchen"
@@ -113,101 +200,133 @@
                     <q-item-section>Ingredients</q-item-section>
                     <q-item-section side>
                         <span class="text-caption dora-text-muted">
-                            {{ usedIds.size }} / {{ ingredientRows.length }} used
+                            {{ ingredientRows.length }} total
                         </span>
                     </q-item-section>
                 </template>
-                <q-list dense>
-                    <q-item v-for="row in ingredientRows" :key="row.ingredient.recipe_ingredient_id">
-                        <q-item-section side top>
-                            <q-checkbox
-                                :model-value="usedIds.has(row.ingredient.stock_item_id)"
-                                @update:model-value="toggleUsed(row.ingredient.stock_item_id)"
-                            >
-                                <q-tooltip>Mark used</q-tooltip>
-                            </q-checkbox>
-                        </q-item-section>
-                        <q-item-section>
-                            <div class="row items-center q-gutter-xs no-wrap">
-                                <span class="text-caption dora-text-muted">
-                                    <span v-if="row.ingredient.quantity">{{ row.ingredient.quantity }}</span>
-                                    <span v-if="row.ingredient.unit"> {{ row.ingredient.unit }}</span>
-                                </span>
-                                <!-- B8: temporary cook-session substitute (never edits the recipe) -->
-                                <template v-if="sessionSwaps.has(row.ingredient.stock_item_id)">
-                                    <q-chip
-                                        dense
-                                        color="secondary"
-                                        text-color="white"
-                                        :icon="ICONS.swap_horiz"
-                                    >
-                                        {{ sessionSwaps.get(row.ingredient.stock_item_id)!.substituteName }}
-                                    </q-chip>
-                                    <span class="text-caption dora-text-muted">
-                                        instead of {{ row.ingredient.stock_item_name }}
-                                    </span>
-                                    <q-btn
-                                        flat
-                                        dense
-                                        round
-                                        size="sm"
-                                        :icon="ICONS.undo"
-                                        @click="clearSwap(row.ingredient.stock_item_id)"
-                                    >
-                                        <q-tooltip>Undo substitute</q-tooltip>
-                                    </q-btn>
-                                </template>
-                                <template v-else>
-                                    <StockItemChip v-if="row.stockItem" :stock-item="row.stockItem" />
-                                    <span v-else>{{ row.ingredient.stock_item_name }}</span>
-                                    <q-btn
-                                        flat
-                                        dense
-                                        round
-                                        size="sm"
-                                        :icon="ICONS.swap_horiz"
-                                        @click="openSwapPicker(row.ingredient.stock_item_id, row.ingredient.stock_item_name)"
-                                    >
-                                        <q-tooltip>Use a substitute for this cook</q-tooltip>
-                                    </q-btn>
-                                </template>
+                <div class="q-pt-sm">
+                    <q-card
+                        v-for="group in ingredientGroups"
+                        :key="group.key"
+                        flat
+                        bordered
+                        class="q-mb-sm ingredient-group"
+                    >
+                        <q-card-section class="q-pb-xs">
+                            <div class="row items-center q-gutter-xs">
+                                <q-icon :name="ICONS.place" size="16px" class="dora-text-muted" />
+                                <span class="text-subtitle2">{{ group.label }}</span>
                             </div>
-                            <q-item-label
-                                v-if="row.ingredient.notes"
-                                caption
-                                class="dora-text-muted"
+                        </q-card-section>
+                        <q-list dense>
+                            <q-item
+                                v-for="row in group.rows"
+                                :key="row.ingredient.recipe_ingredient_id"
+                                :class="{
+                                    'ingredient-row--highlighted': highlightedIngredientIds.has(row.ingredient.recipe_ingredient_id),
+                                }"
                             >
-                                {{ row.ingredient.notes }}
-                            </q-item-label>
-                            <q-item-label
-                                v-if="row.ingredient.stock_location_id"
-                                caption
-                            >
-                                <q-icon :name="ICONS.place" size="14px" />
-                                {{ breadcrumbFor(row.ingredient.stock_location_id).join(' › ') }}
-                            </q-item-label>
-                        </q-item-section>
-                    </q-item>
-                </q-list>
+                                <q-item-section>
+                                    <div class="row items-center q-gutter-xs no-wrap">
+                                        <span class="text-caption dora-text-muted ingredient-quantity">
+                                            {{ displayQuantity(row.ingredient.quantity, row.ingredient.unit) }}
+                                        </span>
+                                        <template v-if="sessionSwaps.has(row.ingredient.stock_item_id)">
+                                            <q-chip
+                                                dense
+                                                color="secondary"
+                                                text-color="white"
+                                                :icon="ICONS.swap_horiz"
+                                            >
+                                                {{ sessionSwaps.get(row.ingredient.stock_item_id)!.substituteName }}
+                                            </q-chip>
+                                            <span class="text-caption dora-text-muted">
+                                                instead of {{ row.ingredient.stock_item_name }}
+                                            </span>
+                                            <q-btn
+                                                flat
+                                                dense
+                                                round
+                                                size="sm"
+                                                :icon="ICONS.undo"
+                                                @click="clearSwap(row.ingredient.stock_item_id)"
+                                            >
+                                                <q-tooltip>Undo substitute</q-tooltip>
+                                            </q-btn>
+                                        </template>
+                                        <template v-else>
+                                            <span class="ingredient-name">{{ row.ingredient.stock_item_name }}</span>
+                                            <q-btn
+                                                flat
+                                                dense
+                                                round
+                                                size="sm"
+                                                :icon="ICONS.swap_horiz"
+                                                @click="openSwapPicker(row.ingredient.stock_item_id, row.ingredient.stock_item_name)"
+                                            >
+                                                <q-tooltip>Use a substitute for this cook</q-tooltip>
+                                            </q-btn>
+                                        </template>
+                                    </div>
+                                    <q-item-label
+                                        v-if="row.ingredient.notes"
+                                        caption
+                                        class="dora-text-muted"
+                                    >
+                                        {{ row.ingredient.notes }}
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-card>
+                </div>
+            </q-expansion-item>
+
+            <!-- C-3 Chunk 5 — tools panel. Shown only when the recipe lists
+                 tools (Cookbook Chunk 5 vocab). Highlights the tools the
+                 current step needs; un-referenced tools dim out. -->
+            <q-expansion-item
+                v-if="recipeTools.length > 0"
+                default-opened
+                :icon="ICONS.kitchen"
+                header-class="text-subtitle1"
+            >
+                <template #header>
+                    <q-item-section avatar><q-icon :name="ICONS.kitchen" /></q-item-section>
+                    <q-item-section>Tools</q-item-section>
+                    <q-item-section side>
+                        <span class="text-caption dora-text-muted">
+                            {{ recipeTools.length }} total
+                        </span>
+                    </q-item-section>
+                </template>
+                <div class="q-pa-sm row q-gutter-xs">
+                    <q-chip
+                        v-for="tool in recipeTools"
+                        :key="tool.tool_id"
+                        :class="{
+                            'tool-chip--highlighted': highlightedToolIds.has(tool.tool_id),
+                            'tool-chip--dim': highlightedToolIds.size > 0 && !highlightedToolIds.has(tool.tool_id),
+                        }"
+                        dense
+                    >
+                        {{ tool.name }}
+                    </q-chip>
+                </div>
             </q-expansion-item>
 
             <q-expansion-item label="All steps" :icon="ICONS.list" header-class="text-subtitle1">
                 <q-list>
                     <q-item
-                        v-for="(step, idx) in steps"
+                        v-for="(step, idx) in cookSteps"
                         :key="idx"
                         :active="idx === currentStepIndex"
+                        clickable
+                        @click="goToStep(idx)"
+                        :class="{ 'all-steps-row--sub': step.isSubStep }"
                     >
-                        <q-item-section side top>
-                            <q-checkbox
-                                :model-value="doneSteps.has(idx)"
-                                @update:model-value="toggleStepDone(idx)"
-                            >
-                                <q-tooltip>Mark step done (marks its ingredients used)</q-tooltip>
-                            </q-checkbox>
-                        </q-item-section>
                         <q-item-section side>{{ idx + 1 }}.</q-item-section>
-                        <q-item-section clickable @click="goToStep(idx)">{{ step }}</q-item-section>
+                        <q-item-section>{{ step.text }}</q-item-section>
                     </q-item>
                 </q-list>
             </q-expansion-item>
@@ -246,29 +365,93 @@
             </q-card-actions>
         </BaseDialog>
 
-        <!-- Finish flow ─────────────────────────────────────────────────── -->
-        <BaseDialog v-model="finishDialogOpen" card-style="min-width: 360px; max-width: 95vw">
-                <q-card-section class="text-h6">Finished cooking?</q-card-section>
-                <q-card-section class="q-gutter-sm q-pt-none">
-                    <q-toggle v-model="finishUpdateLevels" label="Update stock levels (use up what you cooked with)" />
-                    <q-input
-                        v-model.number="finishMealsCooked"
-                        type="number"
-                        min="0"
-                        label="How many meals did you cook?"
-                        outlined
-                        dense
-                        hint="Added to this recipe's pool. Leave at 0 if you just ate it."
-                    />
-                    <q-toggle v-model="finishAddRanOut" label="Add anything that ran out to a shopping list" />
-                    <div class="text-caption dora-text-muted">
-                        {{ usedIds.size }} ingredient(s) marked used.
-                    </div>
-                </q-card-section>
-                <q-card-actions align="right">
-                    <BaseButton variant="ghost" label="Skip & exit" @click="finishDialogOpen = false; exitCookMode()" />
-                    <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
-                </q-card-actions>
+        <!-- C-3 Chunk 1 — finish-flow rewrite. Per-ingredient level control
+             replaces the old blanket "update stock levels" / "auto-add ran
+             out" toggles; `meals_cooked` defaults to 0 ("just ate it" is the
+             common case); click-out cancels (BaseDialog v-model leaves the
+             state untouched until "Done"). Celebration message lands as a
+             toast after success. -->
+        <BaseDialog v-model="finishDialogOpen" card-style="min-width: 360px; max-width: 720px">
+            <q-card-section class="text-h6">Finished cooking?</q-card-section>
+            <q-card-section v-if="finishRows.length === 0" class="dora-text-muted">
+                This recipe has no ingredients to adjust — tap "Done" to log the meals.
+            </q-card-section>
+            <q-card-section v-else class="q-pt-none">
+                <div class="text-caption dora-text-muted q-mb-sm">
+                    {{ finishRows.length }} ingredient{{ finishRows.length === 1 ? '' : 's' }} used. Pick a stock change for each — defaults to "Down one level".
+                </div>
+                <q-list bordered separator class="finish-list">
+                    <q-item v-for="row in finishRows" :key="row.targetStockItemId">
+                        <q-item-section>
+                            <q-item-label>
+                                <div class="row items-center q-gutter-xs">
+                                    <span class="text-weight-medium">{{ row.targetName }}</span>
+                                    <q-chip
+                                        v-if="row.currentLevelName"
+                                        dense
+                                        :color="row.currentLevelColour ?? undefined"
+                                        :text-color="row.currentLevelColour ? 'white' : undefined"
+                                    >
+                                        {{ row.currentLevelName }}
+                                    </q-chip>
+                                </div>
+                            </q-item-label>
+                            <q-item-label caption>
+                                <q-btn-toggle
+                                    v-model="row.action"
+                                    :options="[
+                                        { label: 'Down one', value: 'down_one' },
+                                        { label: 'Out', value: 'out' },
+                                        { label: 'Unchanged', value: 'unchanged' },
+                                    ]"
+                                    flat
+                                    dense
+                                    no-caps
+                                    spread
+                                    toggle-color="primary"
+                                    class="q-mt-xs"
+                                />
+                                <div class="row items-center q-gutter-sm q-mt-xs">
+                                    <q-select
+                                        v-model="row.overrideLevelId"
+                                        :options="levelSelectOptions"
+                                        option-value="value"
+                                        option-label="label"
+                                        emit-value
+                                        map-options
+                                        dense
+                                        outlined
+                                        clearable
+                                        label="Override to a specific level"
+                                        class="col"
+                                    />
+                                    <BaseButton
+                                        variant="ghost"
+                                        :icon="ICONS.shopping_cart"
+                                        label="Add to list"
+                                        @click="onFinishAddToList(row.targetStockItemId)"
+                                    />
+                                </div>
+                            </q-item-label>
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </q-card-section>
+            <q-card-section class="q-pt-md">
+                <q-input
+                    v-model.number="finishMealsCooked"
+                    type="number"
+                    min="0"
+                    label="How many meals did you cook?"
+                    outlined
+                    dense
+                    hint="Added to this recipe's pool. Leave at 0 if you just ate it."
+                />
+            </q-card-section>
+            <q-card-actions align="right">
+                <BaseButton variant="ghost" label="Cancel" @click="finishDialogOpen = false" />
+                <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
+            </q-card-actions>
         </BaseDialog>
     </div>
 </template>
@@ -280,8 +463,11 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import StockItemChip from 'src/components/chips/StockItemChip.vue';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import { formatQuantity } from 'src/helpers/formatQuantity';
+    import { scaleQuantity } from 'src/helpers/scaleQuantity';
+    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import type { StockLevelName } from 'src/models/stockLevel';
     // P2-13 — extracted browser-speech composables. Cook mode opts into
     // continuous listening so the user can keep their hands in the
     // mixing bowl while saying "next" / "start timer".
@@ -295,6 +481,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -305,6 +492,7 @@
     const router = useRouter();
     const $q = useQuasar();
     const recipeStore = useRecipeStore();
+    const recipeVocabStore = useRecipeVocabStore();
     const locationStore = useLocationStore();
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
@@ -326,6 +514,35 @@
     const recipe = ref<Recipe | null>(null);
     const loading = ref(true);
     const currentStepIndex = ref(0);
+
+    // C-3 Chunk 6 — session-only headcount. Defaults to the recipe's own
+    // `servings` (until C-5 onboarding ships a `household_headcount`
+    // user-setting to seed this). Never writes back to the saved recipe —
+    // matches the B8-substitute discipline of "this cook only".
+    const cookingFor = ref<number>(1);
+    watch(recipe, (next) => {
+        if (next?.servings && next.servings > 0) cookingFor.value = next.servings;
+    }, { immediate: true });
+
+    /** Format a recipe ingredient's quantity for display, rescaled to the
+     *  current headcount and routed through `formatQuantity` for unit
+     *  spacing. The two helpers are deliberately separate — `scaleQuantity`
+     *  owns the rounding (DEC-4), `formatQuantity` owns the spacing (DEC-3).
+     *  Returns an empty string when both quantity and unit are null. */
+    function displayQuantity(quantity: number | null | undefined, unit: string | null | undefined): string {
+        const baseServings = recipe.value?.servings ?? null;
+        const scaled = scaleQuantity(quantity, baseServings, cookingFor.value, unit);
+        return formatQuantity(scaled, unit);
+    }
+
+    /** Re-clamp the headcount input on blur. `q-input.number` lets the user
+     *  type "0" or clear the field (giving NaN); coerce back to a sane
+     *  minimum of 1 so quantities never collapse to zero mid-cook. */
+    function onCookingForBlur() {
+        const value = cookingFor.value;
+        if (!Number.isFinite(value) || value < 1) cookingFor.value = 1;
+        else cookingFor.value = Math.floor(value);
+    }
 
     // ── P2-13 voice (extracted into composables) ────────────────────────
     // The user's persisted preference seeds the local toggle; subsequent
@@ -351,22 +568,108 @@
 
     const timerRemaining = ref<number | null>(null);
     const timerRunning = ref(false);
+    // C-3 Chunk 2 — captured at start so the fill-bar has a stable
+    // denominator even after pause/reset shuffles `timerRemaining`.
+    const timerTotal = ref<number | null>(null);
     let timerIntervalId: ReturnType<typeof setInterval> | null = null;
 
-    const steps = computed(() => {
-        if (!recipe.value?.instructions) return ['No instructions provided.'];
-        const parts = recipe.value.instructions
+    const timerProgress = computed<number>(() => {
+        if (timerTotal.value === null || timerTotal.value <= 0) return 0;
+        if (timerRemaining.value === null) return 1;
+        return Math.max(0, Math.min(1, timerRemaining.value / timerTotal.value));
+    });
+
+    // C-3 Chunk 2 — Sous Chef voice command list, surfaced via the help
+    // popover so users discover the verbs without trial and error.
+    const sousChefCommands: ReadonlyArray<{ label: string; does: string }> = [
+        { label: '"Next"', does: 'advance to the next step' },
+        { label: '"Previous" / "Back"', does: 'go to the previous step' },
+        { label: '"Repeat"', does: 'read the current step again' },
+        { label: '"Start timer"', does: 'start the step timer (uses detected duration, or 5 min)' },
+        { label: '"Pause timer"', does: 'pause the running timer' },
+        { label: '"Reset timer"', does: 'clear the timer' },
+        { label: '"Exit"', does: 'leave cook mode' },
+    ];
+
+    // C-3 Chunk 5 — step model. Structured recipes (Chunk 4) carry a
+    // flat `recipe.steps[]` with optional parent_step_id for one level of
+    // sub-steps and per-step ingredient/tool references; we flatten that to
+    // a linear sequence (top, its subs, next top, …) for navigation.
+    // Unstructured recipes fall back to splitting `instructions` on newline.
+    type CookStep = {
+        text: string;
+        hint: string | null;
+        ingredientIds: string[]; // references RecipeIngredient.recipe_ingredient_id
+        toolIds: string[];       // references Tool.tool_id
+        isSubStep: boolean;
+    };
+
+    const cookSteps = computed<CookStep[]>(() => {
+        const structured = recipe.value?.steps ?? [];
+        if (structured.length > 0) {
+            const flat: CookStep[] = [];
+            const tops = structured
+                .filter((s) => s.parent_step_id === null)
+                .sort((a, b) => a.sequence - b.sequence);
+            for (const top of tops) {
+                flat.push({
+                    text: top.text,
+                    hint: top.hint,
+                    ingredientIds: [...top.ingredient_ids],
+                    toolIds: [...top.tool_ids],
+                    isSubStep: false,
+                });
+                const subs = structured
+                    .filter((s) => s.parent_step_id === top.step_id)
+                    .sort((a, b) => a.sequence - b.sequence);
+                for (const sub of subs) {
+                    flat.push({
+                        text: sub.text,
+                        hint: sub.hint,
+                        ingredientIds: [...sub.ingredient_ids],
+                        toolIds: [...sub.tool_ids],
+                        isSubStep: true,
+                    });
+                }
+            }
+            return flat;
+        }
+        // Unstructured fallback — same shape, empty refs.
+        const raw = recipe.value?.instructions;
+        if (!raw) {
+            return [{
+                text: 'No instructions provided.',
+                hint: null,
+                ingredientIds: [],
+                toolIds: [],
+                isSubStep: false,
+            }];
+        }
+        const parts = raw
             .split(/\r?\n+/)
             .map((s) => s.replace(/^\s*\d+[.)]\s*/, '').trim())
             .filter((s) => s.length > 0);
-        return parts.length > 0 ? parts : [recipe.value.instructions];
+        const lines = parts.length > 0 ? parts : [raw];
+        return lines.map((t) => ({
+            text: t,
+            hint: null,
+            ingredientIds: [],
+            toolIds: [],
+            isSubStep: false,
+        }));
     });
 
-    const currentStep = computed(() => steps.value[currentStepIndex.value] ?? '');
+    // Linear step text (consumed by the speech / nav / timer code that
+    // existed before structured steps landed).
+    const steps = computed(() => cookSteps.value.map((s) => s.text));
 
-    // ── Ingredient "used" tracking ───────────────────────────────────────
-    const usedIds = ref<Set<string>>(new Set());
-    const doneSteps = ref<Set<number>>(new Set());
+    const currentStep = computed(() => steps.value[currentStepIndex.value] ?? '');
+    const currentStepObject = computed<CookStep | null>(
+        () => cookSteps.value[currentStepIndex.value] ?? null,
+    );
+    // (was a `hasStructuredSteps` computed; removed as unused — Chunk 5
+    //  reads `currentStepObject.ingredientIds.length > 0` directly to
+    //  decide whether to apply the text-match fallback.)
 
     type IngredientRow = { ingredient: Recipe['ingredients'][number]; stockItem: StockItem | null };
     const ingredientRows = computed<IngredientRow[]>(() =>
@@ -377,11 +680,86 @@
         })),
     );
 
-    function toggleUsed(stockItemId: string) {
-        if (usedIds.value.has(stockItemId)) usedIds.value.delete(stockItemId);
-        else usedIds.value.add(stockItemId);
-        usedIds.value = new Set(usedIds.value);
-    }
+    // C-3 Chunk 3 — group ingredients by their *base* stock location (the
+    // top-level node of the breadcrumb). Sub-areas collapse into their parent
+    // — "Pantry > Spice Rack" reads as "Pantry" — keeping the mid-cook view
+    // calm. Ingredients with no location land in a final "No location" group.
+    type IngredientGroup = { key: string; label: string; rows: IngredientRow[] };
+    const ingredientGroups = computed<IngredientGroup[]>(() => {
+        const groups = new Map<string, IngredientGroup>();
+        const orderedKeys: string[] = [];
+        for (const row of ingredientRows.value) {
+            const locId = row.ingredient.stock_location_id;
+            let key: string;
+            let label: string;
+            if (locId) {
+                const breadcrumb = breadcrumbFor(locId);
+                label = breadcrumb[0] ?? row.ingredient.stock_location_name ?? 'Other';
+                key = label;
+            } else {
+                key = '__none__';
+                label = 'No location';
+            }
+            if (!groups.has(key)) {
+                groups.set(key, { key, label, rows: [] });
+                orderedKeys.push(key);
+            }
+            groups.get(key)!.rows.push(row);
+        }
+        // Push the "No location" bucket to the bottom so the cook reads the
+        // located groups in order first.
+        const ordered = orderedKeys.map((k) => groups.get(k)!).filter(Boolean);
+        ordered.sort((a, b) => {
+            if (a.key === '__none__') return 1;
+            if (b.key === '__none__') return -1;
+            return 0;
+        });
+        return ordered;
+    });
+
+    // C-3 Chunk 5 — per-step highlight. Structured recipes use the step's
+    // own `ingredient_ids` / `tool_ids` lists; unstructured recipes fall
+    // back to matching ingredient names inside the step text (same logic
+    // as the pre-Chunk-5 auto-mark behaviour, repurposed for visual
+    // highlight rather than tick state).
+    const highlightedIngredientIds = computed<Set<string>>(() => {
+        const step = currentStepObject.value;
+        if (!step) return new Set();
+        if (step.ingredientIds.length > 0) {
+            return new Set(step.ingredientIds);
+        }
+        // Unstructured fallback — text match.
+        const text = step.text.toLowerCase();
+        const matched = new Set<string>();
+        for (const ing of recipe.value?.ingredients ?? []) {
+            if (text.includes(ing.stock_item_name.toLowerCase())) {
+                matched.add(ing.recipe_ingredient_id);
+            }
+        }
+        return matched;
+    });
+
+    const highlightedToolIds = computed<Set<string>>(() => {
+        const step = currentStepObject.value;
+        if (!step) return new Set();
+        return new Set(step.toolIds);
+    });
+
+    // C-3 Chunk 5 — tools panel. Resolves the recipe's `tool_ids` against
+    // the vocab store so the panel can render `{tool_id, name}` rows; only
+    // shown when the recipe references any tools at all.
+    type CookTool = { tool_id: string; name: string };
+    const recipeTools = computed<CookTool[]>(() => {
+        const ids = recipe.value?.tool_ids ?? [];
+        if (ids.length === 0) return [];
+        const vocab = recipeVocabStore.tools;
+        return ids
+            .map((id) => {
+                const match = vocab.find((t) => t.tool_id === id);
+                return match ? { tool_id: id, name: match.name } : null;
+            })
+            .filter((t): t is CookTool => t !== null);
+    });
 
     // ── B8 — temporary, cook-session-only substitutions ─────────────────
     // Picking a substitute here applies ONLY to this cook: it never edits the
@@ -420,25 +798,10 @@
         sessionSwaps.value = new Map(sessionSwaps.value);
     }
 
-    // Mark every ingredient whose name appears in a step's text as used.
-    function markIngredientsUsedInStep(stepText: string) {
-        const text = stepText.toLowerCase();
-        for (const ing of recipe.value?.ingredients ?? []) {
-            if (text.includes(ing.stock_item_name.toLowerCase())) {
-                usedIds.value.add(ing.stock_item_id);
-            }
-        }
-        usedIds.value = new Set(usedIds.value);
-    }
-
-    function toggleStepDone(idx: number) {
-        if (doneSteps.value.has(idx)) doneSteps.value.delete(idx);
-        else {
-            doneSteps.value.add(idx);
-            markIngredientsUsedInStep(steps.value[idx] ?? '');
-        }
-        doneSteps.value = new Set(doneSteps.value);
-    }
+    // C-3 Chunk 5 — `markIngredientsUsedInStep` + `toggleStepDone` removed
+    // along with `usedIds` / `doneSteps`. "Used" is no longer a per-cook
+    // toggle; every ingredient on a recipe is used by definition, and the
+    // finish flow now ranges over `recipe.ingredients` directly.
 
     const detectedTimerMinutes = computed<number | null>(() => {
         const text = currentStep.value.toLowerCase();
@@ -456,7 +819,10 @@
     }
 
     function startTimer(seconds: number) {
-        if (timerRemaining.value === null) timerRemaining.value = seconds;
+        if (timerRemaining.value === null) {
+            timerRemaining.value = seconds;
+            timerTotal.value = seconds;
+        }
         timerRunning.value = true;
         if (timerIntervalId) clearInterval(timerIntervalId);
         timerIntervalId = setInterval(() => {
@@ -467,6 +833,7 @@
                 pauseTimer();
                 $q.notify({ type: 'positive', message: 'Timer finished!', icon: ICONS.timer });
                 if (speechEnabled.value) speak('Timer finished');
+                playTimerFinishTone();
             }
         }, 1000);
     }
@@ -482,6 +849,36 @@
     function resetTimer() {
         pauseTimer();
         timerRemaining.value = null;
+        timerTotal.value = null;
+    }
+
+    // C-3 Chunk 2 — generated beep via WebAudio. Stays silent if the
+    // browser denies audio (PWA / iOS may require a user gesture before any
+    // sound plays; we ignore the failure rather than spam the console). The
+    // toast + voice prompt keep the user informed regardless.
+    function playTimerFinishTone() {
+        try {
+            const AudioCtor: typeof AudioContext | undefined =
+                typeof window !== 'undefined'
+                    ? (window.AudioContext
+                        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+                    : undefined;
+            if (!AudioCtor) return;
+            const ctx = new AudioCtor();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 880; // a brief A5
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.55);
+            osc.onended = () => { void ctx.close(); };
+        } catch {
+            // Silent fallback — see comment above.
+        }
     }
 
     function speak(text: string) {
@@ -509,10 +906,8 @@
 
     function nextStep() {
         resetTimer();
-        // Advancing past a step counts it done and uses up its ingredients.
-        doneSteps.value.add(currentStepIndex.value);
-        doneSteps.value = new Set(doneSteps.value);
-        markIngredientsUsedInStep(currentStep.value);
+        // C-3 Chunk 5 — no more per-step tick state; advancing just navigates
+        // (or opens the finish flow when we've run out of steps).
         if (currentStepIndex.value < steps.value.length - 1) {
             currentStepIndex.value += 1;
         } else {
@@ -533,19 +928,79 @@
     }
 
     // ── Finish flow ──────────────────────────────────────────────────────
+    // C-3 Chunk 1 — per-ingredient finish checklist. The blanket
+    // `finishUpdateLevels` / `finishAddRanOut` toggles are gone; each used
+    // ingredient gets its own action (`down_one` / `out` / `unchanged`) with
+    // an optional override to any specific level. `meals_cooked` defaults to
+    // 0 ("just ate it" is the common case).
+    type FinishAction = 'down_one' | 'out' | 'unchanged';
+    type FinishRow = {
+        // After session swaps: the stock item whose level we actually
+        // touch on finish (the substitute, not the original recipe item).
+        targetStockItemId: string;
+        targetName: string;
+        currentLevelId: string | undefined;
+        currentLevelName: string | null;
+        currentLevelColour: string | null;
+        action: FinishAction;
+        overrideLevelId: string | null;
+    };
     const finishDialogOpen = ref(false);
     const finishing = ref(false);
-    const finishUpdateLevels = ref(true);
-    const finishMealsCooked = ref<number>(1);
-    const finishAddRanOut = ref(true);
+    const finishMealsCooked = ref<number>(0);
+    const finishRows = ref<FinishRow[]>([]);
+
+    const levelSelectOptions = computed(() =>
+        [...stockLevels.value]
+            .sort((a, b) => a.sequence - b.sequence)
+            .map((l) => ({ value: l.stock_level_id, label: l.name })),
+    );
+
+    function levelNameById(levelId: string | undefined): string | null {
+        if (!levelId) return null;
+        return stockLevels.value.find((l) => l.stock_level_id === levelId)?.name ?? null;
+    }
+    function levelColourById(levelId: string | undefined): string | null {
+        const name = levelNameById(levelId);
+        if (!name) return null;
+        try {
+            return getStockLevelColour(name as StockLevelName);
+        } catch {
+            return null;
+        }
+    }
+
+    function buildFinishRows(): FinishRow[] {
+        // C-3 Chunk 5 — finish ranges over every ingredient on the recipe,
+        // applying any session swaps. The user no longer ticks ingredients
+        // mid-cook; cooking the recipe implies using all of them.
+        const rows: FinishRow[] = [];
+        for (const ing of recipe.value?.ingredients ?? []) {
+            const swap = sessionSwaps.value.get(ing.stock_item_id);
+            const targetId = swap?.substituteId ?? ing.stock_item_id;
+            const item = stockItems.value.find((si) => si.stock_item_id === targetId);
+            const fallbackName = swap?.substituteName ?? ing.stock_item_name;
+            rows.push({
+                targetStockItemId: targetId,
+                targetName: item?.name ?? fallbackName,
+                currentLevelId: item?.stock_level_id,
+                currentLevelName: levelNameById(item?.stock_level_id),
+                currentLevelColour: levelColourById(item?.stock_level_id),
+                action: 'down_one',
+                overrideLevelId: null,
+            });
+        }
+        return rows;
+    }
 
     function openFinish() {
         pauseTimer();
+        finishRows.value = buildFinishRows();
         finishDialogOpen.value = true;
     }
 
-    // The next level "down" toward Out of Stock (one higher sequence).
-    function nextLowerLevelId(currentLevelId: string): string | null {
+    function nextLowerLevelId(currentLevelId: string | undefined): string | null {
+        if (!currentLevelId) return null;
         const current = stockLevels.value.find((l) => l.stock_level_id === currentLevelId);
         if (!current) return null;
         const lower = stockLevels.value
@@ -554,63 +1009,82 @@
         return lower?.stock_level_id ?? null;
     }
 
-    function isLowOrOut(levelId: string | undefined): boolean {
-        const name = stockLevels.value.find((l) => l.stock_level_id === levelId)?.name;
-        return name === 'Low Stock' || name === 'Out of Stock';
+    function outOfStockLevelId(): string | null {
+        const out = stockLevels.value.find((l) => l.name === 'Out of Stock');
+        return out?.stock_level_id ?? null;
+    }
+
+    /** Resolve a row's stated intent into the level id to write (or null
+     *  to leave the stock alone). Override wins over the action chips. */
+    function resolveTargetLevel(row: FinishRow): string | null {
+        if (row.overrideLevelId) return row.overrideLevelId;
+        switch (row.action) {
+            case 'down_one': return nextLowerLevelId(row.currentLevelId);
+            case 'out': return outOfStockLevelId();
+            case 'unchanged': return null;
+        }
+    }
+
+    async function onFinishAddToList(stockItemId: string) {
+        const targetId = shoppingListStore.quickAddTargetListId;
+        if (!targetId) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'No active shopping list — set a primary list first.',
+            });
+            return;
+        }
+        try {
+            await slActions.addItems(targetId, [{ stock_item_id: stockItemId }]);
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Added to your shopping list.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not add to shopping list.',
+            });
+            console.warn('add-to-list failed during finish', err);
+        }
     }
 
     async function confirmFinish() {
         finishing.value = true;
         try {
-            // A session-substituted ingredient means the *substitute* was the
-            // thing actually used — so decrement / restock that item, not the
-            // original the recipe lists.
-            const used = [...usedIds.value].map(
-                (id) => sessionSwaps.value.get(id)?.substituteId ?? id,
+            // Fan out per-row level updates with fail-soft semantics: one
+            // failed item doesn't take down the rest of the batch.
+            const updates = finishRows.value
+                .map((row) => {
+                    const target = resolveTargetLevel(row);
+                    if (!target || target === row.currentLevelId) return null;
+                    return { stock_item_id: row.targetStockItemId, stock_level_id: target };
+                })
+                .filter((u): u is NonNullable<typeof u> => u !== null);
+            await Promise.allSettled(
+                updates.map((u) => stockItemStore.updateStockLevelAsync(u)),
             );
 
-            if (finishUpdateLevels.value) {
-                for (const id of used) {
-                    const item = stockItems.value.find((si) => si.stock_item_id === id);
-                    if (!item) continue;
-                    const next = nextLowerLevelId(item.stock_level_id);
-                    if (next && next !== item.stock_level_id) {
-                        await stockItemStore.updateStockLevelAsync({
-                            stock_item_id: id,
-                            stock_level_id: next,
-                        });
-                    }
-                }
-            }
-
+            let mealsCooked = 0;
             if (recipe.value) {
-                const n = Math.max(0, Math.floor(finishMealsCooked.value || 0));
-                await recipeStore.cookAsync(recipe.value.recipe_id, n);
+                mealsCooked = Math.max(0, Math.floor(finishMealsCooked.value || 0));
+                await recipeStore.cookAsync(recipe.value.recipe_id, mealsCooked);
             }
 
-            if (finishAddRanOut.value) {
-                // After decrementing, anything now low/out is a candidate to
-                // restock. Read fresh levels from the store.
-                const ranOut = used.filter((id) => {
-                    const item = stockItems.value.find((si) => si.stock_item_id === id);
-                    return item && isLowOrOut(item.stock_level_id);
-                });
-                const primary = shoppingListStore.quickAddTargetListId;
-                if (ranOut.length > 0 && primary) {
-                    await slActions.addItems(
-                        primary,
-                        ranOut.map((id) => ({ stock_item_id: id })),
-                    );
-                } else if (ranOut.length > 0) {
-                    $q.notify({
-                        type: 'info',
-                        position: 'bottom-right',
-                        message: 'Set a primary shopping list to auto-add ran-out items.',
-                    });
-                }
-            }
-
-            $q.notify({ type: 'positive', message: 'Nice cooking!', icon: ICONS.check_circle });
+            // Celebration. Copy reads off `meals_cooked` per L337 / DEC-5.
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                timeout: 4000,
+                message:
+                    mealsCooked === 0
+                        ? 'All eaten — hope it was good.'
+                        : `You saved ${mealsCooked} meal${mealsCooked === 1 ? '' : 's'} — enjoy.`,
+                icon: ICONS.check_circle,
+            });
             finishDialogOpen.value = false;
             exitCookMode();
         } finally {
@@ -622,7 +1096,10 @@
         pauseTimer();
         if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
         stopListening();
-        void router.push('/recipes');
+        // L298 — exit returns to the recipe's detail page (where the user
+        // came from), not all the way back to the cookbook overview.
+        const id = route.params.id as string;
+        void router.push(id ? `/recipes/${id}` : '/cookbook');
     }
 
     function handleKeydown(event: KeyboardEvent) {
@@ -665,12 +1142,6 @@
         } else if (/(^|\s)(reset timer|clear timer)(\s|$)/.test(transcript)) {
             resetTimer();
             if (speechEnabled.value) speak('Timer reset.');
-        } else if (/(^|\s)(mark done|step done|tick step|done)(\s|$)/.test(transcript)) {
-            // Mark the *current* step done without auto-advancing —
-            // "next" stays explicit. Mirrors tapping the checkbox in
-            // the step list rather than the big Next button.
-            toggleStepDone(currentStepIndex.value);
-            if (speechEnabled.value) speak('Step marked done.');
         } else if (/(^|\s)(stop|exit|quit)(\s|$)/.test(transcript)) {
             exitCookMode();
         }
@@ -696,8 +1167,11 @@
             if (recipeStore.recipes.length === 0) {
                 await recipeStore.getRecipesAsync();
             }
-            const fromStore = recipeStore.recipes.find((r) => r.recipe_id === recipeId);
-            recipe.value = fromStore ?? (await recipeApiService.getAsync(recipeId));
+            // C-3 Chunk 5 — the list endpoint doesn't return `steps[]`
+            // (only `has_structured_steps`), and cook mode needs structured
+            // steps for per-step highlights / hints. Always fetch detail so
+            // `recipe.value.steps` is present when the recipe has them.
+            recipe.value = await recipeApiService.getAsync(recipeId);
         } catch {
             recipe.value = null;
         } finally {
@@ -711,11 +1185,13 @@
         }
 
         // Stock items + levels back the ingredient chips and the finish flow;
-        // membership/primary feed the "add ran-out items" step.
+        // membership/primary feed the "add ran-out items" step; tools vocab
+        // (Chunk 5) feeds the per-step tools panel.
         await Promise.all([
             stockItems.value.length === 0 ? stockItemStore.getStockItemsAsync() : Promise.resolve(),
             stockLevels.value.length === 0 ? stockLevelStore.getStockLevelsAsync() : Promise.resolve(),
             shoppingListStore.refreshAsync(),
+            recipeVocabStore.tools.length === 0 ? recipeVocabStore.getToolsAsync() : Promise.resolve(),
         ]);
     });
 
@@ -729,7 +1205,7 @@
     });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
     .cook-mode {
         max-width: 900px;
         margin: 0 auto;
@@ -740,5 +1216,61 @@
     .step-text {
         line-height: 1.4;
         font-weight: 400;
+    }
+    // C-3 Chunk 3 — calm location-grouped ingredient cards. No mid-cook
+    // stock-level colour noise; just legible names + quantities.
+    .ingredient-group {
+        background: var(--surface-card);
+    }
+    .ingredient-quantity {
+        min-width: 64px;
+    }
+    .ingredient-name {
+        font-weight: 500;
+    }
+    // C-3 Chunk 2 — fill-bar visually echoes the MM:SS countdown.
+    .timer-bar {
+        transition: opacity var(--motion-normal, 200ms) ease;
+    }
+    .timer-text {
+        font-variant-numeric: tabular-nums;
+    }
+    .sous-chef-help {
+        min-width: 300px;
+        max-width: 360px;
+    }
+    .finish-list {
+        max-height: 50vh;
+        overflow-y: auto;
+        border-radius: var(--radius-md);
+    }
+    // C-3 Chunk 5 — per-step highlight. A soft tint + accented border on
+    // ingredient rows / tool chips that the current step references; the
+    // unhighlighted neighbours dim slightly when at least one highlight is
+    // active, so the eye lands where it should.
+    .ingredient-row--highlighted {
+        background: var(--semantic-info-soft, color-mix(in srgb, var(--brand-primary) 12%, transparent));
+        border-left: 3px solid var(--brand-primary);
+    }
+    .tool-chip--highlighted {
+        background: var(--brand-primary) !important;
+        color: var(--text-on-primary, white) !important;
+        font-weight: 500;
+    }
+    .tool-chip--dim {
+        opacity: 0.55;
+    }
+    .all-steps-row--sub {
+        padding-left: 32px;
+    }
+    .step-hint {
+        line-height: 1.4;
+    }
+    // C-3 Chunk 6 — headcount input.
+    .cook-header {
+        flex-wrap: wrap;
+    }
+    .cooking-for {
+        white-space: nowrap;
     }
 </style>

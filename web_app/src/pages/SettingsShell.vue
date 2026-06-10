@@ -105,6 +105,12 @@
             icon: ICONS.label
         },
         {
+            path: '/settings/recipe-vocab',
+            label: 'Recipe tags & categories',
+            caption: 'Cuisines, categories, dietary tags',
+            icon: ICONS.menu_book
+        },
+        {
             path: '/settings/account',
             label: 'Account',
             caption: 'Your profile and sign-out',

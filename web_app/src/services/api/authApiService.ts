@@ -31,6 +31,16 @@ export type UpdateMeCommand = {
     /** P2-13 — voice opt-in toggles. Saved per user. */
     voice_input_enabled?: boolean;
     voice_output_enabled?: boolean;
+    /** C-cross Chunk 2 — per-user money-features opt-in. Layered with the
+     *  install-wide `money_enabled` flag via `useMoneyEnabled()`. */
+    money_features_enabled?: boolean;
+    /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
+     *  when no nutrition source has been configured (admin seam). */
+    nutrition_mode?: 'off' | 'simple' | 'complex';
+    /** C-cross Chunk 5 — per-user image-display opt-ins. Saved photos
+     *  survive a toggle (only rendering is suppressed). */
+    show_recipe_images?: boolean;
+    show_stock_images?: boolean;
 };
 export type ChangePasswordCommand = {
     current_password: string;

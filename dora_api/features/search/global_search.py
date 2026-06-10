@@ -181,7 +181,12 @@ class GlobalSearchHandler:
                     query, "recipe", limit,
                     [(r.id, r.name) for r in recipes],
                     subtitle_by_id={
-                        r.id: r.cuisine or r.category or None for r in recipes
+                        # cuisine/category are FK entities (selectin-loaded).
+                        r.id: (
+                            (r.cuisine.name if r.cuisine else None)
+                            or (r.category.name if r.category else None)
+                        )
+                        for r in recipes
                     },
                 )
             )

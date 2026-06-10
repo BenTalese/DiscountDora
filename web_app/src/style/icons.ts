@@ -25,6 +25,12 @@ export const ICONS = {
     add_link: 'mdi-link-plus',
     add_shopping_cart: 'mdi-cart-plus',
     arrow_back: 'mdi-arrow-left',
+    arrow_downward: 'mdi-arrow-down',
+    arrow_upward: 'mdi-arrow-up',
+    subdirectory_arrow_right: 'mdi-subdirectory-arrow-right',
+    notes: 'mdi-note-text-outline',
+    payments: 'mdi-cash',
+    record_voice_over: 'mdi-microphone-message',
     auto_awesome: 'mdi-auto-fix',
     bolt: 'mdi-lightning-bolt',
     bookmark: 'mdi-bookmark',
@@ -177,6 +183,7 @@ export const ICONS = {
     // `icon` is a placeholder used as a fallback when no specific icon
     // was supplied — render as a neutral help glyph rather than nothing.
     icon: 'mdi-help-box-outline',
+    image: 'mdi-image',
     image_not_supported: 'mdi-image-off',
     inbox: 'mdi-inbox',
     info_outline: 'mdi-information-outline',

@@ -21,7 +21,9 @@
             <!-- Identity chip — opens the detail page. -->
             <StockItemChip :stock-item="item" @click.stop />
 
-            <!-- Location chip → bubble up "filter to this location". -->
+            <!-- Location chip → bubble up "filter to this location".
+                 C-cross Chunk 4: displays zone; tooltip reveals full
+                 breadcrumb when one exists. -->
             <q-chip
                 v-if="item.stock_location_id"
                 dense
@@ -32,7 +34,10 @@
                 @click.stop="emit('filter-location', item.stock_location_id!)"
             >
                 {{ locationName }}
-                <q-tooltip>Filter to this location</q-tooltip>
+                <q-tooltip>
+                    <span v-if="locationHasFullDetail">{{ locationFull }} · </span>
+                    Filter to this location
+                </q-tooltip>
             </q-chip>
 
             <!-- On N lists chip — opens a menu of those lists. -->
@@ -197,6 +202,8 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
+    import { useLocationStore } from 'src/stores/locationStore';
+    import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
     import { computed, ref } from 'vue';
 
     const props = defineProps<{
@@ -220,6 +227,7 @@
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
+    const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
     const recipeStore = useRecipeStore();
 
@@ -233,11 +241,23 @@
         if (!id) return '';
         return stockLevels.value.find((l) => l.stock_level_id === id)?.name ?? '';
     });
-    const locationName = computed(() => {
+    // C-cross Chunk 4 — show the *zone* (top-level breadcrumb node), not
+    // the leaf location name. "Right shelf" → "Pantry"; users can see the
+    // full breadcrumb via tooltip below.
+    const locationBreadcrumb = computed<readonly string[]>(() => {
         const id = props.item.stock_location_id;
-        if (!id) return '';
-        return stockLocations.value.find((l) => l.stock_location_id === id)?.name ?? '';
+        if (!id) return [];
+        // Prefer the tree-based breadcrumb; fall back to the flat name if
+        // the tree hasn't loaded yet (first render of a freshly-opened
+        // page).
+        const path = locationStore.breadcrumb(id);
+        if (path.length > 0) return path;
+        const flat = stockLocations.value.find((l) => l.stock_location_id === id)?.name;
+        return flat ? [flat] : [];
     });
+    const locationName = computed(() => formatLocation(locationBreadcrumb.value, 'zone'));
+    const locationFull = computed(() => formatLocation(locationBreadcrumb.value, 'full'));
+    const locationHasFullDetail = computed(() => locationHasDetail(locationBreadcrumb.value));
 
     // ── Recipes referencing this item ───────────────────────────────────
     const recipesUsingItem = computed(() => {

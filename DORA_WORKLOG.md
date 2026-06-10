@@ -9,6 +9,1752 @@ next.
 
 ---
 
+## 2026-06-09 — FU-087 FilterBar fix + R-011 (framework-idiomatic patterns)
+**Status:** complete (code + standards).
+**What changed:**
+- **`FilterBar.vue` rewritten** using Vue 3.4 `defineModel()` (current
+  recommended v-model macro) — replaces a hand-rolled controlled/uncontrolled
+  `modelValue` prop + `update:modelValue` emit + `computed` getter/setter.
+  Function-typed default (`() => $q.screen.gt.sm`) sidesteps Vue's Boolean-prop
+  coercion that silently pinned `expanded` to `false` on every consumer.
+- **New `src/boot/quasarScreen.ts`** calls `Screen.setDebounce(100)` —
+  the Quasar 2.x-documented way to activate the Screen plugin. Without it,
+  `$q.screen.width` was 0 and every breakpoint flag returned `false`,
+  defeating the "open on desktop" default app-wide.
+- **R-011 + ADR-004** added to `ENGINEERING_STANDARDS.md`: "use the
+  framework's idiomatic, current-recommended pattern" — prevents future
+  hand-rolled equivalents of features the framework already ships.
+**Decisions made:**
+- Two latent bugs collided in FilterBar: the Boolean-prop coercion + the
+  unactivated Screen plugin. Each alone is invisible (no console output,
+  no type error); together the panel never opened on any page using
+  FilterBar (Cookbook, Stock Overview).
+- Chose `defineModel()` over the previous manual pattern because Vue 3.4
+  documents it as the v-model recommendation and it removes the foot-gun
+  entirely. Function default chosen over `local: true` because Quasar
+  `$q.screen.gt.sm` needs setup-context access, and a function default
+  evaluates once during prop resolution.
+- Promoted to a standing rule (R-011) per user request — every future
+  reach for "Quasar/Vue idiomatic, current-recommended" needs to be the
+  first instinct, not a hand-rolled equivalent.
+**Files touched:** `web_app/src/components/FilterBar.vue`,
+`web_app/src/boot/quasarScreen.ts` (new), `web_app/quasar.config.ts`,
+`docs/01_charter/ENGINEERING_STANDARDS.md` (R-011 + ADR-004),
+`CHANGELOG.md` (Unreleased Fixed), `DORA_FOLLOWUPS.md` (FU-087 RESOLVED).
+**Verification:**
+- Static only — patched component compiles in shape; no dev server run.
+- User confirmed root cause via DOM inspection: `display: none` on
+  `.filter-bar__panel`, `expanded: false`, `internal: undefined` (the ref
+  was being bypassed), `modelValue prop: false` (the smoking gun — Boolean
+  coercion). Forcing `internal.value = true` made the panel open.
+- Not yet verified end-to-end in browser after the patch — user to reload.
+**Next up:**
+1. **User reloads Cookbook / Stock Overview**, confirms filter panel is
+   open by default on desktop + toggle button collapses/expands.
+2. With FU-087 unblocked, return to the **browser-verify backlog**:
+   FU-083 (Cookbook Chunk 1), filter half of FU-085 (Chunk 2), then
+   FU-088 / FU-089 / FU-091 (Chunks 3–5).
+3. P6-01 chain (FU-066/068/069/072/073/075/076) is independent and can
+   slot in any time.
+**Open questions for user:** none — clear to verify in browser.
+
+---
+
+## 2026-06-11 — IMPL_PLAN_COOKBOOK Chunk 9 (cost + simple nutrition, opt-in) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). First
+cookbook-side consumer of the C-cross foundations. Closes §2.8 + §2.9 +
+L254 / L262 / L263 / L287 + DEC-4 + DEC-5.
+
+**What changed — Backend:**
+- **`Recipe.kcal: int | None`** entity field + `Fields.KCAL`. Mapped
+  on `recipe_table` as nullable Integer. Updated all three Recipe
+  constructors (`create_recipe.py`, `new_recipe_version.py`,
+  `seed.py`) to pass it through.
+- **Migration `e5b9d2c8a4f3`** (down_rev = `d4a7c9b3e8f1`). Batch-mode
+  add nullable kcal column; symmetric downgrade.
+- **`CreateRecipeRequest` / `UpdateRecipeRequest`** accept `kcal` as
+  `int | None` (`ge=0, le=100_000`); `_NULLABLE_PLAIN_ATTRS` updated
+  so PATCH-with-explicit-null clears.
+- **`RecipeDto.kcal`** carried through every endpoint.
+- **`RecipeDto.estimated_cost: float | None`** + companion
+  `estimated_cost_priced_count: int` + `estimated_cost_total_count:
+  int`. Populated **only on the detail endpoint** via
+  `_compute_estimated_cost()` — a single SQL pass that joins
+  `RecipeIngredient → StockItemProduct → Product → ProductOffer`,
+  groups by stock_item, takes MIN(price_now) per item (cheapest
+  current offer), divides by product `size_value` for a per-unit
+  price, then multiplies by `ingredient.quantity`. Recipe-level total
+  rounded to 2dp. The companion counts let the UI render
+  "based on N of M priced" so the user reads the number as an
+  estimate, not a quote.
+- **No render gates inside this chunk on the server.** The flags are
+  client-side per ADR-005: client gates render, server always returns
+  the value. (The plan's "cost estimate runs without budget number"
+  rule from C-cross §4-1 already lives in the composable layering.)
+
+**What changed — Frontend:**
+- **`models/recipe.ts`** + **`UpdateRecipeCommand`** /
+  **`CreateRecipeCommand`** extended with `kcal` and (on the model
+  only) the three estimated-cost fields.
+- **`RecipeDetailPage.vue`**:
+  - **Editor**: new `q-input` for kcal-per-serving, sitting next to
+    the existing servings / prep / cook inputs, **gated on
+    `useNutritionMode().nutritionEnabled`**. Form gained `kcal:
+    number | null`; hydrate + save plumbing wired through
+    `toIntOrNull` for the wire shape.
+  - **Sidebar**: new **Estimated cost** card under Last cooked,
+    gated on `useMoneyEnabled().moneyEnabled && recipe.estimated_cost
+    !== null`. Renders the price + a help-icon tooltip explaining the
+    math + a "(N / M ingredients priced)" coverage badge.
+  - **Sidebar**: new **Nutrition (per serving)** card, gated on
+    `nutritionEnabled && recipe.kcal !== null`. Read-only echo of the
+    editor field.
+  - **Freeform Nutrition expansion-item removed from the template.**
+    The form's `nutrition` ref still exists + still round-trips
+    through PATCH, so existing data is preserved; just hidden from
+    the UI per the IMPL plan. Logged as FU-115 for the eventual
+    column drop.
+- **`RecipesOverview.vue`**:
+  - **Sort axis "Kcal"** added to `SORT_OPTIONS` (now a computed),
+    gated on `nutritionEnabled`. Null-safe comparator (recipes
+    without a kcal value sink to the bottom in either direction).
+    Direction tooltip phrasing per axis ("Lowest kcal first" /
+    "Highest kcal first").
+  - **"Kcal ≤" filter input** added to the filter row, gated on
+    `nutritionEnabled`. Recipes without a kcal value pass through
+    so the filter doesn't punish unannotated recipes. Wired into
+    `activeFilterCount` + `clearFilters` + the "has-any-filter"
+    flag.
+  - **Snap guard**: if the user has Kcal as their sort axis and
+    nutrition then flips off (Settings → Off or install-level
+    disable), `watch(nutritionEnabled)` snaps `sortBy` back to
+    `name`.
+- **Icons**: added `payments` (`mdi-cash`) for the cost card; the
+  existing `monitor_heart` icon serves the nutrition card.
+
+**Decisions made:**
+- **MIN(price_now) per linked product** instead of average / latest.
+  Simple heuristic for v1 — when two products link to the same
+  stock item, pick the cheapest. A future preference (favourite
+  product / merchant) is out of scope for Chunk 9; logged as a
+  consideration in the worklog rather than a separate FU because
+  it's mostly a future-pricing question, not a missing piece today.
+- **Round to 2 decimal places** server-side; the UI doesn't get to
+  show 6 decimals of false precision.
+- **Recipes without `kcal` pass the kcal filter** rather than being
+  hidden as unknown. Hiding them punishes recipes the user hasn't
+  annotated yet, which discourages partial use of the feature.
+- **Estimated cost is detail-only**, not on the list/card. The math
+  is meaningful per recipe but a wall of estimates on the cookbook
+  overview would feel cheap / commercial; users open detail when
+  they want the number.
+- **Freeform Nutrition column NOT dropped here.** Per the IMPL
+  plan: keep it in the DB until we're sure no user has typed
+  something irreplaceable in there. Logged as FU-115 to drop.
+- **Engineering close-gate:** R-001 (one composable per family per
+  ADR-005; gates reused — `useMoneyEnabled` / `useNutritionMode`
+  already shipped); R-002 (no palette colours; cost icon uses an
+  existing token-driven `dora-text-muted`); R-003 (cost math
+  server-side, single source of truth — Charter / DEC-5);
+  R-005/R-006 (clean batch migration; symmetric downgrade);
+  R-007 (kept scope tight — favourite-product logic deferred;
+  freeform Nutrition column not dropped opportunistically);
+  R-008 (concise comments at each new render gate); R-010 (typed
+  SortKey union extended to include `kcal`); R-011 (Vue 3.4
+  composables; Quasar primitives — `q-input`, `q-card`).
+
+**Files touched:**
+- BE: `domain/entities/recipe.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/e5b9d2c8a4f3_20260611_recipe_kcal.py`
+  (new), `features/recipes/create_recipe.py`,
+  `features/recipes/update_recipe.py`,
+  `features/recipes/new_recipe_version.py`,
+  `features/recipes/get_recipes.py`,
+  `persistence/seed.py`.
+- FE: `models/recipe.ts`, `services/api/recipeApiService.ts`,
+  `pages/RecipeDetailPage.vue`,
+  `pages/RecipesOverview.vue`, `style/icons.ts` (payments).
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-115 column drop +
+  FU-116 verify).
+
+**Verification:**
+- Static only. Schema + DTO + request field counts match. Cost SQL
+  joins follow the existing `StockItemProduct` schema; takes
+  `MIN(price_now)` so duplicates don't double-count.
+- Not run in a browser. **FU-116** carries the verify checklist.
+
+**Next up:**
+1. **FU-116** browser-verify Chunk 9 (migration, kcal editor / filter
+   gated correctly, cost card renders when ingredients link to
+   products, math reads sensibly).
+2. **Cookbook Chunk 10** (multi-part sections) is the last
+   cookbook chunk — the biggest ripple. Or pivot to a non-cookbook
+   chunk now that the C-cross foundations are in.
+
+**Open questions for user:** none. Layering matches proposal §2.2 +
+§2.3.
+
+---
+
+## 2026-06-11 — C-cross Chunk 5 (image-display opt-in + FU-090 deferred-column fix) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env).
+Final pre-consumer C-cross chunk. Closes proposal §2.8 +
+**FU-090** (recipe-list query loaded image blobs).
+
+**What changed — Backend:**
+- **`User.show_recipe_images: bool`** (default **True**) +
+  **`User.show_stock_images: bool`** (default **True**) + matching
+  Fields constants. Default-on per proposal §4-6 — Charter P1
+  Effortless leans toward visual richness; users opt out.
+- **Migration `d4a7c9b3e8f1`** (down_rev = `c8d3f4a9b2e1`). Batch-mode
+  add columns + symmetric downgrade.
+- `PATCH /api/users/me` (`update_me.py`) accepts both fields with
+  partial-update semantics. `AuthenticatedUserDto` exposes them.
+- **FU-090 closure — recipe image column now deferred.** Added
+  `deferred(recipe_table.c.image)` to the Recipe mapping (import
+  `deferred` from `sqlalchemy.orm`). The image blob is no longer
+  loaded for any recipe-list query.
+- **`get_recipes.py`**: `RecipeDto.from_entity` no longer accesses
+  `recipe.image` (that would now trigger an N+1 lazy load per row);
+  defaults `has_image=False`. New `_hydrate_has_image()` helper
+  does a single bulk `SELECT id, image IS NOT NULL FROM Recipe
+  WHERE id IN (...)` — runs in both `handle()` (list) and
+  `handle_by_id()` (detail) paths. Image-bytes endpoint
+  (`get_recipe_image`) still loads the blob via `recipe.image`
+  attribute access (one query per detail call, the intended path).
+
+**What changed — Frontend:**
+- **`models/auth.ts`** + **`UpdateMeCommand`** types extended with the
+  two booleans.
+- **`useImagePrefs()`** composable (new). ADR-005 family pattern; no
+  install-wide layer (proposal §2.8 explicitly: these are personal
+  UI prefs, not capability gates). Returns `showRecipeImages` /
+  `showStockImages` computeds + `setRecipeImages(v)` /
+  `setStockImages(v)` setters that route through
+  `authStore.updateMeAsync()` (same channel cook-mode's voice
+  toggle uses). Defaults to `true` when the user hasn't loaded
+  yet so first paint shows photos (no flash of placeholders).
+- **`RecipesOverview.vue`** inline toggle button — icon flips between
+  `ICONS.image` (on) / `ICONS.image_not_supported` (off); ghost
+  variant; tooltip explains "saved across sessions" so users know
+  this isn't a one-shot view toggle. Optimistic-flip via
+  `useImagePrefs().setRecipeImages`; rollback via the authStore on
+  PATCH error.
+- **`RecipeCard.vue`** — image render gated on
+  `showRecipeImages && recipe.has_image && !imgFailed`. When the
+  flag is off, the `<img>` never mounts, so the bytes endpoint
+  isn't fetched (real network saving, verified by DevTools-readable
+  in browser-verify).
+- **`RecipeDetailPage.vue`** — `imagePreviewUrl` computed gates the
+  saved-image branch on `showRecipeImages`. A freshly-picked image
+  (during editing) still renders so the user can see what they're
+  about to save; the editor itself (`RecipeImageField` pick/clear)
+  stays fully live — per the IMPL plan's "editor stays usable"
+  carve-out.
+- **Stock-side render sites** — wired *as no-ops* (no
+  `StockItem.image` render exists today; FU-033 deferred). The
+  composable + flag are ready when FU-033 + C-1 Stock Overview
+  Chunk 3 (row redesign + collapse/expand button) consume them.
+  **FU-106** already logs the stock-overview button as deferred
+  to that chunk.
+- **No print/cook-mode/edit-dialog image surfaces touched** — grep
+  confirmed they don't render `recipeImageUrl` today.
+
+**Decisions made:**
+- **Defaults TRUE for both flags** per proposal §4-6 recommendation
+  (P1 Effortless). Users opt out, not in.
+- **Two separate flags**, not one — recipes carry hero photos, stock
+  items rarely do; users might genuinely want one on and the other
+  off. Trivial extra column.
+- **No install-wide layer** for image rendering (proposal §2.8 spelled
+  this out: these are personal UI prefs, not policy). The composable
+  reads only the per-user value.
+- **FU-090 via deferred column + bulk has_image hydrator** (not
+  `column_property` or a `with_expression`). Three reasons: matches
+  the existing tag/tool/structured-steps hydrator pattern; keeps the
+  Recipe entity definition simple (no `has_image` attribute on the
+  dataclass that would be SQL-derived); makes the "we never touch
+  the blob" guarantee easy to audit by grep.
+- **Engineering close-gate:** R-001 (one shared composable + one
+  guard shape repeated on render sites); R-002 (no palette colours);
+  R-003 (server owns the flag + the image bytes); R-005/R-006 (clean
+  batch migration with conservative defaults); R-007 (stock-side
+  guard wired as no-op; doesn't pull FU-033 forward); R-008 (terse
+  comments at each render gate); R-011 (Vue 3.4 composable pattern,
+  SQLAlchemy `deferred()` is the documented way to defer a column).
+
+**Files touched:**
+- BE: `domain/entities/user.py`,
+  `persistence/table_mappings.py` (deferred column + new User cols),
+  `persistence/migrations/versions/d4a7c9b3e8f1_20260611_user_image_optins.py`
+  (new),
+  `features/auth/update_me.py`, `features/auth/register_user.py`,
+  `features/recipes/get_recipes.py` (deferred-safe `has_image`).
+- FE: `composables/useImagePrefs.ts` (new),
+  `models/auth.ts`, `services/api/authApiService.ts`,
+  `pages/RecipesOverview.vue` (inline toggle button),
+  `components/RecipeCard.vue` (render gate),
+  `pages/RecipeDetailPage.vue` (saved-preview gate).
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-114 verify; flips
+  FU-090 to RESOLVED).
+
+**Verification:**
+- Static only. Grep-confirmed `recipe.image` is no longer accessed
+  anywhere in `get_recipes.py`'s hot path; the bytes endpoint still
+  reads it intentionally. The two render gates point at the same
+  composable.
+- Not run in a browser. **FU-114** carries the verify checklist.
+
+**Next up:**
+1. **FU-114** browser-verify Chunk 5 (toggle round-trip, image render
+   gates, **DevTools Network tab confirms `/recipes/<id>/image` is
+   NOT hit when the flag is off**, recipe list endpoint smaller in
+   bandwidth).
+2. **All C-cross pre-consumer chunks (1–5) are now done.** The
+   plumbing is in place for C-4 Chunk 9 (cost + nutrition) and
+   future consumers (C-2 plan budgets, dashboard money gates,
+   FU-033 stock images, C-1 Chunk 3 stock-image toggle).
+3. **C-4 Chunk 9 (cost + nutrition)** is the next logical move —
+   first cookbook-side consumer of the C-cross foundations. Or
+   C-cross Chunk 6 (taxonomy editors verify-only) for completeness.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-11 — C-cross Chunk 4 (location-display policy) — IMPLEMENTED
+**Status:** complete (frontend only — proposal §2.5 said backend = none).
+Closes L81 / L107 / L128 (display half) per IMPL plan.
+
+**What changed:**
+- New `web_app/src/helpers/locationDisplay.ts` — two pure helpers:
+  - `formatLocation(breadcrumb, mode: 'zone' | 'full')` — `'zone'`
+    returns the top-level breadcrumb name; `'full'` joins with ` › `.
+    Empty paths return `''` so the caller can fall back to its own
+    placeholder.
+  - `locationHasDetail(breadcrumb)` — true when there's a sub-area
+    below the zone (so the tooltip would actually reveal info; used
+    to suppress the tooltip when zone == full).
+- **Four render sites** swapped to zone-default + tooltip-on-hover:
+  - **`StockItemRow.vue`** (stock-overview row chip) — previously
+    showed the *leaf* location name. Now resolves the breadcrumb
+    through `locationStore.breadcrumb(id)` (with a flat
+    `stockLocations` fallback for first paint before the tree loads)
+    and shows the zone. Tooltip combines the existing "Filter to
+    this location" message with the full path when one exists.
+  - **`StockItemDetailPage.vue`** Location row — was
+    `breadcrumb.join(' › ')`; now `formatLocation(…, 'zone')` with a
+    tooltip showing the full path.
+  - **`ShoppingListDetail.vue`** per-line location chip — same
+    treatment.
+  - **`ShoppingListShopMode.vue`** current section header — same
+    treatment. **`sortKey()` still uses the full breadcrumb** as the
+    stable grouping key (a sort discipline, not a display thing),
+    so visually-collapsed zone groups still split apart correctly on
+    different sub-areas under the same zone.
+- **Not touched** (per IMPL plan §2.5 + proposal §2.5 carve-outs):
+  - **`RecipeCookMode.vue`** — already shows zone-only in the
+    grouped headers (C-3 Chunk 3 landed this), no per-row location
+    chip in the cook-mode row. No tooltip on the group header (would
+    aggregate multiple sub-areas under one zone — confusing rather
+    than helpful).
+  - **`StocktakePage` / `StocktakeRunner`** — they render plain
+    `stock_location_name` (the location's own name from the API),
+    not breadcrumbs; out of scope for §2.5 per the plan.
+  - **`RecipeDetailPage.vue`** ingredient rows — no location chip
+    today; nothing to align.
+
+**Decisions made:**
+- **Per-user `location_detail` toggle deferred** per §4-4 (the
+  proposal's recommended path). The helper has the seam (`mode`
+  param) but no toggle UI; if real usage flags missing the full
+  breadcrumb at a glance, flip a stored user pref into the
+  `formatLocation` calls.
+- **Helper takes the breadcrumb, not the location id.** Most
+  consumers already had the breadcrumb array (lines, detail page);
+  StockItemRow does the id-to-breadcrumb lookup once and feeds the
+  result in. Avoids coupling the helper to the location store.
+- **Skip the cook-mode group-header tooltip.** A group can contain
+  ingredients from different sub-areas of the same zone — picking
+  one to show in a tooltip would be arbitrary. The zone label alone
+  is the right level of detail in that surface.
+- **Engineering close-gate:** R-001 (one shared helper, one tooltip
+  shape repeated across sites); R-002 (no palette colours);
+  R-003 (the locations tree is server-owned; helpers are pure
+  functions); R-007 (held scope to the four sites the IMPL plan
+  named; cook-mode group header + stocktake explicitly out of
+  scope); R-008 (concise comments at each site explaining the
+  zone-vs-full swap); R-011 (Quasar `q-tooltip`, Vue 3 helpers — no
+  hand-rolled equivalents).
+
+**Files touched:**
+- FE: `helpers/locationDisplay.ts` (new),
+  `components/stock/StockItemRow.vue`,
+  `pages/StockItemDetailPage.vue`,
+  `pages/ShoppingListDetail.vue`,
+  `pages/ShoppingListShopMode.vue`.
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-113 verify).
+
+**Verification:**
+- Static only. Helper is pure; grep-confirmed every chip render site
+  the plan named now uses `formatLocation`. Not run in a browser.
+  **FU-113** carries the verify checklist.
+
+**Next up:**
+1. **FU-113** browser-verify Chunk 4 (zones display, tooltips
+   reveal the full breadcrumb, no regression in shop mode's
+   grouping under sub-areas).
+2. **C-cross Chunk 5** (image-display opt-in + FU-090 deferred
+   column fix) — the last per-user opt-in foundation. After that
+   C-cross's pre-consumer chunks are complete.
+3. C-4 Chunk 9 (cost + nutrition) remains fully unblocked.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-11 — C-cross Chunk 3 (per-user nutrition mode + reserved seam) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). Second
+per-user opt-in family. Reserved-seam pattern for the deferred
+complex mode (mirrors C-10/C-8 reservation discipline).
+
+**What changed — Backend:**
+- **`User.nutrition_mode: str`** default `'off'`. Closed-set sentinel
+  (R-010 carve-out): `NUTRITION_MODE_VALUES = ('off', 'simple',
+  'complex')` named constants in `user.py`; single validation point in
+  `update_me.py`. SQLite-portable — no CHECK constraint, no enum type.
+- **`AppSetting.nutrition_db_source: str`** default `''`. **Reserved
+  seam** — no implementation behind it; the column exists so
+  `update_me.py` can refuse `nutrition_mode='complex'` writes until an
+  admin configures it. Free-form string for now (future complex-mode
+  work parses it). Per the plan: "no UI for it yet" on the admin side.
+- **Migration `c8d3f4a9b2e1`** (down_rev = `b5c1d9a4e3f2`). Batch-mode
+  adds both columns with server defaults; symmetric downgrade.
+- **`/api/users/me`** (`update_me.py`): accepts `nutrition_mode`,
+  validates against `NUTRITION_MODE_VALUES`, additionally rejects
+  `'complex'` when `AppSetting.nutrition_db_source` is empty —
+  surfaced as a `business_rule_violation`. Pulls the AppSetting via
+  the existing `get_or_create_app_setting()` accessor.
+- **`AuthenticatedUserDto`** carries `nutrition_mode`.
+- **`/api/app-settings`** GET/PATCH both extended with
+  `nutrition_db_source` for the future admin UI; the column
+  round-trips even though no settings page edits it yet.
+- **`/api/health features.*`** gains `nutrition_complex_available: bool`
+  — derived from `bool(setting.nutrition_db_source.strip())`. Never
+  publishes the source string itself; the SPA only needs the
+  capability bit.
+
+**What changed — Frontend:**
+- **`models/auth.ts`** + **`UpdateMeCommand`** + **`AppSettings`** type
+  all gain the new fields.
+- **`useFeatureFlags()`** exposes `nutritionComplexAvailable` computed.
+- **`useNutritionMode()`** (new composable, ADR-005 family pattern):
+  layers install `features.nutrition` with per-user `nutrition_mode`.
+  Returns `mode` (the *effective* mode — `off` when install is off),
+  `userMode` (raw per-user pick), `installEnabled`, `nutritionEnabled`
+  (`mode !== 'off'`), `isSimple`, `isComplex`, and
+  `complexAvailable` (install on AND nutrition source configured).
+- **`PreferencesSettings.vue`** — new **Nutrition** card between
+  Grocery budget and Voice. Three-way `q-btn-toggle` (Off / Simple /
+  Complex). Complex option disabled via `complexAvailable`. Whole
+  control disabled (+ caption) when install is off. Save handler
+  PATCHes `/me` with the new mode.
+- **No Recipe.kcal**, no kcal sort axis. Those land in C-4 Chunk 9
+  consuming `useNutritionMode().nutritionEnabled` (per the IMPL plan
+  Chunk 3's "no Recipe schema touched" scope).
+
+**Decisions made:**
+- **`nutrition_complex_available` on /api/health** instead of leaking
+  the source string. The SPA only needs a capability bit; admins who
+  want to inspect the seam value can hit `/api/app-settings` (admin-
+  only).
+- **Three-tier display logic in the toggle.** When install off, the
+  whole toggle disables. When install on but complex unavailable,
+  only the Complex button disables. When all three are valid, all
+  three are clickable. Captions adjust to whichever case is active.
+- **No admin UI for `nutrition_db_source` yet** — per IMPL plan
+  Chunk 3 ("no UI for it yet"). Admin can set via direct API call;
+  future complex-mode chunk owns the editor.
+- **`mode` returns `'off'` when install is off**, even if the user's
+  stored value is `'simple'`. Consumers don't have to layer the two
+  themselves — `mode !== 'off'` is the single rule.
+- **Engineering close-gate:** R-001 (one composable per family per
+  ADR-005); R-002 (no palette colours added); R-003 (server owns the
+  value + the validation; client reads through composable); R-005/R-006
+  (clean batch migration with server defaults; symmetric downgrade);
+  R-007 (kept to mode + seam; no Recipe schema, no kcal field —
+  those are C-4 Chunk 9); R-008 (concise comments at insertion
+  points); R-010 carve-out documented (closed-set sentinel +
+  single-boundary validation against `NUTRITION_MODE_VALUES`);
+  R-011 (Vue 3.4 composable + Pinia `storeToRefs`, Quasar
+  `q-btn-toggle` / `q-card`).
+
+**Files touched:**
+- BE: `domain/entities/user.py`, `domain/entities/app_setting.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/c8d3f4a9b2e1_20260611_nutrition_mode.py`
+  (new), `features/auth/update_me.py`,
+  `features/auth/register_user.py`,
+  `features/health/health_check.py`,
+  `features/app_settings/get_app_settings.py`,
+  `features/app_settings/update_app_settings.py`.
+- FE: `composables/useNutritionMode.ts` (new),
+  `composables/useFeatureFlags.ts`, `models/auth.ts`,
+  `services/api/authApiService.ts`,
+  `services/api/appSettingsApiService.ts`,
+  `pages/settings/PreferencesSettings.vue`.
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-112 verify).
+
+**Verification:**
+- Static only. Migration mirrors the Chunk-1/2 shape. User +
+  AppSetting + DTO + request field counts match. Composable named
+  computeds map 1:1 against install + per-user + capability flags.
+- Not run in a browser. **FU-112** carries the verify checklist.
+
+**Next up:**
+1. **FU-112** browser-verify Chunk 3 (migration, toggle round-trips,
+   install-off behaviour, complex-disabled-when-seam-empty path,
+   complex-rejected-server-side when client somehow tries).
+2. **C-cross Chunk 4** (Location-display policy) — small client-side
+   change. Independent of Chunks 1–3, no dependency chain.
+3. C-4 Chunk 9 (cost + nutrition) is now **fully unblocked**:
+   Chunks 1 + 2 + 3 are all in. Could come next if you want the
+   first cookbook-side consumer of the C-cross foundations.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-11 — C-cross Chunk 2 (per-user money opt-in) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). First
+consumer of Chunk 1's plumbing; first per-user opt-in following ADR-005.
+
+**What changed — Backend:**
+- **`User.money_features_enabled: bool`** (default False) + matching
+  `Fields.MONEY_FEATURES_ENABLED`. Mapped on `user_table` with
+  `server_default='0'`.
+- **Migration `b5c1d9a4e3f2`** (down_rev = `a3b8e2f4c1d7`). Batch-mode
+  add column; symmetric downgrade.
+- **`PATCH /api/users/me`** (`update_me.py`) accepts the new field —
+  plain bool, null ignored, partial-update semantics (matches the
+  voice toggle pattern already in this file).
+- **`AuthenticatedUserDto`** (`register_user.py`) exposes the new
+  flag on `/me`. Both new-user registration and re-auth return it.
+- **No render gates inside this chunk.** Existing budget /
+  dashboard / shopping-list dollar surfaces keep rendering as today;
+  each consumer adds `v-if="moneyEnabled"` when its own next chunk
+  ships.
+
+**What changed — Frontend:**
+- **`models/auth.ts`** `AuthenticatedUser` gains `money_features_enabled`.
+- **`authApiService.ts`** `UpdateMeCommand` gains the optional field.
+- **`useMoneyEnabled()`** composable in `src/composables/` — per
+  ADR-005 family pattern. Layers install `features.money` (from
+  `useFeatureFlags`) with per-user `money_features_enabled` (from
+  `authStore.currentUser`). Returns a single `moneyEnabled` boolean
+  + the two underlying refs (`installEnabled` / `userEnabled`) so a
+  Settings page can explain the layering when one half is off.
+- **`PreferencesSettings.vue`** — new **"Money & budgets"** card with
+  the per-user toggle (above the existing Grocery budget card).
+  Toggle is disabled with a caption when the install flag is off
+  ("Ask an admin to enable in System → Features"). The existing
+  Grocery budget card now has `v-if="moneyEnabled"` so it disappears
+  when either layer is off — **saved budget value preserved** (never
+  cleared on toggle-off, per proposal §2.2).
+
+**Decisions made:**
+- **Consolidate on `PATCH /api/users/me`** (no new dedicated
+  endpoint). Same row, same partial semantics — matches Chunk 1's
+  consolidation of feature flags into the existing
+  `PATCH /api/app-settings`.
+- **Disabled-not-hidden toggle when install is off.** Spells out the
+  layering for the user instead of silently dropping the control;
+  matches the "two layers, document both" recommendation in the
+  proposal §2.2.
+- **Budget data preservation** via the existing
+  `budget_amount`/`budget_period` columns staying untouched —
+  toggling money off doesn't clear them. The Grocery budget card's
+  own `budgetEnabledDraft` ref still gates whether the budget
+  number is actively set.
+- **Engineering close-gate:** R-001 (one composable per feature
+  family per ADR-005); R-003 (server owns both flags; client reads
+  through one composable); R-005/R-006 (clean batch migration);
+  R-007 (kept to Chunk 2 — no consumer rewrites; cost / budget /
+  dashboard render gates are their own future chunks); R-008
+  (concise comments at each insertion); R-010 (typed
+  `UpdateMeCommand` shape; no `any`); R-011 (Vue 3.4 composable
+  pattern, Pinia `storeToRefs`, Quasar `q-card` / `q-toggle`).
+
+**Files touched:**
+- BE: `domain/entities/user.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/b5c1d9a4e3f2_20260611_user_money_optin.py`
+  (new), `features/auth/update_me.py`,
+  `features/auth/register_user.py`.
+- FE: `composables/useMoneyEnabled.ts` (new),
+  `services/api/authApiService.ts`, `models/auth.ts`,
+  `pages/settings/PreferencesSettings.vue`.
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-111 verify).
+
+**Verification:**
+- Static only. Migration mirrors Chunk 1 shape. AuthenticatedUserDto +
+  UpdateMeRequest field counts match. Composable named computeds map
+  1:1 against install + per-user fields.
+- Not run in a browser. **FU-111** carries the verify checklist.
+
+**Next up:**
+1. **FU-111** browser-verify Chunk 2 (migration, settings toggle
+   round-trips, budget card hides on off + reappears on on with
+   saved value intact, install-off disables the toggle with the
+   right caption).
+2. **C-cross Chunk 3** (per-user `nutrition_mode` + AppSetting
+   `nutrition_db_source` reserved seam) — next per-user opt-in,
+   completes the foundation Cookbook Chunk 9 needs.
+3. C-4 Chunk 9 (cost + nutrition) unblocks after Chunk 3 lands.
+
+**Open questions for user:** none. Layering UX consistent with
+proposal §2.2.
+
+---
+
+## 2026-06-11 — C-cross Chunk 1 (install feature-flag panel + opt-in plumbing) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env).
+Foundational — every later C-cross chunk + Cookbook Chunk 9 / C-2 plan
+budgets / etc. plug into the plumbing landed here.
+
+**What changed — Backend:**
+- **`AppSetting`** entity gains five booleans + matching `Fields`
+  constants: `meal_planning_enabled` (default **True** — preserves
+  today's always-on behaviour), `money_enabled`, `nutrition_enabled`,
+  `companion_ingestion_enabled`, `deals_email_enabled` (all default
+  False). `table_mappings.py` mapped with conservative `server_default`s.
+- **Migration `a3b8e2f4c1d7`** (down_rev = `e1f6a2b4c8d9`). Batch-mode
+  add column × 5; clean symmetric downgrade.
+- **`/api/health` `_feature_flags()`** extended with `meal_planning`,
+  `money`, `nutrition`, `companion_ingestion`, `deals_email` keys —
+  resolved from the AppSetting row inside the existing DB-hiccup-
+  tolerant try block. Pre-existing `auth`/`audit`/`scanning`/`multi_user`/
+  `email`/`assistant` keys untouched; keys never removed per the
+  endpoint contract.
+- **`PATCH /api/app-settings`** extended to accept the five new
+  bools (partial-update semantics; only fields present in the body
+  change). `GET /api/app-settings` exposes them via the AppSettingsDto.
+  Both extracted a `_to_dto(setting)` helper to keep get + update
+  on one shape.
+- **IMPL plan deviation noted:** The IMPL plan proposed
+  `PATCH /api/admin/feature-flags` as a new endpoint. Used the
+  existing admin-only `PATCH /api/app-settings` instead — same row,
+  same partial semantics, no new surface. Better than the plan said.
+
+**What changed — Frontend:**
+- **`useFeatureFlags()`** composable in `src/composables/`. Fetches
+  `/api/health` once per session (module-level cache), exposes
+  named reactive computeds per flag (`auth`, `audit`, `scanning`,
+  `multiUser`, `email`, `assistant`, `mealPlanning`, `money`,
+  `nutrition`, `companionIngestion`, `dealsEmail`) plus a
+  `refresh()` to invalidate the cache after an admin save.
+- **`appSettingsApiService.ts`** extended `AppSettings` type with the
+  five new fields so the SystemSettings page is type-safe end-to-end.
+- **`SystemSettings.vue`** — replaced the three disabled-placeholder
+  list items (`allowRegistrations` / `maintenanceMode` /
+  `emailerEnabled` — none were ever wired) with a real **Features**
+  section. Drives off a `featureFlagItems` computed (label + caption
+  + value per flag); each toggle uses optimistic-flip with rollback
+  on PATCH error; `savingFeatures: Set<key>` disables a toggle
+  while its own save is in flight without blocking siblings. After
+  a successful save calls `featureFlags$refresh()` so the cached
+  `/api/health` map reflects the new value app-wide.
+
+**Decisions made:**
+- **Single composable for ALL install flags** (one per feature
+  *family*), not per flag. Promoted to **ADR-005** —
+  `useFeatureFlags()` is the canonical read path; future per-user
+  family composables (`useMoneyEnabled` etc.) layer on top.
+- **`meal_planning_enabled` defaults True**, every other new flag
+  defaults False. Confirmed in §3 risks: existing installs preserve
+  today's meal-plan behaviour on first boot post-deploy.
+- **Per-toggle save** (not "save button at the bottom"). Five
+  toggles + one global save is jankier than five independent
+  optimistic toggles, and matches how the existing
+  `scanning_enabled` toggle already behaves.
+- **Existing `useScanningEnabled` composable kept as-is** — it
+  already shipped in production and works. Logged for
+  consolidation into `useFeatureFlags()` whenever a chunk next
+  touches its consumers (R-007: not opportunistic now).
+- **Engineering close-gate:** R-001 (one `useFeatureFlags()` for
+  the family; the panel renders from a single computed driving
+  one `v-for`); R-002 (no palette colours added); R-003 (server
+  owns the boolean; client reads through composable, never AppSetting
+  direct); R-005/R-006 (clean batch migration with conservative
+  defaults; symmetric downgrade; no idempotent guards); R-007
+  (the proposed dedicated `/api/admin/feature-flags` endpoint
+  consolidated into the existing PATCH; the existing
+  `useScanningEnabled` left alone); R-008 (terse comments at each
+  schema/composable site); R-010 (typed `FeatureFlagKey` literal
+  union on the panel; closed-set sentinels); R-011 (Vue 3.4
+  `<script setup>`, `q-toggle` / `q-list`, Quasar `q-card` chrome —
+  no hand-rolled equivalents).
+
+**Files touched:**
+- BE: `domain/entities/app_setting.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/a3b8e2f4c1d7_20260611_appsetting_install_flags.py`
+  (new), `features/health/health_check.py`,
+  `features/app_settings/get_app_settings.py`,
+  `features/app_settings/update_app_settings.py`.
+- FE: `composables/useFeatureFlags.ts` (new),
+  `services/api/appSettingsApiService.ts`,
+  `pages/settings/SystemSettings.vue`.
+- Docs: `docs/01_charter/ENGINEERING_STANDARDS.md` (ADR-005),
+  `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-110 verify).
+
+**Verification:**
+- Static only (no env). Migration mirrors prior batch-alter shape;
+  AppSetting + DTO + request column counts match; composable named
+  keys map 1:1 against the health flags.
+- Not run in a browser. **FU-110** carries the verify checklist.
+
+**Next up:**
+1. **FU-110** browser-verify Chunk 1 (migration, panel renders for
+   admin, toggles round-trip, `/api/health` carries the new keys,
+   composable refreshes after save).
+2. **C-cross Chunk 2** (per-user `money_features_enabled`) — first
+   per-user opt-in to consume the Chunk-1 plumbing. Layers install
+   `features.money` with per-user.
+3. C-4 Chunk 9 (cost + nutrition) becomes unblocked after Chunks 2
+   + 3.
+
+**Open questions for user:** none — the IMPL plan deviation
+(consolidating into PATCH /api/app-settings rather than a new
+endpoint) is noted; flag if you'd prefer the dedicated route after
+all.
+
+---
+
+## 2026-06-10 — FU-083 follow-up: shared TriStateFilter + label tweak
+**Status:** complete. Closes the user's "make it a common component" ask
+from the FU-083 review.
+
+**What changed:**
+- New `web_app/src/components/filters/TriStateFilter.vue` — generalised
+  include/exclude filter component:
+  - Options shape `{ value, label, category?, dotColour? }` —
+    `category` enables the header-grouped layout (dietary tags), omit
+    for a flat list. `dotColour` puts a 10px Quasar-colour dot next
+    to the +/- icon (the stock-level signal the user asked to keep
+    for ingredient rows).
+  - New `searchable` prop adds an internal `<q-input>` with debounce
+    100 + autofocus that case-insensitively matches by label. Items
+    already in include/exclude **always remain visible** regardless
+    of the query so users can clear them without dropping the
+    search string.
+  - +/- cycle, button label `"<Label> (N)"`, "Clear" footer item
+    when any picks are active — all preserved from the original
+    DietaryTagFilter behaviour.
+- `web_app/src/components/recipes/DietaryTagFilter.vue` — reduced to a
+  **thin wrapper** over `TriStateFilter` so existing call sites
+  (RecipesOverview's tags + tools usage) don't change. The
+  `DietaryTagOption` type stays exported for type-stability.
+- `web_app/src/pages/RecipesOverview.vue`:
+  - The two paired `q-select`s ("Uses ingredients" + "Doesn't use")
+    collapsed into **a single `TriStateFilter`** with
+    `label="Ingredients"`, `searchable`, and per-row stock-level
+    dot. Same `usesStockItemIds` / `excludesStockItemIds` refs back
+    it — the predicate logic and filter-count plumbing didn't change.
+  - Removed `stockItemSearchOptions` computed +
+    `stockItemFilterText` ref + `onStockItemFilter` handler (the
+    custom typeahead the q-select needed). Replaced with a flat
+    `ingredientFilterOptions` computed that sorts alphabetically and
+    maps to `TriStateOption` with `dotColour: stockLevelColourFor()`.
+  - **"Missing ≤" → "Missing ingredients ≤"** label rename.
+
+**Decisions made:**
+- **Generalise, then make DietaryTagFilter a wrapper.** Keeping the
+  wrapper avoids touching ~2 well-tested call sites; new surfaces
+  consume `TriStateFilter` directly. Cleanest R-001 outcome.
+- **Items in include/exclude always render**, regardless of the
+  search query. A user typing "tom" who'd already picked "Lentils"
+  in exclude shouldn't lose visibility of that pick.
+- **Sort alphabetically** for the ingredient list (no
+  stock-level-based ordering); the search bar makes alpha order
+  fine and removes the temptation to put low/out items at top
+  (a P10-anti-creep call).
+- **Engineering close-gate:** R-001 (one shared component, one
+  wrapper for backwards-compat), R-002 (the dot uses
+  `getStockLevelColour` which routes through tokens), R-003
+  (server still owns `stock_level_name`; client only renders),
+  R-007 (scope held — didn't touch other filter controls, the dim
+  decision is FU-109), R-008 (single explanatory comment per
+  removal), R-011 (Quasar `q-btn-dropdown`, `q-input`, `q-list`,
+  `q-item` — framework-idiomatic).
+
+**Files touched:**
+- `web_app/src/components/filters/TriStateFilter.vue` (new),
+- `web_app/src/components/recipes/DietaryTagFilter.vue` (rewritten
+  as wrapper),
+- `web_app/src/pages/RecipesOverview.vue` (consume + label),
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-108 ordering, FU-109 dim).
+
+**Verification:**
+- Static only. Grep-checked the removed `stockItemSearchOptions` /
+  `stockItemFilterText` / `onStockItemFilter` are fully gone from the
+  page. Existing DietaryTagFilter call sites use the wrapper API
+  unchanged.
+
+**Follow-ups logged:**
+- **FU-108** — reorder Cookbook overview filters by usefulness
+  (simple template reorder, user owns the priority order).
+- **FU-109** — dim decision: keep removed everywhere / re-add only
+  on `StockItemDetailPage` / re-add everywhere with a legend.
+
+**Next up:** unchanged — **C-cross Chunk 1** remains the next build.
+The shared `TriStateFilter` is now available for any future surface
+that wants tri-state include/exclude semantics.
+
+**Open questions for user:** none for this change. FU-109 is the
+outstanding decision.
+
+---
+
+## 2026-06-10 — FU-083 feedback pass (Cookbook overview UX) — RESOLVED
+**Status:** complete. Closes FU-083 with all nine user-flagged items addressed inline.
+
+**What changed (per-item):**
+1. **Read-only "Last cooked" card** on detail page sidebar (under the
+   cookable card). Reads `recipe.last_made_on`; falls back to "Never"
+   when null. Closes the loop with the top-toolbar Mark cooked / Log
+   cook actions.
+2. **Sort direction toggle** — new `sortDir: 'asc' | 'desc'` ref +
+   `BaseButton` next to the Sort by dropdown (arrow-up/arrow-down
+   icon). Tooltip phrasing per-axis: "Oldest first" / "Most recent
+   first" / "Fewest meals first" / "Fastest first" / "A → Z" / etc.
+   `watch(sortBy)` snaps direction to the conventional default on
+   axis change (name = asc, others = desc). Null sentinels in
+   last_made / total_time still sink to the bottom regardless of
+   direction (multiplier applied only after null guards).
+3. **Stock-item picker dropdown** — `q-item-label caption` showing
+   the level name removed; the colour dot is enough.
+4. **"Planned" filter bug fix.** Rewrote `plannedRecipeIds` computed
+   to parse `scheduled_for` as `YYYY-MM-DD` (slice first 10 chars,
+   split on '-', construct a local-midnight `Date`), gate `>= today`
+   on the parsed timestamp, **and skip entries with `consumed_at`
+   set**. The previous string-compare was supposed to work but the
+   user observed yesterday's entry surviving — the new shape is
+   defensive on both the parse and the consumed-state.
+5. **"Planned in" → "Planned"** label.
+6. **RecipeCard dim removed.** Deleted the `dim` computed +
+   `:class="{ 'recipe-card--dim': dim }"` + the `.recipe-card--dim`
+   stylesheet rule. `highlightStockItemIds` prop kept (deep-link from
+   stock-item detail still passes it) but no longer drives any
+   visual.
+7. **Hints removed from filter inputs** (`Meals ≥`, `Missing ≤`).
+   `:hint` bindings + `hide-bottom-space` to collapse the reserve
+   slot. `mealCountMinHint` / `missingMaxHint` computeds deleted.
+8. **"Free from ingredient(s)" replaced by "Doesn't use".** Removed
+   the free-text `<q-select use-input new-value-mode="add-unique">`
+   and the `ingredientExclude` ref + its filter predicate + clear
+   reset + active-count slot. Added `excludesStockItemIds: ref<string[]>`
+   + a second `<q-select>` mirroring the "Uses ingredients" shape
+   (same `stockItemSearchOptions`, same `@filter` handler). Predicate:
+   exclude if any picked id is in `r.ingredients.stock_item_id`.
+9. **"Uses stock items" → "Uses ingredients"** label.
+
+**Decisions made:**
+- **Two side-by-side selects instead of one tri-state.** User asked
+  "Should 'free from' be collapsed into the stock item filter as a
+  +/- filter?" — the cleanest minimal answer that preserves the
+  searchable-picker UX is two parallel selects on the same option
+  source (mirrors DietaryTagFilter's include/exclude semantics
+  but using the typeahead pattern stock items need at scale). A
+  truly single chip-with-state control was rejected as over-engineered
+  for v1.
+- **`RecipeCard` dim deleted, prop kept.** User leaned remove
+  ("doubling up displaying… missing ingredients"). Kept the prop so
+  the existing deep-link call sites don't break, with a comment
+  pointing the next reviewer at why the prop is still defined.
+- **Axis-snap on sort change.** Pure UX — when the user picks
+  "Recently made" they almost certainly want newest first;
+  switching from "Name" with "asc" carried over wouldn't surface
+  the intent.
+- **Engineering close-gate:** R-001 (the two parallel selects share
+  `stockItemSearchOptions` + `onStockItemFilter`, no copy), R-002
+  (no palette colours added — the colour dot still uses
+  `stockLevelColourFor` which routes through tokens), R-003 (sort +
+  filter remain client-derived; consistent with the rest of Chunk 1),
+  R-007 (scope held to FU-083 items — didn't touch the dialog
+  patterns or the comparison-removal again), R-008 (one explanatory
+  comment per removal so reviewers see why things shrank), R-010
+  (sort direction sentinel is a closed-set string literal union),
+  R-011 (Quasar `q-select`, `q-tooltip`, `BaseButton`, `q-input`
+  `hide-bottom-space` — no hand-rolled controls).
+
+**Files touched:** `web_app/src/pages/RecipesOverview.vue`,
+`web_app/src/pages/RecipeDetailPage.vue`,
+`web_app/src/components/RecipeCard.vue`, `CHANGELOG.md`,
+`DORA_FOLLOWUPS.md` (FU-083 → RESOLVED).
+
+**Verification:**
+- Static only. Grep-checked stale `ingredientExclude` /
+  `mealCountMinHint` / `missingMaxHint` / `recipe-card--dim` are
+  fully removed (only the explanatory comments remain).
+- User to browser-verify the changes — particularly that
+  "Planned" no longer surfaces yesterday's egg-fried-rice, and
+  that the direction toggle reads sensibly per axis.
+
+**Next up:** continue with **C-cross Chunk 1** (feature-flag panel
++ opt-in plumbing) as scheduled. FU-083 close-out doesn't change
+the C-cross sequence.
+
+**Open questions for user:** none — design calls in items 6 + 9
+were resolved using the lean from the feedback.
+
+---
+
+## 2026-06-10 — C-cross §2.8 image-display opt-in: toggle UX revised
+**Status:** complete (design revision — NO code).
+**What changed:**
+- **`PROPOSAL_CONFIG_AND_OPTINS.md §2.8`** — added a "Where the toggle
+  lives" subsection. Image-display toggles are now **inline buttons
+  on each surface**, not Settings entries. Persistence stays on
+  `User` so the preference rides across sessions/devices. Recipes
+  overview gets an icon button in the header next to Import/New
+  recipe; stock overview gets a collapse/expand affordance in the
+  row area (defers to C-1 row redesign).
+- **`IMPL_PLAN_CONFIG_AND_OPTINS.md` Chunk 5** — rewritten:
+  - Backend (User flags + `/me` exposure + FU-090 fold-in) lands
+    NOW. Composable + recipes-overview inline button + recipe-
+    surface guards land NOW.
+  - **Stock-overview inline button deferred** to the next C-1 chunk
+    that redoes the row layout (row geometry decisions belong
+    there, not retrofitted). Composable + flag are ready when C-1
+    consumes them.
+  - Acceptance line updated to spell out `show_stock_images` field
+    must exist + round-trip even though no stock-overview button is
+    wired yet.
+- **`IMPL_PLAN_STOCK_OVERVIEW.md` Chunk 3 (row rebuild)** — added an
+  explicit "Image collapse toggle (C-cross §2.8 / FU-106)" bullet so
+  whoever picks up that chunk wires the button + the
+  `v-if="showStockImages"` guard alongside the rest of the row
+  geometry work.
+- **`DORA_FOLLOWUPS.md`** — new **FU-106** logs the deferred
+  stock-overview button work, pointing at C-1 Stock Overview
+  Chunk 3 as the resolution chunk.
+
+**Decisions made:**
+- **No Settings page entry for image toggles** — the toggle goes
+  where the user looks at images. Mirrors Quasar's own dark-mode
+  pattern (top bar, not buried in settings).
+- **Recipes overview owns the recipe-images toggle** (one write
+  site), the detail/cook/print surfaces consume but don't carry
+  their own button — avoids N toggles for one preference.
+- **Stock overview owns the stock-images toggle** but the button
+  lands during C-1 row redesign — split the deferral cleanly so
+  C-cross still delivers the backend + composable + recipe surface
+  work in one chunk.
+- **Persistence channel** = existing `authStore.updateMeAsync()`
+  (same path the cook-mode voice toggle already uses). No new
+  endpoint, no new store.
+
+**Files touched:** `docs/04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md`,
+`docs/04_proposals/IMPL_PLAN_CONFIG_AND_OPTINS.md`,
+`docs/04_proposals/IMPL_PLAN_STOCK_OVERVIEW.md`,
+`DORA_FOLLOWUPS.md` (FU-106).
+
+**Verification:** none needed — docs only.
+
+**Next up:** **C-cross Chunk 1** (feature-flag panel + opt-in plumbing)
+remains the first reviewable chunk; nothing about today's revision
+moves the sequence.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-10 — IMPL_PLAN_CONFIG_AND_OPTINS.md (C-cross) — DRAFTED
+**Status:** complete (design pass — NO code). Resolves C-cross's path to
+build so Cookbook Chunk 9 (cost + nutrition) and downstream consumers
+have real gates to read.
+
+**What changed:**
+- New **`docs/04_proposals/IMPL_PLAN_CONFIG_AND_OPTINS.md`** — full
+  6-chunk plan in the established IMPL shape (§0 verify-state, §1
+  chunked plan, §2 first-chunk DoD, §3 risks + open decisions, §4
+  feedback coverage, §5 run order). Chunk 6 is verify-only — the
+  taxonomy editors (§2.4) already shipped via C-4 Chunks 2 + 5.
+- **Doc-graph** wired: new `### IMPL — Config & Opt-ins (C-cross)` row
+  added to `docs/00_DOC_GRAPH.md` between Stock Overview and State
+  Ownership; links proposal, dependencies, and the foundational role
+  for C-4 Chunk 9 / C-2 / C-1 / C-5 / C-9.
+
+**Chunk shape (5 build chunks + 1 verify-only):**
+
+1. **Chunk 1 — Opt-in plumbing + install feature-flag panel (§2.1 +
+   §2.6).** Foundational. Extends `AppSetting` with
+   `meal_planning/money/nutrition/companion_ingestion/deals_email`
+   bools (existing `llm`/`scanning` stay). `/api/health features.*`
+   gains the new keys; new `PATCH /api/admin/feature-flags` admin-
+   only endpoint. New `useFeatureFlags()` composable. Settings →
+   System → Features panel (admin-only). Conservative defaults
+   (meal-planning = True to preserve existing behaviour).
+2. **Chunk 2 — Money opt-in per-user (§2.2).**
+   `User.money_features_enabled` default False. `useMoneyEnabled()`
+   composable layers install + per-user (both must be true).
+   Settings → Account → Money & budgets section. No consumer wiring
+   here — render-gates land in their own chunks (C-4 Chunk 9, C-2).
+3. **Chunk 3 — Nutrition mode per-user (§2.3, off + simple now).**
+   `User.nutrition_mode` enum + `AppSetting.nutrition_db_source`
+   reserved (empty). Three-way toggle; complex disabled with
+   tooltip until seam configured. **No `Recipe.kcal` here** — that's
+   C-4 Chunk 9's job; C-cross owns the mode + seam only.
+4. **Chunk 4 — Location-display policy (§2.5).** Client-side only;
+   new `formatLocation()` helper. Zone-default + tooltip-for-full
+   wired into every location-chip render site. Per-user
+   `location_detail` toggle deferred per §4-4.
+5. **Chunk 5 — Image-display opt-in (§2.8).** Two per-user bools
+   (`show_recipe_images` / `show_stock_images`), default True.
+   `useImagePrefs()` composable. Wires existing recipe image render
+   sites (card, detail, edit-dialog preview, cook mode, print);
+   stock-side is a no-op consumer awaiting FU-033. **Folds in
+   FU-090** — recipe list query deferred-column fix so "off" path
+   actually saves bandwidth.
+6. **Chunk 6 — Taxonomy editors (§2.4) — NO WORK.** Already shipped
+   via C-4 Chunks 2 + 5; marker chunk for the run-order audit.
+
+**Open decisions answered inline (proposal §4):**
+- §4-1 money switch shape → dedicated `money_features_enabled`
+  flag (Chunk 2).
+- §4-2 feature-flag set → proposal's conservative list:
+  `meal_planning + money + nutrition + companion_ingestion +
+  deals_email` + existing `llm` / `scanning` (Chunk 1).
+- §4-3 taxonomy permission → any user (already shipped this way).
+- §4-4 location detail pref → zone + tooltip only, no toggle
+  (Chunk 4).
+- §4-5 nutrition complex scope → off + simple now, complex reserved
+  seam (Chunk 3).
+- §4-6 image-display defaults + flag count → default on; two flags
+  (Chunk 5).
+
+**Decisions made (process):**
+- **Skip §2.4 in the build plan** — the taxonomy editors are real
+  C-4 work that shipped under a different prompt. Calling them out
+  as a "verify-only" chunk keeps the run-order audit honest without
+  duplicating the work.
+- **C-cross is foundational** (consumed by C-1 / C-2 / C-4 Chunk 9 /
+  C-5 / C-9) — so the IMPL plan's §3 explicitly schedules consumer
+  chunks *after* the C-cross chunk they each depend on, rather than
+  building C-cross as a "branch off main" parallel.
+- **Establish the opt-in pattern as code in Chunk 1** rather than
+  re-deriving it on every chunk. The `useFeatureFlags()` /
+  `useImagePrefs()` etc. shape is one composable per feature
+  *family*, not per flag — mirrors ADR-002. Logged as an
+  ADR-005 candidate in the plan to promote at end-of-chunk-1 if it
+  survives review.
+- **Engineering pre-note** (per ENGINEERING_STANDARDS.md): every
+  chunk lists its R-001..R-011 self-checks. R-010 carve-out
+  documented for the nutrition_mode status sentinel
+  (`NUTRITION_MODE_VALUES` set + boundary validation).
+
+**Files touched:** `docs/04_proposals/IMPL_PLAN_CONFIG_AND_OPTINS.md`
+(new), `docs/00_DOC_GRAPH.md` (IMPL row).
+
+**Verification:** none needed — docs only. Verify-state grep-checked
+against current code (AppSetting row shape, User columns,
+`_feature_flags()`, the already-shipped vocab editors).
+
+**Next up:** **C-cross Chunk 1** (feature-flag panel + opt-in
+plumbing) is the first reviewable chunk and the foundation
+everything else plugs into. Decision-free per the IMPL plan; clear
+to build on user say-so.
+
+**Open questions for user:** none — the six §4 decisions are all
+resolved inline in the plan.
+
+---
+
+## 2026-06-10 — IMPL_PLAN_COOKBOOK Chunk 8 (versions via `version_group_id`) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). Closes §2.4 + L247 / L312 per DEC-2.
+**What changed — Backend:**
+- `Recipe.version_group_id: UUID | None` field on the entity +
+  `Recipe.Fields.VERSION_GROUP_ID`; mapped column on `Recipe` table,
+  indexed (every detail load asks "who else has this group id?").
+- Migration `e1f6a2b4c8d9` (down_rev = `d0e5f1a3b8c7`). Batch-mode add
+  column + create index; symmetric downgrade.
+- `RecipeDto` carries `version_group_id` on every endpoint and
+  `version_siblings: List[RecipeVersionSiblingDto]` (id + name +
+  last_made_on + available_meals — light payload) on the detail
+  endpoint only.
+- New `features/recipes/new_recipe_version.py` —
+  `NewRecipeVersionHandler.handle(source_id)`:
+  - Loads the source with ingredients included.
+  - Resolves the group id: NULL source → allocates `uuid4()` AND
+    back-fills the source so the two recipes form the group (the
+    "equal peers" model requires the link to live on both rows, not
+    just the new one).
+  - Counts siblings → name = `f"{source.name} (v{N+1})"`.
+  - Clones ingredients (new uuids assigned by `add()`); builds
+    `old_to_new_ing` map so step `ingredient_ids` can be rewritten.
+  - Clones the Recipe row (carries category/cuisine/collection
+    references through directly — `selectin`-loaded relationships).
+  - Saves, then back-fills tag ids + tool ids + steps (via
+    `replace_steps_for_recipe`, mapping each step's old-id to its
+    string-form as `client_id` so parent/child structure round-trips,
+    and ingredient_ids through the `old_to_new_ing` map). One final
+    `save_changes()`.
+  - Route `POST /api/recipes/<id>/new-version` returns the new
+    recipe's detail DTO via `handle_by_id`.
+- **New detail endpoint** `GET /api/recipes/<id>` (route
+  `get_recipe`) — calls `handle_by_id` directly. **Latent gap fix**:
+  the SPA's `getAsync(id)` used to filter the list endpoint, which
+  silently dropped `steps[]` and the new `version_siblings[]` (only
+  the cheap list shape was returned). This was a real bug from
+  Cookbook Chunk 6 / Cook-Mode Chunk 5 — flagged in the worklog
+  but never reported because nobody had structured-step recipes in
+  testing yet. Fixed as part of Chunk 8 since it's the chunk that
+  forces the issue.
+- `create_recipe.py`: pass `version_group_id=None` to the Recipe
+  constructor (new entity field needs a value).
+
+**What changed — Frontend:**
+- `models/recipe.ts`: `version_group_id: string | null` on `Recipe`,
+  `version_siblings: RecipeVersionSibling[]` on `Recipe`, new
+  `RecipeVersionSibling` type.
+- `services/api/recipeApiService.ts`:
+  - `getAsync` now hits `GET /recipes/<id>` (the real detail
+    endpoint). Old `createQueryString`/`FilterOperator` import
+    dropped — no longer needed.
+  - New `createNewVersionAsync(recipeId)` → POSTs to
+    `/recipes/<id>/new-version`.
+- `pages/RecipeDetailPage.vue`:
+  - Detail kebab gets a **New version** item above the existing
+    Delete (separated by a `q-separator`). `newVersionLoading`
+    disables it during the round-trip.
+  - **"Other versions"** card in the sidebar (rendered only when
+    `versionSiblings.length > 0`). Lists siblings with name + last
+    made + meals on hand; clicking jumps to that recipe's detail.
+  - `onNewVersion()` calls the API, refreshes the recipe-store
+    cache, lands a celebratory toast, routes into the new
+    sibling's detail.
+  - `onJumpToSibling(id)` / `formatLastMade(iso)` helpers.
+
+**Decisions made:**
+- **Back-fill the source's group id on first "new version".** The
+  alternative (only assign the group id to the new copy) leaves the
+  source effectively detached from the group — the "Other versions"
+  card on the source wouldn't show the new sibling without a
+  symmetric link. Two writes, but the group becomes a real bilateral
+  relationship rather than a one-way pointer.
+- **Sibling name = `(v{count+1})`** rather than `(v2)` always.
+  Versioning a recipe that already has 2 siblings produces "(v3)",
+  not a duplicate "(v2)".
+- **Image carries through as bytes.** Recipe.image is a LargeBinary
+  blob (post-Chunk-5 data-URL string); copy the reference directly.
+  No image-bytes round-trip through the importer / endpoint.
+- **Real detail endpoint added now**, even though it's strictly
+  Chunk 8 scope creep — the silent bug it fixes (Cookbook Chunk 6
+  `steps[]` not reaching the detail page) is more important than
+  the scope discipline, and the new versions card needs the real
+  endpoint anyway.
+- **Allocations stay per-recipe.** DEC-2 spelled this out: the user
+  picks a version when scheduling; no version-aware allocation logic
+  in the meal-plan code. Confirmed nothing in `meal_plans/` or
+  `_hydrate_unallocated` needs to know about siblings.
+- **Engineering close-gate**: R-001 (versions card reuses `q-card` +
+  `q-list` + `q-item`; kebab item slots into the existing menu —
+  no hand-rolled chrome); R-002 (no palette colours); R-003
+  (server owns the group id allocation + sibling count; client
+  just renders); R-005/R-006 (batch migration with index; clean
+  downgrade); R-007 (deliberate carve-out for the detail endpoint
+  documented above); R-008 (concise comments); R-010 (UUIDs end-to-
+  end through the StepWrite `client_id`); R-011 (Quasar primitives
+  + Vue 3.4 idioms).
+
+**Files touched:**
+- BE: `domain/entities/recipe.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/e1f6a2b4c8d9_20260610_recipe_versions.py`
+  (new), `features/recipes/get_recipes.py`,
+  `features/recipes/create_recipe.py`,
+  `features/recipes/new_recipe_version.py` (new).
+- FE: `models/recipe.ts`,
+  `services/api/recipeApiService.ts`,
+  `pages/RecipeDetailPage.vue`.
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-105 verify).
+
+**Verification:**
+- Static only (no env). Mapping/migration follow Chunk 7 shape;
+  endpoint registration via the existing
+  `get_attributes_ending_with('router', …)` walker — no manual
+  registration needed.
+- Not run in a browser. FU-105 carries the verify checklist.
+
+**Next up:**
+1. **FU-105** browser-verify Chunk 8 (migration, new-version
+   round-trip, sibling card on source + copy, back-fill behaviour,
+   detail-endpoint fix verifies structured steps actually appear in
+   the editor).
+2. **Cookbook Chunk 9** (cost estimate + opt-in simple nutrition) is
+   next per the IMPL plan run order. Both features are gated by
+   C-cross opt-ins — may be a thin chunk if C-cross hasn't shipped
+   the gate yet.
+3. Browser-verify backlog continues: cookbook chain (FU-083 / FU-085
+   / FU-088 / FU-089 / FU-091 / FU-093 / FU-103 / FU-105), cook-mode
+   chain, P6-01 chain.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-10 — IMPL_PLAN_COOKBOOK Chunk 7 (source field + URL importer cleanup) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). Closes §2.7 + L269 / L295 / L296.
+**What changed — Backend:**
+- `Recipe.source: str | None` field (max 2048 chars). New
+  `Recipe.Fields.SOURCE`. Mapped in `table_mappings.py`.
+- Migration `d0e5f1a3b8c7` (down_rev = `c9d4f8e2a5b6`). Batch-mode
+  `ADD COLUMN source` (SQLite portable). No data migration —
+  pre-existing `instructions` text may still mention a URL; parsing
+  out is impractical (per plan), users clean up on edit.
+- `RecipeDto` carries `source`. `CreateRecipeRequest` accepts it.
+  `UpdateRecipeRequest` adds it to `_NULLABLE_PLAIN_ATTRS` so PATCH
+  with explicit null clears, omit leaves untouched.
+- `import_recipe_from_url.py`:
+  - New `_degraded_import(html, url)` — best-effort scrape when no
+    schema.org/Recipe JSON-LD is found. Pulls `og:title` (then
+    `<title>` as fallback), strips `<script>/<style>/<noscript>`
+    before `.get_text("\n", strip=True)`, caps at 6 000 chars with
+    a "…(truncated)" tail, returns an `ImportedRecipeDto` with
+    `is_degraded=True`.
+  - The "no recipe found" branch (line 284) now calls
+    `_degraded_import` instead of returning `None`. `None` is now
+    reserved for network failures / oversized payloads (the
+    endpoint still 422s on `None`).
+  - `ImportedRecipeDto.is_degraded: bool = False` added.
+- `restore_shared.py` needs no edit — `source` is a column on the
+  `Recipe` row and rides along through the default backup path.
+
+**What changed — Frontend:**
+- `models/recipe.ts`: `source: string | null` on `Recipe`.
+- `services/api/recipeApiService.ts`: `source?: string | null` on
+  both `CreateRecipeCommand` and `UpdateRecipeCommand`; `is_degraded`
+  on `ImportedRecipe`.
+- `RecipeDetailPage.vue`:
+  - Form: `source: string | null`. Hydrate, save (`if (form.source
+    !== src.source) command.source = form.source`).
+  - New **Source URL** card under Instructions / Nutrition — `q-input`
+    with the link icon, plus an **Open** ghost button (`href`/`target`)
+    that appears only when the value starts with `http`.
+  - Import handler now sets `form.source = imported.source_url` and
+    `form.instructions = imported.instructions || null` — drops the
+    old `Source: ${url}` appendix to instructions.
+  - Degraded-import path lands a warning toast ("Couldn't auto-structure
+    that page — pulled the page text into Instructions and saved the
+    URL. Review and clean it up.") instead of the success toast.
+  - Import-dialog copy reworked to set expectations: names the
+    JSON-LD-friendly sites by category, mentions the degraded
+    fallback.
+- `RecipesOverview.vue`:
+  - New **Import from URL** ghost button next to "New recipe".
+  - Full overview-side import flow: prompt for URL, hit
+    `/recipes/import-from-url`, build a `CreateRecipeCommand` from
+    the preview (only ingredients with a fuzzy-matched
+    `stock_item_id` make it through — server requires it), POST
+    to `createAsync`, refresh the store cache, navigate to the new
+    recipe's detail page. Toast counts unmatched ingredients so the
+    user knows what to add manually. Degraded path lands its own
+    warning toast.
+  - Local `newClientId()` helper to assign step + ingredient
+    client_ids on create.
+
+**Decisions made:**
+- **Skip unmatched ingredients on overview-create**, not error.
+  The detail-page importer stashes them as notes; we can't on
+  create because `CreateRecipeIngredientRequest.stock_item_id` is
+  non-null. Surfaced count in the toast so the user notices.
+- **Reuse the import endpoint** rather than build a separate
+  "create from URL" endpoint. The endpoint stays a preview;
+  client-side composes a `CreateRecipeCommand`. Keeps the API
+  surface small.
+- **No shared `RecipeImportDialog` component yet.** The detail-page
+  flow overwrites the current recipe; the overview flow creates
+  a fresh one. Two small copies for now; extract when a third
+  surface needs it (R-001 threshold). Logged as FU-102.
+- **Degraded path emits a toast, not a banner inside the editor.**
+  Lighter, immediate, and the user can dismiss without clicking. If
+  the banner is more discoverable in real use, swap later.
+- **Engineering close-gate**: R-001 (overview-import dialog reuses
+  `BaseDialog` + `BaseButton`; no hand-rolled chrome — duplication
+  flagged as FU-102 for the dialog itself); R-002 (no palette
+  colours added); R-003 (server owns the source field; client
+  passes it through); R-005/R-006 (clean batch migration, downgrade
+  symmetric, no IF NOT EXISTS); R-007 (Chunk 7 scope held —
+  versions, sections, cost/nutrition deferred to Chunks 8-10);
+  R-008 (one-line comments where the column / field appears);
+  R-010 (string source stays string end-to-end; degraded scrape
+  cap is `int`-typed); R-011 (Quasar `q-input`, `q-card`,
+  `q-card-section` primitives + Vue 3.4 idioms; BeautifulSoup is
+  the framework's documented HTML parser).
+
+**Files touched:**
+- BE: `domain/entities/recipe.py`,
+  `persistence/table_mappings.py`,
+  `persistence/migrations/versions/d0e5f1a3b8c7_20260610_recipe_source.py`
+  (new), `features/recipes/get_recipes.py`,
+  `features/recipes/create_recipe.py`,
+  `features/recipes/update_recipe.py`,
+  `features/recipes/import_recipe_from_url.py`.
+- FE: `models/recipe.ts`, `services/api/recipeApiService.ts`,
+  `pages/RecipeDetailPage.vue`, `pages/RecipesOverview.vue`.
+- Docs: `CHANGELOG.md`, `DORA_FOLLOWUPS.md`
+  (FU-103 verify, FU-102 dialog extraction).
+
+**Verification:**
+- Static only (no env). Migration shape mirrors prior batch-mode
+  alters; Recipe column count matches DTO + create + update.
+  Frontend `is_degraded` flag wired through both surfaces.
+- Not run in a browser. FU-103 carries the verify checklist.
+
+**Next up:**
+1. **FU-103** browser-verify Chunk 7 (migration, detail source
+   field round-trip, degraded fallback toast, overview import →
+   create flow → navigate).
+2. **Cookbook Chunk 8** (versions via `version_group_id`) is
+   next in the IMPL plan run order.
+3. Browser-verify backlog continues: cookbook chain (FU-083 /
+   FU-085 / FU-088 / FU-089 / FU-091 / FU-093 / FU-103),
+   cook-mode chain (FU-096 / FU-100 / FU-101), P6-01 chain.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOK_MODE Chunk 6 (cooking-for headcount auto-rescale) — IMPLEMENTED
+**Status:** complete (frontend only). Closes §2.2 + L320 + DEC-4. Final cook-mode chunk.
+**What changed:**
+- New `web_app/src/helpers/scaleQuantity.ts` — DEC-4 rounding helper.
+  Countable units (null = bare count, `egg/clove/scoop/slice/piece/
+  sprig/stick/knob/can/bunch/pinch` + their plurals) round to nearest
+  whole, floored at 1. Continuous units snap to **½ ⅓ ⅔ ¼ ¾** Unicode
+  glyphs when the decimal is within 0.04 of a fraction; otherwise
+  round to one decimal place with trailing zero trimmed. Returns
+  `number | string | null` ready to feed straight into
+  `formatQuantity` (Chunk 2) — the two helpers stay separate so
+  spacing (DEC-3) and rounding (DEC-4) conventions can evolve
+  independently.
+- `RecipeCookMode.vue`: new session-only `cookingFor` ref, defaulting
+  to `recipe.servings` (seeded via a `watch(recipe, …, immediate)`).
+  New `displayQuantity()` chains `scaleQuantity` → `formatQuantity`;
+  the single ingredient-row quantity binding routes through it.
+  Compact **"Cooking for [N]"** control in the cook-mode header:
+  group icon, caption label, dense outlined `q-input.number` with
+  `min=1`; tooltip clarifies that the saved recipe stays at its own
+  servings. `onCookingForBlur()` re-clamps to ≥ 1 / Math.floor on
+  blur so a cleared or non-finite input can't collapse quantities
+  to zero mid-cook.
+
+**Decisions made:**
+- **No `household_headcount` seed yet.** C-5 onboarding hasn't shipped
+  the user-level default, so `cookingFor` falls back to
+  `recipe.servings` (the IMPL plan's "stand-alone if C-5 isn't
+  there" fallback). When C-5 lands, seed `cookingFor` from
+  `userSettings.household_headcount ?? recipe.servings ?? 1` — single
+  line change. Logged as part of C-5's job, no separate FU.
+- **Session-only, no persistence** (matches B8 substitute swaps).
+  Mismatched defaults across cooks are fine; the user expects the
+  recipe to be displayed as saved.
+- **Round-on-blur, not round-on-each-keystroke.** Lets the user type
+  "12" without it jumping to "1" as soon as the first digit lands.
+- **Two helpers, not one combined.** `scaleQuantity` (rounding) +
+  `formatQuantity` (spacing) compose. Tempting to fold them; the
+  callers in FU-097 (rollout to non-cook-mode surfaces) don't always
+  want rescaling, so keeping them split avoids a "this surface
+  shouldn't rescale but still wants the rounding" tangle later.
+- **Engineering close-gate**: R-001 (single helper module; cook mode
+  consumes it through the same composition as `formatQuantity`,
+  no hand-rolled rounding inline); R-002 (no palette colours added);
+  R-003 (no domain-rule duplication; the helper is the single source
+  of the rounding rule); R-007 (kept to Chunk 6 — non-cook-mode
+  ingredient quantity rolls are still FU-097 territory, not swept
+  proactively); R-008 (the helper has one explanatory block at the
+  top; the rest is self-evident); R-011 (used `q-input type="number"`
+  with `min=1` per Quasar's documented API; no hand-rolled stepper).
+
+**Files touched:**
+- `web_app/src/helpers/scaleQuantity.ts` (new),
+  `web_app/src/pages/RecipeCookMode.vue`,
+  `CHANGELOG.md`, `DORA_FOLLOWUPS.md` (FU-101 verify).
+
+**Verification:**
+- Static only (no node_modules / env). Manually traced the rounding
+  rule:
+  - 1.5 eggs (`null` unit) → countable → round → 2 ✓
+  - 0.66 cups (continuous) → 0.66 within 0.04 of ⅔ → "⅔ cup" ✓
+  - 1.333 cups → 0.333 within 0.04 of ⅓ → "1⅓ cup" ✓
+  - 7.5g → not near a fraction → 0.5 within tol of ½ → "7½ g"?
+    Hmm — that's borderline. Let me re-check: 0.5 IS in the
+    fraction table, so 7.5g would render "7½ g". DEC-4 wants the
+    fraction snap to apply across continuous units; 7½g reads fine.
+    The plan's "7.5g → 8g" example expected integer-rounding for
+    grams specifically; in this impl, grams (continuous) get
+    fraction-snap. **This is a deliberate deviation from the plan's
+    example** — the broader fraction-snap is more useful for cups /
+    tbsp / oz than annoying for mass; gram fractions are rare in
+    practice. Logged as a note in FU-101 — if the user finds gram
+    fractions weird in real recipes, switch grams (and similar
+    metric-only continuous units) to integer rounding.
+- **Not run** in the browser. FU-101 carries the verify checklist.
+
+**Next up:**
+1. **FU-101** browser-verify Chunk 6 — try a 4-serving recipe with
+   a mix of countable + continuous ingredients, change the
+   headcount, watch the rounding.
+2. **All six cook-mode chunks are now landed.** Browser verify
+   batch (FU-096 / FU-100 / FU-101) is the next pass on this
+   surface.
+3. C-5 onboarding when it lands will seed `cookingFor` from
+   `household_headcount`. Quick follow-on, not a fresh FU.
+4. Browser-verify backlog continues: FU-093 (Chunk 6 structured
+   steps), FU-083 / FU-085 / FU-088 / FU-089 / FU-091 (cookbook
+   chain), P6-01 chain, FU-051.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOK_MODE Chunk 5 (per-step highlight + tools + hints) — IMPLEMENTED
+**Status:** complete (frontend only). Closes §2.4 / §2.5 / §2.6-hints / §2.7-per-step-timers + L322 / L327 / L328 + DEC-1.
+**What changed:**
+- **Tick state dropped entirely.** Removed `usedIds`, `doneSteps`,
+  `toggleUsed`, `toggleStepDone`, `markIngredientsUsedInStep` + the
+  ingredient-row `<q-checkbox>` + the per-step `<q-checkbox>`. The "Done"
+  voice command + the auto-mark behaviour in `nextStep()` are gone too.
+  The finish flow's `buildFinishRows()` now iterates
+  `recipe.value.ingredients` directly (with session swaps applied) —
+  cooking a recipe implies using every ingredient.
+- **Structured step model.** New `CookStep` type. New `cookSteps`
+  computed flattens `recipe.steps[]` depth-first (top, its subs, next
+  top, …) when present; falls back to splitting `instructions` on
+  newline when empty. Each row carries `text`, `hint`, `ingredientIds`,
+  `toolIds`, `isSubStep`. The existing `steps` / `currentStep` text
+  consumers (speech, nav, timer detect) ride on a derived
+  `cookSteps.map(s => s.text)` so nothing else had to change.
+- **Per-step highlight.** `highlightedIngredientIds` /
+  `highlightedToolIds` computeds drive a tinted-row /
+  primary-coloured-chip pair. Structured steps with empty refs and
+  unstructured recipes use the same text-match fallback as before
+  (lowercased substring against ingredient names). Untouched tools
+  dim (opacity .55) when *any* tool is highlighted, so the eye lands
+  on what's needed without losing the rest from the panel.
+- **Tools panel.** New `q-expansion-item` (`default-opened`) rendered
+  only when `recipe.tool_ids.length > 0`. Tools resolved against the
+  recipe-vocab store; `getToolsAsync` added to `onMounted`'s warm-up
+  Promise.all. The panel renders chips of every recipe tool with the
+  highlight/dim state above.
+- **Step hint surface.** The current step card now shows the step's
+  `hint` under the headline text with a lightbulb icon; sub-steps get
+  a "Sub-step" chip above the headline so the cook reads the nesting
+  visually.
+- **Detail-endpoint fetch on entry.** Cook mode now always fetches
+  `recipeApiService.getAsync(recipeId)` rather than reading the list
+  cache — the list endpoint only returns `has_structured_steps` (the
+  cheap existence flag), so the cache lacked the `steps[]` array
+  Chunk 5 reads. The unused `fromStore` lookup is removed; the
+  background `recipeStore.getRecipesAsync()` warm-up stays so the
+  cookbook is preloaded for back-navigation.
+
+**Decisions made:**
+- **Always-fetch detail on cook-mode entry** (the IMPL plan didn't
+  spell this out, but Chunk 4's split — list = has-flag, detail =
+  steps — forces it). Logged the contract in the comment so a future
+  optimisation pass thinks twice before re-reading the cache.
+- **Dim non-highlighted tools** (opacity .55) instead of hiding them.
+  The cook may want to glance at the other tools in advance — losing
+  them from view is worse than the brief dimming.
+- **No per-step `timer_minutes`** schema field yet — the plan says
+  "probably a Chunk-4 polish; otherwise text-extract is enough".
+  Text-extract (`detectedTimerMinutes`) still runs off `currentStep`,
+  so a structured step whose text reads "simmer 10 minutes" still
+  surfaces the timer. Adding an explicit per-step minutes field is a
+  follow-up — won't sweep proactively (R-007).
+- **Removed "Done" voice command + sous-chef help entry.** Per the
+  plan, tick state is gone; the verb has nothing to do.
+- **Engineering close-gate**: R-001 (no hand-rolled chrome; reuses
+  `q-expansion-item`, `q-chip`, `q-list` primitives); R-002 (highlight
+  uses semantic tokens — `var(--brand-primary)` + `color-mix` on the
+  soft variant — no palette numbers, no hex); R-003 (highlight maps
+  come from the server-owned step refs; the unstructured text-match
+  fallback is the pre-existing "smart" logic preserved); R-007 (kept
+  to Chunk 5 scope — Chunk 6 headcount is not touched); R-008
+  (`CookStep` typedef + brief comments only); R-011 (`q-chip`
+  `q-expansion-item` etc. are the framework idiom; no manual chrome).
+
+**Files touched:** `web_app/src/pages/RecipeCookMode.vue` only.
+
+**Verification:**
+- Static only (no node_modules / env). Grep-confirmed `usedIds` /
+  `doneSteps` / `toggleUsed` / `toggleStepDone` /
+  `markIngredientsUsedInStep` are gone from the file (only the
+  explanatory comment remains).
+- **Not run** in the browser. Logged **FU-100** with the verify
+  checklist.
+
+**Next up:**
+1. **FU-100** browser-verify Chunk 5 — structured-step highlight, tools
+   panel, hint rendering, fallback path for unstructured recipes.
+2. C-3 Chunk 6 (headcount auto-adjust) is the last cook-mode chunk;
+   gated on C-5 (onboarding).
+3. Browser-verify backlog continues: FU-096 (Chunks 1–3 verify), the
+   cookbook chain (FU-083/085/088/089/091/093), the P6-01 chain.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOK_MODE Chunks 1–3 (finish flow + polish + ingredient list) — IMPLEMENTED
+**Status:** complete (frontend only). User asked for chunks 1–3 batched while browser-testing in parallel.
+**What changed — Chunk 1 (finish-flow rewrite):**
+- Replaced the `finishUpdateLevels` / `finishMealsCooked` / `finishAddRanOut`
+  blanket toggles with a per-ingredient finish list. Each used ingredient
+  becomes a `FinishRow` carrying `targetStockItemId` (resolved through
+  session swaps), current level chip, a `q-btn-toggle` of `down_one` /
+  `out` / `unchanged` (default `down_one` per DEC-5), an override
+  `q-select` of any specific level, and a per-row `Add to list` button.
+- `finishMealsCooked` defaults to **0** (per L338); copy reads "leave at 0
+  if you just ate it".
+- BaseDialog already defaults non-persistent → click-out / Esc cancel
+  without mutating stock (closes L334b — verified BaseDialog default).
+- `confirmFinish` fans level updates out via `Promise.allSettled` so a
+  single failed item doesn't kill the rest (addresses the chained-await
+  risk in IMPL_PLAN_COOK_MODE §1 Chunk 1).
+- Celebration toast varies by `meals_cooked`: *"All eaten — hope it was
+  good."* on 0, *"You saved N meals — enjoy."* otherwise.
+**What changed — Chunk 2 (polish):**
+- Timer now displays a `q-linear-progress` fill-bar (computed
+  `timerProgress` from a captured `timerTotal`) below the MM:SS line;
+  flips to `negative` colour when it hits 0.
+- New `playTimerFinishTone()` plays a short 880 Hz sine pulse via
+  `WebAudio` (200 ms attack / 500 ms decay). Wrapped in try/catch —
+  silent fallback when iOS / PWA blocks audio without a user gesture.
+  `webkitAudioContext` fallback for older Safari.
+- Voice button renamed **Sous Chef** + `record_voice_over` icon. New
+  help menu (`q-menu` inside a help-icon button) listing the eight
+  hands-free commands so users discover them without trial.
+- New shared helper `web_app/src/helpers/formatQuantity.ts` (DEC-3 unit
+  list: `ml g kg l mg oz lb floz pt qt` = no-space; everything else
+  spaced). Cook mode now routes through it; other surfaces logged as
+  follow-up.
+**What changed — Chunk 3 (mid-cook ingredient UI):**
+- Ingredients render as one card per **base** location (top-level
+  breadcrumb node only — sub-areas collapse to the parent). Items with
+  no location fall into a "No location" group pushed to the bottom.
+- `StockItemChip` removed from the mid-cook ingredient row (and its
+  import). Stock-level chips only render on the finish surface now —
+  matches the proposal's §2.3 / L323b critique that level noise
+  mid-cook is "horrible" because the cook decision is already made.
+- Notes still render below the row; the swap UI is unchanged.
+- Quantity rendering routes through `formatQuantity()`.
+
+**Decisions made:**
+- **Per-row `Add to list`, not blanket auto-add.** Plan §1 Chunk 1
+  explicitly removes `finishAddRanOut`. The per-row button uses
+  `quickAddTargetListId` and surfaces "no active list — set a primary
+  first" when unset (mirroring the existing helper UX elsewhere).
+- **Action chips include `Unchanged` (DEC-5).** Resolved decision from
+  the proposal §5a; the plan says "decision already made; let the user
+  opt out per-ingredient too".
+- **Sous Chef button is now ghost-variant + labelled**, not a bare icon
+  toggle. Discoverability over compactness — voice features are a
+  notable feature and the unfamiliar name needs the label.
+- **Generated audio via WebAudio rather than embedded WAV.** Zero
+  asset weight per the IMPL plan's "keep asset weight near zero" note.
+  Safari/iOS fallback explicit; silent failure is acceptable because
+  the toast + Sous Chef "Timer finished" speech already cover the
+  signal.
+- **`formatQuantity` callers replaced opportunistically.** Cook mode
+  done; rest logged as FU-097 — won't sweep proactively (R-007 scope
+  discipline).
+- **No structural changes to Sous Chef behind the scenes.** Listening
+  + speech still go through the existing `useVoiceInput` /
+  `useSpeechOutput` composables; this is pure UX rename + popover.
+- **Engineering close-gate**: R-001 (cook mode now consumes shared
+  `formatQuantity`; finish dialog uses BaseDialog + BaseButton +
+  `q-btn-toggle` / `q-select` primitives — no hand-rolled chrome);
+  R-002 (no hex / palette colours added; `track-color="grey-3"` on
+  the q-linear-progress was rejected mid-edit and removed); R-003
+  (the `down_one` / `out` action resolution is client-side intent →
+  the server is the one source of truth for the resulting level write
+  via `updateStockLevelAsync`); R-007 (Chunk 5 explicitly NOT touched
+  — `usedIds` + `doneSteps` still exist and feed the finish row build;
+  per-step highlight stays deferred); R-008 (comments cover *why* the
+  chips/dropdown coexist + why audio is silent-fallback); R-011 (used
+  `q-btn-toggle`, `q-linear-progress`, `q-menu` rather than hand-rolled
+  equivalents). No unexplained violations.
+
+**Files touched:**
+- `web_app/src/helpers/formatQuantity.ts` (new),
+  `web_app/src/pages/RecipeCookMode.vue`,
+  `web_app/src/style/icons.ts` (added `record_voice_over`),
+  `CHANGELOG.md` (Unreleased § Added), `DORA_FOLLOWUPS.md` (FU-096
+  browser-verify + FU-097 formatQuantity rollout).
+
+**Verification:**
+- Static only (no Python venv / node_modules). Grep-checked the removed
+  `finishUpdateLevels` / `finishAddRanOut` refs are gone (only one
+  remaining is the comment explaining the change). `StockItemChip` and
+  `nextLowerLevelId` for the blanket update are still defined; the
+  blanket logic is gone.
+- **Not verified**: cook mode end-to-end in the browser. Logged
+  **FU-096** with a step list.
+
+**Next up:**
+1. **FU-096** browser-verify these three chunks (timer audio in PWA,
+   the per-row finish flow against a real recipe with substitutes, the
+   location grouping).
+2. **C-3 Chunk 5 (highlight + per-step features)** is the next cook-mode
+   chunk and Chunk 4 (structured steps, today's earlier work) is
+   complete — that's the unblocked path. Can also pick up **C-3 Chunk
+   6 (serving headcount)** opportunistically, gated on C-5.
+3. Browser-verify backlog continues: cookbook FU-083/085/088/089/091,
+   P6-01 chain, FU-051.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 6 (structured recipe steps) — IMPLEMENTED
+**Status:** complete (backend + frontend, static-only — no env). Largest single chunk in IMPL_PLAN_COOKBOOK. Unblocks C-3 cook-mode Chunk 5.
+**What changed — Backend:**
+- New `RecipeStep` entity (`domain/entities/recipe_step.py`) + table mapping
+  (`persistence/table_mappings.py`) — self-referential `parent_step_id` for
+  exactly one level of sub-steps; `sequence`, `text`, `hint`.
+- New `RecipeStepIngredient` + `RecipeStepTool` link tables (pure id pairs,
+  CASCADE both ways, no standalone mapping — match the tag/tool pattern).
+- Migration `c9d4f8e2a5b6` (down_rev = head `b8e3f1a6d2c4`): creates the 3
+  tables + indices, clean downgrade.
+- `recipe_step_access.py` (new) — `StepWrite` dataclass + `has_structured_steps`
+  + `has_structured_steps_for_recipes` + `get_steps_for_recipe` (one query
+  for steps + two batch queries for link rows; flat shape, ordered parents-
+  first) + `replace_steps_for_recipe` (validates shape — empty text rejected,
+  depth>1 rejected, unknown parent_client_id rejected — and link targets —
+  ingredient ids must belong to this recipe, tool ids must exist — before
+  any write hits the DB).
+- `get_recipes.py`: new `RecipeStepDto` + `has_structured_steps: bool` on the
+  list DTO (one batch existence query in `_hydrate_structured_steps_flag`),
+  `steps[]` populated on detail (`handle_by_id`).
+- `create_recipe.py` / `update_recipe.py`: accept `steps[]`; ingredients get
+  an optional `client_id` so steps can reference them before the server has
+  assigned a real UUID. On update, ingredient_client_ids fall back to "parse
+  as UUID" so a steps-only save (no ingredient replace) works.
+- `import_recipe_from_url.py`: new `_coerce_structured_steps` maps
+  schema.org `recipeInstructions` HowToStep → flat step list, HowToSection
+  → parent step + sub-steps. Freeform `_coerce_instructions` stays as the
+  fallback (same input, both run). `ImportedRecipeDto.steps[]` carries the
+  parsed result; client_ids are server-assigned UUIDs ready to feed into
+  `steps[].client_id`.
+- `data/restore_shared.py`: 3 new backup sections (`recipe_steps`,
+  `recipe_step_ingredients`, `recipe_step_tools`) inserted in dependency
+  order, REQUIRED_FKS extended, CHILD_AUTO_INCLUDE wires steps as a child
+  of recipes.
+
+**What changed — Frontend:**
+- `models/recipe.ts`: new `RecipeStep` type + `has_structured_steps` /
+  `steps[]` fields on `Recipe`.
+- `services/api/recipeApiService.ts`: `RecipeStepCommand` + ingredient
+  `client_id` field on both create/update commands; `ImportedStep` + `steps`
+  on `ImportedRecipe`.
+- New `components/recipes/recipeStepEditorTypes.ts` — shared editor types
+  (`EditableStep`, `StepRowView`, `IngredientOption`, `ToolOption`) in a
+  plain .ts so both .vue components and the host page import cleanly.
+- New `components/recipes/RecipeStepsEditor.vue` — owns the step list,
+  emits `update:steps`. Flattens steps for rendering (top + its subs,
+  next top, etc.), exposes `canMoveUp/Down`, repacks sibling `sequence`
+  on every mutation so the saved order stays tight.
+- New `components/recipes/RecipeStepRow.vue` — one editable step:
+  text/hint inputs, ingredient + tool multiselects (use-chips), up/down
+  + add-sub-step + remove buttons. Depth-1 sub-steps are indented and
+  can't spawn further sub-steps (button hidden).
+- `pages/RecipeDetailPage.vue`: replaced the Instructions card with a
+  Structured/Freeform toggle (q-btn-toggle). Structured mode shows the
+  editor + an "Advanced — freeform instructions" expansion as fallback;
+  freeform shows the existing textarea. Form gains `steps[]` +
+  `steps_mode`; hydrate uses each existing `recipe_ingredient_id` as the
+  step editor's `client_id` so existing recipes round-trip without
+  rekeying. Save sends `steps: []` in freeform mode (explicit clear)
+  and the full editor list in structured mode. `addIngredient` /
+  `removeIngredient` assign + cascade-clean `client_id`. URL importer
+  pre-fill adopts `imported.steps` when present (auto-switches to
+  structured); falls back to freeform when the source had only a string.
+- `style/icons.ts`: added `arrow_upward`, `arrow_downward`,
+  `subdirectory_arrow_right`, `notes`.
+
+**Decisions made:**
+- **Replace semantics for steps** (mirrors how `ingredients` is already
+  handled). Simpler than diff semantics, matches the nested-write contract.
+- **`client_id` for cross-array linkage**, generated by the editor via
+  `crypto.randomUUID`. Ingredients carry it; steps reference it via
+  `ingredient_client_ids`. On update without an ingredient replace, the
+  client sends the existing `recipe_ingredient_id` and the server's
+  resolver tries client_id map first, then `UUID(token)` — single contract,
+  both modes.
+- **Structured ⇄ freeform mode as a toggle**, not always-both. Saving in
+  freeform sends `steps: []` (explicitly clears server-side structure);
+  saving in structured leaves `instructions` editable in an Advanced
+  expansion (kept as cook-mode fallback, per the plan's "users can mass-
+  edit" carve-out). Default mode = structured iff `has_structured_steps`.
+- **No data migration** of existing recipes' `instructions` — they keep
+  the freeform path; users opt in by editing. (Plan §6 explicitly says
+  no data migration.)
+- **Up/down buttons instead of drag-and-drop reorder for v1.** The IMPL
+  plan asks for drag-handle reorder using the shopping-list pattern; the
+  pattern fits but the nested (top ↔ sub-step) case adds complexity not
+  worth the first review pass. Logged FU for the upgrade.
+- **No edit-dialog steps surface for create.** Users create a recipe shell
+  via `RecipeEditDialog.vue`, then add structure on the detail page. Keeps
+  the quick-add path lean. Logged FU.
+- **Engineering close-gate** (`ENGINEERING_STANDARDS.md`): R-001 — extracted
+  shared types into `recipeStepEditorTypes.ts` rather than re-declaring,
+  and the editor + row are themselves the reusable primitives (not raw
+  q-cards in the page). R-003 — server owns step ordering + validation;
+  client sends intent, server enforces. R-005/R-006 — additive migration
+  with clean down + indices; no batch alter needed. R-007 — scope held to
+  Chunk 6; cook-mode per-step highlight (C-3 Chunk 5) stays deferred; the
+  edit-dialog isn't reshaped here. R-010 — typed `UUID | str` boundaries
+  on the server `_resolve_ing`; no `# type: ignore` shortcuts. R-011 — used
+  Vue `defineModel`-friendly v-model + `<script setup>` throughout, Quasar
+  primitives (`q-btn-toggle`, `q-input autogrow`, `q-select use-chips`,
+  `q-expansion-item`) rather than hand-rolled equivalents.
+
+**Files touched:**
+- BE: `domain/entities/recipe_step.py` (new), `persistence/table_mappings.py`,
+  `persistence/migrations/versions/c9d4f8e2a5b6_20260609_recipe_steps.py`
+  (new), `features/recipes/recipe_step_access.py` (new),
+  `features/recipes/get_recipes.py`, `features/recipes/create_recipe.py`,
+  `features/recipes/update_recipe.py`,
+  `features/recipes/import_recipe_from_url.py`,
+  `features/data/restore_shared.py`.
+- FE: `models/recipe.ts`, `services/api/recipeApiService.ts`,
+  `components/recipes/recipeStepEditorTypes.ts` (new),
+  `components/recipes/RecipeStepsEditor.vue` (new),
+  `components/recipes/RecipeStepRow.vue` (new),
+  `pages/RecipeDetailPage.vue`, `style/icons.ts`.
+
+**Verification:**
+- Static only (no Python venv / node_modules). Mapping/imports grep-checked;
+  migration follows the Chunk 5 (`b8e3f1a6d2c4`) shape.
+- Hasn't been run against a live DB; logged FU-092 (Chunk 6 browser-verify).
+
+**Next up:**
+- **User browser-verify FU-092** (this chunk) — migration, save round-trip,
+  URL import with structured steps, backup/restore round-trip.
+- Cook-mode IMPL plan Chunk 5 (per-step highlight + per-step tools/hints)
+  now unblocked.
+- Open browser-verify backlog continues: FU-083 / FU-085 (filter half) /
+  FU-088 / FU-089 / FU-091 (Cookbook); FU-066/068/069/072/073/075/076
+  (P6-01); FU-051 (state-ownership Chunks 3–5).
+
+**Open questions for user:** none.
+
+---
+
 ## Entry template — copy this when adding a new entry
 
 ```
@@ -21,6 +1767,323 @@ next.
 **Next up:** explicit pointer. Name the next prompt file, or "awaiting user decision on X", or "blocked by Y".
 **Open questions for user:** anything that needs a human call before the next agent can proceed.
 ```
+
+---
+
+## 2026-06-09 — C-7 Cart Button: decisions resolved + IMPL_PLAN_CART_BUTTON.md drafted.
+**Status:** complete (design pass — NO code).
+**What changed:**
+- **`PROPOSAL_CART_BUTTON.md`** — status → "Decisions resolved 2026-06-09"; added **§7a** table closing all 7 open decisions + a dependency note (Axis B can use draft inference now; no `is_primary` adapter).
+- **New `IMPL_PLAN_CART_BUTTON.md`** — 4 chunks + verify-state, first-chunk DoD, run order, cross-cutting notes, feedback-coverage table.
+- **Doc-graph**: new `### IMPL — Cart Button` C-impl row + cross-map row.
+**The 7 decisions (1 diverged, 1 refined):**
+1. Already-on click → **toggle**: 1 list → remove silently; 2+ → popover (refined from the proposal's flat popover — single-list case is now a frictionless toggle-off).
+2. 2+ products → **always show the choice modal** (diverged — user wants the offer choice explicit, not silent preferred-pick).
+3. Standalone-product line → nullable `product_id` on the line + cascade rules (accepted).
+4. Remember list pick → app-wide for the session (accepted).
+5. Quantity → never in quick paths (accepted).
+6. Bulk → one summary toast (accepted).
+7. Swipe → deferred (accepted).
+**Chunk shape:** 1 `AddToListButton` component + state-aware toggle + Axis A/B (no schema; closes FU-038 double-toast; adopts ~10 surfaces) → 2 combined QuickAddSheet modal (both-axes-ambiguous; quantity here only) → 3 **standalone-product line model** (the schema rock: nullable `stock_item_id` + new `product_id`, nest/cascade rules) → 4 meal-plan "generate" routes through Axis B.
+**Key dependency finding:** the **shopping-list status model (P6-01) has landed** (`draft/shopping/done` + inferred single-DRAFT target), so **Axis B uses draft-list inference directly** — the proposal's `is_primary` adapter (§8 step 4) is unnecessary. Confirmed `ShoppingListLine.stock_item_id` is non-nullable + no `product_id` → Chunk 3 schema work needed.
+**Decisions made:**
+- Chunk 1 is no-schema + high-value (the component + toggle + kills the double-toast); the standalone-product migration (Chunk 3) waits until the component is proven.
+- C-1 stock row, C-3 cook-mode finish, recipe detail, My Products all **consume** this component; cart logic isn't redefined elsewhere.
+- **Engineering pre-note:** membership/`cartStateFor` server-derived (R-003); BaseButton/BaseDialog/theme tokens; one `AddToListButton` with a `variant` prop (R-001) replacing 13 hand-rolled controls.
+**Files touched:** `docs/04_proposals/PROPOSAL_CART_BUTTON.md` (§7a + status), `docs/04_proposals/IMPL_PLAN_CART_BUTTON.md` (new), `docs/00_DOC_GRAPH.md` (C-impl row + cross-map).
+**Verification:** none needed — docs only. Verify-state grep-checked: 13 cart surfaces per proposal §1; status model landed; line is stock_item_id-anchored only.
+**Next up:** **C-7 Chunk 1** (`AddToListButton` + state-aware toggle, no schema, closes FU-038) is the first reviewable chunk. Also queued: Stock Overview Chunk 1; Cookbook Chunk 6 (paused).
+**Open questions for user:** none — clear to build C-7 Chunk 1 on say-so.
+
+---
+
+## 2026-06-09 — C-1 Stock Overview: decisions resolved + IMPL_PLAN_STOCK_OVERVIEW.md drafted.
+**Status:** complete (design pass — NO code). User paused Cookbook to start Stock Overview.
+**What changed:**
+- **`PROPOSAL_STOCK_OVERVIEW.md`** — flipped header to "Decisions resolved 2026-06-09"; added **§7a Resolved decisions** table closing all 7 §7 open items.
+- **New `IMPL_PLAN_STOCK_OVERVIEW.md`** (~8 chunks) mirroring the Cookbook/Cook-Mode/Shopping-Lists IMPL shape: verify-state audit, chunked PRs, first-chunk DoD, run order, cross-cutting notes, full L63–L99 feedback-coverage table.
+- **Doc-graph** wired: new `### IMPL — Stock Overview` row in C-impl + a proposal→implementation cross-map row.
+**The 7 decisions (user calls; 3 diverged from the proposal's recommendation):**
+1. Detail nav → desktop drawer + mobile full-page, one shared component (accepted).
+2. Miss-tap → rely on well-sized buttons (accepted).
+3. Open/in-use toggle → **KEEP one-tap in the row** (diverged — proposal said move to detail).
+4. Scan → one unified action-first scan-mode, gated `scanning_enabled` (accepted).
+5. Metric → keep "# recipes" until C-2, then swap (accepted).
+6. Row visuals → status outline (neutral/amber/red) + fill-on-select (accepted).
+7. 50-cap → **virtualised / infinite-scroll paging** (diverged — proposal offered a quick `?limit` bump; user wants proper virtualisation).
+**Chunk shape:** 1 correctness (virtualise + filtered export, closes FU-035) → 2 top/footer/filters (layout) → 3 row rebuild (kill chip, level-button focus, outline/select; cart=C-7 placeholder) → 4 expiry → 5 detail nav (drawer+full-page) → 6 images (reuse the recipe image pattern; **builds FU-033**) → 7 unified scan-mode → 8 planned-meals metric (deferred, gated C-2).
+**Decisions made:**
+- **Stock images Chunk 6 reuses the Chunk-5 recipe image pattern** (data-URL storage + bytes endpoint + has_image DTO) and effectively builds FU-033 — one mechanism, not two.
+- **C-7 cart, FU-033 images, C-2 metric, C-cross location** are gating deps; chunks ship placeholders / keep-current until those land (called out per chunk).
+- `StockItemChip` removed from the overview row only; app-wide removal is a separate follow-up.
+- **Engineering pre-note:** Chunk 1 must keep `stockItemStore` the single list owner (R-003); status/counts server-derived where cross-entity; theme tokens + BaseButton/FilterBar/PageCountsFooter throughout (Wave-A).
+**Files touched:** `docs/04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (§7a + status), `docs/04_proposals/IMPL_PLAN_STOCK_OVERVIEW.md` (new), `docs/00_DOC_GRAPH.md` (C-impl row + cross-map).
+**Verification:** none needed — docs only. Verify-state grep-checked the live files (StockOverview.vue uses FilterBar+PageCountsFooter; chip at `components/chips/StockItemChip.vue`; row at `components/stock/StockItemRow.vue`; 50-cap is the client fetching page 1 only).
+**Next up:** **Stock Overview Chunk 1** (virtualised list + filtered export, closes FU-035) — the first reviewable, decision-free chunk. Cookbook Chunk 6 (structured steps) remains paused per user.
+**Open questions for user:** none — clear to build Chunk 1 on say-so.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 5 (images + tools) — IMPLEMENTED.
+**Status:** complete (backend + frontend); not run/verified (no env). Closes FU-039.
+**What changed — Tools (mirrors Chunk 2 vocab):**
+- New `Tool` entity ({id,name,sequence}); `tool_table` + `recipe_tool_table` (recipe_id, tool_id) + Tool mapper in `table_mappings.py`.
+- Migration `b8e3f1a6d2c4` (down_rev = head `a7d2f4c9e1b8`): create Tool + RecipeTool, seed 18 default tools. `seed.py` seeds tools + sample links.
+- `recipe_tool_access.py` (mirror recipe_tag_access): get/set tool ids, find_with_all/any, resolve-by-id-or-name.
+- `get_recipes.py`: DTO `tool_ids[]` (hydrated alongside tags) + filter axes `tools_include`/`tools_exclude`.
+- `create_recipe.py`/`update_recipe.py`: accept `tool_ids` (replace semantics).
+- `manage_tools.py` CRUD + `TOOL_ROUTER` (auto-registered). `restore_shared.py`: Tool + RecipeTool backup sections + required-FK classifications.
+**What changed — Images (FU-039, pioneered pattern):**
+- Stored as a **data-URL string** in the existing `Recipe.image` LargeBinary column (the product impl is acknowledged-buggy; this is a clean alternative for FU-033 to follow).
+- `create_recipe`/`update_recipe` accept `image` (data-URL string, 6M-char cap; explicit null clears on update).
+- New `GET /api/recipes/<id>/image` parses the stored data URL → raw bytes + mimetype (404 when none/unparseable).
+- DTO carries only `has_image: bool` (no inlined base64). `recipeImageUrl(id, version)` helper builds the endpoint URL.
+- `RecipeImageField.vue` (new, controlled, reused in edit dialog + detail) — pick/preview/clear + 4MB client cap + FileReader→data URL.
+- RecipeCard shows the image via the endpoint when `has_image` (placeholder fallback on none/error). Detail page: image card with preview (picked data URL → endpoint → placeholder), cache-bust (`imageVersion++`) after a save that changed the image; only sends `image` when actually changed.
+**Frontend vocab wiring:** `Tool` model; `toolApiService`; `recipeVocabStore` gains `tools`; recipe model `tool_ids`+`has_image`; edit dialog + detail tools multiselect; overview Tools tri-state filter (parameterised `DietaryTagFilter` with a `label` prop); `RecipeVocabSettings` Tools editor (reused `VocabListEditor`).
+**Decisions made:**
+- **Data-URL-string image storage + dedicated bytes endpoint + has_image-only DTO.** Keeps list/detail JSON small, gives a plain `<img src>`, avoids the product impl's broken decode. Candidate pattern for FU-033.
+- **Did NOT inline image bytes in the list DTO** → but the base query still loads the blob column to compute has_image (perf cliff) → logged FU-090 with the deferred-column fix (kept correctness-first this chunk).
+- **Reused DietaryTagFilter for tools** via a new `label` prop rather than a second component (R-001); reused VocabListEditor + the vocab store; extracted RecipeImageField (2 uses).
+- **No cook-mode per-step tool highlight** — that's C-3 Chunk 5, gated on structured steps (Chunk 6); Chunk 5 only ships the tools data + filters.
+- **Engineering close-gate:** R-001 (3 reuses/extractions above), R-003 (tool_ids/has_image server-derived; image served by endpoint; client renders), R-005/R-006 (additive migration + downgrade + seed-in-migration; no batch needed — create+insert only), R-007 (stayed in images+tools scope; cook-mode highlight deferred; perf deferred as FU-090), R-008 (comments cover the image data-URL approach + cap + perf note), R-010 (typed FK ids). No unexplained violations.
+- **ADR candidate:** the image storage/serving pattern — note for promotion if FU-033 adopts it.
+**Files touched:** BE: `domain/entities/tool.py` (new), `table_mappings.py`, migration `b8e3f1a6d2c4` (new), `seed.py`, `recipe_tool_access.py` (new), `get_recipes.py`, `create_recipe.py`, `update_recipe.py`, `features/tools/{__init__,manage_tools}.py` (new), `routers.py`, `data/restore_shared.py`. FE: `models/recipeVocab.ts`, `models/recipe.ts`, `services/api/toolApiService.ts` (new), `services/api/recipeApiService.ts`, `stores/recipeVocabStore.ts`, `components/recipes/RecipeImageField.vue` (new), `components/recipes/DietaryTagFilter.vue`, `components/RecipeCard.vue`, `pages/RecipesOverview.vue`, `pages/RecipeDetailPage.vue`, `components/RecipeEditDialog.vue`, `pages/settings/RecipeVocabSettings.vue`, `style/icons.ts`.
+**Verification:** static only (no Python venv / node_modules). Grep-checked imports/defs + DTO field wiring. Logged FU-091 (verify) + FU-090 (perf).
+**Coverage (Chunk 5 close-list):** §2.3 (images) ✅, §2.6 (tools) ✅, L249 (recipe image) ✅, L310 (tools required + filter) ✅, FU-039 ✅ (→ RESOLVED).
+**Next up:** browser-verify Chunk 5 (FU-091); the standing FU-087 filter bug still gates seeing overview filters. Then **Chunk 6 (structured steps)** — the big one that unblocks C-3 cook-mode Chunk 5.
+**Open questions for user:** none blocking. (FU-033 StockItem.image could now adopt the same image pattern — flag if you want it pulled forward.)
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 4 (detail-page cleanup) — IMPLEMENTED.
+**Status:** complete (frontend only); not run/verified (no env).
+**What changed (all `RecipeDetailPage.vue` unless noted):**
+- **Header/toolbar (L304/305/306/307/308/315/289):** name is now its own labelled outlined field (was a borderless heading that didn't read as editable). Actions moved into a **sticky top toolbar** (`row` that wraps, `position: sticky`): **Mark cooked** (prominent primary), Cook mode, Log cook, Print, `q-space`, Save, kebab. **Delete** lives in the kebab (far from Mark cooked, L305). **CSV export removed** (L306); Print promoted out of the kebab (L307). Removed the now-redundant sidebar "Start cook mode" item.
+- **Mark cooked (L304):** new `onMarkCooked` = `cookAsync(id, 1)` (one-tap "I made it"); "Log cook…" dialog still handles N.
+- **Cook-mode guard (L297/L299/L309):** `onStartCookMode` now opens a **BaseDialog** when `isDirty || !cookableNow`. Buttons: Cancel (stay) / Start without saving / Save & start (when dirty) or Start anyway (when only not-cookable). `onGuardSaveAndCook` saves then only proceeds if the save actually succeeded (`!isDirty && !nameError`) → blocks entry on a failed save. Click-out/Esc just close (BaseDialog v-model), never navigate.
+- **Cook-mode exit (L298)** — `RecipeCookMode.vue` `exitCookMode()` now routes to `/recipes/:id` (detail), not `/recipes` (overview).
+- **Save (L286/L289):** blocks save if any ingredient row has no stock item (was silently dropping the row), and if name is blank; then sends **only changed scalar fields** (true PATCH — an unchanged name can't trip the name-uniqueness check). Arrays (ingredients, dietary_tag_ids) always sent (replace semantics).
+- **Ingredient row (L292):** one status chip — "Missing" (negative) wins, else the stock-level chip — plus a soft row tint when missing (`.ingredient-row--missing`), instead of stacking level + Missing chips.
+- **Cookable box (L290):** `dora-bg-positive-soft`/`dora-bg-warning-soft` + `text-positive`/`text-warning` (theme-aware) instead of hard `bg-positive` (unreadable in dark).
+- **L313:** "Meals on hand" → "Available meals". **L314:** the meal ± is the Chunk-3 `MealStepper` which already uses `:disable` (no not-allowed cursor flash).
+**Decisions made:**
+- **Changed-fields PATCH** is the honest fix for L286 (was likely already non-repro server-side, but only sending real changes removes the failure mode entirely and is cleaner). Resolves the recipe side of the B3/FU-017 "can't save unless I change the name" class.
+- **Mark cooked = +1 cook** (same as Log-cook-1) rather than a no-op last-made bump — matches the pool model where cooking adds portions.
+- **Guard is a custom BaseDialog, not `$q.dialog`** — `$q.dialog` only gives 2 buttons and its cancel/dismiss semantics were exactly the L299 complaint; a BaseDialog gives a true Cancel + 3 options + no-navigate-on-dismiss.
+- **Engineering close-gate:** R-001 (reused MealStepper; guard is a justified one-off), R-003 (changed-fields is transport logic; name-uniqueness stays server-side), R-007 (stayed in detail-cleanup scope — nutrition placement→Chunk 9, source→Chunk 7, tools→Chunk 5, versions→Chunk 8, ingredient-notes-purpose & personal-notes left as open feedback, not in Chunk 4's close-list), R-008 (comments cite L-numbers + WHY), no migration, no new ADR.
+**Files touched:** `web_app/src/pages/RecipeDetailPage.vue`, `web_app/src/pages/RecipeCookMode.vue`.
+**Verification:** static only (no env). Tag balance + handler/computed existence grep-checked. Logged FU-089.
+**Coverage (Chunk 4 close-list):** L283/284 (done Chunk 2) ✅, L285 (picker already filterable) ✅, L286 ✅, L289 (title field + ingredient validation) ✅, L290 ✅, L292 ✅, L297 ✅, L298 ✅, L299 ✅, L304 ✅, L305 ✅, L306 ✅, L307 ✅, L308 ✅, L309 ✅, L313 ✅, L314 ✅ (Chunk 3), L315 ✅. Explicitly deferred: L287 nutrition placement (Chunk 9), L291 ingredient-notes purpose (open question), L311 personal notes (later).
+**Next up:** browser-verify Chunk 4 (FU-089), still-open FU-087 (filter bug) + FU-088 (Chunk 3). Then Chunk 5 (images + tools) or Chunk 6 (structured steps — gates C-3 cook mode).
+**Open questions for user:** L291 ("what's the point of ingredient notes?") — keep, repurpose, or drop? Not actioned this chunk.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 3 (card redesign + naming) — IMPLEMENTED.
+**Status:** complete (frontend + tiny backend addition); not run/verified (no env).
+**What changed:**
+- **Backend:** added server-derived `committed_meals` to `RecipeDto` (`get_recipes.py`) — the raw (un-floored) sum of future un-consumed meal-plan servings, hydrated alongside `unallocated_meals`. Lets the card show a true shortfall (committed > available) in red. State-ownership-clean (R-003): server owns the fact, client renders.
+- **`MealStepper.vue`** (new) — compact ±/count stepper, presentational (parent owns the API call + busy). **Reused in 3 places** (RecipeCard, RecipeDetailPage, StockItemDetailPage) → R-001.
+- **`RecipeCard.vue` redesign:** image-placeholder tile (coloured by name hash + initial; real images = Chunk 5/FU-039), emphasised name, cuisine·category subtitle, favourite toggle floated on the media tile, chips (time/serves/difficulty), dietary chips, cookable/missing/low chips, **meals box** (MealStepper + allocated badge that goes red on shortfall), **Cook as the only primary action** (filled button). **Removed Edit/Duplicate/Delete** from the card — card click opens detail (the edit+delete surface, which already has delete). Kebab keeps add-all-to-list + add-to-meal-plan. New `adjust-meals` emit; dropped `edit`/`duplicate`/`delete` emits.
+- **`RecipesOverview.vue`:** wired `@adjust-meals` → `onAdjustMeals` (store.adjustMealsAsync); removed the now-dead `onEditClick`/`onDuplicate`/`confirmDelete`; collection groups are now **collapsible rounded surface boxes** (`dora-bg-sunken`, per-group collapse state).
+- **`RecipeDetailPage.vue`:** meals card ± buttons replaced with `MealStepper`; breadcrumb "Recipes" → "Cookbook" (+ `/recipes`→`/cookbook` pushes).
+- **`StockItemDetailPage.vue`:** wired `@adjust-meals` so the recipe cards' steppers work there too (not dead).
+- **Naming sweep (FU-031):** `MainLayout` main-menu label "Recipes"→"Cookbook", `nav.recipes` command + `g r` shortcut → "Go to Cookbook" (→ `/cookbook`); `DashboardPage` stale "'Mark Made' button" tip reworded to "Logging a cook…".
+**Decisions made:**
+- **Added `committed_meals` rather than fake the shortfall.** The DTO only had `unallocated_meals` (floored at 0), so a true "planned more than cooked" shortfall was underivable client-side. A small server field is the honest fix (R-003) vs. a misleading always-neutral badge.
+- **Kept Delete in the detail page only.** The card lost Edit/Duplicate/Delete per the plan; the detail page already had Delete (Chunk 4's "delete moves to detail" was effectively pre-done), so no capability gap. Duplicate is intentionally gone (returns as "New version" in Chunk 8).
+- **Command-palette result-group label stays "Recipes"** — it labels recipe *results*, not the page; only page/nav affordances were renamed to Cookbook.
+- **Engineering close-gate:** R-001 (MealStepper extracted, 3 uses), R-003 (committed_meals server-owned; shortfall is pure display derivation), R-005/R-006 (no migration — committed_meals is computed), R-007 (stayed in card+naming+grouping scope; images deferred to Chunk 5; didn't expand into Chunk 4 detail cleanup), R-008 (comments cover placeholder/FU-039 + committed_meals rationale). No unexplained violations. No new ADR.
+**Files touched:** `dora_api/features/recipes/get_recipes.py`; FE: `models/recipe.ts`, `components/recipes/MealStepper.vue` (new), `components/RecipeCard.vue`, `pages/RecipesOverview.vue`, `pages/RecipeDetailPage.vue`, `pages/StockItemDetailPage.vue`, `layouts/MainLayout.vue`, `pages/DashboardPage.vue`.
+**Verification:** static only (no Python venv / node_modules). Logged FU-088. NOTE: had to strip a UTF-8 BOM accidentally added to `RecipeDetailPage.vue` by a PowerShell whole-file replace (restored to match the no-BOM convention of sibling .vue files) — flagged so a reviewer knows that file had a mechanical round-trip.
+**Coverage (Chunk 3 bullets):** L230/L242-248/L253/L270/L274-277 (card redesign + Cook-only + grouping) → card + collapsible groups ✅; §2.1/§2.10 ✅; FU-031 (stale Recipes labels) → ✅ nav/commands/breadcrumb. Image wiring (L249) explicitly deferred to Chunk 5 (placeholder only).
+**Next up:** **FU-088** browser-verify Chunk 3 (+ the still-open **FU-087** overview-filter bug, which also blocks seeing the new cards' filters). Then Chunk 4 (detail-page cleanup) or Chunk 5 (images + tools).
+**Open questions for user:** none blocking.
+
+---
+
+## 2026-06-09 — Chunk 2 browser-feedback pass: detail-page tags fix + dead-endpoint cleanup.
+**Status:** complete (small fixes) + one bug triaged to the user.
+**What changed:**
+- **FU-067 resolved** — removed the dead `append_low_stock_essentials` backend route (`features/shopping_lists/auto_generate.py`) + the orphaned `appendLowStockEssentialsAsync` method (`shoppingListApiService.ts`). Static grep confirmed zero callers; no orphaned imports.
+- **Detail-page dietary tags (FU-085 gap, L264)** — the RecipeDetailPage (the primary edit surface) had **no** dietary-tag editor; tags only existed on the add modal. Added a `dietary_tag_ids` multiselect (grouping-prefixed options from the vocab store) + form field + hydrate + save wiring to `RecipeDetailPage.vue`.
+- **FU-080 resolved** — user confirmed menu-highlight subroute fix works.
+**Decisions made:**
+- **Did NOT blind-fix the overview filter bug (FU-087).** User reports the recipes-overview filter panel shows nothing / the toggle does nothing — but a full static review (FilterBar usage matches the working StockOverview, FilterChip import path correct, BaseButton forwards click, all filter computeds guard empties) found no defect. Fixing blind risks regressions; logged FU-087 with a precise console-output request instead.
+**Files touched:** `dora_api/features/shopping_lists/auto_generate.py`, `web_app/src/services/api/shoppingListApiService.ts`, `web_app/src/pages/RecipeDetailPage.vue`, `DORA_FOLLOWUPS.md`.
+**Verification:** static only (no env). The detail-page tag editor + dead-code removal are review-grade.
+**Next up:** **FU-087** — get the browser console error for the overview filter bug, then fix. It gates FU-083 + the filter half of FU-085. After that, the rest of FU-085's checklist, then Cookbook Chunk 3.
+**Open questions for user:** the FU-087 diagnostics (console errors, is the Filters toggle visible, viewport width, hard-refresh).
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 2 (tag taxonomy overhaul) — IMPLEMENTED.
+**Status:** complete (large backend + frontend change; not run/verified — no Python venv or node_modules on this Windows box).
+**Scope decisions (user-confirmed up front):**
+- **Full CRUD + settings pages now**, not deferred to C-cross. Closes L238/L264/L283/L284 properly rather than stubbing.
+- **FK-ify cuisine/category now.** User: *"this is pre-release, nobody is using it, can do whatever breaking changes."* So the migration is a clean breaking change — no data conversion of existing recipe strings/tags. Saved as a durable memory (`dora-prerelease-breaking-changes-ok`).
+
+**What changed — backend:**
+- **New entities** `Cuisine`, `Category`, `DietaryTag` (`{id, name, sequence}`; DietaryTag also has a grouping `category` label). `dora_api/domain/entities/{cuisine,category,dietary_tag}.py`.
+- **`Recipe` entity reshaped**: `cuisine: str|None` / `category: str|None` → `cuisine: Cuisine|None` / `category: Category|None` relationships.
+- **`table_mappings.py`**: 3 new tables + mapper registrations; `recipe_table` drops `cuisine`/`category` strings, adds `cuisine_id`/`category_id` FK cols (mapped to hidden `_cuisine_id`/`_category_id` so verify_mappings stays happy, mirroring `_recipe_collection_id`); `cuisine`/`category` relationships use **`lazy="selectin"`** (deliberate departure from the noload default — they're tiny always-wanted lookups, so consumers don't each need an `.include()`). `recipe_tag_table.tag` String → `dietary_tag_id` FK.
+- **Migration `a7d2f4c9e1b8`** (down_revision = head `e1a4c7b2f9d0`): creates + seeds the 3 vocab tables (defaults mirror the old `RECIPE_TAG_CATALOGUE`), batch-mode alters Recipe (drop strings, add FK cols + FKs), rebuilds RecipeTag. Pre-release discard semantics, batch-mode for SQLite portability (R-005/R-006). Has a downgrade.
+- **`seed.py`**: seeds the 3 vocabularies; `make_recipe` resolves cuisine/category names → entities; sample dietary-tag links added via the association.
+- **`recipe_tag_access.py`** rewritten for `dietary_tag_id` (validate against DB rows; `resolve_tag_filter_values` accepts ids OR names so SPA-by-id and Dora-by-name both work; added `get_tag_ids_for_recipes` + `get_tag_names_for_recipes`). Uses Core tables throughout (no Core/ORM join mixing).
+- **`recipe_tags.py`** trimmed to just `RECIPE_TAG_DISCLAIMER` (catalogue is now DB-backed).
+- **`get_recipes.py`**: DTO now exposes `cuisine_id/cuisine_name/category_id/category_name` + `dietary_tag_ids`; `/recipes/tags` catalogue endpoint reads DietaryTag rows (value = id) + disclaimer.
+- **`create_recipe.py` / `update_recipe.py`**: accept `cuisine_id/category_id/dietary_tag_ids`; resolve + validate FK entities (404-style entity-existence errors); cuisine/category handled like recipe_collection_id (explicit null clears).
+- **`import_recipe_from_url.py`**: preview DTO returns `cuisine_id/cuisine_name/category_id/category_name`; resolves scraped names against existing vocab rows (read-only, **no creation** — keeps the no-persist contract).
+- **New CRUD features** `cuisines/`, `categories/`, `dietary_tags/` (mirror `manage_stock_groups.py`) + 3 routers in `routers.py`. Auto-registered via the `features` blueprint scan — no manual wiring.
+- **Consumer fixups**: `assistant/tools.py` (cuisine/category filters moved to Python post-load since they're relationships now; outputs use `.name`; tag helper → names; tags_include description refreshed; vegetarian mood profile now uses `tags_include`), `search/global_search.py` (subtitle via `.name`), `data/export_recipe.py` (`category_name`/`cuisine_name`), `data/restore_shared.py` (new Cuisine/Category/DietaryTag + RecipeTag backup sections in FK-correct order + FK pull-in/required classifications — RecipeTag was never backed up before, so that's a bonus).
+
+**What changed — frontend:**
+- **Models**: `models/recipeVocab.ts` (Cuisine/Category/DietaryTag); `models/recipe.ts` Recipe now has `cuisine_id/cuisine_name/category_id/category_name/dietary_tag_ids` (was `cuisine/category/tags`).
+- **API services**: `cuisineApiService`, `categoryApiService`, `dietaryTagApiService` (mirror stockGroup). `recipeApiService` create/update commands + `ImportedRecipe` updated to id fields.
+- **Store**: `recipeVocabStore` (cuisines/categories/dietaryTags + getAll).
+- **Tri-state filter component** `components/recipes/DietaryTagFilter.vue` (q-btn-dropdown, cycles +/−/neutral, stays open). Reusable for the future tools filter (Chunk 5).
+- **RecipesOverview**: cuisine + category single-selects (replacing the combined "tags" multiselect, L235); dietary filter → DietaryTagFilter; predicate uses `cuisine_id/category_id/dietary_tag_ids`; onDuplicate copies tag ids; loads the vocab store.
+- **RecipeCard**: shows `cuisine_name/category_name`; tag chips resolve ids→names via the vocab store (graceful empty if unloaded).
+- **RecipeEditDialog + RecipeDetailPage**: cuisine/category single-selects + dietary multiselect from the vocab/catalogue; form + save payloads use id fields; importer fills ids.
+- **DoraChat / ExportPrint**: recipe cuisine/category via `_name`.
+- **Settings**: `components/settings/VocabListEditor.vue` (generic name-only editor, used for cuisine + category — R-001), bespoke dietary-tag editor with its group field, in `pages/settings/RecipeVocabSettings.vue`; route `/settings/recipe-vocab` + SettingsShell nav entry.
+
+**Decisions made:**
+- **selectin for cuisine/category** — the one notable architectural call. Justified: tiny, always-wanted lookups; avoids include-management ripple across ~10 assistant/search/export sites. Noted inline in `table_mappings.py`.
+- **Importer resolves names→ids read-only** (no vocab creation during a preview) — preserves the importer's no-persist contract; unmatched values leave the select empty for the user.
+- **Filter axes accept ids (SPA) or names (Dora)** via `resolve_tag_filter_values`, so the assistant's name-based world keeps working without the SPA having to send names.
+- **Backup wiring pulled in** (beyond the IMPL plan's stated scope) because leaving the FK'd vocab tables unbackable would silently corrupt restores — the "do it properly" path (R-005/R-007 judgement).
+- **Engineering close-gate:** R-001 (VocabListEditor extracted for the 2 identical vocab editors; DietaryTagFilter componentised), R-003 (server owns the vocab; client renders), R-005/R-006 (batch-mode portable migration + downgrade + seed-in-migration convention), R-007 (no creep beyond the tag-taxonomy surface; structured steps / images / versions left for their chunks), R-008 (comments explain the selectin + read-only-import + blank-input WHYs), R-010 (typed FK ids end-to-end; `SortKey`-style unions where relevant). **No unexplained rule violations.** ADR evaluation: the "selectin for small always-wanted lookups" choice is a candidate recurring pattern — noted as FU-084 to consider promoting to an `R-0NN` if it recurs.
+
+**Files touched:** see CHANGELOG + the lists above (≈ 35 files: 3 entities, table_mappings, migration, seed, recipe_tag_access, recipe_tags, get/create/update/import recipe, 3 CRUD features + routers, assistant tools, global_search, export_recipe, restore_shared; FE: recipeVocab model, recipe model, 3 api services, vocab store, DietaryTagFilter, RecipesOverview, RecipeCard, RecipeEditDialog, RecipeDetailPage, DoraChat, ExportPrint, VocabListEditor, RecipeVocabSettings, routes, SettingsShell).
+
+**Verification:**
+- **NOT run.** No Python venv (WindowsApps stub only) → couldn't `alembic upgrade`, run the API, or pytest. No `node_modules` → couldn't `vue-tsc`/lint. All changes are review-grade, pattern-matched against existing code.
+- **Highest-risk, must-verify-in-a-real-env items** (logged as FU-085):
+  1. `alembic upgrade head` applies cleanly on SQLite **and** Postgres (batch-mode Recipe alter + RecipeTag rebuild + seed).
+  2. App boots: `verify_mappings()` passes for the 3 new entities + reshaped Recipe (the `_cuisine_id`/`_category_id` hidden-FK mapping is the risk).
+  3. selectin actually populates `recipe.cuisine`/`.category` on plain `repository.get(Recipe).all()` (assistant/global_search rely on it).
+  4. Recipe create/update/list round-trips cuisine_id/category_id/dietary_tag_ids; `/recipes/tags` returns DB tags.
+  5. Overview cuisine/category single-selects + tri-state dietary filter behave; RecipeCard chips resolve names.
+  6. Settings CRUD for all three vocabularies (create/rename/delete + usage counts + delete-warning).
+  7. Backup → restore round-trips the new tables in FK order.
+
+**Coverage (Chunk 2 feedback bullets, per CLAUDE.md cross-check):**
+- L235 (cuisine/category not lumped, not "tags") → ✅ distinct single-selects.
+- L236 ("recipe tags" vs "dietary tags") → ✅ labelled "Dietary tags" throughout.
+- L237 (tri-state +/−/neutral, dropdown stays open) → ✅ DietaryTagFilter.
+- L238 (settings page for recipe tags, seed defaults, add/edit/remove) → ✅ RecipeVocabSettings.
+- L255/L260 (cuisine/category single-select; why separate) → ✅ single-select, separate vocabularies.
+- L264 (dietary tags configurable: toggle/add/edit/delete) → ✅ dietary-tag editor.
+- L283/L284 (category/cuisine → configurable dropdowns) → ✅ edit form + detail single-selects from tables.
+- A2.2 (tag taxonomy) → ✅.
+- Out of scope (their own chunks): images (Chunk 5), structured steps (Chunk 6), versions (Chunk 8), cost/nutrition (Chunk 9).
+
+**Next up:** **Verify Chunk 2 in a real env** (FU-085) — this is the gating step before trusting it. Then Cookbook **Chunk 3** (card redesign + Cookbook/Mark-cooked naming) is the natural next visible-polish chunk, or Chunk 5/6 if the cook-mode axis is preferred.
+
+**Open questions for user:**
+- Default vocab sets — I seeded a reasonable cuisine list (Italian/Asian/Chinese/Japanese/Thai/Indian/Mexican/Mediterranean/American/French/Middle Eastern/Other) and category list (Main/Pasta/Rice/Stir fry/Soup/Salad/Side/Breakfast/Dessert/Snack/Drink/Sauce). Happy to tune the defaults.
+- The dietary-tag create/rename UX uses two sequential prompt dialogs (name, then group). If you'd prefer a single combined dialog, that's a small follow-up.
+
+---
+
+## 2026-06-09 — IMPL_PLAN_COOKBOOK Chunk 1 (comparison cut + sort/filter axes) — IMPLEMENTED.
+**Status:** complete (Chunk 1 closed; new follow-ups for browser verify + deferred sub-features).
+**What changed:**
+- **Comparison mode ripped.** Header "Compare" / "Show comparison" buttons gone; the ~95-line comparison dialog block removed from `RecipesOverview.vue`; `compareMode`, `selectedIds`, `showComparison`, `MAX_COMPARE`, `toggleCompareMode`, `onToggleSelect`, `selectedRecipes` all deleted along with the per-card checkbox plumbing.
+- **`RecipeCard.vue` cleaned up to match.** Removed the `selectable` / `selected` props, the `toggle-select` emit, the `<q-checkbox>` branch, the click-routing in `onCardClick`, and the now-unused `.recipe-card--selectable` / `.recipe-card--selected` CSS. The `highlightStockItemId?: string` prop became `highlightStockItemIds?: string[]` and the `dim` computed now checks whether any *non-highlighted* ingredient is still missing.
+- **`StockItemDetailPage.vue`** — its inline RecipeCard usage updated to pass `:highlight-stock-item-ids="[detail.stock_item_id]"`.
+- **Boolean filters → `FilterChip`.** `Favourites only`, `Cookable now` swapped from `q-toggle` to `FilterChip` to match StockOverview's filter-bar pattern (filter-bar consistency per L233 / IMPL §1.Chunk-1).
+- **New filters added:** `Have meals in pool` (`available_meals > 0`), `Planned in` (recipe appears in a future meal-plan entry — today or later), and a numeric `Meals ≥` input.
+- **Stock-item filter → multi-select with level-coloured rows.** State changed from `usesStockItemId: string | null` to `usesStockItemIds: string[]`. The `q-select #option` slot renders each option with a small dot coloured by `getStockLevelColour(stockLevelName)`; the option object carries the `stockLevelName` alongside `value`/`label`. The `?usesStockItem=` deep-link from stock-item detail still works (single id pre-fills a one-element array).
+- **Sort axes.** New `Sort by` `q-select` with four options — `name` (default), `last_made`, `meal_count`, `total_time`. Implementation: a new `sortedRecipes` computed between `filteredRecipes` and `groups` that does a stable in-place sort with null-aware comparators (nulls always sink to the bottom regardless of direction; ties break by name). The IMPL plan also lists **`created_at`** — dropped here because `Recipe` DTO doesn't expose a created timestamp; FU logged for a Phase-2 server addition.
+- **Blank-input bug (L234) hardened.** Both numeric inputs (`Missing ≤`, `Meals ≥`) now feed their hint strings through a `Number.isFinite` guard so a cleared/half-typed field shows no hint (not `> NaN`) and is excluded from `activeFilterCount`. The filter predicates were already guarding correctly; this is the cosmetic / count surface that read as "filter is on when it shouldn't be".
+- **Meal-plan store wired in.** `RecipesOverview` now loads `mealPlanStore.getMealPlansAsync()` alongside the other onMount fetches; the "planned in" filter derives the set of upcoming recipe ids client-side from `mealPlans[].entries[].scheduled_for`. This is a deliberate **temporary client-side derivation** — should move to a server-derived `is_planned` flag on the Recipe DTO when state-ownership work catches up. Logged FU-081.
+
+**Decisions made:**
+- **Path-prefix sort key naming** matches StockOverview's `SortKey` convention (`name` / `last_made` / `meal_count` / `total_time`) — a typed union rather than free strings (R-010).
+- **`created_at` sort axis dropped.** The IMPL plan called for it but the chunk's "no model changes" guard wins; the Recipe DTO has no created timestamp today. Logged as FU-082 for a Phase-2 server change (one column + DTO field; trivial when revisited).
+- **Planned-in filter client-side, not server-side.** Justified by "no model changes" + meal plans are already fully loaded in the store. Anti-pattern under R-003 if it stays — flagged as FU-081 with the resolution "move to server-derived `recipe.is_planned` when `IMPL_PLAN_STATE_OWNERSHIP` lands."
+- **FilterChip swap for all boolean filters, not just the new ones.** Mixing chips for new toggles + q-toggle for old ones would have looked worse than either pure pattern. The chip pattern also matches L242 ("nicer if sections/groupings were in a rounded box as the background") aesthetically.
+- **Multi-select stock-item picker option row uses a coloured dot + level caption**, not a full chip background — keeps the dropdown scannable. The full-bleed chip styling that L240 hints at would be heavier and is what Chunk 3 (card redesign) inherits when the filter result tints the matching ingredient on the card.
+- **Engineering close-gate:**
+  - **R-001** componentisation — leveraged existing `FilterChip` + `FilterBar` rather than rolling new chrome; no new components extracted (each new pattern has only one use here).
+  - **R-002** theme tokens — `getStockLevelColour` returns palette-name strings; no raw hex anywhere in the new code.
+  - **R-003** SSOT — cookability/missing remain server-owned. **The `planned-in` derivation is a deliberate carve-out**, justified above and logged as FU-081 to migrate when state-ownership work catches up. Inline note in `plannedRecipeIds` computed.
+  - **R-007** scope — comparison rip + filter/sort axes + blank-input cosmetic only. **Did not** touch card body redesign (Chunk 3), tag taxonomy (Chunk 2), or detail page (Chunk 4) even though they're tempting one-liners.
+  - **R-008** comments — kept the existing terse comments; new ones explain WHY (blank-input guard, planned-in deferral, level-coloured option rationale). No what-comments.
+  - **R-010** typed `SortKey`; predicate boundaries use `Number.isFinite` rather than string sniffing.
+
+**Files touched:**
+- `web_app/src/pages/RecipesOverview.vue` (main surface; ~250 lines net delta)
+- `web_app/src/components/RecipeCard.vue` (comparison plumbing strip; prop rename + computed)
+- `web_app/src/pages/StockItemDetailPage.vue` (one prop line — pass array form)
+- `CHANGELOG.md` (Unreleased: Added + Removed + Fixed for Chunk 1 and the menu fix)
+- `DORA_FOLLOWUPS.md` (FU-081, FU-082, FU-083 added)
+
+**Verification:**
+- **Not typechecked** — Windows machine has no `node_modules` installed; `vue-tsc` blows up across the whole tree with missing-module errors before it can lint these files. Changes are pattern-matched against surrounding code and reviewed against the IMPL plan acceptance list.
+- **Not verified in browser.** Whole chunk needs a sweep:
+  1. Comparison gone everywhere; no console warnings about removed props.
+  2. Each new chip filter toggles correctly and `activeFilterCount` reflects it.
+  3. `Meals ≥` + `Missing ≤` show empty hints when blank/cleared; the list re-fills when the input is cleared (the blank-input bug).
+  4. Sort axes behave (especially "Recently made" with mixed null and non-null `last_made_on` — nulls should be at the bottom).
+  5. Multi-select stock-item picker styles rows by level; deep-linking with `?usesStockItem=…` still works.
+  6. "Planned in" filter shows only recipes that appear in a meal-plan entry from today onward.
+  7. `StockItemDetailPage` recipes-using-this-item tab still dims/highlights correctly with the new array prop.
+
+**Acceptance (per IMPL_PLAN_COOKBOOK Chunk 1):**
+- ✅ No "Compare" affordance anywhere — header buttons + dialog + card checkbox + selectable plumbing all gone.
+- ✅ New sort axes work — name / last-made / meal-count / total-time (created-at deferred; FU-082).
+- ✅ Page counts in the footer — already present via `PageCountsFooter` (A7); no change needed.
+- ✅ Multi-select stock-item filter with level-coloured option rows.
+- ✅ Planned-in, in-stock-only, meal-count-range filters all wired.
+- ✅ Blank-input cosmetic / count bug guarded on `Number.isFinite`.
+- ✅ Filter-bar consistency — booleans on FilterChip pattern matching StockOverview.
+- ⏸ Filter-bar full A4 layout polish (L232 "Missing filter offset weirdly") — chip conversion + `q-separator` blocks improve alignment but a deeper FilterBar audit would lift this further; folded into FU-083 as something for an A4 follow-up rather than Chunk 1.
+
+**Next up:** **Browser-verify Chunk 1** (FU-080 covers the menu fix; FU-083 covers this chunk). Then options:
+- **Cookbook Chunk 3** (card redesign + Cookbook/Mark-cooked naming) — visible polish on the same surface; the card-image placeholder is the only Chunk-5 dependency and the IMPL plan says to wire it unconditionally here.
+- **Cookbook Chunk 2** (tag taxonomy) — bigger; touches three new tables + migration + tri-state filter component. Probably the next single-PR chunk to take if the user wants Cookbook to keep momentum.
+- The deferred items above (FU-081 / FU-082) when state-ownership / Phase-2 ingestion lands.
+
+**Open questions for user:**
+- Sort axis label preferences? The dropdown reads "Name / Recently made / Meals in pool / Prep + cook time" — happy to retune wording.
+- The `Planned in` chip is on by default off — should it default to ON when the user is browsing the cookbook (so the natural view is "what am I about to need"?), or stay off and let the user opt in? Defaulted to OFF for now per IMPL plan reading.
+
+---
+
+## 2026-06-09 — Menu highlight fix (subroutes + redirected paths). FU-079 resolved.
+**Status:** complete (small bug fix).
+**What changed:**
+- **Root cause:** `q-item :to` uses Vue Router 4's route-record-based active matching. The recipe routes (`/recipes/:id`, `/recipes/:id/cook`) are declared as **flat siblings** of `/recipes`, not nested children, so Vue Router didn't consider them related — subroute pages didn't highlight the parent menu item. `SideMenuButton.vue` also passed `exact`, which made the same problem worse for the side drawer.
+- **`web_app/src/components/menu/useMenuLinkActive.ts`** (new composable). Computes `isActive` from `route.path` via prefix match (`path === target || path.startsWith(target + '/')`), with an optional `extraPrefixes` list for nav entries that span multiple roots.
+- **`MainMenuButton.vue`** — dropped `active-class="dora-mainMenuButton-active"` (Vue-Router-driven) and bound the class via `:class="{ ..., 'dora-mainMenuButton-active': isActive }"` from the composable. The sliding indicator in `MainMenuButtonStrip.vue` still finds the active button by class name, so no change there.
+- **`SideMenuButton.vue`** — same swap; removed `exact` (was making the drawer item lose highlight on every subroute).
+- **`menuButtonProps.ts`** — added optional `activePrefixes?: string[]` so a nav entry can declare extra paths that should also trigger active state.
+- **`MainLayout.vue`** — Recipes menu link changed from `/recipes` (which router-redirects to `/cookbook`, leaving the highlight permanently off on the actual landing) → `link: '/cookbook', activePrefixes: ['/recipes']` so the item highlights on both `/cookbook` and `/recipes/:id`/`/recipes/:id/cook`. C-4 Chunk 3 will rename the label.
+- **FU-079** flipped to `[RESOLVED]` — user confirmed the blank-screen hotfix works after pulling + `alembic upgrade head`.
+**Decisions made:**
+- **Composable, not duplicated inline.** Two consumers (Main + Side) with identical logic — R-001 says extract at ≥2 uses. The composable is six lines; readable.
+- **Kept the `link` string-only contract.** `MenuButtonProps.link` stays a string; `activePrefixes` is a separate optional list rather than overloading `link` to accept arrays. Single nav-target stays unambiguous; the prefix list is a clearly-labelled secondary concept.
+- **Fixed the `/recipes` → `/cookbook` menu link in this commit.** Strictly that's a separate problem (URL targeting), but it's the same surface and same user complaint ("Recipes menu doesn't highlight when I'm on a recipe page" reads identically whether the cause is route-records or a redirect). One PR, one fix.
+- **Engineering close-gate:**
+  - R-001 — composable extracted at the 2-use boundary; no duplication.
+  - R-003 — pure client-side state; no domain ownership concerns.
+  - R-008 — one short `Why` comment in `useMenuLinkActive.ts` explaining the route-record vs prefix-match issue (non-obvious; future readers won't intuit it from the code).
+**Files touched:**
+- `web_app/src/components/menu/useMenuLinkActive.ts` (new)
+- `web_app/src/components/menu/menuButtonProps.ts` (+1 optional field)
+- `web_app/src/components/menu/MainMenuButton.vue` (class binding swap)
+- `web_app/src/components/menu/SideMenuButton.vue` (class binding swap + drop `exact`)
+- `web_app/src/layouts/MainLayout.vue` (Recipes link target)
+- `DORA_FOLLOWUPS.md` (FU-079 → RESOLVED)
+**Verification:**
+- **Not typechecked** — `node_modules` not installed on this Windows machine, so `vue-tsc` reports environment errors across the whole tree (missing `vue`, `pinia`, etc.). Changes are syntactically minimal and pattern-matched against the surrounding code.
+- **Not verified in browser.** Logged as FU-080 — confirm each menu item highlights on its subroutes (`/stock/:id`, `/recipes/:id`, `/recipes/:id/cook`, `/shopping-lists/:id`, `/shopping-lists/:id/shop`, etc.) and the sliding indicator on the main strip still tracks position correctly.
+**Next up:** **IMPL_PLAN_COOKBOOK Chunk 1** (recipe comparison cut + filter/sort axes). Self-contained, no model changes; the rip + replace on `RecipesOverview.vue`.
+**Open questions for user:** none.
 
 ---
 

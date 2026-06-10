@@ -476,34 +476,3 @@ def auto_generate():
         _Response.skipped_already_on_list,
     )
     return ok(_response_payload(_Response))
-
-
-# ───── Append low + essentials (convenience) ──────────────────────────────
-
-@SHOPPING_LIST_ROUTER.route(
-    "/<shopping_list_id>/append-low-stock-essentials", methods=["POST"]
-)
-def append_low_stock_essentials(shopping_list_id: UUID):
-    """One-button "top up this list with the essentials I'm low on".
-
-    Equivalent to auto-generate with sources={low_stock, out_of_stock,
-    essentials_only_for_low=True} and merge_into_list_id=<this>. Carved
-    out as its own endpoint because the UX hook is a single click on the
-    list-detail toolbar, not a modal.
-    """
-    _Logger = logging.getLogger(__name__)
-    _Request = AutoGenerateRequest(
-        sources=AutoGenerateSources(
-            low_stock=True,
-            out_of_stock=True,
-            essentials_only_for_low=True,
-        ),
-        merge_into_list_id=shopping_list_id,
-    )
-    _Response = get_container().inject(AutoGenerateHandler).handle(_Request)
-    if _Response.list_not_found:
-        return not_found("ShoppingList", shopping_list_id)
-    _Logger.info(
-        "Append low+essentials -> list %s: +%d added", shopping_list_id, _Response.added_count
-    )
-    return ok(_response_payload(_Response))

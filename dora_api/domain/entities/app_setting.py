@@ -21,9 +21,34 @@ class AppSetting(BaseEntity):
     llm_base_url: str = ""
     llm_model: str = ""
     scanning_enabled: bool = False
+    # C-cross Chunk 1 — install-wide feature flags (proposal §2.6). Surface
+    # via `/api/health features.*` + admin-only `PATCH /api/admin/feature-
+    # flags`. Per-user opt-ins (money, nutrition, image display) layer on
+    # top of these — install flag = "available here at all"; user flag =
+    # "do I personally want to see it". Defaults are conservative: only
+    # `meal_planning_enabled` ships True so existing installs don't lose
+    # the meal-plan feature on first boot post-deploy.
+    meal_planning_enabled: bool = True
+    money_enabled: bool = False
+    nutrition_enabled: bool = False
+    companion_ingestion_enabled: bool = False
+    deals_email_enabled: bool = False
+    # C-cross Chunk 3 — reserved seam for the nutrition `complex` mode
+    # (proposal §2.3). Stores the admin-configured nutrition data source
+    # (a free-form string for now — the actual schema lands when the
+    # complex-mode integration ships). Empty string ⇒ no source ⇒ a
+    # user cannot save `nutrition_mode='complex'` (rejected at the
+    # `update_me.py` boundary).
+    nutrition_db_source: str = ""
 
     class Fields(BaseEntity.Fields):
         LLM_ENABLED = "llm_enabled"
         LLM_BASE_URL = "llm_base_url"
         LLM_MODEL = "llm_model"
         SCANNING_ENABLED = "scanning_enabled"
+        MEAL_PLANNING_ENABLED = "meal_planning_enabled"
+        MONEY_ENABLED = "money_enabled"
+        NUTRITION_ENABLED = "nutrition_enabled"
+        COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
+        DEALS_EMAIL_ENABLED = "deals_email_enabled"
+        NUTRITION_DB_SOURCE = "nutrition_db_source"

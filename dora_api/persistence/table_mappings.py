@@ -1,11 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table
-from sqlalchemy.orm import registry as SARegistry, relationship
+from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
 from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.audit_event import AuditEvent
 from dora_api.domain.entities.auth_token import AuthToken
+from dora_api.domain.entities.category import Category
+from dora_api.domain.entities.cuisine import Cuisine
+from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.merchant import Merchant
@@ -17,11 +20,13 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.recipe_step import RecipeStep
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine,
 )
 from dora_api.domain.entities.stock_group import StockGroup
+from dora_api.domain.entities.tool import Tool
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.dora_suggestion_suppression import \
     DoraSuggestionSuppression
@@ -57,6 +62,14 @@ def configure_mappings(db: SQLAlchemy):
         Column("llm_base_url", String(500), nullable=False),
         Column("llm_model", String(255), nullable=False),
         Column("scanning_enabled", Boolean, nullable=False, server_default="0"),
+        # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
+        Column("meal_planning_enabled", Boolean, nullable=False, server_default="1"),
+        Column("money_enabled", Boolean, nullable=False, server_default="0"),
+        Column("nutrition_enabled", Boolean, nullable=False, server_default="0"),
+        Column("companion_ingestion_enabled", Boolean, nullable=False, server_default="0"),
+        Column("deals_email_enabled", Boolean, nullable=False, server_default="0"),
+        # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
+        Column("nutrition_db_source", String(255), nullable=False, server_default=""),
     )
 
     product_offer_table = Table(
@@ -294,13 +307,47 @@ def configure_mappings(db: SQLAlchemy):
         Column("name", String(255), nullable=False),
     )
 
+    # C-4 Chunk 2 — user-configurable recipe vocabularies (cuisine, category,
+    # dietary tags). Each is a simple {id, name, sequence} lookup edited in
+    # settings; recipes link to them by FK (cuisine/category single-select,
+    # dietary tags many-to-many).
+    cuisine_table = Table(
+        "Cuisine", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+    )
+
+    category_table = Table(
+        "Category", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+    )
+
+    dietary_tag_table = Table(
+        "DietaryTag", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("category", String(255), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+    )
+
+    # C-4 Chunk 5 — user-configurable kitchen-tool vocabulary.
+    tool_table = Table(
+        "Tool", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+    )
+
     recipe_table = Table(
         "Recipe", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("available_meals", Integer, nullable=False, server_default="0"),
-        Column("category", String(255), nullable=True),
+        Column("category_id", UUIDType, ForeignKey("Category.id", ondelete="SET NULL"), nullable=True),
         Column("cook_time_minutes", Integer, nullable=True),
-        Column("cuisine", String(255), nullable=True),
+        Column("cuisine_id", UUIDType, ForeignKey("Cuisine.id", ondelete="SET NULL"), nullable=True),
         Column("difficulty", String(50), nullable=True),
         Column("image", LargeBinary, nullable=True),
         Column("instructions", String, nullable=True),
@@ -311,19 +358,33 @@ def configure_mappings(db: SQLAlchemy):
         Column("prep_time_minutes", Integer, nullable=True),
         Column("recipe_collection_id", UUIDType, ForeignKey("RecipeCollection.id", ondelete="SET NULL"), nullable=True),
         Column("servings", Integer, nullable=True),
+        # C-4 Chunk 7 — origin URL for imported recipes.
+        Column("source", String(2048), nullable=True),
         Column("time_of_day", String(50), nullable=True),
+        # C-4 Chunk 8 — version sibling grouping (DEC-2). NULL = singleton.
+        # Indexed because every detail load asks "who else has this id?".
+        Column("version_group_id", UUIDType, nullable=True, index=True),
+        # C-4 Chunk 9 — simple nutrition (kcal). NULL when unset.
+        Column("kcal", Integer, nullable=True),
     )
 
-    # P2-08 — recipe → tag association. Tags themselves are not entities:
-    # the canonical catalogue lives in `dora_api/domain/recipe_tags.py`,
-    # and this table simply pins which curated tag(s) belong to a recipe.
-    # No standalone mapping is registered (matching the
-    # StockItemProduct/StockItemSubstitute pattern); handlers read/write
-    # rows directly via the SQLAlchemy core API or repository helpers.
+    # C-4 Chunk 2 — recipe → dietary-tag association. The tag vocabulary is
+    # now the `DietaryTag` entity (was an in-code catalogue); this table pins
+    # which tag(s) belong to a recipe. No standalone mapping is registered
+    # (matching the StockItemProduct/StockItemSubstitute pattern); handlers
+    # read/write rows via the recipe_tag_access helpers.
     recipe_tag_table = Table(
         "RecipeTag", metadata,
         Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), primary_key=True),
-        Column("tag", String(64), primary_key=True),
+        Column("dietary_tag_id", UUIDType, ForeignKey("DietaryTag.id", ondelete="CASCADE"), primary_key=True),
+    )
+
+    # C-4 Chunk 5 — recipe → tool association (pure link, no standalone
+    # mapping; accessed via recipe_tool_access helpers).
+    recipe_tool_table = Table(
+        "RecipeTool", metadata,
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), primary_key=True),
+        Column("tool_id", UUIDType, ForeignKey("Tool.id", ondelete="CASCADE"), primary_key=True),
     )
 
     recipe_ingredient_table = Table(
@@ -334,6 +395,34 @@ def configure_mappings(db: SQLAlchemy):
         Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="RESTRICT"), nullable=False),
         Column("unit", String(50), nullable=True),
+    )
+
+    # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`
+    # enables one level of sub-steps (a sub-step's parent must itself be a
+    # top-level step; depth>1 is rejected in the access helper). Two link
+    # tables: which of the recipe's own ingredients this step uses, and which
+    # tools (from the Chunk 5 vocabulary). Both are pure (step_id, x_id) pairs
+    # accessed via the `recipe_step_access` helpers — no standalone mapping.
+    recipe_step_table = Table(
+        "RecipeStep", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
+        Column("parent_step_id", UUIDType, ForeignKey("RecipeStep.id", ondelete="CASCADE"), nullable=True),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("text", String, nullable=False),
+        Column("hint", String, nullable=True),
+    )
+
+    recipe_step_ingredient_table = Table(
+        "RecipeStepIngredient", metadata,
+        Column("step_id", UUIDType, ForeignKey("RecipeStep.id", ondelete="CASCADE"), primary_key=True),
+        Column("recipe_ingredient_id", UUIDType, ForeignKey("RecipeIngredient.id", ondelete="CASCADE"), primary_key=True),
+    )
+
+    recipe_step_tool_table = Table(
+        "RecipeStepTool", metadata,
+        Column("step_id", UUIDType, ForeignKey("RecipeStep.id", ondelete="CASCADE"), primary_key=True),
+        Column("tool_id", UUIDType, ForeignKey("Tool.id", ondelete="CASCADE"), primary_key=True),
     )
 
     meal_plan_table = Table(
@@ -378,6 +467,14 @@ def configure_mappings(db: SQLAlchemy):
         # toggles from these and the user can override per session.
         Column("voice_input_enabled", Boolean, nullable=False, server_default="0"),
         Column("voice_output_enabled", Boolean, nullable=False, server_default="0"),
+        # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
+        Column("money_features_enabled", Boolean, nullable=False, server_default="0"),
+        # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
+        Column("nutrition_mode", String(16), nullable=False, server_default="off"),
+        # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
+        # Default True (visual richness on by default; users opt out).
+        Column("show_recipe_images", Boolean, nullable=False, server_default="1"),
+        Column("show_stock_images", Boolean, nullable=False, server_default="1"),
     )
 
     auth_token_table = Table(
@@ -515,11 +612,61 @@ def configure_mappings(db: SQLAlchemy):
         "stock_item": relationship(StockItem, lazy="noload"),
     })
 
+    # C-4 Chunk 6 — structured step rows. Ingredient + tool links are not
+    # mapped as SQLAlchemy relationships; the access helper queries the link
+    # tables directly when hydrating the DTO (matches the dietary-tag/tool
+    # pattern). All entity fields are publicly mapped (recipe_id/
+    # parent_step_id are real domain attributes, not internal FKs).
+    _mapper_registry.map_imperatively(RecipeStep, recipe_step_table, properties={
+        "_id_col": recipe_step_table.c.id,
+        "id": recipe_step_table.c.id,
+        "recipe_id": recipe_step_table.c.recipe_id,
+        "parent_step_id": recipe_step_table.c.parent_step_id,
+        "sequence": recipe_step_table.c.sequence,
+        "text": recipe_step_table.c.text,
+        "hint": recipe_step_table.c.hint,
+    })
+
+    _mapper_registry.map_imperatively(Cuisine, cuisine_table, properties={
+        "_id_col": cuisine_table.c.id,
+        "id": cuisine_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(Category, category_table, properties={
+        "_id_col": category_table.c.id,
+        "id": category_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(DietaryTag, dietary_tag_table, properties={
+        "_id_col": dietary_tag_table.c.id,
+        "id": dietary_tag_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(Tool, tool_table, properties={
+        "_id_col": tool_table.c.id,
+        "id": tool_table.c.id,
+    })
+
     _mapper_registry.map_imperatively(Recipe, recipe_table, properties={
         "_id_col": recipe_table.c.id,
         "_recipe_collection_id": recipe_table.c.recipe_collection_id,
+        "_cuisine_id": recipe_table.c.cuisine_id,
+        "_category_id": recipe_table.c.category_id,
         "id": recipe_table.c.id,
+        # C-cross Chunk 5 / FU-090 — defer the image blob so the list
+        # endpoint doesn't load every recipe's image bytes into memory
+        # just to compute `has_image`. The detail endpoint (and the
+        # dedicated `/recipes/<id>/image` route) trigger the load
+        # on-demand via attribute access; everywhere else gets the
+        # `has_image: bool` DTO field from a separate SELECT.
+        "image": deferred(recipe_table.c.image),
         "recipe_collection": relationship(RecipeCollection, lazy="noload"),
+        # selectin (not noload): cuisine + category are tiny, always-wanted
+        # lookups, so every recipe read carries them without each call site
+        # needing an explicit .include() (keeps the assistant / search /
+        # export consumers simple).
+        "cuisine": relationship(Cuisine, lazy="selectin"),
+        "category": relationship(Category, lazy="selectin"),
         "ingredients": relationship(
             RecipeIngredient,
             lazy="noload",

@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List
+from uuid import UUID
 
 from dora_api.domain.entities.base_entity import BaseEntity
+from dora_api.domain.entities.category import Category
+from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 
@@ -10,9 +13,12 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 @dataclass
 class Recipe(BaseEntity):
     available_meals: int
-    category: str | None
+    # C-4 Chunk 2: cuisine + category are now FK-backed vocabularies, not
+    # free-text. Single-select each (DEC-1). Relationships are selectin-loaded
+    # so every recipe read carries them without an explicit include.
+    category: Category | None
     cook_time_minutes: int | None
-    cuisine: str | None
+    cuisine: Cuisine | None
     difficulty: str | None
     image: bytes | None
     ingredients: List[RecipeIngredient]
@@ -24,7 +30,23 @@ class Recipe(BaseEntity):
     prep_time_minutes: int | None
     recipe_collection: RecipeCollection | None
     servings: int | None
+    # C-4 Chunk 7 — origin URL when the recipe was imported. Nullable; the
+    # URL importer writes here instead of appending "Source: <url>" to the
+    # instructions blob (Chunk 7's clean-up of L295 / L296). Hand-entered
+    # recipes leave it None.
+    source: str | None
     time_of_day: str | None
+    # C-4 Chunk 8 — version siblings via a shared `version_group_id`.
+    # Recipes sharing the same id are versions of each other (no current
+    # pointer, no snapshot/current distinction per DEC-2 — they're equal
+    # peers). NULL means the recipe is a singleton; it'll absorb future
+    # versions when the user makes one.
+    version_group_id: UUID | None
+    # C-4 Chunk 9 — simple nutrition (kcal). Typed by the user when the
+    # nutrition opt-in is `simple` (C-cross). NULL means no value set.
+    # The freeform `nutrition: str | None` field above stays for
+    # backwards compatibility but is no longer rendered/edited.
+    kcal: int | None
 
     class Fields(BaseEntity.Fields):
         AVAILABLE_MEALS = "available_meals"
@@ -42,4 +64,7 @@ class Recipe(BaseEntity):
         PREP_TIME_MINUTES = "prep_time_minutes"
         RECIPE_COLLECTION = "recipe_collection"
         SERVINGS = "servings"
+        SOURCE = "source"
         TIME_OF_DAY = "time_of_day"
+        VERSION_GROUP_ID = "version_group_id"
+        KCAL = "kcal"

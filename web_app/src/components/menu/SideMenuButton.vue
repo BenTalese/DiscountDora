@@ -1,9 +1,8 @@
 <template>
     <q-item
         :to="link"
-        active-class="dora-sideMenuButton-active"
+        :class="{ 'dora-sideMenuButton-active': isActive }"
         clickable
-        exact
         tag="a"
     >
         <q-item-section avatar>
@@ -19,7 +18,10 @@
 
 <script setup lang="ts">
     import type { MenuButtonProps } from './menuButtonProps';
-    defineProps<MenuButtonProps>();
+    import { useMenuLinkActive } from './useMenuLinkActive';
+
+    const props = defineProps<MenuButtonProps>();
+    const isActive = useMenuLinkActive(() => props.link, () => props.activePrefixes);
 </script>
 
 <style scoped lang="scss">

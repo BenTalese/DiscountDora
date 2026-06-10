@@ -909,8 +909,8 @@
             getRecipes: () => recipes.value.map((r) => ({
                 id: r.recipe_id,
                 name: r.name,
-                cuisine: r.cuisine,
-                category: r.category,
+                cuisine: r.cuisine_name,
+                category: r.category_name,
                 cookTimeMinutes: r.cook_time_minutes,
                 isFavourite: Boolean(r.is_favourite),
                 ingredientStockItemIds: r.ingredients

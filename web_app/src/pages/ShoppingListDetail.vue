@@ -575,12 +575,16 @@
                                     >
                                         {{ addedViaLabel(line.added_via) }}
                                     </q-chip>
+                                    <!-- C-cross Chunk 4 — zone-default + tooltip. -->
                                     <span
                                         v-if="line.stock_location_breadcrumb.length > 0"
                                         class="q-mr-sm"
                                     >
                                         <q-icon :name="ICONS.place" size="14px" />
-                                        {{ line.stock_location_breadcrumb.join(' › ') }}
+                                        {{ formatLocation(line.stock_location_breadcrumb, 'zone') }}
+                                        <q-tooltip v-if="locationHasDetail(line.stock_location_breadcrumb)">
+                                            {{ formatLocation(line.stock_location_breadcrumb, 'full') }}
+                                        </q-tooltip>
                                     </span>
                                     <span v-if="line.offers.length > 0">
                                         {{ line.offers.length }} merchant offer{{
@@ -1002,6 +1006,7 @@
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
 
     const route = useRoute();
     const router = useRouter();

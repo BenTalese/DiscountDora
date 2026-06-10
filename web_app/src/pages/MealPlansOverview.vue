@@ -376,6 +376,13 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useMealPlanExport } from 'src/composables/useMealPlanExport';
+    import {
+        LOW_STOCK_SEQUENCE,
+        needsRestockSequence,
+        OUT_OF_STOCK_SEQUENCE,
+        SUFFICIENT_STOCK_SEQUENCE,
+        WELL_STOCKED_SEQUENCE,
+    } from 'src/helpers/stockStatus';
     import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
     import type { Recipe } from 'src/models/recipe';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -464,32 +471,45 @@
     }
 
     // ── Stock status ─────────────────────────────────────────────────────
-    const stockLevelByItemId = computed(() => {
-        const map = new Map<string, string>();
-        stockItems.value.forEach((s) => map.set(s.stock_item_id, s.stock_level_id));
+    // Resolves by sequence (§3.1 contract) — renaming a level row in the
+    // UI doesn't shift which bucket a stock item lands in.
+    const stockItemById = computed(() => {
+        const map = new Map<string, typeof stockItems.value[number]>();
+        stockItems.value.forEach((s) => map.set(s.stock_item_id, s));
         return map;
     });
-    function stockLevelName(stockItemId: string): string | null {
-        const levelId = stockLevelByItemId.value.get(stockItemId);
-        if (!levelId) return null;
-        return stockLevels.value.find((l) => l.stock_level_id === levelId)?.name ?? null;
+    function levelSequenceForItem(stockItemId: string): number | null {
+        const item = stockItemById.value.get(stockItemId);
+        if (!item) return null;
+        if (typeof item.stock_level_sequence === 'number') return item.stock_level_sequence;
+        return stockLevels.value.find(
+            (l) => l.stock_level_id === item.stock_level_id,
+        )?.sequence ?? null;
     }
     function stockStatusLabel(stockItemId: string): string {
-        return stockLevelName(stockItemId) ?? 'Not tracked';
+        const item = stockItemById.value.get(stockItemId);
+        if (!item) return 'Not tracked';
+        return (
+            stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name
+            ?? 'Not tracked'
+        );
     }
     function stockStatusColour(stockItemId: string): string {
-        const name = stockLevelName(stockItemId);
-        if (name === 'Out of Stock') return 'negative';
-        if (name === 'Low Stock') return 'warning';
-        if (name === 'Sufficient Stock') return 'info';
-        if (name === 'Well-Stocked') return 'positive';
-        return 'grey';
+        const seq = levelSequenceForItem(stockItemId);
+        switch (seq) {
+            case OUT_OF_STOCK_SEQUENCE: return 'negative';
+            case LOW_STOCK_SEQUENCE: return 'warning';
+            case SUFFICIENT_STOCK_SEQUENCE: return 'info';
+            case WELL_STOCKED_SEQUENCE: return 'positive';
+            default: return 'grey';
+        }
     }
 
     const needToBuy = computed(() =>
         ingredients.value.filter((ing) => {
-            const name = stockLevelName(ing.stock_item_id);
-            return name === null || name === 'Low Stock' || name === 'Out of Stock';
+            const seq = levelSequenceForItem(ing.stock_item_id);
+            // Untracked (no seq) OR low/out → still needs buying.
+            return seq === null || needsRestockSequence(seq);
         }),
     );
 
@@ -627,13 +647,47 @@
         void router.push(`/recipes/${recipeId}/cook`);
     }
 
+    // Cart-button Chunk 4 / L382: route the generate target through Axis B —
+    // when any draft list already exists, offer "add to existing / new"
+    // instead of always creating a fresh one. Returns the chosen list id, or
+    // null to mean "create new", or undefined if the user cancelled.
+    async function pickGenerateTarget(): Promise<string | null | undefined> {
+        const drafts = (shoppingListStore.membership?.active_lists ?? []).filter(
+            (l) => l.status === 'draft',
+        );
+        if (drafts.length === 0) return null;
+        const CREATE_NEW = '__create_new__';
+        return await new Promise<string | null | undefined>((resolve) => {
+            $q.dialog({
+                title: 'Add to which list?',
+                message: 'Generate the week\'s shopping into an existing draft, or create a new list.',
+                options: {
+                    type: 'radio',
+                    model: drafts[0]!.shopping_list_id,
+                    items: [
+                        ...drafts.map((d) => ({ label: d.name, value: d.shopping_list_id })),
+                        { label: '+ Create new list', value: CREATE_NEW },
+                    ],
+                },
+                cancel: { noCaps: true },
+                ok: { label: 'Generate', noCaps: true, color: 'primary' },
+                persistent: false,
+            })
+                .onOk((val: string) => resolve(val === CREATE_NEW ? null : val))
+                .onCancel(() => resolve(undefined))
+                .onDismiss(() => {});
+        });
+    }
+
     async function generateListForWeek() {
         if (!selectedPlan.value) return;
+        const target = await pickGenerateTarget();
+        if (target === undefined) return;
         generating.value = true;
         try {
             const startIso = toIso(selectedPlan.value.start_date);
             const result = await shoppingListApi.autoGenerateAsync({
-                name: `Meals: ${selectedPlan.value.name}`,
+                ...(target ? { merge_into_list_id: target } : { name: `Meals: ${selectedPlan.value.name}` }),
                 sources: { meal_plan_week: startIso },
             });
             await shoppingListStore.refreshAsync();
@@ -645,12 +699,13 @@
                 });
                 return;
             }
+            const itemWord = result.added_count === 1 ? 'item' : 'items';
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Shopping list created with ${result.added_count} item${
-                    result.added_count === 1 ? '' : 's'
-                }.`,
+                message: target
+                    ? `Added ${result.added_count} ${itemWord} to your list.`
+                    : `Shopping list created with ${result.added_count} ${itemWord}.`,
             });
             if (result.shopping_list_id) {
                 void router.push(`/shopping-lists/${result.shopping_list_id}`);

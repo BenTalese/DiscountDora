@@ -1,3 +1,8 @@
+import {
+    isLowStockSequence,
+    isOutOfStockSequence,
+    needsRestockSequence,
+} from 'src/helpers/stockStatus';
 import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
 import type { Recipe } from 'src/models/recipe';
 import type { StockGroup } from 'src/models/stockGroup';
@@ -115,13 +120,9 @@ export function useStockFilters(sources: {
         return days <= 7;
     }
     function hasAlert(item: StockItem): boolean {
-        const n = stockLevelName(item.stock_level_id);
-        return (
-            n === 'Low Stock' ||
-            n === 'Out of Stock' ||
-            isExpiringSoon(item) ||
-            item.is_flagged === true
-        );
+        const restock =
+            item.needs_restock ?? needsRestockSequence(levelSequence(item.stock_level_id));
+        return restock || isExpiringSoon(item) || item.is_flagged === true;
     }
 
     // ── Dropdown option lists ───────────────────────────────────────────
@@ -145,9 +146,10 @@ export function useStockFilters(sources: {
         let essentials = 0;
         let open = 0;
         for (const item of sources.stockItems()) {
-            const name = stockLevelName(item.stock_level_id);
-            if (name === 'Low Stock') low++;
-            if (name === 'Out of Stock') out++;
+            const seq =
+                item.stock_level_sequence ?? levelSequence(item.stock_level_id);
+            if (item.is_low_stock ?? isLowStockSequence(seq)) low++;
+            if (item.is_out_of_stock ?? isOutOfStockSequence(seq)) out++;
             if (item.is_flagged) essentials++;
             if (item.is_open) open++;
         }
@@ -255,10 +257,9 @@ export function useStockFilters(sources: {
     });
 
     // ── Sticky-footer counts (A7) — reflect the FILTERED view ───────────
-    function toneForLevel(name: string): 'positive' | 'warning' | 'negative' {
-        const n = name.toLowerCase();
-        if (n.includes('out')) return 'negative';
-        if (n.includes('low')) return 'warning';
+    function toneForLevelSequence(seq: number): 'positive' | 'warning' | 'negative' {
+        if (isOutOfStockSequence(seq)) return 'negative';
+        if (needsRestockSequence(seq)) return 'warning';
         return 'positive';
     }
     const footerCounts = computed(() => {
@@ -289,7 +290,7 @@ export function useStockFilters(sources: {
         const levelStats = sources.stockLevels().map((l) => ({
             label: shortLabel(l.name),
             value: byLevel.get(l.stock_level_id) ?? 0,
-            tone: toneForLevel(l.name),
+            tone: toneForLevelSequence(l.sequence),
         }));
         return [
             { label: 'Shown', value: items.length, tone: 'primary' as const },

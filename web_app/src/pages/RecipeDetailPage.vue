@@ -1068,7 +1068,6 @@
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Recipe } from 'src/models/recipe';
-    import type { StockLevelName } from 'src/models/stockLevel';
     import type { Substitute } from 'src/models/stockItemDetail';
     import RecipeApiService, { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
@@ -1316,11 +1315,11 @@
     );
 
     // â”€â”€ Stock-level helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    function levelNameFor(stockItemId: string): StockLevelName | null {
+    function levelNameFor(stockItemId: string): string | null {
         const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
         if (!item) return null;
         const level = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id);
-        return (level?.name) ?? null;
+        return level?.name ?? null;
     }
     function levelColourFor(stockItemId: string): string | null {
         const name = levelNameFor(stockItemId);

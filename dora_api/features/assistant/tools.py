@@ -30,7 +30,8 @@ from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE, is_out_of_stock,
+from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
+                                          LOW_STOCK_SEQUENCE, is_out_of_stock,
                                           needs_restock)
 from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.persistence.bool_operation import BoolOperation
@@ -52,9 +53,6 @@ _MAX_CANDIDATES = 6
 # (LOW_STOCK_SEQUENCE, is_out_of_stock, needs_restock). An ingredient counts as
 # "in stock" for recipe suggestions unless it's out of stock — low/sufficient
 # still count, since you can usually cook with a little of something.
-
-# How many days out counts as "expiring soon".
-_EXPIRY_HORIZON_DAYS = 7
 
 # Don't list every missing ingredient — a few is enough for the user to judge.
 _MAX_MISSING = 5
@@ -902,7 +900,7 @@ def search_stock(args: dict) -> list[dict]:
     if _truthy(args.get("low_only")):
         conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(LOW_STOCK_SEQUENCE))
     if _truthy(args.get("expiring_soon")):
-        horizon = date.today() + timedelta(days=_EXPIRY_HORIZON_DAYS)
+        horizon = date.today() + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(horizon))
     if _truthy(args.get("flagged_only")):
@@ -1472,9 +1470,9 @@ def suggest_substitution(args: dict) -> list[dict]:
 def whats_expiring(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
     try:
-        horizon_days = int(args.get("within_days", _EXPIRY_HORIZON_DAYS))
+        horizon_days = int(args.get("within_days", EXPIRING_SOON_WINDOW_DAYS))
     except (TypeError, ValueError):
-        horizon_days = _EXPIRY_HORIZON_DAYS
+        horizon_days = EXPIRING_SOON_WINDOW_DAYS
     cutoff = date.today() + timedelta(days=max(0, horizon_days))
     query = (
         repo.get(StockItem)
@@ -1562,7 +1560,7 @@ def pantry_health(_args: dict) -> list[dict]:
     out = sum(1 for i in items if is_out_of_stock(i.stock_level))
     flagged = sum(1 for i in items if i.is_flagged)
     open_items = sum(1 for i in items if i.is_open)
-    horizon = date.today() + timedelta(days=_EXPIRY_HORIZON_DAYS)
+    horizon = date.today() + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
     expiring_soon = sum(
         1 for i in items
         if i.expiry_date and i.expiry_date <= horizon and i.expiry_date >= date.today()
@@ -2017,7 +2015,7 @@ def find_location(args: dict) -> list[dict]:
     )
 
     today = date.today()
-    horizon = today + timedelta(days=_EXPIRY_HORIZON_DAYS)
+    horizon = today + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
 
     def is_urgent(it: StockItem) -> bool:
         level_bad = needs_restock(it.stock_level)

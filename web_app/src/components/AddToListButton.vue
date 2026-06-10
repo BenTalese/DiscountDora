@@ -18,12 +18,31 @@
         list — popover).
     -->
 
+    <!-- ── Inline-product variant ───────────────────────────────────────
+         C-7 Chunk 3 — anchored on `productId` rather than `stockItemId`;
+         used on the My Products row so unlinked products can be added
+         to a draft list as their own product-only line. -->
+    <q-btn
+        v-if="variant === 'inline-product'"
+        flat
+        dense
+        no-caps
+        size="sm"
+        :icon="ICONS.add_shopping_cart"
+        :label="label ?? 'Add as product'"
+        :loading="busy"
+        :disable="!productId"
+        @click.stop="onInlineProductClick"
+    >
+        <q-tooltip>Add a product-only line to a draft list</q-tooltip>
+    </q-btn>
+
     <!-- ── Bulk variant ─────────────────────────────────────────────────
          Resolves the target ONCE for the whole batch via the existing
          pick flow (sessionStorage-remembered), adds everything, surfaces
          one summary toast. -->
     <q-btn
-        v-if="variant === 'bulk'"
+        v-else-if="variant === 'bulk'"
         flat
         no-caps
         :icon="ICONS.add_shopping_cart"
@@ -100,7 +119,8 @@
 <script setup lang="ts">
     import { computed, h, ref, type Component } from 'vue';
     import { storeToRefs } from 'pinia';
-    import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator } from 'quasar';
+    import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator, useQuasar } from 'quasar';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { ICONS } from 'src/style/icons';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
@@ -117,14 +137,20 @@
     const props = withDefaults(
         defineProps<{
             stockItemId?: string;
+            /** C-7 Chunk 3 — anchor a standalone product line (no
+             *  stock-item placeholder). Pairs with `variant="inline-product"`
+             *  on the My Products row. */
+            productId?: string;
             items?: string[];
-            variant?: 'row' | 'toolbar' | 'menu' | 'bulk';
+            variant?: 'row' | 'toolbar' | 'menu' | 'bulk' | 'inline-product';
             /** Optional override for the row tooltip / toolbar / menu label. */
             label?: string;
         }>(),
         { variant: 'row' },
     );
 
+    const $q = useQuasar();
+    const shoppingListApi = new ShoppingListApiService();
     const shoppingListStore = useShoppingListStore();
     const { membership: storeMembership } = storeToRefs(shoppingListStore);
     const membership = computed<Membership | null>(
@@ -298,6 +324,75 @@
                 );
             }
             emit('bulk-done');
+        } finally {
+            busy.value = false;
+        }
+    }
+
+    // ── Inline-product variant click ────────────────────────────────────
+    // C-7 Chunk 3 — adds a *standalone product line* (no stock-item
+    // anchor). Resolves the target list via Axis B (membership.active_
+    // lists filtered by status='draft'): 1 draft → silent; 2+ → picker;
+    // 0 → tell the user to create a draft. Skips cart-state tracking
+    // because we have no stock-item id to key membership on.
+    async function onInlineProductClick() {
+        if (!props.productId) return;
+        const drafts = (membership.value?.active_lists ?? []).filter(
+            (l) => l.status === 'draft',
+        );
+        let targetListId: string | null = null;
+        if (drafts.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: 'No draft list yet. Create one first to add this product.',
+            });
+            return;
+        }
+        if (drafts.length === 1) {
+            targetListId = drafts[0]!.shopping_list_id;
+        } else {
+            targetListId = await new Promise<string | null>((resolve) => {
+                $q.dialog({
+                    title: 'Which list?',
+                    message: 'Add this product to which draft list?',
+                    options: {
+                        type: 'radio',
+                        model: drafts[0]!.shopping_list_id,
+                        items: drafts.map((d) => ({
+                            label: d.name,
+                            value: d.shopping_list_id,
+                        })),
+                    },
+                    cancel: { noCaps: true },
+                    ok: { label: 'Add', noCaps: true, color: 'primary' },
+                    persistent: false,
+                })
+                    .onOk((val: string) => resolve(val))
+                    .onCancel(() => resolve(null))
+                    .onDismiss(() => {});
+            });
+            if (!targetListId) return;
+        }
+        busy.value = true;
+        try {
+            const result = await shoppingListApi.addLineAsync(targetListId, {
+                product_id: props.productId,
+            });
+            await shoppingListStore.refreshAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: result.already_on_list
+                    ? 'Already on your list.'
+                    : 'Added as product line.',
+            });
+        } catch {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not add the product.',
+            });
         } finally {
             busy.value = false;
         }

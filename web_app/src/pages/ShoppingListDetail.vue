@@ -503,13 +503,15 @@
                     </div>
                     <q-list bordered separator>
                         <q-item
-                            v-for="line in group.lines"
+                            v-for="line in nestedLinesFor(group)"
                             :key="line.line_id"
                             :class="{
                                 'shopping-line-ticked': line.is_ticked,
                                 'shopping-line-dragging': dragLineId === line.line_id,
                                 'shopping-line-drop-over': dragOverLineId === line.line_id,
                                 'shopping-line-focused': focusedLineId === line.line_id,
+                                'shopping-line-nested': isNestedChild(line),
+                                'shopping-line-product-only': isProductOnly(line),
                             }"
                             :draggable="canReorder"
                             @dragstart="onLineDragStart($event, line.line_id)"
@@ -553,15 +555,29 @@
                                     }"
                                 >
                                     <StockItemChip
-                                        v-if="stockItemFor(line.stock_item_id)"
+                                        v-if="!isNestedChild(line) && stockItemFor(line.stock_item_id)"
                                         :stock-item="stockItemFor(line.stock_item_id)!"
                                     />
                                     <q-chip
-                                        v-else
+                                        v-else-if="isNestedChild(line)"
                                         dense
-                                        class="dora-text-muted"
+                                        size="sm"
+                                        :icon="ICONS.shopping_bag"
+                                        class="dora-bg-sunken"
                                     >
                                         {{ line.stock_item_name }}
+                                        <q-tooltip>Nested product</q-tooltip>
+                                    </q-chip>
+                                    <q-chip
+                                        v-else
+                                        dense
+                                        :icon="isProductOnly(line) ? ICONS.shopping_bag : undefined"
+                                        :class="isProductOnly(line) ? 'dora-bg-sunken' : 'dora-text-muted'"
+                                    >
+                                        {{ line.stock_item_name }}
+                                        <q-tooltip v-if="isProductOnly(line)">
+                                            Product only — no linked stock item on this list
+                                        </q-tooltip>
                                     </q-chip>
                                 </div>
                                 <q-item-label caption class="q-mt-xs">
@@ -1001,6 +1017,7 @@
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -1016,6 +1033,7 @@
     const stockItemApi = new StockItemApiService();
     const store = useShoppingListStore();
     const stockItemStore = useStockItemStore();
+    const productStore = useProductStore();
     const { openQuickAdd, isOpen: quickAddOpen } = useQuickAdd();
 
     const listId = computed(() => String(route.params.id ?? ''));
@@ -1275,6 +1293,58 @@
             return (a.label ?? '').localeCompare(b.label ?? '');
         });
     });
+
+    // C-7 Chunk 3 — nested display. A line with both `stock_item_id` and
+    // `product_id` set is a *nested* product under the matching
+    // stock-item line; a line with only `product_id` is a *standalone*
+    // product-only line. `nestedLinesFor` reorders a group so each parent
+    // is immediately followed by its nested children, and `isNestedChild`
+    // drives the CSS indent on the child rows.
+    function nestedLinesFor(group: LineGroup): ShoppingListLine[] {
+        const lines = group.lines;
+        // Map stock_item_id -> parent (product_id IS NULL, stock_item_id set)
+        const parentByStockItem = new Map<string, ShoppingListLine>();
+        for (const l of lines) {
+            if (l.stock_item_id && !l.product_id) {
+                parentByStockItem.set(l.stock_item_id, l);
+            }
+        }
+        // Group children by parent line id
+        const childrenByParent = new Map<string, ShoppingListLine[]>();
+        const orphans: ShoppingListLine[] = [];
+        for (const l of lines) {
+            if (l.stock_item_id && l.product_id) {
+                const parent = parentByStockItem.get(l.stock_item_id);
+                if (parent) {
+                    const bucket = childrenByParent.get(parent.line_id) ?? [];
+                    bucket.push(l);
+                    childrenByParent.set(parent.line_id, bucket);
+                    continue;
+                }
+            }
+            // Either: parent-style line (placed by main loop below) OR
+            // standalone product-only line OR a nested child whose parent
+            // isn't in this group — keep at natural position.
+            orphans.push(l);
+        }
+        // Stable rebuild: walk the original ordering of `orphans` (which
+        // already contains every parent and every uncoupled line in
+        // sequence). For each parent, splice its children immediately
+        // after.
+        const out: ShoppingListLine[] = [];
+        for (const l of orphans) {
+            out.push(l);
+            const kids = childrenByParent.get(l.line_id);
+            if (kids) out.push(...kids);
+        }
+        return out;
+    }
+    function isNestedChild(line: ShoppingListLine): boolean {
+        return !!(line.stock_item_id && line.product_id);
+    }
+    function isProductOnly(line: ShoppingListLine): boolean {
+        return !line.stock_item_id && !!line.product_id;
+    }
 
     // Stock items keyed by id, looked up from the store, so we can hand
     // the right StockItem to <StockItemChip> per line.
@@ -2040,10 +2110,55 @@
         // user's purposes (they get the same item back at roughly the
         // same place; precise sequence isn't worth a reorder round-trip).
         const before = detail.value?.lines.find((l) => l.line_id === lineId);
+
+        // C-7 Chunk 3 rule 4 — removing a product-only line (no
+        // stock_item_id) prompts to also remove the *linked* stock-item
+        // line, if one is also on this list. The user added the product
+        // intent; removing it usually implies the stock-item placeholder
+        // goes too, but they may want to keep the generic line.
+        let alsoRemoveStockItemId: string | null = null;
+        if (before && !before.stock_item_id && before.product_id) {
+            const linkedStockItemId = productStore.products?.find(
+                (p) => p.product_id === before.product_id,
+            )?.linked_stock_item_id ?? null;
+            if (linkedStockItemId) {
+                const parentLine = detail.value?.lines.find(
+                    (l) =>
+                        l.stock_item_id === linkedStockItemId
+                        && l.line_id !== lineId,
+                );
+                if (parentLine) {
+                    // Yes → remove both; No/dismiss → just the product. The
+                    // product line is going regardless (the user already
+                    // clicked Remove); the prompt is purely about whether the
+                    // generic stock-item placeholder rides along.
+                    const removeBoth = await new Promise<boolean>((resolve) => {
+                        $q.dialog({
+                            title: 'Also remove the stock item?',
+                            message: `${parentLine.stock_item_name} is on this list as its own line. Remove it too?`,
+                            ok: { label: 'Yes, remove both', noCaps: true, color: 'primary' },
+                            cancel: { label: 'No, just the product', noCaps: true, flat: true },
+                            persistent: false,
+                        })
+                            .onOk(() => resolve(true))
+                            .onCancel(() => resolve(false))
+                            .onDismiss(() => {});
+                    });
+                    if (removeBoth) alsoRemoveStockItemId = linkedStockItemId;
+                }
+            }
+        }
+
         try {
             await api.deleteLineAsync(listId.value, lineId);
+            if (alsoRemoveStockItemId) {
+                await api.removeByStockItemFromListAsync(
+                    listId.value,
+                    alsoRemoveStockItemId,
+                );
+            }
             await refreshAll();
-            if (before) {
+            if (before && before.stock_item_id) {
                 const targetListId = listId.value;
                 const snapshot = {
                     stock_item_id: before.stock_item_id,
@@ -2320,6 +2435,12 @@
         if (stockItemStore.stockItems.length === 0) {
             await stockItemStore.getStockItemsAsync();
         }
+        // C-7 Chunk 3 — needed to resolve a product-only line's
+        // linked stock item for the rule-4 modal and for nested-display
+        // grouping.
+        if (!productStore.products || productStore.products.length === 0) {
+            await productStore.getProductsAsync();
+        }
         await load();
     });
 </script>
@@ -2356,6 +2477,19 @@
     }
     .shopping-line-ticked-content {
         opacity: 0.6;
+    }
+    /* C-7 Chunk 3 — nested product line sits indented under its
+     * stock-item parent, with a left rail so the relationship reads at
+     * a glance. */
+    .shopping-line-nested {
+        padding-left: 2.25rem;
+        border-left: 3px solid var(--surface-component);
+    }
+    /* Product-only line (no linked stock item on this list) — softly
+     * tinted background so it reads as a "to be linked later" signal,
+     * not as a normal stock-anchored line. */
+    .shopping-line-product-only {
+        background-color: var(--overlay-pressed, var(--surface-component));
     }
     .offer-savings {
         font-weight: 600;

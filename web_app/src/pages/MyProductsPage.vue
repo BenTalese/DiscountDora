@@ -317,21 +317,27 @@
                             <q-tooltip>Open at merchant</q-tooltip>
                         </q-btn>
                         <q-btn
+                            v-if="product.linked_stock_item_id"
                             flat
                             dense
                             no-caps
                             :icon="ICONS.add_shopping_cart"
                             color="primary"
-                            :disable="!product.linked_stock_item_id"
                             @click.stop="onAddSingle(product)"
                         >
                             <q-tooltip>
-                                {{ product.linked_stock_item_id
-                                    ? 'Add the linked stock item to your primary list'
-                                    : 'Link to a stock item first.'
-                                }}
+                                Add the linked stock item to your draft list
                             </q-tooltip>
                         </q-btn>
+                        <!-- C-7 Chunk 3 — unlinked products add as a
+                             product-only line (L191 standalone). -->
+                        <AddToListButton
+                            v-else
+                            variant="inline-product"
+                            :product-id="product.product_id"
+                            @click.stop
+                        />
+
                         <q-btn flat round dense :icon="ICONS.more_vert" @click.stop>
                             <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
@@ -539,6 +545,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -552,7 +559,6 @@
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { StockItem } from 'src/models/stockItem';
-    import type { StockLevelName } from 'src/models/stockLevel';
     import ProductApiService from 'src/services/api/productApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -1042,10 +1048,10 @@
         return stockItems.value.filter((s) => !linkedIds.has(s.stock_item_id));
     });
 
-    function levelNameFor(item: StockItem): StockLevelName | null {
+    function levelNameFor(item: StockItem): string | null {
         return (
-            (stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)
-                ?.name) ?? null
+            stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name
+            ?? null
         );
     }
     function levelColourFor(item: StockItem): string {

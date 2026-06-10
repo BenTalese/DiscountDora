@@ -29,3 +29,19 @@ def missing_count_for(ingredients) -> int:
 def is_cookable(ingredients) -> bool:
     """True when nothing is missing. An empty ingredient list is cookable."""
     return missing_count_for(ingredients) == 0
+
+
+def missing_stock_item_names_for(ingredients) -> list[str]:
+    """Distinct names of the missing stock items, alphabetised.
+
+    Built off the already-loaded ingredient tree — never re-queries — so the
+    recipe-list endpoint can surface "what's missing?" without an N+1. Sorted
+    for deterministic output (client list rendering + test stability).
+    """
+    seen: dict[str, None] = {}
+    for ingredient in (ingredients or []):
+        item = getattr(ingredient, "stock_item", None)
+        if item is None or not is_missing(item.stock_level):
+            continue
+        seen.setdefault(item.name, None)
+    return sorted(seen)

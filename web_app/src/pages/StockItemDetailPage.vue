@@ -13,7 +13,7 @@
             <q-chip
                 v-if="detail?.stock_level_name"
                 dense
-                :color="getStockLevelColour(detail.stock_level_name as StockLevelName)"
+                :color="getStockLevelColour(detail.stock_level_name)"
                 text-color="white"
             >
                 {{ detail.stock_level_name }}
@@ -111,7 +111,7 @@
                                             outline
                                             dense
                                             no-caps
-                                            :color="getStockLevelColour((detail.stock_level_name ?? 'Well-Stocked') as StockLevelName)"
+                                            :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
                                             :label="detail.stock_level_name ?? 'Set level'"
                                         >
                                             <q-list dense>
@@ -534,7 +534,6 @@
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { Recipe } from 'src/models/recipe';
-    import type { StockLevelName } from 'src/models/stockLevel';
     import type { LinkedProduct, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';

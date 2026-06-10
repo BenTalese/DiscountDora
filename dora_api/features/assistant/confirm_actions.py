@@ -31,6 +31,8 @@ from dora_api.domain.entities.shopping_list import (
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import (StockStatus, is_missing,
+                                          level_for_status)
 from dora_api.features.meal_plans.update_meal_plan import (
     UpdateMealPlanEntryRequest, UpdateMealPlanHandler, UpdateMealPlanRequest)
 from dora_api.features.shopping_lists.manage_shopping_list import (
@@ -101,30 +103,32 @@ def _resolve_single_item(name: str) -> dict[str, Any] | StockItem:
 
 # ── update_stock_level ─────────────────────────────────────────────────
 
-# Common phrasings the model might emit. Resolved against StockLevel.name
-# (case-insensitive substring) too, so seed-customised names still work.
-_LEVEL_ALIASES: dict[str, str] = {
-    "out": "Out of Stock", "out of stock": "Out of Stock", "empty": "Out of Stock",
-    "gone": "Out of Stock", "none": "Out of Stock", "finished": "Out of Stock",
-    "low": "Low Stock", "low stock": "Low Stock", "running low": "Low Stock",
-    "almost out": "Low Stock", "almost gone": "Low Stock",
-    "sufficient": "Sufficient", "ok": "Sufficient", "fine": "Sufficient",
-    "well stocked": "Well Stocked", "well-stocked": "Well Stocked",
-    "stocked up": "Well Stocked", "full": "Well Stocked", "plenty": "Well Stocked",
+# Common phrasings the model might emit. Resolved to a canonical StockStatus
+# (sequence-keyed) — never a level name string — so seed-customised level
+# names still pick the right row (R-003 / Chunk 1 contract).
+_LEVEL_ALIASES: dict[str, StockStatus] = {
+    "out": StockStatus.OUT_OF_STOCK, "out of stock": StockStatus.OUT_OF_STOCK,
+    "empty": StockStatus.OUT_OF_STOCK, "gone": StockStatus.OUT_OF_STOCK,
+    "none": StockStatus.OUT_OF_STOCK, "finished": StockStatus.OUT_OF_STOCK,
+    "low": StockStatus.LOW_STOCK, "low stock": StockStatus.LOW_STOCK,
+    "running low": StockStatus.LOW_STOCK, "almost out": StockStatus.LOW_STOCK,
+    "almost gone": StockStatus.LOW_STOCK,
+    "sufficient": StockStatus.SUFFICIENT_STOCK, "ok": StockStatus.SUFFICIENT_STOCK,
+    "fine": StockStatus.SUFFICIENT_STOCK,
+    "well stocked": StockStatus.WELL_STOCKED, "well-stocked": StockStatus.WELL_STOCKED,
+    "stocked up": StockStatus.WELL_STOCKED, "full": StockStatus.WELL_STOCKED,
+    "plenty": StockStatus.WELL_STOCKED,
 }
 
 
 def _resolve_level(repo: SqlAlchemyRepository, level_input: str) -> StockLevel | None:
     if not level_input:
         return None
-    canonical = _LEVEL_ALIASES.get(level_input.lower().strip())
-    if canonical:
-        exact = repo.get(StockLevel).all(
-            EntityField(StockLevel, StockLevel.Fields.NAME).eq(canonical)
-        )
-        if exact:
-            return exact[0]
-    # Fallback: substring against name.
+    status = _LEVEL_ALIASES.get(level_input.lower().strip())
+    if status is not None:
+        return level_for_status(repo.get(StockLevel).all(), status)
+    # Fallback: substring against the user's custom level name (in case the
+    # alias map didn't cover a phrasing they actually use).
     matches = repo.get(StockLevel).all(
         EntityField(StockLevel, StockLevel.Fields.NAME).contains(level_input)
     )
@@ -624,11 +628,8 @@ def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
         item = ing.stock_item
         if item is None:
             continue
-        if missing_only:
-            level = item.stock_level
-            is_in_stock = level is not None and level.sequence < 3  # OUT_OF_STOCK = 3
-            if is_in_stock:
-                continue
+        if missing_only and not is_missing(item.stock_level):
+            continue
         candidates.append({"stock_item_id": str(item.id), "name": item.name})
 
     if not candidates:

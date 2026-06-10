@@ -68,10 +68,16 @@ class ShoppingListLine(BaseEntity):
     # caller flips this back to "manual" so the chip disappears.
     added_via: str = ADDED_VIA_MANUAL
     added_at: datetime | None = None
-    # N6 snapshot pair, captured the first time a line is ticked. They freeze
-    # the merchant offer at "moment of pick" so historic reporting (savings,
-    # spend-by-merchant) stays honest after prices move. Both stay None for
-    # lines that were never ticked (e.g. archived without finishing).
+    # Snapshot pair captured at the *commit-to-offer* moment: when the line
+    # is added with a `selected_product_id`, or when the user later sets /
+    # changes the selection. Freezes the merchant offer at that planning
+    # moment so historic reporting (savings, spend-by-merchant) stays honest
+    # if prices move before purchase. Both stay None for lines that never
+    # had a selected product (e.g. a generic stock-item line the shopper
+    # picks at the shelf). Untick / re-tick does NOT change them — ticking
+    # is "purchase complete", not "commit to offer". (State-ownership
+    # Chunk 6; was previously captured at first-tick, which lost intent
+    # when planning-time and tick-time prices diverged.)
     picked_offer_price: float | None = None
     list_price_at_pick: float | None = None
     # P2-02 purchase memory: what the shopper *actually* paid (per unit) and

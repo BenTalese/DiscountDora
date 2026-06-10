@@ -5,6 +5,102 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Cart Button Chunk 3 UI side (FU-131).** The frontend half of
+  L191 that was deferred from the schema/backend chunk lands here:
+  - **Rule 4 modal.** Removing a product-only line from a shopping
+    list now prompts *"Also remove the stock item from this list?"*
+    when the product's linked stock item is also on the list as its
+    own line. Yes removes both in one user action; No removes just
+    the product line.
+  - **Nested display.** A line with both `stock_item_id` and
+    `product_id` set (a product nested under a stock-item parent,
+    per rule 2) now renders indented under its parent with a left
+    rail and a "Nested product" tooltip. Product-only lines (no
+    `stock_item_id`) wear a softly tinted background + a "Product
+    only — no linked stock item on this list" tooltip so the line
+    type is legible at a glance.
+  - **`AddToListButton variant="inline-product"`.** New variant
+    anchored on `product-id` (rather than `stock-item-id`) that
+    adds a standalone product-only line via Axis B: 1 draft →
+    silent add, 2+ → radio picker, 0 → toast "create a draft
+    first". The My Products page now uses it for unlinked products
+    — previously those rows had a permanently-disabled cart icon
+    with a "link to a stock item first" tooltip.
+
+### Fixed
+- **Offer-price snapshot now captures at *add* / *select* time, not at
+  tick (State Ownership Chunk 6).** Previously `picked_offer_price` and
+  `list_price_at_pick` were frozen the first time a line was ticked —
+  which meant adding a line on Monday at $5 and ticking it on Saturday
+  at $6 lost the planning intent ($5), and a line that was never ticked
+  had a `NULL` snapshot, leaving "what did I mean to pay?" unanswerable.
+  The snapshot now fires when the user commits to an offer:
+  - **Add line** with `selected_product_id` → snapshot captured.
+  - **Update line** that sets/changes `selected_product_id` → snapshot
+    re-captured at the new offer's current price.
+  - **Update line** that clears `selected_product_id` → snapshot
+    cleared (no priced intent).
+  - **Tick** / **untick** no longer touches the snapshot. A
+    belt-and-braces "snapshot on first tick if still NULL" stays for
+    legacy rows; new lines reach that path already populated.
+  Budget spend (`/api/budget/status`), waste reporting, and the
+  shopping-list `finish` flow all consume the same `picked_offer_price`
+  field — they now see the planning-time price the user actually meant
+  to pay.
+
+### Changed
+- **Renaming a stock level no longer breaks the SPA
+  (State Ownership Chunk 4).** Every client decision keyed on the
+  literal string `'Out of Stock'` (or `'Low Stock'`, `'Well-Stocked'`,
+  `'Sufficient Stock'`) now reads the server-derived booleans
+  (`is_out_of_stock`, `is_low_stock`, `needs_restock`) on the stock-item
+  DTO, or matches by the level's `sequence` via the new
+  `helpers/stockStatus.ts` (`isOutOfStockSequence`,
+  `needsRestockSequence`, `findLevelBySequence`). Migrated:
+  `StockItemChip`, `StockItemRow`, `useStockFilters`, `WastePage`,
+  `MealPlansOverview`, `ProductSearch`, `RecipeCookMode`,
+  `NewListDialog`. Display-only colour helper
+  (`stockLevelLogic.colourForSequence`) is now sequence-keyed too. The
+  `StockLevelName` type union was dropped (custom level names are valid
+  again), and the type-only casts to it were removed across
+  `RecipeDetailPage`, `RecipesOverview`, `MyProductsPage`,
+  `StockItemDetailPage`.
+
+### Added
+- **`missing_stock_item_names` on `RecipeDto` (State Ownership Chunk 2).**
+  Each recipe now ships the distinct, alphabetised names of its missing
+  stock items alongside `missing_count` / `cookable`, so the client can
+  render a "Missing: flour, eggs" hint without re-joining the ingredient
+  tree or the stock-level table. Computed set-based off the already-loaded
+  ingredients in `from_entity` — no N+1, mirrors how `missing_count` is
+  built. (Stock-item / recipe-ingredient DTO booleans + `missing_count` /
+  `cookable` already shipped under the same chunk; this closes the
+  field-list gap.)
+
+### Changed
+- **Server stock-status authority is now sequence-keyed everywhere
+  (State Ownership Chunk 1).** The last two name-hardcodes are gone:
+  the assistant's `_LEVEL_ALIASES` ("out", "low", "running low", …) now
+  resolves to a `StockStatus` enum + `level_for_status` lookup instead
+  of an `"Out of Stock"` string match, and the recipe missing-ingredient
+  filter uses `is_missing()` instead of a `level.sequence < 3` magic
+  literal. The 7-day "expiring soon" threshold is now defined once in
+  `dora_api/domain/stock_status.py` (alongside the status contract);
+  `attention.py`, `get_alerts.py`, and `assistant/tools.py` import the
+  canonical name instead of redeclaring it. No user-visible behaviour
+  change — renaming the "Out of Stock" stock level still does the right
+  thing (asserted by `tests/test_confirm_actions_resolve_level.py`).
+
+- **Meal-plan "Generate shopping list for this week" routes through Axis B
+  (Cart Button Chunk 4 / L382).** When you have any draft list, the button
+  now opens a small picker: pick an existing draft to **add to**, or **+
+  Create new list** for the always-new path. With zero drafts it skips the
+  prompt and creates a new list as before. The success toast distinguishes
+  the two ("Added N items to your list." vs "Shopping list created with
+  N items."). No schema change — the backend's `merge_into_list_id` already
+  supported this; only the meal-plan call site was hard-coded to always-new.
+
 ### Fixed
 - **Filter panels everywhere now open.** The "Filters" toggle on Cookbook,
   Stock Overview and every page using `FilterBar` rendered a dead button — the

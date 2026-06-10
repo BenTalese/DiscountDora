@@ -1,16 +1,20 @@
 """Canonical stock-status authority.
 
-The single server-side source of truth for what a stock level *means*. Status is
-keyed to the level's ordinal ``sequence``, **never** its display name — renaming a
-level's label in the UI must not change behaviour. Every feature that buckets,
-derives, or assigns stock status consumes this module; no other code may compare a
-stock-level name or hardcode a bare sequence literal.
+The single server-side source of truth for what a stock level *means* and the
+related freshness windows. Status is keyed to the level's ordinal ``sequence``,
+**never** its display name — renaming a level's label in the UI must not change
+behaviour. Every feature that buckets, derives, or assigns stock status consumes
+this module; no other code may compare a stock-level name or hardcode a bare
+sequence literal.
 
 Seeded sequences (see ``persistence/seed.py`` / the initial migration):
 0 Well-Stocked, 1 Sufficient Stock, 2 Low Stock, 3 Out of Stock.
 
 "Missing" semantics (used for ingredient cookability): out-of-stock **only** — a
 low-stock ingredient you can usually still cook with.
+
+Freshness window: ``EXPIRING_SOON_WINDOW_DAYS`` colocates here because the
+contract owns thresholds, not only level→bucket mapping (impl plan §1 Chunk 1).
 """
 from __future__ import annotations
 
@@ -32,6 +36,11 @@ WELL_STOCKED_SEQUENCE = int(StockStatus.WELL_STOCKED)
 SUFFICIENT_STOCK_SEQUENCE = int(StockStatus.SUFFICIENT_STOCK)
 LOW_STOCK_SEQUENCE = int(StockStatus.LOW_STOCK)
 OUT_OF_STOCK_SEQUENCE = int(StockStatus.OUT_OF_STOCK)
+
+# Days from "today" within which an item is considered "expiring soon" for alerts,
+# location attention scores, and the assistant's expiring-soon filter. Single
+# source — do not redeclare a 7 elsewhere.
+EXPIRING_SOON_WINDOW_DAYS = 7
 
 
 def _sequence_of(level) -> Optional[int]:

@@ -11,7 +11,8 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.recipe_tags import RECIPE_TAG_DISCLAIMER
-from dora_api.domain.recipe_cookability import missing_count_for
+from dora_api.domain.recipe_cookability import (missing_count_for,
+                                                 missing_stock_item_names_for)
 from dora_api.domain.stock_status import is_low_stock, is_missing
 from dora_api.features.recipes.recipe_tag_access import (
     find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
@@ -168,6 +169,10 @@ class RecipeDto:
     # ingredient tree (§3.2 state-ownership refactor).
     missing_count: int
     cookable: bool
+    # Distinct, alphabetised names of the missing stock items — lets the
+    # client render a "Missing: flour, eggs" hint without rejoining the
+    # ingredient tree or the stock-level table.
+    missing_stock_item_names: List[str]
     # C-4 Chunk 5: whether the recipe has an image (the bytes are served via
     # GET /recipes/<id>/image, never inlined in list/detail JSON).
     has_image: bool
@@ -239,6 +244,7 @@ class RecipeDto:
             ingredients = _IngDtos,
             missing_count = _Missing,
             cookable = _Missing == 0,
+            missing_stock_item_names = missing_stock_item_names_for(recipe.ingredients),
             # FU-090 — `image` is now a deferred column; accessing
             # `recipe.image` here would trigger N+1 lazy loads on the
             # list path. Default False and let the handler hydrate

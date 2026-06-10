@@ -55,7 +55,7 @@
                         >
                             <q-item-section avatar>
                                 <q-avatar
-                                    :color="getStockLevelColour(level.name)"
+                                    :color="colourForSequence(level.sequence)"
                                     size="14px"
                                 />
                             </q-item-section>
@@ -244,7 +244,8 @@
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
+    import { isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -298,12 +299,19 @@
         if (!id) return '';
         return stockLevels.value.find((l) => l.stock_level_id === id)?.name ?? '';
     });
+    const levelSequence = computed<number | null>(() => {
+        const seq = props.item.stock_level_sequence;
+        if (typeof seq === 'number') return seq;
+        const id = props.item.stock_level_id;
+        return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? null;
+    });
     // The level button is text-less but coloured by the stock level. The
-    // colour is sourced from `getStockLevelColour` so light/dark themes
-    // (Pesto, Cherry Cola) both inherit the palette correctly.
+    // colour is sourced from `colourForSequence` so light/dark themes
+    // (Pesto, Cherry Cola) both inherit the palette correctly, and renaming
+    // a level doesn't change its colour.
     const levelButtonStyle = computed(() => {
-        const name = levelName.value;
-        const colour = name ? getStockLevelColour(name) : null;
+        const seq = levelSequence.value;
+        const colour = seq !== null ? colourForSequence(seq) : null;
         // `getStockLevelColour` returns Quasar palette names ("positive",
         // "warning"…); we map those to the CSS variables Quasar exposes
         // so a single style binding covers all themes.
@@ -375,7 +383,10 @@
     });
 
     // ── Whole-row outline + dim rules (decision 6 + L91) ────────────────
-    const isOutOfStock = computed(() => levelName.value === 'Out of Stock');
+    const isOutOfStock = computed(
+        () =>
+            props.item.is_out_of_stock ?? isOutOfStockSequence(levelSequence.value),
+    );
     const rowClasses = computed(() => ({
         'stock-row--dim': isOutOfStock.value,
         'stock-row--peeking': props.peeking,

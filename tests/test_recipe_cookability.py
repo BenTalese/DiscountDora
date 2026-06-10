@@ -22,21 +22,21 @@ def _level(sequence):
     return SimpleNamespace(sequence=sequence, id=uuid4())
 
 
-def _item(level_sequence):
+def _item(level_sequence, name="item"):
     """Stock item with the given stock level (None = no level record)."""
     return SimpleNamespace(
         id=uuid4(),
-        name="item",
+        name=name,
         stock_level=_level(level_sequence) if level_sequence is not None else None,
         stock_location=None,
     )
 
 
-def _ingredient(item_sequence):
+def _ingredient(item_sequence, name="item"):
     """Recipe ingredient stub. item_sequence=None → stock item has no level record."""
     return SimpleNamespace(
         id=uuid4(),
-        stock_item=_item(item_sequence),
+        stock_item=_item(item_sequence, name=name),
         quantity=None,
         unit=None,
         notes=None,
@@ -60,7 +60,10 @@ def _recipe(*ingredient_args):
         prep_time_minutes=None,
         recipe_collection=None,
         servings=None,
+        source=None,
         time_of_day=None,
+        version_group_id=None,
+        kcal=None,
         ingredients=list(ingredient_args),
     )
 
@@ -131,3 +134,28 @@ def test__beyond_sequence_clamps_to_out_of_stock():
     dto = RecipeDto.from_entity(_recipe(_ingredient(99)))
     assert dto.cookable is False
     assert dto.missing_count == 1
+
+
+# ── missing_stock_item_names (Chunk 2) ────────────────────────────────────────
+
+def test__missing_names_alphabetised_and_distinct():
+    # Two out-of-stock items (one listed twice) + one in-stock item.
+    dto = RecipeDto.from_entity(_recipe(
+        _ingredient(3, name="zucchini"),
+        _ingredient(3, name="apples"),
+        _ingredient(3, name="apples"),    # duplicate → one entry
+        _ingredient(1, name="butter"),    # in-stock → omitted
+    ))
+    assert dto.missing_stock_item_names == ["apples", "zucchini"]
+
+
+def test__missing_names_empty_when_cookable():
+    dto = RecipeDto.from_entity(_recipe(_ingredient(0), _ingredient(2)))
+    assert dto.cookable is True
+    assert dto.missing_stock_item_names == []
+
+
+def test__missing_names_includes_no_level_items():
+    # No stock-level record → counts as missing per the contract.
+    dto = RecipeDto.from_entity(_recipe(_ingredient(None, name="salt")))
+    assert dto.missing_stock_item_names == ["salt"]

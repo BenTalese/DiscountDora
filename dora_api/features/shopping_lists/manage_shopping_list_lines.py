@@ -126,6 +126,12 @@ class AddLineHandler:
             added_at = datetime.now(timezone.utc),
         )
         self.repository.add(line)
+        # State-ownership Chunk 6 — snapshot the offer at *add* (not at
+        # tick) so "what did I mean to pay?" stays answerable for lines
+        # that never get ticked, and so a price move between add and
+        # tick doesn't silently overwrite the planning-time intent.
+        if line.selected_product_id is not None:
+            snapshot_offer_price(self.repository, line)
         self.repository.save_changes()
         return AddLineResponse(line_id=line.id)
 
@@ -172,11 +178,6 @@ def snapshot_offer_price(repository: SqlAlchemyRepository, line: ShoppingListLin
         return
     line.picked_offer_price = float(offer.price_now)
     line.list_price_at_pick = float(offer.price_was) if offer.price_was else None
-
-
-# Internal alias used by the update path; exposed name above is what other
-# modules (e.g. finish-list) import.
-_snapshot_offer_price = snapshot_offer_price
 
 
 # ───── Update line (tick, quantity, selected_product) ─────────────────────
@@ -231,25 +232,41 @@ class UpdateLineHandler:
             line.quantity = request.quantity
             user_edited = True
         if "is_ticked" in set_fields and request.is_ticked is not None:
-            # N6: snapshot the selected offer's price the first time a line
-            # transitions to ticked. Re-ticking after an untick doesn't
-            # re-snapshot — the original moment-of-pick wins so reports
-            # stay stable. Untick clears the snapshot so a future tick can
-            # capture a fresh one.
+            # State-ownership Chunk 6 — ticking is "purchase complete",
+            # NOT "commit to an offer". The snapshot was captured at
+            # add-time / selection-change time and represents the
+            # planning-moment price; ticking leaves it alone. Untick
+            # likewise preserves it (the commit-to-offer moment didn't
+            # un-happen).
+            #
+            # Belt-and-braces for legacy rows that landed before the
+            # add-time snapshot existed and never got one assigned: on
+            # the first tick, fill it from the current offer so reports
+            # have something to read. New rows reach this path with
+            # `picked_offer_price` already set from add/select.
             became_ticked = request.is_ticked and not line.is_ticked
             line.is_ticked = request.is_ticked
             if became_ticked and line.picked_offer_price is None:
-                _snapshot_offer_price(self.repository, line)
-            elif not request.is_ticked:
-                line.picked_offer_price = None
-                line.list_price_at_pick = None
+                snapshot_offer_price(self.repository, line)
         if "sequence" in set_fields and request.sequence is not None:
             line.sequence = request.sequence
         if request.clear_selected_product:
             line.selected_product_id = None
+            # Snapshot belongs to the (now-cleared) selection; clear it
+            # so totals fall back to "no priced intent" instead of
+            # showing a stale price for an offer the user no longer
+            # picked.
+            line.picked_offer_price = None
+            line.list_price_at_pick = None
             user_edited = True
         elif "selected_product_id" in set_fields and request.selected_product_id is not None:
+            changed = line.selected_product_id != request.selected_product_id
             line.selected_product_id = request.selected_product_id
+            # State-ownership Chunk 6 — re-snapshot whenever the user
+            # commits to a different offer. The price they "meant to
+            # pay" just changed.
+            if changed:
+                snapshot_offer_price(self.repository, line)
             user_edited = True
 
         # P2-02 — actual paid price / merchant. Editing these doesn't flip

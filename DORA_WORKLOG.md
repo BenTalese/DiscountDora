@@ -9,6 +9,1282 @@ next.
 
 ---
 
+## 2026-06-12 — IMPL_PLAN_SHOPPING_LISTS Chunks 3–7 audit — VERIFY-STATE-FIRST, NO CODE
+**Status:** no-op. Same pattern as State Ownership Chunks 3 and 5 —
+the impl plan named seven chunks; **all of them are in the code
+already**. Chunks 1 and 2 were explicitly marked ✅ IMPLEMENTED in the
+plan; this entry establishes that 3–7 are too, so the next session
+doesn't re-walk the same ground.
+
+**What the plan asked for and what's in the code:**
+
+### Chunk 3 — Lifecycle UI (one primary-action button) — DONE
+- `ShoppingListDetail.vue:298-333` renders **one** `BaseButton` whose
+  label + handler switch on `detail.status`:
+  - `draft` → "Start shopping" (`onStartShopping`)
+  - `shopping` → "Continue shopping" (`goToShopMode`)
+  - `done` → "Reopen" (`onReopen`)
+- **"← back to editing"** path: `ShoppingListShopMode.vue::exit()`
+  reopens the list (SHOPPING → DRAFT) before routing back to detail.
+- **Review folded into the finish confirmation:** `ShoppingListShop
+  Mode.vue::onFinish` (lines 838-885) lists "the 12 items that will
+  bump to Well-Stocked" inside the confirm dialog. Comment at 842
+  cites the Chunk 3 spec.
+- **Deliberate deviation:** SHOPPING is still a *separate route*
+  (`/shopping-lists/:id/shop`), not rendered in place. Comment at
+  `ShoppingListDetail.vue:1679-1693` explains the original
+  auto-redirect watcher wedged the global FadeTransition; kept as a
+  user-initiated nav. Documented; not a regression.
+
+### Chunk 4 — One creation surface — DONE
+- `ShoppingListsOverview.vue:38-46` shows a single "New list" button
+  that opens `NewListDialog`. The dialog hosts the
+  empty/template/recipe/auto-fill mux against the existing
+  `/auto-generate` endpoint (`sources` + `merge_into_list_id`).
+- Comment on the overview names it as a fallback surface only —
+  Chunk 5 made the detail the canonical landing.
+
+### Chunk 5 — Merge overview into detail — DONE
+- Route guard in `router/routes.ts` redirects `/shopping-lists` to
+  the detail of the picked list when any list exists.
+- `ShoppingListsOverview.vue` is now the empty/error fallback
+  (comment at the top of the file describes the new role).
+- `ShoppingListDetail.vue:25-96` renders an **Active + Archived
+  selector** in the header, with archived lists in the same
+  selector behind a section divider. Active rows show
+  status-keyed icons (shopping_cart_checkout for SHOPPING, list
+  for DRAFT).
+- Landing-pick keyed to `planned_shop_date === today` lives in
+  `routes.ts:122` (`drafts.find((s) => s.planned_shop_date === today)`).
+
+### Chunk 6 — In-store polish — DONE
+- **Persistent skip:** `ShoppingListShopMode.vue:647` — comment
+  names "P6-01 Chunk 6 — skip now persists. Optimistic local
+  sequence" then writes through to the API.
+- **Tap-to-type quantity:** `qtyEditorOpen` + the qty-editor
+  modal at lines 660+.
+- **Whole-list peek:** `peekOpen` + BaseDialog at lines 270, 585.
+- **Pricing-as-you-go:** `priceEditorDraft` reactive + inline
+  edit during shopping (lines 716-755).
+- **Group-by-aisle as a view:** the detail's `groupBy` ref
+  (`'none' | 'location' | 'merchant'`) is a render-time grouping;
+  it never writes back to `sequence` (verified by reading
+  `lineGroups` — it builds buckets without mutating any line).
+- **DnD off-by-one fix (L414):** `ShoppingListDetail.vue:1198-1218`
+  — the comment explicitly cites "P6-01 Chunk 6 / feedback L414 —
+  the old logic subtracted 1 when dragging down…" and the new
+  splice-at-`toIdx` shape replaces it.
+- **Substitute-swap-in-store** *is* explicitly **out of scope** for
+  this plan — the Chunk 6 entry punts it to C-7 §9.1 + INV-8.
+
+### Chunk 7 — Planned shop day + cleanup — DONE
+- **`planned_shop_date` column:** migration
+  `e1a4c7b2f9d0_20260613_shopping_list_planned_shop_date.py`. Entity
+  + DTO + SPA model + NewListDialog editor + ShoppingListDetail
+  chip all carry it (`Chunk 7` citations in the comments).
+- **Shopping-day banner:** `ShoppingListDetail.vue:367-385`. Comment
+  notes full alert-type wiring (push, suggestion feed) is **C-9's
+  scope**, not this plan.
+- **Legacy column drop (`is_in_progress`, `is_archived`,
+  `is_primary`):** all three already dropped by the deviations
+  recorded in Chunk 1 + Chunk 2's plan entries (pre-release =
+  no compat shims). Grep against `entities/shopping_list.py` +
+  `table_mappings.py` shows zero references outside historical
+  comments.
+
+**What changed this session:** **nothing.** Recognition entry only.
+
+**Decisions made:**
+- **Honest no-op, not invented scaffolding.** Same discipline as
+  State Ownership Chunks 3 + 5: declaring shipped work shipped is
+  the right move when re-implementing would just churn the diff.
+- **Substitute-swap-in-store, full alert-type wiring stay out of
+  scope.** The impl plan flagged both as ties to other plans (C-7
+  §9.1 / INV-8 / C-9). Logging here as cross-references for the
+  next session, not as gaps.
+
+**Files touched:** none. `CHANGELOG.md` not updated.
+
+**Verification:**
+- Walked each chunk against the code, citing the file:line that
+  satisfies the spec. Every deliverable has a home; the one
+  intentional deviation (Chunk 3 SHOPPING surface as a separate
+  page, not in-place) is documented in the code with a load-bearing
+  comment.
+- No tests run; no behaviour change.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- N/A — recognition entry. **R-007** held: no invented work.
+
+**Phase 1 status — DONE.** Reading
+`docs/01_charter/RECONCILED_FINISHING_PLAN.md §5`:
+- Cart Button (C-7) — Chunks 1–4 + FU-131 UI side — closed.
+- State Ownership — Chunks 1–6 — closed. (Chunk 7 explicitly
+  optional / "may not be worth doing"; recommend deferring
+  indefinitely.)
+- Shopping Lists — Chunks 1–7 — closed.
+
+**Next up:**
+1. **Phase 1 cleanup pass:** the 7 open browser-verify items
+   (FU-130, FU-132, FU-135, FU-141, FU-142, FU-145) + FU-136
+   stub one-liner. Best done as one focused smoke session so
+   the user exercises the whole loop at once.
+2. **Phase 2:** ingestion API (`PROPOSAL_INGESTION_API.md` /
+   C-10), or one of the still-open follow-ups (FU-138 query-
+   count harness, FU-139 colour-helper sweep, FU-140 nullable-
+   id typing sweep, FU-143 snapshot backfill, FU-144 product
+   cart-state).
+3. The master plan's **Phase 0 re-baseline of `STATUS.md`** —
+   it was tagged stale at the start of this stream; multiple
+   chunks since make the staleness worse.
+
+**Open questions for user:**
+- Phase 1 reads as **done**. The next big work unit is **Phase 2
+  (ingestion API)** — that's a different shape of work (new
+  feature, not finishing-pass). Want to start that, or
+  **prioritise the browser-verify batch + the trivial
+  follow-ups** to lock Phase 1 in before opening a new front?
+- Worth re-baselining `STATUS.md` now? Multiple plans got closed
+  in this stream and the doc was already stale.
+
+---
+
+## 2026-06-12 — FU-131 / IMPL_PLAN_CART_BUTTON Chunk 3 UI side — IMPLEMENTED
+**Status:** complete (frontend-only). Closes the UI deferral logged
+when Cart Button Chunk 3's backend landed. All three of FU-131's
+documented pieces — rule 4 modal, nested display, inline-product
+variant — shipped together so the SPA finally matches the
+schema/handlers built earlier.
+
+**What changed:**
+- **`web_app/src/pages/ShoppingListDetail.vue`** — three additions:
+  - **Rule 4 modal in `onRemoveLine`** (lines 2036-2092). When
+    the removed line is product-only (`!stock_item_id &&
+    product_id`), looks up the product's `linked_stock_item_id`
+    via the product store, finds the matching stock-item parent
+    line on this list, and prompts *"Also remove the stock item
+    from this list?"* via `$q.dialog`. **Yes** issues both deletes
+    in the same try-block; **No / dismiss** removes only the
+    product line. The existing undo path still fires for
+    stock-item-anchored cases.
+  - **Nested display** — new `nestedLinesFor(group)` reorders a
+    group so each parent's nested children (lines sharing
+    `stock_item_id` and carrying a `product_id`) follow it
+    immediately. `isNestedChild(line)` / `isProductOnly(line)`
+    drive CSS classes `shopping-line-nested` (indent + left
+    rail) and `shopping-line-product-only` (soft tint). The
+    chip swap in the line template renders a "Nested product"
+    pill for children, a tinted "Product only" pill for
+    standalones, and the existing `StockItemChip` for normal
+    parents.
+  - **Product-store preload** in `onMounted` so the rule-4
+    `linked_stock_item_id` lookup and the nested-display
+    grouping don't race the first render.
+- **`web_app/src/components/AddToListButton.vue`** — new
+  variant + handler:
+  - Prop `productId?: string` accepted alongside the existing
+    `stockItemId`. Variant union grown to include
+    `'inline-product'`.
+  - `onInlineProductClick` resolves the target list off Axis B
+    using `membership.active_lists` filtered by
+    `status === 'draft'`: 0 → "create a draft first" notify;
+    1 → silent add; 2+ → radio dialog (same shape as the
+    meal-plan-generate picker). Hits `shoppingListApi.add
+    LineAsync(target, { product_id })` directly; no stock
+    item, no membership cart-state tracking (the button is
+    product-anchored, not stock-item-anchored).
+  - Template branch for the new variant: a flat dense
+    icon-and-label "Add as product" button with tooltip.
+- **`web_app/src/pages/MyProductsPage.vue`** — the unlinked
+  branch of the My Products row now renders
+  `<AddToListButton variant="inline-product" :product-id="p.id">`
+  instead of a permanently-disabled cart icon with the
+  unhelpful "Link to a stock item first" tooltip. Linked
+  products keep the existing `onAddSingle` (stock-item path).
+
+**Decisions made:**
+- **Modal phrasing: yes-or-just-product, never abort.** The
+  user already clicked Remove on the product line; the prompt
+  is *only* about whether the generic stock-item placeholder
+  rides along. Dismissing the dialog removes the product
+  line. Caches the click intent: rejecting the modal isn't
+  the same as rejecting the original Remove.
+- **Nested children render with a plain chip, not
+  `StockItemChip`.** The parent already wears the full chip
+  (level, cart state, menu); duplicating it on the child
+  reads as a separate item rather than a nested one. The
+  child gets a compact "Nested product" pill that names the
+  product without drawing the eye away from the parent.
+- **Inline-product Axis B is the same picker shape as
+  meal-plan generate.** Reused the radio-dialog pattern
+  rather than promoting it into a shared component
+  (FU-133 still tracks that promotion — now with three call
+  sites, the case strengthens). For Chunk 3 scope, inline is
+  fine.
+- **No cart-state tracking on product-anchored adds.** The
+  `cartStateFor` helper is keyed on `stock_item_id`; making
+  it work for product anchors means a parallel membership
+  index. Out of scope for Chunk 3 UI — the inline-product
+  button just shows "Add as product" without "on a list"
+  awareness. Logged as future opportunity in **FU-144**.
+- **`onAddSingle` path for linked products unchanged.** It
+  routes through the stock-item flow (the user wants the
+  stock item too); the unlinked branch is the new affordance.
+
+**Files touched:**
+- `web_app/src/pages/ShoppingListDetail.vue` (rule 4 + nested
+  display + CSS + onMounted preload)
+- `web_app/src/components/AddToListButton.vue` (variant +
+  handler + template branch)
+- `web_app/src/pages/MyProductsPage.vue` (consume the new
+  variant)
+- `CHANGELOG.md` (Unreleased § Added)
+- `DORA_FOLLOWUPS.md` (FU-131 closed; FU-144 logged;
+  FU-133 cross-reference)
+
+**Verification:**
+- `npx vue-tsc --noEmit` → **clean** (exit 0).
+- `pytest tests/ --ignore=tests/e2e` → 41 passed, 8 failed
+  (pre-existing FU-136 totals stub). No new regressions.
+- **NOT browser-verified.** Needs a live session to exercise:
+  1. Add product-only line via My Products row → confirm
+     line lands with the product chip + tinted background.
+  2. Link the product to a stock item later → confirm the
+     stock-item parent appears and the product nests under
+     it.
+  3. Remove the nested product → confirm rule-4 modal
+     fires and respects yes/no.
+  4. Remove a product-only line when the linked stock item
+     is *not* on the list → confirm no modal (rule 4
+     doesn't apply).
+  5. With 0 / 1 / 2+ drafts, exercise the inline-product
+     Axis-B picker each way. Logged as **FU-145**.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — inline-product variant lives on
+  the existing `AddToListButton`, not a new component. The
+  radio-dialog picker repeats the meal-plan-generate shape
+  (FU-133 owns extraction once a fourth caller appears or a
+  reuse cost crosses the threshold).
+- **R-002 theme tokens** — nested + product-only styles use
+  the existing `--surface-component` / `--overlay-pressed`
+  CSS variables. No new colour literals.
+- **R-003 state ownership** — the rule-4 *lookup* (product's
+  linked stock item) reads off the product store (server-
+  derived). The "rule 4 trigger" is a cross-entity rule
+  visible on the client because the question is presented
+  *to the user* — but the backend independently enforces
+  the schema invariants (rule 3 cascade, rule 1 standalone
+  add, rule 2 nest-on-link). The modal is UI, not the
+  authority.
+- **R-005 distribution posture** — no API/schema change.
+- **R-007 scope discipline** — held the line. Did NOT add
+  cart-state for product anchors (FU-144), did NOT promote
+  the radio-picker into a shared component (FU-133), did
+  NOT extend the inline-product variant to the bulk batch.
+- **R-008 terse comments** — chunk-citation lines on each
+  new helper; no narration.
+- **R-011 framework-idiomatic** — `$q.dialog` + Vue
+  template variants, the established patterns.
+- No new ADRs.
+
+**Next up:**
+1. **FU-145** — browser-verify FU-131 (the five-state
+   matrix above).
+2. **FU-141** — browser-verify Chunk 4 (rename a stock
+   level).
+3. **FU-142** — browser-verify Chunk 6 (snapshot at
+   add/select).
+4. **FU-130 / FU-132 / FU-135** — older Cart Button browser
+   verifies still pending.
+5. **FU-136** — `test_shopping_list_totals.py` stub
+   one-liner (restores CI signal).
+6. **`IMPL_PLAN_SHOPPING_LISTS`** — the other named Phase 1
+   item. Shares finish/restock-transaction territory with
+   State Ownership Chunk 6; now a clean target.
+
+**Open questions for user:**
+- The browser-verify backlog now has five items
+  (FU-130/132/135/141/142/145 — six). Knock them down as
+  one focused smoke session, or push to
+  `IMPL_PLAN_SHOPPING_LISTS` and bundle the verifications
+  there?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 6 (snapshot offer at ADD) — IMPLEMENTED
+**Status:** complete (server-only, no schema change). Closes the
+impl plan's §1 Chunk 6 — the Type-C data-model bug from
+`STATE_OWNERSHIP_REFACTOR_PROPOSAL.md §2.C`.
+
+**What changed:**
+- **`dora_api/features/shopping_lists/manage_shopping_list_lines.py`**:
+  - **`AddLineHandler.handle`** — after persisting a new line, if
+    `selected_product_id` is set, immediately call
+    `snapshot_offer_price` so the planning-time price is frozen
+    onto `picked_offer_price` / `list_price_at_pick`. Lines added
+    without a chosen offer (stock-item only, 0 linked products,
+    auto-generated) keep both snapshot fields NULL — the user
+    hasn't committed to a price yet.
+  - **`UpdateLineHandler.handle`** — three behaviour shifts:
+    - **Tick** no longer captures the snapshot for *new* rows
+      (they already have one from add). A belt-and-braces "snapshot
+      on first tick if still NULL" is preserved so legacy rows
+      land in reports.
+    - **Untick** no longer clears the snapshot — the commit-to-offer
+      moment didn't un-happen. (Previously untick set both fields
+      back to NULL, losing the planning intent.)
+    - **`selected_product_id` set/changed** now re-captures the
+      snapshot at the new offer's current price.
+    - **`clear_selected_product`** now also clears the snapshot
+      (the commit-to-offer moment is gone).
+  - **`_snapshot_offer_price` private alias** removed — every
+    caller now uses the public `snapshot_offer_price` name.
+- **`dora_api/domain/entities/shopping_list.py`** — `ShoppingList
+  Line.picked_offer_price` / `list_price_at_pick` docstring
+  rewritten to describe the new semantics ("commit-to-offer
+  moment", not "first tick"). Documents the legacy-row carve-out
+  so future readers don't reintroduce snapshot-on-tick.
+- **`tests/test_snapshot_offer_price.py`** (new) — 4 unit tests
+  pinning the helper against a fake repo:
+  - Sets both prices when the offer carries a `price_was`.
+  - Leaves `list_price_at_pick` NULL when the offer has no
+    `price_was`.
+  - No-op when `selected_product_id` is None.
+  - No-op when no active offer exists for the chosen product.
+
+**Decisions made:**
+- **No schema change.** Both columns already exist
+  (`migration c6e9f4a82d15`); only the moment-of-capture moves.
+  This matches the proposal's `Fix → snapshot at add-time, or
+  store an offer reference on the line at creation` — picked the
+  first arm because the columns are there.
+- **Keep the belt-and-braces snapshot-on-first-tick.** Legacy
+  rows that pre-date this chunk still have `picked_offer_price
+  IS NULL`; the next time the user ticks them, the existing
+  hook fills them so budget / waste reports still get a number.
+  After the legacy population drains, this branch becomes dead
+  code — but the cost of keeping it is one comparison per tick
+  and a single line of logic.
+- **`finish_list` snapshot loop also retained.** Same
+  belt-and-braces story — a list finished in a flow that
+  bypasses the standard tick path (e.g. a script) still gets
+  every ticked line snapshot-filled.
+- **No DTO surface change.** The snapshot is consumed by
+  `budget.py`, `waste.py`, and `reports.py` server-side; the
+  shopping-list line DTO doesn't expose it (the UI uses the
+  *current* offer price for the active "still to grab" total).
+  The proposal's framing is correct: this is a *data-model*
+  fix, not a state-location one. Client display logic is
+  unchanged.
+- **No assistant flagging.** Update-line that changes
+  `selected_product_id` re-snapshots the same way add does.
+  Not surfacing this in the UI (toast / "intent updated"
+  banner) — the user's mental model is already "I picked this
+  one"; the snapshot follows silently. Could surface later if
+  reports tell a confusing story; logged as opportunistic.
+
+**Files touched:**
+- `dora_api/features/shopping_lists/manage_shopping_list_lines.py`
+- `dora_api/domain/entities/shopping_list.py`
+- `tests/test_snapshot_offer_price.py` (new)
+- `CHANGELOG.md` (Unreleased § Fixed)
+- `DORA_FOLLOWUPS.md` (FU-142, FU-143 logged)
+
+**Verification:**
+- `pytest tests/test_snapshot_offer_price.py` → **4 passed**.
+- `pytest tests/ --ignore=tests/e2e` → 41 passed, 8 failed
+  (all `test_shopping_list_totals.py` — FU-136 pre-existing).
+  **No new regressions; chunk added 4 passing tests.**
+- Traced every consumer of `picked_offer_price`:
+  - `budget.py:82-83` (`_price_paid_for`) reads it as the
+    archived spent figure. After this chunk, that's the
+    planning-time price the user committed to — which is what
+    the proposal calls the right semantic.
+  - `waste.py:129` reads it for the rescue page's price calc.
+  - `suggestions/generators.py:173` gates "did this line have
+    *some* price" on either snapshot or actual.
+  - `manage_shopping_list.py:212-215` finish-time fallback —
+    retained.
+- Grepped for any caller of `_snapshot_offer_price` (private
+  alias I removed) — none outside this file.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — `snapshot_offer_price` is the
+  single helper; all three call sites (add, update,
+  finish-fallback) go through it.
+- **R-003 state ownership** — the whole chunk. The
+  "commit-to-offer price" is now a server-owned domain fact
+  captured at the right moment, not synthesised at report time
+  from a stale tick.
+- **R-005 distribution posture** — no DB, no migration, no
+  config. Pure behavioural change on the existing columns.
+- **R-007 scope discipline** — held the line at the Chunk 6
+  documented scope. Did NOT touch the totals DTO surface, the
+  budget endpoint shape, or any client code. The plan also
+  flagged overlap with `IMPL_PLAN_SHOPPING_LISTS.md` Chunk 1
+  ("finish/restock transaction") — that's a separate
+  workstream; the snapshot timing fix lands cleanly
+  independently and the finish-time fallback keeps the two
+  compatible.
+- **R-008 terse comments** — chunk-citation lines on the new
+  hooks + on the entity docstring. No narration.
+- **R-011 framework-idiomatic** — direct entity mutation +
+  `self.repository.add` / `save_changes`, the established
+  pattern in this file.
+- No new ADRs. The "commit-to-X" model for snapshots could
+  arguably become a rule, but one application doesn't yet
+  justify promoting it — log if a second domain fact needs
+  the same timing pattern.
+
+**Next up:**
+1. **State Ownership refactor — DONE.** Chunks 1–6 closed (1, 2,
+   4, 6 in this session; 3 & 5 verify-state). Chunk 7 (Type D
+   persistence) is explicitly low-priority in the plan, and the
+   proposal notes it "may not be worth doing at all" — recommend
+   dropping or deferring indefinitely.
+2. **FU-141** — Browser-verify Chunk 4 (rename a stock level,
+   confirm chip colours / row dim / mark-used / meal-plan
+   need-to-buy behave correctly).
+3. **FU-142** — Browser-verify Chunk 6 (add a line with a
+   chosen offer, verify budget / reports see the planning-time
+   price; change selection; tick / untick).
+4. **FU-143** — Backfill task: legacy rows with `NULL`
+   `picked_offer_price` and non-NULL `selected_product_id`
+   could be snapshot-filled now (one-off) so budget/waste
+   reports immediately reflect every line, not just future
+   ones. Optional — the belt-and-braces tick path drains
+   them organically.
+5. **FU-139** — Finish colour-helper sequence sweep.
+6. **FU-140** — Cart Button Chunk 3 nullable-id typing sweep.
+7. **FU-138** — Recipes query-count harness.
+8. **FU-136** — `test_shopping_list_totals.py` stub one-liner.
+9. **FU-131** — Cart Button Chunk 3 UI side.
+
+**Open questions for user:**
+- The state-ownership refactor is functionally complete. Want
+  to declare Chunk 7 dropped (recommended) or schedule it for
+  a future pass?
+- Of the open browser-verify trio (FU-130, FU-132, FU-135,
+  FU-141, FU-142) — knock them down as a batch in one
+  smoke-test session, or do one before moving on to the next
+  feature area?
+- With the State Ownership column closed, **Phase 1 has two
+  remaining items per `RECONCILED_FINISHING_PLAN.md §5`**:
+  IMPL_PLAN_SHOPPING_LISTS (finish/restock transaction —
+  shares territory with Chunk 6 here) and FU-131 (Cart
+  Button Chunk 3 UI). Which to pick up next?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 5 (Type B server aggregates) — VERIFY-STATE-FIRST, NO CODE
+**Status:** no-op. Like Chunk 3, every Chunk-5 deliverable was
+**already shipped in earlier work** (the dashboard refactor,
+the budget endpoint, the best-deals endpoint, and the
+waste-rescue endpoint each predate this session). Recording the
+recognition so the next agent doesn't re-audit the same surface.
+
+**What the plan asked for (impl plan §1 Chunk 5 + audit
+addendum §8.2):**
+1. Primary shopping-list **$ totals / savings** on the dashboard
+   summary (or read off list detail) — delete client joins.
+2. **Best deals** as `?sort=discount&limit=N` (or a focused
+   endpoint) instead of downloading all products to sort
+   client-side.
+3. **Use-soon** figures (waste-rescue).
+4. Fold the inline discount-% copy back onto the shared
+   helper (tiny Type-C dedup).
+
+**What's already in the code:**
+- **Primary-list totals — done.** `DashboardPage.vue:1202`
+  builds `primaryListStats` from `primaryListDetail.value?.
+  totals` (server-owned). The accompanying comment names the
+  refactor (*"Totals are server-owned (state-ownership Type B)
+  — read them off the detail's `totals` instead of summing
+  `priceOfLine`/`savingsOfLine` here"*). The shopping-list
+  detail DTO carries `total_price`, `remaining_price`,
+  `total_savings`, `ticked_count`, `unticked_count`,
+  `line_count` — every value the card binds is a direct read.
+- **Budget — done.** `dora_api/features/budget/budget.py`
+  returns `BudgetStatusDto` with server-computed `spent`,
+  `projected_active`, `remaining`, `over_budget`. The
+  dashboard's budget card (`DashboardPage.vue:209-262`)
+  reads from `budgetApi.getStatusAsync()` (`/api/budget/
+  status`) directly. The audit addendum's "stop re-fetching
+  the primary list to re-sum what budget.py already
+  computes" is the standing implementation, not the
+  outstanding fix.
+- **Best deals — done.** `productApi.getBestDealsAsync(3)`
+  hits `/products/best-deals?limit=3` (handler at
+  `dora_api/features/products/get_products.py:173`). The
+  server picks the discount-sorted top N; the dashboard
+  binds the response without re-sorting.
+- **Use-soon — done.** `wasteApi.getRescueAsync(7)` hits
+  `/api/waste/rescue` (handler at
+  `dora_api/features/waste/waste.py:57`), which returns
+  expiring items + the recipes that can absorb them. The
+  dashboard binds `wasteRescue.items` /
+  `wasteRescue.recipes` directly.
+- **Discount-% dedup — done.** Every consumer
+  (`ProductSearchCard`, `ProductSearch`, `DashboardPage`,
+  `offerSortByOptions`, `productStore`) imports
+  `discountPercent` from `helpers/scrapedProductOfferLogic.ts`.
+  Zero inline copies surfaced by `grep`.
+
+**What changed this session:** **nothing.** Same shape as the
+Chunk 3 recognition entry.
+
+**Decisions made:**
+- **No re-architecture work.** Could push the primary-list
+  totals onto the dashboard *summary* endpoint to save the
+  separate fetch (one round-trip vs two) — but the current
+  shape (`getDetailAsync` on the inferred draft target)
+  reuses the existing detail endpoint, avoids a fatter
+  summary DTO, and the card already needs the line list
+  for "show 3 items" anyway. The plan flagged this as an
+  open §3.3 decision; the codebase chose "focused endpoints,
+  detail provides totals" and it's coherent. Not worth
+  re-litigating.
+- **Honest no-op entry, not invented work.** Same discipline
+  as Chunk 3 — recognising shipped work is more useful than
+  building marginal scaffolding to claim a diff.
+
+**Files touched:** none. `CHANGELOG.md` not updated.
+
+**Verification:**
+- Read each cited file + grep for `priceOfLine` /
+  `savingsOfLine` / inline discount math on `DashboardPage`
+  → all clean.
+- Confirmed `BudgetStatusDto` is server-computed, not a
+  client-summed shape.
+- Confirmed `/products/best-deals` is a focused endpoint
+  (not a `?sort=discount` parameter overload on `/products`)
+  — fine either way; the proposal listed both as acceptable.
+- No new tests; all behaviour pinning was already done in
+  the earlier work.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- N/A — no code change.
+- **R-007 scope discipline** — held the line. Did *not*
+  invent a dashboard-summary fattening to justify a diff;
+  the shape that's there already serves the principle.
+
+**Next up:**
+1. **State Ownership Chunk 6** — the **real outstanding
+   bug**: the offer-price snapshot still fires at *tick*,
+   not at *add*. `AddLineHandler`
+   (`manage_shopping_list_lines.py:118-127`) does not call
+   `snapshot_offer_price`; only the tick path does
+   (line 241). Means if a line is never ticked,
+   `picked_offer_price` stays NULL and the "what did I mean
+   to pay?" answer is unanswerable. Coordinated with
+   `IMPL_PLAN_SHOPPING_LISTS.md` Chunk 1 per the impl plan.
+2. **FU-141** browser-verify Chunk 4 (rename test).
+3. **FU-139** colour-helper sweep.
+4. **FU-140** Cart Button Chunk 3 nullable-id typing sweep.
+5. **FU-136** totals-stub one-liner.
+6. **FU-131** Cart Button Chunk 3 UI side.
+7. **Chunk 7 (Type D)** — explicitly low-priority in the plan;
+   could be dropped.
+
+**Open questions for user:**
+- Push to **Chunk 6** (the only remaining real refactor —
+  snapshot at ADD)? It's a data-model fix with a schema
+  consideration (do we add fields, or store an offer ref?).
+- Or run **FU-141** browser-verify first to lock in Chunk 4
+  before stacking more change on top?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 4 (delete client copies) — IMPLEMENTED
+**Status:** complete (client-side, behaviour-preserving). Closes
+the impl plan's §1 Chunk 4 — the "it got simpler" win. The audit
+from this session's last user message named 13 literal-compare
+sites; this entry purges all of them and the type-union that
+enforced the four seeded names.
+
+**What changed:**
+- **`web_app/src/helpers/stockStatus.ts`** (new) — client-side
+  mirror of `dora_api/domain/stock_status.py`. Exports
+  `WELL_STOCKED_SEQUENCE` / `SUFFICIENT_STOCK_SEQUENCE` /
+  `LOW_STOCK_SEQUENCE` / `OUT_OF_STOCK_SEQUENCE`,
+  `isOutOfStockSequence`, `isLowStockSequence`,
+  `needsRestockSequence`, and `findLevelBySequence` (for the
+  cases where the client still has to *write* a level, e.g.
+  "mark used → out-of-stock"). Module docstring directs callers
+  to read DTO booleans first, sequence helpers only when given a
+  bare level or sequence.
+- **`web_app/src/models/stockLevel.ts`** — dropped the
+  `StockLevelName` union (`'Well-Stocked' | 'Sufficient Stock'
+  | 'Low Stock' | 'Out of Stock'`); `name: string`. Comment
+  added pointing renamers at `helpers/stockStatus.ts`.
+- **`web_app/src/helpers/stockLevelLogic.ts`** — split into:
+  - `colourForSequence(seq)` (new, canonical) — sequence-keyed,
+    rename-safe. Out-of-range falls back to the OUT colour.
+  - `getStockLevelColour(name)` (legacy, retained as a
+    soft-fallback) — type widened to `string | null | undefined`,
+    unknown → grey instead of console-erroring. Kept so existing
+    template bindings compile while the per-surface sweep
+    continues; new code uses `colourForSequence`. Tracked as
+    FU-139 to complete the sweep.
+- **`StockItemChip.vue`** — `levelName` is now `string | null`
+  (no union). The colour read switches to `colourForSequence`
+  on the level's `sequence`. `levelShort`'s switch matches on
+  sequence constants. `lowOrOut` reads `stockItem.needs_restock`
+  with a `needsRestockSequence` fallback.
+- **`StockItemRow.vue`** — `levelSequence` computed from the
+  item's `stock_level_sequence` (with a stockLevels lookup
+  fallback). The dim-when-out rule reads `is_out_of_stock` on
+  the item, falling back to the sequence helper. The level
+  picker's per-row avatar colour now reads
+  `colourForSequence(level.sequence)`.
+- **`composables/useStockFilters.ts`** — `hasAlert`,
+  `summaryCounts`, and `toneForLevelSequence` (renamed from
+  `toneForLevel`) all key off sequence + the item's
+  `is_out_of_stock`/`is_low_stock`/`needs_restock` booleans.
+  `shortLabel` still substring-replaces the seeded names for
+  the chip label — comment only, no behaviour.
+- **`WastePage.vue::markUsed`** — "set to out-of-stock" now
+  uses `findLevelBySequence(levels, OUT_OF_STOCK_SEQUENCE)`.
+- **`MealPlansOverview.vue`** — `stockStatusColour`,
+  `needToBuy`, and the new `levelSequenceForItem` helper all
+  read by sequence. `stockStatusLabel` still surfaces the
+  level's display name (it's *display*, not a decision).
+- **`ProductSearch.vue::onQuickAdd`** — new tracked items
+  start at the row matching `OUT_OF_STOCK_SEQUENCE`.
+- **`RecipeCookMode.vue`** — `levelColourById` reads by
+  sequence via `colourForSequence`; `outOfStockLevelId`
+  resolves the row via `findLevelBySequence`. `StockLevelName`
+  import dropped.
+- **`NewListDialog.vue::lowOrOutCount`** — filters levels via
+  `needsRestockSequence(l.sequence)` instead of name compares.
+- **`StockLevelName`-as-type-cast cleanup** — removed
+  `import type { StockLevelName }` + the `as StockLevelName`
+  casts in `RecipeDetailPage.vue` (`levelNameFor` returns
+  `string | null`), `RecipesOverview.vue` (`stockLevelColourFor`
+  passes the string straight through), `MyProductsPage.vue`
+  (`levelNameFor`), and `StockItemDetailPage.vue` (two template
+  bindings).
+
+**Incidental fixes surfaced by `vue-tsc --noEmit`:**
+- **`NewListDialog.vue:376`** — `detail.lines.map(l => l.stock_item_id)`
+  now returns `(string | null)[]` since Cart Button Chunk 3
+  made `stock_item_id` nullable. Added a typed
+  `.filter((id): id is string => !!id)` so the bulk-add call
+  still type-checks. Tagged as FU-140 — there are likely more
+  Cart-Button-Chunk-3 typing fallout sites worth a sweep.
+- **`ShoppingListDetail.vue:2049`** — the undo-snapshot path
+  passed a possibly-null `stock_item_id` to
+  `removeByStockItemFromListAsync`. Added a guard so undo only
+  registers when `before.stock_item_id` is non-null. Same FU-140
+  family.
+
+**Decisions made:**
+- **Drop the `StockLevelName` union outright (not soft-deprecate).**
+  The union promised an exhaustive set of four names; honouring
+  it means users can't rename a level. The whole chunk exists to
+  let them. `name: string` is the honest type.
+- **Keep `getStockLevelColour(name)` as a soft-fallback rather
+  than purge every call site this chunk.** ~5 surfaces still
+  call it with a level name (display chips that get `level_name`
+  off a detail DTO, not a sequence). Migrating those to
+  `colourForSequence` is a per-surface follow-on that doesn't
+  fit Chunk 4's documented scope. Logged as **FU-139** —
+  finish the colour-helper migration so the literal map in
+  `stockLevelLogic.ts` can be deleted entirely.
+- **Preserve display-only level names where they're not
+  decisions.** `stockStatusLabel` in `MealPlansOverview`
+  still calls a chip "Out of Stock" when the level is named
+  that — but the *colour bucket* underneath is now sequence-
+  keyed. R-007 — only the decisions move, the labels stay.
+- **`shortLabel` substring-replace in `useStockFilters`
+  retained.** It's heuristic-by-design (handles "Out of Stock"
+  → "Out" but also any custom name with "out" in it). Comment
+  reinforced; no behaviour change.
+- **`doraIntents.ts:68` comment touch was not made.** It's a
+  documentation example listing the seeded names — no decision
+  rides on it. Out of scope.
+
+**Files touched:**
+- `web_app/src/helpers/stockStatus.ts` (new)
+- `web_app/src/helpers/stockLevelLogic.ts`
+- `web_app/src/models/stockLevel.ts`
+- `web_app/src/components/chips/StockItemChip.vue`
+- `web_app/src/components/stock/StockItemRow.vue`
+- `web_app/src/components/dialogs/NewListDialog.vue`
+- `web_app/src/composables/useStockFilters.ts`
+- `web_app/src/pages/WastePage.vue`
+- `web_app/src/pages/MealPlansOverview.vue`
+- `web_app/src/pages/ProductSearch.vue`
+- `web_app/src/pages/RecipeCookMode.vue`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `web_app/src/pages/RecipesOverview.vue`
+- `web_app/src/pages/MyProductsPage.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `web_app/src/pages/ShoppingListDetail.vue` (FU-140 fix)
+- `CHANGELOG.md` (Unreleased § Changed)
+- `DORA_FOLLOWUPS.md` (FU-139, FU-140 logged)
+
+**Verification:**
+- `npx vue-tsc --noEmit` → **clean** (exit 0, no errors).
+  Confirms `StockLevelName` cleanup is complete and every type
+  signature lines up.
+- `pytest tests/ --ignore=tests/e2e` → 37 passed, 8 failed
+  (all `test_shopping_list_totals.py` — FU-136 pre-existing).
+  No new regressions.
+- Grep audit:
+  - `StockLevelName` → 0 hits across `web_app/src`.
+  - `'Out of Stock'` / `'Low Stock'` literals in code → all
+    remaining hits are comments or the soft-fallback `case`
+    statements in `stockLevelLogic.ts` (FU-139 closes those
+    last cases). No decision-driving literal remains.
+- **NOT verified in browser.** Logged as FU-141 — needs eyeball
+  on chip colours, dim-when-out row treatment, "mark used" on
+  the waste page, and the "Cookable tonight" / "Need to buy"
+  meal-plan card.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — new `helpers/stockStatus.ts` is the
+  shared rule-of-the-domain; no duplicated logic across the
+  migrated files (every call goes through it).
+- **R-002 theme tokens** — no chrome changes. Colour map keeps
+  using palette tokens via `nameOf<ThemePalette>`.
+- **R-003 state ownership** — *the* rule. Every former
+  client-side rename-fragile decision now reads either a
+  server-derived boolean off the DTO (preferred) or matches
+  through the canonical sequence constants (when only a
+  `StockLevel` row is in scope).
+- **R-005 distribution posture** — no API/schema change.
+- **R-007 scope discipline** — held the line on the colour
+  helper sweep (FU-139) and the broader Cart-Chunk-3 typing
+  fallout (FU-140). Only the FU-140 sites blocking this
+  chunk's typecheck were touched.
+- **R-008 terse comments** — chunk-citation lines on the new
+  helpers + on the soft-fallback in `stockLevelLogic.ts`. No
+  narration.
+- **R-011 framework-idiomatic** — Vue `computed` + standard
+  TS narrowing; nothing exotic.
+- No new ADRs. The state-ownership principle is already in
+  the standards doc; this chunk is its enforcement.
+
+**Next up:**
+1. **Browser-verify** (FU-141) — chip colours, row dim,
+   mark-used, meal-plan need-to-buy. Quick eyeball pass — no
+   logic should have shifted, but rename a level to confirm.
+2. **State Ownership Chunk 5** — Type B server aggregates
+   (verify-state-first: dashboard `primaryListStats` already
+   reads server totals, `/products/best-deals` already exists,
+   `/api/waste/rescue` already exists; Chunk 5 may largely be
+   recognise-of-done like Chunk 3 was).
+3. **State Ownership Chunk 6** — Type C: snapshot offer at ADD
+   (real data-model bug; the AddLineHandler still doesn't
+   snapshot — confirmed in the Chunk audit). Coordinate with
+   `IMPL_PLAN_SHOPPING_LISTS.md` Chunk 1.
+4. **FU-139** — finish migrating colour-helper callers from
+   name-keyed to sequence-keyed; delete the legacy fallback.
+5. **FU-140** — sweep for more Cart Button Chunk 3 nullable
+   `stock_item_id` typing fallout.
+6. **FU-136** — `test_shopping_list_totals.py` `product_id`
+   stub one-liner.
+7. **FU-131** — Cart Button Chunk 3 UI side.
+
+**Open questions for user:**
+- Browser-verify Chunk 4 first (FU-141), or push straight to
+  Chunk 5 (likely another "already shipped" audit) and Chunk 6
+  (the real data-model bug)?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 3 (query support) — VERIFY-STATE-FIRST, NO CODE
+**Status:** no-op. Chunk 3's two deliverables had **already shipped in
+earlier work** (visible in the code I read while verifying Chunk 1 + 2).
+Following CLAUDE.md's "verify state before acting" rule — declaring it
+done rather than re-writing what's already there.
+
+**What the plan asked for (impl plan §1 Chunk 3):**
+1. `GET /api/recipes?cookable=true` (+ inverse + `?max_missing=N`)
+2. `cookable_count` on the dashboard summary
+
+**What's already in the code:**
+- **`?cookable=true|false` + `?max_missing=N`** —
+  `RecipeFilters` (`get_recipes.py:264-315`) carries both fields;
+  `_parse_recipe_filters` (`get_recipes.py:740-777`) parses them
+  off `request.args` via the existing tri-state `_parse_bool`;
+  `_restrict_query` (`get_recipes.py:391-429`) feeds them into
+  `load_recipe_cookability` (the shared aggregation that the
+  DTO + dashboard also use — R-003) and reduces the candidate id
+  set via `matches_missing`. Route wired at `get_recipes.py:798-817`.
+- **`cookable_count` on dashboard summary** — `RecipeSummary`
+  (`get_dashboard_summary.py:48-56`) carries the field; the
+  handler (`get_dashboard_summary.py:147-151`) consumes the
+  same `load_recipe_cookability` helper and counts
+  `missing == 0 AND ingredient_count > 0` (so empty recipes
+  don't pad the "cookable tonight" number).
+- **Tests:** `tests/test_recipe_filters.py` (11 tests) pins
+  `_parse_bool`, `_parse_recipe_filters`, `is_empty`,
+  `needs_cookability`, and the `matches_missing` predicate
+  across `cookable` × `max_missing` combinations.
+
+**What changed this session:** **nothing.** This is a
+recognition-of-done entry, not a code unit. Logged so the next
+session doesn't re-discover the same surface and re-do work.
+
+**Decisions made:**
+- **Did not write an integration / e2e test for the recipe-list
+  cookability filter.** Unit tests already cover every
+  branch of the parsing + matching logic. An end-to-end test
+  through Flask would be valuable but is heavier (the e2e
+  infra spins a real server + session-scoped DB; building data
+  via the API would need recipe + ingredient + stock-item
+  POSTs not present in the existing suite). Reserved for
+  whenever the cookability path becomes load-bearing on a
+  real query plan — see FU-138.
+- **FU-138 (query-count test) stays open and unchanged.** I
+  previously committed (Chunk 2 worklog) to "co-sequence the
+  FU-138 harness with Chunk 3", but since Chunk 3 is a no-op
+  code-wise, the harness is the *only* thing I'd be building —
+  and that's a substantial test-infra piece (SQLAlchemy
+  `before_cursor_execute` counter, baseline numbers, fixture
+  for population). Better to land it as its own focused work
+  unit, or fold it into Chunk 4's surface-by-surface client
+  migration where N+1 perf becomes load-bearing in real
+  traffic.
+
+**Files touched:** none. `CHANGELOG.md` not updated (no
+product-level change).
+
+**Verification:**
+- `pytest tests/test_recipe_filters.py
+  tests/test_recipe_cookability.py tests/test_stock_status.py
+  tests/test_confirm_actions_resolve_level.py` → **33 passed**.
+  Covers every branch of the cookability contract end-to-end
+  short of a real DB query.
+- Read each cited code site to confirm the wiring; no drift
+  between docstring and implementation.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- N/A on code rules — no changes. Recognition-of-done is the
+  whole unit.
+- **R-007 scope discipline** — held the line: did *not* invent
+  FU-138 harness work to justify a code-changing diff. The
+  honest answer is "already done; here's the proof."
+
+**Next up:**
+1. **State Ownership Chunk 4** — delete the 7 client
+   `isMissing`/`isCookable` reimplementations + ~14 client
+   `'Out of Stock'` literals. Read the new DTO fields
+   (`missing_count`, `cookable`, `missing_stock_item_names`,
+   `is_missing`, `stock_level_sequence`) and the new
+   `?cookable=true` query instead. **Surface-by-surface
+   (R-007).** This is the "it got simpler" win the plan
+   advertises.
+2. **FU-138** — query-count harness for the recipes endpoint.
+   Pure test-infra; pick its own session.
+3. **FU-136** — `test_shopping_list_totals.py` `product_id`
+   stub fix (one-liner, restores CI signal).
+4. Browser-verify trio: FU-130, FU-132, FU-135.
+5. **FU-131** — Cart Button Chunk 3 UI side.
+
+**Open questions for user:**
+- Push to Chunk 4 (the visible client-side cleanup)? It's the
+  most user-facing of the remaining state-ownership pieces.
+- Or knock down the browser-verify trio + FU-136 stub fix
+  first to restore green test signal and de-risk the Cart
+  Button stack before more code lands?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 2 (derived status on DTOs + missing names) — IMPLEMENTED
+**Status:** complete (server-only, DTO field add). Closes the impl
+plan's §1 Chunk 2 with one last gap filled.
+
+**Verify-state-first finding:** ~90% of Chunk 2 was already in place
+from earlier work — `StockItemDto` carries
+`stock_level_sequence` + `is_out_of_stock` + `is_low_stock` +
+`needs_restock`; `RecipeIngredientDto` carries `is_missing` +
+`is_low_stock` + `stock_level_id`; `RecipeDto` carries
+`missing_count` + `cookable`; and `domain/recipe_cookability.py`
+already hosts the shared `missing_count_for` helper (consumed by
+the DTO, the `?cookable` query filter, and the dashboard's
+`cookable_count`). The single field the plan named that *wasn't*
+shipped: `missing_stock_item_names`.
+
+**What changed:**
+- **`dora_api/domain/recipe_cookability.py`** — new
+  `missing_stock_item_names_for(ingredients) -> list[str]`. Runs
+  purely on the already-loaded ingredient tree (`stock_item`,
+  `stock_level`), distinct on item name, alphabetised for stable
+  output. Sits next to `missing_count_for` so the cookability
+  authority owns both shapes.
+- **`dora_api/features/recipes/get_recipes.py`** —
+  `RecipeDto.missing_stock_item_names: List[str]` field added
+  (non-default, placed after the existing non-default
+  `missing_count` / `cookable`, before the default-bearing
+  `has_image`); populated in `from_entity` via the new helper.
+- **`tests/test_recipe_cookability.py`**:
+  - Fixed the pre-existing stub (FU-137 — closed): `_recipe()`
+    now provides `source`, `version_group_id`, `kcal` so
+    `RecipeDto.from_entity` doesn't `AttributeError`. Two
+    earlier-added DTO fields had drifted away from the stub.
+  - `_item()` / `_ingredient()` gained an optional `name=`
+    parameter so the missing-names tests can assert on distinct
+    labels.
+  - Three new tests pin the field: distinct + alphabetised;
+    empty when cookable; includes items with no stock-level
+    record (`None` → missing per the contract).
+
+**Decisions made:**
+- **Helper lives on `domain/recipe_cookability.py`, not on the
+  DTO module.** R-003 — the cookability authority owns *all*
+  cross-recipe-stock-item aggregations so the rule can't drift
+  between consumers. Mirrors how `missing_count_for` is shared
+  by the DTO, the `?cookable=true` query, and the dashboard's
+  `cookable_count`.
+- **Field placement before defaults, not after.** Python
+  dataclass ordering — a non-default field can't sit after a
+  default-bearing one. Added immediately after `cookable`
+  (also no default) so the section about server-owned
+  cookability stays grouped.
+- **No client model update yet.** The plan reserves "delete the
+  client copies" for **Chunk 4**; Chunk 2 just makes the field
+  available. Extra fields are harmless to the existing
+  `Recipe` TypeScript model.
+- **Query-count test deferred.** The plan's §3 risk note asks
+  for a query-count pin on the recipe-list endpoint. The new
+  helper provably doesn't query (pure function over the
+  already-loaded entity tree), and the existing
+  `missing_count_for` shares the same loader path — so this
+  chunk's addition is N+1-free *by construction*. A formal
+  query-count harness (SQLAlchemy `before_cursor_execute`
+  counter) is a substantial test-infra piece with no precedent
+  in the suite. Logged as **FU-138**, recommended at Chunk 3
+  (when `?cookable=true` lands and there's a hot list endpoint
+  worth pinning end-to-end).
+
+**Files touched:**
+- `dora_api/domain/recipe_cookability.py`
+- `dora_api/features/recipes/get_recipes.py`
+- `tests/test_recipe_cookability.py`
+- `CHANGELOG.md` (Unreleased § Added)
+- `DORA_FOLLOWUPS.md` (FU-138 logged; FU-137 closed)
+
+**Verification:**
+- `pytest tests/test_recipe_cookability.py
+  tests/test_stock_status.py
+  tests/test_confirm_actions_resolve_level.py` → **20 → 23
+  passed** (12 cookability incl. 3 new + the FU-137 unblock + 8
+  status + 3 resolver = 23 total).
+- Full `pytest tests/ --ignore=tests/e2e` → 37 passed, 8 failed
+  (all `test_shopping_list_totals.py` — FU-136, pre-existing
+  from Cart Button Chunk 3, confirmed on `dd15399` baseline;
+  no new regressions).
+- Grepped for direct `RecipeDto(...)` constructions outside
+  `from_entity` — only `get_recipes.py:221` (which I updated).
+  Other recipe-shaped DTOs (`LinkedRecipeDto`,
+  `RescueRecipeDto`, `ImportedRecipeDto`) are separate classes
+  and untouched.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — new aggregation lives next to
+  `missing_count_for` (single source for cookability rules).
+- **R-003 state ownership** — *the* rule this chunk extends.
+  Missing-names aggregation is server-side, computed once,
+  served on the DTO; client will consume in Chunk 4.
+- **R-005 distribution posture** — no DB, no migration. The
+  new helper is pure-Python, repository-agnostic.
+- **R-007 scope discipline** — only the documented Chunk 2
+  field gap (`missing_stock_item_names`) added. Did not
+  touch `?cookable=true` (Chunk 3) or delete any client copy
+  (Chunk 4). Did opportunistically fix FU-137 because the
+  stub fix *was* needed to verify this very change.
+- **R-008 terse comments** — one-line "why" on the new field
+  + on the helper's docstring; no narration.
+- **R-011 framework-idiomatic** — dataclass field add +
+  `from_entity` is the established DTO pattern.
+- No new ADRs.
+
+**Next up:**
+1. **State Ownership Chunk 3** — implement `GET
+   /api/recipes?cookable=true` (+ `?max_missing=N`) end-to-end.
+   The DTO + filter parsing already exist
+   (`_RecipeFilters.cookable` / `.max_missing` + the
+   `recipes_with_missing_counts` helper); verify the route
+   honours them and add `cookable_count` to the dashboard
+   summary. Co-sequence the FU-138 query-count test here.
+2. **Chunk 4** — delete the 7 client `isMissing` / `isCookable`
+   reimplementations + ~14 client `'Out of Stock'` literals.
+   Read the new DTO fields instead. Surface-by-surface
+   (R-007).
+3. Open browser-verify: FU-130, FU-132, FU-135.
+4. **FU-131** — Cart Button Chunk 3 UI side.
+5. **FU-136** — `test_shopping_list_totals.py` `product_id`
+   stub fix (one-liner, restores CI signal).
+
+**Open questions for user:**
+- Push to Chunk 3, or knock down FU-136 and the browser-verify
+  trio first?
+- Chunk 3's `cookable_count` on `/dashboard/summary` is a tiny
+  add; do it as part of Chunk 3 (recommended — the plan groups
+  them) or hold it back?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_STATE_OWNERSHIP Chunk 1 (canonical stock-status contract — finished) — IMPLEMENTED
+**Status:** complete (server-only, no DTO/client change). **Closes
+the impl plan's first reviewable chunk.** Verify-state-first revealed
+~80% of Chunk 1 was already done in earlier work (`stock_status.py`
+module exists, dashboard/waste/reports already consume
+`level_for_status`, the rename + missing-policy tests already pass).
+Picked up the remaining four threads.
+
+**What changed:**
+- **`dora_api/domain/stock_status.py`** — `EXPIRING_SOON_WINDOW_DAYS
+  = 7` colocated with the level-status contract. Module docstring
+  updated to flag that the contract owns *both* level→bucket
+  mapping **and** related thresholds (per impl plan §1).
+- **`dora_api/features/locations/attention.py`** — dropped the
+  local `EXPIRING_SOON_WINDOW_DAYS = 7`; imports from
+  `stock_status` instead.
+- **`dora_api/features/alerts/get_alerts.py`** — import moved
+  from `features.locations.attention` to `domain.stock_status`
+  (the canonical source).
+- **`dora_api/features/assistant/tools.py`** — `_EXPIRY_HORIZON_DAYS
+  = 7` deleted; the 5 call sites now use the shared
+  `EXPIRING_SOON_WINDOW_DAYS`. Removes the last duplicate of the
+  7-day window.
+- **`dora_api/features/assistant/confirm_actions.py`**:
+  - `_LEVEL_ALIASES` retyped from `dict[str, str]` (phrasing →
+    level *name*) to `dict[str, StockStatus]` (phrasing → status
+    enum). `_resolve_level` then calls `level_for_status(repo.get
+    (StockLevel).all(), status)` to pick the row by sequence —
+    rename the seeded "Out of Stock" label and "out" / "gone" /
+    "empty" still resolve correctly.
+  - Substring-name fallback retained for users who customise
+    level names beyond the alias map's phrasings.
+  - The recipe-missing-ingredient filter (line 629) replaced
+    `level is not None and level.sequence < 3  # OUT_OF_STOCK = 3`
+    with `is_missing(item.stock_level)` from the contract.
+- **`tests/test_confirm_actions_resolve_level.py`** (new) —
+  three unit tests pinning the resolver against a fake repo
+  whose levels are renamed (`Renamed-Out`, `Renamed-Low`, etc.);
+  every phrasing must still pick the right row purely by
+  sequence. Plus case/whitespace insensitivity and empty-input
+  cases.
+
+**Decisions made:**
+- **Open decision 1 ("missing = out-only vs out+low") was
+  already resolved in code** — `is_missing` returns `level is
+  None or is_out_of_stock(level)`. Documented in
+  `stock_status.py` module docstring + asserted by
+  `test_stock_status.py::test__is_missing_is_out_of_stock_only
+  _with_none_missing`. No new decision needed.
+- **Threshold colocation: keep in `stock_status.py`, not a new
+  `thresholds.py` module.** The impl plan explicitly asks for "one
+  module" for both status mapping and the related threshold; a
+  second module would re-fragment the source of truth the chunk
+  exists to consolidate. The docstring names the broader scope
+  ("status authority + freshness window") so the colocation
+  doesn't read as accidental.
+- **Substring-name fallback retained in `_resolve_level`.** It's
+  the only path that still touches a level *name* anywhere on
+  the server — kept because users with custom phrasings outside
+  the alias map (e.g. they renamed "Sufficient" to "Mid") need
+  *some* lookup to work. This is `R-003` carve-out by design;
+  the alias-map path covers the canonical sequence values, and
+  the fallback only fires when the user's phrasing doesn't
+  match a recognised alias. Documented inline.
+- **No DTO / client change.** Pure server consolidation, per the
+  chunk definition-of-done (impl plan §2).
+
+**Files touched:**
+- `dora_api/domain/stock_status.py`
+- `dora_api/features/locations/attention.py`
+- `dora_api/features/alerts/get_alerts.py`
+- `dora_api/features/assistant/tools.py`
+- `dora_api/features/assistant/confirm_actions.py`
+- `tests/test_confirm_actions_resolve_level.py` (new)
+- `CHANGELOG.md` (Unreleased § Changed)
+- `DORA_FOLLOWUPS.md` (FU-136, FU-137 logged for pre-existing
+  test breakages surfaced during verification)
+
+**Verification:**
+- Ran `pytest tests/test_stock_status.py
+  tests/test_confirm_actions_resolve_level.py` → **11 passed**.
+- Ran full `pytest tests/ --ignore=tests/e2e` (33 collected) → 24
+  passed, **9 failed pre-existing** (8 in
+  `test_shopping_list_totals.py`, 1 in `test_recipe_cookability.py`).
+  Confirmed pre-existing by `git stash && pytest && stash pop` —
+  same failures on `dd15399` baseline before my edits. Root
+  causes:
+  - `test_shopping_list_totals.py` × 8: stub `_line()` doesn't
+    pass `product_id` (added by Cart Button Chunk 3); pure test
+    fixture drift, no behaviour issue. **FU-136**.
+  - `test_recipe_cookability.py` × 1: stub recipe missing a
+    `source` attribute (added by an earlier prompt). **FU-137**.
+- Confirmed the rename test in `test_stock_status.py:38-46`
+  exercises the keystone property; combined with the new
+  `_resolve_level` rename test, every path that used to compare
+  on `"Out of Stock"` is now sequence-keyed.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — single new test module under
+  `tests/`; no production-side new modules. Consolidation is the
+  whole point.
+- **R-003 state ownership** — *the* rule this chunk enforces.
+  Server now owns every level→bucket call, including the assistant
+  alias resolver. The one carve-out (substring-name fallback for
+  user-customised level labels) is documented inline at the
+  one site that still reads `StockLevel.name`.
+- **R-005 distribution posture** — no DB, no migration, no
+  config.
+- **R-007 scope discipline** — held the line at the impl plan's
+  Chunk 1 definition-of-done. Did *not* touch DTOs, did *not*
+  delete client copies of `Out of Stock`, did *not* implement
+  `?cookable=true`. Those are Chunks 2-4.
+- **R-008 terse comments** — Chunk-1 citations on the alias map
+  and threshold; no commentary on the obvious.
+- **R-011 framework-idiomatic** — `StockStatus(IntEnum)` +
+  `level_for_status` is the pattern already established by the
+  module; the edits extend rather than reinvent.
+- No new ADRs. Module-level guidance (single source for
+  status + windows) is already captured by `R-003` and the
+  module docstring.
+
+**Next up:**
+1. **State Ownership Chunk 2** — derived booleans / status
+   enum on the stock-item + recipe-ingredient DTOs, plus
+   `cookable` / `missing_count` / `missing_stock_item_names`
+   on `RecipeDto` (set-based, no N+1; query-count test).
+   `test_recipe_cookability.py` is already shaped for this and
+   needs the FU-137 stub fix as part of the chunk.
+2. **Chunk 3** — `?cookable=true` query honoured server-side +
+   `cookable_count` on dashboard summary.
+3. **Chunk 4** — delete the 7 client `isMissing`/`isCookable`
+   copies + the ~14 client `'Out of Stock'` literals.
+4. **Browser-verify backlog**: FU-130, FU-132, FU-135 still
+   open.
+5. **FU-131** — Cart Button Chunk 3 UI side (inline-product
+   variant + nested display + rule-4 modal).
+
+**Open questions for user:**
+- Push straight to State Ownership Chunk 2, or circle back to
+  FU-131 / browser-verify first?
+- FU-137 (`test_recipe_cookability.py` `source` attr) is a
+  trivial stub fix and the chunk's existing test scaffolding —
+  fold into Chunk 2 (recommended) or close as its own
+  one-liner now?
+
+---
+
+## 2026-06-12 — IMPL_PLAN_CART_BUTTON Chunk 4 (meal-plan generate routes through Axis B) — IMPLEMENTED
+**Status:** complete (frontend-only — backend `merge_into_list_id`
+already supported it from earlier work). **Static-only — no env.**
+Closes the Cart Button impl plan's last chunk (L382 / surface 10 in
+`PROPOSAL_CART_BUTTON.md §5`).
+
+**What changed:**
+- `web_app/src/pages/MealPlansOverview.vue` — replaced the
+  always-creates-new-list `generateListForWeek` with an
+  Axis-B-gated flow:
+  - New `pickGenerateTarget()` reads the draft lists off
+    `shoppingListStore.membership.active_lists` (server-derived,
+    R-003 — no client recomputation).
+  - **0 drafts:** no prompt; falls through to today's create-new
+    behaviour with the auto-name `"Meals: <plan>"`.
+  - **≥1 drafts:** opens a radio `$q.dialog` with each draft as
+    an option plus a final **"+ Create new list"** row (the
+    sentinel resolves to "no merge target" → create-new path).
+  - Cancel/dismiss aborts the whole action — no silent fallback
+    to always-new.
+  - The autoGenerate call now spreads `merge_into_list_id` *or*
+    `name` (XOR-style) so we don't pass a stale name when adding
+    to an existing list.
+  - Success toast distinguishes merge vs new ("Added N items to
+    your list." vs "Shopping list created with N items.").
+- `CHANGELOG.md` — Unreleased § Changed entry.
+
+**Decisions made:**
+- **Prompt at ≥1 draft, not just 2+.** Strict Axis B silently
+  picks at 1 draft, but the proposal's surface-10 row reads
+  *"offers add-to-existing ▾ / new instead of always-new"* — the
+  user-visible promise is the offer itself, and this is a heavy
+  bulk create-from-source action where a 1-click confirmation is
+  cheap insurance against "oh, I meant the other list". 0 drafts
+  still skips silently (nothing to offer).
+- **No remembered pick.** Unlike `useQuickAddTargetPick` (used by
+  quick-add for repeat single-item adds), generate-for-week is a
+  once-per-week action — sessionStorage memoisation would just
+  hide the picker the second time without a real win. Keep it
+  re-prompting; the picker preselects the first draft so single-
+  draft confirm is a single Enter.
+- **No new component.** The picker is one `$q.dialog` call (~20
+  LOC); promoting it to a `TargetListPicker.vue` is only worth
+  it if a second surface needs the same shape. Logged as
+  FU-133 in case it does.
+
+**Files touched:**
+- `web_app/src/pages/MealPlansOverview.vue`
+- `CHANGELOG.md` (Unreleased § Changed)
+- `DORA_FOLLOWUPS.md` (FU-133 logged)
+
+**Verification:**
+- Static only. Confirmed `shoppingListStore.membership` is
+  accessed via the Pinia setup-store proxy (no `.value`) the
+  same way `StockItemDetailPage.vue:906` and
+  `StockOverview.vue:477` do.
+- Confirmed `merge_into_list_id` is honoured by the backend at
+  `dora_api/features/shopping_lists/auto_generate.py:155-162`
+  (rejects done/missing lists; otherwise picks the existing
+  list as target).
+- Confirmed the spread-form passes either `merge_into_list_id`
+  *or* `name` — never both — so the backend doesn't see an
+  unused stale name field.
+- **NOT yet verified in browser.** Needs a real plan + at least
+  one draft list to exercise the merge path. Logged as a verify
+  backlog item.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-001 componentise** — judgement-call carve-out (single
+  consumer); FU-133 owns the promotion if a second consumer
+  appears.
+- **R-002 theme tokens** — no chrome changes; the picker uses
+  Quasar's stock dialog like the rest of the app.
+- **R-003 state ownership** — target candidates come from
+  membership (server-derived); the picker doesn't recompute
+  anything.
+- **R-005 distribution posture** — no DB/config touched.
+- **R-007 scope discipline** — held the line on Chunk 4 only;
+  did not pull `pickGenerateTarget` into the recipe-side
+  `autoGenerate` call sites (`RecipesOverview.vue:1153`,
+  `MainLayout.vue:291`, `NewListDialog.vue:416`) — those have
+  their own resolution stories (NewListDialog already picks a
+  target; the others are separate surfaces) and are out of this
+  chunk's scope. Logged as FU-134 to evaluate post-browser-test.
+- **R-008 terse comments** — one chunk-line citation on
+  `pickGenerateTarget` for the L382 link.
+- **R-011 framework-idiomatic** — Quasar `$q.dialog` radio
+  options; standard Promise-wrapping pattern matches
+  `useStockItemActions.addToList:74-98`.
+- No new ADRs.
+
+**Next up:**
+1. **Browser verify** the four-state matrix: 0 drafts (silent
+   new), 1 draft (picker shows draft + create-new, both paths
+   work), 2+ drafts (picker shows all + create-new), cancel
+   aborts cleanly. **High-priority** — this is the only
+   acceptance check for the chunk.
+2. **FU-131 / FU-132** (Chunk 3 UI + DB smoke), still deferred.
+3. **State Ownership Chunk 1** — the architectural rock.
+4. **Stock Overview Chunk 7** — unified scan-mode.
+5. Verify backlog now 18 items (added: Cart Button 4).
+
+**Open questions for user:** with the cart-button impl plan
+backend story now complete, do you want to circle back to
+FU-131 (Chunk 3 UI: inline-product variant + nested display +
+rule-4 modal) or push on State Ownership Chunk 1 next?
+
+---
+
 ## 2026-06-12 — IMPL_PLAN_CART_BUTTON Chunk 3 (standalone-product lines + rules 1–3 backend) — IMPLEMENTED
 **Status:** complete (backend + schema + DTO + minimal frontend
 plumbing). **Static-only — no env.** Closes L191 + L130 + couples

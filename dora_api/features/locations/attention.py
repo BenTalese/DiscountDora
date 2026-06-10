@@ -15,7 +15,8 @@ from datetime import date, datetime, timezone
 from typing import Iterable
 
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.stock_status import is_low_stock, is_out_of_stock
+from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
+                                          is_low_stock, is_out_of_stock)
 
 
 # Tunable weights. Tweak here, not in callers.
@@ -25,8 +26,6 @@ WEIGHT_OUT_OF_STOCK = 15
 WEIGHT_LOW_STOCK = 8
 WEIGHT_FLAGGED = 5
 WEIGHT_STOCKTAKE_OVERDUE = 5
-
-EXPIRING_SOON_WINDOW_DAYS = 7
 
 
 @dataclass

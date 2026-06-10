@@ -486,8 +486,11 @@
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import { scaleQuantity } from 'src/helpers/scaleQuantity';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import type { StockLevelName } from 'src/models/stockLevel';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
+    import {
+        findLevelBySequence,
+        OUT_OF_STOCK_SEQUENCE,
+    } from 'src/helpers/stockStatus';
     // P2-13 — extracted browser-speech composables. Cook mode opts into
     // continuous listening so the user can keep their hands in the
     // mixing bowl while saying "next" / "start timer".
@@ -1029,13 +1032,9 @@
         return stockLevels.value.find((l) => l.stock_level_id === levelId)?.name ?? null;
     }
     function levelColourById(levelId: string | undefined): string | null {
-        const name = levelNameById(levelId);
-        if (!name) return null;
-        try {
-            return getStockLevelColour(name as StockLevelName);
-        } catch {
-            return null;
-        }
+        if (!levelId) return null;
+        const seq = stockLevels.value.find((l) => l.stock_level_id === levelId)?.sequence;
+        return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
 
     function buildFinishRows(): FinishRow[] {
@@ -1078,7 +1077,7 @@
     }
 
     function outOfStockLevelId(): string | null {
-        const out = stockLevels.value.find((l) => l.name === 'Out of Stock');
+        const out = findLevelBySequence(stockLevels.value, OUT_OF_STOCK_SEQUENCE);
         return out?.stock_level_id ?? null;
     }
 

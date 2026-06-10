@@ -39,6 +39,264 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-143 — Backfill `picked_offer_price` for legacy lines
+- **Raised:** 2026-06-12 (State Ownership Chunk 6 impl)
+- **Type:** deferred job (optional)
+- **What:** Chunk 6 moved the offer-price snapshot from
+  *tick* to *add* / *select*. Rows created before this change
+  with a non-NULL `selected_product_id` but NULL
+  `picked_offer_price` (never ticked) won't have a snapshot
+  until the user later ticks them (the belt-and-braces hook
+  at `manage_shopping_list_lines.py` UpdateLineHandler tick
+  path + the finish-list fallback at `manage_shopping_list.
+  py:212-215`). A one-off script could snapshot-fill every
+  legacy row with `selected_product_id IS NOT NULL AND
+  picked_offer_price IS NULL`, picking the current offer for
+  the chosen product.
+- **Why deferred:** Optional. The belt-and-braces paths drain
+  legacy rows organically; nothing breaks if a never-ticked
+  legacy row stays unsnapshotted (it just doesn't appear in
+  budget / waste aggregates until ticked). At pre-release
+  scale this is fine to skip.
+- **Recommended resolution:** opportunistic — only worth
+  doing if a user later complains "budget number doesn't
+  match what's in my old draft lists". Then a small Alembic
+  data migration or one-shot script clears the deficit in a
+  single pass.
+
+## [OPEN] FU-142 — Browser-verify State Ownership Chunk 6 (snapshot-at-add)
+- **Raised:** 2026-06-12 (State Ownership Chunk 6 impl)
+- **Type:** finding / verification
+- **What:** Exercise the new snapshot timing end-to-end:
+  1. **Add line with selected offer** — confirm budget's
+     "projected_active" (or post-finish "spent") reflects the
+     planning-time price; price the offer up via the
+     companion app and confirm the snapshot is the *original*
+     value, not the moved price.
+  2. **Change `selected_product_id`** via the list detail
+     page's offer chip — confirm the snapshot re-captures at
+     the new offer's current price.
+  3. **Clear selection** — confirm the snapshot clears (the
+     line shows as "no priced intent" in any UI that
+     surfaces it).
+  4. **Tick** an already-snapshotted line — confirm tick
+     does NOT overwrite the snapshot.
+  5. **Untick** — confirm the snapshot persists (the
+     commit-to-offer moment didn't un-happen).
+  6. **Tick a legacy line** (one created before this chunk
+     with `picked_offer_price` NULL) — confirm the
+     belt-and-braces hook fills the snapshot the first time.
+- **Why deferred:** static-only impl; needs the running app
+  + a live offer to verify price-moved-between-states.
+- **Recommended resolution:** confirm in browser — same
+  high-priority slot as the other Chunk-N verify items.
+
+## [OPEN] FU-141 — Browser-verify State Ownership Chunk 4
+- **Raised:** 2026-06-12 (State Ownership Chunk 4 impl;
+  static-only, no env)
+- **Type:** finding / verification
+- **What:** Eyeball that the rename-safety refactor preserved
+  every visual decision it was supposed to preserve:
+  - `StockItemChip` — colour band + short label ("OK" / "Mid" /
+    "Low" / "Out") still match each level. Renaming "Out of
+    Stock" to "Empty" in Settings should leave colour + label
+    unchanged.
+  - `StockItemRow` — dim treatment fires for out-of-stock
+    rows; level button colour follows the current level.
+  - `useStockFilters` — summary counts (top of Stock Overview)
+    + sticky-footer tones still light up correctly when a
+    level is renamed.
+  - `WastePage` — "Mark used" sets the level to whichever row
+    matches `OUT_OF_STOCK_SEQUENCE` (rename it first to
+    confirm).
+  - `MealPlansOverview` — "Need to buy" lists ingredients
+    whose level is None/low/out; status chip colours match the
+    bucket.
+  - `ProductSearch` quick-add — new tracked items still start
+    in the out-of-stock bucket.
+  - `RecipeCookMode` finish-rows — "leave out of stock"
+    action resolves to the right level after a rename.
+- **Why deferred:** static-only impl; needs a running app +
+  level-rename action to exercise the renaming property
+  end-to-end.
+- **Recommended resolution:** confirm in browser — high-priority
+  for this chunk because the whole point is "renaming a level
+  no longer breaks anything". Rename one level as part of the
+  smoke pass.
+
+## [OPEN] FU-140 — Sweep Cart Button Chunk 3 typing fallout (nullable `stock_item_id`)
+- **Raised:** 2026-06-12 (State Ownership Chunk 4 typecheck)
+- **Type:** finding / cleanup
+- **What:** Cart Button Chunk 3 made `ShoppingListLine.stock_
+  item_id` nullable (a product-only line carries `product_id`
+  instead). The TS model followed, but at least two consumers
+  type-checked only because no other change had triggered them:
+  - `NewListDialog.vue:376` — `detail.lines.map(l => l.stock_
+    item_id)` previously was `string[]`, now `(string|null)[]`.
+    Fixed here with a typed `.filter` to keep the chunk's
+    typecheck green.
+  - `ShoppingListDetail.vue:2049` — the undo-snapshot path
+    passed a possibly-null id to
+    `removeByStockItemFromListAsync`. Guarded here so the undo
+    only registers when the id is non-null.
+  There are likely more call sites in `ShoppingListDetail` and
+  the cook-mode finish that haven't been audited because
+  TypeScript only flags them when another change exercises the
+  expression.
+- **Why deferred:** out of Chunk 4's documented scope (this
+  is Cart Button Chunk 3 fallout). The two blocking sites
+  were fixed inline; the sweep is the open item.
+- **Recommended resolution:** opportunistic — fold into the
+  next Cart Button or shopping-list touch. Could also be a
+  one-shot `grep` sweep for `stock_item_id` reads on
+  `ShoppingListLine` and a typed audit.
+
+## [OPEN] FU-139 — Finish migrating `getStockLevelColour(name)` callers to `colourForSequence(seq)`
+- **Raised:** 2026-06-12 (State Ownership Chunk 4)
+- **Type:** follow-up / cleanup
+- **What:** Chunk 4 introduced `colourForSequence(seq)` and
+  migrated the *decision-driving* call sites. The legacy
+  `getStockLevelColour(name)` was kept as a soft-fallback so
+  ~5 surfaces with only a `level_name` (no sequence in scope)
+  still compile:
+  - `StockItemDetailPage.vue:16, 114, 126` (the q-chip in
+    the header, the level-picker dropdown label, and the
+    per-level avatar in that dropdown)
+  - `RecipesOverview.vue:537` (`stockLevelColourFor`
+    helper consumed by ingredient chips)
+  - `RecipeDetailPage.vue:1326` (`levelColourFor`)
+  - `QuickAddSheet.vue:195`
+  - `CreateStockItemDialog.vue:43`
+  - `MyProductsPage.vue:1053`
+  Each is a small migration (give the helper the level row,
+  read `.sequence`, call `colourForSequence`). Once they're
+  all migrated, the legacy `getStockLevelColour` + its
+  literal-case `switch` in `stockLevelLogic.ts` can be
+  deleted, completing the purge.
+- **Why deferred:** out of Chunk 4's documented scope (these
+  are display-only colour lookups, not decision-driving
+  comparisons). R-007 — flag, don't drift.
+- **Recommended resolution:** opportunistic, or as a focused
+  follow-on session. Each surface migration is mechanical
+  (~5 lines). The full sweep closes the literal-fallback hole.
+
+## [OPEN] FU-138 — Query-count test for `GET /recipes` (no N+1)
+- **Raised:** 2026-06-12 (State Ownership Chunk 2 close-gate)
+- **Type:** deferred job (test infra)
+- **What:** The plan's §3 perf risk for Chunks 2–3 calls for an
+  integration test that pins the recipe-list endpoint's SQL
+  query count, so the set-based cookability / missing-names
+  aggregations can't silently regress into N+1 lazy loads.
+  `missing_stock_item_names_for` (Chunk 2) is N+1-free by
+  construction (pure function over the already-loaded
+  ingredient tree), but a runtime guard is still the right
+  long-term shape — especially once `?cookable=true` (Chunk 3)
+  hits the same query path.
+- **Why deferred:** the project has no precedent for query-count
+  tests (no SQLAlchemy `before_cursor_execute` harness, no
+  baseline numbers). Building that scaffolding belongs with
+  the chunk that adds the next hot endpoint, not with a pure
+  field-add.
+- **Recommended resolution:** **later during State Ownership
+  Chunk 3** — fold the harness build into the `?cookable=true`
+  end-to-end test so it pays for itself across both chunks.
+
+## [RESOLVED] FU-137 — `test_recipe_cookability.py` stub missing `source` attr
+- **Raised:** 2026-06-12 (surfaced during State Ownership Chunk 1
+  verification run)
+- **Type:** finding / test breakage (pre-existing)
+- **What:** `tests/test_recipe_cookability.py::_recipe()` built a
+  `SimpleNamespace` recipe stub lacking `source`,
+  `version_group_id`, `kcal` — fields that `RecipeDto.from_entity`
+  reads. Every test in the file failed with `AttributeError`.
+- **State note:** **Resolved 2026-06-12 (State Ownership Chunk 2)**
+  — the stub was the scaffolding for Chunk 2's
+  `missing_stock_item_names` tests, so the fix was folded into
+  that chunk per the original recommendation. Added the three
+  missing attributes; all 12 cookability tests now pass.
+
+## [OPEN] FU-136 — `test_shopping_list_totals.py` stub missing `product_id` arg
+- **Raised:** 2026-06-12 (surfaced during State Ownership Chunk 1
+  verification run)
+- **Type:** finding / test breakage (pre-existing from Cart Button
+  Chunk 3)
+- **What:** Cart Button Chunk 3 added `product_id` to
+  `ShoppingListLineDto` (now required). `tests/test_shopping_list
+  _totals.py::_line()` doesn't pass it, so 8 of 9 tests in the
+  file fail with `TypeError: ... missing 1 required positional
+  argument: 'product_id'`. Confirmed pre-existing on commit
+  `dd15399` (before Chunk 1 edits).
+- **Why deferred:** Cart Button Chunk 3 was logged as
+  static-only and the test stub update was missed in that PR.
+  Out of Chunk 1's scope (totals tests don't exercise the
+  stock-status contract).
+- **Recommended resolution:** **now** — single-line stub fix
+  (`product_id=None`), no production-side change needed.
+  Restores CI signal cheaply.
+
+## [OPEN] FU-135 — Browser-verify Cart Button Chunk 4 (meal-plan generate via Axis B)
+- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify the four-state matrix on the meal-plan
+  "Generate shopping list for this week" button:
+  1. **0 draft lists:** no picker; creates a new list named
+     `Meals: <plan>`; success toast says "Shopping list created
+     with N items."; routes to the new list.
+  2. **1 draft list:** picker opens with that draft preselected +
+     a "+ Create new list" row; OK on the draft → backend merges,
+     toast says "Added N items to your list.", routes to that
+     list.
+  3. **2+ draft lists:** picker lists all drafts (first
+     preselected) + "+ Create new list"; both an existing pick
+     and the create-new pick work.
+  4. **Cancel/dismiss:** aborts cleanly — no list created, no
+     toast, no navigation.
+  Also: `nothing_to_add` path still emits the info toast and
+  *doesn't* navigate.
+- **Why deferred:** static-only impl; needs a real meal plan +
+  varied draft-list state.
+- **Recommended resolution:** confirm in browser — same
+  high-priority slot as FU-130 / FU-132.
+
+## [OPEN] FU-134 — Audit other `autoGenerate` call sites for Axis-B routing
+- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl)
+- **Type:** follow-up
+- **What:** The meal-plan "Generate shopping list for this week" button
+  now offers add-to-existing vs. create-new via Axis B. Three other
+  `shoppingListApi.autoGenerateAsync` call sites were left alone:
+  - `web_app/src/components/dialogs/NewListDialog.vue:416` — already
+    explicitly picks/creates a target list before generating; no change
+    needed (already Axis-B-aware by construction).
+  - `web_app/src/pages/RecipesOverview.vue:1153` — recipe "add all
+    missing to a new list" path. Acceptance candidate for the same
+    treatment (the proposal puts recipe bulk-add under variant="bulk"
+    via the `AddToListButton`, which is the longer-term home).
+  - `web_app/src/layouts/MainLayout.vue:291` — global/keyboard
+    shortcut entry. Check whether this should also offer Axis B or
+    is intentionally always-new.
+- **Why deferred:** out of Chunk 4's documented scope (`PROPOSAL_CART_
+  BUTTON.md §5` surface 10 is meal-plan generate only). Scope discipline
+  (R-007) — flag, don't drift.
+- **Recommended resolution:** opportunistic — re-evaluate when the
+  `AddToListButton variant="bulk"` work lands for recipes (FU-131
+  vicinity) and again when the global shortcut surface gets touched.
+
+## [OPEN] FU-133 — Promote generate-target picker into a shared `TargetListPicker`
+- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl)
+- **Type:** follow-up (R-001 carve-out)
+- **What:** `pickGenerateTarget` in
+  `web_app/src/pages/MealPlansOverview.vue` is a one-shot `$q.dialog`
+  radio picker (drafts + "+ Create new"). If a second surface needs
+  the same shape (likely candidates: FU-134 audit, future bulk
+  add-all-missing flows), extract it as
+  `components/dialogs/TargetListPickerDialog.vue` with props
+  `{ drafts, allowCreateNew, title?, message? }` and one resolved
+  payload type `{ kind: 'existing', id } | { kind: 'new' } | null`.
+- **Why deferred:** single consumer today — promoting now would be
+  speculative abstraction (R-001 judgement carve-out).
+- **Recommended resolution:** when FU-134's audit lands a second
+  consumer.
+
 ## [OPEN] FU-132 — Browser-verify Cart Button Chunk 3 (standalone-product lines + rules 1–3)
 - **Raised:** 2026-06-12 (Cart Button Chunk 3 impl; static-only, no env)
 - **Type:** finding / verification
@@ -78,7 +336,67 @@ long session summary. Distinct from the other two logs:
 
 ---
 
-## [OPEN] FU-131 — Cart Button Chunk 3 frontend UI (rule 4 modal + inline-product variant + nested display)
+## [RESOLVED] FU-131 — Cart Button Chunk 3 frontend UI (rule 4 modal + inline-product variant + nested display)
+- **State note:** **Resolved 2026-06-12** — all three pieces
+  (rule 4 modal in `ShoppingListDetail.vue::onRemoveLine`,
+  nested display via `nestedLinesFor` + new CSS classes, and
+  `AddToListButton variant="inline-product"` consumed by
+  `MyProductsPage`) landed in a single session. Browser-verify
+  tracked separately as **FU-145**. Original entry preserved
+  below for the trail.
+
+## [OPEN] FU-145 — Browser-verify Cart Button Chunk 3 UI (FU-131 follow-on)
+- **Raised:** 2026-06-12 (FU-131 impl)
+- **Type:** finding / verification
+- **What:** Exercise the rule-4 modal + nested display +
+  inline-product variant end-to-end:
+  1. **Add a product-only line** via the My Products row
+     ("Add as product" button) on an unlinked product →
+     confirm the line lands with the product chip + tinted
+     "product only" background.
+  2. **Link the product to a stock item** later via the
+     stock-item detail → confirm the parent stock-item line
+     appears on the same list (rule 2 backend) AND that the
+     product nests visually under it (rule 2 frontend).
+  3. **Remove the nested product** → rule-4 modal fires;
+     "Yes" removes both, "No" leaves the stock-item parent.
+  4. **Remove a product-only line** whose linked stock item
+     is NOT on the list → no modal (rule 4 doesn't apply).
+  5. **Inline-product Axis B** — exercise with 0 / 1 / 2+
+     drafts: 0 → "create a draft first" toast; 1 → silent
+     add; 2+ → radio picker, both picks work.
+  6. **Existing flows still work** — linked products on the
+     My Products row still hit `onAddSingle` (stock-item
+     path); ticking/unticking nested children works; bulk
+     mode handles parents + children sensibly.
+- **Why deferred:** static-only impl; needs a populated
+  database + live SPA to exercise the matrix.
+- **Recommended resolution:** confirm in browser — folds
+  naturally into the broader Cart Button + State Ownership
+  browser-verify batch.
+
+## [OPEN] FU-144 — Cart-state awareness for product-anchored adds
+- **Raised:** 2026-06-12 (FU-131 impl)
+- **Type:** follow-up
+- **What:** `AddToListButton variant="inline-product"`
+  doesn't show "on a list" state today — `cartStateFor` keys
+  on `stock_item_id` and a product-anchored button has none.
+  Result: a user can re-click "Add as product" on the same
+  product and get a second product-only line (the backend's
+  dedupe catches it and the toast reads "Already on your
+  list", so it's safe — just not as informative as the
+  stock-item variant). A parallel membership index keyed on
+  `product_id` would let the button render the same
+  on-list / on-multiple states the stock-item variant does.
+- **Why deferred:** out of FU-131's documented scope (the
+  three named pieces shipped); product-anchored membership
+  is a server-side extension that touches the
+  `Membership` DTO + how its `items` array is keyed.
+- **Recommended resolution:** when a third product-anchored
+  consumer of `AddToListButton` shows up, or when a user
+  reports the double-add UX as a problem.
+
+## [OPEN] FU-131 (original) — Cart Button Chunk 3 frontend UI (rule 4 modal + inline-product variant + nested display)
 - **Raised:** 2026-06-12 (Cart Button Chunk 3 deliberate scope-down)
 - **Type:** rollout
 - **What:** Backend rules 1–3 + schema + DTO are wired this chunk.

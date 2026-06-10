@@ -286,6 +286,10 @@
     import { ICONS } from 'src/style/icons';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import {
+        findLevelBySequence,
+        OUT_OF_STOCK_SEQUENCE,
+    } from 'src/helpers/stockStatus';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -396,8 +400,9 @@
         busyAction.value = 'used';
         try {
             await stockLevelStore.getStockLevelsAsync();
-            const outLevel = stockLevelStore.stockLevels.find(
-                (l) => l.name === 'Out of Stock',
+            const outLevel = findLevelBySequence(
+                stockLevelStore.stockLevels,
+                OUT_OF_STOCK_SEQUENCE,
             );
             await stockItemApi.updateAsync({
                 stock_item_id: item.stock_item_id,

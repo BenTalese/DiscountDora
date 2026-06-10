@@ -142,6 +142,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import MealPlanApiService from 'src/services/api/mealPlanApiService';
+    import { needsRestockSequence } from 'src/helpers/stockStatus';
     import RecipeApiService from 'src/services/api/recipeApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
@@ -189,7 +190,7 @@
     const lowOrOutCount = computed(() => {
         const ids = new Set(
             stockLevels.value
-                .filter((l) => l.name === 'Low Stock' || l.name === 'Out of Stock')
+                .filter((l) => needsRestockSequence(l.sequence))
                 .map((l) => l.stock_level_id),
         );
         if (ids.size === 0) return 0;
@@ -371,7 +372,9 @@
                     const tmp = await templateApi.instantiateAsync(f.templateId, {});
                     if (tmp.shopping_list_id) {
                         const detail = await api.getDetailAsync(tmp.shopping_list_id);
-                        const ids = detail.lines.map((l) => l.stock_item_id);
+                        const ids = detail.lines
+                            .map((l) => l.stock_item_id)
+                            .filter((id): id is string => !!id);
                         const counts = await bulkAddToList(targetListId, ids);
                         preSeededAdded += counts.added;
                         preSeededSkipped += counts.skipped;

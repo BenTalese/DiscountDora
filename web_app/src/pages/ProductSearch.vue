@@ -291,6 +291,10 @@
     import type { IOfferSortByOption } from 'src/helpers/offerSortByOptions';
     import { OfferSortByOptions } from 'src/helpers/offerSortByOptions';
     import {
+        findLevelBySequence,
+        OUT_OF_STOCK_SEQUENCE,
+    } from 'src/helpers/stockStatus';
+    import {
         discountPercent,
         findSavedProduct,
         unitPrice,
@@ -566,7 +570,8 @@
 
             // New tracked items start Out of Stock — you're shopping for them.
             const level =
-                stockLevels.value.find((l) => l.name === 'Out of Stock') ?? stockLevels.value[0];
+                findLevelBySequence(stockLevels.value, OUT_OF_STOCK_SEQUENCE)
+                ?? stockLevels.value[0];
             if (!level) throw new Error('No stock levels configured.');
 
             const created = await stockItemApi.createAsync({

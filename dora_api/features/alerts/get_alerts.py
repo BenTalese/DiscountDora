@@ -16,8 +16,8 @@ from typing import List
 from uuid import UUID
 
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.stock_status import is_low_stock, is_out_of_stock
-from dora_api.features.locations.attention import EXPIRING_SOON_WINDOW_DAYS
+from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
+                                          is_low_stock, is_out_of_stock)
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container

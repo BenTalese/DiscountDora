@@ -92,9 +92,15 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
+    import {
+        LOW_STOCK_SEQUENCE,
+        needsRestockSequence,
+        OUT_OF_STOCK_SEQUENCE,
+        SUFFICIENT_STOCK_SEQUENCE,
+        WELL_STOCKED_SEQUENCE,
+    } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
-    import type { StockLevelName } from 'src/models/stockLevel';
     import type { Membership } from 'src/models/shoppingList';
     import { cartStateFor } from 'src/models/shoppingList';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -115,23 +121,26 @@
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { membership } = storeToRefs(shoppingListStore);
 
-    const levelName = computed<StockLevelName | null>(
+    const level = computed(
         () =>
-            stockLevels.value.find((l) => l.stock_level_id === props.stockItem.stock_level_id)
-                ?.name ?? null,
+            stockLevels.value.find(
+                (l) => l.stock_level_id === props.stockItem.stock_level_id,
+            ) ?? null,
     );
-    const levelColour = computed(() =>
-        levelName.value ? getStockLevelColour(levelName.value) : 'grey',
+    const levelName = computed<string | null>(() => level.value?.name ?? null);
+    const levelSequence = computed<number | null>(
+        () => props.stockItem.stock_level_sequence ?? level.value?.sequence ?? null,
     );
+    const levelColour = computed(() => colourForSequence(levelSequence.value));
     const levelShort = computed(() => {
-        switch (levelName.value) {
-            case 'Well-Stocked':
+        switch (levelSequence.value) {
+            case WELL_STOCKED_SEQUENCE:
                 return 'OK';
-            case 'Sufficient Stock':
+            case SUFFICIENT_STOCK_SEQUENCE:
                 return 'Mid';
-            case 'Low Stock':
+            case LOW_STOCK_SEQUENCE:
                 return 'Low';
-            case 'Out of Stock':
+            case OUT_OF_STOCK_SEQUENCE:
                 return 'Out';
             default:
                 return '';
@@ -173,7 +182,9 @@
         return days <= 7;
     });
     const lowOrOut = computed(
-        () => levelName.value === 'Low Stock' || levelName.value === 'Out of Stock',
+        () =>
+            props.stockItem.needs_restock ??
+            needsRestockSequence(levelSequence.value),
     );
     const hasAlert = computed(
         () => lowOrOut.value || expiringSoon.value || props.stockItem.is_flagged === true,

@@ -393,7 +393,6 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import type { StockLevelName } from 'src/models/stockLevel';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -535,7 +534,7 @@
     }
 
     function stockLevelColourFor(name: string | null | undefined): string {
-        return name ? getStockLevelColour(name as StockLevelName) : 'grey';
+        return name ? getStockLevelColour(name) : 'grey';
     }
 
     // Recipe ids planned in any meal-plan entry from today onward. FU-083

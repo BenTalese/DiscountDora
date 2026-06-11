@@ -1,5 +1,16 @@
 # DiscountDora — Implementation Status
 
+> **⚠ LEGACY — do not treat as authoritative.** Moved to
+> `docs/06_legacy_prompt_plans/` on 2026-06-12 alongside the
+> original `PROMPT_PLAN_PART_*` docs it audits. This file was
+> last regenerated 2026-05-27 and is **out of date** — the
+> finishing-pass closures of Cookbook / Cook Mode / C-cross /
+> Stock Overview / Cart Button / Shopping Lists / State Ownership
+> all post-date the snapshot here. Live state lives in
+> `CHANGELOG.md` + the actual code; the active plan lineage lives
+> in `docs/04_proposals/`. Kept for historical reference against
+> the legacy PROMPT_PLAN audit only.
+
 Audit of the codebase against the five `PROMPT_PLAN` documents (Parts 1–5).
 Generated 2026-05-27 by cross-referencing each spec item's "DONE WHEN"
 criteria against `CHANGELOG.md` and the actual code (`web_app/`, `dora_api/`,

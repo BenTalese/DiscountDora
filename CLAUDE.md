@@ -24,8 +24,11 @@ To keep handoffs clean:
      isolation and silently violate the charter.
    - `docs/01_charter/` — vision + governance
      (`DASHY_DORA_CHAMPION_PLAN.md`, `RECONCILED_FINISHING_PLAN.md`,
-     `STATUS.md`, `ENGINEERING_STANDARDS.md` — the code/architecture rules
+     `ENGINEERING_STANDARDS.md` — the code/architecture rules
      `R-001..` + ADR log; checked on **every** task, see section below).
+     The old `STATUS.md` audit was retired to `06_legacy_prompt_plans/`
+     on 2026-06-12; for "what's built right now?" use the **top entry
+     of `DORA_WORKLOG.md`** + `CHANGELOG.md` instead.
    - `docs/02_feedback/` — user input (source of truth):
      `Feedback _ Fixes - as of [DATE].md`, `FEEDBACK_TRIAGE_AND_PLAN.md`,
      `COVERAGE_GAPS.md`.

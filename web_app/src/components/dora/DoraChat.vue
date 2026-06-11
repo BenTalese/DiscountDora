@@ -407,6 +407,7 @@
     } from 'src/services/doraIntents';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
+    import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -517,6 +518,10 @@
     const { openQuickAdd } = useQuickAdd();
 
     const recipeStore = useRecipeStore();
+    // FU-150 — chat handlers need the dietary-tag vocab to convert
+    // ids on recipes into names ("vegetarian", "gluten free") for
+    // substring matching.
+    const recipeVocabStore = useRecipeVocabStore();
     const stockItemStore = useStockItemStore();
     const mealStore = useMealPlanStore();
     const stockLevelStore = useStockLevelStore();
@@ -906,17 +911,32 @@
                     };
                 });
             },
-            getRecipes: () => recipes.value.map((r) => ({
-                id: r.recipe_id,
-                name: r.name,
-                cuisine: r.cuisine_name,
-                category: r.category_name,
-                cookTimeMinutes: r.cook_time_minutes,
-                isFavourite: Boolean(r.is_favourite),
-                ingredientStockItemIds: r.ingredients
-                    .map((i) => i.stock_item_id)
-                    .filter((id): id is string => !!id),
-            })),
+            getRecipes: () => {
+                // FU-150 — resolve dietary tag ids → names once per call
+                // so the chat handler can substring-match "vegetarian"
+                // / "gluten free" against recipes without an N×M scan
+                // of the vocab.
+                const tagNameById = new Map(
+                    (recipeVocabStore.dietaryTags ?? []).map(
+                        (t) => [t.dietary_tag_id, t.name],
+                    ),
+                );
+                return recipes.value.map((r) => ({
+                    id: r.recipe_id,
+                    name: r.name,
+                    cuisine: r.cuisine_name,
+                    category: r.category_name,
+                    cookTimeMinutes: r.cook_time_minutes,
+                    isFavourite: Boolean(r.is_favourite),
+                    ingredientStockItemIds: r.ingredients
+                        .map((i) => i.stock_item_id)
+                        .filter((id): id is string => !!id),
+                    dietaryTagNames: (r.dietary_tag_ids ?? [])
+                        .map((id) => tagNameById.get(id))
+                        .filter((n): n is string => !!n),
+                    timeOfDay: r.time_of_day ?? null,
+                }));
+            },
             getShoppingLists: () => shoppingListStore.summaries.map((l) => ({
                 id: l.shopping_list_id,
                 name: l.name,
@@ -1258,6 +1278,11 @@
         if (recipes.value.length === 0) loads.push(recipeStore.getRecipesAsync());
         if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
         if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        // FU-150 — make sure dietary tags + cuisines are loaded so the
+        // chat handler can resolve ids → names for substring matching.
+        if ((recipeVocabStore.dietaryTags ?? []).length === 0) {
+            loads.push(recipeVocabStore.getAllAsync());
+        }
         if (loads.length > 0) await Promise.all(loads);
     }
 

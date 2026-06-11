@@ -36,7 +36,7 @@
 | **The code** (per CHANGELOG/STATUS) | Built the **old** *Discount Dora*: scraping + deal-comparison product search, stock map (N9), substitutes graph (N7), barcodes, plus Part-2 intelligence bolt-ons (P2-02/04/05/06/08/11/13). **No P6/P7/P8 entries.** | **On the pre-pivot path** — but see below. |
 | **Your feedback** | Page-by-page polish of the app **as it exists today**, largely without the pivot lens. Heavy investment in product search, merchants, comparison. | **Polish altitude.** |
 
-**Crucial nuance on "state":** my code copy is stale, and STATUS.md is dated 2026‑05‑27. Your *current* code is **further into the pivot than either shows** — you've already killed the substitutes graph and stock map and merged meals→recipes (all of which the plan mandates). So treat the pivot as **in progress**, and STATUS as needing a re-baseline (Phase 0).
+**Crucial nuance on "state":** at the time this plan was drafted, the code copy was stale and `STATUS.md` (dated 2026-05-27) was already trailing reality. The pivot has since closed (Cookbook / Cook Mode / C-cross / Stock Overview Chunks 1–6 / Cart Button / Shopping Lists / State Ownership all done — see `CHANGELOG.md` + the top entry of `DORA_WORKLOG.md`); `STATUS.md` was retired to `docs/06_legacy_prompt_plans/STATUS.md` on 2026-06-12 because its audit framing (against the original PROMPT_PLAN docs) no longer matched the active proposal/IMPL lineage. "Phase 0 re-baseline" as originally written is therefore obsolete — the live worklog is the new baseline.
 
 **The reconciliation problem in one line:** the plan is pivoting the boat; the feedback is repainting cabins — some of them cabins the plan is about to remove.
 

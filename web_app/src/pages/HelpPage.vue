@@ -16,16 +16,10 @@
                 :to="{ path: '/help/dora' }"
                 class="q-mr-sm"
             />
-            <q-btn
-                flat
-                no-caps
-                :icon="ICONS.open_in_new"
-                label="Report a bug"
-                type="a"
-                href="https://github.com/BenTalese/DiscountDora/issues/new"
-                target="_blank"
-                rel="noopener"
-            />
+            <!-- Repo is private — no public issues page. Bug reports
+                 go through whatever channel the operator has set up
+                 with the user; removed the dead-link button. -->
+
         </div>
 
         <q-banner
@@ -198,36 +192,15 @@
                         </div>
                     </q-card-section>
                     <q-separator />
-                    <q-list separator>
-                        <q-item
-                            clickable
-                            tag="a"
-                            href="https://github.com/BenTalese/DiscountDora"
-                            target="_blank"
-                            rel="noopener"
-                        >
-                            <q-item-section avatar><q-icon :name="ICONS.code" /></q-item-section>
-                            <q-item-section>
-                                <q-item-label>Project repository</q-item-label>
-                                <q-item-label caption>github.com/BenTalese/DiscountDora</q-item-label>
-                            </q-item-section>
-                        </q-item>
-                        <q-item
-                            clickable
-                            tag="a"
-                            href="https://github.com/BenTalese/DiscountDora/issues/new"
-                            target="_blank"
-                            rel="noopener"
-                        >
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.bug_report" />
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>Report a bug or request a feature</q-item-label>
-                                <q-item-label caption>Opens a GitHub issue.</q-item-label>
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
+                    <!-- Repo is private — the public-repo + issues
+                         links were removed. Bug reports and feature
+                         requests go through whatever channel the
+                         operator has set up. -->
+                    <q-card-section class="dora-text-muted text-caption">
+                        Found a bug or want a feature? Note the steps
+                        you took and what you expected, and pass it
+                        to whoever runs this Dora instance.
+                    </q-card-section>
                 </q-card>
             </q-tab-panel>
         </q-tab-panels>

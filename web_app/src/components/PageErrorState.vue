@@ -29,17 +29,12 @@
                 label="Go to dashboard"
                 to="/"
             />
-            <q-btn
-                v-if="showReport"
-                flat
-                no-caps
-                :icon="ICONS.bug_report"
-                label="Report this"
-                type="a"
-                :href="reportUrl"
-                target="_blank"
-                rel="noopener"
-            />
+            <!-- Repo is private — the "Report this" button used to
+                 pre-fill a GitHub issue with the error + correlation
+                 id. With no public issue tracker, the report flow
+                 lives wherever the operator has set it up; the
+                 button is hidden until that surface exists. -->
+
         </div>
     </div>
 </template>
@@ -133,36 +128,9 @@
         }
     });
 
-    // Pre-fill a GitHub issue with the error message + correlation id. The
-    // user can edit before submitting, but the bones are there.
-    const reportUrl = computed(() => {
-        const titleText = `[${props.variant}] ${props.error?.message ?? title.value}`;
-        const bodyLines = [
-            '**What happened**',
-            props.error?.message ?? title.value,
-            '',
-            '**Where**',
-            typeof window !== 'undefined' ? window.location.href : '',
-            '',
-        ];
-        if (props.correlationId) {
-            bodyLines.push('**Reference**', `\`${props.correlationId}\``, '');
-        }
-        if (props.error?.stack) {
-            bodyLines.push(
-                '**Stack** (top frames)',
-                '```',
-                props.error.stack.split('\n').slice(0, 8).join('\n'),
-                '```',
-            );
-        }
-        const params = new URLSearchParams({
-            title: titleText,
-            body: bodyLines.join('\n'),
-            labels: 'bug,from-app',
-        });
-        return `https://github.com/BenTalese/DiscountDora/issues/new?${params.toString()}`;
-    });
+    // `reportUrl` retired with the GitHub issues link (repo is now
+    // private). If a self-host operator wires up an internal report
+    // sink, restore a similar pre-fill helper pointing at it.
 
     function onReload() {
         if (typeof window !== 'undefined') {

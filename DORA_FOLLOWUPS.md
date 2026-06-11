@@ -39,6 +39,232 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-153 — Assistant LLM config: per-user, reachability probe, multi-provider
+- **Raised:** 2026-06-12 (user feedback during FU-085 verify)
+- **Type:** design / proposal addition (no code yet)
+- **What:** `DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md §7` (new
+  section, this session) captures four interlocking changes to
+  the LLM client + config side, distinct from the §1–6 routing
+  refactor:
+  1. **§7.1 Per-user LLM config** — drop the singleton
+     `AppSetting.llm_*` and move it to `User.llm_*` (+ a
+     `master_llm_enabled` install-wide kill switch on
+     AppSetting). Households with two desktops each running
+     their own LLM stop sharing one URL.
+  2. **§7.2 Reachability probe** — new `GET
+     /api/assistant/ping` hit **once per chat open** (not per
+     message, not on a poll). Visible "AI mode unavailable —
+     using basic mode" banner + Retry when the user's
+     `llm_enabled` is true but their LLM doesn't answer.
+  3. **§7.3 Network-topology constraint** — document that the
+     backend (not the device) reaches the LLM URL. Operator
+     concern for household / remote-LLM setups; pure
+     documentation, no code.
+  4. **§7.4 Multi-provider** — abstract `LlmClient` with
+     `OllamaClient` (existing, moved) + `OpenAiClient` +
+     `AnthropicClient` + `GeminiClient`. Per-user
+     `llm_provider` enum + encrypted-at-rest API key column.
+     Different tool-call schemas adapt to a shared shape
+     before reaching `tools.py`.
+- **Sequencing (§7.5):** one migration ships §7.1 + §7.4
+  schema columns; provider implementations follow per-PR;
+  §7.2 probe lands last (cheap once per-user config is
+  available); §7.3 is docs only.
+- **Existing DORA-BOT feedback cross-ref (§7.6):** the
+  per-user mode toggle / "turn the bot off completely" /
+  "disabled if unavailable" items in `Feedback _ Fixes - as
+  of [06-Jun-2026].md` lines 452-460 pair directly with §7.1
+  + §7.2 — the toggle UI visibly reflects the probe result.
+- **Recommended resolution:** treat as the next chunked
+  IMPL plan after the FU-152 routing redesign (or before;
+  they're orthogonal but the per-user config is a
+  pre-requisite for the rules-router-per-user too). Pair
+  with the AI-mode design pass.
+- **State note 2026-06-12:** **user signed off** on §7.1–§7.4
+  as written, with one refinement folded into §7.1: the
+  per-user Assistant config lives in
+  `PreferencesSettings.vue` next to the existing C-cross
+  per-user toggles (`money_features_enabled`, etc.) — not a
+  net-new settings page. §7.3 (network-topology docs) was
+  explicitly accepted as "same connectivity story as the rest
+  of the app, nothing special". Next step: draft an IMPL plan
+  from §7 when this work is sequenced.
+
+---
+
+## [RESOLVED-MINIMAL] FU-150 — Assistant chat-mode doesn't recognise dietary/cuisine queries
+- **Raised:** 2026-06-12
+- **Resolved (step 1, this session):** rule-based first-match-wins
+  matcher kept, but the `find_recipe` intent's trigger list now
+  catches the bare-noun cases ("i need a recipe", "any breakfast
+  ideas", "show me a vegetarian recipe", etc.) — and the handler
+  was rewritten to **stop yanking "the bit after a preposition"**
+  and instead tokenise the whole message (minus stopwords) and
+  substring-match each token against name + cuisine + category +
+  timeOfDay + dietaryTagNames. Vocab arrives via the extended
+  `RecipeSnapshot` (`dietaryTagNames`, `timeOfDay`) hydrated in
+  `DoraChat.vue` from the existing Pinia stores; vocab preload
+  was added to `ensureRecipeData()`. Net effect: "i need a
+  vegetarian recipe" → routes to find_recipe, filters by the
+  'vegetarian' dietary tag, lists the top matches. "Asian
+  breakfast recipe" → both 'asian' + 'breakfast' must hit
+  (cuisine + timeOfDay). Reply echoes the tokens it filtered on
+  so the user sees what was matched.
+  **Limitations of step 1 (kept as the structural follow-up FU-152):**
+  the matcher is still keyword-list + token-substring, with no
+  proper slot extraction or query parser. Stopword list is
+  hand-coded; synonyms ("veggie" → "vegetarian") aren't resolved;
+  composite phrases ("gluten free" survives because the tag name
+  matches, but two-word tags + free-text terms in the same
+  message can produce surprising AND-filters). The redesign in
+  FU-152 spec's the real fix; this RESOLVED-MINIMAL fixes the
+  user-visible "vegetarian"/"asian" failure mode now.
+
+---
+
+## [OPEN] FU-152 — Chat-mode design: tokenise → slot-extract → filter (structural)
+- **Raised:** 2026-06-12 (offshoot of FU-150's minimal fix)
+- **Type:** design / structural improvement
+- **What:** The current chat is a "first-match-wins keyword
+  matcher" with hand-curated `matches[]` per intent + a handler
+  that pulls "the noun after a preposition" and substring-searches
+  recipe fields. FU-150 step 1 broadened the trigger list +
+  switched the handler to whole-message tokenisation, which is
+  enough for the dietary/cuisine cases but still scales linearly
+  in keyword count and produces brittle behaviour for compound
+  queries.
+- **Proposed redesign (two axes):**
+  1. **Vocab-derived triggers.** Load Cuisine + DietaryTag +
+     Tool catalogues at chat init. Each catalogue contributes
+     its names to a "term → intent" prior so the matcher knows
+     "vegetarian"/"asian"/"slow cooker" all route to
+     `find_recipe`. Auto-updates when the user adds new vocab.
+  2. **Slot extraction**, separate from intent detection. After
+     the intent fires, walk the message once and capture
+     `slots: {cuisines[], dietaryTags[], timeOfDay?,
+     stockItems[], freeText}`. Handlers consume slots
+     declaratively — `filterRecipes({ dietary: ['vegetarian'],
+     cuisine: 'asian' })` — instead of doing ad-hoc substring
+     searches.
+  3. **Intent scoring (optional)**: replace first-match-wins
+     with a scoring pass per intent (each contributes keyword
+     hits + vocab hits + structural cues). Highest-score intent
+     wins, tie → fallback. Catches "i'm hungry, what veggie
+     thing can I make?" routing to `whats_for_dinner` with a
+     dietary slot, rather than tripping `find_recipe` because
+     "recipe"-ish keyword fired first.
+  4. **Reply transparency**: show the slots the handler
+     applied ("Filtering by: vegetarian + asian"). Already
+     present in FU-150 step 1 via `queryDisplay`.
+- **Why deferred:** step 1 covers the immediate UX failure; the
+  full slot-extraction redesign is a separate, focused work
+  unit. Pair with the AI-mode sweep — the slot extractor is the
+  same shape of work whether the route resolves into the
+  rule-engine handler or the LLM handler.
+- **Recommended resolution:** later — pair with AI-mode design.
+
+---
+
+## [OPEN] FU-151 — Browser-verify FU-085 fixes (FU-147 dietary picker, FU-148/149 filters, FU-150 chat)
+- **Raised:** 2026-06-12 (concluding the FU-085 verify pass)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **FU-147** — open the seeded "egg fried rice" recipe → its
+     two dietary tags pre-populate the picker; saving with no
+     edit doesn't clear them; adding/removing tags + saving
+     round-trips (re-open the page shows the new set).
+  2. **FU-148** — Cookbook overview "Time of day" dropdown
+     filters to Breakfast / Lunch / Dinner / Dessert / Snack /
+     Any. Clearable.
+  3. **FU-149** — "# ingredients ≤" filter narrows the list;
+     "# ingredients" sort axis orders ascending by default
+     (fewest first); the direction toggle flips it.
+  4. **FU-150** (step 1) — basic chat-mode:
+     - "i need a vegetarian recipe" → lists vegetarian recipes,
+       header says "Filtering by: vegetarian recipe" (or similar).
+     - "i need an asian recipe" → cuisine filter applied.
+     - "show me a breakfast recipe" → timeOfDay filter applied.
+     - "i need a recipe" with no other terms → prompt asking
+       for a name/ingredient/cuisine/tag (no fallback bank).
+- **Recommended resolution:** next browser session.
+
+---
+
+## [RESOLVED] FU-149 — Cookbook overview: add "# ingredients" filter + sort axis
+- **Raised:** 2026-06-12 (user browser verify of FU-085)
+- **Type:** enhancement
+- **What:** New filter axis "ingredients = N" or "ingredients ≤ N"
+  + new sort axis "ingredient count (asc/desc)" on the cookbook
+  overview. Ingredient count is already on the Recipe DTO (via the
+  `ingredients[]` array length); the work is mostly in
+  `useRecipeFilters` / the overview's filter panel + sort options.
+- **Why deferred:** new feature, not bug. Scope cap on the
+  current session.
+- **Recommended resolution:** later, batched with FU-148
+  (time-of-day filter) and the other cookbook polish items.
+
+---
+
+## [RESOLVED] FU-148 — Cookbook overview: add "time of day" filter
+- **Raised:** 2026-06-12 (user browser verify of FU-085)
+- **Type:** enhancement
+- **What:** `Recipe.time_of_day` exists on the entity + DTO
+  (breakfast / lunch / dinner / snack / dessert / drink), and it's
+  editable on the recipe detail page, but there's no filter for
+  it on the cookbook overview. Add a single-select dropdown
+  defaulting to "any time of day" alongside the cuisine / category
+  selects. The other filters use the same `useRecipeFilters`
+  pattern; this should be one mirrored predicate.
+- **Why deferred:** new feature; pair with FU-149.
+- **Recommended resolution:** later.
+
+---
+
+## [RESOLVED] FU-147 — Recipe detail dietary-tag picker loses selection on save
+- **Raised:** 2026-06-12
+- **Resolved:** 2026-06-12 — root cause turned out to be a backend
+  bug in the detail endpoint, not a frontend race. The
+  `/api/recipes/<recipe_id>` route has no `uuid:` converter, so
+  Flask passes `recipe_id` to `handle_by_id` as a **string**.
+  `get_tag_ids_for_recipes()` returns `dict[UUID, list[UUID]]`
+  (keys come from SQLAlchemy result rows). The handler then did
+  `tag_map.get(recipe_id, [])` — a Python dict lookup with a
+  string key against UUID-typed keys → **always returned `[]`**,
+  silently dropping every tag and tool on the detail JSON.
+  Same bug affected `tool_map.get(recipe_id, [])`. Fix in
+  `get_recipes.py::handle_by_id`: pass `entity.id` (the loaded
+  entity's real UUID) to both `get_tag_ids_for_recipes` and the
+  subsequent `.get()` calls. The list endpoint was unaffected
+  because it sources ids from RecipeDtos that already carry
+  UUID objects.
+  Static-only fix; browser-verify is **FU-151**.
+
+---
+
+## [OPEN] FU-146 — Sweep external GitHub-issues references — DONE
+- **Raised:** 2026-06-12 (user browser verify of FU-085: "should
+  remove any mention of github issues as the repo is now private")
+- **Type:** finding / hygiene
+- **What:** Dora-bot fallback bank, `report_issue` intent + its
+  `externalLink`, the `whats_new` "See latest release on GitHub"
+  link, `HelpPage` "Report a bug" header button + Help-tab repo
+  list + issues list, `AboutSettings` repo + bug-report items,
+  and `PageErrorState`'s pre-filled GitHub-issues URL all linked
+  to `github.com/BenTalese/DiscountDora` — a now-private repo.
+- **Resolved:** 2026-06-12 — replaced the FALLBACK_REPLIES bank +
+  `report_issue` intros to drop the GitHub framing; retired the
+  externalLink on `fallback` + `report_issue` (Help-nav stays);
+  retired the `whats_new` release URL; pulled the four GitHub
+  buttons/items from `HelpPage` + `AboutSettings`; retired
+  `PageErrorState`'s `reportUrl` + the "Report this" button (the
+  `showReport` prop stays so a self-host operator can restore a
+  similar surface pointing at their own report sink).
+  **Note:** the `report_issue` intent itself stays — it's a
+  useful "I found a bug" affordance — but it now navigates to
+  Help instead of pointing at an external tracker.
+
+---
+
 ## [OPEN] FU-143 — Backfill `picked_offer_price` for legacy lines
 - **Raised:** 2026-06-12 (State Ownership Chunk 6 impl)
 - **Type:** deferred job (optional)
@@ -215,24 +441,12 @@ long session summary. Distinct from the other two logs:
   that chunk per the original recommendation. Added the three
   missing attributes; all 12 cookability tests now pass.
 
-## [OPEN] FU-136 — `test_shopping_list_totals.py` stub missing `product_id` arg
-- **Raised:** 2026-06-12 (surfaced during State Ownership Chunk 1
-  verification run)
-- **Type:** finding / test breakage (pre-existing from Cart Button
-  Chunk 3)
-- **What:** Cart Button Chunk 3 added `product_id` to
-  `ShoppingListLineDto` (now required). `tests/test_shopping_list
-  _totals.py::_line()` doesn't pass it, so 8 of 9 tests in the
-  file fail with `TypeError: ... missing 1 required positional
-  argument: 'product_id'`. Confirmed pre-existing on commit
-  `dd15399` (before Chunk 1 edits).
-- **Why deferred:** Cart Button Chunk 3 was logged as
-  static-only and the test stub update was missed in that PR.
-  Out of Chunk 1's scope (totals tests don't exercise the
-  stock-status contract).
-- **Recommended resolution:** **now** — single-line stub fix
-  (`product_id=None`), no production-side change needed.
-  Restores CI signal cheaply.
+## [RESOLVED] FU-136 — `test_shopping_list_totals.py` stub missing `product_id` arg
+- **Raised:** 2026-06-12
+- **Resolved:** 2026-06-12 — added `product_id=None` to the `_line()`
+  factory in `tests/test_shopping_list_totals.py`. Single-line stub
+  fix; totals tests don't exercise the new anchor so None is the
+  honest value. CI signal restored.
 
 ## [OPEN] FU-135 — Browser-verify Cart Button Chunk 4 (meal-plan generate via Axis B)
 - **Raised:** 2026-06-12 (Cart Button Chunk 4 impl; static-only, no env)
@@ -1804,7 +2018,22 @@ long session summary. Distinct from the other two logs:
   8. Backup → restore round-trips Cuisine/Category/DietaryTag/RecipeTag in FK-correct order.
   9. Dora assistant: search_recipes/suggest_recipes still filter by cuisine + dietary tags (now Python-side / name-resolved).
 - **Recommended resolution:** now / first thing once a working env is available — before building Chunk 3+ on top.
-- **State note:** 2026-06-09 — user did a browser pass: migration applied + app boots + settings CRUD + add-modal dietary tags all **confirmed working** (items 1,2,4,7 effectively ✅). Two gaps found: (a) overview filters unusable → split out as **FU-087**; (b) no dietary-tag editor on the detail page (only the add modal) → **fixed this session** (added a multiselect + form field + save wiring to `RecipeDetailPage.vue`, L264). Still to verify: items 3 (selectin), 5 (filters — blocked by FU-087), 6 (detail-page tags now exist — re-verify save round-trip), 8 (backup), 9 (assistant).
+- **State note:** 2026-06-09 — first user browser pass: migration applied + app boots + settings CRUD + add-modal dietary tags all **confirmed working** (items 1,2,4,7 effectively ✅). Two gaps found: (a) overview filters unusable → split out as **FU-087**; (b) no dietary-tag editor on the detail page (only the add modal) → **fixed** (added a multiselect to `RecipeDetailPage.vue`, L264). Still to verify: items 3 (selectin), 5 (filters), 6 (detail-page tags), 8 (backup), 9 (assistant).
+- **State note:** 2026-06-12 — second user browser pass surfaced
+  five concrete findings split out as their own FUs (so FU-085
+  doesn't become an umbrella for everything cookbook-shaped):
+  - **FU-146** (RESOLVED this session) — GitHub-issues mentions
+    swept out (repo private).
+  - **FU-147** — detail-page dietary-tag picker doesn't
+    pre-populate + chips clear after save (item 6 partial fail).
+  - **FU-148** — Cookbook overview missing "time of day" filter.
+  - **FU-149** — Cookbook overview missing "# ingredients"
+    filter + sort axis.
+  - **FU-150** — assistant chat-mode doesn't recognise dietary
+    or cuisine queries (item 9 partial fail).
+  FU-085 itself stays OPEN until items 3 (selectin), 5 (filters
+  end-to-end), 6 (FU-147 fix verified), 8 (backup), 9 (FU-150
+  fix verified) are all green.
 
 ## [OPEN] FU-084 — Consider an ADR/rule for "selectin for small always-wanted lookups"
 - **Raised:** 2026-06-09 (Chunk 2)
@@ -2594,16 +2823,21 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** opportunistic — fold into the A8 wrap-up or
   next polish pass.
 
-## [OPEN] FU-030 — B9.9: confirm 404 page already-themed (no code change)
-- **Raised:** 2026-06-06 (B9.9; CLAUDE.md confirm-in-browser rule)
-- **Type:** finding
-- **What:** Both 404 surfaces already use tokens — `ErrorNotFound.vue`
-  uses `--surface-toolbar`/`--text-on-toolbar`; `errors/ErrorPageNotFound.vue`
-  delegates to `PageErrorState`. A1 themed them. Reported defect didn't
-  reproduce statically.
-- **Recommended resolution:** confirm in browser — hit a 404 URL (e.g.
-  `/this-route-does-not-exist`) and verify both fullscreen and in-layout
-  variants look themed (not default Quasar).
+## [RESOLVED] FU-030 — Fullscreen 404 page redesigned (login-theme + Dora pic)
+- **Raised:** 2026-06-06 (B9.9; user follow-up 2026-06-12: "page
+  looks a bit boring, maybe use the login theme instead and add a
+  suitable dora pic")
+- **Resolved:** 2026-06-12 — rewrote `pages/ErrorNotFound.vue` to
+  mirror `LoginPage.vue`'s "off-app" treatment: three drifting
+  mesh-gradient blobs (magenta / dora amber / mint), floating
+  mascot using `dorabot-fatal-error-or-offline.png`, glassy card
+  with gradient "404", "This page wandered off" headline, and a
+  "Take me home" CTA. Locally-scoped CSS variables (forced light
+  tokens) for the same reason LoginPage does it — 404 can render
+  pre-auth and `data-theme` can flip dark before sign-in.
+  Respects `prefers-reduced-motion`. `ErrorPageNotFound.vue` (the
+  in-layout variant via `PageErrorState`) was already themed and
+  stays untouched.
 
 ## [OPEN] FU-029 — B9.4: confirm command-palette commands all trigger
 - **Raised:** 2026-06-06 (B9.4; CLAUDE.md confirm-in-browser rule)

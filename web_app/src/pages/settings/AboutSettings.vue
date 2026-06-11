@@ -63,37 +63,10 @@
                     </q-item-section>
                 </q-item>
 
-                <q-item
-                    clickable
-                    tag="a"
-                    href="https://github.com/BenTalese/DiscountDora"
-                    target="_blank"
-                    rel="noopener"
-                >
-                    <q-item-section avatar>
-                        <q-icon :name="ICONS.open_in_new" />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label>Project repository</q-item-label>
-                        <q-item-label caption>GitHub · BenTalese/DiscountDora</q-item-label>
-                    </q-item-section>
-                </q-item>
+                <!-- Repo is private — public-repo + public issue
+                     links removed. Bug reports go through whatever
+                     channel the operator has set up. -->
 
-                <q-item
-                    clickable
-                    tag="a"
-                    href="https://github.com/BenTalese/DiscountDora/issues/new"
-                    target="_blank"
-                    rel="noopener"
-                >
-                    <q-item-section avatar>
-                        <q-icon :name="ICONS.bug_report" />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label>Report a bug</q-item-label>
-                        <q-item-label caption>Opens a new issue on GitHub.</q-item-label>
-                    </q-item-section>
-                </q-item>
             </q-list>
         </q-card-section>
 

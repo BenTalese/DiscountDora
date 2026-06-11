@@ -660,8 +660,15 @@ class GetRecipesHandler:
         if entity is None:
             return None
         dto = RecipeDto.from_entity(entity)
-        tag_map = get_tag_ids_for_recipes([recipe_id])
-        tool_map = get_tool_ids_for_recipes([recipe_id])
+        # FU-147 — the `/<recipe_id>` route has no `uuid:` converter, so
+        # Flask hands us a `str`. `get_tag_ids_for_recipes` returns a
+        # dict keyed by real UUIDs (SQLAlchemy coerces the IN clause but
+        # the dict's keys come from the result rows). A Python `.get(str)`
+        # against UUID keys always misses, which silently dropped every
+        # tag + tool on the detail endpoint. Look up via the loaded
+        # entity's id (always a UUID) so the keys match.
+        tag_map = get_tag_ids_for_recipes([entity.id])
+        tool_map = get_tool_ids_for_recipes([entity.id])
         step_rows = get_steps_for_recipe(recipe_id)
         step_dtos = [
             RecipeStepDto(
@@ -710,8 +717,10 @@ class GetRecipesHandler:
         import dataclasses
         _WithAssoc = dataclasses.replace(
             dto,
-            dietary_tag_ids=tag_map.get(recipe_id, []),
-            tool_ids=tool_map.get(recipe_id, []),
+            # FU-147 — keys are UUIDs from the SQL result; use entity.id
+            # (a real UUID) instead of the route-string `recipe_id`.
+            dietary_tag_ids=tag_map.get(entity.id, []),
+            tool_ids=tool_map.get(entity.id, []),
             steps=step_dtos,
             has_structured_steps=bool(step_dtos),
             version_siblings=sibling_dtos,

@@ -111,6 +111,65 @@ semver — major bumps signal schema or breaking-config changes.
   being activated, so every viewport check returned `false`. Replaced with
   Vue 3.4 `defineModel()` + a `Screen.setDebounce()` boot file. (FU-087)
 
+### Changed
+- **Fullscreen 404 page redesigned (FU-030).** The typo-a-URL
+  "Nothing here…" page now mirrors the login screen's off-app
+  treatment — drifting mesh-gradient blobs, a floating Dora
+  mascot (the "fatal-error-or-offline" variant), and a glassy
+  card with a gradient "404", "This page wandered off"
+  headline, and a "Take me home" CTA. Locally-scoped tokens
+  (same rationale as LoginPage — 404 can render pre-auth where
+  the app's theme cascade isn't trustworthy yet); respects
+  `prefers-reduced-motion`.
+
+### Fixed
+- **Recipe detail dietary tags + tools were silently dropped on the
+  detail endpoint (FU-147).** The `/api/recipes/<recipe_id>` route
+  has no `uuid:` converter, so Flask passed `recipe_id` to
+  `handle_by_id` as a string. The handler then did
+  `tag_map.get(recipe_id, [])` against a dict whose keys were
+  real UUIDs from SQLAlchemy — Python's `.get(str)` against UUID
+  keys always missed, so every recipe came back from the detail
+  endpoint with empty `dietary_tag_ids` + `tool_ids`. Cards on
+  the overview were fine (different code path); only the detail
+  view + its editors were affected. Fix: look up via the loaded
+  entity's id, which is always a UUID.
+
+### Added
+- **Cookbook overview "Time of day" filter (FU-148).** Single-
+  select dropdown alongside cuisine + category; values mirror
+  the recipe-editor enum (Breakfast / Lunch / Dinner / Dessert /
+  Snack / Any).
+- **Cookbook overview "# ingredients" filter + sort axis
+  (FU-149).** Numeric cap ("# ingredients ≤ N") for finding
+  shorter recipes; new sort axis "# ingredients" defaulting to
+  ascending ("fewest first") with the existing direction toggle
+  to flip it.
+- **Basic chat-mode recognises dietary, cuisine, and time-of-day
+  queries (FU-150 step 1).** "I need a vegetarian recipe", "I
+  need an asian recipe", "show me a breakfast recipe" no longer
+  fall to the generic fallback bank. The `find_recipe` intent's
+  trigger list now covers bare-noun phrasings, and its handler
+  was rewritten to tokenise the whole message (stopwords
+  stripped) and substring-match each token against recipe name,
+  cuisine, category, time-of-day, and dietary tag names. The
+  reply echoes which tokens it filtered on. (The full
+  slot-extraction redesign — vocab-derived triggers + a real
+  query parser — is logged as FU-152 for a focused later pass.)
+
+### Changed
+- **Removed external GitHub-issues links throughout the app
+  (FU-146 — repo is private).** The assistant's fallback replies
+  no longer suggest "the GitHub issues page" or "the issues link
+  is your friend"; the `report_issue` intent acknowledges the
+  problem and points at Help instead of an external tracker.
+  The "Report a bug" button on `HelpPage` + the repo/issues links
+  on `AboutSettings` + the pre-filled "Report this" button on
+  `PageErrorState` (which built a GitHub-issues URL with the
+  error message and correlation id) are all gone. The
+  `report_issue` chat affordance stays — it just navigates to
+  Help instead.
+
 ### Added
 - **Standalone-product shopping-list lines (Cart Button Chunk 3 / L191
   / L130).** A shopping-list line now anchors on a **stock item, a

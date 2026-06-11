@@ -172,6 +172,31 @@
                 :options="categoryOptions"
                 label="Category"
             />
+            <!-- FU-148 — time-of-day single-select. Fixed enum mirrors
+                 the editor on RecipeDetailPage. -->
+            <q-select
+                dense
+                outlined
+                style="min-width: 170px"
+                emit-value
+                map-options
+                clearable
+                v-model="timeOfDayFilter"
+                :options="TIME_OF_DAY_OPTIONS"
+                label="Time of day"
+            />
+            <!-- FU-149 — "# ingredients ≤" numeric cap. Pairs with the
+                 new sort axis below. -->
+            <q-input
+                v-model.number="ingredientsMax"
+                dense
+                outlined
+                type="number"
+                min="0"
+                style="max-width: 140px"
+                label="# ingredients ≤"
+                hide-bottom-space
+            />
             <!-- FU-083 follow-up — Uses / Doesn't use ingredients consolidated
                  into the shared TriStateFilter, with `searchable` for the
                  large stock-item set and a per-row stock-level colour dot.
@@ -467,6 +492,13 @@
     // L235 — cuisine + category are distinct single-select id filters.
     const cuisineFilter = ref<string | null>(null);
     const categoryFilter = ref<string | null>(null);
+    // FU-148 — time-of-day single-select. Values mirror the editor's
+    // q-select on RecipeDetailPage (Breakfast / Lunch / Dinner /
+    // Dessert / Snack / Any). Null = no filter.
+    const timeOfDayFilter = ref<string | null>(null);
+    // FU-149 — "# ingredients ≤" cap. Same blank-input / NaN guard as
+    // the other numeric inputs.
+    const ingredientsMax = ref<number | null>(null);
     // Set via the "Uses ingredients" picker OR via `?usesStockItem=` query
     // (deep-linked from the stock item detail screen — single id pre-fills
     // a one-element array).
@@ -477,16 +509,25 @@
     // ingredient(s)" path.
     const excludesStockItemIds = ref<string[]>([]);
 
-    type SortKey = 'name' | 'last_made' | 'meal_count' | 'total_time' | 'kcal';
+    type SortKey = 'name' | 'last_made' | 'meal_count' | 'total_time' | 'kcal' | 'ingredient_count';
     type SortDir = 'asc' | 'desc';
     // C-4 Chunk 9 — "Kcal" axis added when the nutrition opt-in is on.
     // The sort menu options are computed below; the static list keeps
     // the always-on axes.
+    // FU-148 — keep in sync with the RecipeDetailPage editor's q-select
+    // values. Static constant rather than vocab-table because time-of-day
+    // is a tiny, fixed enum (unlike cuisine / category / dietary tags).
+    const TIME_OF_DAY_OPTIONS = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Any'];
+
     const STATIC_SORT_OPTIONS: { label: string; value: SortKey }[] = [
         { label: 'Name', value: 'name' },
         { label: 'Recently made', value: 'last_made' },
         { label: 'Meals in pool', value: 'meal_count' },
         { label: 'Prep + cook time', value: 'total_time' },
+        // FU-149 — sort by ingredient count (fewer ingredients first
+        // is the common "make this quick" intent; the asc/desc toggle
+        // covers the other direction).
+        { label: '# ingredients', value: 'ingredient_count' },
     ];
     const sortBy = ref<SortKey>('name');
     // FU-083 — explicit asc/desc toggle. Default per axis: name = asc,
@@ -701,6 +742,22 @@
             if (categoryFilter.value !== null && r.category_id !== categoryFilter.value) {
                 return false;
             }
+            // FU-148 — time-of-day single-select. Null = no filter; a
+            // recipe with null time_of_day fails any non-null filter
+            // (matches the user intent of "show me breakfast recipes",
+            // not "show me everything tagged breakfast OR unset").
+            if (timeOfDayFilter.value !== null && r.time_of_day !== timeOfDayFilter.value) {
+                return false;
+            }
+            // FU-149 — "# ingredients ≤" cap. Blank/NaN reverts to no
+            // filter (matches L234 blank-input rule).
+            if (
+                ingredientsMax.value !== null
+                && Number.isFinite(ingredientsMax.value)
+                && r.ingredients.length > ingredientsMax.value
+            ) {
+                return false;
+            }
             if (usesStockItemIds.value.length > 0) {
                 const wanted = new Set(usesStockItemIds.value);
                 if (!r.ingredients.some((i) => wanted.has(i.stock_item_id))) return false;
@@ -776,6 +833,14 @@
                     if (av === bv) return a.name.localeCompare(b.name);
                     return (av - bv) * dirSign;
                 }
+                case 'ingredient_count': {
+                    // FU-149 — neither side is null (ingredients[] is
+                    // always at least []), so no sentinel-sink handling.
+                    const av = a.ingredients.length;
+                    const bv = b.ingredients.length;
+                    if (av === bv) return a.name.localeCompare(b.name);
+                    return (av - bv) * dirSign;
+                }
                 case 'name':
                 default:
                     return a.name.localeCompare(b.name) * dirSign;
@@ -828,6 +893,8 @@
             || collectionFilter.value !== null
             || cuisineFilter.value !== null
             || categoryFilter.value !== null
+            || timeOfDayFilter.value !== null
+            || (ingredientsMax.value !== null && Number.isFinite(ingredientsMax.value))
             || usesStockItemIds.value.length > 0
             || excludesStockItemIds.value.length > 0
             || dietaryTagsInclude.value.length > 0
@@ -851,6 +918,8 @@
         if (collectionFilter.value !== null) n++;
         if (cuisineFilter.value !== null) n++;
         if (categoryFilter.value !== null) n++;
+        if (timeOfDayFilter.value !== null) n++;
+        if (ingredientsMax.value !== null && Number.isFinite(ingredientsMax.value)) n++;
         if (usesStockItemIds.value.length > 0) n++;
         if (excludesStockItemIds.value.length > 0) n++;
         if (dietaryTagsInclude.value.length > 0) n++;
@@ -877,6 +946,8 @@
                 return asc ? 'Fastest first' : 'Slowest first';
             case 'kcal':
                 return asc ? 'Lowest kcal first' : 'Highest kcal first';
+            case 'ingredient_count':
+                return asc ? 'Fewest ingredients first' : 'Most ingredients first';
             case 'name':
             default:
                 return asc ? 'A → Z' : 'Z → A';
@@ -888,7 +959,11 @@
     // (recently-made → newest first; name → A→Z; etc). They can still
     // flip with the direction button.
     watch(sortBy, (next) => {
-        sortDir.value = next === 'name' ? 'asc' : 'desc';
+        // Name + ingredient_count default to ascending — "A→Z" / "fewest
+        // first" are the natural reads. Everything else (recently made,
+        // most meals, fastest, lowest kcal) defaults to descending.
+        sortDir.value =
+            next === 'name' || next === 'ingredient_count' ? 'asc' : 'desc';
     });
 
     // C-4 Chunk 9 — if the user had Kcal as their sort axis and then the
@@ -911,6 +986,8 @@
         collectionFilter.value = null;
         cuisineFilter.value = null;
         categoryFilter.value = null;
+        timeOfDayFilter.value = null;
+        ingredientsMax.value = null;
         usesStockItemIds.value = [];
         excludesStockItemIds.value = [];
         dietaryTagsInclude.value = [];

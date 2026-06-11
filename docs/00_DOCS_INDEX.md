@@ -70,7 +70,6 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 | `01_charter/RECONCILED_FINISHING_PLAN.md` | **START HERE.** The current phased finishing plan. Records resolved strategic decisions (scraper → companion via ingestion API; Foundations → loop → champion). |
 | `01_charter/DASHY_DORA_CHAMPION_PLAN.md` | Vision + the **Dora Decision Charter** (Part II) + the verify-state-first operating procedure (Part III) that govern every prompt. |
 | `01_charter/ENGINEERING_STANDARDS.md` | The **code/architecture rubric** — standing rules `R-001..` (componentisation, theming, single-source-of-truth, scope, code-style, …) + ADR log. Checked on **every** task; violations must be fixed, commented, or flagged. The engineering counterpart to the Charter. |
-| `01_charter/STATUS.md` | Audit of what's built vs the Part 1-5 plans. Known stale — always re-check the live code. |
 
 ## 02_feedback — user input (source of truth)
 
@@ -132,7 +131,7 @@ context.
 
 | Part | ID prefix | Status |
 |---|---|---|
-| 1 | P/N/X/S/F/A/M/DS/Doc/D/T/L/I | Largely built (see `01_charter/STATUS.md`) |
+| 1 | P/N/X/S/F/A/M/DS/Doc/D/T/L/I | Largely built (see `06_legacy_prompt_plans/STATUS.md` — last audit 2026-05-27, now legacy; cross-reference `CHANGELOG.md` for current state) |
 | 2 | P2-* | Mostly NOT started |
 | 3 | P3-* | NOT started (some conflicts with current design) |
 | 4 | P4-* | NOT started |
@@ -150,10 +149,13 @@ and similar. Triage or delete; not loaded by any process.
 ## Governance (applies to EVERY prompt, in every plan)
 
 1. **Verify current state first.** Before acting on any prompt, read
-   `01_charter/STATUS.md`, `CHANGELOG.md`, the named code, and the
-   prior plans; reconcile the prompt against reality; adapt or STOP if
-   it has drifted or a dependency is missing. (Full procedure:
-   `01_charter/DASHY_DORA_CHAMPION_PLAN.md` Part III.)
+   `CHANGELOG.md`, the **top entry of `DORA_WORKLOG.md`**, the named code,
+   and the active proposals/IMPL plans under `docs/04_proposals/`;
+   reconcile the prompt against reality; adapt or STOP if it has drifted
+   or a dependency is missing. (Full procedure:
+   `01_charter/DASHY_DORA_CHAMPION_PLAN.md` Part III. The old
+   `01_charter/STATUS.md` audit has been moved to
+   `06_legacy_prompt_plans/STATUS.md` as legacy reference only.)
 2. **Obey the Dora Decision Charter.** Every design decision is checked
    against the 12 principles in
    `01_charter/DASHY_DORA_CHAMPION_PLAN.md` Part II (effortless above

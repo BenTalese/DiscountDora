@@ -23,7 +23,12 @@ def _offer(price_now, price_was, *, is_selected=False, is_preferred=False):
 def _line(*, quantity=1, is_ticked=False, actual_unit_price=None,
           selected_product_id=None, offers=()):
     return ShoppingListLineDto(
-        line_id=uuid4(), stock_item_id=uuid4(), stock_item_name="i",
+        # FU-136 — `product_id` became required on the DTO when Cart
+        # Button Chunk 3 added the standalone-product anchor. These
+        # tests exercise totals only, so product_id is irrelevant —
+        # pass None and keep the test stub current.
+        line_id=uuid4(), stock_item_id=uuid4(), product_id=None,
+        stock_item_name="i",
         stock_level_name=None, stock_location_id=None, stock_location_breadcrumb=[],
         quantity=quantity, is_ticked=is_ticked, selected_product_id=selected_product_id,
         sequence=0, added_via="manual", added_at=datetime(2026, 1, 1),

@@ -169,7 +169,7 @@ file was written. Before building anything, every agent MUST run these two steps
 state their findings:
 
 ### STEP 0 — VERIFY CURRENT STATE (do this first, every time)
-1. Read **STATUS.md** and **CHANGELOG.md** for current implementation state and version.
+1. Read the **top entry of `DORA_WORKLOG.md`** (canonical "where we are") and **`CHANGELOG.md`** (product-level history) for current implementation state. The legacy `STATUS.md` audit lives at `docs/06_legacy_prompt_plans/STATUS.md` for historical reference only — it was last regenerated 2026-05-27 and is not authoritative.
 2. Read the **prior prompt plans** (PROMPT_PLAN_PART_6 / _7) to see what this prompt
    depends on and whether those dependencies are actually built yet.
 3. Read the **actual code** named in the prompt's READ list and confirm the files,

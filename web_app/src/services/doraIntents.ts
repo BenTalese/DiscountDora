@@ -53,7 +53,8 @@ export type DoraReply = {
     suggestions?: DoraIntentId[];
     // Optional navigation. The chat UI renders a button when present.
     navigateTo?: { path: string; label: string };
-    // External link (e.g. GitHub issues). Opens in a new tab.
+    // External link (e.g. upstream release notes). Opens in a new tab.
+    // Repo is private — no public issue-tracker link any more.
     externalLink?: { url: string; label: string };
 };
 
@@ -81,6 +82,12 @@ export type RecipeSnapshot = {
     cookTimeMinutes: number | null;
     isFavourite: boolean;
     ingredientStockItemIds: string[];
+    // FU-150 — names of dietary tags + tools so the handler can match
+    // queries like "vegetarian recipe" / "I need an asian recipe"
+    // without needing to resolve IDs at chat time. The snapshot stays
+    // a pure data shape; the Pinia stores supply the names.
+    dietaryTagNames: string[];
+    timeOfDay: string | null;
 };
 
 export type ShoppingListSnapshot = {
@@ -275,16 +282,17 @@ const INSULT_REPLIES = [
 ];
 
 // Fallback bank — rotated when the rule engine can't make sense of an input.
-// Every variant still gets the Help nav + GitHub issues externalLink + the
-// quick-action suggestions (those are set on the reply, not in the text), so
-// the user always has a path forward.
+// Every variant gets the Help nav + quick-action suggestions (set on the
+// reply, not in the text), so the user always has a path forward. The repo
+// is private — no public issue tracker to point at — so fallback copy keeps
+// the framing local ("rephrase / try a quick action / open Help").
 const FALLBACK_REPLIES = [
-    "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.) If something's actually broken, the GitHub issues page is where to flag it.",
-    "Hmm, drawing a blank on that one. Could be I'm having a moment, or it's a feature I haven't learned yet. Try rephrasing — and if you reckon I should know this, the issues link is your friend.",
-    "Not sure what you're after there. The quick actions below might point you the right way, or open Help. Genuine bug? GitHub issues is the proper place to dob me in.",
-    "I tried to parse that and got a Blue Screen Of Burger. Could you rephrase? Or report it if it feels like a bug, the issues link is right there.",
-    "That one's stumped me. Either my training's outdated or you've found a gap — issues page is the move if it's the latter. Otherwise, rephrase and I'll have another crack.",
-    "Sorry, I'm beef. Not following. Try a quick action, hit Help for the guides, or open an issue if something's properly off.",
+    "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.)",
+    "Hmm, drawing a blank on that one. Could be I'm having a moment, or it's a feature I haven't learned yet. Try rephrasing and I'll have another crack.",
+    "Not sure what you're after there. The quick actions below might point you the right way, or open Help.",
+    "I tried to parse that and got a Blue Screen Of Burger. Could you rephrase?",
+    "That one's stumped me. Either my training's outdated or you've found a gap. Rephrase and I'll try again.",
+    "Sorry, I'm beef. Not following. Try a quick action, or hit Help for the guides.",
 ];
 
 // ── Local helpers for data intents ─────────────────────────────────────
@@ -700,10 +708,26 @@ export const INTENTS: ReadonlyArray<{
                   'where did i put', 'which location'],
     },
     {
+        // FU-150 — broaden the trigger list so dietary / cuisine /
+        // time-of-day queries route here even without an explicit
+        // "recipe for ..." preposition. "i need a vegetarian recipe"
+        // / "i need an asian recipe" / "any breakfast ideas" all land
+        // here and the handler does the actual filtering against
+        // recipe.name + cuisine + category + dietaryTagNames +
+        // timeOfDay. The handler also tolerates messages with no
+        // recognised filter and degrades to a generic prompt rather
+        // than the fallback bank.
         id: 'find_recipe',
         label: 'Find a recipe',
-        matches: ['recipe for', 'how do i cook', 'how to cook', 'how do i make',
-                  'how to make', 'recipe with', 'recipes with'],
+        matches: [
+            'recipe for', 'how do i cook', 'how to cook', 'how do i make',
+            'how to make', 'recipe with', 'recipes with',
+            'a recipe', 'any recipe', 'any recipes', 'find recipe',
+            'find a recipe', 'find recipes', 'find me a recipe',
+            'i need a recipe', 'i want a recipe', 'i need recipes',
+            'show me recipes', 'show me a recipe', 'recipe ideas',
+            'meal idea',
+        ],
     },
     {
         id: 'whats_for_dinner',
@@ -804,10 +828,10 @@ export const INTENTS: ReadonlyArray<{
         matches: ['tour', 'show me around', 'walk me through', 'overview', 'what can you do'],
     },
     {
-        // Bug reporting — explicit affordance for "I found an issue" so the
-        // user gets a direct GitHub-issues prompt instead of the rotating
-        // fallback text. Phrased to catch the common reports without
-        // overlapping with general help intents.
+        // Bug reporting — explicit affordance for "I found an issue" so
+        // the user gets an acknowledgement + Help-nav prompt instead of
+        // the rotating fallback text. Repo is private; no public issues
+        // page to link out to.
         id: 'report_issue',
         label: 'I found an issue',
         matches: [
@@ -934,9 +958,10 @@ export async function runIntent(
                 text: `You're on Discount Dora ${versionInfo?.current ?? 'an unknown version'}. The Help page has the full changelog; recent highlights include the assistant (that's me, the burger), the locations heatmap, and per-user preferences.${updateBit}`,
                 mood: versionInfo?.updateAvailable ? 'super_excited' : 'excited',
                 navigateTo: { path: '/help', label: 'Open Help (changelog tab)' },
-                ...(versionInfo?.updateAvailable && versionInfo.releaseUrl
-                    ? { externalLink: { url: versionInfo.releaseUrl, label: 'See latest release on GitHub' } }
-                    : {}),
+                // Repo is private — the release URL isn't surfaced as an
+                // external link any more. The Help-page changelog is the
+                // canonical place to read about updates.
+                ...{},
             };
         }
 
@@ -1156,24 +1181,50 @@ export async function runIntent(
         }
 
         case 'find_recipe': {
+            // FU-150 — instead of yanking the noun chunk after
+            // "recipe for"/"how to cook", filter the recipe list by
+            // every term we recognise in the message. Substring-match
+            // each candidate's name + cuisine + category +
+            // dietaryTagNames + timeOfDay against tokens in the raw
+            // text. "i need a vegetarian recipe" matches every
+            // recipe whose dietaryTagNames includes 'vegetarian'.
+            // "show me an asian breakfast recipe" matches recipes
+            // whose cuisine + timeOfDay both hit.
             const recipes = context.getRecipes?.() ?? [];
-            const query = rawText ? extractAfter(rawText, ['recipe for', 'how do i cook', 'how to cook', 'how do i make', 'how to make', 'recipe with', 'recipes with']) : null;
-            if (!query) {
+            const lower = (rawText ?? '').toLowerCase();
+            const stopwords = new Set([
+                'a', 'an', 'and', 'any', 'are', 'find', 'for', 'from', 'how',
+                'i', 'idea', 'ideas', 'in', 'is', 'me', 'my', 'need', 'of',
+                'on', 'or', 'recipe', 'recipes', 'show', 'something', 'the',
+                'to', 'want', 'what', 'with', 'do', 'make', 'cook', 'meal',
+                'meals', 'have', 'tonight', 'today', 'please',
+            ]);
+            const tokens = lower
+                .replace(/[^a-z0-9 ]+/g, ' ')
+                .split(/\s+/)
+                .filter((t) => t.length > 1 && !stopwords.has(t));
+            const matchesFor = (r: RecipeSnapshot, t: string): boolean =>
+                r.name.toLowerCase().includes(t)
+                || (r.cuisine ?? '').toLowerCase().includes(t)
+                || (r.category ?? '').toLowerCase().includes(t)
+                || (r.timeOfDay ?? '').toLowerCase().includes(t)
+                || r.dietaryTagNames.some((n) => n.toLowerCase().includes(t));
+            const matches = tokens.length === 0
+                ? []
+                : recipes.filter((r) => tokens.every((t) => matchesFor(r, t)));
+            if (tokens.length === 0) {
                 return {
-                    text: "Recipe for what? Drop a name or an ingredient and I'll rummage.",
+                    text: "Recipe for what? Drop a name, an ingredient, a cuisine ('asian', 'italian'), or a dietary tag ('vegetarian', 'gluten free').",
                     mood: 'searching',
                     navigateTo: { path: '/recipes', label: 'Browse recipes' },
                 };
             }
-            const q = query.toLowerCase();
-            const matches = recipes.filter((r) =>
-                r.name.toLowerCase().includes(q) ||
-                (r.cuisine ?? '').toLowerCase().includes(q) ||
-                (r.category ?? '').toLowerCase().includes(q),
-            );
+            // Pretty-string the matched terms back for the reply so
+            // the user sees what we filtered on.
+            const queryDisplay = tokens.join(' + ');
             if (matches.length === 0) {
                 return {
-                    text: `No recipe matching "${query}". Could be one to add — or try a more general term (e.g. "pasta", "curry").`,
+                    text: `No recipe matching ${queryDisplay}. Could be one to add — or try a broader term.`,
                     mood: 'confused',
                     navigateTo: { path: '/recipes', label: 'Browse recipes' },
                 };
@@ -1188,7 +1239,7 @@ export async function runIntent(
             }
             const top = matches.slice(0, 5).map((r) => `• ${r.name}${r.cuisine ? ` (${r.cuisine})` : ''}`).join('\n');
             return {
-                text: `${matches.length} candidate${matches.length === 1 ? '' : 's'} for "${query}":\n\n${top}${matches.length > 5 ? `\n\n…and ${matches.length - 5} more.` : ''}`,
+                text: `${matches.length} candidate${matches.length === 1 ? '' : 's'} for ${queryDisplay}:\n\n${top}${matches.length > 5 ? `\n\n…and ${matches.length - 5} more.` : ''}`,
                 mood: 'lightbulb',
                 navigateTo: { path: '/recipes', label: 'Browse recipes' },
             };
@@ -1294,19 +1345,18 @@ export async function runIntent(
         }
 
         case 'report_issue': {
+            // Repo is private; no public issue tracker. Acknowledge the
+            // problem and point at Help instead of an external link.
             const intros = [
-                "Oh no — sorry about that. Best place to flag it is the GitHub issues page.",
-                "Bugs! My one weakness (other than soggy buns). Drop the details on GitHub and it'll get looked at properly.",
-                "Appreciate the heads-up. The issues page on GitHub is the right home for it — more eyes than just mine.",
-                "Noted! Quick favour: file it on GitHub so it doesn't get lost in my burger-brain. Steps to reproduce + what you expected = chef's kiss.",
+                "Oh no — sorry about that. Hit Help for the guides; if it's a real bug, jot down what happened so it can be looked at properly.",
+                "Bugs! My one weakness (other than soggy buns). Note the steps + what you expected and pass it on to whoever's running this Dora instance.",
+                "Appreciate the heads-up. Help has the troubleshooting guides; for anything that smells like a real defect, capture the details so they don't get lost.",
+                "Noted! Steps to reproduce + what you expected = chef's kiss — write them down and they'll get the attention they deserve.",
             ];
             return {
                 text: pick(intros),
                 mood: 'worried',
-                externalLink: {
-                    url: 'https://github.com/BenTalese/DiscountDora/issues/new',
-                    label: 'Open a GitHub issue',
-                },
+                navigateTo: { path: '/help', label: 'Open Help' },
                 suggestions: ['stuck', 'guides'],
             };
         }
@@ -1316,10 +1366,6 @@ export async function runIntent(
                 text: pick(FALLBACK_REPLIES),
                 mood: 'confused',
                 navigateTo: { path: '/help', label: 'Open Help' },
-                externalLink: {
-                    url: 'https://github.com/BenTalese/DiscountDora/issues/new',
-                    label: 'Report an issue on GitHub',
-                },
                 suggestions: ['stuck', 'guides', 'whats_for_dinner', 'joke'],
             };
         }

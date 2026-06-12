@@ -531,6 +531,7 @@
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
+    import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { Recipe } from 'src/models/recipe';
@@ -638,6 +639,10 @@
             form.is_flagged !== detail.value.is_flagged
         );
     });
+    // FU-156 — block sidebar/router-link/back/refresh while the basics
+    // form has unsaved edits. Image upload saves immediately so it's not
+    // part of dirty state.
+    useUnsavedChangesGuard(isDirty);
     // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
     // Saves immediately — uploading a photo isn't coupled to the basics
     // form's Save button. `imageVersion` busts the <img> cache after a
@@ -833,10 +838,10 @@
         return recipes.value.filter((r) => ids.has(r.recipe_id)) as unknown as Recipe[];
     });
     function goToRecipe(recipeId: string) {
-        void router.push({ path: '/recipes', query: { recipe: recipeId } });
+        void router.push(`/cookbook/${recipeId}`);
     }
     function goToCook(recipeId: string) {
-        void router.push(`/recipes/${recipeId}/cook`);
+        void router.push(`/cookbook/${recipeId}/cook`);
     }
     async function onAdjustRecipeMeals(recipeId: string, delta: number) {
         try {
@@ -966,6 +971,10 @@
     async function doDelete(id: string) {
         try {
             await stockItemStore.deleteStockItemAsync(id);
+            // The item is gone — drop the form's reference so the
+            // unsaved-changes guard (FU-156) doesn't prompt about edits
+            // to a now-deleted row on the way out.
+            detail.value = null;
             if (props.embedded) emit('close');
             else void router.push('/stock');
         } catch (err) {

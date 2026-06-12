@@ -126,9 +126,6 @@
 
         <!-- Keyboard-shortcut cheatsheet (opened with "?"). -->
         <ShortcutsCheatsheet v-if="currentUser" />
-
-        <!-- Command palette (Cmd/Ctrl-K). Lazy-mounted on first open. -->
-        <CommandPalette v-if="currentUser && hasEverOpened" />
     </q-layout>
 </template>
 
@@ -141,7 +138,6 @@
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import QuickAddSheet from 'src/components/QuickAddSheet.vue';
-    import CommandPalette from 'src/components/CommandPalette.vue';
     import ShortcutsCheatsheet from 'src/components/ShortcutsCheatsheet.vue';
     import ApplicationLogo from 'src/components/menu/ApplicationLogo.vue';
     import HamburgerButton from 'src/components/menu/HamburgerButton.vue';
@@ -149,11 +145,7 @@
     import PageTitle from 'src/components/menu/PageTitle.vue';
     import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
     import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
-    import { useCommandPalette } from 'src/composables/useCommandPalette';
-    import { useCommands } from 'src/composables/useCommands';
     import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
-    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
-    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useUndo } from 'src/composables/useUndo';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, onUnmounted, ref } from 'vue';
@@ -258,98 +250,15 @@
         { keys: 'g h', scope: 'Global', description: 'Go to Help', handler: () => void router.push('/help') },
     ]);
 
-    // ── Command palette (S1) ────────────────────────────────────────────
-    const { paletteOpen, hasEverOpened, togglePalette } = useCommandPalette();
-    void paletteOpen;
-    const shoppingListStore = useShoppingListStore();
-    const shoppingListApi = new ShoppingListApiService();
-
-    function onCommandPaletteKey(event: KeyboardEvent) {
-        // Cmd-K (mac) / Ctrl-K (everyone else). Cmd-K must work even when an
-        // input is focused, so we don't gate on isTypingTarget here.
-        if (!(event.ctrlKey || event.metaKey)) return;
-        if (event.shiftKey || event.altKey) return;
-        if (event.key.toLowerCase() !== 'k') return;
-        event.preventDefault();
-        togglePalette();
-    }
-    onMounted(() => {
-        if (typeof window !== 'undefined') {
-            window.addEventListener('keydown', onCommandPaletteKey);
-        }
-    });
-    onUnmounted(() => {
-        if (typeof window !== 'undefined') {
-            window.removeEventListener('keydown', onCommandPaletteKey);
-        }
-    });
-
-    // Static commands — registered while MainLayout is mounted (the whole
-    // authenticated session). Page-specific commands register themselves via
-    // useCommands() with their own lifecycle.
-    async function autogenerateFromLowStock() {
-        const result = await shoppingListApi.autoGenerateAsync({
-            sources: {
-                low_stock: true,
-                out_of_stock: true,
-                essentials_only_for_low: true,
-                flagged: true,
-            },
-        });
-        if (result.shopping_list_id && !result.nothing_to_add) {
-            void shoppingListStore.refreshAsync();
-            void router.push(`/shopping-lists/${result.shopping_list_id}`);
-        } else {
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: 'Nothing low or out — no list generated.',
-            });
-        }
-    }
-    function openPrimaryList() {
-        const id = shoppingListStore.quickAddTargetListId;
-        if (id) void router.push(`/shopping-lists/${id}`);
-        else void router.push('/shopping-lists');
-    }
-    // P2-11 — jump straight into shop mode for the primary list. Falls
-    // back to the list overview when there's no primary set, mirroring
-    // the existing openPrimaryList behaviour.
-    function openPrimaryShopMode() {
-        const id = shoppingListStore.quickAddTargetListId;
-        if (id) void router.push(`/shopping-lists/${id}/shop`);
-        else void router.push('/shopping-lists');
-    }
-    useCommands([
-        { id: 'nav.dashboard', label: 'Go to Dashboard', icon: ICONS.dashboard, section: 'Navigate', action: () => router.push('/') },
-        { id: 'nav.stock', label: 'Go to Stock', icon: 'inventory_2', section: 'Navigate', action: () => router.push('/stock') },
-        { id: 'nav.lists', label: 'Go to Shopping Lists', icon: ICONS.shopping_cart, section: 'Navigate', action: () => router.push('/shopping-lists') },
-        { id: 'nav.recipes', label: 'Go to Cookbook', icon: ICONS.menu_book, section: 'Navigate', action: () => router.push('/cookbook') },
-        { id: 'nav.meal-plans', label: 'Go to Meal Plans', icon: ICONS.calendar_month, section: 'Navigate', action: () => router.push('/meal-plans') },
-        { id: 'nav.products', label: 'Go to Product Search', icon: ICONS.local_offer, section: 'Navigate', action: () => router.push('/product-search') },
-        { id: 'nav.my-products', label: 'Go to My Products', icon: ICONS.favorite, section: 'Navigate', action: () => router.push('/my-products') },
-        { id: 'nav.price-history', label: 'Go to Price History', icon: ICONS.show_chart, section: 'Navigate', tags: ['chart', 'trends', 'alerts'], action: () => router.push('/price-history') },
-        { id: 'nav.data', label: 'Go to Data Management', icon: ICONS.storage, section: 'Navigate', tags: ['backup', 'restore', 'import', 'export', 'scan', 'qr labels'], action: () => router.push('/data') },
-        { id: 'nav.reports', label: 'Go to Reports', icon: ICONS.insights, section: 'Navigate', tags: ['analytics', 'charts', 'spend', 'savings'], action: () => router.push('/reports') },
-        { id: 'nav.waste', label: 'Go to Waste', icon: ICONS.expiry, section: 'Navigate', tags: ['expiring', 'rescue', 'wasted', 'use soon'], action: () => router.push('/waste') },
-        { id: 'nav.settings', label: 'Go to Settings', icon: ICONS.settings, section: 'Navigate', action: () => router.push('/settings') },
-        { id: 'nav.help', label: 'Go to Help', icon: ICONS.help_outline, section: 'Navigate', action: () => router.push('/help') },
-
-        { id: 'create.stock-item', label: 'Create stock item', icon: ICONS.add_box, section: 'Create', tags: ['new item', 'add item'], action: () => router.push({ path: '/stock', query: { create: '1' } }) },
-        { id: 'lists.open-primary', label: 'Open primary shopping list', icon: ICONS.shopping_cart, section: 'Shopping lists', action: openPrimaryList },
-        { id: 'lists.shop-mode', label: 'Shop mode on primary list', icon: ICONS.shopping_cart, section: 'Shopping lists', tags: ['in store', 'mobile', 'big buttons'], action: openPrimaryShopMode },
-        { id: 'lists.autogenerate-low', label: 'Auto-generate shopping list from low stock', icon: ICONS.auto_awesome, section: 'Shopping lists', tags: ['generate', 'restock'], action: autogenerateFromLowStock },
-
-        { id: 'ui.toggle-dark', label: 'Toggle dark mode', icon: ICONS.dark_mode, section: 'View', tags: ['theme', 'light'], action: () => $q.dark.toggle() },
-        { id: 'help.shortcuts', label: 'Show keyboard shortcuts', icon: ICONS.keyboard, section: 'Help', tags: ['cheatsheet'], action: openCheatsheet },
-        { id: 'help.restart-onboarding', label: 'Restart onboarding', icon: ICONS.play_circle, section: 'Help', action: () => router.push('/welcome') },
-    ]);
+    // Command palette retired 2026-06-12 — see worklog + FU-029.
+    // `useShortcut` / `useShortcutRegistry` (keyboard shortcuts) stay;
+    // they were always orthogonal to the palette.
 
     const linksList: MenuButtonProps[] = [
         { label: 'Stock', icon: 'inventory_2', link: '/stock' },
         { label: 'Product Search', icon: ICONS.search, link: '/product-search' },
         { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
-        { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook', activePrefixes: ['/recipes'] },
+        { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
         { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
         { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
         { label: 'Data', icon: ICONS.storage, link: '/data' },

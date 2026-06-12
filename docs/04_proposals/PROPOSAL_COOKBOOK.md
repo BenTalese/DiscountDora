@@ -37,8 +37,11 @@ the user wants gone.
 
 ### 2.1 Naming — "Cookbook" (L230)
 Page is "Cookbook" everywhere (A8 did the route rename + redirect; ensure the
-title/labels and the stale "Recipes" command-palette label, **FU-031**, all
-follow). "Mark made" → **"Mark cooked"** everywhere, componentised (L245, L303).
+title/labels follow; **FU-031**'s remaining "Recipes" stragglers in tour
+cards / help text / static SPA copy still need a sweep, ~~plus the
+command-palette label~~ which is moot since the palette was retired
+2026-06-12). "Mark made" → **"Mark cooked"** everywhere, componentised
+(L245, L303).
 
 ### 2.2 Tag system overhaul (L235-238, L255, L260, L283-284) — the big taxonomy fix
 Three distinct concepts, currently muddled:

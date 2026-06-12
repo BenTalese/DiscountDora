@@ -401,7 +401,7 @@
                         <a
                             class="dora-card-action dora-card-link"
                             href="#"
-                            @click.prevent="goTo('/recipes?cookable=true')"
+                            @click.prevent="goTo('/cookbook?cookable=true')"
                         >
                             See more →
                         </a>
@@ -415,7 +415,7 @@
                             <a
                                 href="#"
                                 class="dora-cook-name"
-                                @click.prevent="goTo(`/recipes/${r.recipe_id}`)"
+                                @click.prevent="goTo(`/cookbook/${r.recipe_id}`)"
                             >
                                 <q-icon
                                     v-if="r.is_favourite"
@@ -442,7 +442,7 @@
                                 :icon="ICONS.restaurant"
                                 label="Cook"
                                 color="primary"
-                                @click="goTo(`/recipes/${r.recipe_id}/cook`)"
+                                @click="goTo(`/cookbook/${r.recipe_id}/cook`)"
                             />
                         </li>
                     </ul>
@@ -451,7 +451,7 @@
                         <a
                             class="dora-empty-cta"
                             href="#"
-                            @click.prevent="goTo('/recipes')"
+                            @click.prevent="goTo('/cookbook')"
                         >Browse recipes →</a>
                     </div>
                 </article>
@@ -481,7 +481,11 @@
                             class="dora-deal-row"
                         >
                             <q-avatar rounded size="36px" class="dora-bg-sunken dora-deal-img">
-                                <img v-if="p.image" :src="p.image" :alt="p.name" />
+                                <img
+                                    v-if="p.has_image"
+                                    :src="`/api/products/${p.product_id}/image`"
+                                    :alt="p.name"
+                                />
                                 <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
                             </q-avatar>
                             <div class="dora-deal-text">
@@ -628,7 +632,7 @@
 
             <!-- ───── Recipes card ──────────────────────────────────────── -->
             <div v-if="isCardVisible('recipes')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/recipes')">
+                <article class="dora-card dora-card-clickable" @click="goTo('/cookbook')">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.menu_book" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Recipes</h3>
@@ -654,7 +658,7 @@
 
             <!-- ───── Meals card ────────────────────────────────────────── -->
             <div v-if="isCardVisible('meals')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/recipes')">
+                <article class="dora-card dora-card-clickable" @click="goTo('/cookbook')">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.restaurant" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Meals on hand</h3>

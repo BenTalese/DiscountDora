@@ -1623,8 +1623,13 @@
     }
 
     async function load() {
+        if (!listId.value) return;
         loading.value = true;
         loadError.value = null;
+        // Clear the previous list's data so the user sees a loading spinner
+        // — not stale rows from the list they navigated away from —
+        // while the new list's detail is in flight.
+        detail.value = null;
         try {
             detail.value = await api.getDetailAsync(listId.value);
         } catch (err) {
@@ -1727,6 +1732,17 @@
     watch(quickAddOpen, (open, wasOpen) => {
         if (wasOpen && !open) void load();
     });
+
+    // FU-157 — react to URL list-id changes. The merged overview-into-
+    // detail design means switching lists via the header dropdown only
+    // changes `route.params.id` without unmounting this component, so
+    // `onMounted` doesn't re-fire. Without this watcher the screen
+    // shows the previous list while the URL displays the new id —
+    // which is also the root cause of the "old list reappears after
+    // operations on another list" symptom (the QuickAdd watcher above
+    // ran `load()` against the *new* id and looked like a resurrection
+    // because the old list had been on-screen the whole time).
+    watch(listId, () => { void load(); });
 
     // ── Swap with substitute ─────────────────────────────────────────
     async function onSwapSubstitute(line: ShoppingListLine) {

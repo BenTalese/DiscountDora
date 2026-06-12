@@ -39,6 +39,136 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-160 — Shopping-list "shopping day" alert (feedback L403)
+- **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
+- **Type:** deferred job
+- **What:** Feedback L403 asked for an alert when a list's planned shop date
+  is *today* / imminent. Depends on FU-159 (planned-shop-date UI) and the
+  existing alert pipeline. Not built.
+- **Recommended resolution:** opportunistic — bundle with FU-159 once that
+  field is surfaced, or queue as a small follow-up once we have a planned
+  shop date to fire against.
+
+## [OPEN] FU-159 — Planned shop date not surfaced in shopping-list UI (feedback L402)
+- **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
+- **Type:** finding (design drift)
+- **What:** Feedback L402: "Being able to set a planned shopping day per list
+  would be useful. Optional of course." The DB column
+  `planned_shop_date` exists (migration
+  `e1a4c7b2f9d0_20260613_shopping_list_planned_shop_date.py`) and the list
+  picker sorts by it
+  ([routes.ts:110-131](web_app/src/router/routes.ts#L110)), but nothing in
+  the UI displays or edits the field. The user can't actually set one.
+- **Recommended resolution:** add a date picker to the list header info
+  area on `ShoppingListDetail.vue` (top info area was already proposed in
+  L407), plus a chip / caption on each row of the list-selector dropdown
+  so the sort order makes visible sense. Pair with FU-158 below — both
+  belong in the same "shopping list polish" pass.
+
+## [OPEN] FU-158 — Shopping list responsive layout + today's-date picking (feedback L405/406/409)
+- **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
+- **Type:** finding (design drift from `SHOPPING_LIST_REDESIGN_PROPOSAL.md`)
+- **What:** The Chunk-5 merge of overview-into-detail shipped, but three
+  pieces of the proposal got dropped:
+  1. **Desktop right-side panel** with all lists ordered by planned shop
+     date → finalised date → creation date (feedback L405). Current code
+     uses a single `q-btn-dropdown` in the header for every viewport
+     ([ShoppingListDetail.vue:8-117](web_app/src/pages/ShoppingListDetail.vue#L8)).
+  2. **Mobile dropdown at top** (L406) — exists today but identical to
+     desktop; no responsive split.
+  3. **Today's-date-keyed picking** when navigating to `/shopping-lists`
+     with no id (L409). The route guard
+     ([routes.ts:110-131](web_app/src/router/routes.ts#L110)) picks by
+     status + creation order, not by today's planned shop date. So a list
+     planned for today is no more likely to be chosen than any other.
+- **Why deferred (now):** the user reported broad shopping-list buggyness;
+  the immediately-blocking bugs (FU-157: URL param not watched) were
+  surgically patched today. The proposal-level polish above is its own
+  scoped work — needs design choices (panel width? desktop-vs-mobile
+  breakpoint?) and probably its own Wave-A-shaped prompt. Bundling them
+  here was already attempted in the original Chunk 5 and the polish was
+  the part that got cut.
+- **Recommended resolution:** queue a focused "Shopping list polish" prompt
+  with these three items + FU-159 (planned shop date in UI) + FU-160
+  (shopping-day alert). Keep `useUnsavedChangesGuard`-style discipline:
+  responsive split is a Wave-A pattern, today's-date logic is a route-guard
+  patch.
+
+## [RESOLVED] FU-157 — Shopping list URL-param change doesn't reload (and "old list reappears")
+- **Raised:** 2026-06-12 (user repro)
+- **Resolved:** 2026-06-12 — `ShoppingListDetail.vue` and
+  `ShoppingListShopMode.vue` were `onMounted`-only, with no
+  `watch(listId)`. Switching lists via the header dropdown pushed the
+  new URL but the component stayed mounted (same route component, just
+  a different `:id`), so `load()` never re-ran and the previous list's
+  data sat on screen. The "old list reappears after adding to another"
+  symptom was a direct consequence: the page never moved off list A,
+  so any subsequent `load()` (e.g. via the QuickAdd-closed watcher)
+  looked like a resurrection. Fix: added `watch(listId, load)` on both
+  pages, plus a `detail.value = null` clear at the start of `load()`
+  so the user sees a spinner — not stale rows — while the new list is
+  in flight.
+- **Type:** finding (real bug, structural)
+
+## [RESOLVED] FU-156 — Main menu nav bypasses the unsaved-changes guard
+- **Raised:** 2026-06-12 (user repro during FU-021 verify)
+- **Resolved:** 2026-06-12 — root cause confirmed (c): the guard was
+  per-handler (`RecipeDetailPage::onBack`) instead of route-level, so
+  any nav surface other than the back button skipped the prompt; on
+  `StockItemDetailPage` there was no guard at all. Fixed at the layer
+  that covers every nav route — new `useUnsavedChangesGuard`
+  composable wraps both `onBeforeRouteLeave` (different-route nav,
+  e.g. main menu) **and** `onBeforeRouteUpdate` (same-component param
+  change, e.g. clicking a related-recipe link mid-edit), plus
+  `beforeunload` for refresh/close. Wired into RecipeDetailPage
+  (`isDirty || imageDirty`) and StockItemDetailPage (`isDirty`).
+  `RecipeDetailPage::onBack` simplified to a plain `router.push` since
+  the guard now owns the prompt. Delete handlers on both pages drop
+  the dirty state before navigating so the user isn't asked about
+  edits to a row they just deleted.
+- **Type:** finding (real bug)
+
+## [RESOLVED] FU-155 — Stock-item detail "Related recipes" tab navigates to Cookbook overview, not the recipe
+- **Raised:** 2026-06-12 (user repro; carve-out from FU-019 [[fu-019]])
+- **Resolved:** 2026-06-12 — bug was in
+  `StockItemDetailPage::goToRecipe` which built
+  `{ path: '/cookbook', query: { recipe: recipeId } }`. The
+  recipe-detail route is `/cookbook/:id`; the bad path matched the
+  `/cookbook` overview (and the unused `?recipe=` query was silently
+  dropped). Changed to `router.push(\`/cookbook/${recipeId}\`)`.
+- **Type:** finding (real bug)
+
+## [OPEN] FU-154 — Page-local product/stock collections bypass their stores (R-003 smell, likely widespread)
+- **Raised:** 2026-06-12 (during FU-014 image-bug investigation)
+- **Type:** finding
+- **What:** `MyProductsPage.vue` keeps its own local `products = ref<Product[]>([])`
+  populated by a direct `productApi.getAllAsync()` in `onMounted` (line 583/1070),
+  bypassing `productStore.products` entirely — even though `ProductSearch.vue`'s
+  save goes through `productStore.createProductAsync()` which keeps the store
+  fresh. Result: a product saved on the search page doesn't appear on My Products
+  until the user hard-refreshes the page (confirmed by user, 2026-06-12). This is
+  a textbook R-003 (state-ownership / single source of truth) violation — two
+  sources of truth for the same domain collection.
+- **Why it's likely widespread:** the same pattern (page-local `ref<T[]>` +
+  direct API call in `onMounted` for a collection that has a Pinia store) almost
+  certainly exists on other pages. Quick suspects to audit:
+  - `DashboardPage.vue` (modified in current branch)
+  - `StockOverview.vue`, `StockItemDetailPage.vue`
+  - `RecipesOverview.vue`, `RecipeDetailPage.vue`
+  - `MealPlansOverview.vue`, `WastePage.vue`
+  Audit method: grep for `= ref<.*\[\]>\(\[\]\)` + `\.getAllAsync\(\)`
+  / `\.get.*Async\(\)` inside `pages/` and cross-reference what Pinia store
+  already owns that collection.
+- **Confirmed problem area:** `web_app/src/pages/MyProductsPage.vue` (lines
+  583, 587–607, 1070). Saved product invisible until refresh.
+- **Recommended resolution:** scoped Wave-A-ish prompt — (1) audit all `pages/`
+  for the pattern, (2) for each hit, replace the local ref + onMounted-fetch with
+  `storeToRefs(theStore)` + `theStore.refresh()`-equivalent, (3) make sure the
+  store's create/update/delete methods refresh state so reactivity is automatic.
+  Don't relocate fine client-only computeds (per R-003 addendum). Treat
+  `MyProductsPage` as the canonical fix to copy.
+- **Cross-ref:** ENGINEERING_STANDARDS R-003 (state ownership).
+
 ## [OPEN] FU-153 — Assistant LLM config: per-user, reachability probe, multi-provider
 - **Raised:** 2026-06-12 (user feedback during FU-085 verify)
 - **Type:** design / proposal addition (no code yet)
@@ -896,32 +1026,14 @@ long session summary. Distinct from the other two logs:
 
 ---
 
-## [OPEN] FU-120 — Browser-verify Stock Overview Chunk 1 (50-cap fix + virtualisation + filtered export)
-- **Raised:** 2026-06-12 (Stock Overview Chunk 1 impl; static-only, no env)
-- **Type:** finding / verification
-- **What:** Verify, in order:
-  1. With a pantry of ≤50 items, the overview renders inside the existing
-     `ListTransition` (glide-in still works); switch the threshold or load
-     more items to confirm the swap to `q-virtual-scroll` above 50.
-  2. Create / seed a pantry with **>50 items** (e.g. 120) and confirm
-     every item is now reachable in the list (scroll the virtual list);
-     `filteredStockItems.length` matches the backend count.
-  3. **Filtered CSV export** — apply a level/location filter, hit Export
-     → CSV, open the file → only the filtered rows appear. Repeat with
-     **no filter active** → confirm the URL has no `ids=` param (the
-     "everything" fast-path stays cheap).
-  4. **Filtered Print/PDF** — same workflow against the print-view tab.
-  5. Bulk-select + per-row actions still work inside the virtualised
-     list (Quasar reuses DOM nodes; the row's emit handlers should
-     fire normally).
-  6. Splitter "peek" still opens when clicking a row in the virtualised
-     list.
-- **Why:** static-only impl. `q-virtual-scroll` swaps in-place for the
-  existing list wrapper; row markup is unchanged but the wrapper change
-  is the riskiest part. The filtered export round-trip also needs a
-  real-DB pass.
-- **Recommended resolution:** now (next session) — confirm and mark
-  RESOLVED, or log defects.
+## [RESOLVED] FU-120 — Browser-verify Stock Overview Chunk 1 (50-cap fix + virtualisation + filtered export)
+- **Raised:** 2026-06-12
+- **Resolved:** 2026-06-12 — user verified in browser ("FU-035
+  resolved — looks good"). >50-item pantry now renders the full
+  list via the paged loop + `q-virtual-scroll`; filtered CSV /
+  print exports honour the `ids=` filter; unfiltered exports
+  take the fast path. No defects raised. **FU-035** stays
+  RESOLVED with this confirmation closing the loop.
 
 ---
 
@@ -2760,8 +2872,8 @@ long session summary. Distinct from the other two logs:
   `stockItemApiService.getAllPagesAsync()` (loops until a short page
   or `total` is reached, asks for `limit=500` per call), and switched
   the store to use it. Pairs with `q-virtual-scroll` so the now-larger
-  list still renders smoothly. Static-only impl; browser-verify is
-  **FU-120**.
+  list still renders smoothly. Browser-verified 2026-06-12 (user
+  confirmation via FU-120) — works as intended.
 
 ## [OPEN] FU-034 — Wire up `StockItemSubstitute.notes` (substitution notes)
 - **Raised:** 2026-06-06 (INV-1)
@@ -2816,11 +2928,15 @@ long session summary. Distinct from the other two logs:
 ## [OPEN] FU-031 — B9.3: stale "Recipes" labels after A8 cookbook rename
 - **Raised:** 2026-06-06 (B9.3 sweep)
 - **Type:** leftover
-- **What:** A8 renamed Recipes → Cookbook (`/cookbook`; `/recipes` redirects).
-  The command palette still says "Go to Recipes" → `/recipes`. Functional via
-  the redirect, but the label is now stale. Same likely in other static lists
-  (tour cards, help text). Worth a one-shot rename sweep.
-- **Recommended resolution:** opportunistic — fold into the A8 wrap-up or
+- **What:** A8 renamed Recipes → Cookbook (`/cookbook`; `/recipes`
+  redirects). ~~The command palette still says "Go to Recipes"~~
+  (palette retired 2026-06-12 — see FU-029 resolution; that
+  source of the bug is mooted). The remaining sweep concern is
+  **other static lists** — tour cards, help text, onboarding
+  copy — that may still say "Recipes" where they should say
+  "Cookbook". Worth a one-shot grep for `Recipes` in the SPA
+  text + a re-check.
+- **Recommended resolution:** opportunistic — fold into the
   next polish pass.
 
 ## [RESOLVED] FU-030 — Fullscreen 404 page redesigned (login-theme + Dora pic)
@@ -2839,17 +2955,24 @@ long session summary. Distinct from the other two logs:
   in-layout variant via `PageErrorState`) was already themed and
   stays untouched.
 
-## [OPEN] FU-029 — B9.4: confirm command-palette commands all trigger
-- **Raised:** 2026-06-06 (B9.4; CLAUDE.md confirm-in-browser rule)
-- **Type:** finding
-- **What:** Ctrl+K palette: every static command has a wired action.
-  `create.stock-item` navigates to `/stock?create=1` and the page already
-  watches `route.query.create`. Reported defect "doesn't trigger some
-  actions" did not reproduce in static code.
-- **Recommended resolution:** confirm in browser — open palette, run each
-  Create / Navigate / Shopping-lists / View / Help command, verify each
-  produces the intended outcome. If any really is broken, re-open as a
-  real bug with the command id.
+## [RESOLVED] FU-029 — B9.4: confirm command-palette commands all trigger
+- **Raised:** 2026-06-06
+- **Resolved:** 2026-06-12 — **command palette retired entirely.**
+  User assessed the palette as low-value for Dora's audience
+  (pantry / mobile, not keyboard-power-user); ripped out the UI
+  + commands registry. Files deleted:
+  `web_app/src/components/CommandPalette.vue`,
+  `web_app/src/composables/useCommandPalette.ts`,
+  `web_app/src/composables/useCommands.ts`,
+  `web_app/src/composables/useRecents.ts`. MainLayout pruned
+  (the Ctrl/Cmd-K trigger, lazy mount, and the 18-item
+  `useCommands([...])` registry are gone, along with the
+  `autogenerateFromLowStock` / `openPrimaryList` /
+  `openPrimaryShopMode` palette-feeder functions). **The
+  `useShortcut` registry stays** — `?`, `/`, `g s`/`g l`/`g r`
+  /`g d`/`g h` etc. all still work; `ShortcutsCheatsheet` is
+  still mounted. With the palette gone, verifying its commands
+  is moot.
 
 ## [OPEN] FU-028 — B9.1: confirm shopping-list drag-drop ordering
 - **Raised:** 2026-06-06 (B9.1; CLAUDE.md confirm-in-browser rule)
@@ -2917,19 +3040,30 @@ long session summary. Distinct from the other two logs:
   staleness vector with a surface-level refetch on the affected store
   or pick a different design.
 
-## [OPEN] FU-025 — Eyeball A6 text scale (xl + slightly-larger default) on dense screens
-- **Raised:** 2026-06-05 (A6)
-- **Type:** finding
-- **What:** A6 widened the steps to 14 / 16.5 / 20.5 / 23px (added Extra-large) and
-  bumped the default a touch (16 → 16.5px), so EVERY md user sees slightly bigger
-  text now. Needs a real-browser check: at **Extra large**, spot-check dense
-  screens (Stock Overview, Recipe detail, Meal plans) for layout breakage; confirm
-  tooltips now scale (new `.q-tooltip` rule); confirm the small step's ~9–12px
-  captions are still readable. Light + dark.
-- **Why deferred:** can't run the app (node_modules absent).
-- **Recommended resolution:** now-ish — when the app is next run. Deliberately-fixed
-  px left in place (ScanOverlay camera UI, PriceHistoryChart SVG labels, Dashboard
-  3px/7.5px micro-gauge) are intentional carve-outs, not bugs.
+## [OPEN] FU-025 — A6 text scale: many surfaces still don't respond (likely needs its own sweep)
+- **Raised:** 2026-06-05 (A6); user-verified gap 2026-06-12
+- **Type:** finding (real, app-wide)
+- **What:** Initial A6 in-browser check (2026-06-12) confirmed the scale
+  steps themselves are working at the page level, BUT user observed that
+  **a lot of secondary text still doesn't change size** when the scale is
+  changed — e.g. **button labels, input text, toggle labels**, and likely
+  other component-internal text. These almost certainly use Quasar's
+  component CSS (`font-size` declared inside `.q-btn__content`,
+  `.q-field__native`, `.q-toggle__label`, etc.) which doesn't inherit from
+  the page-level rem-scaling tokens A6 set up. Fixing this is broader than
+  any single page — likely a Wave-A-style "global pass" prompt that
+  overrides the component-internal font-sizes to track the text-scale
+  variable (or replaces hard-coded px with the same `rem`/var the body
+  text already uses).
+- **Why deferred:** out of FU-025's verify scope; needs its own sweep.
+- **Recommended resolution:** now-ish — promote into a small Wave-A-shaped
+  prompt ("A6b: text-scale follow-through into component-internal text").
+  Audit method: grep `font-size` in `web_app/src/css/quasar.variables.scss`
+  / overrides, plus a runtime walk through Stock Overview + a form-heavy
+  page (Recipe edit, Stock-item detail) at Small vs Extra-large; list each
+  surface that doesn't visibly change and convert its `px` to the same
+  text-scale var. Deliberately-fixed-px carve-outs (ScanOverlay camera UI,
+  PriceHistoryChart SVG labels, Dashboard 3px/7.5px micro-gauge) stay.
 
 ## [OPEN] FU-024 — A7 leftovers: dead banner CSS + wider footer adoption
 - **Raised:** 2026-06-05 (A7)
@@ -2960,37 +3094,25 @@ long session summary. Distinct from the other two logs:
   separately (keep as a typing indicator, or switch to AppSpinner). Consider
   list-skeletons for the big overviews during the FU-010 holistic look pass.
 
-## [OPEN] FU-022 — Confirm A4 reported filter bug did NOT reproduce
+## [RESOLVED] FU-022 — Confirm A4 reported filter bug did NOT reproduce
 - **Raised:** 2026-06-05 (A4; back-filled per the non-issue rule)
+- **Resolved:** 2026-06-12 — user verified in browser. Clearing filters
+  on each of StockOverview / RecipesOverview / MyProductsPage /
+  ProductSearch correctly returns all rows; the reported "everything
+  filtered out on empty" symptom does not reproduce. A4's explicit
+  `!== null` hardening is belt-and-braces.
 - **Type:** finding
-- **What:** A4 was built around a reported bug — "clearing a filter input filters
-  *everything* out instead of behaving as filter off (empty MUST = off)." Static
-  read across StockOverview / RecipesOverview / MyProductsPage / ProductSearch
-  found it did **not** reproduce — every page already skipped blank predicates
-  (truthiness / `!= null` / empty-array / boolean-false). A4 hardened them to be
-  explicit anyway, but the original symptom was never observed.
-- **Why deferred:** can't run the app (node_modules absent); the report came from
-  real usage, so a static read isn't proof.
-- **Recommended resolution:** confirm in browser — on each of the four pages,
-  clear each filter and verify all rows return (no wipe-out). If a wipe still
-  happens somewhere, re-open as a real bug.
 
-## [OPEN] FU-021 — Confirm A3 reported modal bug did NOT reproduce
+## [RESOLVED] FU-021 — Confirm A3 reported modal bug did NOT reproduce
 - **Raised:** 2026-06-05 (A3; back-filled per the non-issue rule)
+- **Resolved:** 2026-06-12 — modal backdrop/Esc-cancel behaviour confirmed
+  fine in browser (cf. FU-007 verification). However, the user found a
+  **different** escape route around the unsaved-changes guard: navigating
+  via the **main menu bar** bypasses the prompt entirely (leaves the page
+  / changes routes within the app without firing the guard). The original
+  modal-misbehaviour symptom is gone; the menu-nav bypass is a separate
+  real bug and is tracked on its own as **[[fu-156]]**.
 - **Type:** finding
-- **What:** A3 was built around reported bugs — modals that "navigate/commit away
-  on click-outside" (esp. the unsaved-changes modal navigating instead of
-  staying) and modals with "no Cancel." Static read found these did **not**
-  reproduce in current code: the `$q.dialog` confirms (recipe delete,
-  unsaved-changes, cook-start) only commit/navigate on explicit `.onOk()` and
-  resolve false on dismiss; template dialogs don't commit on `@hide`; all had a
-  Cancel/Close. A3 standardised them via `BaseDialog` anyway.
-- **Why deferred:** can't run the app (node_modules absent); reported from real
-  usage, so a static read isn't proof.
-- **Recommended resolution:** confirm in browser — backdrop-click / Esc on the
-  key modals (new-recipe, recipe delete, cook-finish, and especially the
-  unsaved-changes dialog) must cancel WITHOUT navigating or committing. Re-open
-  any that still misbehave.
 
 ## [OPEN] FU-020 — Recipe-detail substitute swap affordance (cook-mode-only for now?)
 - **Raised:** 2026-06-05 (B8)
@@ -3006,28 +3128,15 @@ long session summary. Distinct from the other two logs:
   applies (a swap that's still non-destructive to the saved recipe — likely a
   "pre-stage this swap for the next cook" rather than editing the recipe).
 
-## [OPEN] FU-019 — Confirm B8 reported defects that did NOT reproduce (per-defect)
+## [RESOLVED] FU-019 — Confirm B8 reported defects that did NOT reproduce (per-defect)
 - **Raised:** 2026-06-05 (B8)
+- **Resolved:** 2026-06-12 — user verified in browser. (a) un-favourite
+  persists, (c) all recipe actions fire. (b) was originally described as
+  "no related-recipes section in the UI" — the user has since located one
+  on the **stock item detail page** (related-recipes tab) and the nav
+  bug *is* real there. That carve-out is spun out to **[[fu-155]]** to
+  track on its own; the remaining (a)/(c) confirmations close this one.
 - **Type:** finding
-- **What:** Three user-reported B8 defects could not be reproduced in a *static*
-  read of current code (post meals→recipes merge). Each was REPORTED from real
-  usage, so each needs an in-browser confirm before it can be called resolved —
-  tracked individually below, not dismissed as a blanket "all fine":
-  - **(a) "Remove-from-favourites does nothing."** Static read: chain looks sound
-    (`toggleFavouriteAsync` sends `!is_favourite` → PATCH → backend assigns →
-    refetch). Confirm un-favourite persists in the running app. If it fails,
-    likely PATCH-semantics (cf. B3) — re-open as a real bug.
-  - **(b) "Clicking a related recipe dumps you on the Cookbook overview."** Static
-    read: there is **no related-recipes section anywhere** in the current UI.
-    Confirm whether the user expects one (i.e. is the real ask "add related
-    recipes"?) or whether this is genuinely gone.
-  - **(c) "All recipe actions inert except Cook."** Static read: every action
-    (favourite, save, log-cook, adjust-meals, import, add-to-list, delete,
-    export) is wired to a working handler. Confirm each actually fires in-app.
-- **Why deferred:** can't run the app (node_modules absent); needs eyeballing.
-- **Recommended resolution:** now-ish — confirm each of (a)/(b)/(c) when the app
-  is next run. Flip to `[RESOLVED]` only once verified; re-open any that still
-  break as real bugs.
 
 ## [OPEN] FU-018 — B7: wider sweep for "store mutation + page toast" double-emits
 - **Raised:** 2026-06-05 (Wave-B self-audit)
@@ -3042,26 +3151,12 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** opportunistic — fold into the next polish
   pass.
 
-## [OPEN] FU-017 — B3: user re-test "can't save unless I change the name"
+## [RESOLVED] FU-017 — B3: user re-test "can't save unless I change the name"
 - **Raised:** 2026-06-05 (Wave-B self-audit)
+- **Resolved:** 2026-06-12 — user confirmed in browser; edits save without
+  needing a name change. Static reading of the update handlers (PATCH +
+  `model_fields_set` + exclude-self uniqueness) matched live behaviour.
 - **Type:** open verification
-- **What:** Static read says every update handler already does the right
-  thing (`model_fields_set` + exclude-self on the name-uniqueness check).
-  No code changed this session for B3. But the user originally reported
-  the symptom in browser testing, and the Wave-B self-audit found two
-  other "looked fine on paper, broken in browser" cases — so this might
-  also reproduce despite the static evidence.
-  - To re-test: edit a stock item, change only e.g. `expiry_date`, save.
-    Then edit a recipe, change only `servings`, save. Both should
-    succeed without a "name already exists" 422.
-  - If it reproduces, capture the request payload + response body and
-    share — that will tell us whether (a) wrong endpoint is being hit
-    (e.g. the create-new path), (b) the frontend is sending a
-    different `name` value than displayed, or (c) something else.
-- **Why deferred:** can't reproduce statically; cheaper to wait for a
-  live error than keep tracing speculative paths.
-- **Recommended resolution:** when the user gets a browser session up
-  next — try the test above; report back.
 
 ## [OPEN] FU-016 — Audit other "frontend cache vs backend mutation" guard races
 - **Raised:** 2026-06-05 (B5 follow-up)
@@ -3090,19 +3185,38 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** opportunistic, or fold into the C-wave
   alerts control centre brief.
 
-## [OPEN] FU-014 — B1: confirm `image` field round-trips for product create
-- **Raised:** 2026-06-05 (B1)
-- **Type:** finding
-- **What:** `CreateProductRequest.image` is typed `Base64Bytes | None` but the
-  frontend ships `offer.image` as a string (likely a raw URL or a `data:` URL).
-  B1 didn't change this — pre-existing — but the offer-spread fix in
-  `ensureSaved` now sends `image` explicitly, so it'll exercise the parse path
-  every save. If creates 422 on `image`, switch the request model to
-  `str | None` (a URL, not bytes) or make the frontend omit the field.
-- **Why deferred:** out of B1's scope (B1 was field-list mismatches, not type
-  mismatches); no node_modules so couldn't test live.
-- **Recommended resolution:** opportunistic — first time the user actually
-  saves a scraped product in browser, watch for a 422 on `image`.
+## [OPEN] FU-014 — Product image round-trip is broken (read side decodes binary as utf-8)
+- **Raised:** 2026-06-05 (B1); re-diagnosed 2026-06-12 after user repro
+- **Type:** finding (now: active bug being fixed)
+- **What (revised diagnosis):** user saved a product from search → image rendered
+  as squished text (the product name) inside the 40px avatar slot. Cause is **on
+  the read side, not create**. Pipeline:
+  1. `merchant_api` already downloads + base64-encodes the merchant image
+     (`product_image_provider.py:53`); `offer.image` reaching the frontend is
+     raw base64 (no data-URL prefix).
+  2. Frontend POSTs that base64 to `/products`; backend's `Base64Bytes` field
+     decodes it back into raw image bytes — **correct so far**.
+  3. DB stores raw PNG/JPEG bytes — **correct**.
+  4. `get_products.py:56` does `product.image.decode('utf-8', 'ignore')` on
+     those raw image bytes. UTF-8 ignores nearly everything in binary → garbage
+     tiny string returned as `image: str | None`.
+  5. Frontend renders `<img :src="garbage_string">` → broken image → browser
+     falls back to `alt=product.name` text squished into the avatar.
+- **Fix in flight (2026-06-12):** adopt the stock-item / recipe pattern.
+  - Backend: `CreateProductRequest.image` → `str | None` (data URL string,
+    `max_length=6_000_000`) matching `CreateStockItemRequest`. Encode utf-8 →
+    bytes in the handler.
+  - Backend: new `GET /products/<id>/image` route mirroring
+    `get_stock_item_image.py` (data-URL decode + raw bytes response).
+  - Backend: `GetProductsResponse.image` → `has_image: bool` (no inline bytes
+    in list payload).
+  - Backend: one-shot null-out of existing garbage rows where
+    `image` doesn't start with `data:`.
+  - Frontend: `Product` model drops `image`, gains `has_image`. `MyProductsPage`
+    + `ProductChip` use `/api/products/<id>/image`. `ProductSearch.ensureSaved`
+    wraps `offer.image` (raw base64) as a data URL with sniffed mime
+    (PNG/JPEG/WebP magic bytes) before POSTing.
+- **Recommended resolution:** in progress now (2026-06-12).
 
 ## [OPEN] FU-013 — A4 leftover: "consistent multi-select control" only partial
 - **Raised:** 2026-06-05 (A4)
@@ -3185,16 +3299,16 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** opportunistic — convert a dialog's chrome whenever
   it's being touched for another reason; no dedicated pass needed.
 
-## [OPEN] FU-007 — Eyeball A3 modals in a real browser
+## [RESOLVED] FU-007 — Eyeball A3 modals in a real browser
 - **Raised:** 2026-06-05 (A3)
+- **Resolved:** 2026-06-12 — user spot-checked various A3 modals in browser
+  (including delete-confirm dialogs and sizing-fix cards); backdrop+Esc cancel
+  cleanly without committing, cards render correctly.
 - **Type:** leftover
 - **What:** A3 was verified statically only — `node_modules` isn't installed in
   this checkout, so no lint / `quasar build` / dev-server run happened. Need to
   confirm backdrop+Esc dismiss without committing, and that the comparison /
   orphans / quick-add cards (scoped-class → `card-style` fix) still size right.
-- **Why deferred:** can't run the app without installing deps.
-- **Recommended resolution:** now-ish — once deps are installed / before signing
-  off Wave A.
 
 ## [OPEN] FU-006 — Migrate the remaining ~289 `q-btn` to BaseButton
 - **Raised:** 2026-06-04 (A2 Phase 2); rescoped 2026-06-05

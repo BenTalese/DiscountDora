@@ -1,6 +1,8 @@
 export type Product = {
     brand: string;
-    image: string;
+    // FU-014 — bytes never travel in list/detail JSON. Fetch via
+    // `/api/products/${product_id}/image` when `has_image` is true.
+    has_image: boolean;
     is_active: boolean;
     is_available: boolean;
     merchant_id?: string;

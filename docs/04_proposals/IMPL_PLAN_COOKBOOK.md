@@ -136,7 +136,9 @@ existing recipes preserve their values.
 - **Naming sweep** — `RecipesOverview` title + breadcrumbs + sidebar item
   all read "Cookbook". "Mark made" → "Mark cooked" everywhere in the
   surface (A8 may already cover the route rename; this chunk catches stale
-  labels including the **command-palette label, FU-031**).
+  labels — ~~command-palette label~~ (palette retired 2026-06-12);
+  remaining FU-031 concerns are tour cards, help text, and any
+  other static "Recipes" mentions in SPA copy).
 - **Card body redesign:**
   - **Image** (gated on FU-039 — Chunk 5 wires it; for now, render the
     placeholder unconditionally so the layout is right).

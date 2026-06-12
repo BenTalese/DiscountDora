@@ -62,10 +62,17 @@ You said "swap into list for substitutes feels like a weird feature. Would it ev
 
 ---
 
-## INV-9 — Command-palette worth (keep / shrink / cut)
-You said "how useful is the command palette feature really? Let's assess."
+## ~~INV-9~~ — Command-palette worth (keep / shrink / cut) — **SUPERSEDED 2026-06-12**
 
-**Prompt:** Assess the Ctrl-K command palette (`CommandPalette.vue` + `useCommands`). Document the static command set, search wiring, usage frequency signals (none today — note that), and the Charter-fit (Effortless+keyboard for power users vs Anti-creep surface area). Distinguish between (a) the palette as a power-user accelerator, and (b) the entity-search inside it which arguably belongs on a global search bar instead. Recommend **keep / shrink to entity-search-only / cut**. One-page memo. Output `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`. No code changes.
+The 2026-06-12 user decision was **cut entirely** (palette retired
+from the SPA — see `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`
+which already recommended SHRINK; the final call landed harder).
+The original prompt below is preserved for the audit trail. Do not
+re-run.
+
+> ~~You said "how useful is the command palette feature really? Let's assess."~~
+>
+> ~~**Prompt:** Assess the Ctrl-K command palette (`CommandPalette.vue` + `useCommands`). Document the static command set, search wiring, usage frequency signals (none today — note that), and the Charter-fit (Effortless+keyboard for power users vs Anti-creep surface area). Distinguish between (a) the palette as a power-user accelerator, and (b) the entity-search inside it which arguably belongs on a global search bar instead. Recommend **keep / shrink to entity-search-only / cut**. One-page memo. Output `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`. No code changes.~~
 
 ---
 

@@ -255,7 +255,7 @@
                     title: 'Cook mode',
                     summary:
                         'Open a recipe and hit Cook. Steps render one card at a time and ingredients show where each one lives (e.g. Pantry > Top shelf).',
-                    path: '/recipes',
+                    path: '/cookbook',
                 },
                 {
                     title: 'Build a meal plan',

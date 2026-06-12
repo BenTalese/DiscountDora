@@ -45,7 +45,9 @@ export type SearchByTermQuery = {
 
 export type CreateProductCommand = {
     brand: string | null;
-    image: string; //TODO: Check if img is good before saving it, prob in use case
+    // FU-014 — `data:image/...;base64,...` string. `merchant_api` ships
+    // raw base64; wrap via `wrapAsDataUrl` (imageService) before calling.
+    image: string | null;
     is_active: boolean;
     is_available: boolean;
     merchant_name: string;

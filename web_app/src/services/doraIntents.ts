@@ -161,13 +161,13 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
         mood: 'searching',
     },
     {
-        match: (p) => p === '/recipes',
+        match: (p) => p === '/cookbook',
         summary:
             "All your recipes. Open one to see ingredients (with their pantry homes), instructions, and cook time. Hit 'Cook' for step-by-step mode.",
         mood: 'happy',
     },
     {
-        match: (p) => p.startsWith('/recipes/') && p.endsWith('/cook'),
+        match: (p) => p.startsWith('/cookbook/') && p.endsWith('/cook'),
         summary:
             "Cook mode! Each step is its own card and the ingredient list tells you where everything lives. Voice control works too if your browser's into it.",
         mood: 'excited',
@@ -1216,7 +1216,7 @@ export async function runIntent(
                 return {
                     text: "Recipe for what? Drop a name, an ingredient, a cuisine ('asian', 'italian'), or a dietary tag ('vegetarian', 'gluten free').",
                     mood: 'searching',
-                    navigateTo: { path: '/recipes', label: 'Browse recipes' },
+                    navigateTo: { path: '/cookbook', label: 'Browse cookbook' },
                 };
             }
             // Pretty-string the matched terms back for the reply so
@@ -1226,7 +1226,7 @@ export async function runIntent(
                 return {
                     text: `No recipe matching ${queryDisplay}. Could be one to add — or try a broader term.`,
                     mood: 'confused',
-                    navigateTo: { path: '/recipes', label: 'Browse recipes' },
+                    navigateTo: { path: '/cookbook', label: 'Browse cookbook' },
                 };
             }
             if (matches.length === 1) {
@@ -1234,14 +1234,14 @@ export async function runIntent(
                 return {
                     text: `Got one: ${r.name}${r.cookTimeMinutes ? ` — ${r.cookTimeMinutes} min cook` : ''}${r.cuisine ? ` · ${r.cuisine}` : ''}.`,
                     mood: 'confident',
-                    navigateTo: { path: `/recipes/${r.id}`, label: 'Open recipe' },
+                    navigateTo: { path: `/cookbook/${r.id}`, label: 'Open recipe' },
                 };
             }
             const top = matches.slice(0, 5).map((r) => `• ${r.name}${r.cuisine ? ` (${r.cuisine})` : ''}`).join('\n');
             return {
                 text: `${matches.length} candidate${matches.length === 1 ? '' : 's'} for ${queryDisplay}:\n\n${top}${matches.length > 5 ? `\n\n…and ${matches.length - 5} more.` : ''}`,
                 mood: 'lightbulb',
-                navigateTo: { path: '/recipes', label: 'Browse recipes' },
+                navigateTo: { path: '/cookbook', label: 'Browse cookbook' },
             };
         }
 
@@ -1252,7 +1252,7 @@ export async function runIntent(
                 return {
                     text: "No recipes yet! Add a few and I'll start making suggestions like a pushy aunty.",
                     mood: 'confused',
-                    navigateTo: { path: '/recipes', label: 'Open Recipes' },
+                    navigateTo: { path: '/cookbook', label: 'Open Cookbook' },
                 };
             }
             const inStockIds = new Set(
@@ -1275,7 +1275,7 @@ export async function runIntent(
             return {
                 text: `Here's the shortlist:\n\n${lines}\n\n${allReady ? "Pick one and I'll have a small party." : "Nothing's quite there — closest one wins, or check what's missing."}`,
                 mood: allReady ? 'super_excited' : 'lightbulb',
-                navigateTo: { path: '/recipes', label: 'Open Recipes' },
+                navigateTo: { path: '/cookbook', label: 'Open Cookbook' },
                 suggestions: ['expiring', 'shopping_list_status'],
             };
         }

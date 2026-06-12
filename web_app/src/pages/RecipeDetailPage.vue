@@ -1073,6 +1073,7 @@
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
+    import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import type {
         CreateRecipeIngredientCommand,
         RecipeStepCommand,
@@ -1137,6 +1138,9 @@
     // <img> cache after a save so the new image shows.
     const imageDirty = ref(false);
     const imageVersion = ref(0);
+    // FU-156 — guard *every* nav surface (sidebar, router-link, back,
+    // refresh) against unsaved field OR image changes.
+    useUnsavedChangesGuard(computed(() => isDirty.value || imageDirty.value));
 
     function onNameInput() {
         nameError.value = null;
@@ -1674,7 +1678,7 @@
     // it (never navigates). Clean entry (saved + cookable) goes straight in.
     function goToCookMode() {
         cookGuardOpen.value = false;
-        void router.push(`/recipes/${recipeId.value}/cook`);
+        void router.push(`/cookbook/${recipeId.value}/cook`);
     }
     function onStartCookMode() {
         if (!recipe.value) return;
@@ -1998,7 +2002,7 @@
                 message: 'New version created.',
                 caption: 'Both versions are equal peers — pick either when scheduling.',
             });
-            if (newId) void router.push(`/recipes/${newId}`);
+            if (newId) void router.push(`/cookbook/${newId}`);
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -2012,7 +2016,7 @@
     }
 
     function onJumpToSibling(recipeId: string) {
-        void router.push(`/recipes/${recipeId}`);
+        void router.push(`/cookbook/${recipeId}`);
     }
 
     function formatLastMade(isoDate: string): string {
@@ -2041,6 +2045,10 @@
         if (!ok) return;
         try {
             await recipeStore.deleteRecipeAsync(recipe.value.recipe_id);
+            // The recipe is gone — drop dirty flags so the unsaved-changes
+            // guard (FU-156) doesn't prompt about edits to a now-deleted row.
+            isDirty.value = false;
+            imageDirty.value = false;
             void router.push('/cookbook');
         } catch (err) {
             $q.notify({
@@ -2053,15 +2061,9 @@
     }
 
     function onBack() {
-        if (isDirty.value) {
-            $q.dialog({
-                title: 'Discard unsaved changes?',
-                message: 'Your edits will be lost.',
-                ok: { label: 'Discard', color: 'negative', noCaps: true },
-                cancel: { noCaps: true },
-            }).onOk(() => { void router.push('/cookbook'); });
-            return;
-        }
+        // The unsaved-changes prompt is owned by `useUnsavedChangesGuard`
+        // (FU-156) — it fires on the resulting router-leave regardless of
+        // which nav surface triggered it, so no per-handler check here.
         void router.push('/cookbook');
     }
 

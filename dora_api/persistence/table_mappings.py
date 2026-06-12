@@ -567,6 +567,12 @@ def configure_mappings(db: SQLAlchemy):
         "_id_col": product_table.c.id,
         "_merchant_id": product_table.c.merchant_id,
         "id": product_table.c.id,
+        # FU-014 — defer the image blob so list endpoints (get_products,
+        # best-deals) never pull megabytes per row. The dedicated
+        # `/products/<id>/image` route triggers the load on attribute
+        # access; `has_image` on ProductDto is derived from a separate
+        # `IS NOT NULL` check. Mirrors the stock-item / recipe pattern.
+        "image": deferred(product_table.c.image),
         "merchant": relationship(Merchant, lazy="noload"),
         "current_offer": relationship(ProductOffer, lazy="noload", uselist=False),
         "historic_offers": relationship(ProductHistoricOffer, lazy="noload"),

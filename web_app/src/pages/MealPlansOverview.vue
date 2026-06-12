@@ -641,10 +641,10 @@
     }
 
     function goToRecipe(recipeId: string) {
-        void router.push(`/recipes/${recipeId}`);
+        void router.push(`/cookbook/${recipeId}`);
     }
     function cookRecipe(recipeId: string) {
-        void router.push(`/recipes/${recipeId}/cook`);
+        void router.push(`/cookbook/${recipeId}/cook`);
     }
 
     // Cart-button Chunk 4 / L382: route the generate target through Axis B —

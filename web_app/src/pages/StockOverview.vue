@@ -655,7 +655,7 @@
     // C-1 Chunk 3 — `goToList` retired with the "On N lists" chip; the
     // cart button owns the list interaction now.
     function goToRecipes() {
-        void router.push('/recipes');
+        void router.push('/cookbook');
     }
     function goToLists() {
         void router.push('/shopping-lists');

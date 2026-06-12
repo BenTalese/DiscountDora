@@ -103,10 +103,6 @@
        are always a light veil so the hover effect lands. */
     --overlay-hover-on-coloured: hsla(0, 0%, 100%, 0.08);
     --overlay-active-on-coloured: hsla(0, 0%, 100%, 0.14);
-    /* Matched-substring highlight (CommandPalette etc.). Alpha-blended
-       so the text reads through; theme-tinted via brand-accent. */
-    --highlight-search: color-mix(in srgb, var(--brand-accent) 40%, transparent);
-
     /* ────────────────────────────── Dora (assistant chrome) ──────── */
     /* Dora's bubble + chat panel paint a warm "disc" + green halo on
        top of the page. Pinning them to Pesto green made Dora look alien

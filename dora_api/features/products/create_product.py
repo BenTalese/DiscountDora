@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import Base64Bytes, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
@@ -23,7 +23,12 @@ class CreateProductRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     brand: str | None = Field(default = None, min_length = 1)
-    image: Base64Bytes | None = None
+    # FU-014 — image is a data-URL string ("data:image/...;base64,..."), stored
+    # as UTF-8 bytes on the entity; served back via GET /products/<id>/image.
+    # Matches the stock-item/recipe convention. The old `Base64Bytes` decoded
+    # arbitrary base64 strings to raw bytes that the read path then tried to
+    # `decode('utf-8','ignore')` — corrupting every saved image.
+    image: str | None = Field(default = None, max_length = 6_000_000)
     is_active: bool
     is_available: bool
     merchant_name: str = Field(min_length = 1)
@@ -78,7 +83,7 @@ class CreateProductHandler:
             brand = request.brand,
             current_offer = _Offer,
             historic_offers = [],
-            image = request.image,
+            image = request.image.encode("utf-8") if request.image else None,
             is_active = request.is_active,
             is_available = request.is_available,
             merchant = _Merchant,

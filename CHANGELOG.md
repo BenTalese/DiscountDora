@@ -29,6 +29,56 @@ semver — major bumps signal schema or breaking-config changes.
     with a "link to a stock item first" tooltip.
 
 ### Fixed
+- **Shopping-list URL-param change now reloads the list (FU-157).**
+  After Chunk 5 merged the overview into the detail page, switching
+  lists via the header dropdown pushed a new `/shopping-lists/<id>`
+  URL but left the previous list on screen — the component stayed
+  mounted (same route component, different `:id`), and `onMounted`
+  never re-fired. The "old list reappears after adding an item to
+  another" symptom was a side-effect of the same gap (the page never
+  actually moved off list A). Both `ShoppingListDetail` and
+  `ShoppingListShopMode` now `watch(listId, load)` and clear stale
+  detail at the start of `load()` so the user sees a spinner instead
+  of the previous list's rows while the new fetch is in flight.
+
+- **Unsaved-changes guard now covers every nav surface (FU-156).**
+  Previously the recipe detail page only prompted "Discard unsaved
+  changes?" when the Back button was clicked, and the stock-item
+  detail page had no guard at all — so navigating via the main side
+  menu, a related-recipe link, the browser back button, or a refresh
+  silently lost edits. New `useUnsavedChangesGuard` composable wires
+  the prompt into `onBeforeRouteLeave` (different-route nav),
+  `onBeforeRouteUpdate` (same-component param change, e.g. clicking
+  another recipe while editing one), and `beforeunload` (refresh /
+  close) in one place. Both detail pages opt in: recipe detail guards
+  field edits and image picks; stock-item detail guards basics-form
+  edits (image upload was already auto-save). Delete handlers reset
+  dirty state before navigating away.
+
+- **Stock-item detail "Related recipes" tab now opens the recipe
+  (FU-155).** Clicking a recipe in the related-recipes tab on a stock
+  item's detail page used to push `/cookbook?recipe=<id>` — which
+  matched the Cookbook overview route, not the recipe-detail route,
+  so the URL changed but the page landed on the overview. Now pushes
+  `/cookbook/<id>` to open the recipe.
+
+- **Product images round-trip correctly on save (FU-014).** Saving a
+  product from the Product Search page previously stored corrupted bytes:
+  the frontend POSTed merchant_api's raw base64, Pydantic's
+  `Base64Bytes` decoded that string into raw image bytes, and the read
+  path called `.decode('utf-8', 'ignore')` on those bytes — producing a
+  garbage string the browser rendered as the broken-image alt text
+  squished into the avatar slot. Now follows the stock-item / recipe
+  convention: the create endpoint takes a `data:image/...;base64,...`
+  string, the image column is `deferred` to keep list payloads small,
+  list/detail responses carry `has_image: bool`, and a new
+  `GET /api/products/<id>/image` route serves the bytes with the right
+  MIME type. A new Alembic migration nulls out the garbage bytes from
+  the old path so the fallback icon shows cleanly until the user
+  re-saves the product. `ImageService` now sniffs MIME from base64
+  magic bytes instead of hard-coding `image/jpeg`. Touched:
+  `MyProductsPage`, `DashboardPage` deals list, `ProductSearch` save.
+
 - **Offer-price snapshot now captures at *add* / *select* time, not at
   tick (State Ownership Chunk 6).** Previously `picked_offer_price` and
   `list_price_at_pick` were frozen the first time a line was ticked —
@@ -110,6 +160,35 @@ semver — major bumps signal schema or breaking-config changes.
   undefined` sentinel; and Quasar's `$q.screen` was being read without ever
   being activated, so every viewport check returned `false`. Replaced with
   Vue 3.4 `defineModel()` + a `Screen.setDebounce()` boot file. (FU-087)
+
+### Changed
+- **Recipe routes now live under `/cookbook` (the cookbook is the
+  page; a recipe is a single item in it).** New SPA URLs:
+  - `/cookbook` — overview (unchanged).
+  - `/cookbook/:id` — recipe detail (was `/recipes/:id`).
+  - `/cookbook/:id/cook` — cook mode (was `/recipes/:id/cook`).
+  Pre-release, so the legacy `/recipes*` paths were **deleted
+  outright** — no redirects, clean break. Backend API paths
+  (`/api/recipes/...`) are untouched; they're a resource name,
+  not a SPA URL.
+
+### Removed
+- **Command palette retired (FU-029, INV-9 followed through).** The
+  Ctrl/Cmd-K command palette and its commands registry are gone.
+  Most palette commands duplicated nav already reachable in 1-2
+  clicks from the side menu; the audience for a hidden Ctrl-K modal
+  doesn't really exist in a pantry / mobile app. The
+  `CommandPalette.vue` component, the `useCommands` registry, the
+  `useCommandPalette` open-state, and the `useRecents`
+  recent-commands store have all been deleted; the global Ctrl/Cmd-K
+  key handler and the palette-feeder helpers in `MainLayout`
+  (`autogenerateFromLowStock`, `openPrimaryList`,
+  `openPrimaryShopMode`) went with them. **Kept:** the
+  `useShortcut` keyboard-shortcut layer + `ShortcutsCheatsheet` —
+  `?` cheatsheet, `/` focus, `g s` / `g l` / `g r` / `g d` / `g h`
+  nav, and every page-specific shortcut still works. If
+  power-user discoverability becomes a real ask, the cheatsheet is
+  where it'll surface — not a hidden modal.
 
 ### Changed
 - **Fullscreen 404 page redesigned (FU-030).** The typo-a-URL

@@ -1103,7 +1103,7 @@
                         : `${unmatchedCount} ingredient${unmatchedCount === 1 ? '' : 's'} couldn’t be matched — add them manually.`,
                 });
             }
-            if (newId) void router.push(`/recipes/${newId}`);
+            if (newId) void router.push(`/cookbook/${newId}`);
         } catch (err) {
             importError.value = 'Could not import. The URL might not publish structured recipe data.';
             console.warn('Import failed', err);
@@ -1120,11 +1120,11 @@
     }
 
     function onOpenRecipe(recipeId: string) {
-        void router.push(`/recipes/${recipeId}`);
+        void router.push(`/cookbook/${recipeId}`);
     }
 
     function onCookClick(recipeId: string) {
-        void router.push(`/recipes/${recipeId}/cook`);
+        void router.push(`/cookbook/${recipeId}/cook`);
     }
 
     function onToggleFavourite(recipeId: string) {

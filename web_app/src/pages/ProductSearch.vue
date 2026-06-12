@@ -306,6 +306,7 @@
     import ProductApiService from 'src/services/api/productApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { wrapAsDataUrl } from 'src/services/files/imageService';
     import { useMerchantStore } from 'src/stores/merchantStore';
     import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -519,7 +520,10 @@
         if (existing) return existing;
         await productStore.createProductAsync({
             brand: offer.brand,
-            image: offer.image,
+            // FU-014 — merchant_api ships raw base64 (no data-URL prefix);
+            // dora_api expects a data-URL string for storage. Wrap with a
+            // sniffed MIME so the round-trip works. Empty → null (no image).
+            image: wrapAsDataUrl(offer.image) || null,
             is_active: true,
             is_available: offer.is_available,
             merchant_name: offer.merchant_name,

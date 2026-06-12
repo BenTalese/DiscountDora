@@ -123,7 +123,7 @@
             >
                 <div v-if="(recipeStore.recipes ?? []).length === 0">
                     No recipes yet.
-                    <router-link to="/recipes">Create one</router-link> to get started.
+                    <router-link to="/cookbook">Create one</router-link> to get started.
                 </div>
                 <div v-else>
                     No recipes match "{{ recipeFilter }}".

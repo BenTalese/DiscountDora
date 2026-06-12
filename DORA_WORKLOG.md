@@ -9,6 +9,678 @@ next.
 
 ---
 
+## 2026-06-12 — FU-157 shopping-list URL-param fix + design-drift audit (FU-158/159/160 spawned)
+**Status:** complete (static — node_modules absent; user verifies in browser).
+
+**Background:** User reported the shopping-lists area "feels buggy no matter
+which way I try to use it." Two specific symptoms — (1) clicking a different
+list in the header dropdown changes the URL id but not the screen content,
+and (2) finishing a list and adding an item to a *different* list makes the
+finished list reappear — plus a meta-question of whether the
+Chunk-5 overview-into-detail merge was botched and whether their L400-410
+feedback design was just ignored. Asked whether a pull-down rebuild was
+warranted.
+
+**Verdict reached after thorough audit (Explore subagent + direct reads):**
+NOT a rebuild. The merge architecture (status enum, route guard, picker
+in header) is sound — `SHOPPING_LIST_REDESIGN_PROPOSAL.md` Chunk 5
+genuinely shipped. Two surgical bugs caused the "broadly buggy" feeling;
+three pieces of polish from the proposal were skipped and now live as
+new FUs.
+
+**FU-157 fix — single missing watcher (both shop surfaces):**
+- `web_app/src/pages/ShoppingListDetail.vue` and
+  `web_app/src/pages/ShoppingListShopMode.vue` both built around
+  `const listId = computed(() => String(route.params.id))` reading the
+  route param reactively, BUT only called `load()` from `onMounted`.
+  When the user picks a different list, `switchToList` does
+  `router.push(/shopping-lists/<new id>)`. Same route component, just
+  a different `:id` param → Vue reuses the component → `onMounted`
+  never re-fires → `load()` is never called again → old list stays
+  on screen with the new id in the URL.
+- The user's "finished list reappears after adding to another" was
+  the same gap from a different angle: page was actually still
+  showing list A the whole time (the URL change to B never
+  triggered a load), then the existing `watch(quickAddOpen, load)`
+  fired on add and pulled list B's data in — which *looked* like A
+  was being replaced/resurrected when in fact the page had been
+  stuck on A all along.
+- Fix: `watch(listId, () => { void load(); })` on both pages, plus
+  `detail.value = null` and an empty-id guard at the top of `load()`
+  so the user sees a spinner — not stale rows — during the switch.
+
+**Decisions:**
+- **Keep `:id` in the URL.** User asked why we have it when Stock
+  Overview doesn't. Stock Overview is *the overview* (no per-item
+  surface); individual stock items have their own URL (`/stock/<id>`).
+  Shopping lists collapsed overview into detail, so the URL has to
+  identify which list the user is on. Benefits: shareable per-list
+  links, browser back/forward across lists, refresh keeps you on the
+  same list. With the watcher fixed, these benefits stand without
+  visual confusion.
+- **Surgical, not rebuild.** The architecture from Chunk 5 (status
+  enum, route guard, header picker) is correctly implemented. The
+  *polish* from the proposal (responsive panel, today's-date picking,
+  planned shop date in UI) was dropped — but that's its own piece of
+  work, not a rebuild trigger. Spawned as FU-158/159/160.
+- **Same fix in shop mode for symmetry.** Shop mode rarely needs
+  param-change reactivity (users tend to finish one shop end-to-end)
+  but matching the pattern is cheap and prevents the same trap
+  re-appearing if the future surface ever needs in-shop list
+  swapping.
+
+**Design-drift FUs spawned (real misses, not bugs):**
+- **FU-158 — Responsive layout + today's-date picking** (feedback
+  L405/406/409). Proposal called for a desktop right-side panel +
+  mobile dropdown; built version is one dropdown everywhere. Route
+  guard at `routes.ts:110-131` picks by status + creation order, not
+  today's planned shop date.
+- **FU-159 — Planned shop date not surfaced** (feedback L402). Column
+  exists (migration `e1a4c7b2f9d0_…`), picker uses it for sort, but no
+  UI to display/edit. User can't actually set one.
+- **FU-160 — Shopping-day alert** (feedback L403). Depends on FU-159.
+
+Recommended: bundle these into a focused "Shopping list polish" prompt
+once the user is ready. They share a surface and design choices.
+
+**Engineering-standards close-gate:**
+- R-003 (state ownership): the fix doesn't relocate state, but it does
+  hint at a related smell — `ShoppingListDetail` holds its own
+  `ref<ShoppingListDetail | null>` outside the store, with no
+  subscription to store mutations. Today that's fine (the store only
+  owns summaries, not detail). If a future change wants e.g. multi-tab
+  reactivity or assistant-driven mid-page status changes, this would
+  need to move into the store. Not flagged as a new FU because
+  FU-154 already covers the "page-local collections bypass store"
+  pattern app-wide; this is the same shape, narrower scope.
+- R-001 / componentisation: no new component extracted (single
+  watcher in two pages — extracting `useRouteParamLoader` for two
+  callers would be premature abstraction per CLAUDE.md scope rule).
+- R-005 (portable data access): n/a, no backend.
+
+**ADR evaluation:** no new rule. The fix is reactive Vue idiom
+("watch the reactive source of an `onMounted` load if your component
+might stay mounted across param changes") — too general to elevate to
+a project-specific R-0NN.
+
+**Verification:**
+- `watch` already imported in both files (added to ShopMode's import).
+- Existing `watch(quickAddOpen, load)` in Detail composes correctly
+  with the new `watch(listId)` — they don't deadlock or double-load.
+- Not run: lint / `quasar build` / dev server (no `node_modules`).
+
+**Next up:**
+- User browser-verify FU-157: open shopping lists, switch between
+  several via the dropdown — each click should show that list's
+  content within a beat (spinner if slow). Finish a list, navigate to
+  another, add an item — only the active list should be on screen
+  before AND after.
+- Decide whether to queue the "Shopping list polish" prompt
+  (FU-158 + FU-159 + FU-160) now or after another wave of feedback
+  pick-up.
+
+## 2026-06-12 — FU-155 (related-recipes nav) + FU-156 (unsaved-changes guard)
+**Status:** complete (static — node_modules not installed; user verifies in browser).
+
+**Background:** During FU-019 / FU-021 verify, user surfaced two real
+bugs spun out from the original "did not reproduce" findings:
+- FU-155: stock-item detail "Related recipes" tab opens the Cookbook
+  overview, not the specific recipe.
+- FU-156: navigating via the main menu bar (or refresh / browser back
+  / related-recipe link) bypasses the unsaved-changes prompt entirely.
+
+**FU-155 fix — wrong route shape in `goToRecipe`:**
+- `web_app/src/pages/StockItemDetailPage.vue::goToRecipe` was pushing
+  `{ path: '/cookbook', query: { recipe: recipeId } }`. The actual
+  recipe-detail route is `/cookbook/:id`. The bad path matched
+  `RecipesOverview` and silently dropped the unused `?recipe=` query.
+  Changed to `router.push(\`/cookbook/${recipeId}\`)`. One line.
+
+**FU-156 fix — guard moved to the router-leave layer, covers every nav surface:**
+- New composable `web_app/src/composables/useUnsavedChangesGuard.ts` —
+  takes a `Ref<boolean> | ComputedRef<boolean>` and wires:
+  - `onBeforeRouteLeave` for different-route nav (main menu, router-
+    link to another route, back button, etc.)
+  - `onBeforeRouteUpdate` for same-component param changes (e.g.
+    clicking a related-recipe link while editing a recipe — both
+    routes match `/cookbook/:id`, so leave doesn't fire but update
+    does).
+  - `beforeunload` for browser refresh / close / address-bar nav.
+  All three call one shared `$q.dialog` Discard/Cancel confirm so the
+  prompt copy is consistent.
+- `RecipeDetailPage.vue` wired with
+  `computed(() => isDirty.value || imageDirty.value)` so both
+  field-edit and image-pick state block nav. Its bespoke
+  `onBack` page-handler check is removed (the guard now owns the
+  prompt regardless of which nav surface triggers it). Delete-recipe
+  clears both dirty flags before `router.push` so the user isn't
+  asked about edits to a row they just deleted.
+- `StockItemDetailPage.vue` wired with the existing `isDirty`
+  computed. Image upload is auto-saved per existing code, so it
+  doesn't need to feed the guard. `doDelete` clears `detail.value` to
+  collapse `isDirty` to false before navigating.
+
+**Decisions:**
+- **Router-level guard, not per-handler.** Earlier code did the
+  "Discard?" prompt inside the page's Back button handler — that's why
+  every other nav surface (sidebar, refresh, back) bypassed it. Putting
+  the prompt at the route-leave layer is the only way to cover *all*
+  nav surfaces without each page re-implementing the same defensive
+  check. Captured in the composable so each new dirty-form page is one
+  line.
+- **Don't include autosaved fields in dirty state.** StockItemDetail's
+  image upload saves immediately and clears its own pending flag — not
+  part of `isDirty`. Including it would prompt about transient
+  in-flight state and confuse the user.
+- **`onBeforeRouteUpdate` matters.** Without it, a user editing recipe
+  A clicks a related-recipe link → route param changes from `/A` to
+  `/B`, Vue Router reuses the component, `onBeforeRouteLeave` doesn't
+  fire, edits silently lost. The fix is six lines for huge defensive
+  coverage.
+- **Reset dirty flags on delete.** Deleting an entity is the user
+  explicitly throwing the form away. Prompting "Discard unsaved
+  changes?" after they've already chosen Delete would be a confusing
+  double-confirm — drop the flags before the post-delete `router.push`.
+
+**Engineering-standards close-gate:**
+- R-003 (state ownership): n/a — guard logic is purely client-side
+  presentation state.
+- R-001 / componentisation: composable extracted to
+  `composables/useUnsavedChangesGuard.ts`, used by both pages. No
+  per-page duplication.
+- R-005 / portability: no backend touched.
+
+**ADR evaluation:** No new rule yet — one composable, two callers
+isn't enough surface to crystallise a standing rule. If a third
+dirty-form page surfaces and adopts the same composable, that's the
+moment to promote "dirty-form pages MUST use `useUnsavedChangesGuard`"
+to an `R-0NN`.
+
+**Verification:**
+- Both target pages still type-check against the composable's
+  signature (`Ref<boolean> | ComputedRef<boolean>`).
+- `computed` and `onBeforeUnmount` already imported on both pages
+  (no new vue-core imports needed in callers).
+- Not run: lint / `quasar build` / dev server (no `node_modules`).
+
+**Next up:**
+- User browser-verify on the two pages:
+  - **FU-155:** Stock item detail → Related recipes tab → click a
+    recipe → lands on that recipe's detail page (URL `/cookbook/<id>`).
+  - **FU-156:** Recipe detail with unsaved field edit → main menu link
+    → prompt fires; cancel keeps you put, Discard navigates. Repeat with
+    image-only change (pick a new image, don't touch fields) → prompt
+    still fires. Refresh tab → browser prompt fires. Same checks on
+    Stock-item detail basics form. Delete recipe / stock item with
+    unsaved edits → no prompt (deletion is implicit discard).
+
+## 2026-06-12 — FU-014 product image fix + state-ownership FU spawn (FU-154)
+**Status:** complete (static — node_modules not installed; user verifies in browser).
+
+**What changed (background to the work):** user repro'd the FU-014 image
+corruption — saving a product from search rendered the product *name*,
+squished, where the avatar image should be. Static trace showed the
+create path was actually fine; the bug was on the **read** side
+(`get_products.py:56`) which `.decode('utf-8', 'ignore')` on raw image
+bytes, returning a garbage string the browser treated as a broken
+`<img src>`. User also called out that the saved product doesn't show on
+My Products until a hard refresh — flagged as likely systemic.
+
+**FU-014 fix — adopt the stock-item / recipe image convention end-to-end:**
+- `dora_api/features/products/create_product.py` — `image` field flipped
+  from `Base64Bytes` to `str | None` with `max_length=6_000_000`; handler
+  encodes as `request.image.encode("utf-8")` (matches
+  `create_stock_item.py`, `create_recipe.py`).
+- `dora_api/features/products/get_products.py` — `ProductDto.image: str |
+  None` → `has_image: bool`. New `stamp_has_image` does a single
+  `image IS NOT NULL` query and stamps the flag (mirrors
+  `_hydrate_has_image` on stock items). Called by both `GetProductsHandler`
+  and `GetBestDealsHandler` so the dashboard's best-deals list also gets
+  the flag.
+- `dora_api/features/products/get_product_image.py` — **new** route
+  `GET /products/<id>/image`. Decodes the stored data-URL bytes and
+  serves raw bytes with the right MIME. Direct copy of the stock-item
+  pattern minus the linked-fallback (products own their image; stock
+  items fall back to linked products).
+- `dora_api/persistence/table_mappings.py` — `image` column on `Product`
+  is now `deferred`, so list endpoints never pull megabytes per row just
+  to derive `has_image`.
+- New Alembic migration `e2c5a8f1d7b3_20260612_product_image_nullify_garbage.py`
+  — nulls out any `Product.image` whose first 5 bytes aren't `b"data:"`.
+  Garbage rows from the old `Base64Bytes` path render the fallback icon
+  cleanly; user re-saves the product to get a correct image.
+- Frontend: `Product` model drops `image`, gains `has_image`.
+  `MyProductsPage` (saved-products grid) and `DashboardPage`
+  (best-deals list) now render `<img v-if="p.has_image"
+  :src="\`/api/products/${p.product_id}/image\`">`.
+- `services/files/imageService.ts` — new `wrapAsDataUrl` helper with
+  base64 magic-byte MIME sniff (PNG / JPEG / WebP / GIF), default JPEG.
+  `decodeBase64Image` delegates to it (kept for the one
+  `ProductSearchCard` caller) instead of hard-coding `image/jpeg`.
+- `ProductSearch.ensureSaved` wraps `offer.image` (raw base64 from
+  `merchant_api`) via `wrapAsDataUrl` before POSTing; empty → null.
+- `CreateProductCommand.image` typed `string | null` to match.
+
+**Decisions:**
+- **Create endpoint takes base64/data-URL string only, not URLs.**
+  Matches existing convention (`create_stock_item`, `create_recipe`).
+  Backend never makes outbound HTTP from a write endpoint (avoids
+  merchant rate-limits, dead-link retries, CORS). The merchant_api
+  already downloads + base64-encodes
+  ([product_image_provider.py:53](merchant_api/infrastructure/product_image_provider.py#L53))
+  so the frontend just relays. Same shape will work for future
+  custom-product uploads (FileReader → data URL → same field).
+- **Defer the image column on Product.** Pre-fix, every `get_products`
+  call SELECTed the full image bytes per row only to throw them away.
+  Aligning with stock-item / recipe is the right cleanup *while we're
+  here*. Two reasonable choices for `has_image` derivation — touch the
+  deferred column (N+1) or bulk-select `IS NOT NULL` — picked bulk to
+  match the stock-item idiom exactly.
+- **ProductChip.vue (orphaned) left as-is.** No callers, its structural
+  `ProductChipModel` doesn't reference the `Product` model so it still
+  type-checks. Will be addressed when something actually consumes it.
+- **No `image_url` field on the create endpoint.** Would have added a
+  second code path for the same shape with no current consumer.
+
+**FU-154 — state-ownership finding (spawned, NOT fixed in this unit):**
+The user noted the saved product not showing till refresh is "likely a
+larger issue spread across the app." Confirmed `MyProductsPage` keeps
+its own local `products = ref<Product[]>([])` populated via direct
+`productApi.getAllAsync()` in `onMounted`, bypassing `productStore`.
+`ProductSearch` saves through the store — so the two diverge. Logged as
+FU-154 with `MyProductsPage` as the canonical fix and a likely-suspects
+audit list (Dashboard, Stock, Recipes, Meal Plans, Waste). R-003
+violation. Not fixed here to keep this unit focused on the image bug.
+
+**Verification:**
+- Backend: imports + types reconciled (`Base64Bytes` import dropped,
+  `wrapAsDataUrl` import added).
+- `image` consumers swept — `MyProductsPage` and `DashboardPage` flipped
+  to `has_image` + route. Only remaining `.image` reference on a Product
+  is `ProductChip.vue` (orphaned).
+- Existing test `test__create_product` uses `image=None` — still valid
+  under the new `str | None` typing.
+- Not run: lint / `quasar build` / dev server (no `node_modules`).
+
+**Engineering-standards close-gate:**
+- R-003 (state ownership): **flagged**, not violated. The image fix
+  itself is push-to-server (server owns image bytes via /image route;
+  client just shows them). The `MyProductsPage` local-`products`-ref
+  smell is a *separate* R-003 violation logged as FU-154 with the full
+  app-wide audit recommended — not introduced by this fix.
+- R-005 (portable data access): migration uses `SUBSTR(image, 1, 5)` +
+  bound parameter, works on both Postgres and SQLite. No batch_alter
+  needed (data-only change).
+- Other rules: no new componentisation, theming, framework, or scope
+  smell introduced.
+
+**ADR evaluation:** no new standing rule — image-handling pattern is
+already implicit via stock-item / recipe precedent; this just brings
+products into line. Could later promote the pattern ("entities store
+bytes as data-URL UTF-8, list payloads carry has_image, dedicated
+/image route") to a formal R-0NN if a fourth case emerges — not yet.
+
+**Next up:**
+- User browser-verify: save a product from search → confirm it has
+  the image when My Products is refreshed (still requires refresh
+  until FU-154 is fixed). Re-save any products with broken thumbnails
+  (the migration nulled their garbage bytes).
+- FU-154 — the app-wide state-ownership audit + `MyProductsPage`
+  refactor whenever it's prioritised.
+
+## 2026-06-12 — Drop the `/recipes*` legacy redirects (clean break)
+**Status:** complete. User pushed back on the redirect retention
+("what's the point of keeping legacy redirects? lets just make it
+clean") — fair, pre-release, no production bookmarks to preserve.
+Ripped the three legacy redirect routes; `/recipes*` URLs now 404,
+which is the right behaviour for a path that no longer exists.
+
+**What changed:**
+- `web_app/src/router/routes.ts` — three redirect entries deleted
+  (`/recipes` → `/cookbook`, `/recipes/:id` → `/cookbook/:id`,
+  `/recipes/:id/cook` → `/cookbook/:id/cook`). Comment block
+  updated to record the deletion rationale.
+- `web_app/src/components/dora/DoraChat.vue::iconForNav` — the
+  `path.startsWith('/recipes')` fallback (added in the previous
+  worklog entry specifically to cover the brief redirect frame)
+  is gone; just `/cookbook` now.
+- CHANGELOG rewritten to drop the "still redirects" caveat —
+  it's a clean break.
+
+**Verification:**
+- Final sweep — only remaining `/recipes` mention in SPA code
+  is the historical-context comment in `menuButtonProps.ts`
+  ("when detail lived at `/recipes/:id`"). That's fine; it's
+  there to explain *why* the prop has no current consumer.
+
+**Engineering close-gate:** N/A — surgical deletion + comment
+update. R-007 held (didn't touch backend API paths or
+component filenames; only the SPA-route surface).
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — Migrate recipe routes under `/cookbook`
+**Status:** complete (frontend-only, static — no env). Closes the
+legacy-route naming tail from A8: detail + cook were still at
+`/recipes/:id*`; now everything lives under `/cookbook`.
+
+**What changed — router:**
+- **`web_app/src/router/routes.ts`** — three new canonical paths:
+  - `/cookbook` (overview, unchanged path)
+  - `/cookbook/:id` (detail, was `/recipes/:id`)
+  - `/cookbook/:id/cook` (cook mode, was `/recipes/:id/cook`)
+- Legacy redirects rewritten as **redirect routes with
+  param-preserving functions** so the old paths still bounce
+  callers (existing bookmarks, external links, anything we
+  missed) into the new namespace:
+  - `/recipes` → `/cookbook` (unchanged)
+  - `/recipes/:id` → `/cookbook/:id` (new — was a page mount)
+  - `/recipes/:id/cook` → `/cookbook/:id/cook` (new — was a
+    page mount)
+- The `RecipeDetailPage.vue` + `RecipeCookMode.vue` page
+  components are unchanged (only the URLs that load them
+  moved); the page filenames keep "Recipe" because that's the
+  domain entity, not the URL.
+
+**What changed — internal nav callers (all `/recipes` → `/cookbook`):**
+- `DashboardPage.vue` — 4 spots (recipe link, cook link,
+  "Browse recipes" CTA, "See more → /cookbook?cookable=true").
+- `MealPlansOverview.vue` — `goToRecipe` + `cookRecipe`.
+- `RecipeDetailPage.vue` — `goToCookMode`, new-version push,
+  `onJumpToSibling`.
+- `RecipesOverview.vue` — `onOpenRecipe`, `onCookClick`,
+  importer success push.
+- `StockItemDetailPage.vue` — `goToRecipe` (with `recipe`
+  query) + `goToCook`.
+- `StockOverview.vue` — `goToRecipes`.
+- `WastePage.vue` — `openRecipe`.
+- `RecipeCookMode.vue` — back-nav (`id ? /cookbook/${id} :
+  /cookbook`).
+- `useStockItemActions.ts::seeRecipesUsing` — pushes to
+  `/cookbook` with the `usesStockItem` query.
+- `data/ExportPrint.vue` — empty-state `router-link to="/recipes"`.
+- `HelpPage.vue` — "Cook mode" guide path.
+- `MainLayout.vue::linksList` — Cookbook entry's
+  `activePrefixes: ['/recipes']` removed (the natural `/cookbook`
+  prefix now covers detail + cook).
+- `DoraChat.vue::iconForNav` — matches **both** `/cookbook`
+  and `/recipes` so the legacy redirect path also shows the
+  cookbook icon during the brief redirect frame.
+
+**What changed — contextual chips + intent summaries:**
+- `services/doraContextualActions.ts` — recipe-detail trigger
+  flipped to `/cookbook/`; the overview-card route + cookbook-
+  from-shopping-list path both flipped to `/cookbook` (label
+  unchanged).
+- `services/doraIntents.ts`:
+  - Page-summary matchers for the recipes overview + cook mode
+    flipped to `/cookbook` shapes.
+  - `find_recipe` handler's six `navigateTo` URLs (browse,
+    no-match, single-result, multi-result, plus the
+    `whats_for_dinner` "Open Recipes" call) all flipped to
+    `/cookbook`; labels updated to "Open Cookbook" / "Browse
+    cookbook" where the old "Open Recipes" / "Browse recipes"
+    no longer matches the destination.
+
+**What changed — comments:**
+- `components/menu/menuButtonProps.ts` + `useMenuLinkActive.ts`
+  comments rewritten — the original explanation cited the
+  `/recipes` ↔ `/recipes/:id` shape; updated to
+  `/cookbook` ↔ `/cookbook/:id` and noted that the prop now
+  has no current consumer (kept for future use).
+
+**Untouched (deliberately):**
+- **Backend API endpoints (`/api/recipes/...`)** — resource
+  naming, not user-visible URL. The DTOs / handlers /
+  migrations all stay under `recipes`; renaming would be a
+  separate REST-versioning conversation with zero UX benefit.
+- **`services/api/recipeApiService.ts`** — all the `/recipes/...`
+  string fragments target the backend API path. Untouched.
+- **`composables/useRecipeExport.ts`** — same; backend export
+  endpoints stay `/api/recipes/<id>/export` + `/print-view`.
+- **Component-folder paths** (`src/components/recipes/*`) —
+  filesystem layout, not URLs.
+- **External-URL placeholders** like
+  `https://example.com/recipes/lasagne` in the URL importer's
+  input — they're example *third-party* URLs, not Dora SPA
+  links.
+- **`DoraChat.vue::iconForNav`** keeps `/recipes` as a fallback
+  match so the icon stays correct during the redirect frame.
+
+**Decisions made:**
+- **Param-preserving redirect functions, not blanket 301-to-
+  overview.** A bookmarked `/recipes/abc-123/cook` should land
+  on cook mode for that recipe, not on the overview. Vue
+  Router's `redirect: (to) => …` is the documented pattern.
+- **Keep the legacy redirects indefinitely.** Cheap, and
+  external links (recipes shared in chat / email / printed
+  cards) will outlive any internal cleanup. If we ever want
+  to retire them, the worklog + this entry are the audit
+  trail.
+- **Don't rename the backend API.** REST resource naming
+  doesn't map to UX naming. `Recipe` is the entity, `/recipes`
+  is its collection endpoint. The frontend URL changed
+  because *Cookbook* is the *page* — different concern.
+- **Don't rename `RecipeDetailPage.vue` / `RecipeCookMode.vue`
+  / `RecipesOverview.vue`.** They render a recipe-shaped
+  entity; the surrounding page (the Cookbook) is the URL
+  noun. Renaming the components would conflate the two.
+
+**Files touched:**
+- `web_app/src/router/routes.ts`
+- `web_app/src/composables/useStockItemActions.ts`
+- `web_app/src/layouts/MainLayout.vue`
+- `web_app/src/components/dora/DoraChat.vue`
+- `web_app/src/pages/DashboardPage.vue`
+- `web_app/src/pages/MealPlansOverview.vue`
+- `web_app/src/pages/RecipeCookMode.vue`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `web_app/src/pages/RecipesOverview.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/pages/WastePage.vue`
+- `web_app/src/pages/HelpPage.vue`
+- `web_app/src/pages/data/ExportPrint.vue`
+- `web_app/src/services/doraContextualActions.ts`
+- `web_app/src/services/doraIntents.ts`
+- `web_app/src/components/menu/menuButtonProps.ts`
+- `web_app/src/components/menu/useMenuLinkActive.ts`
+- `CHANGELOG.md` (Unreleased Changed)
+
+**Verification:**
+- Static only. Final grep for `'/recipes\|"/recipes\|`/recipes/`
+  shows only:
+  - `recipeApiService.ts` backend API paths (intentional);
+  - `useRecipeExport.ts` backend URL builder (intentional);
+  - `DoraChat.vue::iconForNav` fallback match (intentional);
+  - `routes.ts` redirect entries + the historical-context
+    comment block (intentional);
+  - `RecipeDetailPage.vue` + `RecipesOverview.vue` URL
+    importer placeholder strings (intentional — third-party
+    URL examples).
+- No remaining internal SPA-route caller points at the legacy
+  shape.
+- **NOT yet verified in browser.** Quick checks: clicking a
+  recipe card on Cookbook overview goes to `/cookbook/<id>`;
+  the cook-mode button goes to `/cookbook/<id>/cook`; the
+  legacy `/recipes/<id>` URL still loads the detail page (via
+  redirect).
+
+**Engineering close-gate:**
+- **R-007 scope discipline** — backend API paths + component
+  filenames stayed put. Only user-facing URLs moved.
+- **R-008 terse comments** — every changed comment block
+  cites the 2026-06-12 migration; no per-call inline notes.
+- **R-011 framework-idiomatic** — Vue Router's `redirect`
+  function for param-preserving rewrites is the documented
+  pattern.
+- No new ADRs.
+
+**Next up:** unchanged from prior worklog — FU-151 browser
+smoke (now folds in: verify `/recipes/...` legacy links
+redirect; verify all internal nav lands on `/cookbook/...`).
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-12 — Command palette retired (FU-029 / INV-9 final call)
+**Status:** complete (frontend-only, static — no env). User decision
+after reviewing the value of Ctrl/Cmd-K for Dora's audience: cut, not
+shrink. INV-9's earlier SHRINK recommendation is preserved as the
+audit trail; the user escalated to CUT and that's the call.
+
+**What changed — code (deletions):**
+- `web_app/src/components/CommandPalette.vue` — **deleted**.
+- `web_app/src/composables/useCommandPalette.ts` — **deleted**.
+- `web_app/src/composables/useCommands.ts` — **deleted**.
+- `web_app/src/composables/useRecents.ts` — **deleted** (was
+  only consumed by the palette).
+- `web_app/src/css/tokens.scss` — `--highlight-search` token
+  removed (only consumer was the palette's matched-substring
+  highlight).
+
+**What changed — code (MainLayout pruning):**
+- Removed the `<CommandPalette v-if="..." />` mount in the
+  template; the `hasEverOpened` lazy-mount sentinel is gone.
+- Removed the `import` lines for `CommandPalette`,
+  `useCommandPalette`, `useCommands`, `ShoppingListApiService`,
+  and `useShoppingListStore` (the last two were only used by the
+  palette-feeder helpers below).
+- Removed the Ctrl/Cmd-K global key handler
+  (`onCommandPaletteKey` + its `onMounted` /
+  `onUnmounted` registration pair).
+- Removed the three palette-feeder helpers
+  (`autogenerateFromLowStock`, `openPrimaryList`,
+  `openPrimaryShopMode`) — verified each was used only by the
+  palette `useCommands([...])` registry, nowhere else.
+- Removed the 18-item `useCommands([...])` registration block.
+- Replaced everything with a one-line breadcrumb comment
+  pointing at the worklog + FU-029.
+
+**What stays (deliberately):**
+- `web_app/src/composables/useShortcut.ts` + its
+  `useShortcutRegistry` — the keyboard-shortcut layer is
+  orthogonal to the palette and broadly useful (`?`, `/`,
+  `g s` / `g l` / `g r` / `g d` / `g h`, and every page-
+  specific shortcut). Still wired in MainLayout's global
+  `useShortcut([...])` block at line 237.
+- `web_app/src/components/ShortcutsCheatsheet.vue` — still
+  mounted; `?` still opens it.
+- `MealPlansOverview.vue::openPaletteLogCook` — confusingly
+  named but unrelated (the meal-plan "recipe palette" is a
+  sidebar, not the command palette). Left alone.
+
+**Docs updated (audit trail across the planning library):**
+- `docs/00_DOC_GRAPH.md` — INV-9 entry rewritten to
+  "SUPERSEDED / palette retired" with a do-not-reopen note;
+  the B9 surface list strikes "command palette"; the B9 open-
+  follow-ups list flips FU-029 to RESOLVED and FU-030 (404
+  redesign) too.
+- `docs/03_prompts/00_INDEX.md` — B9 description strikes
+  "ctrl+k"; INV row strikes "command-palette worth (INV-9)".
+- `docs/03_prompts/B9_misc_bugs.md` item 4 — struck through
+  with a CANCELLED note.
+- `docs/03_prompts/INV_investigations.md` INV-9 block —
+  struck through with a SUPERSEDED preamble; original prompt
+  preserved.
+- `docs/05_investigations/COMMAND_PALETTE_ASSESSMENT.md` —
+  added an "⚠ OUTCOME 2026-06-12 — palette retired entirely"
+  banner at the top pointing at the worklog.
+- `docs/04_proposals/IMPL_PLAN_COOKBOOK.md` § naming-sweep —
+  struck the "command-palette label" mention; the surrounding
+  FU-031 sweep concern (tour cards, help text, static SPA
+  copy) survives.
+- `docs/04_proposals/PROPOSAL_COOKBOOK.md` §2.1 — same
+  treatment; FU-031 wording reframed.
+- `docs/02_feedback/FEEDBACK_TRIAGE_AND_PLAN.md` — both
+  "command palette" mentions (B9 list + "open design
+  questions" list) struck through with the retirement note.
+- `CLAUDE.md` § "Removed features — do not reintroduce" —
+  new bullet for the command palette, calling out
+  exactly what was removed and what was kept (`useShortcut`
+  + cheatsheet stay).
+
+**Follow-ups updated:**
+- **FU-029 → RESOLVED.** Verifying the palette's commands is
+  moot now; the entry records the cut as the resolution.
+- **FU-031 reframed.** The palette-label sub-bullet is
+  mooted; the broader "Recipes → Cookbook" rename sweep in
+  tour cards / help text / SPA copy remains open.
+
+**Decisions made:**
+- **Cut over shrink.** The INV-9 memo recommended SHRINK
+  (delete the redundant nav commands, promote entity search
+  to a global bar). The user's framing was harsher and
+  honest: nobody using Dora reaches for Ctrl-K. Building a
+  global-search bar is a separate, larger UX question that
+  doesn't depend on preserving the palette.
+- **Don't touch the recipe / meal-plan "palette" naming.**
+  Different concept (a sidebar of cards), no risk of
+  confusion in the deletion sweep.
+- **Keep the master kill-switch breadcrumb in
+  `CLAUDE.md`.** Future Claude sessions will be tempted to
+  rebuild a Ctrl-K palette as "obvious power-user UX". The
+  removed-features bullet pre-empts that re-litigation.
+- **Pull the unused `--highlight-search` token.** R-007 —
+  dead code is dead, and a future reader hunting "what uses
+  this?" deserves a clean answer.
+
+**Files touched:**
+- `web_app/src/layouts/MainLayout.vue` (pruned)
+- `web_app/src/components/CommandPalette.vue` (deleted)
+- `web_app/src/composables/useCommandPalette.ts` (deleted)
+- `web_app/src/composables/useCommands.ts` (deleted)
+- `web_app/src/composables/useRecents.ts` (deleted)
+- `web_app/src/css/tokens.scss` (one dead token removed)
+- `docs/00_DOC_GRAPH.md`
+- `docs/03_prompts/00_INDEX.md`
+- `docs/03_prompts/B9_misc_bugs.md`
+- `docs/03_prompts/INV_investigations.md`
+- `docs/05_investigations/COMMAND_PALETTE_ASSESSMENT.md`
+- `docs/04_proposals/IMPL_PLAN_COOKBOOK.md`
+- `docs/04_proposals/PROPOSAL_COOKBOOK.md`
+- `docs/02_feedback/FEEDBACK_TRIAGE_AND_PLAN.md`
+- `CLAUDE.md` (Removed features section)
+- `CHANGELOG.md` (Unreleased Removed)
+- `DORA_FOLLOWUPS.md` (FU-029 RESOLVED; FU-031 reframed)
+
+**Verification:**
+- Final sweep confirmed no leftover code references
+  (`grep -r 'useCommands\|useCommandPalette\|CommandPalette\|
+  paletteOpen\|togglePalette\|useRecents'` finds only the
+  unrelated `openPaletteLogCook` in MealPlansOverview).
+- Final token sweep confirmed `--highlight-search` had no
+  remaining consumers; safe to remove.
+- **NOT yet verified in browser.** The cleanest test is
+  "Ctrl-K does nothing and the rest of the app still works";
+  fold into the next browser-verify pass.
+
+**Engineering close-gate (`ENGINEERING_STANDARDS.md`):**
+- **R-007 scope discipline** — only the palette + its
+  exclusive dependencies were removed. Shortcuts, cheatsheet,
+  and the meal-plan "palette" naming all left untouched.
+- **R-001 componentise** — N/A (deletion, not extraction).
+- **R-008 terse comments** — one breadcrumb in MainLayout
+  pointing at the worklog + FU-029; no per-deletion
+  commentary.
+- **R-011 framework-idiomatic** — N/A (deletion).
+- No new ADRs.
+
+**Next up (unchanged from prior worklog):**
+1. **FU-151** — browser smoke session for the four FU-085
+   spin-off fixes (FU-147 / FU-148 / FU-149 / FU-150 step 1).
+2. Other open verify FUs: FU-130, FU-132, FU-135, FU-141,
+   FU-142, FU-145.
+3. **FU-153 / FU-152** assistant work when sequenced.
+4. **Phase 2** (ingestion API / C-10).
+
+**Open questions for user:** none.
+
+---
+
 ## 2026-06-12 — FU-030 fullscreen 404 redesign (login-theme + mascot)
 **Status:** complete (frontend-only, static — no env). User-flagged
 the existing 404 as "a bit boring"; rewrote to mirror the

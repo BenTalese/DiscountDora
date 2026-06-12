@@ -76,13 +76,15 @@ const routes: RouteRecordRaw[] = [
             { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
             { path: 'tts-test', component: () => import('pages/TtsTestPage.vue'), meta: { title: 'TTS test' } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
-            // A8 — the recipes collection page is now the "Cookbook" (/cookbook).
-            // Individual recipes stay at /recipes/:id (a single item is a recipe).
-            // Legacy /recipes redirects so old links/bookmarks/shortcuts still work.
+            // A8 + 2026-06-12 migration — recipe routes all live under
+            // `/cookbook` (the cookbook is the page; a recipe is an
+            // item in it). Legacy `/recipes*` redirects were retired
+            // 2026-06-12 — pre-release, no live bookmarks to preserve,
+            // no external links written yet. A user that types
+            // `/recipes/<id>` now hits the 404 page (which is fine).
             { path: 'cookbook', component: () => import('pages/RecipesOverview.vue'), meta: { title: 'Cookbook' } },
-            { path: 'recipes', redirect: '/cookbook' },
-            { path: 'recipes/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
-            { path: 'recipes/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
+            { path: 'cookbook/:id', component: () => import('pages/RecipeDetailPage.vue'), meta: { title: 'Recipe' } },
+            { path: 'cookbook/:id/cook', component: () => import('pages/RecipeCookMode.vue'), meta: { title: 'Cook mode' } },
             { path: 'meal-plans', component: () => import('pages/MealPlansOverview.vue'), meta: { title: 'Meal plans' } },
             {
                 path: 'shopping-lists',

@@ -25,7 +25,9 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(slots=True)
 class ProductDto:
     brand: str | None
-    image: str | None
+    # FU-014 — bytes never travel in list/detail JSON. SPA fetches via
+    # `GET /products/<id>/image`. Mirrors stock-item / recipe pattern.
+    has_image: bool
     is_active: bool
     is_available: bool
     merchant_id: UUID
@@ -48,12 +50,11 @@ class ProductDto:
 
     @classmethod
     def from_entity(cls, product: Product) -> 'ProductDto':
+        # `has_image` is stamped in bulk by `stamp_has_image` so we don't
+        # trigger the deferred image-blob load per row (N+1).
         return ProductDto(
             brand = product.brand,
-            # HACK: The Get Products use case decode fails.
-            # 'ignore' is a hack solution to temporarily ignore the decoding errors.
-            # The My Products/Favorites page will need to address this issue.
-            image = product.image.decode('utf-8', 'ignore') if product.image else None,
+            has_image = False,
             is_active = product.is_active,
             is_available = product.is_available,
             merchant_id = product.merchant.id,
@@ -74,6 +75,24 @@ _FIELD_MAP: dict[str, EntityField] = {
     "product_id": EntityField(Product, "id"),
     "merchant_id": EntityField(Product, "_merchant_id"),
 }
+
+
+def stamp_has_image(repository, dtos: list[ProductDto]) -> None:
+    """FU-014 — bulk-derive `has_image` from a single `image IS NOT NULL`
+    pass that never touches the deferred image blob. Mirrors the
+    stock-item / recipe pattern.
+    """
+    if not dtos:
+        return
+    product_ids = [p.product_id for p in dtos]
+    product_table = db.metadata.tables["Product"]
+    rows = repository.session.execute(
+        select(product_table.c.id, product_table.c.image.isnot(None))
+        .where(product_table.c.id.in_(product_ids))
+    ).all()
+    flag_by_id: dict[UUID, bool] = {row[0]: bool(row[1]) for row in rows}
+    for dto in dtos:
+        dto.has_image = flag_by_id.get(dto.product_id, False)
 
 
 def stamp_linked_stock_items(repository, dtos: list[ProductDto]) -> None:
@@ -120,6 +139,7 @@ class GetProductsHandler:
             .include(Product.Fields.MERCHANT)
             .paginate(options, ProductDto.from_entity, field_map=_FIELD_MAP)
         )
+        stamp_has_image(self.repository, page.items)
         stamp_linked_stock_items(self.repository, page.items)
         return page
 
@@ -154,6 +174,7 @@ class GetBestDealsHandler:
         # Highest discount first; matches the client's old discount-% sort.
         scored.sort(key=lambda t: t[0], reverse=True)
         dtos = [ProductDto.from_entity(p) for _, p in scored[:limit]]
+        stamp_has_image(self.repository, dtos)
         stamp_linked_stock_items(self.repository, dtos)
         return dtos
 

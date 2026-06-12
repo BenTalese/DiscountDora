@@ -408,8 +408,8 @@ Then the per-prompt list below.
 
 ### B9 — Misc global bugs
 - **Surface:** shopping-list drag/drop, main menu, settings nav,
-  command palette, undo stack, product history, logging, mobile Dora,
-  404 page.
+  ~~command palette~~ (retired 2026-06-12), undo stack, product
+  history, logging, mobile Dora, 404 page.
 - **Charter principles:** P3 Honest, P6 One-action, P11 Fast.
 - **Feedback bullets:**
   - `§SHOPPING LIST DETAILS VIEW` "Drag and drop is an index off
@@ -427,8 +427,9 @@ Then the per-prompt list below.
   (B9.7 log rotation).
 - **Original spec:** none material.
 - **Open follow-ups:** **FU-027** (B9.7 log-rotation decision); FU-028
-  (B9.1 shopping-list drag-drop); FU-029 (B9.4 command palette); FU-030
-  (B9.9 404 page already-themed); FU-026 (B9.5 undo behaves oddly).
+  (B9.1 shopping-list drag-drop); ~~FU-029 (B9.4 command palette)~~
+  (RESOLVED 2026-06-12 — palette retired); FU-030 (B9.9 404 page —
+  RESOLVED 2026-06-12, redesigned); FU-026 (B9.5 undo behaves oddly).
 - **Removed-features watchlist:** none.
 - **Cross-prompt dependencies:** mostly independent; B9.5 (undo) ↔
   state-ownership scope (server-owned audit removes some client undo
@@ -578,20 +579,21 @@ Then the per-prompt list below.
   per-item substitutes list is kept.
 - **Cross-prompt dependencies:** pairs with B8.
 
-### INV-9 — Command-palette worth
-- **Surface:** Ctrl-K palette
-- **Charter principles:** P10 Anti-creep (13/18 commands duplicate
-  sidebar); P11 Fast (power-user accelerator).
-- **Feedback bullets:** `§NO AREA / MISC` "How useful is the command
-  palette feature really? Let's assess"; "Command palette (ctrl + k)
-  doesnt work with some stuff like create stock item".
-- **Related proposals:** none direct.
-- **Related investigations:** `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`.
-- **Original spec:** none material.
-- **Open follow-ups:** **FU-029** (B9.4 confirm command-palette
-  commands all trigger).
-- **Removed-features watchlist:** none.
-- **Cross-prompt dependencies:** independent.
+### ~~INV-9~~ — Command-palette worth — **SUPERSEDED / palette retired**
+> **2026-06-12:** palette retired entirely (user decision after the
+> SHRINK recommendation). FU-029 RESOLVED in the same move. The
+> entry stays here as an audit-trail anchor; no future prompt
+> should re-open it.
+- **Surface:** ~~Ctrl-K palette~~ (no longer exists)
+- **Charter principles:** P10 Anti-creep ✓ (cut won out over
+  shrink).
+- **Related investigations:** `05_investigations/COMMAND_PALETTE_ASSESSMENT.md`
+  (OUTCOME banner at top of that file points back here).
+- **Open follow-ups:** none — FU-029 RESOLVED.
+- **Removed-features watchlist:** **command palette + `useCommands` +
+  `useRecents`** — do not reintroduce. Keyboard-shortcut layer
+  (`useShortcut`, `ShortcutsCheatsheet`) is **kept**.
+- **Cross-prompt dependencies:** none.
 
 ### INV-10 — `essential` flag model
 - **Surface:** stock-item flag + auto-generate shopping list

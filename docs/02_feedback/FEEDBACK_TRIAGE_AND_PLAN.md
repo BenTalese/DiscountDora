@@ -130,7 +130,7 @@ Placeholder "I'm a notification!" subtitle (Meal Plans) — unprofessional, must
 Remove-from-favourites does nothing; clicking recipes nav fails → overview; recipe actions inert except Cook; **substitute permanently swaps/edits the recipe** (should be temporary); references the **deleted substitutes-graph** feature.
 
 ### B9 — Misc concrete bugs
-Unlink-product → exception (Stock Detail); shopping-list-detail drag-drop **off-by-one** (wrong items swapped); product-history selection does nothing + graph clipped + hover bubble not themed; command palette (ctrl+k) doesn't fire create-stock-item; undo cross-app inconsistent (push-expiry then clear-expiry); main-menu hover double outline; settings duplicated in menu + dropdown; logs not rolling (46k-line file, wrong date span); floating Dora vanishes on mobile login; Dora image off-centre (search + dashboard).
+Unlink-product → exception (Stock Detail); shopping-list-detail drag-drop **off-by-one** (wrong items swapped); product-history selection does nothing + graph clipped + hover bubble not themed; ~~command palette (ctrl+k) doesn't fire create-stock-item~~ **(palette retired 2026-06-12 — bug class no longer exists)**; undo cross-app inconsistent (push-expiry then clear-expiry); main-menu hover double outline; settings duplicated in menu + dropdown; logs not rolling (46k-line file, wrong date span); floating Dora vanishes on mobile login; Dora image off-centre (search + dashboard).
 
 ---
 
@@ -144,7 +144,7 @@ Unlink-product → exception (Stock Detail); shopping-list-detail drag-drop **of
 - *Allocation logic working?* — see B6; needs investigation.
 - *Relevancy filter (product search)* — I can trace how it ranks.
 
-**Genuinely open design questions (your call, I'll advise):** expiry↔open relationship; value of stock groups / notes / preferred-merchant / history-tab / recipe-comparison / command-palette / substitutes-swap-into-list. These are "keep, rework, or cut" calls — I'll give a recommendation on each when we get to that area.
+**Genuinely open design questions (your call, I'll advise):** expiry↔open relationship; value of stock groups / notes / preferred-merchant / history-tab / recipe-comparison / ~~command-palette~~ (cut 2026-06-12) / substitutes-swap-into-list. These are "keep, rework, or cut" calls — I'll give a recommendation on each when we get to that area.
 
 ---
 

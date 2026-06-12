@@ -211,7 +211,11 @@
                             @update:model-value="toggleSelect(product.product_id)"
                         />
                         <q-avatar v-else rounded size="40px" class="dora-bg-sunken">
-                            <img v-if="product.image" :src="product.image" :alt="product.name" />
+                            <img
+                                v-if="product.has_image"
+                                :src="`/api/products/${product.product_id}/image`"
+                                :alt="product.name"
+                            />
                             <q-icon v-else :name="ICONS.shopping_bag" size="20px" />
                         </q-avatar>
                         <div class="col">

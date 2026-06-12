@@ -451,7 +451,7 @@
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
     import { ICONS } from 'src/style/icons';
-    import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+    import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
@@ -519,8 +519,12 @@
     const estimatedRemainingTotal = computed(() => detail.value?.totals?.remaining_price ?? 0);
 
     async function load() {
+        if (!listId.value) return;
         loading.value = true;
         loadError.value = null;
+        // Clear stale data so the spinner shows, not the previous list,
+        // while the new detail is in flight (FU-157).
+        detail.value = null;
         try {
             detail.value = await api.getDetailAsync(listId.value);
         } catch (err) {
@@ -529,6 +533,10 @@
             loading.value = false;
         }
     }
+
+    // FU-157 — same param-change pattern as ShoppingListDetail. Rare in
+    // shop mode (you usually shop one list end-to-end) but free to wire.
+    watch(listId, () => { void load(); });
 
     onMounted(async () => {
         await load();

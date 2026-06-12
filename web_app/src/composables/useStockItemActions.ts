@@ -170,7 +170,7 @@ export function useStockItemActions() {
 
     /** Recipes that use this item — opens the recipes screen pre-filtered. */
     function seeRecipesUsing(stockItemId: string) {
-        void router.push({ path: '/recipes', query: { usesStockItem: stockItemId } });
+        void router.push({ path: '/cookbook', query: { usesStockItem: stockItemId } });
     }
 
     return {

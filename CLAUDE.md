@@ -184,6 +184,15 @@ there is worth extracting, that's fine — no section needed.
   UI + scan-unknown rework are deferred to Phase 2 (ingestion).
 - Central retailer scraping as a hosted service (P7-01). It survives only as
   a self-hosted, off-by-default module / the standalone companion.
+- **Command palette** (the Ctrl/Cmd-K modal that opened `CommandPalette.vue`
+  driven by `useCommands` + `useRecents`). Retired 2026-06-12 after the
+  INV-9 assessment recommended SHRINK and the user escalated to CUT —
+  audience for Dora is pantry / mobile, not keyboard-power-user. **NOT
+  removed:** the `useShortcut` + `useShortcutRegistry` keyboard layer
+  (`?` cheatsheet, `/` focus, `g s`/`g l`/`g r`/`g d`/`g h` nav, page-
+  specific `n`/`a` etc.) and `ShortcutsCheatsheet.vue` — all kept. If
+  power-user discoverability becomes a real ask later, the cheatsheet is
+  the place to surface it, not a hidden Ctrl-K modal.
 
 ## Naming
 

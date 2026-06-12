@@ -66,7 +66,7 @@ export function contextualActionsFor(
 
     // ── Recipe detail / edit ────────────────────────────────────────
     if (
-        path.startsWith('/recipes/')
+        path.startsWith('/cookbook/')
         && params.id
         && !path.endsWith('/cook')
     ) {
@@ -112,14 +112,14 @@ export function contextualActionsFor(
         ];
     }
 
-    // ── Recipes overview ────────────────────────────────────────────
-    if (path === '/recipes') {
+    // ── Cookbook overview ───────────────────────────────────────────
+    if (path === '/cookbook') {
         return [
             {
                 kind: 'navigate',
                 label: 'Cookable now',
                 icon: ICONS.check_circle,
-                path: '/recipes',
+                path: '/cookbook',
                 query: { cookable: 'true' },
             },
         ];
@@ -144,7 +144,7 @@ export function contextualActionsFor(
                 kind: 'navigate',
                 label: 'Find a recipe to cook',
                 icon: ICONS.menu_book,
-                path: '/recipes',
+                path: '/cookbook',
                 query: { cookable: 'true' },
             },
         ];

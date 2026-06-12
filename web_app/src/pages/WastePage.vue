@@ -389,7 +389,7 @@
     }
 
     function openRecipe(recipeId: string) {
-        void router.push(`/recipes/${recipeId}`);
+        void router.push(`/cookbook/${recipeId}`);
     }
 
     async function markUsed(item: ExpiringItem) {

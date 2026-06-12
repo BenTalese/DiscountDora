@@ -1166,7 +1166,7 @@
         // L298 — exit returns to the recipe's detail page (where the user
         // came from), not all the way back to the cookbook overview.
         const id = route.params.id as string;
-        void router.push(id ? `/recipes/${id}` : '/cookbook');
+        void router.push(id ? `/cookbook/${id}` : '/cookbook');
     }
 
     function handleKeydown(event: KeyboardEvent) {

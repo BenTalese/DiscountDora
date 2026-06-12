@@ -1,5 +1,15 @@
 # COMMAND_PALETTE_ASSESSMENT — INV-9
 
+> **⚠ OUTCOME 2026-06-12 — palette retired entirely.** This memo
+> recommended SHRINK (cut the redundant nav commands + promote
+> entity search to a visible global bar). The user then escalated
+> to **CUT** — palette UI, commands registry, and recents storage
+> all removed (see worklog + FU-029). The Ctrl-K trigger no
+> longer exists; `useShortcut` keyboard shortcuts (`?`, `/`,
+> `g s` / `g l` / …) and `ShortcutsCheatsheet` are kept. The
+> analysis below is preserved as the trail that led to the cut
+> decision.
+
 **Date:** 2026-06-06 · **Type:** Read-only, no code changes · One-page memo.  
 **Question:** The user asked "how useful is the command palette really?" Assess
 the Ctrl-K palette (`CommandPalette.vue` + `useCommands`).

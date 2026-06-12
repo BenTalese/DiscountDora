@@ -2910,20 +2910,57 @@ long session summary. Distinct from the other two logs:
     bumps an `imageVersion` to bust the browser cache.
   - Static-only impl; browser-verify is **FU-125**.
 
-## [OPEN] FU-032 — C-2: confirm B6 allocation works end-to-end in browser
-- **Raised:** 2026-06-06 (C-2 recon)
-- **Type:** finding
-- **What:** Backend `_hydrate_unallocated` (in `get_recipes.py`) computes
-  `unallocated_meals = max(available_meals - sum(future un-consumed
-  servings), 0)` via a single GROUP BY. The recipe palette renders the
-  result directly. On static read, B6 (allocation reduces "X unallocated
-  of Y on hand") works correctly. Original B6 report was from real usage,
-  so per the CLAUDE.md MANDATORY rule it stays `[OPEN] confirm in
-  browser` until eyeballed.
-- **Recommended resolution:** confirm in browser — cook 4 meals of a
-  recipe, drop it on two future days (2 servings each), verify palette
-  shows "(0/4)". If it doesn't, capture the response from
-  `GET /recipes?...&include=unallocated` and re-open as a real bug.
+## [OPEN] FU-032 — C-2: allocation count doesn't decrement after planner drop (live repro, root cause TBD)
+- **Raised:** 2026-06-06 (C-2 recon); user repro confirmed 2026-06-12
+- **Type:** finding (real bug, not yet root-caused)
+- **What:** User dragged recipes from the palette onto future days; the
+  chip's count next to the recipe name didn't change. Static read of
+  the data path looks correct end-to-end:
+  - Frontend `MealPlansOverview.onDropOnDay` → `persistEntries` →
+    `mealPlanStore.updateMealPlanAsync` awaits the PATCH **and** the
+    follow-up `getMealPlansAsync`, then in parallel
+    `recipeStore.getRecipesAsync()` runs.
+  - Backend `UpdateMealPlanHandler.handle` calls `save_changes()`
+    before returning (commit guaranteed).
+  - Backend `_hydrate_unallocated` (`get_recipes.py:591`) issues one
+    GROUP BY against `MealPlanEntry` filtering
+    `consumed_at IS NULL AND scheduled_for >= today AND recipe_id IN :ids`
+    and subtracts from `available_meals`.
+  - Frontend chip ([MealPlansOverview.vue:101](web_app/src/pages/MealPlansOverview.vue#L101))
+    is `(N) = recipe.unallocated_meals` bound through
+    `storeToRefs(recipeStore).recipes` — reassigning `recipes.value` in
+    `getRecipesAsync` should trigger re-render.
+- **Possible runtime causes (none verifiable without devtools):**
+  1. **User is reading `available_meals` not `unallocated_meals`.** The
+     chip shows `(unallocated_meals)` next to the recipe name; the
+     click-menu shows `available_meals` as the big number. Drops only
+     decrement `unallocated_meals` (cooked pool unchanged — that only
+     moves on Cook / ± adjust). Worth confirming which number the user
+     is tracking.
+  2. **Reactivity edge case** with `storeToRefs` + sorted array
+     reassignment. Unlikely but only visible at runtime.
+  3. **`scheduled_for` date comparison** — backend filters
+     `scheduled_for >= :today` using `date.today()` (server local).
+     Drops on "today" land on the boundary; future drops shouldn't be
+     affected. Cross-timezone client/server could in theory miss a
+     same-day entry — unlikely with future drops.
+- **C-2 redesign cross-ref:** `PROPOSAL_MEAL_PLANS.md §3.1` re-renders
+  the same numbers (`(unallocated / pool)` chip — emphasised on the
+  recipe row) and `§3.2` reworks the entry chip shape. The C-2 work is
+  **design only — no impl plan yet**, so the chip surface in production
+  isn't going to change soon. Don't defer the bug fix to "when C-2
+  lands."
+- **Recommended resolution:** when the user is next at a browser:
+  1. Confirm whether the unchanging number is the `(N)` next to the
+     recipe name (real bug) or the bigger `{{ available_meals }}` in
+     the click-menu card (expected behaviour, not a bug).
+  2. If the `(N)` is genuinely stuck, capture the network response from
+     `GET /api/recipes` immediately after the drop — does the JSON
+     show the new `unallocated_meals`? If yes, it's a frontend
+     reactivity bug; if no, it's the backend's SUM not seeing the new
+     row (transaction visibility / date filter).
+  3. With that one bit of evidence the root cause collapses to either
+     a Vue reactivity patch or a backend date / commit-visibility fix.
 
 ## [OPEN] FU-031 — B9.3: stale "Recipes" labels after A8 cookbook rename
 - **Raised:** 2026-06-06 (B9.3 sweep)
@@ -2974,18 +3011,13 @@ long session summary. Distinct from the other two logs:
   still mounted. With the palette gone, verifying its commands
   is moot.
 
-## [OPEN] FU-028 — B9.1: confirm shopping-list drag-drop ordering
+## [RESOLVED] FU-028 — B9.1: confirm shopping-list drag-drop ordering
 - **Raised:** 2026-06-06 (B9.1; CLAUDE.md confirm-in-browser rule)
+- **Resolved:** 2026-06-12 — user verified in browser. Reorder both
+  directions lands at the dashed-outline position. The static-read
+  insertAt math (`fromIdx < toIdx ? toIdx - 1 : toIdx`) matches live
+  behaviour.
 - **Type:** finding
-- **What:** Static walk-through (both drag-up and drag-down examples) ends
-  with the dragged item correctly placed BEFORE the target index. Backend
-  `bulk_operations.reorder_lines` sorts by `(sequence, id)`. Frontend
-  `ShoppingListDetail.onLineDrop` insertAt math
-  (`fromIdx < toIdx ? toIdx - 1 : toIdx`) is correct.
-- **Recommended resolution:** confirm in browser — reorder a few times,
-  drag both directions, drop on a row and check the dragged item lands
-  exactly where the dashed outline showed. If wrong, capture the exact
-  before/after order and we'll re-investigate.
 
 ## [OPEN] FU-027 — B9.7: log-rotation model decision (timed vs size)
 - **Raised:** 2026-06-06 (B9.7)

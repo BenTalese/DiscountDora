@@ -39,6 +39,33 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-161 — Check / upgrade the Aldi scraper (site appears updated)
+- **Raised:** 2026-06-12 (user note during Phase 1 wrap-up)
+- **Type:** deferred job
+- **What:** User flagged that Aldi's website appears to have
+  changed; the existing Aldi scraper in the companion / merchant
+  scraping module likely needs revisiting. Concrete steps when
+  picked up:
+  1. Hit a representative Aldi product page in a browser, compare
+     the live DOM to what the scraper's selectors expect.
+  2. Run the scraper against a known SKU and inspect the result
+     (price, size, on-special detection) — note any fields that
+     come back null / wrong / missing.
+  3. Decide whether it's a selector tweak or a structural
+     rewrite. Aldi historically uses a different layout from
+     Coles/Woolworths, so changes there can ripple more than a
+     simple class rename.
+  4. If structural: cross-check the merchant scraping posture
+     (`RECONCILED_FINISHING_PLAN.md` Decision 1 — scraper is the
+     companion-app-only path; the core repo doesn't ship live
+     scrape).
+- **Why deferred:** out of scope of the current finishing-pass
+  stream; needs live URLs + the companion app to investigate
+  properly.
+- **Recommended resolution:** opportunistic — when the user
+  next needs Aldi pricing data, or as a focused session in the
+  companion repo.
+
 ## [OPEN] FU-160 — Shopping-list "shopping day" alert (feedback L403)
 - **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
 - **Type:** deferred job

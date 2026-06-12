@@ -78,5 +78,11 @@ def serve_root():
 def serve_path(requested: str):
     # API blueprints (/api/..., /mapi/... once collapse lands) win on
     # routing precedence because they're more specific than this
-    # catch-all. Anything that reaches here is an SPA path.
+    # catch-all. Anything that reaches here is an SPA path — EXCEPT an
+    # unknown/retired /api/... URL, which must 404 like an API endpoint
+    # rather than answer 200 with index.html (an API client reading HTML
+    # as success is far worse than a clean not-found; surfaced when the
+    # shopping-list CSV /export endpoint was removed in UX-v2).
+    if requested.startswith("api/"):
+        abort(404)
     return _serve_file_or_index(requested)

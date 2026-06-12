@@ -182,7 +182,7 @@
         summaries.value
             .filter((s) => s.status !== 'done')
             .map((s) => ({
-                label: s.name,
+                label: s.display_name,
                 value: s.shopping_list_id,
             })),
     );

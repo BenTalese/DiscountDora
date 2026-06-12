@@ -1,41 +1,16 @@
 /**
- * Shopping-list export actions — CSV download + print-view open.
+ * Shopping-list export actions — print-view open.
  *
- * The brief calls for this to be the single source for these actions so
- * both ExportPrint.vue and the ShoppingListDetail toolbar use the same
- * code path. Keep new export formats here too rather than scattering
- * `${baseUrl}/...` literals.
+ * Single source for these actions so every caller shares the code path;
+ * keep new export formats here rather than scattering `${baseUrl}/...`
+ * literals. The CSV download was removed in the UX-v2 pass — print is the
+ * only take-it-with-you export for a shopping list
+ * (PROPOSAL_SHOPPING_LIST_UX_V2.md §12 Q1); the endpoint is gone too.
  */
-import { Notify } from 'quasar';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
-import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useShoppingListExport() {
     const baseUrl = resolveBaseURL('dora');
-
-    async function downloadCsv(listId: string): Promise<void> {
-        try {
-            const response = await fetch(
-                `${baseUrl}/shopping-lists/${encodeURIComponent(listId)}/export?format=csv`,
-                { method: 'GET', credentials: 'include' },
-            );
-            if (!response.ok) {
-                throw new Error(`Export failed (${response.status})`);
-            }
-            const filename =
-                parseFilename(response.headers.get('content-disposition'))
-                ?? `shopping-list-${listId}.csv`;
-            const blob = await response.blob();
-            triggerSave(blob, filename);
-        } catch (err) {
-            Notify.create({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't export the shopping list.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        }
-    }
 
     /** Open the server-rendered print view in a new tab and fire the
      *  browser's print dialog. User can hit "Save as PDF" from there. */
@@ -47,6 +22,6 @@ export function useShoppingListExport() {
         window.open(url, '_blank', 'noopener');
     }
 
-    return { downloadCsv, openPrintView };
+    return { openPrintView };
 }
 

@@ -377,7 +377,18 @@
                     <q-list v-else separator>
                         <q-item v-for="sub in detail.substitutes" :key="sub.stock_item_id">
                             <q-item-section>
-                                <StockItemChip :stock-item="stockItemFor(sub)" :dense="false" />
+                                <!-- UX-v2: StockItemChip retired — plain
+                                     name-link + level dot; the substitute's
+                                     own page has everything else. -->
+                                <div class="row items-center q-gutter-x-sm no-wrap">
+                                    <a
+                                        class="text-primary cursor-pointer text-body2"
+                                        @click="actions.openDetail(sub.stock_item_id)"
+                                    >
+                                        {{ stockItemFor(sub).name }}
+                                    </a>
+                                    <StockLevelDot :stock-item="stockItemFor(sub)" />
+                                </div>
                             </q-item-section>
                             <q-item-section side>
                                 <div class="row q-gutter-xs">
@@ -527,7 +538,7 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
-    import StockItemChip from 'src/components/chips/StockItemChip.vue';
+    import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';

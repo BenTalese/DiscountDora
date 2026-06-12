@@ -112,33 +112,23 @@ const routes: RouteRecordRaw[] = [
                             // empty / error state.
                         }
                     }
-                    const summaries = store.summaries;
-                    if (summaries.length === 0) return; // empty state
-                    const shopping = summaries.find((s) => s.status === 'shopping');
-                    if (shopping) return `/shopping-lists/${shopping.shopping_list_id}`;
-                    const today = new Date().toISOString().slice(0, 10);
-                    const drafts = summaries
-                        .filter((s) => s.status === 'draft')
-                        .slice()
-                        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
-                    const todayDraft = drafts.find((s) => s.planned_shop_date === today);
-                    if (todayDraft) return `/shopping-lists/${todayDraft.shopping_list_id}`;
-                    if (drafts[0]) return `/shopping-lists/${drafts[0].shopping_list_id}`;
-                    const done = summaries
-                        .filter((s) => s.status === 'done')
-                        .slice()
-                        .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
-                    if (done[0]) return `/shopping-lists/${done[0].shopping_list_id}`;
-                    // Truly nothing — render the empty state.
+                    // UX-v2 §3.3 — the "next up" pick is a server-owned rule
+                    // (live shop > first date-wise after the last completed >
+                    // earliest pending > most recently completed). The guard
+                    // just follows the flag; no date logic lives here.
+                    const next = store.summaries.find((s) => s.is_next_up);
+                    if (next) return `/shopping-lists/${next.shopping_list_id}`;
+                    // No lists at all — render the empty state.
                     return;
                 },
             },
             { path: 'shopping-lists/templates', component: () => import('pages/ShoppingListTemplates.vue'), meta: { title: 'Shopping list templates' } },
-            { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping list' } },
-            { path: 'shopping-lists/:id/shop', component: () => import('pages/ShoppingListShopMode.vue'), meta: { title: 'Shop mode' } },
-            // P2-11 — PWA-shortcut landing page that redirects into shop
-            // mode for whichever list is currently primary. Lightweight
-            // stub; see pages/ShopNowRedirect.vue.
+            // UX-v2: detail is the single shopping surface for every status
+            // (S4: plural title; the old /shop route + page were merged in).
+            { path: 'shopping-lists/:id', component: () => import('pages/ShoppingListDetail.vue'), meta: { title: 'Shopping lists' } },
+            // P2-11 — PWA-shortcut landing page that redirects to whichever
+            // list is live / next up. Lightweight stub; see
+            // pages/ShopNowRedirect.vue.
             { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
             { path: 'reports', component: () => import('pages/ReportsPage.vue'), meta: { title: 'Reports' } },
             { path: 'waste', component: () => import('pages/WastePage.vue'), meta: { title: 'Waste' } },

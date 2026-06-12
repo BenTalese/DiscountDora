@@ -16,12 +16,12 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
-                                                    ShoppingList)
+from dora_api.domain.entities.shopping_list import ShoppingList
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.shopping_lists.manage_shopping_list_lines import (
     AddLineHandler, AddLineRequest)
-from dora_api.persistence.field import EntityField
+from dora_api.features.shopping_lists.primary_target_resolver import \
+    resolve_primary_target
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 _Logger = logging.getLogger(__name__)
@@ -86,10 +86,15 @@ def _normalise_items(raw_items: Any) -> list[dict[str, Any]]:
 
 
 def _primary_list(repo: SqlAlchemyRepository) -> ShoppingList | None:
-    return repo.get(ShoppingList).one(
-        EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-        & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-    )
+    # "Primary" is inferred, not stored (P6-01 Chunk 2): exactly one draft
+    # list = the target; zero or several = no unambiguous primary, so the
+    # assistant asks instead of guessing. (This previously queried the
+    # dropped `is_primary` column and would AttributeError at runtime.)
+    lists = repo.get(ShoppingList).all()
+    outcome = resolve_primary_target(lists)
+    if outcome.kind != "single":
+        return None
+    return next((l for l in lists if l.id == outcome.target_list_id), None)
 
 
 def resolve_add_plan(raw_items: Any) -> dict[str, Any]:
@@ -120,7 +125,7 @@ def resolve_add_plan(raw_items: Any) -> dict[str, Any]:
         "type": "add_to_shopping_list",
         "no_primary": primary is None,
         "shopping_list": (
-            {"id": str(primary.id), "name": primary.name} if primary else None
+            {"id": str(primary.id), "name": primary.display_name} if primary else None
         ),
         "items": resolved,
     }

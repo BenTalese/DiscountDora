@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from flask_cors import CORS
 from flask_migrate import upgrade
+from werkzeug.exceptions import HTTPException
 
 from dora_api.app import app, db
 from dora_api.infrastructure.api_response import internal_server_error
@@ -138,6 +139,13 @@ def register_routers():
 
 @app.errorhandler(Exception)
 def handle_global_exception(error: Exception):
+    # Deliberate HTTP errors (abort(404), abort(503), …) must pass through
+    # with their intended status — before this guard, EVERY abort() in the
+    # app was being rewritten into an opaque 500 "unexpected error" (found
+    # via the SPA catch-all's 404/503 during the UX-v2 endpoint removals).
+    # Only genuinely unhandled exceptions become 500s.
+    if isinstance(error, HTTPException):
+        return error
     logging.getLogger().exception("Unhandled exception", exc_info=error)
     return internal_server_error("An unexpected error occurred.")
 

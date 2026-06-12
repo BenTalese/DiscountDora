@@ -46,6 +46,9 @@ def resolve_primary_target(lists: Iterable[ShoppingList]) -> PrimaryTargetOutcom
     return PrimaryTargetOutcome(
         kind="ambiguous",
         candidates=[
-            PrimaryTargetCandidate(shopping_list_id=l.id, name=l.name) for l in drafts
+            # display_name: candidates are shown in a "which list?" picker,
+            # so a self-labelled list must read as its date, not None.
+            PrimaryTargetCandidate(shopping_list_id=l.id, name=l.display_name)
+            for l in drafts
         ],
     )

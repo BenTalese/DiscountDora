@@ -1,8 +1,11 @@
 """GET /api/shopping-lists — overview of every shopping list.
 
-Each entry includes the line count and a "ticked / total" progress for quick
-glanceability on the overview page. Detail (with full lines + selected
-products) lives on GET /api/shopping-lists/<id>.
+Each entry includes the line count, a "ticked / total" progress, the
+server-owned `display_name` / `effective_date`, and exactly one entry is
+flagged `is_next_up` (the list the UI should land on / mark "next"). The
+ordering, naming-fallback and next-up rules are domain rules (R-003) — they
+live here once, not in TS. Detail (with full lines + selected products)
+lives on GET /api/shopping-lists/<id>.
 """
 import logging
 from dataclasses import dataclass
@@ -12,8 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
-from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
-                                                    ShoppingList,
+from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -24,11 +26,20 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(frozen=True, slots=True)
 class ShoppingListSummaryDto:
     shopping_list_id: UUID
-    name: str
+    # The user's custom name (None when the list self-labels from dates) and
+    # the resolved label the UI should render. Kept separate so "rename"
+    # inputs can prefill the custom name only.
+    name: str | None
+    display_name: str
     status: str
     created_at: datetime
     completed_at: datetime | None
     planned_shop_date: date | None
+    # finalised shop date > planned shop date > created — the list's position
+    # in time. The response is sorted ascending by this (past first), so the
+    # rail/dropdown can render in order without re-deriving the rule.
+    effective_date: date
+    is_next_up: bool
     line_count: int
     ticked_count: int
 
@@ -60,28 +71,66 @@ class GetShoppingListsHandler:
                 ticked += count
             counts[list_id] = (total, ticked)
 
+        next_up_id = _next_up_list_id(lists)
         out: List[ShoppingListSummaryDto] = []
         for lst in lists:
             total, ticked = counts.get(lst.id, (0, 0))
             out.append(ShoppingListSummaryDto(
                 shopping_list_id = lst.id,
                 name = lst.name,
+                display_name = lst.display_name,
                 status = lst.status,
                 created_at = lst.created_at,
                 completed_at = lst.completed_at,
                 planned_shop_date = lst.planned_shop_date,
+                effective_date = lst.effective_date,
+                is_next_up = lst.id == next_up_id,
                 line_count = total,
                 ticked_count = ticked,
             ))
-        # Active (most recent first), then archived (most recent first). With
-        # "primary" inferred client-side, there's no stored flag to sort by.
-        out.sort(
-            key=lambda s: (
-                s.status == SHOPPING_LIST_STATUS_DONE,
-                -(s.created_at.timestamp() if s.created_at else 0),
-            )
-        )
+        # One time-ordered continuum (UX-v2): past at the top, future at the
+        # bottom, done and active interleaved by their effective date. The
+        # rail and the mobile dropdown render this order verbatim.
+        out.sort(key=lambda s: (s.effective_date, s.created_at))
         return out
+
+
+def _next_up_list_id(lists: List[ShoppingList]) -> UUID | None:
+    """The list the UI should land on / flag as "next up" (UX-v2 §3.3):
+    1. a live shop always wins (earliest if several are mid-shop);
+    2. else the pending list whose effective date comes first on/after the
+       most recent completed list ("first date-wise after the last completed");
+    3. else (only overdue pending lists) the earliest pending one;
+    4. else (everything done) the most recently completed.
+    """
+    if not lists:
+        return None
+
+    def time_key(lst: ShoppingList):
+        return (lst.effective_date, lst.created_at)
+
+    shopping = [l for l in lists if l.is_shopping]
+    if shopping:
+        return min(shopping, key=time_key).id
+
+    pending = [l for l in lists if not l.is_done]
+    done = [l for l in lists if l.is_done]
+    if pending:
+        if done:
+            last_completed = max(
+                (d.completed_at for d in done if d.completed_at),
+                default=None,
+            )
+            if last_completed is not None:
+                after = [
+                    l for l in pending
+                    if l.effective_date >= last_completed.date()
+                ]
+                if after:
+                    return min(after, key=time_key).id
+        return min(pending, key=time_key).id
+
+    return max(done, key=lambda l: l.completed_at or l.created_at).id
 
 
 @SHOPPING_LIST_ROUTER.route("", methods=["GET"])

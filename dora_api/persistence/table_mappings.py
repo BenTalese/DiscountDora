@@ -189,7 +189,9 @@ def configure_mappings(db: SQLAlchemy):
     shopping_list_table = Table(
         "ShoppingList", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("name", String(255), nullable=False),
+        # NULL = no custom name; the API serves a date-derived display_name
+        # (UX-v2 — custom name is clearable, lists self-label from dates).
+        Column("name", String(255), nullable=True),
         # P6-01 lifecycle status (draft/shopping/done) — replaces the old
         # is_archived / is_in_progress flag pair. "Primary" is inferred from
         # DRAFT-count at read time (Chunk 2), not stored.

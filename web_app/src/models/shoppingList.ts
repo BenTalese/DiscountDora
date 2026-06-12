@@ -15,7 +15,12 @@ export function isListShopping(status: ShoppingListStatus): boolean {
 
 export type ShoppingListSummary = {
     shopping_list_id: string;
-    name: string;
+    /** The user's custom name; `null` = self-labelled from dates. Use
+     *  `display_name` for rendering — this field only prefills rename. */
+    name: string | null;
+    /** UX-v2, server-owned (R-003): custom name > planned shop date >
+     *  creation date. Always render this one. */
+    display_name: string;
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;
@@ -23,6 +28,13 @@ export type ShoppingListSummary = {
      *  for. Drives landing-page pick, selector sort, and shopping-day
      *  banner. `null` = unscheduled. */
     planned_shop_date: string | null;
+    /** UX-v2, server-owned: finalised shop date > planned shop date >
+     *  created. The summaries response arrives sorted ascending by this —
+     *  render the rail/dropdown in payload order. */
+    effective_date: string;
+    /** UX-v2, server-owned: exactly one summary is flagged as the list the
+     *  UI should land on / mark "next up" (§3.3 rule lives server-side). */
+    is_next_up: boolean;
     line_count: number;
     ticked_count: number;
 };
@@ -94,7 +106,10 @@ export type ShoppingListTotals = {
 
 export type ShoppingListDetail = {
     shopping_list_id: string;
-    name: string;
+    /** Custom name (`null` = self-labelled) — see ShoppingListSummary. */
+    name: string | null;
+    /** Resolved label to render — see ShoppingListSummary. */
+    display_name: string;
     status: ShoppingListStatus;
     created_at: string;
     completed_at: string | null;

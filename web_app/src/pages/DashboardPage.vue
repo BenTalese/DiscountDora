@@ -158,7 +158,7 @@
                         <span class="dora-card-action">Open list →</span>
                     </header>
                     <div class="dora-primary-list-name">
-                        {{ quickAddTargetSummary.name }}
+                        {{ quickAddTargetSummary.display_name }}
                     </div>
                     <div v-if="primaryListStats" class="dora-stat-grid q-mt-sm">
                         <div class="dora-stat">

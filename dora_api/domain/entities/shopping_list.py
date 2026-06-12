@@ -106,15 +106,28 @@ class ShoppingListLine(BaseEntity):
         PURCHASED_MERCHANT_ID = "purchased_merchant_id"
 
 
+def format_list_date(value: date, today: date | None = None) -> str:
+    """Human label for a list's date-derived display name ("Sat 14 Jun");
+    the year is appended only when it isn't the current one."""
+    today = today or date.today()
+    fmt = "%a %d %b" if value.year == today.year else "%a %d %b %Y"
+    return value.strftime(fmt)
+
+
 @dataclass
 class ShoppingList(BaseEntity):
-    name: str
+    # The user's custom name. None = no custom name — the list labels itself
+    # from its dates via `display_name` below. (UX-v2: was NOT NULL with a
+    # date string baked in at create time, which went stale the moment a
+    # planned shop date was set or changed.)
+    name: str | None
     created_at: datetime
     # Lifecycle status (see SHOPPING_LIST_STATUS_* above). Transitions:
     #   draft    -> shopping : user clicks Start shopping
-    #   shopping -> draft    : user clicks Stop shopping (no finish)
-    #   draft/shopping -> done : Finish (restock + snapshot) or plain archive
+    #   draft/shopping -> done : Finish (restock review + snapshot)
     #   done     -> draft    : Reopen (reverses the finish from finish_snapshot)
+    # (UX-v2 removed the shopping -> draft "stop/pause" transition and the
+    # restock-less "archive" path — lists are finished or deleted.)
     status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
     # P6-01 Chunk 7. Optional shopping day the user is planning this list
@@ -132,6 +145,34 @@ class ShoppingList(BaseEntity):
     # (matches the noload pattern used elsewhere — table_mappings sets
     # lazy="noload"). Default empty so seed/in-memory construction works.
     lines: List[ShoppingListLine] = field(default_factory=list)
+
+    @property
+    def display_name(self) -> str:
+        """Server-owned display name (R-003): the custom name when set, else
+        the planned shop date, else the creation date. Clearing the custom
+        name makes the list re-label itself from its dates."""
+        if self.name:
+            return self.name
+        if self.planned_shop_date:
+            return format_list_date(self.planned_shop_date)
+        created = (
+            self.created_at.date()
+            if isinstance(self.created_at, datetime) else self.created_at
+        )
+        return format_list_date(created)
+
+    @property
+    def effective_date(self) -> date:
+        """Where the list sits in time, for ordering and the next-up pick:
+        finalised shop date (completed_at) > planned shop date > created."""
+        if self.is_done and self.completed_at:
+            return self.completed_at.date()
+        if self.planned_shop_date:
+            return self.planned_shop_date
+        return (
+            self.created_at.date()
+            if isinstance(self.created_at, datetime) else self.created_at
+        )
 
     @property
     def is_done(self) -> bool:

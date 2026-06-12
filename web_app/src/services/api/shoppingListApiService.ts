@@ -13,7 +13,9 @@ export type CreateShoppingListCommand = {
 };
 
 export type UpdateShoppingListCommand = {
-    name?: string;
+    /** UX-v2 — explicit `null` clears the custom name (the list then
+     *  self-labels from its dates); omitting leaves it alone. */
+    name?: string | null;
     status?: ShoppingListStatus;
     /** P6-01 Chunk 7 — explicit `null` clears; omitting leaves it alone. */
     planned_shop_date?: string | null;
@@ -51,6 +53,17 @@ export type CopyShoppingListCommand = {
 
 export type FinishResult = {
     items_restocked: number;
+};
+
+/** UX-v2 restock review — per-item level choice from the finish modal.
+ *  Items without an override restock to Well-Stocked (server default). */
+export type FinishLevelOverride = {
+    stock_item_id: string;
+    stock_level_id: string;
+};
+
+export type FinishShoppingListCommand = {
+    level_overrides?: FinishLevelOverride[];
 };
 
 export type QuickAddCandidate = {
@@ -164,10 +177,13 @@ export default class ShoppingListApiService {
     deleteAsync = async (id: string): Promise<void> =>
         await this.httpClient.delete<void>(`/shopping-lists/${id}`);
 
-    finishAsync = async (id: string): Promise<FinishResult> =>
-        await this.httpClient.post<FinishResult, Record<string, never>>(
+    finishAsync = async (
+        id: string,
+        command: FinishShoppingListCommand = {},
+    ): Promise<FinishResult> =>
+        await this.httpClient.post<FinishResult, FinishShoppingListCommand>(
             `/shopping-lists/${id}/finish`,
-            {},
+            command,
         );
 
     /** F5: inverse of finish (Reopen). The server reads its own
@@ -244,15 +260,11 @@ export default class ShoppingListApiService {
             {},
         );
 
+    // UX-v2: there is deliberately no stopShoppingAsync — the lifecycle is
+    // Start shopping → Finish & restock (→ Reopen); /stop was removed.
     startShoppingAsync = async (id: string): Promise<void> =>
         await this.httpClient.post<void, Record<string, never>>(
             `/shopping-lists/${id}/start`,
-            {},
-        );
-
-    stopShoppingAsync = async (id: string): Promise<void> =>
-        await this.httpClient.post<void, Record<string, never>>(
-            `/shopping-lists/${id}/stop`,
             {},
         );
 

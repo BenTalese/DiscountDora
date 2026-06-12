@@ -262,6 +262,36 @@ exceptions, which still must be commented) · **Source** (where it was establish
   rewrites).
 - **Source:** ADR-004; this session's FilterBar bug (FU-087).
 
+### R-012 — Discoverability: working features stay visible
+- **Rule:** A feature the user is expected to *use* must be visibly reachable
+  on the surface where it applies — a labelled button, a toolbar action, an
+  inline control. Overflow/ellipsis menus ("⋮", "More") are reserved for
+  actions that are **rare or destructive** (delete, clear-all, export/print,
+  one-a-month housekeeping). Never bury a working action three taps deep to
+  save visual space; if the toolbar is crowded, that's a design problem to
+  solve with hierarchy, not with hiding.
+- **Why:** If it's hidden, the user is less likely to find out it exists.
+  The shopping-list surface proved it repeatedly: group-by/refresh-deals/
+  move/export all sat behind one unlabelled ellipsis, the per-row actions sat
+  behind a second one, the price editor hid behind an unstyled text chip and
+  the shop-day setter behind an unstyled text link — the user reported
+  *missing the existence* of several of these (UX-v2 feedback S5/S12/S14/S17).
+- **Apply:** When adding an action, default it to a visible labelled control
+  on the page toolbar (`PageToolbar` actions slot) or directly on the row it
+  affects. Move it into a "More" overflow only if it is rare or destructive —
+  and label that dropdown "More", never a bare icon. Buttons that *look* like
+  text (links with no affordance) count as hidden.
+- **Violation signal:** a new q-menu/ellipsis holding everyday actions; an
+  action only reachable from a kebab when there's row/toolbar space; a
+  clickable element styled as plain text; a feature whose only entry point is
+  inside another feature's dialog.
+- **Carve-outs:** dense list rows (e.g. a virtualised rail) may keep per-item
+  housekeeping behind a kebab — the row's *primary* action (select/open) must
+  still be direct. Document anything else inline with the rule id.
+- **Source:** ADR-006; shopping-list UX-v2 session (user: "keep features
+  visible/easily reachable as much as possible — this should be an
+  engineering rule").
+
 ---
 
 ## ADR process (evaluate every task)
@@ -420,6 +450,45 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   primitive) + R-003 (server owns the fact, client doesn't shadow it)
   + ADR-002 (this is the consolidated form of the per-flag composable
   pattern ADR-002 seeded).
+
+### ADR-006 — Working features stay visible; overflow menus only for rare/destructive actions
+- **Date / task:** 2026-06-12 (shopping-list UX v2 build, user directive)
+- **Status:** accepted
+- **Context:** The shopping-list surface hid its everyday actions behind two
+  layers of unlabelled ellipsis menus, styled its price editor as a tiny text
+  chip and its shop-day setter as a plain text link. The user repeatedly
+  failed to discover features that existed (their words: "If it's hidden,
+  the user is less likely to find it exists … keep features visible/easily
+  reachable as much as possible — this should be an engineering rule").
+- **Decision:** Adopt R-012. Everyday actions get visible labelled controls
+  (toolbar / on-row); overflow menus are reserved for rare or destructive
+  actions and are labelled "More"; clickable things must look clickable.
+- **Consequences:** Toolbars carry more visible buttons (acceptable — that's
+  what the toolbar is for); audits of a surface now include "is anything
+  load-bearing hidden in a kebab?". Rules out the reflex of shoving new
+  actions into an existing ⋮ to avoid layout work. Dense-list rows keep a
+  narrow carve-out for per-item housekeeping.
+- **Promotes rule:** R-012.
+
+### ADR-007 — API JSON serialises dates/datetimes as ISO 8601
+- **Date / task:** 2026-06-12 (shopping-list UX v2 build)
+- **Status:** accepted
+- **Context:** Flask's default JSON provider emits `date`/`datetime` as
+  RFC 1123 ("Tue, 01 Sep 2026 00:00:00 GMT"). Every client-side string
+  comparison against ISO dates silently failed — the route guard's
+  `planned_shop_date === '2026-09-01'` never matched (so today's-list
+  landing never worked), and the Chunk-7 e2e tests that asserted ISO had
+  never passed. Found while adding `effective_date` / `next_up_list_id`.
+- **Decision:** `DoraJSONProvider` on the Flask app (`dora_api/app.py`):
+  `datetime` → `isoformat()` (offset included), `date` → `YYYY-MM-DD`.
+  New API fields assume ISO; client code may compare/sort date strings
+  lexicographically (ISO sorts correctly; RFC never did).
+- **Consequences:** Every date/datetime in every response changed format —
+  one-off risk absorbed now (JS `new Date()` parses ISO at least as well as
+  RFC), in exchange for date equality/sorting working at all. Rules out
+  per-endpoint string formatting of dates in DTOs.
+- **Promotes rule:** none — it's one global setting, not a recurring
+  decision; R-003/R-010 already cover "don't stringly-type domain values".
 
 ---
 

@@ -14,9 +14,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.shopping_list import (
-    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_DRAFT,
-    SHOPPING_LIST_STATUS_SHOPPING, SHOPPING_LIST_STATUS_VALUES, ShoppingList,
-    ShoppingListLine)
+    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
+    SHOPPING_LIST_STATUS_VALUES, ShoppingList, ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
@@ -50,9 +49,10 @@ class CreateShoppingListHandler:
 
     def handle(self, request: CreateShoppingListRequest) -> CreateShoppingListResponse:
         now = datetime.now(timezone.utc)
-        # Default name = today's date — most users want a list-per-shop.
-        # Auto-naming keeps the create UX one click.
-        name = (request.name or "").strip() or now.strftime("%a %d %b")
+        # No auto-materialised date name (UX-v2): name stays NULL unless the
+        # user typed one, and the API serves a date-derived display_name that
+        # tracks the planned shop date if one is set later.
+        name = (request.name or "").strip() or None
         new_list = ShoppingList(
             name=name,
             created_at=now,
@@ -84,7 +84,11 @@ def create_shopping_list():
 
 class UpdateShoppingListRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+    # Pass a string to set, or explicit `null` to clear the custom name (the
+    # list then self-labels from its dates via display_name). Field unset on
+    # the wire = leave the existing value alone — same convention as
+    # planned_shop_date below.
+    name: str | None = Field(default=None, max_length=255)
     # Lifecycle status (draft / shopping / done). Setting it to/from `done`
     # also manages completed_at. Note: this is the plain status edit — the
     # restock-and-snapshot Finish flow lives in /finish, not here.
@@ -110,8 +114,10 @@ class UpdateShoppingListHandler:
             return UpdateShoppingListResponse(not_found=True)
 
         set_fields = request.model_fields_set
-        if "name" in set_fields and request.name is not None:
-            lst.name = request.name
+        # Explicit `null` (or a blank string) clears the custom name;
+        # field absent = no change.
+        if "name" in set_fields:
+            lst.name = (request.name or "").strip() or None
         if "status" in set_fields and request.status is not None:
             if request.status not in SHOPPING_LIST_STATUS_VALUES:
                 return UpdateShoppingListResponse(invalid_status=True)
@@ -174,26 +180,42 @@ def delete_shopping_list(shopping_list_id: UUID):
     return no_content()
 
 
-# ───── Finish (review mode) ───────────────────────────────────────────────
+# ───── Finish (restock review) ────────────────────────────────────────────
+
+class FinishLevelOverride(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stock_item_id: UUID
+    stock_level_id: UUID
+
+
+class FinishShoppingListRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # UX-v2 restock review: per-item level choices from the finish modal.
+    # Items not listed here restock to Well-Stocked (the default). Empty /
+    # absent body = restock everything to Well-Stocked, the one-click path.
+    level_overrides: list[FinishLevelOverride] = Field(default_factory=list)
+
 
 @dataclass(slots=True)
 class FinishShoppingListResponse:
     not_found: bool = False
+    invalid_level: bool = False
     ticked_lines: int = 0
 
 
 class FinishShoppingListHandler:
-    """Marks the list as archived. For every ticked line, set the linked
-    stock item's stock level to "Well-Stocked" (the assumption is: you
-    just bought it, your pantry is restocked). Untouched lines are left
-    on the now-archived list — the caller can copy them to a new list or
-    use the "move unchecked to new list" flow.
+    """Marks the list as done. For every ticked line, set the linked stock
+    item's stock level — Well-Stocked by default (you just bought it), or
+    the level the user picked in the restock-review modal (UX-v2 M12: e.g.
+    knock a part-restocked item down to Sufficient). Untouched lines are
+    left on the now-done list — the caller can copy them to a new list or
+    use the "move unchecked" flow.
     """
 
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, shopping_list_id: UUID) -> FinishShoppingListResponse:
+    def handle(self, request: FinishShoppingListRequest, shopping_list_id: UUID) -> FinishShoppingListResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
         if lst is None:
             return FinishShoppingListResponse(not_found=True)
@@ -214,10 +236,18 @@ class FinishShoppingListHandler:
             if line.picked_offer_price is None:
                 snapshot_offer_price(self.repository, line)
 
-        # Resolve the Well-Stocked level once (by status identity, not name).
-        well_stocked = level_for_status(
-            self.repository.get(StockLevel).all(), StockStatus.WELL_STOCKED
-        )
+        # Resolve all levels once: Well-Stocked is the default target (by
+        # status identity, not name), and the UX-v2 restock-review overrides
+        # are validated against the same set.
+        all_levels = self.repository.get(StockLevel).all()
+        levels_by_id = {level.id: level for level in all_levels}
+        well_stocked = level_for_status(all_levels, StockStatus.WELL_STOCKED)
+
+        overrides: dict[UUID, UUID] = {
+            o.stock_item_id: o.stock_level_id for o in request.level_overrides
+        }
+        if any(level_id not in levels_by_id for level_id in overrides.values()):
+            return FinishShoppingListResponse(invalid_level=True)
 
         # Capture each restocked item's prior level so Reopen can reverse it
         # server-side (R-003: the undo state is a server-owned domain fact, not
@@ -225,21 +255,25 @@ class FinishShoppingListHandler:
         # overwrite below.
         level_restores: list[dict[str, str]] = []
         updated = 0
-        if well_stocked and ticked_lines:
-            stock_item_ids = [l.stock_item_id for l in ticked_lines]
+        if ticked_lines:
+            stock_item_ids = [l.stock_item_id for l in ticked_lines if l.stock_item_id]
             # stock_level is a noload relationship; eager-load it so we can
             # capture each item's prior level for the reopen snapshot.
             stock_items = self.repository.get(StockItem).include("stock_level").all(
                 EntityField(StockItem, "id").in_(stock_item_ids)
-            )
+            ) if stock_item_ids else []
             now = datetime.now(timezone.utc)
             for item in stock_items:
+                override_id = overrides.get(item.id)
+                target = levels_by_id.get(override_id) if override_id else well_stocked
+                if target is None:
+                    continue
                 if item.stock_level is not None:
                     level_restores.append({
                         "stock_item_id": str(item.id),
                         "stock_level_id": str(item.stock_level.id),
                     })
-                item.stock_level = well_stocked
+                item.stock_level = target
                 item.stock_level_last_updated = now
                 updated += 1
 
@@ -255,11 +289,17 @@ class FinishShoppingListHandler:
 
 
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/finish", methods=["POST"])
+@has_request_body(FinishShoppingListRequest)
 def finish_shopping_list(shopping_list_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(FinishShoppingListHandler).handle(shopping_list_id)
+    _Request: FinishShoppingListRequest = get_request_body() or FinishShoppingListRequest()
+    _Response = get_container().inject(FinishShoppingListHandler).handle(_Request, shopping_list_id)
     if _Response.not_found:
         return not_found("ShoppingList", shopping_list_id)
+    if _Response.invalid_level:
+        return business_rule_violation(
+            "One or more `level_overrides` reference an unknown stock level."
+        )
     _Logger.info(
         f"Finished shopping list {shopping_list_id}: "
         f"{_Response.ticked_lines} items restocked"
@@ -300,7 +340,9 @@ class CopyShoppingListHandler:
 
         now = datetime.now(timezone.utc)
         target = ShoppingList(
-            name = (request.name or "").strip() or f"Copy of {source.name}",
+            # display_name, not raw name — the source may be self-labelled
+            # (name NULL), and "Copy of Sat 14 Jun" beats "Copy of None".
+            name = (request.name or "").strip() or f"Copy of {source.display_name}",
             created_at = now,
         )
         self.repository.add(target)
@@ -335,13 +377,15 @@ def copy_shopping_list(shopping_list_id: UUID):
     return ok({"shopping_list_id": _Response.new_shopping_list_id})
 
 
-# ───── Start / Stop shopping ──────────────────────────────────────────────
-# These are a single state-transition with two endpoints rather than a
-# generic PATCH because the transition is meaningful enough to log and
-# defend invariants around (e.g. can't start an archived list).
+# ───── Start shopping ─────────────────────────────────────────────────────
+# A dedicated endpoint (not a generic PATCH) because the transition is
+# meaningful enough to log and defend invariants around (e.g. can't start a
+# done list). The old /stop ("pause") endpoint was removed in UX-v2: the
+# lifecycle is Start shopping → Finish & restock (→ Reopen), and the merged
+# single page has no separate shop surface to exit from.
 
 @dataclass(slots=True)
-class StartStopResponse:
+class StartShoppingResponse:
     not_found: bool = False
     archived: bool = False
 
@@ -350,15 +394,15 @@ class StartShoppingHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, shopping_list_id: UUID) -> StartStopResponse:
+    def handle(self, shopping_list_id: UUID) -> StartShoppingResponse:
         lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
         if lst is None:
-            return StartStopResponse(not_found=True)
+            return StartShoppingResponse(not_found=True)
         if lst.is_done:
-            return StartStopResponse(archived=True)
+            return StartShoppingResponse(archived=True)
         lst.status = SHOPPING_LIST_STATUS_SHOPPING
         self.repository.save_changes()
-        return StartStopResponse()
+        return StartShoppingResponse()
 
 
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/start", methods=["POST"])
@@ -369,34 +413,7 @@ def start_shopping(shopping_list_id: UUID):
         return not_found("ShoppingList", shopping_list_id)
     if _Response.archived:
         return business_rule_violation(
-            "Cannot start shopping on an archived list."
+            "Cannot start shopping on a finished list."
         )
     _Logger.info(f"Started shopping on list {shopping_list_id}")
-    return no_content()
-
-
-class StopShoppingHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
-
-    def handle(self, shopping_list_id: UUID) -> StartStopResponse:
-        lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
-        if lst is None:
-            return StartStopResponse(not_found=True)
-        # Stop = "I'm no longer actively shopping", i.e. back to draft. A done
-        # list stays done (stop is a no-op there) — the endpoint is idempotent
-        # and shouldn't resurrect a finished list.
-        if lst.is_shopping:
-            lst.status = SHOPPING_LIST_STATUS_DRAFT
-        self.repository.save_changes()
-        return StartStopResponse()
-
-
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/stop", methods=["POST"])
-def stop_shopping(shopping_list_id: UUID):
-    _Logger = logging.getLogger(__name__)
-    _Response = get_container().inject(StopShoppingHandler).handle(shopping_list_id)
-    if _Response.not_found:
-        return not_found("ShoppingList", shopping_list_id)
-    _Logger.info(f"Stopped shopping on list {shopping_list_id}")
     return no_content()

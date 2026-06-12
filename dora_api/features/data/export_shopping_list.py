@@ -1,4 +1,4 @@
-"""Export endpoints for shopping lists — CSV download + print-view HTML.
+"""Print-view export for shopping lists.
 
 PDF generation is deliberately not done server-side: the SPA opens the
 print-view in a new tab and calls window.print(), and the user can hit
@@ -6,30 +6,27 @@ print-view in a new tab and calls window.print(), and the user can hit
 system deps and the resulting output looks identical to the on-screen
 preview.
 
-Both endpoints hang off the existing SHOPPING_LIST_ROUTER:
-  GET /api/shopping-lists/<id>/export?format=csv
+The old CSV export (`GET /<id>/export?format=csv`) was removed in the
+shopping-list UX v2 pass — print covers the only real take-it-with-you use
+(`PROPOSAL_SHOPPING_LIST_UX_V2.md` §12 Q1).
+
+Hangs off the existing SHOPPING_LIST_ROUTER:
   GET /api/shopping-lists/<id>/print-view
 """
-import csv
-import io
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from flask import Response, render_template_string, request
+from flask import Response, render_template_string
 
-from dora_api.features.data.export_shared import (
-    PRINT_CSS,
-    PRINT_TOOLBAR,
-    export_filename,
-)
+from dora_api.features.data.export_shared import PRINT_CSS, PRINT_TOOLBAR
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.shopping_lists.get_shopping_list_detail import (
     GetShoppingListDetailHandler,
     ShoppingListDetailDto,
     ShoppingListLineDto,
 )
-from dora_api.infrastructure.api_response import bad_request, not_found
+from dora_api.infrastructure.api_response import not_found
 from dora_api.infrastructure.utils import get_container
 
 
@@ -82,46 +79,19 @@ def _grouped_by_location(
     return sorted(buckets.items(), key=lambda kv: _sort_key(kv[0]))
 
 
-# ── CSV export ─────────────────────────────────────────────────────────
-
-def _build_csv(detail: ShoppingListDetailDto) -> str:
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow([
-        "location", "item", "quantity", "merchant",
-        "unit_price", "total", "picked_up", "notes",
-    ])
-    for location, lines in _grouped_by_location(detail):
-        for line in lines:
-            qty = line.quantity if line.quantity is not None else 1
-            unit = _line_unit_price(line)
-            total = round(unit * qty, 2) if unit is not None else ""
-            writer.writerow([
-                location,
-                line.stock_item_name,
-                line.quantity if line.quantity is not None else "",
-                _line_merchant(line),
-                f"{unit:.2f}" if unit is not None else "",
-                f"{total:.2f}" if isinstance(total, float) else "",
-                "true" if line.is_ticked else "false",
-                "",   # notes column reserved for future per-line notes
-            ])
-    return buffer.getvalue()
-
-
 # ── Print-view HTML ────────────────────────────────────────────────────
 
 _PRINT_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>{{ detail.name }} · shopping list</title>
+  <title>{{ detail.display_name }} · shopping list</title>
   {{ css | safe }}
 </head>
 <body>
   {{ toolbar | safe }}
   <div class="page">
-    <h1>{{ detail.name }}</h1>
+    <h1>{{ detail.display_name }}</h1>
     <div class="meta">
       Generated {{ generated_at }} · {{ detail.lines | length }} item(s)
     </div>
@@ -199,33 +169,14 @@ def _render_print_view(detail: ShoppingListDetailDto) -> str:
 
 # ── Route ──────────────────────────────────────────────────────────────
 
-@SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/export", methods=["GET"])
-def export_shopping_list(shopping_list_id: UUID):
-    fmt = (request.args.get("format") or "csv").lower()
-    if fmt not in ("csv",):
-        return bad_request(
-            f"Unsupported export format '{fmt}'. Supported: csv. "
-            "For PDF, open the print-view and 'Save as PDF' from your browser."
-        )
-    detail = get_container().inject(GetShoppingListDetailHandler).handle(shopping_list_id)
-    if detail is None:
-        return not_found("ShoppingList", shopping_list_id)
-
-    body = _build_csv(detail)
-    filename = export_filename("shopping-list", detail.name, "csv")
-    logging.getLogger(__name__).info(
-        "Exported shopping list %s as %s (%d lines)",
-        shopping_list_id, fmt, len(detail.lines),
-    )
-    response = Response(body, mimetype="text/csv; charset=utf-8")
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
-
-
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/print-view", methods=["GET"])
 def print_view_shopping_list(shopping_list_id: UUID):
     detail = get_container().inject(GetShoppingListDetailHandler).handle(shopping_list_id)
     if detail is None:
         return not_found("ShoppingList", shopping_list_id)
     html = _render_print_view(detail)
+    logging.getLogger(__name__).info(
+        "Rendered print view for shopping list %s (%d lines)",
+        shopping_list_id, len(detail.lines),
+    )
     return Response(html, mimetype="text/html; charset=utf-8")

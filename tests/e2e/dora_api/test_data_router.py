@@ -476,30 +476,15 @@ def _first_seeded_recipe_id() -> str | None:
     return items[0]["recipe_id"]
 
 
-def test__shopping_list_export_csv__returns_csv_with_header_row(api):
+def test__shopping_list_export_csv__endpoint_removed(api):
+    # UX-v2 (§12 Q1): shopping-list CSV export was removed app-wide — print
+    # is the only list export. The whole /export route is gone, not just the
+    # csv format.
     list_id = _first_seeded_shopping_list_id()
     response = requests.get(
         f"http://localhost:5170/api/shopping-lists/{list_id}/export?format=csv",
     )
-    assert response.status_code == 200, response.text
-    assert response.headers["Content-Type"].startswith("text/csv")
-    disposition = response.headers.get("Content-Disposition", "")
-    assert "attachment" in disposition.lower()
-    assert ".csv" in disposition
-
-    body = response.text
-    # First row is the header brief specified.
-    first_line = body.splitlines()[0]
-    for col in ("location", "item", "quantity", "merchant", "unit_price", "total", "picked_up", "notes"):
-        assert col in first_line, f"header missing column {col!r}: {first_line}"
-
-
-def test__shopping_list_export__unknown_format__is_400(api):
-    list_id = _first_seeded_shopping_list_id()
-    response = requests.get(
-        f"http://localhost:5170/api/shopping-lists/{list_id}/export?format=bogus",
-    )
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test__shopping_list_print_view__returns_html_with_list_name(api):
@@ -512,7 +497,9 @@ def test__shopping_list_print_view__returns_html_with_list_name(api):
     )
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("text/html")
-    assert detail["name"] in response.text
+    # display_name, not name — name is nullable now (UX-v2 self-labelled
+    # lists) and the print view renders the resolved label.
+    assert detail["display_name"] in response.text
     # @media print stylesheet is embedded inline.
     assert "@media print" in response.text
 

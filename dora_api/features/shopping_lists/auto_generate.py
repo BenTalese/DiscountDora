@@ -246,7 +246,8 @@ class AutoGenerateHandler:
 
     def _next_auto_index(self) -> int:
         all_lists = self.repository.get(ShoppingList).all()
-        return sum(1 for l in all_lists if l.name.startswith("Auto ")) + 1
+        # name is nullable now (UX-v2 self-labelled lists) — guard the scan.
+        return sum(1 for l in all_lists if (l.name or "").startswith("Auto ")) + 1
 
     # ── Sources ─────────────────────────────────────────────────────────
 

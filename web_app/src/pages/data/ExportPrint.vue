@@ -50,7 +50,7 @@
                 >
                     <q-item-section>
                         <q-item-label>
-                            {{ list.name }}
+                            {{ list.display_name }}
                             <q-chip
                                 v-if="list.status === 'done'"
                                 dense
@@ -68,25 +68,17 @@
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side>
-                        <div class="row q-gutter-xs">
-                            <q-btn
-                                flat
-                                dense
-                                :icon="ICONS.file_download"
-                                label="CSV"
-                                no-caps
-                                @click="shoppingExport.downloadCsv(list.shopping_list_id)"
-                            />
-                            <q-btn
-                                flat
-                                dense
-                                :icon="ICONS.print"
-                                label="Print"
-                                no-caps
-                                color="primary"
-                                @click="shoppingExport.openPrintView(list.shopping_list_id)"
-                            />
-                        </div>
+                        <!-- UX-v2 §12 Q1: shopping-list CSV export removed
+                             app-wide — print is the only list export. -->
+                        <q-btn
+                            flat
+                            dense
+                            :icon="ICONS.print"
+                            label="Print"
+                            no-caps
+                            color="primary"
+                            @click="shoppingExport.openPrintView(list.shopping_list_id)"
+                        />
                     </q-item-section>
                 </q-item>
             </q-list>

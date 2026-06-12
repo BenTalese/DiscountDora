@@ -57,14 +57,15 @@ def test__create_shopping_list__defaults_to_draft_status(api):
     assert "is_in_progress" not in detail
 
 
-def test__start_then_stop__transitions_status(api):
-    list_id = _create_list(f"Lifecycle start/stop {uuid4()}")
+def test__start__transitions_status__and_stop_is_removed(api):
+    list_id = _create_list(f"Lifecycle start {uuid4()}")
 
     assert requests.post(f"{SHOPPING_LISTS}/{list_id}/start").status_code == 204
     assert _detail(list_id)["status"] == "shopping"
 
-    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/stop").status_code == 204
-    assert _detail(list_id)["status"] == "draft"
+    # UX-v2: no pause — /stop was deleted with the shop-mode merge. The
+    # lifecycle is start -> finish (-> reopen).
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/stop").status_code == 404
 
 
 def test__update_status__invalid_value_is_rejected(api):

@@ -5,6 +5,76 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Shopping lists UX v2 — one page for the whole shop**
+  (`PROPOSAL_SHOPPING_LIST_UX_V2.md`, feedback S1–S18 + L400–L421).
+  - **Shop mode is gone as a separate page.** The detail page is now the
+    single shopping surface for every status. "Start shopping" flips the
+    page into a live-shop state: bigger tick targets, ticked lines sink to
+    the bottom with strikethrough, a sticky footer shows live progress +
+    remaining spend + the Finish CTA, and quick-add stays available mid-shop
+    (you remember the milk *in* the store). The one-item-at-a-time walk,
+    skip, up-next preview and peek-list dialog are gone with the page; the
+    price-as-you-go receipt loop, substitute swap, tap-to-type quantities
+    and keyboard shortcuts (now incl. `u` = untick last) all survived the
+    merge. The `/stop` ("pause") endpoint is gone — the lifecycle is Start
+    shopping → Finish & restock → (Reopen).
+  - **Finish & restock is now a restock review.** Finishing opens a modal
+    listing every ticked item with a per-item stock-level picker (default
+    Well-Stocked) above one "Restock & finish" button — one click for the
+    common case, per-item tweaks (e.g. "only partly topped up → Sufficient")
+    without extra screens. `POST /finish` accepts `level_overrides`.
+  - **Desktop lists rail / mobile dropdown.** All lists — active and done —
+    render as one virtualised, auto-scrolling continuum ordered by
+    *effective date* (finalised shop date → planned shop date → created),
+    past at the top, future at the bottom, with a "next up" marker. On
+    mobile the same continuum is a dropdown at the top of the page. The
+    landing redirect now follows a server-computed `next_up_list_id`
+    (live shop → first list date-wise after the last completed → earliest
+    pending → most recent done).
+  - **Top info area.** Big list name with a heading-scale status badge
+    (DRAFT / SHOPPING / DONE), readable meta row, the planned shop day as a
+    real button (tinted when today/overdue — the old banner is folded in),
+    and the completion doughnut is back (it died with the old overview page)
+    next to the server-owned money totals.
+  - **Custom names are clearable and lists self-label.** `name` is nullable;
+    a list without one displays its planned-shop-date (else creation date)
+    via a server-owned `display_name` — and re-labels itself when the shop
+    day changes. Auto-generated date-names from the old behaviour were
+    migrated to the new self-labelling.
+  - **Toolbar instead of ellipsis menus (new rule R-012).** Quick add,
+    group-by, refresh deals, select-many and the lifecycle action are
+    visible buttons; only rare/destructive actions (template, print, move
+    unticked, copy, clear, delete) live in a labelled "More" menu. Per-row
+    actions (price, swap substitute, remove) sit directly on the row — the
+    row kebab is gone, and the price control is a real outlined button.
+  - **Removed:** the StockItemChip component app-wide (rows show a plain
+    name-link + a new `StockLevelDot`; its second usage on the stock-item
+    substitutes list got the same treatment); per-line "move to another
+    list" (remove + re-add covers it; bulk "move unticked" stays);
+    the "archive" action (finish or delete — "done without restock" was a
+    redundant third path); shopping-list **CSV export** end-to-end (print
+    view remains); the browser-tab title now reads "Shopping lists".
+
+### Fixed
+- **API dates are now ISO 8601.** Flask's default serialised dates as
+  RFC 1123 ("Tue, 01 Sep 2026 00:00:00 GMT"), which silently broke every
+  client-side date comparison — including the "open today's list" landing
+  pick, which could never match. All `date`/`datetime` fields now serialise
+  ISO (ADR-007).
+- **Deliberate HTTP errors no longer masquerade as 500s.** The global
+  exception handler swallowed `abort(404)`/`abort(503)` etc. and returned
+  "An unexpected error occurred." for all of them; real status codes now
+  pass through. Unknown `/api/...` URLs also 404 properly instead of
+  serving the SPA's index.html.
+- **Dora-chat add-to-list no longer queries a dropped column.** The
+  assistant's primary-list lookup still filtered on `is_primary`, which was
+  removed from the schema in the Chunk-2 rework — the action would crash at
+  runtime; it now uses the shared draft-count resolver.
+- **Empty-state flash on the shopping list page.** The first rendered frame
+  could show "This list isn't available" before loading kicked in; the page
+  now opens on skeletons.
+
 ### Added
 - **Cart Button Chunk 3 UI side (FU-131).** The frontend half of
   L191 that was deferred from the schema/backend chunk lands here:

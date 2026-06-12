@@ -148,7 +148,10 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
 @dataclass(frozen=True, slots=True)
 class ShoppingListDetailDto:
     shopping_list_id: UUID
-    name: str
+    # Custom name (None = self-labelled) + the resolved label to render —
+    # same split as the summaries DTO; the fallback rule lives on the entity.
+    name: str | None
+    display_name: str
     status: str
     created_at: datetime
     completed_at: datetime | None
@@ -307,6 +310,7 @@ class GetShoppingListDetailHandler:
         return ShoppingListDetailDto(
             shopping_list_id = _List.id,
             name = _List.name,
+            display_name = _List.display_name,
             status = _List.status,
             created_at = _List.created_at,
             completed_at = _List.completed_at,

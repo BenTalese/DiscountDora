@@ -39,7 +39,99 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
+## [OPEN] FU-166 — Legacy e2e suite has drifted badly from the API (122 pre-existing failures)
+- **Raised:** 2026-06-12 (first known full `pytest tests` run, during UX v2)
+- **Type:** finding
+- **What:** Full suite: **122 failed / 167 passed / 10 errors**. Verified
+  pre-existing by stashing the UX v2 changes and re-running the two heaviest
+  files (`test_stock_item_router`, `test_user_router`) — identical failures
+  on baseline. Dominant modes: tests assert the *old bare-array* response
+  shape where the API now returns pagination envelopes
+  (`{items, page, limit, total}`); 404s + fixture errors through the older
+  CRUD router tests. The newer feature suites (shopping lists 21/21, audit,
+  auth, data import/export) pass. The old router tests appear to predate
+  several API reworks and were never maintained.
+- **Why it matters:** "the tests pass" currently means nothing for ~40% of
+  the suite — regressions in old surfaces are invisible. FU-164 (backup
+  sections) is one concrete member of this set.
+- **Recommended resolution:** later, as its own focused prompt — triage per
+  file: update assertions to the current API contract, or delete tests for
+  removed behaviour. Don't fix piecemeal inside feature work.
+
+## [OPEN] FU-165 — Browser-verify shopping-list UX v2
+- **Raised:** 2026-06-12 (UX v2 build session)
+- **Type:** finding (verification gate)
+- **What:** UX v2 shipped with lint + vue-tsc clean and all 21 shopping e2e
+  tests passing, but the visual/interaction layer needs a human pass in the
+  running app. Checklist: rail order + auto-scroll + next-up marker; mobile
+  dropdown; rename → clear name → list self-labels (and re-labels when the
+  shop day changes); shop-day button tones (today/overdue); doughnut +
+  totals; Start shopping → sticky footer → restock-review modal (incl. a
+  per-item level tweak) → Reopen reverses it; quick-add mid-shop; row
+  actions (price button, swap, remove); group-by; bulk select; print view;
+  no empty-state flash on load; **drag-reorder lands on the exact row you
+  drop on (FU-161)**; dashboard card + Dora-chat add-to-list still work
+  (both were touched).
+- **Recommended resolution:** now — first browser session after this lands.
+
+## [OPEN] FU-163 — App-wide undo posture: user leaning toward removal
+- **Raised:** 2026-06-12 (UX v2 decisions, §12 Q4)
+- **Type:** finding (product decision pending)
+- **What:** User: "I'm heavily questioning the usefulness of undo feature
+  everywhere in the app. Likely going to remove." Affected inventory: the
+  `useUndo` registry + silent per-tick undo entries, `notifyUndoable` toasts
+  (stock item restore et al.), and the shopping-list Reopen/unfinish flow.
+  UX v2 already removed the remove-line undo toast. **Reopen is the one
+  reviewed, server-snapshotted undo path (L420/421)** — flag it as the
+  candidate to keep if the rest goes. Relates to FU-026 (undo-oddity audit).
+- **Recommended resolution:** when the user calls it — run as a small
+  decision pass (inventory above), then a removal prompt.
+
+## [OPEN] FU-164 — Backup payload missing `product_stock_item_links` section (pre-existing test failure)
+- **Raised:** 2026-06-12 (full pytest run during UX v2)
+- **Type:** finding
+- **What:** `test__get_backup__happy_path__returns_attachment_with_expected_sections`
+  expects a `product_stock_item_links` section that `features/data/backup.py`
+  never provides — the string appears nowhere in `dora_api`. The test was
+  updated in commit `d2153e3` ("Tidy up incorrect barcode implementation…")
+  ahead of a backup change that never landed. Unrelated to UX v2 (fails on
+  main too).
+- **Recommended resolution:** opportunistic — either add the links section to
+  the backup builder (likely the original intent: the product↔stock-item
+  anchor table should be backed up) or correct the test. Decide alongside the
+  next data/backup task.
+
+## [RESOLVED] FU-162 — Implement shopping-list UX v2 (single-page merge, rail, chip axe)
+- **Raised:** 2026-06-12 (shopping-list UX design session)
+- **Type:** deferred job
+- **What:** `docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V2.md` — the agreed
+  redesign of the shopping surface: lists rail (desktop) / dropdown (mobile)
+  ordered by effective date, server-owned `display_name` (nullable custom name)
+  and `next_up_list_id`, top info area (big status badge, proper shop-day
+  button, resurrected completion doughnut + totals), toolbar instead of
+  ellipsis menus, per-row direct actions + real price button, StockItemChip
+  deleted app-wide, shop-mode page merged into the detail page (full M1–M15
+  disposition table in the proposal §2).
+- **State note:** 2026-06-12 — built in full the same day (§12 decisions:
+  no location default for shopping, restock-review modal, CSV export +
+  archive + per-line move + pause all removed, R-012 adopted). ESLint +
+  vue-tsc clean; 21/21 shopping e2e tests pass (3 updated to the new
+  design). Browser verification tracked as FU-165.
+
+## [OPEN] FU-161 — Shopping list drag-and-drop "index off" (feedback L414) — confirm in browser
+- **Raised:** 2026-06-12 (shopping-list UX design session; original report L414, 06-Jun feedback)
+- **Type:** finding (reported defect, not reproduced in static read)
+- **What:** "Drag and drop is an index off somehow (wrong items being swapped)."
+  *2026-06-12 update:* a deeper read found the fix **already shipped in P6-01
+  Chunk 6** — `onLineDrop` carries a comment explicitly correcting the
+  "subtract 1 when dragging down" off-by-one, and UX v2 preserved that logic
+  verbatim. Per the reported-defect rule it stays open until verified in the
+  running app (now part of the FU-165 checklist).
+- **Recommended resolution:** confirm in browser (FU-165).
+
 ## [OPEN] FU-160 — Shopping-list "shopping day" alert (feedback L403)
+  *(2026-06-12: now unblocked — the shop-day button + ISO date serialisation
+  landed with UX v2; only the alert wiring remains.)*
 - **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
 - **Type:** deferred job
 - **What:** Feedback L403 asked for an alert when a list's planned shop date
@@ -47,9 +139,14 @@ long session summary. Distinct from the other two logs:
   existing alert pipeline. Not built.
 - **Recommended resolution:** opportunistic — bundle with FU-159 once that
   field is surfaced, or queue as a small follow-up once we have a planned
-  shop date to fire against.
+  shop date to fire against. *2026-06-12 update:* fire after FU-162 step 1
+  (shop-day button) lands; see `PROPOSAL_SHOPPING_LIST_UX_V2.md` §9.
 
-## [OPEN] FU-159 — Planned shop date not surfaced in shopping-list UI (feedback L402)
+## [RESOLVED] FU-159 — Planned shop date not surfaced in shopping-list UI (feedback L402)
+- **State note:** 2026-06-12 — resolved by UX v2 (FU-162): the shop day is a
+  real outlined button in the top info area (today/overdue tones), drives the
+  rail's effective-date order and the server-side next-up pick, and labels
+  self-named lists. Browser check folded into FU-165.
 - **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
 - **Type:** finding (design drift)
 - **What:** Feedback L402: "Being able to set a planned shopping day per list
@@ -64,8 +161,17 @@ long session summary. Distinct from the other two logs:
   L407), plus a chip / caption on each row of the list-selector dropdown
   so the sort order makes visible sense. Pair with FU-158 below — both
   belong in the same "shopping list polish" pass.
+  *2026-06-12 update:* partially built since raised (date link + editor +
+  banner exist on the detail page) but discoverability complaint stands
+  (text link, S14). Folded into FU-162 /
+  `PROPOSAL_SHOPPING_LIST_UX_V2.md` §4 — resolve there.
 
-## [OPEN] FU-158 — Shopping list responsive layout + today's-date picking (feedback L405/406/409)
+## [RESOLVED] FU-158 — Shopping list responsive layout + today's-date picking (feedback L405/406/409)
+- **State note:** 2026-06-12 — resolved by UX v2 (FU-162): desktop virtualised
+  rail + mobile dropdown (one effective-date continuum), and the landing pick
+  is the server-owned `next_up_list_id` (the old today's-date string compare
+  could never match — RFC-vs-ISO serialisation, see ADR-007). Browser check
+  folded into FU-165.
 - **Raised:** 2026-06-12 (re-surfaced during shopping-list buggy-merge audit)
 - **Type:** finding (design drift from `SHOPPING_LIST_REDESIGN_PROPOSAL.md`)
 - **What:** The Chunk-5 merge of overview-into-detail shipped, but three
@@ -93,6 +199,10 @@ long session summary. Distinct from the other two logs:
   (shopping-day alert). Keep `useUnsavedChangesGuard`-style discipline:
   responsive split is a Wave-A pattern, today's-date logic is a route-guard
   patch.
+  *2026-06-12 update:* that focused design now exists —
+  `docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V2.md` (§3 rail/dropdown,
+  §3.3 server-owned `next_up_list_id` replacing today's-date guessing).
+  Folded into FU-162 — resolve there.
 
 ## [RESOLVED] FU-157 — Shopping list URL-param change doesn't reload (and "old list reappears")
 - **Raised:** 2026-06-12 (user repro)
@@ -1857,6 +1967,9 @@ long session summary. Distinct from the other two logs:
   drip-feeding per page.
 
 ## [OPEN] FU-097 — Roll out `formatQuantity()` to recipes/shopping-list surfaces
+  *(2026-06-12, UX v2: the shopping-list half is **N/A** — list quantities are
+  unitless integers in a numeric input, there's no value+unit pair to format.
+  Only the recipe surfaces remain.)*
 - **Raised:** 2026-06-09 (Cook Mode Chunk 2)
 - **Type:** finding / R-001 + R-003 cleanup
 - **What:** The new

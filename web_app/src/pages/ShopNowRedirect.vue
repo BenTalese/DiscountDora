@@ -15,8 +15,9 @@
      * into the manifest at build time (it's per-user), so this resolves it on
      * mount and `replace()`s the URL to the right place.
      *
-     * Chunk 2 rule (no stored "primary" anymore):
-     *   - exactly one SHOPPING list → resume it in shop mode
+     * Chunk 2 rule (no stored "primary" anymore), UX-v2 single-page shape
+     * (shop mode is merged into the detail page — no /shop route):
+     *   - exactly one SHOPPING list → open it (the page is mid-shop already)
      *   - else exactly one DRAFT     → open the draft so the user can Start
      *   - else                       → overview (let them pick)
      */
@@ -35,7 +36,7 @@
             const summaries = shoppingListStore.summaries;
             const shoppingLists = summaries.filter((s) => s.status === 'shopping');
             if (shoppingLists.length === 1) {
-                await router.replace(`/shopping-lists/${shoppingLists[0]!.shopping_list_id}/shop`);
+                await router.replace(`/shopping-lists/${shoppingLists[0]!.shopping_list_id}`);
                 return;
             }
             const drafts = summaries.filter((s) => s.status === 'draft');

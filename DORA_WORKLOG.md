@@ -9,6 +9,166 @@ next.
 
 ---
 
+## 2026-06-12 — Shopping-list UX v2 BUILT (single-page merge, rail, chip axe, restock review)
+**Status:** complete — static + automated verification done (lint, vue-tsc,
+21/21 shopping e2e); browser pass pending (FU-165).
+
+**Background:** Same-day green light on `PROPOSAL_SHOPPING_LIST_UX_V2.md`
+with four decisions (proposal §12): Q1 lean "More" menu + **CSV export
+removed app-wide**; Q2 visibility promoted to a standing rule (**R-012**) +
+**archive removed** + **per-line move-to-list removed**; Q3 **no Pause**
+(`/stop` endpoint deleted); Q4 **no undo toast** on remove + app-wide undo
+posture logged (FU-163). Two design revisions: M2 — no location
+ordering/grouping default for shopping (stock location ≠ shelf location);
+M12 — finish opens a **restock review modal** (ticked items each with a
+level picker defaulting Well-Stocked + one "Restock & finish" button).
+
+**Backend (all parse + e2e-tested):**
+- `ShoppingList.name` nullable (`f3a9c1e5d2b7` migration backfills
+  auto-date names to NULL); server-owned `display_name`
+  (name → planned date → created, year appended when not current) and
+  `effective_date` + `is_next_up` on summaries; response sorted by
+  effective date ascending (rail renders payload order verbatim — R-003).
+- Next-up rule in `get_shopping_lists._next_up_list_id`: live shop →
+  first pending on/after last completed_at → earliest pending → most
+  recent done.
+- `POST /finish` accepts `level_overrides` (per-item restock levels);
+  `/stop` and the CSV `/export` endpoints deleted (print-view stays, now
+  renders display_name).
+- PATCH name supports explicit-null clear (mirrors planned_shop_date).
+- **Bug found+fixed:** assistant add-to-list still queried the *dropped*
+  `is_primary` column (would AttributeError at runtime) — now uses
+  `resolve_primary_target`. Membership/candidate DTO names now serve
+  display_name.
+- **Systemic fix (ADR-007):** `DoraJSONProvider` — dates/datetimes now
+  serialise ISO 8601 instead of Flask's RFC-1123 default. The RFC format
+  meant `planned_shop_date === 'YYYY-MM-DD'` could never match (today's-
+  list landing pick never worked; Chunk-7 ISO e2e tests had never passed).
+- **Systemic fix:** global `errorhandler(Exception)` was rewriting every
+  deliberate `abort(4xx/5xx)` into an opaque 500 — HTTPExceptions now pass
+  through. Unknown `/api/...` URLs 404 instead of serving the SPA's
+  index.html.
+
+**Frontend:**
+- `ShoppingListDetail.vue` fully rebuilt (~2,300 lines): PageToolbar with
+  visible actions (lifecycle primary, Quick add, group-by toggle, Refresh
+  deals, Select, labelled "More" for rare/destructive); top info area
+  (h4 display_name + heading-scale status badge + clearable rename +
+  body2 meta + shop-day **button** with today/overdue tones replacing the
+  banner + resurrected **doughnut** + server totals); desktop virtualised
+  **rail** (one date continuum incl. done, auto-scroll to selection,
+  next-up marker, slim kebab = copy/delete) + mobile dropdown of the same
+  continuum (new shared `ShoppingListRailItem.vue`); rows = name-link +
+  `StockLevelDot` + offer chips + qty stepper + **real outlined price
+  button** + direct swap/remove icons (kebab gone); shopping state =
+  sticky footer (progress, remaining, Finish) + bigger ticks + ticked
+  lines sink with strikethrough + quick-add stays available; **restock
+  review modal**; `u` shortcut = untick last; flash fix
+  (`loading = ref(true)`).
+- Shop-mode page + route **deleted** (M1–M15 dispositions per proposal §2);
+  route guard now just follows `is_next_up`; tab title plural;
+  ShopNowRedirect updated.
+- `StockItemChip.vue` **deleted** (both call sites; stock-item substitutes
+  list now name-link + StockLevelDot). Discovered `dora-link` CSS class
+  was never defined — the old shop-day "link" literally had no styling
+  (why it read as plain text, S14).
+- display_name adopted by every consumer (dashboard card, QuickAddSheet,
+  NewListDialog, DoraChat, ExportPrint — which also lost its list-CSV
+  button).
+
+**Tests:** 3 e2e tests updated to the new design (stop→404, export→404,
+print asserts display_name). Full-suite run in progress at close; the one
+known pre-existing failure is FU-164 (backup `product_stock_item_links`
+section never existed — fails on main too).
+
+**Engineering-standards close-gate:** R-001 (StockLevelDot +
+ShoppingListRailItem extracted for reuse; PageToolbar adopted), R-002
+(theme/Quasar tokens only), R-003 (display_name, effective_date ordering,
+next_up_list_id all server-owned; doughnut % is display math), R-005
+(migration batch-mode + Python backfill, portable both DBs), R-006 (single
+additive migration + downgrade), R-007 (PageToolbar wider rollout and the
+My-Data page redesign explicitly NOT touched), R-010/R-011 (typed DTO
+mirrors; framework idioms). **New rule R-012 (discoverability) + ADR-006;
+ADR-007 (ISO dates).** No unexplained violations.
+
+**Next up:**
+1. **User: browser-verify FU-165** (checklist in the FU) — includes the
+   FU-161 drag check.
+2. FU-160 (shopping-day alert) is now unblocked; FU-163 (undo posture)
+   awaits a user decision.
+
+**Full-suite result (post-close addendum):** `pytest tests` = 122 failed /
+167 passed / 10 errors. **Verified pre-existing, not from this unit**: with
+the UX-v2 changes stashed, the two heaviest failing files
+(`test_stock_item_router`, `test_user_router`) fail identically on baseline
+— the legacy router tests assert the old bare-array response shape where
+the API has long returned pagination envelopes, etc. All 21 shopping tests
+pass WITH the changes. Logged as FU-166 (legacy e2e suite drift — needs its
+own triage prompt); FU-164 (backup sections) is one member of that set.
+
+## 2026-06-12 — Shopping-list UX v2 design (proposal written; no code)
+**Status:** complete (design-only unit; build gated on §11 answers).
+
+**Background:** User rejected the current shopping-list presentation layer
+with 18 specific bullets (stock-item chips, ellipsis menus, tiny price
+button/info text, missing doughnut, list-switching UX, shop-mode concept,
+flash-of-empty-state, tab title, name fallback, next-up landing, etc.) and
+asked for a proper redesign — including "fully understand shop mode before
+merging it away".
+
+**Output:** `docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V2.md` — supersedes
+the v1 proposal's *presentation* layer (v1 structure shipped as P6-01 and
+stands). Headlines:
+- Shop-mode page deleted; full M1–M15 feature inventory with per-feature
+  disposition (cut one-at-a-time card/skip/up-next/peek; merge price-as-you-go,
+  finish-and-restock, progress, shortcuts into the detail page + sticky
+  shopping footer). `shopping` status enum value KEPT.
+- Desktop virtualised lists rail / mobile dropdown, ordered by effective date
+  (completed_at > planned_shop_date > created_at), auto-scroll to selection.
+- Server-owned `display_name` (custom name nullable + clearable, falls back
+  planned date → created date) and `next_up_list_id` (first date-wise after
+  last completed) — both R-003 pushes, no client copies.
+- Top info area: heading-scale status badge, body2 meta row, proper shop-day
+  button, resurrected completion doughnut (was q-circular-progress on the old
+  overview, deleted in 3e07e2e) + totals moved up.
+- StockItemChip axed app-wide (exactly 2 call sites: shopping rows +
+  stock-detail substitutes; replaced by name-link + new StockLevelDot).
+- PageToolbar adoption; frequent actions visible, only rare/destructive in
+  one "More" menu; per-row direct actions replace the line kebab; real price
+  button.
+- Root causes found during audit: empty-state flash = `loading=ref(false)`
+  first-frame fallback (ShoppingListDetail.vue:1041); name-clear impossible
+  (min_length=1 + None-skip in manage_shopping_list.py); tab title at
+  routes.ts:137.
+
+**Decisions made:**
+- Surgical supersede, not rewrite: v1's shipped structure (status enum,
+  inferred primary, receipt loop, finish/reopen snapshots) is untouched.
+- Five-step shippable build order in proposal §9 (quick wins → naming →
+  rail/next-up → rows/chip-axe → shop-mode merge).
+- Four open questions for the user in §11 (zero-overflow toolbar?, rail
+  kebab OK?, keep Pause?, remove-line confirm/undo).
+
+**Follow-ups:** FU-162 raised (implement v2, absorbs FU-158/159 + FU-097
+rows); FU-161 raised (L414 drag-drop index bug — reported defect, not
+reproduced statically, confirm in browser during step 4); FU-158/159/160
+annotated to point at the proposal. COVERAGE_GAPS.md shopping-lists row
+updated to cite v2.
+
+**Engineering-standards close-gate:** docs-only unit, no code touched.
+Design itself was checked: R-001 (StockLevelDot + PageToolbar reuse), R-002
+(theme tokens only, no new colours), R-003 (display_name + next_up_list_id
+server-side; doughnut % from server counts is display math), R-007 (PageToolbar
+wider rollout explicitly descoped). ADR evaluation: no new rule — "server owns
+derived display names" is R-003 applied, not a new principle.
+
+**Verification:** static only — all §1 audit claims carry file:line cites;
+no build/browser run (none needed for a design doc).
+
+**Next up:** user answers proposal §11 (4 questions), then FU-162 step 1
+(quick wins: tab title, flash fix, shop-day button, status badge, meta sizing,
+doughnut + totals) — no backend, immediately shippable.
+
 ## 2026-06-12 — FU-157 shopping-list URL-param fix + design-drift audit (FU-158/159/160 spawned)
 **Status:** complete (static — node_modules absent; user verifies in browser).
 

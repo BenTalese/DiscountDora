@@ -939,7 +939,7 @@
             },
             getShoppingLists: () => shoppingListStore.summaries.map((l) => ({
                 id: l.shopping_list_id,
-                name: l.name,
+                name: l.display_name,
                 itemCount: l.line_count,
                 isPrimary: l.shopping_list_id === shoppingListStore.quickAddTargetListId,
             })),

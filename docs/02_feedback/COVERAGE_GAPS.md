@@ -173,7 +173,9 @@ next reviewer can fast-skip them.
 - MEAL PLANS — `04_proposals/PROPOSAL_MEAL_PLANS.md` (F1..F49 table).
 - SHOPPING LISTS / DETAILS / MODE — `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`
   + `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` (C-impl phased plan, written
-  2026-06-06; maps L401-422), B9.1.
+  2026-06-06; maps L401-422), B9.1. **UX layer superseded 2026-06-12 by
+  `04_proposals/PROPOSAL_SHOPPING_LIST_UX_V2.md`** (S1-S18 session bullets +
+  re-maps L402-421; shop-mode page merged away, rail/dropdown, chip axe).
 - REPORTS / WASTE — feedback empty; deferred.
 - ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
   L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only

@@ -90,7 +90,9 @@ class GetMembershipHandler:
         active_list_infos = [
             ActiveListInfoDto(
                 shopping_list_id = l.id,
-                name = l.name,
+                # The resolved label (custom name or date fallback) — this
+                # DTO exists to render pickers/toasts, never to edit names.
+                name = l.display_name,
                 status = l.status,
             )
             for l in active_lists

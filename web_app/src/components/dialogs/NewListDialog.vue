@@ -200,7 +200,7 @@
     const mergeOptions = computed(() =>
         store.summaries
             .filter((s) => s.status !== 'done')
-            .map((s) => ({ label: s.name, value: s.shopping_list_id })),
+            .map((s) => ({ label: s.display_name, value: s.shopping_list_id })),
     );
 
     const form = reactive({

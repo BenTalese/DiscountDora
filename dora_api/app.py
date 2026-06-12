@@ -1,8 +1,10 @@
 import os
 import secrets
+from datetime import date, datetime
 from pathlib import Path
 
 from flask import Flask
+from flask.json.provider import DefaultJSONProvider
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
@@ -12,7 +14,29 @@ from dora_api.infrastructure.configuration_manager import DoraConfig
 
 config_manager = DoraConfig()
 
+
+class DoraJSONProvider(DefaultJSONProvider):
+    """Serialise date/datetime as ISO 8601 instead of Flask's RFC-1123
+    default ("Tue, 01 Sep 2026 00:00:00 GMT"). The RFC format silently broke
+    every client-side string comparison against ISO dates — e.g. the route
+    guard's `planned_shop_date === '2026-09-01'` never matched, so the
+    "today's list" landing pick could not work (found during shopping-list
+    UX v2; the Chunk-7 e2e tests always expected ISO). ISO also sorts
+    correctly as a plain string, which RFC does not.
+    """
+
+    @staticmethod
+    def default(o: object):
+        # datetime first — it's a subclass of date.
+        if isinstance(o, datetime):
+            return o.isoformat()
+        if isinstance(o, date):
+            return o.isoformat()
+        return DefaultJSONProvider.default(o)
+
+
 app = Flask(__name__)
+app.json = DoraJSONProvider(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = config_manager.get_db_connection_string()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # True has been deprecated and does nothing
 

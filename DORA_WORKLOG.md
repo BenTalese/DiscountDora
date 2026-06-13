@@ -9,6 +9,93 @@ next.
 
 ---
 
+## 2026-06-13 — FU-166: legacy e2e suite triaged to green + ~95× faster
+**Status:** complete — full `pytest tests` = **296 passed / 3 xfailed / 0 failed**
+in ~6s, stable across two consecutive runs.
+
+**Background:** Session-start scan surfaced FU-166 (122 failed / 167 passed /
+10 errors, ~40% of the suite drifted off the current API contract). User chose
+to triage it. Mid-task the user questioned the **13.5-min** runtime; agreed to
+fix performance *first*, then triage on the fast suite.
+
+**Part 1 — test-client conversion (the big win):**
+- Root cause of the slowness: `tests/e2e/dora_api/conftest.py` booted a real
+  werkzeug dev server in a thread and drove it over loopback TCP (~2.7s/test —
+  real connection setup + the Windows `localhost` IPv6-fallback penalty +
+  dev-server `Connection: close` defeating keep-alive).
+- Rewrote the `api` fixture to dispatch in-process via `app.test_client()`,
+  rebinding module-level `requests.*` **and** `requests.Session` to thin
+  adapters (handles `json=`/`params=`/`headers=` + multipart `files=`/`data=`,
+  exposes `.status_code`/`.headers`/`.text`/`.content`/`.json()`). **Test
+  bodies untouched.** Made the fixture `autouse` to kill a latent ordering bug
+  (tests not requesting `api` only worked if another test had already triggered
+  the global rebind).
+- Result: **813s → ~6s (~95×)**, behaviour-preserving — the fail/pass set was
+  byte-identical to the live-server baseline on the swap (verified by diffing
+  failure lists). New **R-013 + ADR-008** in `ENGINEERING_STANDARDS.md`.
+
+**Part 2 — contract triage (disposition: UPDATE, per user):** all 132 failures
+were stale expectations, not bugs. Four drift axes: path-style→query-string
+options; bare array→`{items,total,page,limit}` envelope; RFC-2822→ISO-8601
+dates (ADR-007); richer DTOs / changed seed. Per file:
+- `test_stock_level_router` (16), `test_stock_location_router` (25),
+  `test_user_router` (12), `test_merchant_router` (16) — straight contract
+  updates. Seed changed: locations are now an 8-node tree (+Cellar=9), user is
+  `dora`/admin (not "The Coolest Guy"), 4 merchants.
+- `test_stock_item_router` (38) — envelope, ISO datetime (made
+  `tests/support.is_valid_datetime` fall back to `fromisoformat`), 19-field
+  DTO, create echoes DTO (`stock_item_id` not `id`). Dropped ~90 lines of dead
+  commented-out path-style tests. Seed-coupled GET assertions made **robust**
+  (sortedness/known-item invariants, not brittle golden orderings).
+- `test_product_router` (42) — same; DTO changed `image`→`has_image` + link
+  fields, `web_url` now `example.com/p/<stockcode>`, prices via `ProductOffer`,
+  9 seed products, `image` field now `str` not bytes.
+- `test_misc`/`test_health` — health returns a status doc (`{ok,...}`) not bare
+  `True`; the unknown-GET-`/api` test `xfail`'d (FU-167, see below).
+- `test_data_router` — fixed a real test bug (`register_product_barcode` used
+  `uuid` without importing it → now passes); two `xfail`s for genuine defects.
+
+**Cross-file flakiness fixed:** shared-DB ordering broke 5 tests only in the
+full suite (auth-flows registers users; another suite creates a lowercase
+`two-drafts-…` stock item). Fixes: user tests filter to `dora` / assert
+presence not exact count; sort tests assert **case-insensitive** sortedness
+(API uses NOCASE collation) instead of position anchors.
+
+**Genuine defects found (tracked as strict `xfail`, will xpass when fixed):**
+- **FU-164** — backup omits `product_stock_item_links` (restore would drop
+  product↔stock-item links).
+- **FU-167** *(new)* — unknown **GET** `/api/<x>` returns a 404 with the SPA's
+  `text/html` body, not the JSON problem-detail the other verbs return (SPA
+  history-mode catch-all still intercepts unmatched `/api` GETs).
+- **FU-168** *(new)* — `GET /api/meal-plans/<id>/export?format=csv` 500s: the
+  CSV builder + print-view template reference `entry.meal_name` but the DTO
+  field is `recipe_name` (print-view silently renders blanks). Open question:
+  was meal-plan CSV export meant to be removed under UX-v2's "CSV export
+  removed app-wide"? If kept → field rename; if not → delete endpoint + test.
+
+**Files touched:** `tests/e2e/dora_api/conftest.py`, all 8 failing e2e test
+files + `test_misc`/`test_health`, `tests/support.py`,
+`docs/01_charter/ENGINEERING_STANDARDS.md` (R-013/ADR-008), `CHANGELOG.md`,
+`DORA_FOLLOWUPS.md`.
+
+**Engineering-standards close-gate:** R-001 (shared conftest adapters +
+`_items`/`_first` helpers), R-013/ADR-008 added. No app code changed (scope
+discipline) — the two app bugs found (FU-167, FU-168) were logged + xfail'd,
+not fixed, pending user decision. Dropped dead commented test code noted above.
+
+**Next up:**
+- **User decision on FU-168** (fix meal-plan CSV export vs delete it — hinges
+  on the UX-v2 CSV-removal scope).
+- FU-164 (backup links section) and FU-167 (SPA catch-all on GET `/api`) are
+  small app fixes whenever a data/routing task is in flight; their xfails
+  flip to xpass-failures the moment they're fixed, prompting test cleanup.
+- The original FU-165 (browser-verify shopping UX v2) and FU-160 (shop-day
+  alert) are still open from the prior session.
+
+**Open questions for user:** FU-168 disposition (above). Otherwise none.
+
+---
+
 ## 2026-06-12 — Shopping-list UX v2 BUILT (single-page merge, rail, chip axe, restock review)
 **Status:** complete — static + automated verification done (lint, vue-tsc,
 21/21 shopping e2e); browser pass pending (FU-165).

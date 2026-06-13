@@ -2,11 +2,18 @@ from datetime import datetime
 from uuid import UUID
 
 
-def is_valid_datetime(value, format='%Y-%m-%dT%H:%M:%S'):
+def is_valid_datetime(value, format=None):
+    # FU-166 / ADR-007: the API now serialises datetimes as ISO 8601
+    # (`datetime.isoformat()`), which may carry microseconds and/or an offset.
+    # With no explicit format, validate via `fromisoformat` (handles those);
+    # an explicit `format` still uses strptime for callers that need it.
     try:
-        datetime.strptime(value, format)
+        if format is None:
+            datetime.fromisoformat(value)
+        else:
+            datetime.strptime(value, format)
         return True
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 

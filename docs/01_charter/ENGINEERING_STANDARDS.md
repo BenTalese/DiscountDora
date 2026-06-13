@@ -294,6 +294,37 @@ exceptions, which still must be commented) · **Source** (where it was establish
 
 ---
 
+### R-013 — E2E API tests dispatch in-process via the Flask test client
+- **Rule:** API-level e2e tests drive the app through Flask's
+  `app.test_client()` (in-process WSGI dispatch), never a real socket server
+  booted in a background thread. The `tests/e2e/dora_api/conftest.py` `api`
+  fixture owns this: it runs `startup(is_test_env=True)`, logs in once, and
+  rebinds the module-level `requests.*` helpers **and** `requests.Session` to
+  thin adapters over the test client — so test bodies keep calling
+  `requests.get(...)` unchanged.
+- **Why:** The old harness ran a werkzeug dev server on `localhost:5170` and
+  hit it over the loopback TCP stack — ~2.7s/test (real connection setup plus
+  the Windows `localhost` IPv6-fallback penalty, compounded by the dev
+  server's `Connection: close`), ~13.5 min for ~300 tests. In-process dispatch
+  is the same coverage with no socket: the suite dropped to **~6s (~95×)**, and
+  the fail/pass set was byte-identical the moment it landed.
+- **Apply:** New e2e tests just use `requests.*` / `requests.Session()` as
+  before — the fixture is `autouse`, so the rebind is always active and tests
+  no longer depend on some *other* test having triggered it first. The adapter
+  covers `json=`/`params=`/`headers=` and multipart (`files=`/`data=`); extend
+  it there if a test needs a new transport feature, don't reintroduce a live
+  server.
+- **Violation signal:** a test spinning up `app.run(...)` in a thread; a
+  `time.sleep(N)` waiting for a server to boot; a bare `requests.get` against a
+  hardcoded `localhost:<port>` that assumes a real listener.
+- **Carve-outs:** a genuine cross-process / network-boundary test (CORS
+  preflight, real WSGI server behaviour, nginx interplay) legitimately needs a
+  live server — isolate it and document the rule id inline. Pure API contract
+  tests do not.
+- **Source:** ADR-008; FU-166 (legacy e2e suite triage).
+
+---
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -489,6 +520,30 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   per-endpoint string formatting of dates in DTOs.
 - **Promotes rule:** none — it's one global setting, not a recurring
   decision; R-003/R-010 already cover "don't stringly-type domain values".
+
+---
+
+### ADR-008 — E2E API tests run through the Flask test client, not a live server
+- **Date / task:** 2026-06-13 (FU-166 legacy e2e suite triage)
+- **Status:** accepted
+- **Context:** The e2e suite booted a werkzeug dev server in a background
+  thread and drove it with `requests` over loopback TCP. ~300 tests took
+  ~13.5 min (~2.7s each) — real connection setup, the Windows `localhost`
+  IPv6-fallback penalty, and the dev server's `Connection: close` defeating
+  keep-alive. The slow fix→verify loop made the suite a maintenance liability,
+  and ~40% of it had silently drifted off the current API contract.
+- **Decision:** Adopt R-013. The `api` fixture dispatches in-process via
+  `app.test_client()` and rebinds `requests.*` + `requests.Session` to thin
+  adapters, so test bodies are untouched. Fixture made `autouse` to remove the
+  latent ordering dependency (tests that didn't request `api` only worked when
+  another test had already triggered the global rebind).
+- **Consequences:** Suite runs in ~6s (~95× faster), behaviour-preserving
+  (identical fail/pass set on the swap). Loses the literal network/WSGI
+  boundary from the default path — acceptable for API contract tests; a real
+  cross-process test must opt back into a live server and say so (R-013
+  carve-out). Adapter must grow to cover any new transport feature
+  (multipart already handled).
+- **Promotes rule:** R-013.
 
 ---
 

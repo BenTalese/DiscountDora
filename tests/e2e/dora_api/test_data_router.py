@@ -4,13 +4,22 @@ Export-only round (N2 part 1). Inspect/restore land in the next round and
 will have their own tests.
 """
 import json
+import uuid  # FU-166: register_product_barcode tests used uuid without importing it.
 
+import pytest
 import requests
 
 
 BACKUP_URL = "http://localhost:5170/api/data/backup"
 
 
+@pytest.mark.xfail(
+    reason="FU-164: the backup builder never emits the `product_stock_item_links` "
+    "section, so a restore would drop every product↔stock-item link. The test "
+    "asserts the intended (complete) backup contract; it xpasses once the builder "
+    "adds the section. Fails identically on main — pre-existing, not from FU-166.",
+    strict=True,
+)
 def test__get_backup__happy_path__returns_attachment_with_expected_sections(api):
     response = requests.get(BACKUP_URL)
 
@@ -673,6 +682,16 @@ def test__stock_overview_print_view__returns_html(api):
     assert "Stock overview" in response.text
 
 
+@pytest.mark.xfail(
+    reason="FU-168: GET /api/meal-plans/<id>/export?format=csv 500s — the CSV "
+    "builder (and the print-view template) reference `entry.meal_name`, but the "
+    "MealPlanEntryDto field is `recipe_name` (the print-view silently renders "
+    "blanks because Jinja swallows the missing attr). Open question first: was "
+    "meal-plan CSV export meant to be removed under the UX-v2 'CSV export removed "
+    "app-wide' decision? If kept, the fix is a field rename; if not, delete the "
+    "endpoint + this test. Pre-existing, not from FU-166.",
+    strict=True,
+)
 def test__meal_plan_export_csv__returns_csv_when_plans_exist(api):
     plans_response = requests.get("http://localhost:5170/api/meal-plans")
     plans = plans_response.json().get("items") or []

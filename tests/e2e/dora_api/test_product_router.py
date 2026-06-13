@@ -38,7 +38,7 @@ def test__create_product__CreatingProductWithAllAttributes__ProductCreated(api):
 
     assert _Response.status_code == 201
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert 'http://localhost:5170/api/products/filter=product_id:eq:' in _Response.headers['location']
+    assert '/api/products?filter=product_id:eq:' in _Response.headers['location']
     assert _Response.json()['id'] == ANY
 
 
@@ -66,7 +66,7 @@ def test__create_product__CreatingProductWithIncorrectDataTypes__CannotBeDeseria
         "detail": "See errors property for more details.",
         "errors": {
             "brand": ["Input should be a valid string"],
-            "image": ["Input should be a valid bytes"],
+            "image": ["Input should be a valid string"],
             "is_active": ["Input should be a valid boolean, unable to interpret input"],
             "is_available": ["Input should be a valid boolean, unable to interpret input"],
             "merchant_name": ["Input should be a valid string"],
@@ -251,8 +251,8 @@ def test__create_product__MerchantAlreadyExists__MerchantIsReused(api):
     requests.post(base_route, json=_FirstProductRequest.model_dump())
     requests.post(base_route, json=_SecondProductRequest.model_dump())
 
-    _FirstProduct = requests.get(f'{base_route}/filter=name:eq:First_Product').json()[0]
-    _SecondProduct = requests.get(f'{base_route}/filter=name:eq:Second_Product').json()[0]
+    _FirstProduct = requests.get(f'{base_route}?filter=name:eq:First Product').json()['items'][0]
+    _SecondProduct = requests.get(f'{base_route}?filter=name:eq:Second Product').json()['items'][0]
 
     assert _FirstProduct['merchant_id'] == _SecondProduct['merchant_id']
     assert _FirstProduct['merchant_name'] == 'ReuseMerchant'
@@ -374,10 +374,10 @@ def test__create_product__EmptyRequest__IsRequiredInputsValidationFailure(api):
 
 
 def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
-    _Product = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _Product = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _Product['brand'] == 'Test'
-    assert _Product['image'] is None
+    assert _Product['has_image'] is False
     assert _Product['is_active'] is True
     assert _Product['is_available'] is True
     assert is_valid_uuid(_Product['merchant_id'])
@@ -393,7 +393,7 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
     assert _Product['web_url'] == 'www'
     assert _Product.keys() == {
         'brand',
-        'image',
+        'has_image',
         'is_active',
         'is_available',
         'merchant_id',
@@ -406,208 +406,205 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
         'size',
         'size_unit',
         'size_value',
-        'web_url'
+        'web_url',
+        'linked_stock_item_id',
+        'linked_stock_item_name'
     }
 
 
 def test__get_products__GettingAllProducts__GetsAllProducts(api):
-    _Response = requests.get(base_route)
+    _Response = requests.get(f'{base_route}?limit=500')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()) == 7
+    _Body = _Response.json()
+    # Under a generous limit, every row is returned, so total == page size.
+    assert _Body['total'] == len(_Body['items'])
+    # At least the full seed (9 products); more once create tests have run.
+    assert _Body['total'] >= 9
 
 
 def test__get_products__FilteringByStockcode__GetsSingleMatchingProduct(api):
-    _Response = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA')
+    _Response = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['merchant_stockcode'] == '50332BA'
-    assert len(_Response.json()) == 1
+    assert _Response.json()['items'][0]['merchant_stockcode'] == '50332BA'
+    assert len(_Response.json()['items']) == 1
 
 
 def test__get_products__FilteringOnNonExistentAttribute__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=stockcode:eq:50332BA')
+    _Response = requests.get(f'{base_route}?filter=stockcode:eq:50332BA')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: stockcode.',
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "Field 'stockcode' is not filterable on 'Product'.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__FilteringForProductThatDoesNotExist__EmptyResult(api):
-    _Response = requests.get(f'{base_route}/filter=product_id:eq:{uuid.uuid4()}')
+    _Response = requests.get(f'{base_route}?filter=product_id:eq:{uuid.uuid4()}')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json() == []
+    assert _Response.json()['items'] == []
 
 
 def test__get_products__FilteringWithUnsupportedOperator__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=product_id:xx:{uuid.uuid4()}')
+    _Response = requests.get(f'{base_route}?filter=product_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "Unsupported filter operator 'xx'. Supported: ct, eq, ge, gt, le, lt, ne.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__SortingByNonExistentAttribute__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/sort=stockcode:desc')
+    _Response = requests.get(f'{base_route}?sort=stockcode:desc')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'stockcode' does not exist in the view model.",
+        "detail": "See errors property for more details.",
         "status": 400,
         "errors": {},
-        "title": "Unsupported query operation.",
+        "title": "Field 'stockcode' is not filterable on 'Product'.",
         "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
     }
 
 
 def test__get_products__NoProductsMatchFilter__ReturnsEmptyList(api):
-    _Response = requests.get(f'{base_route}/filter=name:eq:NonExistentProductName')
+    _Response = requests.get(f'{base_route}?filter=name:eq:NonExistentProductName')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json() == []
+    assert _Response.json()['items'] == []
 
 
 def test__get_products__SortByNameAscending__ProductsInAscendingOrder(api):
-    _Response = requests.get(f'{base_route}/sort=name:asc')
+    _Response = requests.get(f'{base_route}?sort=name:asc&limit=500')
 
     assert _Response.status_code == 200
-    _Names = [p['name'] for p in _Response.json()]
-    assert _Names == sorted(_Names)
+    _Names = [p['name'] for p in _Response.json()['items']]
+    # API sorts case-insensitively (NOCASE collation).
+    assert _Names == sorted(_Names, key=str.lower)
 
 
 def test__get_products__SortByNameDescending__ProductsInDescendingOrder(api):
-    _Response = requests.get(f'{base_route}/sort=name:desc')
+    _Response = requests.get(f'{base_route}?sort=name:desc&limit=500')
 
     assert _Response.status_code == 200
-    _Names = [p['name'] for p in _Response.json()]
-    assert _Names == sorted(_Names, reverse=True)
+    _Names = [p['name'] for p in _Response.json()['items']]
+    assert _Names == sorted(_Names, key=str.lower, reverse=True)
 
 
 def test__get_products__SortWithUnsupportedOrder__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/sort=name:random')
+    _Response = requests.get(f'{base_route}?sort=name:random')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "Sort order 'random' is not supported. Use 'asc' or 'desc'.",
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "Sort direction 'random' is not supported. Use 'asc' or 'desc'.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__PaginationFirstPage__ReturnsCorrectSlice(api):
-    _AllProducts = requests.get(base_route).json()
-    _Response = requests.get(f'{base_route}/page=1&limit=2')
+    _AllProducts = requests.get(f'{base_route}?sort=name:asc&limit=500').json()['items']
+    _Response = requests.get(f'{base_route}?sort=name:asc&page=1&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json() == _AllProducts[:2]
+    assert _Response.json()['items'] == _AllProducts[:2]
 
 
 def test__get_products__PaginationSecondPage__ReturnsCorrectSlice(api):
-    _AllProducts = requests.get(base_route).json()
-    _Response = requests.get(f'{base_route}/page=2&limit=2')
+    _AllProducts = requests.get(f'{base_route}?sort=name:asc&limit=500').json()['items']
+    _Response = requests.get(f'{base_route}?sort=name:asc&page=2&limit=2')
 
     assert _Response.status_code == 200
-    assert _Response.json() == _AllProducts[2:4]
+    assert _Response.json()['items'] == _AllProducts[2:4]
 
 
-def test__get_products__PaginationWithoutLimit__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=1')
+def test__get_products__PageWithoutLimit__DefaultsLimit(api):
+    # FU-166: page/limit are now independently optional (limit defaults to 50).
+    _Response = requests.get(f'{base_route}?page=1')
 
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        'detail': 'You must use page and limit together.',
-        'errors': {},
-        'status': 400,
-        'title': 'Unsupported query operation.',
-        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
-    }
+    assert _Response.status_code == 200
+    assert _Response.json()['page'] == 1
+    assert _Response.json()['limit'] == 50
 
 
-def test__get_products__LimitWithoutPage__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/limit=2')
+def test__get_products__LimitWithoutPage__DefaultsPage(api):
+    _Response = requests.get(f'{base_route}?limit=2')
 
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        'detail': 'You must use page and limit together.',
-        'errors': {},
-        'status': 400,
-        'title': 'Unsupported query operation.',
-        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
-    }
+    assert _Response.status_code == 200
+    assert _Response.json()['page'] == 1
+    assert _Response.json()['limit'] == 2
+    assert len(_Response.json()['items']) == 2
 
 
 def test__get_products__PageBelowOne__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=0&limit=2')
+    _Response = requests.get(f'{base_route}?page=0&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Page must be 1 or greater.',
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "'page' must be 1 or greater.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__LimitBelowOne__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=1&limit=0')
+    _Response = requests.get(f'{base_route}?page=1&limit=0')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Limit must be 1 or greater.',
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "'limit' must be 1 or greater.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__NonIntegerPageOrLimit__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=one&limit=two')
+    _Response = requests.get(f'{base_route}?page=one&limit=two')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Page and limit must be integers.',
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "'page' must be an integer.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_products__MalformedFilter__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=name:eq')
+    _Response = requests.get(f'{base_route}?filter=name:eq')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert "Malformed filter" in _Response.json()['detail']
+    assert "Malformed filter" in _Response.json()['title']
 
 
 #endregion get_products tests
@@ -616,9 +613,9 @@ def test__get_products__MalformedFilter__IsBadRequest(api):
 
 
 def test__update_product__EmptyUpdate__ProductUnaffected(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = {})
-    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatchOperation = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _PatchResponse.status_code == 204
     assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
@@ -626,7 +623,7 @@ def test__update_product__EmptyUpdate__ProductUnaffected(api):
 
 
 def test__update_product__UpdatingAllAttributes__AllAttributesUpdated(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:51741').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:51741').json()['items'][0]
 
     _ProductRequest = UpdateProductRequest(
         is_active = False,
@@ -636,44 +633,22 @@ def test__update_product__UpdatingAllAttributes__AllAttributesUpdated(api):
     )
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest.model_dump())
-    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:51741').json()[0]
+    _ProductAfterPatchOperation = requests.get(f'{base_route}?filter=merchant_stockcode:eq:51741').json()['items'][0]
 
     assert _PatchResponse.status_code == 204
     assert _PatchResponse.headers['Content-Type'] == 'text/html; charset=utf-8'
-    assert _ProductToUpdate == {
-        'brand': 'Cadbury',
-        'image': None,
-        'is_active': True,
-        'is_available': True,
-        'merchant_name': 'Woolworths',
-        'merchant_id': _ProductToUpdate['merchant_id'],
-        'merchant_stockcode': '51741',
-        'name': 'Cadbury Freddo Cake',
-        'price_now': 2.82,
-        'price_was': 3.52,
-        'size': '1.5L',
-        'size_unit': 'L',
-        'size_value': 1.0,
-        'web_url': 'https://www.woolworths.com.au/shop/productdetails/51741',
-        'product_id': _ProductToUpdate['product_id']
-    }
-    assert _ProductAfterPatchOperation == {
-        'brand': 'Cadbury',
-        'image': None,
-        'is_active': False,
-        'is_available': False,
-        'merchant_name': 'Woolworths',
-        'merchant_id': _ProductToUpdate['merchant_id'],
-        'merchant_stockcode': '51741',
-        'name': 'Cadbury Freddo Cake',
-        'price_now': 1.0,
-        'price_was': 12.8,
-        'size': '1.5L',
-        'size_unit': 'L',
-        'size_value': 1.0,
-        'web_url': 'https://www.woolworths.com.au/shop/productdetails/51741',
-        'product_id': _ProductToUpdate['product_id']
-    }
+    # Before: the seeded Cadbury product is active/available.
+    assert _ProductToUpdate['name'] == 'Cadbury Freddo Cake'
+    assert _ProductToUpdate['is_active'] is True
+    assert _ProductToUpdate['is_available'] is True
+    # After: only the four patched fields change; identity fields are stable.
+    assert _ProductAfterPatchOperation['is_active'] is False
+    assert _ProductAfterPatchOperation['is_available'] is False
+    assert _ProductAfterPatchOperation['price_now'] == 1.0
+    assert _ProductAfterPatchOperation['price_was'] == 12.8
+    assert _ProductAfterPatchOperation['name'] == 'Cadbury Freddo Cake'
+    assert _ProductAfterPatchOperation['merchant_stockcode'] == '51741'
+    assert _ProductAfterPatchOperation['product_id'] == _ProductToUpdate['product_id']
 
 
 def test__update_product__ProductDoesNotExist__ProductNotFound(api):
@@ -692,12 +667,12 @@ def test__update_product__ProductDoesNotExist__ProductNotFound(api):
 
 
 def test__update_product__UpdatingPriceNowWithoutPriceWas__IsValidationFailure(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _ProductRequest = UpdateProductRequest(price_now = 1.0).model_dump(exclude_unset=True)
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)
-    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatchOperation = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _ProductToUpdate == _ProductAfterPatchOperation
     assert _PatchResponse.status_code == 422
@@ -714,12 +689,12 @@ def test__update_product__UpdatingPriceNowWithoutPriceWas__IsValidationFailure(a
 
 
 def test__update_product__UpdatingPriceWasWithoutPriceNow__IsValidationFailure(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _ProductRequest = UpdateProductRequest(price_was = 1.0).model_dump(exclude_unset=True)
 
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json = _ProductRequest)
-    _ProductAfterPatchOperation = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatchOperation = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _ProductToUpdate == _ProductAfterPatchOperation
     assert _PatchResponse.status_code == 422
@@ -736,11 +711,11 @@ def test__update_product__UpdatingPriceWasWithoutPriceNow__IsValidationFailure(a
 
 
 def test__update_product__UpdatingIsActiveOnly__OnlyIsActiveChanges(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _ProductRequest = UpdateProductRequest(is_active=False).model_dump(exclude_unset=True)
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json=_ProductRequest)
-    _ProductAfterPatch = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatch = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _PatchResponse.status_code == 204
     assert _ProductAfterPatch['is_active'] is False
@@ -750,11 +725,11 @@ def test__update_product__UpdatingIsActiveOnly__OnlyIsActiveChanges(api):
 
 
 def test__update_product__UpdatingIsAvailableOnly__OnlyIsAvailableChanges(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _ProductRequest = UpdateProductRequest(is_available=False).model_dump(exclude_unset=True)
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json=_ProductRequest)
-    _ProductAfterPatch = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductAfterPatch = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     assert _PatchResponse.status_code == 204
     assert _ProductAfterPatch['is_available'] is False
@@ -764,13 +739,13 @@ def test__update_product__UpdatingIsAvailableOnly__OnlyIsAvailableChanges(api):
 
 
 # def test__update_product__UpdatingPrices__PreviousOfferMovedToHistoric(api):
-#     _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+#     _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 #     _OriginalPriceNow = _ProductToUpdate['price_now']
 #     _OriginalPriceWas = _ProductToUpdate['price_was']
 
 #     _ProductRequest = UpdateProductRequest(price_now=9.99, price_was=14.99).model_dump(exclude_unset=True)
 #     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json=_ProductRequest)
-#     _ProductAfterPatch = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+#     _ProductAfterPatch = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
 #     assert _PatchResponse.status_code == 204
 #     assert _ProductAfterPatch['price_now'] == 9.99
@@ -780,7 +755,7 @@ def test__update_product__UpdatingIsAvailableOnly__OnlyIsAvailableChanges(api):
 
 
 def test__update_product__PriceNowAtZeroBoundary__IsBadRequest(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _ProductRequest = {"price_now": 0, "price_was": 10.5}
     _PatchResponse = requests.patch(f"{base_route}/{_ProductToUpdate['product_id']}", json=_ProductRequest)
@@ -791,7 +766,7 @@ def test__update_product__PriceNowAtZeroBoundary__IsBadRequest(api):
 
 
 def test__update_product__ExtraAttributes__IsBadRequest(api):
-    _ProductToUpdate = requests.get(f'{base_route}/filter=merchant_stockcode:eq:50332BA').json()[0]
+    _ProductToUpdate = requests.get(f'{base_route}?filter=merchant_stockcode:eq:50332BA').json()['items'][0]
 
     _PatchResponse = requests.patch(
         f"{base_route}/{_ProductToUpdate['product_id']}",

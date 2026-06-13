@@ -6,6 +6,13 @@ from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
 
+# FU-166: the list endpoints now (a) take query options on the query string
+# (`?filter=…&sort=…&page=…&limit=…`) rather than as a path segment, and
+# (b) return a pagination envelope `{items, total, page, limit}` instead of a
+# bare array. Query-option errors are surfaced as `bad_request(str(exc))`, so
+# the message lands in `title` (with a generic `detail`). These tests were
+# rewritten to that contract.
+
 base_route = 'http://localhost:5170/api/stock-levels'
 
 #endregion setup
@@ -14,7 +21,9 @@ base_route = 'http://localhost:5170/api/stock-levels'
 
 
 def test__get_stock_levels__GettingStockLevel__GetsAllExpectedAttributes(api):
-    _StockLevel = requests.get(base_route).json()[0]
+    # Sort explicitly — without a sort clause the envelope order is the DB's
+    # natural order, not sequence order.
+    _StockLevel = requests.get(f'{base_route}?sort=sequence:asc').json()['items'][0]
 
     assert _StockLevel['name'] == 'Well-Stocked'
     assert _StockLevel['sequence'] == 0
@@ -31,173 +40,168 @@ def test__get_stock_levels__GettingAllStockLevels__GetsAllStockLevels(api):
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert len(_Response.json()) == 4
+    assert len(_Response.json()['items']) == 4
+    assert _Response.json()['total'] == 4
 
 
 def test__get_stock_levels__FilteringBySequence__GetsSingleMatchingStockLevel(api):
-    _Response = requests.get(f'{base_route}/filter=sequence:gt:2')
+    _Response = requests.get(f'{base_route}?filter=sequence:gt:2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Out of Stock'
-    assert len(_Response.json()) == 1
+    assert _Response.json()['items'][0]['name'] == 'Out of Stock'
+    assert len(_Response.json()['items']) == 1
 
 
 def test__get_stock_levels__FilteringOnNonExistentAttribute__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=thing:eq:1')
+    _Response = requests.get(f'{base_route}?filter=thing:eq:1')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': 'Queried attribute(s) do not exist on response: thing.',
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "Field 'thing' is not filterable on 'StockLevel'.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_stock_levels__FilteringForStockLevelThatDoesNotExist__EmptyResult(api):
-    _Response = requests.get(f'{base_route}/filter=stock_level_id:eq:{uuid.uuid4()}')
+    _Response = requests.get(f'{base_route}?filter=stock_level_id:eq:{uuid.uuid4()}')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json() == []
+    assert _Response.json()['items'] == []
+    assert _Response.json()['total'] == 0
 
 
 def test__get_stock_levels__FilteringWithUnsupportedOperator__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/filter=stock_level_id:xx:{uuid.uuid4()}')
+    _Response = requests.get(f'{base_route}?filter=stock_level_id:xx:{uuid.uuid4()}')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        'detail': "The filter operator 'xx' is not supported. Supported operators: 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'ct'.",
+        'detail': 'See errors property for more details.',
         'errors': {},
         'status': 400,
-        'title': 'Unsupported query operation.',
+        'title': "Unsupported filter operator 'xx'. Supported: ct, eq, ge, gt, le, lt, ne.",
         'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_stock_levels__SortingByNonExistentAttribute__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/sort=thing:desc')
+    _Response = requests.get(f'{base_route}?sort=thing:desc')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Sort field 'thing' does not exist in the view model.",
-        "status": 400,
-        "errors": {},
-        "title": "Unsupported query operation.",
-        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+        'detail': 'See errors property for more details.',
+        'errors': {},
+        'status': 400,
+        'title': "Field 'thing' is not filterable on 'StockLevel'.",
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_stock_levels__SortingBySequenceAscending__StockLevelsSortedBySequenceAscending(api):
-    _Response = requests.get(f'{base_route}/sort=sequence:asc')
+    _Items = requests.get(f'{base_route}?sort=sequence:asc').json()['items']
 
-    assert _Response.status_code == 200
-    assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Well-Stocked'
-    assert _Response.json()[1]['name'] == 'Sufficient Stock'
-    assert _Response.json()[2]['name'] == 'Low Stock'
-    assert _Response.json()[3]['name'] == 'Out of Stock'
+    assert _Items[0]['name'] == 'Well-Stocked'
+    assert _Items[1]['name'] == 'Sufficient Stock'
+    assert _Items[2]['name'] == 'Low Stock'
+    assert _Items[3]['name'] == 'Out of Stock'
 
 
 def test__get_stock_levels__SortingBySequenceDescending__StockLevelsSortedBySequenceDescending(api):
-    _Response = requests.get(f'{base_route}/sort=sequence:desc')
+    _Items = requests.get(f'{base_route}?sort=sequence:desc').json()['items']
 
-    assert _Response.status_code == 200
-    assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Out of Stock'
-    assert _Response.json()[1]['name'] == 'Low Stock'
-    assert _Response.json()[2]['name'] == 'Sufficient Stock'
-    assert _Response.json()[3]['name'] == 'Well-Stocked'
+    assert _Items[0]['name'] == 'Out of Stock'
+    assert _Items[1]['name'] == 'Low Stock'
+    assert _Items[2]['name'] == 'Sufficient Stock'
+    assert _Items[3]['name'] == 'Well-Stocked'
 
 
 def test__get_stock_levels__GettingTwoStockLevelsPerPage__GetsPageOfTwoStockLevels(api):
-    _Response = requests.get(f'{base_route}/page=1&limit=2')
+    _Response = requests.get(f'{base_route}?sort=sequence:asc&page=1&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Well-Stocked'
-    assert _Response.json()[1]['name'] == 'Sufficient Stock'
-    assert len(_Response.json()) == 2
+    assert _Response.json()['items'][0]['name'] == 'Well-Stocked'
+    assert _Response.json()['items'][1]['name'] == 'Sufficient Stock'
+    assert len(_Response.json()['items']) == 2
+    assert _Response.json()['total'] == 4
 
 
 def test__get_stock_levels__GettingSecondPage__GetsSecondPageOfStockLevels(api):
-    _Response = requests.get(f'{base_route}/page=2&limit=2')
+    _Response = requests.get(f'{base_route}?sort=sequence:asc&page=2&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Low Stock'
-    assert _Response.json()[1]['name'] == 'Out of Stock'
-    assert len(_Response.json()) == 2
+    assert _Response.json()['items'][0]['name'] == 'Low Stock'
+    assert _Response.json()['items'][1]['name'] == 'Out of Stock'
+    assert len(_Response.json()['items']) == 2
 
 
 def test__get_stock_levels__PageValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=true&limit=2')
+    _Response = requests.get(f'{base_route}?page=true&limit=2')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Page and limit must be integers.",
-        "status": 400,
-        "errors": {},
-        "title": "Unsupported query operation.",
-        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+        'detail': 'See errors property for more details.',
+        'errors': {},
+        'status': 400,
+        'title': "'page' must be an integer.",
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
 def test__get_stock_levels__LimitValueIsNotInteger__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=1&limit=true')
+    _Response = requests.get(f'{base_route}?page=1&limit=true')
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
     assert _Response.json() == {
-        "detail": "Page and limit must be integers.",
-        "status": 400,
-        "errors": {},
-        "title": "Unsupported query operation.",
-        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
+        'detail': 'See errors property for more details.',
+        'errors': {},
+        'status': 400,
+        'title': "'limit' must be an integer.",
+        'type': 'https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1',
     }
 
 
-def test__get_stock_levels__PagingWithoutLimit__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/page=1')
+def test__get_stock_levels__PageWithoutLimit__DefaultsLimit(api):
+    # FU-166: the old "you must use page and limit together" rule was removed —
+    # `page` and `limit` are now independently optional (limit defaults to 50).
+    _Response = requests.get(f'{base_route}?page=1')
 
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        "detail": "You must use page and limit together.",
-        "status": 400,
-        "errors": {},
-        "title": "Unsupported query operation.",
-        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
-    }
+    assert _Response.status_code == 200
+    assert _Response.json()['page'] == 1
+    assert _Response.json()['limit'] == 50
+    assert len(_Response.json()['items']) == 4
 
 
-def test__get_stock_levels__LimitingWithoutPage__IsBadRequest(api):
-    _Response = requests.get(f'{base_route}/limit=1')
+def test__get_stock_levels__LimitWithoutPage__DefaultsPage(api):
+    # FU-166: limit alone is now valid; page defaults to 1.
+    _Response = requests.get(f'{base_route}?limit=1')
 
-    assert _Response.status_code == 400
-    assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json() == {
-        "detail": "You must use page and limit together.",
-        "status": 400,
-        "errors": {},
-        "title": "Unsupported query operation.",
-        "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1"
-    }
+    assert _Response.status_code == 200
+    assert _Response.json()['page'] == 1
+    assert _Response.json()['limit'] == 1
+    assert len(_Response.json()['items']) == 1
 
 
-def test__get_stock_levels__FilteringSortingAndPagingStockItems__GetsMatchingStockLevels(api):
-    _Response = requests.get(f'{base_route}/filter=sequence:gt:0&sort=sequence:desc&page=2&limit=2')
+def test__get_stock_levels__FilteringSortingAndPagingStockLevels__GetsMatchingStockLevels(api):
+    _Response = requests.get(f'{base_route}?filter=sequence:gt:0&sort=sequence:desc&page=2&limit=2')
 
     assert _Response.status_code == 200
     assert _Response.headers['Content-Type'] == 'application/json'
-    assert _Response.json()[0]['name'] == 'Sufficient Stock'
-    assert len(_Response.json()) == 1
+    # sequence>0 → Sufficient(1), Low(2), Out(3); desc → Out, Low, Sufficient;
+    # page 2 of 2 → Sufficient Stock.
+    assert _Response.json()['items'][0]['name'] == 'Sufficient Stock'
+    assert len(_Response.json()['items']) == 1
+    assert _Response.json()['total'] == 3
 
 
 #endregion get_stock_levels tests

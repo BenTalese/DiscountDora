@@ -6,6 +6,20 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **E2E test suite: ~95× faster + realigned to the current API contract**
+  (FU-166). The `tests/e2e` harness now dispatches in-process through Flask's
+  test client instead of booting a real HTTP server and driving it over the
+  loopback socket — the full ~300-test suite dropped from **~13.5 min to ~6s**
+  (test bodies unchanged; `conftest` rebinds `requests.*`/`requests.Session`
+  to test-client adapters, new rule **R-013** / **ADR-008**). The ~132 failing
+  legacy CRUD router tests (stock items/levels/locations, users, merchants,
+  products) were updated from the long-superseded contract — path-style
+  `/filter=…` → query-string `?filter=…`, bare arrays → `{items,total,page,
+  limit}` envelopes, RFC-2822 → ISO-8601 dates, refreshed seed data + DTO key
+  sets, and reworked query-option error messages. Net: **0 failures** (was 122
+  failed / 10 errors). Three remaining genuine defects are now tracked
+  `xfail`s (backup completeness FU-164, unknown-GET-/api JSON 404 FU-167,
+  meal-plan CSV export FU-168) so they xpass the moment they're fixed.
 - **Shopping lists UX v2 — one page for the whole shop**
   (`PROPOSAL_SHOPPING_LIST_UX_V2.md`, feedback S1–S18 + L400–L421).
   - **Shop mode is gone as a separate page.** The detail page is now the

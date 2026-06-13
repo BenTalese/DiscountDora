@@ -39,9 +39,56 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
-## [OPEN] FU-166 — Legacy e2e suite has drifted badly from the API (122 pre-existing failures)
+## [OPEN] FU-168 — Meal-plan CSV export 500s (`entry.meal_name` vs `recipe_name`)
+- **Raised:** 2026-06-13 (FU-166 triage)
+- **Type:** finding (genuine defect, tracked as strict `xfail`)
+- **What:** `GET /api/meal-plans/<id>/export?format=csv` returns 500. In
+  `dora_api/features/data/export_meal_plan.py`, `_build_csv` (and the
+  print-view Jinja template) read `entry.meal_name`, but `MealPlanEntryDto`
+  exposes `recipe_name` — Python raises `AttributeError` (→ 500) for CSV;
+  Jinja silently renders blank meal names in the print-view (its test passes
+  but the output is wrong).
+- **Open question first:** was meal-plan CSV export meant to be **removed**
+  under the UX-v2 "CSV export removed app-wide" decision? If kept → one-line
+  field rename (`meal_name`→`recipe_name`) in both the CSV builder and the
+  print template. If not → delete the `/export` endpoint + its test.
+  `test__meal_plan_export_csv__returns_csv_when_plans_exist` is `xfail(strict)`
+  asserting the intended (working) contract, so it xpasses once resolved.
+- **Why deferred:** app-code change + a product decision; out of scope for the
+  test-triage unit (R-/charter scope discipline).
+- **Recommended resolution:** user decides keep-vs-remove; then small fix or
+  deletion.
+
+## [OPEN] FU-167 — Unknown GET `/api/<x>` returns SPA HTML 404, not JSON problem-detail
+- **Raised:** 2026-06-13 (FU-166 triage)
+- **Type:** finding (genuine defect, tracked as strict `xfail`)
+- **What:** An unmatched **GET** under `/api/` (e.g. `/api/55/ety`) returns a
+  404 whose body is the SPA's `index.html` (`text/html`), while POST/PATCH/
+  DELETE on unmatched `/api/` paths correctly return the JSON problem-detail.
+  The SPA history-mode catch-all (GET-only, `features/spa.py`) still
+  intercepts unmatched `/api/` GETs — the UX-v2 fix that made unknown `/api/`
+  URLs 404 didn't cover the GET-via-SPA path. `test_misc`'s GET case is
+  `xfail(strict)` asserting the intended JSON 404; it xpasses once the SPA
+  catch-all excludes `/api/`.
+- **Why deferred:** app-routing change; out of scope for test triage.
+- **Recommended resolution:** opportunistic — when next touching SPA routing
+  / `features/spa.py`; exclude `/api/` from the catch-all so unmatched API
+  GETs fall through to the JSON 404 handler.
+
+## [RESOLVED] FU-166 — Legacy e2e suite has drifted badly from the API (122 pre-existing failures)
 - **Raised:** 2026-06-12 (first known full `pytest tests` run, during UX v2)
 - **Type:** finding
+- **State note:** 2026-06-13 — **RESOLVED.** Full `pytest tests` now
+  **296 passed / 3 xfailed / 0 failed** in ~6s (was 122/167/10 in 813s),
+  stable across repeated runs. Two-part fix: (1) converted the e2e harness to
+  Flask's in-process test client (~95× faster, behaviour-preserving — new
+  R-013/ADR-008); (2) updated all ~132 drifted assertions to the current
+  contract (query-string options, `{items,total,page,limit}` envelope, ISO
+  dates, refreshed seed/DTOs, reworked error messages) per the user's
+  UPDATE disposition. Three genuine defects uncovered are now tracked as
+  strict `xfail`s rather than silently passed: FU-164 (backup links section),
+  FU-167 (unknown-GET `/api` HTML 404), FU-168 (meal-plan CSV 500). See the
+  2026-06-13 worklog entry for the per-file breakdown.
 - **What:** Full suite: **122 failed / 167 passed / 10 errors**. Verified
   pre-existing by stashing the UX v2 changes and re-running the two heaviest
   files (`test_stock_item_router`, `test_user_router`) — identical failures
@@ -90,6 +137,12 @@ long session summary. Distinct from the other two logs:
 ## [OPEN] FU-164 — Backup payload missing `product_stock_item_links` section (pre-existing test failure)
 - **Raised:** 2026-06-12 (full pytest run during UX v2)
 - **Type:** finding
+- **2026-06-13 update (FU-166):** the test
+  (`test__get_backup__happy_path__returns_attachment_with_expected_sections`)
+  is now a strict `xfail` asserting the *intended* complete-backup contract,
+  so it xpasses the moment the backup builder emits the
+  `product_stock_item_links` section. Still OPEN — confirms the data gap is
+  real (a restore drops product↔stock-item links); resolution unchanged.
 - **What:** `test__get_backup__happy_path__returns_attachment_with_expected_sections`
   expects a `product_stock_item_links` section that `features/data/backup.py`
   never provides — the string appears nowhere in `dora_api`. The test was

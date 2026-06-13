@@ -238,14 +238,6 @@
                             <q-btn
                                 flat
                                 dense
-                                :icon="ICONS.file_download"
-                                label="CSV"
-                                no-caps
-                                @click="mealPlanExport.downloadCsv(plan.meal_plan_id)"
-                            />
-                            <q-btn
-                                flat
-                                dense
                                 :icon="ICONS.print"
                                 label="Print"
                                 no-caps

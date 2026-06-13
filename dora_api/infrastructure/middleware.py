@@ -1,12 +1,12 @@
 import logging
 import time
-from http.client import NOT_FOUND
 from uuid import uuid4
 
-from flask import Blueprint, g, jsonify, request, session
+from flask import Blueprint, g, request, session
 from pydantic import ValidationError
 
-from dora_api.infrastructure.api_response import (ProblemDetails, bad_request,
+from dora_api.infrastructure.api_response import (bad_request,
+                                                  endpoint_not_found,
                                                   unauthorized)
 from dora_api.infrastructure.audit import auto_audit_after_request
 from dora_api.infrastructure.decorators import REQUEST_BODYS_BY_ENDPOINT
@@ -63,12 +63,7 @@ def handle_incoming_request():
         return
 
     if not request.endpoint:
-        return jsonify(ProblemDetails(
-            detail = "Endpoint was not found.",
-            status = NOT_FOUND,
-            errors = {},
-            title = "Endpoint was not found.",
-            type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")), 404
+        return endpoint_not_found()
 
     # Auth gate runs before body deserialisation so unauthenticated callers
     # don't waste cycles having their payloads parsed.

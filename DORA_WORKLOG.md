@@ -9,9 +9,32 @@ next.
 
 ---
 
+## 2026-06-13 — Proposal: test-suite coverage / quality / cleanup (docs-only)
+**Status:** complete (design only — no code).
+**What:** Wrote `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` off the
+back of FU-166. Grounded in a fresh audit of the actual suite + CI:
+- CI runs **only** `tests/e2e/dora_api` — the 7 domain unit test files under
+  `tests/` never gate merges; no `pytest-cov`, no pytest config, 0 frontend
+  tests, `merchant_api`/`emailer` compile-only.
+- **24 of 41 API surfaces have no e2e file** (recipes, meal_plans, dashboard,
+  search, alerts, budget, waste, reports, … — full list in §4).
+- Problems observed during FU-166: shared-mutable-DB order coupling, ~40
+  duplicated problem-detail dicts, two naming conventions, seed-coupled magic
+  values.
+**Proposal shape:** themed P0/P1/P2 improvements (CI-runs-all + config +
+coverage; per-test DB rollback → isolation + xdist; shared response matchers +
+factories; gap-filling tests by layer; frontend Vitest; markers/parametrize/
+Hypothesis; cleanup) + a 4-phase sequence + candidate engineering rules.
+**Follow-up raised:** FU-169 (implement the proposal, phased).
+**Next up:** user reviews/prioritises the proposal; Phase 1 (P0s) is the
+no-regret start.
+
+---
+
 ## 2026-06-13 — FU-166: legacy e2e suite triaged to green + ~95× faster
-**Status:** complete — full `pytest tests` = **296 passed / 3 xfailed / 0 failed**
-in ~6s, stable across two consecutive runs.
+**Status:** complete — full `pytest tests` = **299 passed / 0 failed** in ~6s,
+stable across runs. (Initially 296 passed / 3 xfailed; the 3 xfail'd defects
+were then fixed in-session at the user's direction — see "Follow-on fixes".)
 
 **Background:** Session-start scan surfaced FU-166 (122 failed / 167 passed /
 10 errors, ~40% of the suite drifted off the current API contract). User chose
@@ -73,10 +96,32 @@ presence not exact count; sort tests assert **case-insensitive** sortedness
   was meal-plan CSV export meant to be removed under UX-v2's "CSV export
   removed app-wide"? If kept → field rename; if not → delete endpoint + test.
 
+**Follow-on fixes (same session, user-directed — all three xfails resolved):**
+- **FU-168 — meal-plan CSV export removed** (user: "makes no sense"). Dropped
+  the `/export` route + `_build_csv` (`export_meal_plan.py`), the `downloadCsv`
+  fn (`useMealPlanExport.ts`) + both CSV buttons (`ExportPrint.vue`,
+  `MealPlansOverview.vue`); test now asserts the endpoint 404s. Print-view kept,
+  its blank-name bug fixed (`meal_name`→`recipe_name` in the template). vue-tsc
+  clean.
+- **FU-167 — unknown GET `/api/<x>` now returns JSON** like the other verbs.
+  Factored a shared `api_response.endpoint_not_found()` (plain
+  `application/json`, matching the middleware); the SPA catch-all's `/api/`
+  branch returns it instead of `abort(404)`. Middleware de-duped to use it too.
+- **FU-164 — was a misdiagnosis.** `product_stock_item_links` already round-
+  trips in the backup; the test failed only because `expected_sections` still
+  listed the removed `meals`/`meal_recipes` (meals→recipes rework). Corrected
+  the test; no backup-builder change.
+
 **Files touched:** `tests/e2e/dora_api/conftest.py`, all 8 failing e2e test
 files + `test_misc`/`test_health`, `tests/support.py`,
 `docs/01_charter/ENGINEERING_STANDARDS.md` (R-013/ADR-008), `CHANGELOG.md`,
-`DORA_FOLLOWUPS.md`.
+`DORA_FOLLOWUPS.md`. Follow-on fixes also touched
+`dora_api/features/data/export_meal_plan.py`,
+`dora_api/features/spa/serve_spa.py`, `dora_api/infrastructure/middleware.py`,
+`dora_api/infrastructure/api_response.py`,
+`web_app/src/composables/useMealPlanExport.ts`,
+`web_app/src/pages/data/ExportPrint.vue`,
+`web_app/src/pages/MealPlansOverview.vue`.
 
 **Engineering-standards close-gate:** R-001 (shared conftest adapters +
 `_items`/`_first` helpers), R-013/ADR-008 added. No app code changed (scope
@@ -84,15 +129,15 @@ discipline) — the two app bugs found (FU-167, FU-168) were logged + xfail'd,
 not fixed, pending user decision. Dropped dead commented test code noted above.
 
 **Next up:**
-- **User decision on FU-168** (fix meal-plan CSV export vs delete it — hinges
-  on the UX-v2 CSV-removal scope).
-- FU-164 (backup links section) and FU-167 (SPA catch-all on GET `/api`) are
-  small app fixes whenever a data/routing task is in flight; their xfails
-  flip to xpass-failures the moment they're fixed, prompting test cleanup.
-- The original FU-165 (browser-verify shopping UX v2) and FU-160 (shop-day
-  alert) are still open from the prior session.
+- FU-166 + its three spin-off defects (FU-164/167/168) are all closed. Suite
+  is green (299 passed) and ~95× faster.
+- Still open from the prior session: **FU-165** (browser-verify shopping
+  UX v2) and **FU-160** (shop-day alert).
+- Worth a browser smoke of the two touched frontend surfaces (MealPlansOverview
+  + ExportPrint) to confirm the CSV buttons are gone and Print still works —
+  vue-tsc is clean but it wasn't run in a browser.
 
-**Open questions for user:** FU-168 disposition (above). Otherwise none.
+**Open questions for user:** none.
 
 ---
 

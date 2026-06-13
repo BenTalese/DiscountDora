@@ -13,13 +13,6 @@ import requests
 BACKUP_URL = "http://localhost:5170/api/data/backup"
 
 
-@pytest.mark.xfail(
-    reason="FU-164: the backup builder never emits the `product_stock_item_links` "
-    "section, so a restore would drop every product↔stock-item link. The test "
-    "asserts the intended (complete) backup contract; it xpasses once the builder "
-    "adds the section. Fails identically on main — pre-existing, not from FU-166.",
-    strict=True,
-)
 def test__get_backup__happy_path__returns_attachment_with_expected_sections(api):
     response = requests.get(BACKUP_URL)
 
@@ -52,8 +45,8 @@ def test__get_backup__happy_path__returns_attachment_with_expected_sections(api)
         "recipe_collections",
         "recipes",
         "recipe_ingredients",
-        "meals",
-        "meal_recipes",
+        # FU-164/FU-166: `meals` + `meal_recipes` were removed by the meals→recipes
+        # rework; `product_stock_item_links` (above) is now a real backup section.
         "meal_plans",
         "meal_plan_entries",
     }
@@ -682,30 +675,18 @@ def test__stock_overview_print_view__returns_html(api):
     assert "Stock overview" in response.text
 
 
-@pytest.mark.xfail(
-    reason="FU-168: GET /api/meal-plans/<id>/export?format=csv 500s — the CSV "
-    "builder (and the print-view template) reference `entry.meal_name`, but the "
-    "MealPlanEntryDto field is `recipe_name` (the print-view silently renders "
-    "blanks because Jinja swallows the missing attr). Open question first: was "
-    "meal-plan CSV export meant to be removed under the UX-v2 'CSV export removed "
-    "app-wide' decision? If kept, the fix is a field rename; if not, delete the "
-    "endpoint + this test. Pre-existing, not from FU-166.",
-    strict=True,
-)
-def test__meal_plan_export_csv__returns_csv_when_plans_exist(api):
-    plans_response = requests.get("http://localhost:5170/api/meal-plans")
-    plans = plans_response.json().get("items") or []
+def test__meal_plan_export_csv__endpoint_removed__is_404(api):
+    # FU-168: meal-plan CSV export was removed (a plan is a calendar, not a
+    # table); print-view → "Save as PDF" is the export path. The /export route
+    # is gone, so it 404s.
+    plans = requests.get("http://localhost:5170/api/meal-plans").json().get("items") or []
     if not plans:
-        return  # No seeded meal plans on this install — skip silently.
+        return  # No seeded meal plans on this install.
     plan_id = plans[0]["meal_plan_id"]
     response = requests.get(
         f"http://localhost:5170/api/meal-plans/{plan_id}/export?format=csv",
     )
-    assert response.status_code == 200, response.text
-    assert response.headers["Content-Type"].startswith("text/csv")
-    header = response.text.splitlines()[0]
-    for col in ("scheduled_for", "slot", "meal", "servings"):
-        assert col in header
+    assert response.status_code == 404
 
 
 def test__meal_plan_print_view__returns_html(api):

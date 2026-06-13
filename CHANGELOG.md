@@ -17,9 +17,20 @@ semver — major bumps signal schema or breaking-config changes.
   `/filter=…` → query-string `?filter=…`, bare arrays → `{items,total,page,
   limit}` envelopes, RFC-2822 → ISO-8601 dates, refreshed seed data + DTO key
   sets, and reworked query-option error messages. Net: **0 failures** (was 122
-  failed / 10 errors). Three remaining genuine defects are now tracked
-  `xfail`s (backup completeness FU-164, unknown-GET-/api JSON 404 FU-167,
-  meal-plan CSV export FU-168) so they xpass the moment they're fixed.
+  failed / 10 errors).
+- **Meal-plan CSV export removed.** A meal plan is a calendar, not a tabular
+  dataset — CSV added no real value, and the endpoint was 500ing anyway
+  (`entry.meal_name` vs the DTO's `recipe_name`). Dropped the
+  `GET /api/meal-plans/<id>/export` route and the CSV buttons; **print-view**
+  (→ browser "Save as PDF") stays and its blank-meal-name bug is fixed (same
+  field rename). (FU-168)
+- **Unknown `GET /api/<x>` now returns the JSON problem-detail**, not the SPA's
+  HTML 404 — matching POST/PATCH/DELETE. Shared `endpoint_not_found()` helper
+  used by both the request middleware and the SPA catch-all. (FU-167)
+- **Backup completeness confirmed.** `product_stock_item_links` already
+  round-trips in the install backup; the failing test merely expected the
+  removed `meals`/`meal_recipes` tables (meals→recipes rework) — test
+  corrected. (FU-164)
 - **Shopping lists UX v2 — one page for the whole shop**
   (`PROPOSAL_SHOPPING_LIST_UX_V2.md`, feedback S1–S18 + L400–L421).
   - **Shop mode is gone as a separate page.** The detail page is now the

@@ -39,41 +39,50 @@ long session summary. Distinct from the other two logs:
 
 # Open
 
-## [OPEN] FU-168 — Meal-plan CSV export 500s (`entry.meal_name` vs `recipe_name`)
-- **Raised:** 2026-06-13 (FU-166 triage)
-- **Type:** finding (genuine defect, tracked as strict `xfail`)
-- **What:** `GET /api/meal-plans/<id>/export?format=csv` returns 500. In
-  `dora_api/features/data/export_meal_plan.py`, `_build_csv` (and the
-  print-view Jinja template) read `entry.meal_name`, but `MealPlanEntryDto`
-  exposes `recipe_name` — Python raises `AttributeError` (→ 500) for CSV;
-  Jinja silently renders blank meal names in the print-view (its test passes
-  but the output is wrong).
-- **Open question first:** was meal-plan CSV export meant to be **removed**
-  under the UX-v2 "CSV export removed app-wide" decision? If kept → one-line
-  field rename (`meal_name`→`recipe_name`) in both the CSV builder and the
-  print template. If not → delete the `/export` endpoint + its test.
-  `test__meal_plan_export_csv__returns_csv_when_plans_exist` is `xfail(strict)`
-  asserting the intended (working) contract, so it xpasses once resolved.
-- **Why deferred:** app-code change + a product decision; out of scope for the
-  test-triage unit (R-/charter scope discipline).
-- **Recommended resolution:** user decides keep-vs-remove; then small fix or
-  deletion.
+## [OPEN] FU-169 — Implement the test-suite improvements proposal
+- **Raised:** 2026-06-13 (post-FU-166 proposal)
+- **Type:** deferred job
+- **What:** `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` — phased
+  plan to make the suite a trustworthy net: **Phase 1 (P0)** CI runs all tests
+  (not just `tests/e2e/dora_api`) + pytest config (`xfail_strict`,
+  `filterwarnings`, markers) + `pytest-cov` + shared `assert_problem`/
+  `assert_envelope` matchers + one naming convention; **Phase 2** per-test DB
+  rollback (isolation → kills order coupling, enables `xdist`) + data
+  factories + parametrize; **Phase 3** close the 24 untested API surfaces +
+  domain/repository/contract tests; **Phase 4** frontend Vitest +
+  `merchant_api`/`emailer` fixture tests + Hypothesis + Postgres CI.
+- **Why deferred:** sizeable; needs user prioritisation. Each phase ships
+  independently green.
+- **Recommended resolution:** start **Phase 1** opportunistically (half-day,
+  no-regret); sequence the rest per the proposal. Relates to FU-045 (Postgres
+  CI, Phase 4) and FU-161 (Aldi scraper — Phase 4 gives it a net).
 
-## [OPEN] FU-167 — Unknown GET `/api/<x>` returns SPA HTML 404, not JSON problem-detail
+## [RESOLVED] FU-168 — Meal-plan CSV export removed (was 500ing)
 - **Raised:** 2026-06-13 (FU-166 triage)
-- **Type:** finding (genuine defect, tracked as strict `xfail`)
-- **What:** An unmatched **GET** under `/api/` (e.g. `/api/55/ety`) returns a
-  404 whose body is the SPA's `index.html` (`text/html`), while POST/PATCH/
-  DELETE on unmatched `/api/` paths correctly return the JSON problem-detail.
-  The SPA history-mode catch-all (GET-only, `features/spa.py`) still
-  intercepts unmatched `/api/` GETs — the UX-v2 fix that made unknown `/api/`
-  URLs 404 didn't cover the GET-via-SPA path. `test_misc`'s GET case is
-  `xfail(strict)` asserting the intended JSON 404; it xpasses once the SPA
-  catch-all excludes `/api/`.
-- **Why deferred:** app-routing change; out of scope for test triage.
-- **Recommended resolution:** opportunistic — when next touching SPA routing
-  / `features/spa.py`; exclude `/api/` from the catch-all so unmatched API
-  GETs fall through to the JSON 404 handler.
+- **Type:** finding (genuine defect) → product decision
+- **What:** `GET /api/meal-plans/<id>/export?format=csv` 500'd — the CSV
+  builder + print-view template read `entry.meal_name`, but `MealPlanEntryDto`
+  exposes `recipe_name`.
+- **State note:** 2026-06-13 — **RESOLVED.** User: "meal-plan CSV export makes
+  no sense, remove." Removed the `/export` route + `_build_csv` (backend), the
+  `downloadCsv` fn from `useMealPlanExport.ts` + both CSV buttons
+  (`ExportPrint.vue`, `MealPlansOverview.vue`); the e2e test now asserts the
+  endpoint 404s. Print-view is **kept** and its latent blank-meal-name bug
+  fixed (`meal_name`→`recipe_name` in the Jinja template). vue-tsc clean.
+
+## [RESOLVED] FU-167 — Unknown GET `/api/<x>` returned SPA HTML 404, not JSON
+- **Raised:** 2026-06-13 (FU-166 triage)
+- **Type:** finding (genuine defect)
+- **What:** An unmatched **GET** under `/api/` returned a 404 with the SPA's
+  `text/html` body (the GET-only SPA catch-all matched, so the request
+  middleware's no-endpoint JSON-404 never fired and the view's `abort(404)`
+  produced the default HTML), while POST/PATCH/DELETE returned JSON.
+- **State note:** 2026-06-13 — **RESOLVED.** Factored the no-route 404 body
+  into a shared `api_response.endpoint_not_found()` (plain `application/json`,
+  matching the middleware), used by both the middleware and the SPA catch-all
+  — the catch-all's `/api/` branch now returns it instead of `abort(404)`. All
+  four verbs return the identical JSON problem-detail; the `test_misc` GET case
+  passes (xfail removed).
 
 ## [RESOLVED] FU-166 — Legacy e2e suite has drifted badly from the API (122 pre-existing failures)
 - **Raised:** 2026-06-12 (first known full `pytest tests` run, during UX v2)
@@ -134,15 +143,18 @@ long session summary. Distinct from the other two logs:
 - **Recommended resolution:** when the user calls it — run as a small
   decision pass (inventory above), then a removal prompt.
 
-## [OPEN] FU-164 — Backup payload missing `product_stock_item_links` section (pre-existing test failure)
+## [RESOLVED] FU-164 — Backup-sections test failure (misdiagnosis: stale `meals`/`meal_recipes`)
 - **Raised:** 2026-06-12 (full pytest run during UX v2)
 - **Type:** finding
-- **2026-06-13 update (FU-166):** the test
-  (`test__get_backup__happy_path__returns_attachment_with_expected_sections`)
-  is now a strict `xfail` asserting the *intended* complete-backup contract,
-  so it xpasses the moment the backup builder emits the
-  `product_stock_item_links` section. Still OPEN — confirms the data gap is
-  real (a restore drops product↔stock-item links); resolution unchanged.
+- **State note:** 2026-06-13 — **RESOLVED, and the original diagnosis was
+  wrong.** `product_stock_item_links` is *already* a real backup section
+  (`restore_shared.SECTIONS` line 78, `StockItemProduct`) and present in the
+  payload — verified by dumping the live backup. The test actually failed
+  because its `expected_sections` still listed **`meals` + `meal_recipes`**,
+  which the "Complete rework of meals" (meals→recipes) commit removed as
+  tables. Fixed by dropping those two stale keys from the test's expected set
+  (and removing the FU-166 xfail). No backup-builder change needed — the
+  product↔stock-item links do round-trip.
 - **What:** `test__get_backup__happy_path__returns_attachment_with_expected_sections`
   expects a `product_stock_item_links` section that `features/data/backup.py`
   never provides — the string appears nowhere in `dora_api`. The test was

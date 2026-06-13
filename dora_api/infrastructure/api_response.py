@@ -114,6 +114,20 @@ def forbidden(detail: str = "You do not have permission to perform this action."
     return response
 
 
+def endpoint_not_found():
+    """404 for an unknown/retired URL (no matching API endpoint). Plain
+    `application/json` (not problem+json) to match what the request middleware
+    already returns for no-route paths — shared so the SPA catch-all's
+    `/api/...` branch produces the identical body for unmatched GETs (FU-167)
+    instead of falling through to the default HTML 404."""
+    return jsonify(ProblemDetails(
+        detail = "Endpoint was not found.",
+        status = NOT_FOUND,
+        errors = {},
+        title = "Endpoint was not found.",
+        type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")), NOT_FOUND
+
+
 def not_found(entity_name: str, id: UUID) -> Response:
     response = jsonify(ProblemDetails(
         detail = f"{entity_name} with the ID '{id}' was not found.",

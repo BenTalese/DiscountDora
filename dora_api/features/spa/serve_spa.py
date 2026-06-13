@@ -26,6 +26,7 @@ from pathlib import Path
 from flask import abort, send_from_directory
 
 from dora_api.features.routers import SPA_ROUTER
+from dora_api.infrastructure.api_response import endpoint_not_found
 
 
 _Logger = logging.getLogger(__name__)
@@ -83,6 +84,11 @@ def serve_path(requested: str):
     # rather than answer 200 with index.html (an API client reading HTML
     # as success is far worse than a clean not-found; surfaced when the
     # shopping-list CSV /export endpoint was removed in UX-v2).
+    #
+    # FU-167: return the shared JSON problem-detail (the same body the request
+    # middleware returns for no-route paths) rather than `abort(404)`, which
+    # would yield the default HTML 404 — so an unmatched GET /api/<x> matches
+    # POST/PATCH/DELETE on the same path.
     if requested.startswith("api/"):
-        abort(404)
+        return endpoint_not_found()
     return _serve_file_or_index(requested)

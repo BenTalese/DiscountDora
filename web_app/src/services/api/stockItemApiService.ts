@@ -27,17 +27,6 @@ export default class StockItemApiService {
     deleteAsync = async (stockItemID: string): Promise<void> =>
         await this.httpClient.delete(`/stock-items/${stockItemID}`);
 
-    /** Restore a previously-deleted stock item from a captured snapshot.
-     *  Used by F5's Undo flow — preserves the original id so any
-     *  cross-references that haven't already been cascaded still resolve. */
-    restoreAsync = async (
-        snapshot: RestoreStockItemCommand,
-    ): Promise<{ stock_item_id: string; already_exists: boolean }> =>
-        await this.httpClient.post<
-            { stock_item_id: string; already_exists: boolean },
-            RestoreStockItemCommand
-        >('/stock-items/restore', snapshot);
-
     getAsync = async (stockItemID: string): Promise<StockItem> => {
         const qs = createQueryString([
             { field: 'stock_item_id', operator: FilterOperator.EQUAL, value: stockItemID }
@@ -129,18 +118,6 @@ export type CreateStockItemCommand = {
     /** C-1 Chunk 6 / FU-033 — image as a data-URL string, or
      *  null/omitted for none. */
     image?: string | null;
-};
-
-export type RestoreStockItemCommand = {
-    stock_item_id: string;
-    name: string;
-    stock_level_id: string;
-    stock_location_id: string | null;
-    stock_group_id?: string | null;
-    expiry_date?: string | null;
-    is_flagged?: boolean;
-    auto_add_when_low?: boolean;
-    is_open?: boolean;
 };
 
 export type UpdateStockItemCommand = {

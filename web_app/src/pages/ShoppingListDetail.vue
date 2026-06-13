@@ -151,16 +151,6 @@
                             @click="openFinishReview"
                         />
                         <BaseButton
-                            v-else-if="detail && detail.status === 'done'"
-                            variant="primary"
-                            :icon="ICONS.undo"
-                            label="Reopen"
-                            :loading="reopening"
-                            @click="onReopen"
-                        >
-                            <q-tooltip>Reopen this list to keep editing it; restock changes are reversed</q-tooltip>
-                        </BaseButton>
-                        <BaseButton
                             v-if="detail && detail.status === 'done'"
                             variant="ghost"
                             :icon="ICONS.content_copy"
@@ -973,7 +963,6 @@
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
     import { tryWithQueue } from 'src/composables/useOfflineQueue';
-    import { register as registerUndo } from 'src/composables/useUndo';
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { WELL_STOCKED_SEQUENCE } from 'src/helpers/stockStatus';
     import {
@@ -1029,9 +1018,8 @@
     type GroupByMode = 'none' | 'location' | 'merchant';
     const groupBy = ref<GroupByMode>('none');
 
-    // ── Lifecycle: start / finish / reopen ───────────────────────────
+    // ── Lifecycle: start / finish ────────────────────────────────────
     const togglingProgress = ref(false);
-    const reopening = ref(false);
 
     async function onStartShopping() {
         togglingProgress.value = true;
@@ -1054,32 +1042,6 @@
             });
         } finally {
             togglingProgress.value = false;
-        }
-    }
-
-    async function onReopen() {
-        if (!detail.value) return;
-        reopening.value = true;
-        try {
-            await api.unfinishAsync(listId.value);
-            await Promise.all([
-                refreshAll(),
-                stockItemStore.getStockItemsAsync(),
-            ]);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Reopened. Restock changes reversed.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not reopen.',
-                caption: describeApiError(err) || '',
-            });
-        } finally {
-            reopening.value = false;
         }
     }
 
@@ -1884,8 +1846,6 @@
         // are absorbed into the offline queue so ticking-off mid-shop keeps
         // working while we hunt for signal.
         const line = detail.value?.lines.find((l) => l.line_id === lineId);
-        const wasTicked = line?.is_ticked ?? false;
-        const itemName = line?.stock_item_name ?? 'item';
         if (line) line.is_ticked = value;
         if (value) recentTickStack.value.push(lineId);
         try {
@@ -1903,21 +1863,6 @@
             // place — no re-load until the queue drains and the server
             // round-trip succeeds.
             void result;
-            // F5: register a silent undo entry. Skipped when value didn't
-            // actually change (defensive; checkbox events fire on identical
-            // values during rapid taps).
-            if (wasTicked !== value) {
-                const applyTick = async (target: boolean) => {
-                    await api.updateLineAsync(listId.value, lineId, { is_ticked: target });
-                    const fresh = detail.value?.lines.find((l) => l.line_id === lineId);
-                    if (fresh) fresh.is_ticked = target;
-                };
-                registerUndo({
-                    label: value ? `Ticked ${itemName}` : `Unticked ${itemName}`,
-                    inverse: () => applyTick(wasTicked),
-                    redo: () => applyTick(value),
-                });
-            }
         } catch (err) {
             await load();
             $q.notify({

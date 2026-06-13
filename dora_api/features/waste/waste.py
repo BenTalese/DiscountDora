@@ -164,6 +164,10 @@ class GetWasteRescueHandler:
                 item = ing.stock_item
                 if item is None:
                     continue
+                # Cookbook revision §1.9 — optional ingredients are skipped
+                # so the rescue ranking matches the cookability rule.
+                if getattr(ing, "is_optional", False):
+                    continue
                 if item.id in at_risk_ids:
                     matches.append(item.name)
                 else:

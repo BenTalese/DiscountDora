@@ -186,16 +186,6 @@ export default class ShoppingListApiService {
             command,
         );
 
-    /** F5: inverse of finish (Reopen). The server reads its own
-     *  finish_snapshot to un-finish the list, restore prior stock levels, and
-     *  demote whichever sibling it auto-promoted to primary — no client
-     *  snapshot is posted. */
-    unfinishAsync = async (id: string): Promise<void> =>
-        await this.httpClient.post<void, Record<string, never>>(
-            `/shopping-lists/${id}/unfinish`,
-            {},
-        );
-
     copyAsync = async (id: string, command: CopyShoppingListCommand): Promise<{ shopping_list_id: string }> =>
         await this.httpClient.post<{ shopping_list_id: string }, CopyShoppingListCommand>(
             `/shopping-lists/${id}/copy`,

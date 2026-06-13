@@ -25,6 +25,9 @@ export type CreateRecipeIngredientCommand = {
      *  sibling sections by `client_id` (or its real UUID when sections
      *  are not being replaced in this payload). Omit/null = unsectioned. */
     section_client_id?: string | null;
+    /** Cookbook revision §1.9 — optional flag. Default false; omitted by
+     *  legacy editors (the server defaults to false anyway). */
+    is_optional?: boolean;
 };
 
 /** C-4 Chunk 10 — a named section on the create/update payload. */

@@ -55,7 +55,7 @@
                             outlined
                             label="Time of Day"
                             v-model="form.time_of_day"
-                            :options="['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Any']"
+                            :options="timeOfDayOptions"
                             clearable
                         />
                         <q-select
@@ -63,7 +63,7 @@
                             outlined
                             label="Difficulty"
                             v-model="form.difficulty"
-                            :options="['Easy', 'Medium', 'Hard']"
+                            :options="difficultyOptions"
                             clearable
                         />
                         <q-input
@@ -196,12 +196,22 @@
                             v-model="ingredient.unit"
                         />
                         <q-input
-                            class="col-10 col-sm-3"
+                            class="col-10 col-sm-2"
                             dense
                             outlined
                             label="Notes"
                             v-model="ingredient.notes"
                         />
+                        <q-checkbox
+                            class="col-auto col-sm-1"
+                            v-model="ingredient.is_optional"
+                            label="Optional"
+                            dense
+                        >
+                            <q-tooltip>
+                                Optional ingredients don't affect whether the recipe is cookable.
+                            </q-tooltip>
+                        </q-checkbox>
                         <BaseButton
                             class="col-2 col-sm-1 text-negative"
                             variant="icon"
@@ -235,7 +245,14 @@
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
+    import {
+        DEFAULT_MEAL_SLOTS,
+        DIFFICULTY_VALUES,
+    } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
+
+    const timeOfDayOptions = [...DEFAULT_MEAL_SLOTS];
+    const difficultyOptions = [...DIFFICULTY_VALUES];
 
     const props = defineProps<{ modelValue: boolean; recipe: Recipe | null }>();
     const emit = defineEmits<{
@@ -365,7 +382,8 @@
                     stock_item_id: i.stock_item_id,
                     quantity: i.quantity,
                     unit: i.unit,
-                    notes: i.notes
+                    notes: i.notes,
+                    is_optional: i.is_optional ?? false,
                 }));
                 form.dietary_tag_ids = [...(props.recipe.dietary_tag_ids ?? [])];
                 form.tool_ids = [...(props.recipe.tool_ids ?? [])];
@@ -377,7 +395,13 @@
     );
 
     function addIngredient() {
-        form.ingredients.push({ stock_item_id: '', quantity: null, unit: null, notes: null });
+        form.ingredients.push({
+            stock_item_id: '',
+            quantity: null,
+            unit: null,
+            notes: null,
+            is_optional: false,
+        });
     }
 
     function removeIngredient(idx: number) {

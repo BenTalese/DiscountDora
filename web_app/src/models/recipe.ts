@@ -16,6 +16,12 @@ export type RecipeIngredient = {
     /** C-4 Chunk 10 — nullable section grouping. NULL = implicit "main"
      *  group; otherwise references one of `Recipe.sections[].section_id`. */
     section_id: string | null;
+    /** Cookbook revision §1.9 — optional ingredients are ignored by the
+     *  cookability rule (no second cookable value). UI renders them with
+     *  an "(optional)" hint, under an Optional separator in the
+     *  shopping-list picker (unchecked by default), and dimmed in cook
+     *  mode. Default false (column is NOT NULL server-side). */
+    is_optional: boolean;
 };
 
 /** C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).

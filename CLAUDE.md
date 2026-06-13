@@ -55,13 +55,15 @@ To keep handoffs clean:
    the prompt references before assuming they exist.
 4. **Read `CHANGELOG.md`** for the most recent product-level changes — context
    for what the code looks like now vs. what older docs describe.
-5. **Scan `DORA_FOLLOWUPS.md` for `[OPEN]` items.** This is the stateful backlog
-   of deferred jobs, leftovers, and findings from past prompts — the things the
-   user may have missed in a long session summary. Surface the open items whose
-   *recommended resolution point* is "now" or matches the work you're about to
-   start, then **ask the user whether they want to review/resolve those now or
-   defer them** before you dive into the main task. Don't silently work around an
-   open item that's relevant to what you're doing.
+5. **Scan `DORA_FOLLOWUPS.md`.** This file holds **only open items** — the
+   stateful backlog of deferred jobs, leftovers, and findings from past prompts
+   that the user may have missed in a long session summary. Surface the items
+   whose *recommended resolution point* is "now" or matches the work you're
+   about to start, then **ask the user whether they want to review/resolve
+   those now or defer them** before you dive into the main task. Don't silently
+   work around an open item that's relevant to what you're doing. Resolved
+   items live in a separate archive (`DORA_FOLLOWUPS_RESOLVED.md`) — only
+   consult that if you need history on a specific FU id.
 
 ## On ending a work unit — ALWAYS
 
@@ -69,15 +71,23 @@ Append a new entry to `DORA_WORKLOG.md` using the template at the top of that
 file. Do this even if the unit was partial or blocked — the next session needs
 to know where you stopped and why.
 
-**Also update `DORA_FOLLOWUPS.md`** with anything the current job spun off:
+**Also update the follow-ups ledger** with anything the current job spun off:
 follow-ups, deferred jobs, leftovers, or findings worth investigating later. The
 user may not catch these from the response alone, so they must live somewhere
-durable and stateful. For each new note record its **state** (`[OPEN]` /
-`[RESOLVED]`) and a **recommended resolution point** (e.g. "now", "later during
-Phase X / prompt Y", "when <trigger>", or "opportunistic"). If you actually
-resolved an existing item this session, flip it to `[RESOLVED]` with a one-line
-note on how — don't delete it; the trail matters. If the unit produced no new
-loops and resolved none, that's fine — no edit needed.
+durable and stateful. The ledger is split across **two files** — keep them
+disciplined:
+
+- `DORA_FOLLOWUPS.md` holds **only `[OPEN]` items**. New follow-ups go at the
+  top, each with a **recommended resolution point** (e.g. "now", "later during
+  Phase X / prompt Y", "when <trigger>", or "opportunistic").
+- `DORA_FOLLOWUPS_RESOLVED.md` is the **archive of `[RESOLVED]` items**. When
+  you resolve an open item this session, **move the entry** from
+  `DORA_FOLLOWUPS.md` to the top of `DORA_FOLLOWUPS_RESOLVED.md`, flip
+  `[OPEN]` → `[RESOLVED]`, and append a one-line state note on how it was
+  resolved (date + brief mechanism). Don't leave resolved items in the open
+  file, and don't delete them — the trail matters.
+
+If the unit produced no new loops and resolved none, no edit is needed.
 
 **MANDATORY — reported defects you conclude are "non-issues" still get a
 follow-up.** When a prompt (or the user) reports a bug and your investigation
@@ -100,14 +110,16 @@ closing** — do not hand off with silent drift. Then run the **ADR evaluation**
 this task make/rely on a recurring decision worth promoting into a new rule? If so,
 add an ADR (and a new `R-0NN`) to that doc. See the next section.
 
-Three logs, three purposes — keep them separate:
+The logs, each with one purpose — keep them separate:
 - **`CHANGELOG.md`** = product/code changes (user-visible, "the app now does
   X"). Updated per the master plan's rule that every prompt updates it.
 - **`DORA_WORKLOG.md`** = process/handoff log (which prompt ran, decisions
   made, what's next, open questions). Internal — for agent-to-agent handoff.
-- **`DORA_FOLLOWUPS.md`** = stateful backlog of open loops (deferred work,
-  leftovers, findings) that outlive a single session. Each item carries a state
-  and a recommended resolution point. The session-start scan reads from here.
+- **`DORA_FOLLOWUPS.md`** = **open** loops only (deferred work, leftovers,
+  findings) that outlive a single session, each with a recommended resolution
+  point. The session-start scan reads from here.
+- **`DORA_FOLLOWUPS_RESOLVED.md`** = archive of resolved items moved out of
+  the open ledger. Audit trail only — not part of the session-start scan.
 
 ## Governing documents (read on demand, not every session)
 

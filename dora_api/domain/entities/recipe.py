@@ -10,6 +10,18 @@ from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 
 
+# Cookbook card revision §1.7 — closed-set vocabulary, validated at the
+# create/update boundaries (R-010). Historic free-text values stay
+# readable but new writes must match.
+ALLOWED_DIFFICULTY_VALUES = ("Easy", "Medium", "Hard")
+
+# Cookbook card revision §1.12 — shared with `MealPlanEntry.slot`
+# (PROPOSAL_MEAL_PLANS.md §4). Closed-set today; will become
+# user-configurable when §4 lands its settings page, at which point this
+# constant becomes the seeded default rather than the hard list.
+DEFAULT_MEAL_SLOTS = ("Breakfast", "Lunch", "Dinner", "Snack", "Dessert")
+
+
 @dataclass
 class Recipe(BaseEntity):
     available_meals: int

@@ -198,8 +198,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("status", String(16), nullable=False, server_default="draft"),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("completed_at", DateTime(timezone=True), nullable=True),
-        # JSON snapshot of what /finish changed, for server-owned Reopen.
-        Column("finish_snapshot", String, nullable=True),
         # P6-01 Chunk 7. Optional shop day the user is planning this list
         # for. Nullable because most lists don't have one — null reads as
         # "no shop day set", not "today".
@@ -420,6 +418,10 @@ def configure_mappings(db: SQLAlchemy):
         # C-4 Chunk 10 — nullable section grouping (ON DELETE SET NULL so
         # removing a section keeps its ingredients, just unsectioned).
         Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
+        # Cookbook revision §1.9 — optional ingredients are ignored by the
+        # cookability rule (no second cookable value). Server-default `0`
+        # keeps existing rows valid through the migration.
+        Column("is_optional", Boolean, nullable=False, server_default="0"),
     )
 
     # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`
@@ -653,6 +655,8 @@ def configure_mappings(db: SQLAlchemy):
         # C-4 Chunk 10 — section_id is a real domain attribute (nullable),
         # mapped publicly so it round-trips through `from_entity`.
         "section_id": recipe_ingredient_table.c.section_id,
+        # Cookbook revision §1.9 — optional flag.
+        "is_optional": recipe_ingredient_table.c.is_optional,
         "stock_item": relationship(StockItem, lazy="noload"),
     })
 

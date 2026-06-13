@@ -23,24 +23,6 @@
                     :menu-links="linksList"
                 />
 
-                <!-- Global Undo (F5). Reflects the top of the undo stack —
-                     tooltip shows the action's label, disabled when there's
-                     nothing to undo. Ctrl/Cmd-Z fires the same handler. -->
-                <q-btn
-                    v-if="currentUser"
-                    flat
-                    dense
-                    round
-                    :icon="ICONS.undo"
-                    :disable="!canUndo"
-                    @click="onUndoClick"
-                    class="q-mr-xs"
-                >
-                    <q-tooltip>
-                        {{ canUndo ? `Undo: ${topUndoLabel}` : 'Nothing to undo' }}
-                    </q-tooltip>
-                </q-btn>
-
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
                 <q-btn
@@ -146,83 +128,15 @@
     import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
     import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
     import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
-    import { useUndo } from 'src/composables/useUndo';
     import { useAuthStore } from 'src/stores/authStore';
-    import { onMounted, onUnmounted, ref } from 'vue';
+    import { ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const route = useRoute();
     const router = useRouter();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
-
-    // F5: global undo wiring. The button uses canUndo / topUndoLabel
-    // for visibility + tooltip, and Ctrl/Cmd-Z fires the same undo()
-    // (skipped when the user is typing in an input so we don't
-    // accidentally undo a stock-level swap while they're editing
-    // a recipe).
-    const { canUndo, canRedo, topUndoLabel, undo, redo } = useUndo();
-
-    async function onUndoClick() {
-        try {
-            const did = await undo();
-            if (!did) return;
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't undo.",
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
-
-    function isTypingTarget(event: KeyboardEvent): boolean {
-        const t = event.target as HTMLElement | null;
-        if (!t) return false;
-        const tag = (t.tagName || '').toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-        if ((t).isContentEditable) return true;
-        return false;
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-        if (!currentUser.value) return;
-        if (isTypingTarget(event)) return;
-        const isMod = event.ctrlKey || event.metaKey;
-        if (!isMod) return;
-        const key = event.key.toLowerCase();
-        // Ctrl/Cmd-Z → undo; Ctrl/Cmd-Shift-Z or Ctrl-Y → redo.
-        if (key === 'z' && !event.shiftKey) {
-            if (!canUndo.value) return;
-            event.preventDefault();
-            void onUndoClick();
-        } else if ((key === 'z' && event.shiftKey) || key === 'y') {
-            if (!canRedo.value) return;
-            event.preventDefault();
-            void redo().catch((err) => {
-                $q.notify({
-                    type: 'negative',
-                    position: 'bottom-right',
-                    message: "Couldn't redo.",
-                    caption: describeApiError(err) || '',
-                });
-            });
-        }
-    }
-
-    onMounted(() => {
-        if (typeof window !== 'undefined') {
-            window.addEventListener('keydown', onKeyDown);
-        }
-    });
-    onUnmounted(() => {
-        if (typeof window !== 'undefined') {
-            window.removeEventListener('keydown', onKeyDown);
-        }
-    });
 
     // ── Global keyboard shortcuts (S5) ──────────────────────────────────
     const { openCheatsheet } = useShortcutRegistry();

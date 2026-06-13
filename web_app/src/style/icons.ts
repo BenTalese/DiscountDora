@@ -247,6 +247,7 @@ export const ICONS = {
     merchant: 'mdi-store',
     recipe: 'mdi-book-open-page-variant',
     meal: 'mdi-silverware-fork-knife',
+    chef_hat: 'mdi-chef-hat',
     location: 'mdi-map-marker',
     user: 'mdi-account-circle',
     scan: 'mdi-qrcode-scan',

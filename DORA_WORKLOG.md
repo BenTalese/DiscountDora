@@ -9,6 +9,305 @@ next.
 
 ---
 
+## 2026-06-14 — Cookbook card revision Chunk C — optional ingredients
+**Status:** complete (vue-tsc clean; full unit suite 299 passed). Session
+was ended abruptly mid-Chunk-C and resumed cautiously — see "Resumption
+notes" at the end.
+
+**What:** Third (and final) implementation chunk off
+`PROPOSAL_COOKBOOK_CARD_REVISION.md`. Covers §1.9 in full — the
+cross-cutting one. **No `cookable_with_optional` half-state** per the
+user's resolution: cookability stays a single required-only rule;
+optional ingredients are invisible to it.
+
+Backend:
+- **Domain** `dora_api/domain/entities/recipe_ingredient.py` — `is_optional: bool` field (default false, NOT NULL).
+- **Persistence** `dora_api/persistence/table_mappings.py` — `is_optional` `Boolean` column with `server_default="0"`; mapper property added.
+- **Migration** `dora_api/persistence/migrations/versions/b9e5c2a78f31_20260614_recipe_ingredient_optional.py` — batch-mode `add_column` so SQLite + Postgres both apply cleanly (R-005). Down-revision is the concurrent FU-163 session's `a1c4e7b3f5d2` (drop_finish_snapshot).
+- **DTOs** `create_recipe.py` + `update_recipe.py` — request models accept `is_optional` (default false). Handlers pass it to the `RecipeIngredient` constructor.
+- **Read DTO** `get_recipes.py` — `RecipeIngredientDto.is_optional` emitted.
+- **Cookability rule** `dora_api/domain/recipe_cookability.py` — single point of change: a new private `_required()` filter; `missing_count_for`, `is_cookable`, `missing_stock_item_names_for` all skip optional rows.
+- **Assistant** `tools.py::_stock_coverage` and `confirm_actions.py::add_recipe_to_list` — skip optional in their own missing-count loops so assistant behaviour matches the rest of the app.
+- **Waste rescue** `waste.py` — skip optional in the rescue-recipe ranking loop.
+
+Frontend:
+- **Type** `models/recipe.ts::RecipeIngredient` — `is_optional: boolean`.
+- **Service** `recipeApiService.ts::CreateRecipeIngredientCommand` — `is_optional?: boolean`.
+- **Edit dialog** `RecipeEditDialog.vue` — per-row Optional `q-checkbox` (tooltip explains it doesn't affect cookability). Empty + hydrated rows initialise `is_optional`.
+- **Detail page** `RecipeDetailPage.vue` — same checkbox in the inline editor; `hydrateForm`, `addIngredient`, URL-importer mapping all set `is_optional` (importer defaults false — v1 makes no attempt to detect optional from source text).
+- **Picker modal** `RecipeIngredientPickerDialog.vue` — optional rows render under a `─── Optional ───` separator at the bottom. Default check rule: optional rows start unchecked regardless of stock level. `Select all` / `Select missing` also leave optional rows unchecked — optional is opt-in only. Dedupe rule when the same stock item appears as both required and optional: **required wins**.
+- **Cook mode** `RecipeCookMode.vue` — `(optional)` hint after the ingredient name; new `.ingredient-row--optional` style dims the row.
+
+**Five-surface regression check** (proposal §3 risk):
+| Surface | Reads via | Status |
+|---|---|---|
+| Recipe DTO → cookbook card + stock-item recipe cards | `missing_count_for` + `missing_stock_item_names_for` | ✓ inherits filter |
+| Dashboard `cookable_count` | `missing_count_for` (R-003 single source) | ✓ inherits filter |
+| Planner shortfall banner | recipe DTO `cookable` field | ✓ inherits filter |
+| Assistant `_stock_coverage` (suggest_recipes) | own loop | ✓ filter added explicitly |
+| Assistant `add_recipe_to_list` candidates | own loop | ✓ filter added explicitly |
+| Waste rescue ranking (extra surface, not in §3) | own loop | ✓ filter added explicitly |
+
+**Charter/standards check:** Clean.
+- R-001 (componentisation): no new components needed; reused picker + editors. ✓
+- R-002 (theme tokens): only opacity + existing CSS vars touched. ✓
+- R-003 (state ownership): rule lives once on the server; client reads via DTO. ✓
+- R-005 (Postgres/SQLite portability): batch-mode migration. ✓
+- R-006 (clean migrations): single migration, NOT NULL with server_default so existing rows stay valid; reversible downgrade. ✓
+- R-007 (scope discipline): assistant + waste edits are necessary regression fixes for the same rule, not scope creep. ✓
+- R-010 (strong types): bool field, no string sentinel. ✓
+- R-011 (idiomatic Quasar): `q-checkbox` + `q-tooltip`. ✓
+No ADR added — feature-add, not a recurring pattern.
+
+**Resumption notes:** Previous session ended abruptly after the domain
+entity + table mapping landed but before the migration was written. On
+resume: baseline-tested first (vue-tsc clean, 298 passed / 1 failed —
+the failure was the concurrent FU-163 session's `/unfinish` 404, **not
+mine**); confirmed via the user that the concurrent FU-163 work was a
+deliberate parallel session and to leave it alone. Built Chunk C from
+the migration onward. By close-gate the concurrent session had landed
+its own test fix, so the suite finished 299 / 0.
+
+**Open loops:**
+- **FU-088** — Chunks A + B + C all landed. Remaining: in-browser
+  verification end-to-end (including the FU-171 image-toggle confirm).
+  Recommend flipping FU-088's resolution to "browser-verify Chunks A+B+C
+  end-to-end" before closing.
+
+**Next up:** browser-verify FU-088 (image toggle, new card footer,
+picker modal, difficulty + time-of-day filters, optional checkbox on
+editors, cook-mode dim). If green: flip FU-088 to RESOLVED.
+
+---
+
+## 2026-06-14 — Undo + Reopen removal (FU-163)
+**Status:** complete. Backend `py_compile` clean, unit suite 49/49 passing,
+e2e collection clean (no import errors from the removed modules), ESLint
+clean on every touched file. Browser verify rolls into the next FU-165 pass.
+
+**What:** Killed the app-wide undo posture and the shopping-list Reopen
+flow end-to-end. User directive: "decided undo feature does not make sense,
+remove. Even the reopen functionality — once a list is done, it's done.
+The snapshot of stock levels feels so overengineered. Kill it."
+
+- **Followups housekeeping (lead-in):** split `DORA_FOLLOWUPS.md` into two
+  files — open items stay in `DORA_FOLLOWUPS.md` (the session-start scan),
+  resolved items moved to the new `DORA_FOLLOWUPS_RESOLVED.md` (audit
+  trail only). `CLAUDE.md` updated to enforce the structure going forward
+  (session-start scan reads open only; resolving an item now means
+  *moving* the block to the archive, not flipping the heading in place).
+  Also resolved FU-036 (Shop-Mode "Substitute" — the surface that report
+  hinged on no longer exists post-Fable 5; current UI is fine).
+- **Frontend:**
+  - Deleted `web_app/src/composables/useUndo.ts` and `useNotifyUndoable.ts`.
+  - `MainLayout.vue` — removed the header Undo button, the `useUndo()`
+    wiring, `onUndoClick`, `isTypingTarget`, the Ctrl/Cmd-Z &
+    Ctrl-Shift-Z/Ctrl-Y `onKeyDown` handler, and the mount/unmount
+    listener wiring. `describeApiError` import dropped (only the undo
+    error toast used it here).
+  - `stockItemStore.ts` — stripped `registerUndo` / `notifyUndoable` from
+    `updateStockLevelAsync`, `updateStockItemAsync`, and
+    `deleteStockItemAsync`. Delete is now plain delete; no toast, no
+    snapshot.
+  - `ShoppingListDetail.vue` — removed the **Reopen** `BaseButton` (Done
+    state), `onReopen`, `reopening` ref, and the `registerUndo` wired
+    around tick/untick in `onToggleTicked`. `unfinishAsync` call gone.
+  - `shoppingListApiService.ts` — `unfinishAsync` deleted.
+  - `stockItemApiService.ts` — `restoreAsync` + `RestoreStockItemCommand`
+    deleted (only the delete-undo path used them).
+- **Backend:**
+  - Deleted `dora_api/features/shopping_lists/unfinish_shopping_list.py`
+    (the `/unfinish` route disappears via the package-walk blueprint
+    registration in `startup.py`).
+  - Deleted `dora_api/features/stock_items/restore_stock_item.py` (same
+    mechanism — `/stock-items/restore` disappears with the file).
+  - `manage_shopping_list.py` `FinishShoppingListHandler` — removed the
+    `level_restores` capture loop, dropped the `.include("stock_level")`
+    eager-load that only existed to snapshot the prior level, dropped
+    the `json.dumps` to `lst.finish_snapshot`, dropped the now-unused
+    `import json`.
+  - `dora_api/domain/entities/shopping_list.py` — removed
+    `finish_snapshot` field + `Fields.FINISH_SNAPSHOT` enum. Rewrote the
+    lifecycle comment ("Once a list is done, it's done").
+  - `dora_api/persistence/table_mappings.py` — dropped the
+    `finish_snapshot` `Column`.
+  - New migration
+    `dora_api/persistence/migrations/versions/a1c4e7b3f5d2_20260614_drop_finish_snapshot.py`
+    drops the column in batch mode (SQLite + Postgres parity, R-005).
+    Single head confirmed: `a1c4e7b3f5d2` ← `f3a9c1e5d2b7`.
+- **Tests:** `tests/e2e/dora_api/test_shopping_list_lifecycle.py` rewritten
+  — dropped `test__finish_then_reopen__restores_level_server_side` and
+  the `levels_by_sequence` fixture + unused module constants; added a
+  one-liner `test__unfinish_endpoint_is_removed` that asserts
+  `POST /unfinish` returns 404 on a Done list. Module docstring
+  reframed.
+- **Follow-ups bookkeeping:**
+  - FU-163 → moved to `DORA_FOLLOWUPS_RESOLVED.md` with the resolution
+    inventory.
+  - FU-026 (PARTIALLY RESOLVED — "undo behaves oddly across surfaces")
+    → moved to resolved as **subsumed by FU-163** (no undo, nothing to
+    behave oddly).
+  - FU-016 (frontend-cache-vs-backend-mutation audit) → inline note
+    added that the "stock-item Undo restore" candidate in its scan list
+    is no longer applicable.
+
+**Charter/standards check:** Clean.
+- R-003 (state ownership): the removal *deletes* a server-owned snapshot
+  that no longer has a consumer; nothing relocates. ✓
+- R-005 (portable data access / SQLite + Postgres): migration uses
+  `op.batch_alter_table` for the column drop. ✓
+- R-007 (clean migrations, no idempotent guards): straight `drop_column`
+  / `add_column` for upgrade/downgrade. ✓
+- R-008 (scope discipline): scope expanded slightly (stock-item
+  `/restore` + `restoreAsync`) only because they were dead code with no
+  callers after the undo removal; logged here rather than spun off.
+- No new ADR / `R-0NN` candidate identified — the removal applies
+  existing rules rather than recording a new one.
+
+**Next up:** none queued by this work. FU-165 (browser-verify shopping
+list UX v2) remains the next gated UX session and will sanity-check
+that the Done-list page renders cleanly without the Reopen button.
+
+---
+
+## 2026-06-13 — Cookbook card revision Chunk B — picker + vocabularies
+**Status:** complete (vue-tsc clean; full unit suite 299 passed).
+**What:** Second implementation chunk off `PROPOSAL_COOKBOOK_CARD_REVISION.md`.
+Covers §1.4 (picker modal), §1.7 (difficulty vocabulary + filter + sort
+axis), §1.12 (`time_of_day` shared vocabulary).
+- **New** `web_app/src/components/recipes/RecipeIngredientPickerDialog.vue`
+  — extracted reusable, per-ingredient checkboxes with `StockLevelDot`,
+  default check rules (`is_missing` / `is_low_stock` auto-on, others
+  auto-off), `Select all` / `Select missing` quick actions, integrated
+  target-list picker. Same component serves both the card's
+  `add-all-to-list` (cookable) and `add-missing` (not cookable) flows;
+  the not-cookable path passes the missing-id subset as
+  `initial-checked-ids` so the user lands on exactly what they need.
+- **New** `web_app/src/helpers/recipeVocabulary.ts` — single-source
+  frontend constants `DIFFICULTY_VALUES`, `DIFFICULTY_RANK`,
+  `DEFAULT_MEAL_SLOTS` that mirror the server constants.
+- **Server** `dora_api/domain/entities/recipe.py` — added module-level
+  `ALLOWED_DIFFICULTY_VALUES` and `DEFAULT_MEAL_SLOTS` constants.
+- **Server** `create_recipe.py` + `update_recipe.py` — boundary
+  validation against both vocabularies (R-010 carve-out), 400 on
+  out-of-vocab values. `invalid_vocabulary_message` field added to both
+  responses; route handlers return `bad_request`.
+- **`RecipesOverview.vue`** — picker replaces the old `addMissing`
+  dialog (and its `autoGenerateAsync` short-circuit). Added difficulty
+  filter dropdown + new `'difficulty'` sort axis (ordinal Easy < Medium
+  < Hard; nulls sink). Active-filter count + clear-all updated.
+  `TIME_OF_DAY_OPTIONS` now sources `DEFAULT_MEAL_SLOTS` (dropped the
+  historical 'Any' bogus entry).
+- **`RecipeDetailPage.vue`** — picker replaces the old target-list
+  dialog (the per-row `AddToListButton` was already present and
+  unchanged). `time_of_day` + `difficulty` q-selects source the shared
+  constants.
+- **`RecipeEditDialog.vue`** — same q-select swap.
+- **`PROPOSAL_MEAL_PLANS.md §4`** — amended: `Dessert` added to the
+  default slot list; cross-reference recorded that `Recipe.time_of_day`
+  consumes the same vocabulary; until that proposal's settings page
+  ships, the shared frontend constant is the source of truth.
+**Trade-off recorded:** the picker uses the plain `addItems` path (not
+`autoGenerateAsync`), which means lines added through the new picker
+land with `added_via=manual` rather than `added_via=auto_recipe`. This
+is the necessary cost of letting the user customize the subset; if the
+auto_recipe tag becomes important again, `autoGenerateAsync` would need
+to accept an explicit subset (out of scope here).
+**Charter/standards check:** Clean.
+- R-001 (componentisation): new modal extracted as a reusable, used by
+  both overview + detail page. ✓
+- R-002 (theme tokens): only Quasar colour names used. ✓
+- R-003 (state ownership): cookability still server-derived; vocabularies
+  defined server-side, mirrored client-side (single source of truth on
+  the server). ✓
+- R-005 (Postgres/SQLite portability): no schema changes; vocab is
+  validated at the boundary, no column constraint added (preserves
+  off-vocab historical strings — §1.12 rule). ✓
+- R-010 (strong types over stringly-typed matching): boundary validation
+  against the closed sets matches the `nutrition_mode` pattern
+  (`update_me.py:146-149`). ✓
+- R-011 (idiomatic Quasar): `q-select` / `q-checkbox` / `q-list` /
+  ripples / tooltip on icon-only buttons. ✓
+**Tests:** all 299 unit tests pass. Recipe e2e file doesn't exist yet
+(per FU-169 audit); manual coverage of recipe endpoints is unchanged.
+The boundary validation logic mirrors `nutrition_mode` which IS unit-
+tested via `test_user_router.py` (vocabulary rejection pattern), so the
+shape is proven; first-class recipe e2e tests for these vocab paths can
+land with FU-169 Phase 3.
+**Open loops:**
+- **FU-088** still open — Chunk C (optional ingredients) remains; plus
+  the FU-171 in-browser image-toggle confirm.
+**Next up:** Chunk C — `RecipeIngredient.is_optional` domain field,
+migration, cookability rule clean-up (still required-only), edit dialog
+optional checkbox, picker modal optional-rows section, cook-mode row
+dim.
+
+---
+
+## 2026-06-13 — Cookbook card revision Chunk A — card visual redesign
+**Status:** complete (frontend only; vue-tsc clean).
+**What:** First implementation chunk off `PROPOSAL_COOKBOOK_CARD_REVISION.md`.
+Pure card-visual rewrite, no schema or DTO change. Covers §1.1, §1.2,
+§1.4 (button only; modal in Chunk B), §1.5, §1.6, §1.8, §1.10, §1.11
+(card-side).
+- `web_app/src/components/RecipeCard.vue` — full rewrite.
+- `web_app/src/style/icons.ts` — added `chef_hat: 'mdi-chef-hat'`.
+- `web_app/src/pages/RecipesOverview.vue` — dropped `@adjust-meals` /
+  `@add-to-meal-plan` bindings + handlers + the dialog body.
+- `web_app/src/pages/StockItemDetailPage.vue` — dropped `@adjust-meals`
+  binding + handler.
+**Charter/standards check:** Clean. R-002 (theme tokens — only Quasar
+`primary` / `warning` / `red`, no hex). R-003 (cookable stays
+server-derived). R-004/R-011 (idiomatic Quasar: `q-tooltip` on
+icon-only buttons). No new component yet (modal lands in Chunk B).
+**Open loops:**
+- **FU-171** raised — image hide/show toggle reportedly broken; full
+  static trace looked correct, so it's logged for browser confirmation
+  after Chunk A ships. The Chunk A rewrite preserves the same
+  `v-if="showRecipeImages && ..."` gate.
+- **FU-088** still open — Chunks B + C still to land, plus the FU-171
+  in-browser confirm.
+**Next up:** Chunk B — `RecipeIngredientPickerDialog.vue` (new
+component), difficulty filter + sort axis, `Recipe.time_of_day` fixed
+vocabulary (shared `DEFAULT_MEAL_SLOTS` constant with `PROPOSAL_MEAL_PLANS.md §4`).
+
+---
+
+## 2026-06-13 — Proposal: Cookbook card revision (FU-088 redesign, docs-only)
+**Status:** complete (design only — no code).
+**What:** User returned from browser-verifying Cookbook Chunk 3 with ten
+concrete findings (FU-088 update). Asked for a proposal before any code.
+Wrote `docs/04_proposals/PROPOSAL_COOKBOOK_CARD_REVISION.md` — supersedes
+`PROPOSAL_COOKBOOK.md §2.10`.
+**Shape:** §1 lists the ten items as designed solutions (image-toggle
+defect, meta-line swap, kebab gone, footer icon-only add-to-list with a
+new `RecipeIngredientPickerDialog.vue`, heart inline, cookable absorbed
+into Cook-button colour + add-to-list mirror, difficulty axis, drop
+"X low" + enlarge dietary chips, optional-ingredients cross-cut, allocated
+badge removed from overview, MealStepper relocates from card to planner
+row per `PROPOSAL_MEAL_PLANS.md §3.1`). §2 chunks it into A (card visuals,
+no schema), B (picker modal + difficulty), C (optional-ingredients —
+domain + migration + cookability rule + UI ripples), D (planner stepper
+paired update). §3 flags the cross-cutting risk (cookability rule is read
+by 5 surfaces — dashboard, planner shortfall, assistant, card,
+stock-item card). §7 coverage table maps each FU-088 bullet → section.
+**Charter/standards check:** docs-only; no `ENGINEERING_STANDARDS.md`
+violations introduced. The proposal itself cites R-001 (modal
+extraction), R-003 (cookability stays server-derived,
+`is_optional` is a server domain fact), R-005 (Postgres/SQLite portable
+migration), R-011 (cookable-via-`q-btn`-colour is the framework-idiomatic
+shape, not a sibling chip).
+**Follow-up updated:** FU-088 marked with a 2026-06-13 note pointing at
+the new proposal; recommended resolution flipped from "browser-verify" to
+"implement Chunks A–C, then re-verify". No new FU raised (the proposal
+itself is the next-step artifact).
+**Next up:** user reviews the four open decisions in §5 (optional-
+ingredients hint copy; difficulty vocabulary confirmation; time-of-day
+overflow rule; Chunk B-vs-C ordering); Chunk A is the no-regret start
+once those are settled.
+
+---
+
 ## 2026-06-13 — Proposal: test-suite coverage / quality / cleanup (docs-only)
 **Status:** complete (design only — no code).
 **What:** Wrote `docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` off the

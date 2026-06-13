@@ -59,6 +59,11 @@ class RecipeIngredientDto:
     # group; the client uses this to bucket ingredients under the named
     # section headers from `RecipeDto.sections`.
     section_id: UUID | None
+    # Cookbook revision §1.9 — optional ingredients. The recipe-level
+    # `cookable` rollup and `missing_stock_item_names` both ignore
+    # optional rows; they're surfaced here only so the edit dialog,
+    # picker modal, and cook-mode UI can render them differently.
+    is_optional: bool = False
 
     @classmethod
     def from_entity(cls, ingredient: RecipeIngredient) -> 'RecipeIngredientDto':
@@ -78,6 +83,7 @@ class RecipeIngredientDto:
             is_missing = is_missing(_Level),
             is_low_stock = is_low_stock(_Level),
             section_id = getattr(ingredient, "section_id", None),
+            is_optional = getattr(ingredient, "is_optional", False),
         )
 
 

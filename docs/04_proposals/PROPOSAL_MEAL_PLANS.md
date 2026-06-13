@@ -119,6 +119,14 @@ shortfall banner. The page's primary nav header is just the page name
   the count chip → menu (`+1 cooked` / `−1 cooked` / `log cook…`).
 - **Drag** desktop pointer only (`@pointerdown` checks
   `event.pointerType === 'mouse'`); touch users get tap-to-add.
+- **FU-088 (2026-06-13) note — cooked-pool stepper relocates here.** The
+  cookbook overview card removed its `MealStepper` (see
+  `PROPOSAL_COOKBOOK_CARD_REVISION.md §1.11`). User's stronger preference
+  is *inline `[ − N + ]` on the row* rather than the
+  `+1 cooked / -1 cooked / log cook…` menu specified above — pick this
+  up when this proposal is implemented. Pool adjustment must be
+  reachable from the planner; the menu form is acceptable as a fallback
+  if the inline form crowds the row.
 
 ### 3.2 Main column — week carousel
 
@@ -261,9 +269,18 @@ Today: `MealPlanEntry.slot` is free-text `str(50)`; unconstrained.
 Proposed:
 
 - New **settings → preferences → meal slots** vocabulary, user-scoped.
-  Defaults shipped: `Breakfast`, `Lunch`, `Dinner`, `Snack`. User can
+  Defaults shipped: `Breakfast`, `Lunch`, `Dinner`, `Snack`, `Dessert`
+  (`Dessert` added 2026-06-13 to align with the cookbook revision —
+  `Recipe.time_of_day` shares this vocabulary, see below). User can
   reorder (drag), rename, add (max ~8), remove (with a confirm when
   any entry uses the slot).
+- **`Recipe.time_of_day` consumes the same vocabulary** (cookbook
+  revision §1.12). Until this proposal ships its user-settings page,
+  the cookbook surfaces read from a shared frontend constant
+  `DEFAULT_MEAL_SLOTS` mirroring the server's
+  `dora_api/domain/entities/recipe.py::DEFAULT_MEAL_SLOTS`. When the
+  user-scoped list lands here, both surfaces switch to reading from
+  that list (the constant becomes the seeded default).
 - `MealPlanEntry.slot` stays a `str` (no FK churn). Frontend always
   picks from the user's list; off-vocabulary historical strings are
   preserved verbatim and rendered in a "Other" row at the bottom of

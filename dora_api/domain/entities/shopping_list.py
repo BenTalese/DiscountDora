@@ -124,10 +124,11 @@ class ShoppingList(BaseEntity):
     created_at: datetime
     # Lifecycle status (see SHOPPING_LIST_STATUS_* above). Transitions:
     #   draft    -> shopping : user clicks Start shopping
-    #   draft/shopping -> done : Finish (restock review + snapshot)
-    #   done     -> draft    : Reopen (reverses the finish from finish_snapshot)
-    # (UX-v2 removed the shopping -> draft "stop/pause" transition and the
-    # restock-less "archive" path — lists are finished or deleted.)
+    #   draft/shopping -> done : Finish (restock review)
+    # Once a list is done, it's done — there is no Reopen. (UX-v2 removed the
+    # shopping -> draft "stop/pause" transition and the restock-less "archive"
+    # path; the undo posture removal in FU-163 retired Reopen too — lists are
+    # finished or deleted.)
     status: str = SHOPPING_LIST_STATUS_DRAFT
     completed_at: datetime | None = None
     # P6-01 Chunk 7. Optional shopping day the user is planning this list
@@ -135,12 +136,6 @@ class ShoppingList(BaseEntity):
     # sort, and the shopping-day banner. Never required — a list without a
     # planned date still behaves the same as today.
     planned_shop_date: date | None = None
-    # P6-01 server-owned undo. Set when a list is finished: a JSON snapshot of
-    # each ticked item's stock level before restock, so Reopen reverses it
-    # without trusting a client-supplied snapshot. None when the list has never
-    # been finished or has since been reopened. (Chunk 2 dropped the
-    # primary-related fields from the snapshot — primary is now inferred.)
-    finish_snapshot: str | None = None
     # Lines hang off the list. Loaded explicitly by handlers that need them
     # (matches the noload pattern used elsewhere — table_mappings sets
     # lazy="noload"). Default empty so seed/in-memory construction works.
@@ -191,6 +186,5 @@ class ShoppingList(BaseEntity):
         STATUS = "status"
         CREATED_AT = "created_at"
         COMPLETED_AT = "completed_at"
-        FINISH_SNAPSHOT = "finish_snapshot"
         PLANNED_SHOP_DATE = "planned_shop_date"
         LINES = "lines"

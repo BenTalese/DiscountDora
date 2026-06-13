@@ -1025,13 +1025,20 @@ def _recipe_matches_keywords(recipe: Recipe, text: str) -> bool:
 
 
 def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
-    """Return (in_stock_count, total_ingredients, missing_names) for a recipe.
-    An ingredient is missing when it has no stock item or its level is the
-    worst ("Out of Stock")."""
+    """Return (in_stock_count, total_required_ingredients, missing_names).
+
+    Cookbook revision §1.9 — **optional ingredients are excluded** so the
+    assistant's coverage matches the recipe DTO's `cookable` rule and the
+    dashboard's `cookable_count` (R-003 single source). Otherwise: an
+    ingredient is missing when it has no stock item or its level is the
+    worst ("Out of Stock").
+    """
     total = 0
     in_stock = 0
     missing: list[str] = []
     for ingredient in recipe.ingredients or []:
+        if getattr(ingredient, "is_optional", False):
+            continue
         total += 1
         item = ingredient.stock_item
         level = item.stock_level if item else None

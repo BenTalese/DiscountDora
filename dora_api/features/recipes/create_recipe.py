@@ -7,7 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
-from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.recipe import (
+    ALLOWED_DIFFICULTY_VALUES,
+    DEFAULT_MEAL_SLOTS,
+    Recipe,
+)
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
@@ -49,6 +53,10 @@ class CreateRecipeIngredientRequest(BaseModel):
     # sections in the same payload. Omit/null to leave in the implicit
     # "main" group.
     section_client_id: str | None = Field(default = None, max_length = 64)
+    # Cookbook revision §1.9 — optional ingredients are ignored by the
+    # cookability rule. Default false keeps the existing client contract
+    # backward-compatible (omitting the field = required ingredient).
+    is_optional: bool = False
 
 
 class CreateRecipeStepRequest(BaseModel):
@@ -134,6 +142,7 @@ class CreateRecipeResponse:
     invalid_tag_message: str | None = None
     invalid_step_message: str | None = None
     invalid_section_message: str | None = None
+    invalid_vocabulary_message: str | None = None
 
 
 class CreateRecipeHandler:
@@ -141,6 +150,22 @@ class CreateRecipeHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateRecipeRequest) -> CreateRecipeResponse:
+        # §1.7/§1.12 — closed-set vocabularies (R-010).
+        if request.difficulty is not None and request.difficulty not in ALLOWED_DIFFICULTY_VALUES:
+            return CreateRecipeResponse(
+                invalid_vocabulary_message=(
+                    f"Invalid difficulty '{request.difficulty}'. "
+                    f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
+                ),
+            )
+        if request.time_of_day is not None and request.time_of_day not in DEFAULT_MEAL_SLOTS:
+            return CreateRecipeResponse(
+                invalid_vocabulary_message=(
+                    f"Invalid time of day '{request.time_of_day}'. "
+                    f"Allowed: {', '.join(DEFAULT_MEAL_SLOTS)}."
+                ),
+            )
+
         _RecipeName = EntityField(Recipe, Recipe.Fields.NAME)
         _ExistingRecipe: Recipe | None = (
             self.repository
@@ -181,6 +206,7 @@ class CreateRecipeHandler:
                 quantity = _IngredientRequest.quantity,
                 stock_item = _StockItem,
                 unit = _IngredientRequest.unit,
+                is_optional = _IngredientRequest.is_optional,
             )
             _Ingredients.append(_NewIngredient)
             _IngredientPairs.append((_IngredientRequest.client_id, _NewIngredient))
@@ -374,6 +400,10 @@ def create_recipe():
     if _Response.invalid_section_message:
         _Logger.warning(f"Invalid recipe section: {_Response.invalid_section_message}")
         return bad_request(_Response.invalid_section_message)
+
+    if _Response.invalid_vocabulary_message:
+        _Logger.warning(f"Invalid recipe vocabulary: {_Response.invalid_vocabulary_message}")
+        return bad_request(_Response.invalid_vocabulary_message)
 
     _Logger.info(f"Successfully created recipe with ID: {_Response.new_recipe_id}")
     from dora_api.features.recipes.get_recipes import GetRecipesHandler

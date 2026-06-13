@@ -174,7 +174,7 @@
                                     outlined
                                     dense
                                     label="Time of day"
-                                    :options="['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Any']"
+                                    :options="timeOfDayOptions"
                                     clearable
                                     class="col-6 col-sm-3"
                                     @update:model-value="markDirty"
@@ -184,7 +184,7 @@
                                     outlined
                                     dense
                                     label="Difficulty"
-                                    :options="['Easy', 'Medium', 'Hard']"
+                                    :options="difficultyOptions"
                                     clearable
                                     class="col-6 col-sm-3"
                                     @update:model-value="markDirty"
@@ -515,6 +515,22 @@
                                         label="Section"
                                         @update:model-value="markDirty"
                                     />
+                                </q-item-section>
+
+                                <!-- Cookbook revision §1.9 — optional flag.
+                                     Excluded from cookability + missing
+                                     count + shopping-list picker defaults. -->
+                                <q-item-section side style="max-width: 110px">
+                                    <q-checkbox
+                                        v-model="ing.is_optional"
+                                        dense
+                                        label="Optional"
+                                        @update:model-value="markDirty"
+                                    >
+                                        <q-tooltip>
+                                            Optional ingredients don't affect whether the recipe is cookable.
+                                        </q-tooltip>
+                                    </q-checkbox>
                                 </q-item-section>
 
                                 <q-item-section side top>
@@ -950,33 +966,14 @@
                 </q-card-actions>
         </BaseDialog>
 
-        <!-- â”€â”€ Target-list picker (for add-all-missing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="targetListOpen" card-style="min-width: 360px">
-                <q-card-section>
-                    <div class="text-h6">Add to which list?</div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
-                    <q-select
-                        v-model="targetListId"
-                        outlined
-                        dense
-                        emit-value
-                        map-options
-                        :options="activeListOptions"
-                        label="Active list"
-                    />
-                </q-card-section>
-                <q-card-actions align="right">
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Add"
-                        :loading="addingMissing"
-                        :disable="!targetListId"
-                        @click="confirmAddMissing"
-                    />
-                </q-card-actions>
-        </BaseDialog>
+        <!-- ── Per-ingredient picker (Chunk B §1.4) ──────────────── -->
+        <RecipeIngredientPickerDialog
+            ref="pickerRef"
+            v-model="pickerOpen"
+            :recipe="recipe"
+            :initial-checked-ids="pickerInitialCheckedIds"
+            @confirm="onPickerConfirm"
+        />
 
         <!-- Log cook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <BaseDialog v-model="logCookOpen" card-style="min-width: 320px">
@@ -1050,6 +1047,7 @@
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
@@ -1085,7 +1083,14 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import {
+        DEFAULT_MEAL_SLOTS,
+        DIFFICULTY_VALUES,
+    } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
+
+    const timeOfDayOptions = [...DEFAULT_MEAL_SLOTS];
+    const difficultyOptions = [...DIFFICULTY_VALUES];
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
@@ -1248,6 +1253,8 @@
             // C-4 Chunk 10 — re-use the existing section UUID as client_id
             // (see hydrate below) so round-tripping keeps the reference.
             section_client_id: i.section_id,
+            // Cookbook revision §1.9 — optional flag round-trip.
+            is_optional: i.is_optional ?? false,
         }));
         const sections: SectionForm[] = (source.sections ?? []).map((s) => ({
             client_id: s.section_id,
@@ -1439,6 +1446,8 @@
             // a step can highlight it before the server assigns a real UUID.
             client_id: newClientId(),
             section_client_id: null,
+            // Cookbook revision §1.9 — new rows default to required.
+            is_optional: false,
         });
         markDirty();
     }
@@ -1699,25 +1708,16 @@
     // C-7 Chunk 1 — `onAddRowToList` retired; the per-row
     // AddToListButton owns the click now.
 
-    // Add-all-missing â†’ opens a small target-list picker dialog.
-    const targetListOpen = ref(false);
-    const targetListId = ref<string | null>(null);
-    const addingMissing = ref(false);
-
-    const activeListOptions = computed(() =>
-        shoppingListStore.summaries
-            .filter((s) => s.status !== 'done')
-            .map((s) => ({
-                label: s.name,
-                value: s.shopping_list_id,
-            })),
-    );
+    // Add-all-missing → opens the shared per-ingredient picker (Chunk B §1.4)
+    // pre-selected to the currently missing items.
+    const pickerRef = ref<{ setBusy: (v: boolean) => void } | null>(null);
+    const pickerOpen = ref(false);
+    const pickerInitialCheckedIds = ref<string[] | undefined>(undefined);
 
     function onAddMissingToList() {
         if (missingIngredients.value.length === 0) return;
-        targetListId.value =
-            shoppingListStore.quickAddTargetListId ?? activeListOptions.value[0]?.value ?? null;
-        if (!targetListId.value) {
+        const hasActiveList = shoppingListStore.summaries.some((s) => s.status !== 'done');
+        if (!hasActiveList) {
             $q.dialog({
                 title: 'No active shopping list',
                 message: 'Create or unarchive one first.',
@@ -1726,22 +1726,21 @@
             }).onOk(() => { void router.push('/shopping-lists'); });
             return;
         }
-        targetListOpen.value = true;
+        pickerInitialCheckedIds.value = missingIngredients.value.map((i) => i.stock_item_id);
+        pickerOpen.value = true;
     }
 
-    async function confirmAddMissing() {
-        if (!targetListId.value) return;
-        addingMissing.value = true;
+    async function onPickerConfirm(payload: { stockItemIds: string[]; targetListId: string }) {
+        pickerRef.value?.setBusy(true);
         try {
             await addItems(
-                targetListId.value,
-                missingIngredients.value.map((i) => ({
-                    stock_item_id: i.stock_item_id,
-                })),
+                payload.targetListId,
+                payload.stockItemIds.map((id) => ({ stock_item_id: id })),
             );
-            targetListOpen.value = false;
+            pickerOpen.value = false;
+            pickerInitialCheckedIds.value = undefined;
         } finally {
-            addingMissing.value = false;
+            pickerRef.value?.setBusy(false);
         }
     }
 
@@ -1853,6 +1852,11 @@
                         ? i.notes ?? null
                         : `Raw: ${i.raw_text}` + (i.notes ? ` (${i.notes})` : ''),
                 client_id: newClientId(),
+                // Cookbook revision §1.9 — importer v1 makes no attempt to
+                // detect optional from the source text (parsing "or to
+                // taste" / parens is brittle). User toggles per-row after
+                // import.
+                is_optional: false,
             }));
             // C-4 Chunk 6 — adopt parsed structured steps when the source
             // shipped HowToStep / HowToSection. Empty list ⇒ source only had a

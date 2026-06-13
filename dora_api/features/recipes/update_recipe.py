@@ -7,7 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
-from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.recipe import (
+    ALLOWED_DIFFICULTY_VALUES,
+    DEFAULT_MEAL_SLOTS,
+    Recipe,
+)
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
@@ -47,6 +51,8 @@ class UpdateRecipeIngredientRequest(BaseModel):
     # sections in the same payload, OR the existing section's UUID string
     # when leaving sections untouched. Null = unsectioned.
     section_client_id: str | None = Field(default = None, max_length = 64)
+    # Cookbook revision §1.9 — optional flag (default false).
+    is_optional: bool = False
 
 
 class UpdateRecipeStepRequest(BaseModel):
@@ -127,6 +133,7 @@ class UpdateRecipeResponse:
     invalid_tag_message: str | None = None
     invalid_step_message: str | None = None
     invalid_section_message: str | None = None
+    invalid_vocabulary_message: str | None = None
 
 
 # Attributes that may safely be assigned from the request as-is, including
@@ -156,6 +163,24 @@ class UpdateRecipeHandler:
             return UpdateRecipeResponse(recipe_not_found = True)
 
         _SetFields = request.model_fields_set
+
+        # §1.7/§1.12 — closed-set vocabularies (R-010).
+        if "difficulty" in _SetFields and request.difficulty is not None \
+                and request.difficulty not in ALLOWED_DIFFICULTY_VALUES:
+            return UpdateRecipeResponse(
+                invalid_vocabulary_message=(
+                    f"Invalid difficulty '{request.difficulty}'. "
+                    f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
+                ),
+            )
+        if "time_of_day" in _SetFields and request.time_of_day is not None \
+                and request.time_of_day not in DEFAULT_MEAL_SLOTS:
+            return UpdateRecipeResponse(
+                invalid_vocabulary_message=(
+                    f"Invalid time of day '{request.time_of_day}'. "
+                    f"Allowed: {', '.join(DEFAULT_MEAL_SLOTS)}."
+                ),
+            )
 
         if "name" in _SetFields and request.name is not None:
             _NameField = EntityField(Recipe, Recipe.Fields.NAME)
@@ -245,6 +270,7 @@ class UpdateRecipeHandler:
                     stock_item = _StockItem,
                     unit = _IngredientRequest.unit,
                     section_id = _resolve_section(_IngredientRequest.section_client_id),
+                    is_optional = _IngredientRequest.is_optional,
                 )
                 _NewIngredients.append(_NewIngredient)
                 _NewPairs.append((_IngredientRequest.client_id, _NewIngredient))
@@ -386,6 +412,10 @@ def update_recipe(recipe_id: UUID):
     if _Response.invalid_section_message:
         _Logger.warning(f"Invalid recipe section on update: {_Response.invalid_section_message}")
         return bad_request(_Response.invalid_section_message)
+
+    if _Response.invalid_vocabulary_message:
+        _Logger.warning(f"Invalid recipe vocabulary: {_Response.invalid_vocabulary_message}")
+        return bad_request(_Response.invalid_vocabulary_message)
 
     _Logger.info(f"Successfully updated recipe with ID: {recipe_id}")
     return no_content()

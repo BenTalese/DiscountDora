@@ -5,7 +5,6 @@ they share the "primary list is unique" invariant — keeping them together
 makes that contract obvious. Finish + copy live here too because they're
 shopping-list-scoped actions, not line-scoped.
 """
-import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -249,17 +248,10 @@ class FinishShoppingListHandler:
         if any(level_id not in levels_by_id for level_id in overrides.values()):
             return FinishShoppingListResponse(invalid_level=True)
 
-        # Capture each restocked item's prior level so Reopen can reverse it
-        # server-side (R-003: the undo state is a server-owned domain fact, not
-        # something we trust a client snapshot for). Recorded *before* the
-        # overwrite below.
-        level_restores: list[dict[str, str]] = []
         updated = 0
         if ticked_lines:
             stock_item_ids = [l.stock_item_id for l in ticked_lines if l.stock_item_id]
-            # stock_level is a noload relationship; eager-load it so we can
-            # capture each item's prior level for the reopen snapshot.
-            stock_items = self.repository.get(StockItem).include("stock_level").all(
+            stock_items = self.repository.get(StockItem).all(
                 EntityField(StockItem, "id").in_(stock_item_ids)
             ) if stock_item_ids else []
             now = datetime.now(timezone.utc)
@@ -268,21 +260,12 @@ class FinishShoppingListHandler:
                 target = levels_by_id.get(override_id) if override_id else well_stocked
                 if target is None:
                     continue
-                if item.stock_level is not None:
-                    level_restores.append({
-                        "stock_item_id": str(item.id),
-                        "stock_level_id": str(item.stock_level.id),
-                    })
                 item.stock_level = target
                 item.stock_level_last_updated = now
                 updated += 1
 
         lst.status = SHOPPING_LIST_STATUS_DONE
         lst.completed_at = datetime.now(timezone.utc)
-        # Chunk 2: "primary" is now inferred from DRAFT-count, so finish no
-        # longer auto-promotes a sibling — there's no stored primary to move.
-        # finish_snapshot keeps only what reopen actually needs to reverse.
-        lst.finish_snapshot = json.dumps({"level_restores": level_restores})
 
         self.repository.save_changes()
         return FinishShoppingListResponse(ticked_lines=updated)

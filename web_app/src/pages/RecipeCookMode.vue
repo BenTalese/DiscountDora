@@ -234,6 +234,7 @@
                                 :key="row.ingredient.recipe_ingredient_id"
                                 :class="{
                                     'ingredient-row--highlighted': highlightedIngredientIds.has(row.ingredient.recipe_ingredient_id),
+                                    'ingredient-row--optional': row.ingredient.is_optional,
                                 }"
                             >
                                 <q-item-section>
@@ -266,6 +267,12 @@
                                         </template>
                                         <template v-else>
                                             <span class="ingredient-name">{{ row.ingredient.stock_item_name }}</span>
+                                            <span
+                                                v-if="row.ingredient.is_optional"
+                                                class="text-caption dora-text-muted"
+                                            >
+                                                (optional)
+                                            </span>
                                             <q-btn
                                                 flat
                                                 dense
@@ -1318,6 +1325,11 @@
     .ingredient-row--highlighted {
         background: var(--semantic-info-soft, color-mix(in srgb, var(--brand-primary) 12%, transparent));
         border-left: 3px solid var(--brand-primary);
+    }
+    // Cookbook revision §1.9 — optional ingredients render dimmed so the
+    // eye lands on what's required to cook.
+    .ingredient-row--optional {
+        opacity: 0.65;
     }
     .tool-chip--highlighted {
         background: var(--brand-primary) !important;

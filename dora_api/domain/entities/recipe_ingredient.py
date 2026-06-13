@@ -16,6 +16,12 @@ class RecipeIngredient(BaseEntity):
     # with ON DELETE SET NULL so deleting a section keeps its ingredients,
     # just unsectioned.
     section_id: UUID | None = None
+    # Cookbook revision §1.9 — optional ingredients are ignored entirely by
+    # the cookability rule (no `cookable_with_optional` half-state). They
+    # still render in the recipe (with an "(optional)" hint) and appear in
+    # the shopping-list picker under an Optional separator, unchecked by
+    # default regardless of stock level.
+    is_optional: bool = False
 
     class Fields(BaseEntity.Fields):
         NOTES = "notes"
@@ -23,3 +29,4 @@ class RecipeIngredient(BaseEntity):
         STOCK_ITEM = "stock_item"
         UNIT = "unit"
         SECTION_ID = "section_id"
+        IS_OPTIONAL = "is_optional"

@@ -355,7 +355,6 @@
                                 :highlight-stock-item-ids="[detail.stock_item_id]"
                                 @open="goToRecipe"
                                 @cook="goToCook"
-                                @adjust-meals="onAdjustRecipeMeals"
                                 @add-missing="onAddMissing"
                             />
                         </div>
@@ -853,13 +852,6 @@
     }
     function goToCook(recipeId: string) {
         void router.push(`/cookbook/${recipeId}/cook`);
-    }
-    async function onAdjustRecipeMeals(recipeId: string, delta: number) {
-        try {
-            await recipeStore.adjustMealsAsync(recipeId, delta);
-        } catch {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update meals.' });
-        }
     }
     async function onAddMissing(_recipeId: string, stockItemIds: string[]) {
         const primary = shoppingListStore.quickAddTargetListId;

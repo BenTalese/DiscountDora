@@ -172,8 +172,9 @@
                 :options="categoryOptions"
                 label="Category"
             />
-            <!-- FU-148 — time-of-day single-select. Fixed enum mirrors
-                 the editor on RecipeDetailPage. -->
+            <!-- FU-148 — time-of-day single-select. §1.12: vocabulary
+                 sourced from DEFAULT_MEAL_SLOTS (shared with meal-plans
+                 PROPOSAL_MEAL_PLANS.md §4). -->
             <q-select
                 dense
                 outlined
@@ -184,6 +185,19 @@
                 v-model="timeOfDayFilter"
                 :options="TIME_OF_DAY_OPTIONS"
                 label="Time of day"
+            />
+            <!-- §1.7 — difficulty single-select. Closed vocabulary
+                 (Easy / Medium / Hard). -->
+            <q-select
+                dense
+                outlined
+                style="min-width: 160px"
+                emit-value
+                map-options
+                clearable
+                v-model="difficultyFilter"
+                :options="DIFFICULTY_OPTIONS"
+                label="Difficulty"
             />
             <!-- FU-149 — "# ingredients ≤" numeric cap. Pairs with the
                  new sort axis below. -->
@@ -327,11 +341,9 @@
                                 :highlight-stock-item-ids="usesStockItemIds"
                                 @open="onOpenRecipe"
                                 @cook="onCookClick"
-                                @adjust-meals="onAdjustMeals"
                                 @toggle-favourite="onToggleFavourite"
                                 @add-missing="onAddMissing"
                                 @add-all-to-list="onAddAllToList"
-                                @add-to-meal-plan="onAddToMealPlan"
                             />
                         </div>
                     </div>
@@ -349,42 +361,14 @@
             @saved="onSaved"
         />
 
-        <!-- ── Add-missing-to-list dialog ─────────────────────────── -->
-        <BaseDialog v-model="addMissingOpen" card-style="min-width: 380px; max-width: 480px">
-                <q-card-section>
-                    <div class="text-h6">Add to a shopping list</div>
-                    <div class="text-caption dora-text-muted">
-                        {{ addMissingPayload?.stockItemIds.length ?? 0 }}
-                        item{{
-                            (addMissingPayload?.stockItemIds.length ?? 0) === 1 ? '' : 's'
-                        }} from
-                        "{{ addMissingPayload?.recipeName }}"
-                    </div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
-                    <q-select
-                        v-model="addMissingTargetListId"
-                        :options="activeListOptions"
-                        emit-value
-                        map-options
-                        outlined
-                        dense
-                        label="Add to"
-                    />
-                </q-card-section>
-                <q-card-actions align="right">
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn
-                        unelevated
-                        color="primary"
-                        no-caps
-                        label="Add"
-                        :loading="addingMissing"
-                        :disable="!addMissingTargetListId"
-                        @click="confirmAddMissing"
-                    />
-                </q-card-actions>
-        </BaseDialog>
+        <!-- ── Per-ingredient picker (Chunk B §1.4) ─────────────── -->
+        <RecipeIngredientPickerDialog
+            ref="pickerRef"
+            v-model="pickerOpen"
+            :recipe="pickerRecipe"
+            :initial-checked-ids="pickerInitialCheckedIds"
+            @confirm="onPickerConfirm"
+        />
 
     </div>
 </template>
@@ -402,6 +386,7 @@
     import { useQuasar } from 'quasar';
     import RecipeCard from 'src/components/RecipeCard.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
+    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
     import DietaryTagFilter from 'src/components/recipes/DietaryTagFilter.vue';
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
     import type {
@@ -411,13 +396,18 @@
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService from 'src/services/api/recipeApiService';
-    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import {
+        DEFAULT_MEAL_SLOTS,
+        DIFFICULTY_RANK,
+        DIFFICULTY_VALUES,
+        type Difficulty,
+    } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -432,7 +422,6 @@
     const shoppingListStore = useShoppingListStore();
     const mealPlanStore = useMealPlanStore();
     const recipeVocabStore = useRecipeVocabStore();
-    const shoppingListApi = new ShoppingListApiService();
     const recipeApi = new RecipeApiService();
     const { addItems } = useShoppingListActions();
 
@@ -492,10 +481,11 @@
     // L235 — cuisine + category are distinct single-select id filters.
     const cuisineFilter = ref<string | null>(null);
     const categoryFilter = ref<string | null>(null);
-    // FU-148 — time-of-day single-select. Values mirror the editor's
-    // q-select on RecipeDetailPage (Breakfast / Lunch / Dinner /
-    // Dessert / Snack / Any). Null = no filter.
+    // FU-148 — time-of-day single-select. §1.12: vocabulary is the
+    // server's DEFAULT_MEAL_SLOTS. Null = no filter.
     const timeOfDayFilter = ref<string | null>(null);
+    // §1.7 — difficulty single-select. Null = no filter.
+    const difficultyFilter = ref<Difficulty | null>(null);
     // FU-149 — "# ingredients ≤" cap. Same blank-input / NaN guard as
     // the other numeric inputs.
     const ingredientsMax = ref<number | null>(null);
@@ -509,15 +499,25 @@
     // ingredient(s)" path.
     const excludesStockItemIds = ref<string[]>([]);
 
-    type SortKey = 'name' | 'last_made' | 'meal_count' | 'total_time' | 'kcal' | 'ingredient_count';
+    type SortKey =
+        | 'name'
+        | 'last_made'
+        | 'meal_count'
+        | 'total_time'
+        | 'kcal'
+        | 'ingredient_count'
+        | 'difficulty';
     type SortDir = 'asc' | 'desc';
     // C-4 Chunk 9 — "Kcal" axis added when the nutrition opt-in is on.
     // The sort menu options are computed below; the static list keeps
     // the always-on axes.
-    // FU-148 — keep in sync with the RecipeDetailPage editor's q-select
-    // values. Static constant rather than vocab-table because time-of-day
-    // is a tiny, fixed enum (unlike cuisine / category / dietary tags).
-    const TIME_OF_DAY_OPTIONS = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Any'];
+    // §1.12 — time-of-day vocabulary mirrors the server's
+    // DEFAULT_MEAL_SLOTS (recipe.py) which is also the seed for the
+    // meal-plans slot list (PROPOSAL_MEAL_PLANS.md §4).
+    const TIME_OF_DAY_OPTIONS = [...DEFAULT_MEAL_SLOTS];
+    // §1.7 — difficulty closed vocabulary; mirrors ALLOWED_DIFFICULTY_VALUES
+    // on the server.
+    const DIFFICULTY_OPTIONS = [...DIFFICULTY_VALUES];
 
     const STATIC_SORT_OPTIONS: { label: string; value: SortKey }[] = [
         { label: 'Name', value: 'name' },
@@ -528,6 +528,8 @@
         // is the common "make this quick" intent; the asc/desc toggle
         // covers the other direction).
         { label: '# ingredients', value: 'ingredient_count' },
+        // §1.7 — difficulty ordinal (Easy < Medium < Hard; nulls sink).
+        { label: 'Difficulty', value: 'difficulty' },
     ];
     const sortBy = ref<SortKey>('name');
     // FU-083 — explicit asc/desc toggle. Default per axis: name = asc,
@@ -749,6 +751,12 @@
             if (timeOfDayFilter.value !== null && r.time_of_day !== timeOfDayFilter.value) {
                 return false;
             }
+            // §1.7 — difficulty single-select. Null = no filter; a recipe
+            // with null difficulty fails any non-null filter (same
+            // intent rule as time_of_day above).
+            if (difficultyFilter.value !== null && r.difficulty !== difficultyFilter.value) {
+                return false;
+            }
             // FU-149 — "# ingredients ≤" cap. Blank/NaN reverts to no
             // filter (matches L234 blank-input rule).
             if (
@@ -841,6 +849,19 @@
                     if (av === bv) return a.name.localeCompare(b.name);
                     return (av - bv) * dirSign;
                 }
+                case 'difficulty': {
+                    // §1.7 — ordinal rank (Easy < Medium < Hard); recipes
+                    // with no value sink regardless of direction.
+                    const av = a.difficulty as Difficulty | null;
+                    const bv = b.difficulty as Difficulty | null;
+                    const ar = av && av in DIFFICULTY_RANK ? DIFFICULTY_RANK[av] : null;
+                    const br = bv && bv in DIFFICULTY_RANK ? DIFFICULTY_RANK[bv] : null;
+                    if (ar === null && br === null) return a.name.localeCompare(b.name);
+                    if (ar === null) return 1;
+                    if (br === null) return -1;
+                    if (ar === br) return a.name.localeCompare(b.name);
+                    return (ar - br) * dirSign;
+                }
                 case 'name':
                 default:
                     return a.name.localeCompare(b.name) * dirSign;
@@ -894,6 +915,7 @@
             || cuisineFilter.value !== null
             || categoryFilter.value !== null
             || timeOfDayFilter.value !== null
+            || difficultyFilter.value !== null
             || (ingredientsMax.value !== null && Number.isFinite(ingredientsMax.value))
             || usesStockItemIds.value.length > 0
             || excludesStockItemIds.value.length > 0
@@ -919,6 +941,7 @@
         if (cuisineFilter.value !== null) n++;
         if (categoryFilter.value !== null) n++;
         if (timeOfDayFilter.value !== null) n++;
+        if (difficultyFilter.value !== null) n++;
         if (ingredientsMax.value !== null && Number.isFinite(ingredientsMax.value)) n++;
         if (usesStockItemIds.value.length > 0) n++;
         if (excludesStockItemIds.value.length > 0) n++;
@@ -948,6 +971,8 @@
                 return asc ? 'Lowest kcal first' : 'Highest kcal first';
             case 'ingredient_count':
                 return asc ? 'Fewest ingredients first' : 'Most ingredients first';
+            case 'difficulty':
+                return asc ? 'Easiest first' : 'Hardest first';
             case 'name':
             default:
                 return asc ? 'A → Z' : 'Z → A';
@@ -963,7 +988,11 @@
         // first" are the natural reads. Everything else (recently made,
         // most meals, fastest, lowest kcal) defaults to descending.
         sortDir.value =
-            next === 'name' || next === 'ingredient_count' ? 'asc' : 'desc';
+            next === 'name'
+            || next === 'ingredient_count'
+            || next === 'difficulty'
+                ? 'asc'
+                : 'desc';
     });
 
     // C-4 Chunk 9 — if the user had Kcal as their sort axis and then the
@@ -987,6 +1016,7 @@
         cuisineFilter.value = null;
         categoryFilter.value = null;
         timeOfDayFilter.value = null;
+        difficultyFilter.value = null;
         ingredientsMax.value = null;
         usesStockItemIds.value = [];
         excludesStockItemIds.value = [];
@@ -1132,153 +1162,76 @@
         if (r) void recipeStore.toggleFavouriteAsync(r);
     }
 
-    // Edit/Duplicate/Delete moved off the card (Chunk 3): the card click opens
-    // the detail page, which is the edit + delete surface. Cook is the card's
-    // only primary action.
-    async function onAdjustMeals(recipeId: string, delta: number) {
-        try {
-            await recipeStore.adjustMealsAsync(recipeId, delta);
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not update meals.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
+    // ── Per-ingredient picker (Chunk B §1.4) ─────────────────────────
+    // Cookbook card emits `add-missing` (not cookable) or `add-all-to-list`
+    // (cookable). Both open the same picker; the only difference is the
+    // initial check state (default = missing/low checked, sufficient/well
+    // unchecked; `add-missing` passes the explicit subset as initial-checked
+    // so the user lands on exactly what they need to buy).
+    const pickerRef = ref<{ setBusy: (v: boolean) => void } | null>(null);
+    const pickerOpen = ref(false);
+    const pickerRecipe = ref<Recipe | null>(null);
+    const pickerInitialCheckedIds = ref<string[] | undefined>(undefined);
 
-    // ── Add to shopping list ────────────────────────────────────────
-    const addMissingOpen = ref(false);
-    const addMissingPayload = ref<{
-        recipeName: string;
-        stockItemIds: string[];
-        // X5 — when set, the confirm path routes through /auto-generate
-        // with sources.recipes=[id] so the line lands with
-        // added_via=auto_recipe and the recipe name as the chip detail.
-        recipeId?: string;
-    } | null>(null);
-    const addMissingTargetListId = ref<string | null>(null);
-    const addingMissing = ref(false);
-
-    const activeListOptions = computed(() =>
-        shoppingListStore.summaries
-            .filter((s) => s.status !== 'done')
-            .map((s) => ({
-                label: s.name,
-                value: s.shopping_list_id,
-            })),
-    );
-
-    function openAddDialog(recipeName: string, ids: string[], recipeId?: string) {
-        if (ids.length === 0) {
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: `Nothing to add for "${recipeName}".`,
-            });
-            return;
-        }
-        addMissingPayload.value = {
-            recipeName,
-            stockItemIds: ids,
-            ...(recipeId !== undefined ? { recipeId } : {}),
-        };
-        addMissingTargetListId.value =
-            shoppingListStore.quickAddTargetListId ?? activeListOptions.value[0]?.value ?? null;
-        if (!addMissingTargetListId.value) {
-            $q.dialog({
-                title: 'No active shopping list',
-                message: 'Create one first to add ingredients to it.',
-                ok: { label: 'Open lists', noCaps: true, color: 'primary' },
-                cancel: { noCaps: true },
-            }).onOk(() => { void router.push('/shopping-lists'); });
-            return;
-        }
-        addMissingOpen.value = true;
+    function requireActiveList(): boolean {
+        const hasOne = shoppingListStore.summaries.some((s) => s.status !== 'done');
+        if (hasOne) return true;
+        $q.dialog({
+            title: 'No active shopping list',
+            message: 'Create one first to add ingredients to it.',
+            ok: { label: 'Open lists', noCaps: true, color: 'primary' },
+            cancel: { noCaps: true },
+        }).onOk(() => { void router.push('/shopping-lists'); });
+        return false;
     }
 
     function onAddMissing(recipeId: string, stockItemIds: string[]) {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
-        openAddDialog(recipe?.name ?? 'recipe', stockItemIds, recipeId);
+        if (!recipe) return;
+        if (recipe.ingredients.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `Nothing to add for "${recipe.name}".`,
+            });
+            return;
+        }
+        if (!requireActiveList()) return;
+        pickerRecipe.value = recipe;
+        pickerInitialCheckedIds.value = stockItemIds;
+        pickerOpen.value = true;
     }
 
     function onAddAllToList(recipeId: string) {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
         if (!recipe) return;
-        const ids = [
-            ...new Set(
-                recipe.ingredients
-                    .map((i) => i.stock_item_id)
-                    .filter((id): id is string => Boolean(id)),
-            ),
-        ];
-        openAddDialog(recipe.name, ids);
-    }
-
-    async function confirmAddMissing() {
-        if (!addMissingPayload.value || !addMissingTargetListId.value) return;
-        addingMissing.value = true;
-        try {
-            const payload = addMissingPayload.value;
-            // X5: when we know the recipe, delegate to /auto-generate so the
-            // lines land with added_via=auto_recipe + the recipe name as the
-            // chip detail. The endpoint also re-checks "well-stocked" itself
-            // so the subset matches the server's view of stock.
-            if (payload.recipeId) {
-                const result = await shoppingListApi.autoGenerateAsync({
-                    merge_into_list_id: addMissingTargetListId.value,
-                    sources: { recipes: [payload.recipeId] },
-                });
-                if (result.nothing_to_add) {
-                    $q.notify({
-                        type: 'info',
-                        position: 'bottom-right',
-                        message: `Nothing missing for "${payload.recipeName}".`,
-                    });
-                } else {
-                    $q.notify({
-                        type: 'positive',
-                        position: 'bottom-right',
-                        message: `Added ${result.added_count} item${
-                            result.added_count === 1 ? '' : 's'
-                        } from "${payload.recipeName}".`,
-                    });
-                }
-                await shoppingListStore.refreshAsync();
-            } else {
-                await addItems(
-                    addMissingTargetListId.value,
-                    payload.stockItemIds.map((id) => ({
-                        stock_item_id: id,
-                    })),
-                );
-            }
-            addMissingOpen.value = false;
-            addMissingPayload.value = null;
-        } finally {
-            addingMissing.value = false;
+        if (recipe.ingredients.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `Nothing to add for "${recipe.name}".`,
+            });
+            return;
         }
+        if (!requireActiveList()) return;
+        pickerRecipe.value = recipe;
+        pickerInitialCheckedIds.value = undefined;
+        pickerOpen.value = true;
     }
 
-    // ── Add to meal plan ────────────────────────────────────────────
-    // Meal plans schedule *meals*, not recipes directly — so without a
-    // wrapping meal, we can only point the user at the meal-plans page.
-    // We pass the recipe id along so a future enhancement on that page
-    // can offer "schedule a meal that uses this recipe" inline.
-    function onAddToMealPlan(recipeId: string) {
-        const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
-        $q.dialog({
-            title: 'Add to a meal plan',
-            message:
-                `Meal plans schedule meals (which group recipes). To plan ` +
-                `"${recipe?.name ?? 'this recipe'}", open Meal Plans, pick a ` +
-                `plan, and add a meal that includes this recipe.`,
-            ok: { label: 'Open meal plans', color: 'primary', noCaps: true },
-            cancel: { noCaps: true },
-        }).onOk(() => {
-            void router.push({ path: '/meal-plans', query: { recipe_id: recipeId } });
-        });
+    async function onPickerConfirm(payload: { stockItemIds: string[]; targetListId: string }) {
+        pickerRef.value?.setBusy(true);
+        try {
+            await addItems(
+                payload.targetListId,
+                payload.stockItemIds.map((id) => ({ stock_item_id: id })),
+            );
+            pickerOpen.value = false;
+            pickerRecipe.value = null;
+            pickerInitialCheckedIds.value = undefined;
+        } finally {
+            pickerRef.value?.setBusy(false);
+        }
     }
 
     async function onSaved() {

@@ -628,6 +628,11 @@ def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
         item = ing.stock_item
         if item is None:
             continue
+        # Cookbook revision §1.9 — optional ingredients are excluded from
+        # the assistant's add-recipe-to-list candidates (mirrors the
+        # picker modal default: opt-in only).
+        if getattr(ing, "is_optional", False):
+            continue
         if missing_only and not is_missing(item.stock_level):
             continue
         candidates.append({"stock_item_id": str(item.id), "name": item.name})

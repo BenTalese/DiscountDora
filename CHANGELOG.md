@@ -5,7 +5,128 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Removed
+- **App-wide undo / shopping-list Reopen — gone (FU-163).** The user
+  retired the whole undo posture: "decided undo feature does not make sense,
+  remove. Even the reopen functionality — once a list is done, it's done.
+  The snapshot of stock levels feels so overengineered. Kill it."
+  - Frontend: deleted `useUndo.ts` + `useNotifyUndoable.ts`; removed the
+    header Undo button + Ctrl/Cmd-Z / Ctrl-Shift-Z keyboard handler in
+    `MainLayout.vue`; stripped every `registerUndo` / `notifyUndoable`
+    call site in `stockItemStore.ts` (level swap, scalar update, delete)
+    and `ShoppingListDetail.vue` (tick/untick). Stock-item delete is now
+    a plain delete — no Undo toast.
+  - Shopping list: the **Reopen** button on a Done list is gone, along
+    with its handler and `unfinishAsync` on the API service. A finished
+    list is final; if the user wants to keep working with its lines, the
+    "Copy to new list" button is still there.
+  - Backend: deleted `POST /api/shopping-lists/<id>/unfinish` (handler
+    + module) and `POST /api/stock-items/restore` (handler + module).
+    The `finish_shopping_list` handler no longer captures the
+    `level_restores` snapshot. `ShoppingList.finish_snapshot` column
+    dropped from the entity, the `Fields` enum, and the table mapping.
+    New migration `a1c4e7b3f5d2_20260614_drop_finish_snapshot` removes
+    the column (batch mode, SQLite + Postgres parity, R-005).
+  - Tests: `test_shopping_list_lifecycle.py` now asserts `/unfinish`
+    returns 404 instead of round-tripping a finish→reopen.
+
 ### Changed
+- **Cookbook revision Chunk C — optional ingredients (the cross-cutting one).**
+  - **New `RecipeIngredient.is_optional` column** (NOT NULL, default false)
+    on the server (`recipe_ingredient.py` + table mapping + batch-mode
+    migration `b9e5c2a78f31`). Round-trips through create/update DTOs
+    and the read DTO; per-row Optional checkbox added to the
+    Cookbook overview edit dialog and the Recipe detail page's inline
+    editor; URL-importer rows default to required (no auto-detection in
+    v1 — parsing "to taste"/parens is brittle).
+  - **Cookability rule (`recipe_cookability.py`) ignores optional rows
+    entirely** — no `cookable_with_optional` half-state, no client
+    second-cookable value. Every consumer of the rule
+    (`missing_count_for` / `missing_stock_item_names_for`) inherits this
+    transitively, so the **five surfaces** that read cookability all
+    move together: recipe DTO (and via that, the cookbook card +
+    stock-item recipe cards), the dashboard's `cookable_count`, the
+    waste-rescue ranking, and both assistant tools
+    (`_stock_coverage` in `tools.py`, `add_recipe_to_list` candidate
+    list in `confirm_actions.py`).
+  - **Picker modal renders optional rows under a "─── Optional ───"
+    separator** at the bottom of the list, unchecked by default
+    regardless of stock level. `Select all` and `Select missing` also
+    leave optional rows unchecked — optional is opt-in only. If the
+    same stock item appears as both required and optional in a recipe,
+    the required commitment wins (treat as required, default checks
+    follow stock level).
+  - **Cook mode** renders an `(optional)` hint after the ingredient
+    name and dims the row (`.ingredient-row--optional`) so the eye
+    lands on what's required.
+  - All 299 unit tests pass; vue-tsc clean. Batch-mode migration is
+    SQLite + Postgres safe (R-005).
+- **Cookbook revision Chunk B — picker modal, difficulty axis, time-of-day vocabulary.**
+  - **New `RecipeIngredientPickerDialog.vue`** (under
+    `web_app/src/components/recipes/`) replaces the old all-or-nothing
+    "add to list" dialog on both the Cookbook overview and the Recipe
+    detail page. Per-ingredient checkboxes with stock-level dots;
+    `is_missing` / `is_low_stock` auto-checked, `sufficient` /
+    `well_stocked` auto-unchecked. Rows are sorted so missing items
+    surface first. `Select all` / `Select missing` quick actions.
+    Target list picker integrated into the dialog. Card emits
+    `add-all-to-list` (cookable) or `add-missing` (not cookable) — both
+    open the same picker; the not-cookable path pre-selects the missing
+    subset.
+  - **Difficulty is now a closed-set vocabulary** (`Easy` / `Medium` /
+    `Hard`) — `ALLOWED_DIFFICULTY_VALUES` on the server
+    (`dora_api/domain/entities/recipe.py`) is validated at create + update
+    boundaries (R-010) returning a 400 on out-of-vocab values; the edit
+    dialog + detail page swap their free-form input for a `q-select`.
+    **New filter** (single-select dropdown) and **new sort axis**
+    (ordinal: Easy < Medium < Hard; recipes with no difficulty sink to
+    the bottom regardless of direction) on the Cookbook overview.
+  - **`Recipe.time_of_day` is now a closed-set vocabulary** sourced from
+    the new `DEFAULT_MEAL_SLOTS` constant (`Breakfast` / `Lunch` /
+    `Dinner` / `Snack` / `Dessert`) — shared with `MealPlanEntry.slot`
+    (`PROPOSAL_MEAL_PLANS.md §4`, amended in this PR). Server-side
+    validation matches the difficulty pattern. The Cookbook overview
+    filter, edit dialog, and detail page all read from the same
+    constant. The historical free-text `'Any'` option in the q-selects
+    is dropped (existing recipes saved with off-vocab values round-trip
+    on read; the next save migrates them to a valid choice).
+  - Frontend constants live in `web_app/src/helpers/recipeVocabulary.ts`
+    (mirror of the server constants); when `PROPOSAL_MEAL_PLANS.md §4`
+    lands a user-configurable slot list, both surfaces will switch to
+    reading from that list with this constant as the seeded default.
+  - All 299 unit tests pass; vue-tsc clean.
+- **Cookbook recipe card — visual redesign (Chunk A of the FU-088 revision).**
+  The browser-verified follow-up to Cookbook Chunk 3 lands its first PR:
+  - **Footer action row reshaped** — heart (leftmost) → Cook (icon-only
+    `mdi-chef-hat`, no label) → add-to-list (icon-only). The kebab `⋮`
+    menu is gone entirely; "Add to meal plan" was retired with it.
+  - **Cookable state is now the Cook button's colour** (primary when
+    cookable, warning when not) — the separate "Cookable now" / "Missing N"
+    chip section is removed. The add-to-list button mirrors it
+    (`mdi-cart-plus` / neutral vs `mdi-cart-remove` / warning) and emits
+    `add-missing` instead of `add-all-to-list` when not cookable.
+  - **Heart moves out of the image overlay** (and the dark scrim with it)
+    into the footer's leftmost slot.
+  - **Meta line reordered + extended** — the chips row (time / serves /
+    difficulty / parts) now sits above the muted caption, which reads
+    `[Cuisine] · [Category] · [Time of day]` (each segment optional).
+  - **Allocated badge removed from the overview** — it lives on the meal
+    planner now (per `PROPOSAL_MEAL_PLANS.md §3.1`).
+  - **`MealStepper` removed from the card** — the cooked-pool stepper
+    stays on the recipe detail page and on the stock-item detail page;
+    it leaves the overview entirely. The planner-side pickup is noted in
+    `PROPOSAL_MEAL_PLANS.md §3.1` for that proposal's eventual
+    implementation.
+  - **"X low" chip and the dim-on-restock-this-item visual are gone.**
+  - **Dietary tag chips are larger** (default size, no `dense` /
+    `size="sm"`) so they're readable at mobile zoom.
+  - Followers: `RecipesOverview.vue` and `StockItemDetailPage.vue` drop
+    the now-orphaned `@adjust-meals` / `@add-to-meal-plan` handlers and
+    their bodies. `recipeStore.adjustMealsAsync` stays (still used by the
+    detail page). New `ICONS.chef_hat` (`mdi-chef-hat`). vue-tsc clean.
+  Chunks B (ingredient-picker modal + difficulty axis + `time_of_day`
+  vocabulary) and C (optional ingredients) follow per
+  `PROPOSAL_COOKBOOK_CARD_REVISION.md`.
 - **E2E test suite: ~95× faster + realigned to the current API contract**
   (FU-166). The `tests/e2e` harness now dispatches in-process through Flask's
   test client instead of booting a real HTTP server and driving it over the

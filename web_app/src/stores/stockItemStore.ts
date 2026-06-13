@@ -1,15 +1,12 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import { notifyUndoable } from 'src/composables/useNotifyUndoable';
 import {
     tryWithQueue,
     type QueueableMutationKind,
 } from 'src/composables/useOfflineQueue';
-import { register as registerUndo } from 'src/composables/useUndo';
 import type { StockItem } from 'src/models/stockItem';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 import type {
     CreateStockItemCommand,
-    RestoreStockItemCommand,
     UpdateStockItemCommand
 } from 'src/services/api/stockItemApiService';
 import StockItemApiService from 'src/services/api/stockItemApiService';
@@ -69,9 +66,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
 
     /** Optimistic stock-level swap with rollback if the API rejects.
      *  Network failures are absorbed into the offline queue so the user
-     *  can keep ticking the kitchen over without internet.
-     *  Registers a quiet undo entry (no toast) so the header Undo button
-     *  / Ctrl-Z can roll the level back. */
+     *  can keep ticking the kitchen over without internet. */
     async function updateStockLevelAsync(stockItemToUpdate: UpdateStockItemCommand) {
         const stockItemIndex = stockItems.value.findIndex(
             (si) => si.stock_item_id == stockItemToUpdate.stock_item_id
@@ -80,7 +75,6 @@ export const useStockItemStore = defineStore('stockItem', () => {
 
         const originalStockLevel = stockItems.value[stockItemIndex]!.stock_level_id;
         const nextStockLevel = stockItemToUpdate.stock_level_id!;
-        const itemName = stockItems.value[stockItemIndex]!.name;
         stockItems.value[stockItemIndex]!.stock_level_id = nextStockLevel;
 
         registerRollback(() => {
@@ -105,56 +99,14 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[stockItemIndex] = await stockItemApiService.getAsync(stock_item_id);
         }
         clearRollbacks();
-
-        // F5: register a silent undo entry (no toast — cart-button level
-        // bumps already toast and we don't want two). The Undo button /
-        // Ctrl-Z surface it. Skip when the swap was a no-op.
-        //
-        // The inverse / redo call the underlying API service directly
-        // (rather than recursing through `updateStockLevelAsync`) so
-        // pressing Undo doesn't itself spawn another undo entry.
-        if (originalStockLevel !== nextStockLevel) {
-            const applyLevel = async (levelId: string) => {
-                await stockItemApiService.updateAsync({
-                    stock_item_id,
-                    stock_level_id: levelId,
-                });
-                const idx = stockItems.value.findIndex(
-                    (si) => si.stock_item_id === stock_item_id,
-                );
-                if (idx >= 0) {
-                    stockItems.value[idx]!.stock_level_id = levelId;
-                }
-            };
-            registerUndo({
-                label: `Stock level: ${itemName}`,
-                inverse: () => applyLevel(originalStockLevel),
-                redo: () => applyLevel(nextStockLevel),
-            });
-        }
     }
 
     /** General-purpose update for the detail page (name/notes/location/etc).
      *  Same offline-queue treatment as the level swap above for the kinds
-     *  registered (mark opened/restocked, push/clear expiry).
-     *  Registers a silent undo entry covering whichever scalar fields
-     *  were changed (we snapshot the pre-state of any field in `cmd`). */
+     *  registered (mark opened/restocked, push/clear expiry). */
     const updateStockItemAsync = async (cmd: UpdateStockItemCommand) => {
         const { stock_item_id, ...payload } = cmd;
         const { kind, label } = classifyUpdate(cmd);
-        // Snapshot the fields we're about to overwrite, so undo can
-        // restore them. Field-by-field (instead of cloning the whole
-        // item) keeps the inverse payload narrow — no risk of
-        // accidentally reverting unrelated changes that landed since.
-        const before = stockItems.value.find((si) => si.stock_item_id === stock_item_id);
-        const inverseFields: Record<string, unknown> = {};
-        const redoFields: Record<string, unknown> = {};
-        if (before) {
-            for (const key of Object.keys(payload) as (keyof typeof payload)[]) {
-                inverseFields[key as string] = before[key as keyof StockItem] ?? null;
-                redoFields[key as string] = payload[key];
-            }
-        }
         const result = await tryWithQueue(
             () => stockItemApiService.updateAsync(cmd),
             {
@@ -176,70 +128,11 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[idx] = refreshed;
             stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
         }
-        // F5: only register when there was something to roll back. Skip
-        // when the field set was empty (defensive) or the values matched.
-        if (before && Object.keys(inverseFields).length > 0) {
-            const applyFields = async (fields: Record<string, unknown>) => {
-                await stockItemApiService.updateAsync({
-                    stock_item_id,
-                    ...fields,
-                } as UpdateStockItemCommand);
-                const refreshed = await stockItemApiService.getAsync(stock_item_id);
-                const idx = stockItems.value.findIndex(
-                    (si) => si.stock_item_id === stock_item_id,
-                );
-                if (idx >= 0) stockItems.value[idx] = refreshed;
-            };
-            registerUndo({
-                label: `${label}: ${before.name}`,
-                inverse: () => applyFields(inverseFields),
-                redo: () => applyFields(redoFields),
-            });
-        }
     };
 
-    /** Delete + queue an Undo via the snapshot/restore endpoint. The toast
-     *  carries an inline Undo — and even after the toast disappears the
-     *  entry is still on the global stack until 20 newer actions push it
-     *  off. */
     const deleteStockItemAsync = async (stockItemID: string) => {
-        const before = stockItems.value.find((si) => si.stock_item_id === stockItemID);
         await stockItemApiService.deleteAsync(stockItemID);
         stockItems.value = stockItems.value.filter((si) => si.stock_item_id !== stockItemID);
-        if (!before) return;
-        const snapshot: RestoreStockItemCommand = {
-            stock_item_id: before.stock_item_id,
-            name: before.name,
-            stock_level_id: before.stock_level_id,
-            stock_location_id: before.stock_location_id ?? null,
-            stock_group_id: before.stock_group_id ?? null,
-            expiry_date: before.expiry_date ?? null,
-            is_flagged: before.is_flagged ?? false,
-            auto_add_when_low: before.auto_add_when_low ?? false,
-            is_open: before.is_open ?? false,
-        };
-        notifyUndoable({
-            message: `Deleted "${before.name}".`,
-            undo: {
-                label: `Delete: ${before.name}`,
-                inverse: async () => {
-                    await stockItemApiService.restoreAsync(snapshot);
-                    // Pull the row back into the store so it shows up
-                    // immediately in lists / pickers.
-                    const restored = await stockItemApiService.getAsync(
-                        snapshot.stock_item_id,
-                    );
-                    stockItems.value.push(restored);
-                    stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
-                },
-                redo: async () => {
-                    await stockItemApiService.deleteAsync(snapshot.stock_item_id);
-                    stockItems.value = stockItems.value.filter(
-                        (si) => si.stock_item_id !== snapshot.stock_item_id,
-                    );
-                },
-            },
-        });
     };
 
     return {

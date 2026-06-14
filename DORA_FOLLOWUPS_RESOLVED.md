@@ -10,6 +10,41 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-172 — Execute IMPL_PLAN_MEAL_PLANS (C-2.A…K)
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS authored from C-2 proposal)
+- **Type:** deferred job
+- **State note (2026-06-14):** **all 11 chunks built + static-verified** —
+  build order ran A, B, K, C, D, E, H, I, F, G, J. Final gate green: **274
+  e2e + 49 unit pass**, `vue-tsc --noEmit` 0 errors, eslint clean on touched
+  files; every new migration verified up/down in isolation and a single
+  Alembic head re-confirmed after resolving a concurrent-session fork.
+  Browser verification of the running surface carries forward under
+  **[[FU-179]]** (the remaining gate before COVERAGE_GAPS §MEAL PLANS rows flip
+  gap→covered). Spun-off open loops at resolution: FU-173 (slot-remap UI),
+  FU-174 (app-wide datetime/tz sweep), FU-175 (bulk-week editor assessment),
+  FU-176 (app-wide R-014 reveal-disable sweep), FU-178 (SQLite full-chain
+  migration), FU-181 (plan email + meals_per_week pref).
+- **What:** `docs/04_proposals/IMPL_PLAN_MEAL_PLANS.md` turned the C-2 Meal
+  Plans proposal into eleven reviewable chunks. Build order (§5):
+  **C-2.A** slot vocabulary (household-wide `MealSlot` table) ★ first PR →
+  **C-2.B** page-chrome cleanup → **C-2.C** vertical carousel + slot rows +
+  tap-add (+ K date fix; fixes FU-154 in passing) → **C-2.D** calendar widget →
+  **C-2.E** drop `MealPlan.name` + implicit create + "Clear week" → **C-2.H**
+  sidebar redesign (composes C-7; carries FU-135) → **C-2.I** trays →
+  **C-2.F** templates (single) → **C-2.G** template sets + recurring + manage
+  page → **C-2.J** sequential builder. Each shipped in isolation; the canvas
+  kept working through every phase.
+- **Decisions settled (review 2026-06-14):** full build; **slots are a
+  household-wide `MealSlot` vocab table** (corrects proposal §4 "user-scoped"
+  — `MealPlan` has no `user_id`); **3 trays** (incl. Frequently-planned);
+  21-day "haven't had" window; recurring cap 26wk; templates at
+  `/meal-plans/templates`; apply-time rotation; slot-remap deferred ([[FU-173]]).
+- **Lower-level (also settled):** past-day fix → **household-timezone** correct
+  (C-2.K; app-wide sweep [[FU-174]]); `MealPlanEditDialog` **retired** (C-2.E;
+  bulk-week assessed in [[FU-175]]); C-2.J added `POST /meal-plans/preview-ingredients`;
+  builder Email **shown-disabled** when SMTP unset per new rule **R-014** /
+  ADR-009 (app-wide reveal-disable sweep [[FU-176]]). Plan is 11 chunks (K split out).
+
 ## [RESOLVED] FU-125 — Stock Overview Chunk 6 / FU-033 — image surface fixes
 - **Raised:** 2026-06-12 (Chunk 6 impl; static-only, no env)
 - **Type:** finding / verification → product-defect resolution

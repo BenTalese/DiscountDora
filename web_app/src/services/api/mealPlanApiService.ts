@@ -57,4 +57,13 @@ export default class MealPlanApiService {
      *  timezone — the planner trusts this over the browser clock (C-2.K). */
     getTodayAsync = async (): Promise<string> =>
         (await this.httpClient.get<{ today: string }>('/meal-plans/today')).today;
+
+    /** Aggregated ingredient demand for an unsaved recipe selection (C-2.J,
+     *  sequential builder). Same scaling math as the saved-plan endpoint. */
+    previewIngredientsAsync = async (
+        recipes: { recipe_id: string; servings: number }[],
+    ): Promise<MealPlanIngredient[]> =>
+        await this.httpClient.post<MealPlanIngredient[], { recipes: { recipe_id: string; servings: number }[] }>(
+            '/meal-plans/preview-ingredients', { recipes },
+        );
 }

@@ -3,12 +3,15 @@ from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
-from dora_api.infrastructure.utils import get_container
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_container, get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -20,6 +23,57 @@ class MealPlanIngredientDto:
     total_quantity: float | None
     unit: str | None
     used_in_recipe_ids: List[UUID]
+
+
+def aggregate_meal_plan_ingredients(
+    repository, recipe_id_to_servings: dict[UUID, int],
+) -> List[MealPlanIngredientDto]:
+    """Aggregate a {recipe_id: total_servings} demand into per-stock-item
+    quantities, scaling each recipe's ingredient amounts by
+    `servings / recipe.servings`. The single source of this scaling math (F34,
+    R-003) — used by both the saved-plan ingredients endpoint and the
+    sequential-builder preview."""
+    if not recipe_id_to_servings:
+        return []
+
+    aggregated: dict[UUID, dict] = {}
+    for recipe_id, servings in recipe_id_to_servings.items():
+        recipe = (
+            repository
+            .get(Recipe)
+            .include(Recipe.Fields.INGREDIENTS)
+                .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+            .one(EntityField(Recipe, "id").eq(recipe_id))
+        )
+        if not recipe:
+            continue
+        recipe_servings = recipe.servings or 1
+        scale = servings / recipe_servings if recipe_servings else 1
+        for ingredient in recipe.ingredients or []:
+            existing = aggregated.setdefault(ingredient.stock_item.id, {
+                "stock_item_name": ingredient.stock_item.name,
+                "total_quantity": 0.0 if ingredient.quantity is not None else None,
+                "unit": ingredient.unit,
+                "used_in_recipe_ids": set(),
+            })
+            if ingredient.quantity is not None and existing["total_quantity"] is not None:
+                existing["total_quantity"] += ingredient.quantity * scale
+            elif ingredient.quantity is not None:
+                existing["total_quantity"] = ingredient.quantity * scale
+            if existing["unit"] is None:
+                existing["unit"] = ingredient.unit
+            existing["used_in_recipe_ids"].add(recipe_id)
+
+    return [
+        MealPlanIngredientDto(
+            stock_item_id = stock_item_id,
+            stock_item_name = data["stock_item_name"],
+            total_quantity = data["total_quantity"],
+            unit = data["unit"],
+            used_in_recipe_ids = list(data["used_in_recipe_ids"]),
+        )
+        for stock_item_id, data in aggregated.items()
+    ]
 
 
 class GetMealPlanIngredientsHandler:
@@ -46,48 +100,7 @@ class GetMealPlanIngredientsHandler:
                 _RecipeIdToServings.get(_Entry._recipe_id, 0) + _Entry.servings
             )
 
-        if not _RecipeIdToServings:
-            return []
-
-        _Aggregated: dict[UUID, dict] = {}
-
-        for _RecipeId, _Servings in _RecipeIdToServings.items():
-            _Recipe = (
-                self.repository
-                .get(Recipe)
-                .include(Recipe.Fields.INGREDIENTS)
-                    .then_include(RecipeIngredient.Fields.STOCK_ITEM)
-                .one(EntityField(Recipe, "id").eq(_RecipeId))
-            )
-            if not _Recipe:
-                continue
-            _RecipeServings = _Recipe.servings or 1
-            _Scale = _Servings / _RecipeServings if _RecipeServings else 1
-            for _Ingredient in _Recipe.ingredients or []:
-                _Existing = _Aggregated.setdefault(_Ingredient.stock_item.id, {
-                    "stock_item_name": _Ingredient.stock_item.name,
-                    "total_quantity": 0.0 if _Ingredient.quantity is not None else None,
-                    "unit": _Ingredient.unit,
-                    "used_in_recipe_ids": set(),
-                })
-                if _Ingredient.quantity is not None and _Existing["total_quantity"] is not None:
-                    _Existing["total_quantity"] += _Ingredient.quantity * _Scale
-                elif _Ingredient.quantity is not None:
-                    _Existing["total_quantity"] = _Ingredient.quantity * _Scale
-                if _Existing["unit"] is None:
-                    _Existing["unit"] = _Ingredient.unit
-                _Existing["used_in_recipe_ids"].add(_RecipeId)
-
-        return [
-            MealPlanIngredientDto(
-                stock_item_id = _StockItemId,
-                stock_item_name = _Data["stock_item_name"],
-                total_quantity = _Data["total_quantity"],
-                unit = _Data["unit"],
-                used_in_recipe_ids = list(_Data["used_in_recipe_ids"]),
-            )
-            for _StockItemId, _Data in _Aggregated.items()
-        ]
+        return aggregate_meal_plan_ingredients(self.repository, _RecipeIdToServings)
 
 
 @MEAL_PLAN_ROUTER.route("<meal_plan_id>/ingredients")
@@ -98,4 +111,36 @@ def get_meal_plan_ingredients(meal_plan_id: UUID):
     if _Result is None:
         return not_found(MealPlan.__name__, meal_plan_id)
     _Logger.info(f"Meal plan {meal_plan_id} has {len(_Result)} aggregated ingredients")
+    return ok(_Result)
+
+
+# ───── Preview ingredients for an unsaved selection (C-2.J) ─────────────────
+
+class PreviewRecipeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recipe_id: UUID
+    servings: int = Field(default=1, ge=1)
+
+
+class PreviewIngredientsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recipes: List[PreviewRecipeInput] = Field(default_factory=list)
+
+
+class PreviewIngredientsHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, request: PreviewIngredientsRequest) -> List[MealPlanIngredientDto]:
+        recipe_id_to_servings: dict[UUID, int] = {}
+        for r in request.recipes:
+            recipe_id_to_servings[r.recipe_id] = recipe_id_to_servings.get(r.recipe_id, 0) + r.servings
+        return aggregate_meal_plan_ingredients(self.repository, recipe_id_to_servings)
+
+
+@MEAL_PLAN_ROUTER.route("preview-ingredients", methods=["POST"])
+@has_request_body(PreviewIngredientsRequest)
+def preview_meal_plan_ingredients():
+    _Request: PreviewIngredientsRequest = get_request_body()
+    _Result = get_container().inject(PreviewIngredientsHandler).handle(_Request)
     return ok(_Result)

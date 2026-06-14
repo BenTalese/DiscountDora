@@ -52,6 +52,26 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
+- **Raised:** 2026-06-14 (C-2.J sequential builder)
+- **Type:** follow-up (deferred sub-feature)
+- **What:** Two small loose ends from the sequential builder (C-2.J):
+  1. **Plan email** — the builder's done-step **Email button is shown disabled**
+     ("isn't set up yet", per R-014). Actual emailing of a plan / its shopping
+     list isn't built (`useMealPlanExport` only does print). Wire it to the
+     existing email infra (INV-4 / `emailer`), SMTP-gated: enable the button
+     only when email is configured for the install, otherwise keep it
+     disabled-with-a-hint (R-014). The proposal §6 also lists email on the
+     recurring/template flows — same backing.
+  2. **`meals_per_week` pref** — the builder's target count is hardcoded to 7
+     (proposal §6 wanted "user's `meals_per_week` if set, else 7"). No such
+     user/household field exists yet. Add it (household-wide, like the slot
+     vocab) + have the builder read it. Minor; the 7 default works fine
+     meanwhile.
+- **Recommended resolution:** opportunistic — pair the email work with the
+  broader email/INV-4 effort; the `meals_per_week` pref with the next
+  settings/onboarding touch (C-5 seeds it).
+
 ## [OPEN] FU-180 — Reassess "preferred product" before commercialise (Phase 4)
 - **Raised:** 2026-06-14 (preferred-product removal sweep)
 - **Type:** open decision
@@ -81,8 +101,27 @@ long session summary. Distinct from the other logs:
   preferred-*merchant* model (one annotation, app-wide) earns its keep
   better than the per-stock-item preferred-product we just deleted.
 
-## [OPEN] FU-179 — Browser-verify Meal Plans C-2.C/D/H/I (carousel + calendar + sidebar + trays)
-- **Raised:** 2026-06-14 (C-2.C/D/H/I — big interaction rebuild, static-only verified)
+## [OPEN] FU-179 — Browser-verify the whole Meal Plans surface (C-2 — all chunks)
+- **Raised:** 2026-06-14 (C-2.A…J — full redesign, static-only verified)
+- **C-2.J sequential builder:** the planner header's "Plan step-by-step" opens a
+  3-step flow (pick meals → buy-vs-have preview → build & generate list) ending
+  on a done step with Print (Email shown disabled). Confirm: cancelling writes
+  nothing; the preview's buy/in-stock split matches the sidebar; build spreads
+  meals across the week's upcoming days + the generate-list choice modal fires;
+  Print opens the week's print view.
+- **C-2.G sets + recurring + manage page:** the Manage Templates page
+  (`/meal-plans/templates`, via the planner's "Manage templates") lists templates
+  (rename/clone/delete) + sets (new/edit-with-up-down-reorder/delete); the
+  planner's "Apply recurring…" applies a template or a rotating set over a week
+  range (≤26 weeks; toast shows weeks/meals/skipped). Confirm a set rotates
+  templates week-by-week and the 26-week cap + "pick exactly one source" errors
+  surface as toasts.
+- **C-2.F templates additions:** right-column Templates card — "Save this week
+  as a template" (only when the focused week has meals) → name + description
+  dialog; "Apply a template…" lists templates, forks the chosen one onto the
+  focused week (past days skipped; toast shows added/skipped counts) and warns
+  before replacing existing future meals. Confirm editing/deleting a template
+  leaves a week forked from it untouched.
 - **C-2.I trays additions:** left column groups into Favourites · Haven't-had
   (oldest/never first) · Frequently-planned · All recipes; curated trays hide
   when empty; searching collapses to a single "Results" tray; rows still
@@ -236,48 +275,6 @@ long session summary. Distinct from the other logs:
   a fixed 5-value constant); building the remap tool now is speculative.
 - **Recommended resolution:** opportunistic — build only if users accumulate
   off-vocabulary slot strings after C-2.A ships the editable list.
-
-## [OPEN] FU-172 — Execute IMPL_PLAN_MEAL_PLANS (C-2.A…K)
-- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS authored from C-2 proposal)
-- **Type:** deferred job
-- **What:** `docs/04_proposals/IMPL_PLAN_MEAL_PLANS.md` turns the C-2 Meal
-  Plans proposal into eleven reviewable chunks. Build order (§5):
-  **C-2.A** slot vocabulary (per-user) ★ first PR → **C-2.B** page-chrome
-  cleanup → **C-2.C** vertical carousel + slot rows + tap-add (+ K date fix;
-  fixes FU-154 in passing) → **C-2.D** calendar widget → **C-2.E** drop
-  `MealPlan.name` + implicit create + "Clear week" → **C-2.H** sidebar redesign
-  (composes C-7; carries FU-135) → **C-2.I** trays → **C-2.F** templates
-  (single) → **C-2.G** template sets + recurring + manage page → **C-2.J**
-  sequential builder. Each ships in isolation; the canvas keeps working through
-  every phase.
-- **Decisions settled (review 2026-06-14):** full build; **slots are a
-  household-wide `MealSlot` vocab table** (corrects proposal §4 "user-scoped"
-  — `MealPlan` has no `user_id`); **3 trays** (incl. Frequently-planned);
-  21-day "haven't had" window; recurring cap 26wk; templates at
-  `/meal-plans/templates`; apply-time rotation; slot-remap deferred ([[FU-173]]).
-- **Lower-level (also settled):** past-day fix → **household-timezone** correct
-  (C-2.K; app-wide sweep [[FU-174]]); `MealPlanEditDialog` **retired** (C-2.E;
-  bulk-week assessed in [[FU-175]]); C-2.J adds `POST /meal-plans/preview-ingredients`;
-  builder Email **shown-disabled** when SMTP unset per new rule **R-014** /
-  ADR-009 (app-wide reveal-disable sweep [[FU-176]]). Plan is 11 chunks (K split out).
-- **Verification gates folded in:** FU-032 (B6 allocation, C-2.C surface),
-  FU-135 (generate-via-Axis-B choice modal, C-2.H); F34 ingredient-math +
-  F29 past-day-drop browser-verifies to be logged when their chunks run.
-- **Why deferred:** the plan is authored; execution is the next work unit.
-- **Progress (2026-06-14):** **A** (MealSlot vocab) + **B** (chrome +
-  `MealPlanEntryChip`) + **K** (household-tz "today") + **C** (carousel + slot
-  rows + tap-add) + **D** (calendar widget + `weekDates.ts` + `?monday=` URL) +
-  **E** (nameless plans + nullable `MealPlan.name` migration + retired
-  `MealPlanEditDialog` + implicit-create-on-tap) + **H** (sidebar: per-item
-  list-status + `AddToListButton` + hover-highlight + colour unification) all
-  landed (e2e 264, unit 49, vue-tsc + eslint clean; migrations verified in
-  isolation) + **I** (left-column trays: Favourites/Haven't-had/Frequently-planned
-  via server-derived `not_made_recently` + `plan_count`). **Next: C-2.F**
-  (templates). 3 chunks remain (F, G, J). Open finds: **FU-178** (SQLite
-  migration chain), **FU-179** (browser-verify C/D/H/I), **FU-175** (bulk-week
-  editor).
-- **Recommended resolution:** continue the build — **C-2.F → C-2.G** (templates +
-  recurring; the big remaining lift) then **C-2.J** (sequential builder).
 
 ## [OPEN] FU-171 — Recipe image hide/show toggle reported broken — no static repro
 - **Raised:** 2026-06-13 (FU-088 → Cookbook card revision Chunk A §1.1)

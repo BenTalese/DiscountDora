@@ -9,6 +9,161 @@ next.
 
 ---
 
+## 2026-06-14 — Meal Plans C-2.J — sequential builder ✅ (C-2 plan COMPLETE)
+**Status:** complete & verified. Backend e2e **274** (incl. 2 new preview tests)
++ unit **49** pass; vue-tsc **0** + eslint **clean**. **This finishes the entire
+IMPL_PLAN_MEAL_PLANS (all 11 chunks: A, B, K, C, D, E, H, I, F, G, J).** Built
+directly (ultracode off).
+
+**What (C-2.J):** the fresh-cooker "Plan step-by-step" flow.
+- **Backend:** extracted the ingredient scaling/aggregation in
+  `get_meal_plan_ingredients.py` into a shared `aggregate_meal_plan_ingredients`
+  (R-003/F34 — one scaling-math function); added `POST /meal-plans/preview-ingredients`
+  (aggregates an *unsaved* `{recipe_id, servings}[]` selection). Tests:
+  `test_meal_plan_preview.py` (2).
+- **Frontend:** **`useStockStatus` composable** extracted (levelSequence /
+  label / colour / needsBuying) — the planner sidebar refactored to use it +
+  the builder reuses it (R-003, no duplicated stock-status glue).
+  `mealPlanApiService.previewIngredientsAsync`. New
+  **`SequentialBuilderDialog.vue`** (q-stepper: pick meals → preview buy-vs-have
+  → build → done with Print). Planner header gains a **"Plan step-by-step"** CTA.
+  The page's `builderBuildPlan` spreads picks across the focused week's upcoming
+  days (day-major, wrapping slots), persists, then runs the existing
+  generate-list choice modal; `builderPrint` opens the print view.
+- **Email:** the builder's done-step **Email button is shown disabled**
+  ("isn't set up yet", R-014) — actual plan-emailing isn't built; logged
+  **FU-181**. Builder target meals hardcoded to 7 (no `meals_per_week` pref
+  exists) — noted in FU-181.
+
+**Charter/standards:** R-001 (builder is its own component; `useStockStatus`
+extracted + reused), R-003 (one aggregation fn server-side; one stock-status
+composable client-side), R-007 (writes ordinary entries — no new persistence;
+email deferred), R-008 (composable extraction removed the page's inline copies),
+R-014 (Email shown-disabled). No ADR.
+
+**C-2 plan wrap-up:** every §MEAL PLANS feedback bullet (F1–F49) now has shipped
+code except F6 (already fixed pre-C-2) and F23 (Dora plan-synthesis — SLM work,
+out of scope). The planner is the full proposed surface. **Remaining: the
+end-to-end browser-verify (FU-179)** + the flagged FUs (FU-178 SQLite chain,
+FU-177 lint, FU-175 bulk-week, FU-181 email). After browser-verify, flip the
+covered rows in `docs/02_feedback/COVERAGE_GAPS.md` gap → covered.
+
+**Open loops:** **FU-172 RESOLVED** (all 11 chunks built + static-verified —
+moved to the resolved ledger). FU-179 extended (builder). FU-181 new (plan email).
+
+**Next up:** **browser-verify the whole Meal Plans surface (FU-179)** in the
+running app — the one thing static checks can't cover. Then C-2 is fully done.
+
+---
+
+## 2026-06-14 — Meal Plans C-2.G — template sets + recurring + manage page
+**Status:** complete & verified. Full backend e2e **272** (incl. 4 new set/
+recurring tests) + unit **49** pass; migration up/down + **single Alembic head**
+re-confirmed in isolation; vue-tsc **0** + eslint **clean**. Second-biggest
+chunk. Built directly (ultracode off).
+
+**What:** Rotating template sets + recurring apply + the Manage Templates page.
+- **Backend:** `MealPlanTemplateSet` + `MealPlanTemplateSetItem` entities/tables/
+  mappers (set has a noload `items` relationship; `item.template_id` is a plain
+  id — no DB FK, so deleting a template doesn't break a set row; set CRUD
+  validates membership). `MealPlan.source_template_set_id` + `rotation_index`
+  provenance. Migration `a3c9e7b2f5d8` (plain create + plain add_columns, chains
+  from `f2b8d4c6a1e3`). New feature `meal_plan_template_sets/manage_sets.py`
+  (GET/GET<id>/POST/PATCH/DELETE — PATCH replaces the ordered item list).
+  In `manage_templates.py`: refactored the single-apply into a shared
+  `_fork_template_onto_week` helper (skip-past + preserve-consumed/replace-future
+  + provenance, **no save** so the recurring loop saves once); added
+  `POST /meal-plans/from-template/recurring` (single template OR set rotating
+  `items[week_index mod len]`, **26-week cap**, exactly-one-source rule) and
+  `POST /meal-plan-templates/<id>/clone`.
+- **Frontend:** `mealPlanTemplateSet` model/service/store; `applyRecurringAsync`
+  + `cloneAsync` on the template service/store. **New `MealPlanTemplatesPage.vue`**
+  at `/meal-plans/templates` — templates (rename/clone/delete) + sets
+  (create/edit with an ordered up/down item list, delete). Planner Templates
+  card gains **"Apply recurring…"** (inline BaseDialog: source select + week-range
+  + 26-week note) and **"Manage templates"**.
+- **Tests:** `test_meal_plan_template_set_router.py` (4) — set CRUD + reorder +
+  unknown-id reject; recurring single over a range; **recurring set rotates by
+  week** (A=Mon, B=Tue → week0 Mon, week1 Tue, week2 Mon); cap + source-rule 422s.
+
+**Autoflush gotcha (carried from C-2.F):** the per-week fork builds entries,
+queries the existing week, THEN adds + links them — no query between add and
+link, so the recurring loop's cross-week autoflush only ever flushes
+already-linked entities (no orphan-FK violation). Save once at the end.
+
+**Charter/standards:** R-001 (mirrored the template pattern; shared fork helper;
+reused BaseDialog), R-003 (rotation/skip-past/cap + household_today server-side),
+R-005/R-006 (portable plain migration, reversible), R-007 (set-clone deferred;
+DnD reorder simplified to up/down — noted), R-008 (no dead code). No ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D+E+H+I+F+G done; **only C-2.J left**). FU-179
+extended (sets/recurring/manage-page browser-verify). FU-178/177/175 open.
+
+**Next up:** **C-2.J** — the sequential builder (fresh-cooker 3-step modal: pick
+meals → required-stock preview → build & finish with email/print). The final
+chunk; composes the recipe row + the C-2.H choice modal; needs a small
+`POST /meal-plans/preview-ingredients` for unsaved selections + SMTP-gated email
+(R-014).
+
+---
+
+## 2026-06-14 — Meal Plans C-2.F — templates (single)
+**Status:** complete & verified. Full backend e2e **268** (incl. 4 new template
+tests) + unit **49** pass; migration verified up/down in isolation; **single
+Alembic head re-confirmed** after resolving a concurrent-session fork (below);
+vue-tsc **0** + eslint **clean**. Biggest single backend chunk so far. Built
+directly (ultracode off).
+
+**What:** Save a week as a template + fork it onto any week.
+- **Backend:** `MealPlanTemplate` + `MealPlanTemplateEntry` entities/tables/
+  mappers (mirroring `ShoppingListTemplate` — public FK-id columns + a noload
+  `entries` relationship). `MealPlan.source_template_id` (plain provenance id,
+  no DB FK — Decision 1). Migration `f2b8d4c6a1e3` (plain create_table + plain
+  add_column → no batch, no FU-178 exposure). New feature
+  `meal_plan_templates/manage_templates.py`: `GET/GET<id>/POST/PATCH/DELETE
+  /api/meal-plan-templates` (POST = snapshot a week's plan → offsets) +
+  `POST /api/meal-plans/from-template` (fork: monday+offset, **skip past days**
+  + missing recipes, preserve consumed + replace future on an existing week,
+  set provenance). Slots inherited from the source plan (already valid).
+- **Frontend:** `models/mealPlanTemplate.ts` + `mealPlanTemplateApiService` +
+  `mealPlanTemplateStore`; a **Templates card** in the right column
+  ("Save this week as a template" → BaseDialog name+description;
+  "Apply a template…" → radio chooser + a replace-count warning when the week
+  has future meals). Apply toasts added/skipped counts.
+- **Tests:** `test_meal_plan_template_router.py` (4) — snapshot→list→detail→apply
+  round-trip; apply skips past offsets (none created); empty-week save rejected
+  (422); edit/delete-template doesn't touch the forked plan.
+
+**Two gotchas hit + fixed:**
+1. **`entry.recipe` is None on `.one()`/`.by_id()`** — the `recipe` relationship
+   is `lazy="noload"` and `then_include` only eager-loads on the *paginate* path
+   (not `.one()`). The snapshot reads the FK directly via the mapped
+   `entry._recipe_id` (always loaded with the row). Commented in place.
+2. **Migration fork (concurrent session).** A parallel session landed
+   `d2a7f4c9e6b1` (drop_stock_item_preferred_product) chaining from the same
+   parent (`e1f7b3d9a2c4`) as my `f2b8d4c6a1e3` → two heads / `flask db upgrade`
+   would fail. Re-pointed **my** migration's `down_revision` to thread *after*
+   theirs (`d2a7f4c9e6b1`) — they're independent (templates vs. column drop), so
+   order is free; left their migration untouched. Single linear head restored
+   (verified). **Heads-up for the concurrent session:** the chain is now
+   …→`e1f7b3d9a2c4`→`d2a7f4c9e6b1`→`f2b8d4c6a1e3`.
+
+**Charter/standards:** R-001 (mirrored the ShoppingListTemplate pattern; reused
+BaseDialog), R-003 (offset/skip-past/replace logic + household_today server-side),
+R-005/R-006 (portable plain migration, reversible), R-007 (single-template only;
+sets/recurring + manage page are C-2.G), R-008 (the `_recipe_id` "why" comment).
+No ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D+E+H+I+F done; next **C-2.G**). FU-179 extended
+(templates save/apply browser-verify). FU-178/177/175 still open.
+
+**Next up:** **C-2.G** — template **sets** (rotating) + **recurring** apply
+(date range, 26-week cap) + provenance (`source_template_set_id` + `rotation_index`)
++ the **Manage Templates page** at `/meal-plans/templates` (edit/clone/delete +
+reorder set items). Builds on C-2.F's entities.
+
+---
+
 ## 2026-06-14 — Cut "preferred product" end-to-end
 **Status:** complete. vue-tsc clean (0 errors); backend unit suite 49/49.
 

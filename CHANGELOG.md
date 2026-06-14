@@ -6,6 +6,40 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **"Plan step-by-step" guided builder (Meal Plans C-2.J).** A guided flow for
+  fresh-cooks: **pick** the meals you want this week → **see what you'd need to
+  buy** (in-stock vs to-buy, computed with the same scaling as the saved-plan
+  shopping list) → **build** the week (meals spread across the upcoming days) and
+  **generate the shopping list** in one step. The finished step offers Print;
+  emailing the plan is flagged as coming soon. Cancelling writes nothing.
+  - New `POST /api/meal-plans/preview-ingredients` (aggregates an *unsaved*
+    recipe selection via the shared ingredient-scaling function).
+- **Meal-plan template sets + recurring planning (Meal Plans C-2.G).** Build a
+  **rotating set** of templates (e.g. "Week A → Week B → repeat") on a new
+  **Manage templates** page, and **apply recurringly** over a date range from
+  the planner: each week is forked from the template (a set rotates through its
+  templates week-by-week), past days skipped, up to 26 weeks. The Manage page
+  also lets you rename / clone / delete templates and create / reorder / delete
+  sets.
+  - New `MealPlanTemplateSet` / `MealPlanTemplateSetItem` tables +
+    `GET/POST/PATCH/DELETE /api/meal-plan-template-sets`,
+    `POST /api/meal-plans/from-template/recurring`, and
+    `POST /api/meal-plan-templates/<id>/clone`;
+    `MealPlan.source_template_set_id` + `rotation_index` provenance. New page at
+    `/meal-plans/templates`. Migration `a3c9e7b2f5d8`.
+- **Meal-plan templates (Meal Plans C-2.F).** Save a week's meals as a reusable
+  **template** and fork it onto any other week. The planner's right column gains
+  a Templates card: **"Save this week as a template"** (name + optional
+  description) captures the focused week's meals by day-of-week + slot;
+  **"Apply a template…"** forks a chosen template onto the week you're viewing —
+  **past days are skipped automatically**, and if the week already has planned
+  meals you're warned before they're replaced. Editing or deleting a template
+  never changes a week already created from it (it carries the template only as
+  provenance).
+  - New `MealPlanTemplate` / `MealPlanTemplateEntry` tables + `GET/POST/PATCH/
+    DELETE /api/meal-plan-templates` and `POST /api/meal-plans/from-template`;
+    `MealPlan.source_template_id` provenance. Migration `f2b8d4c6a1e3`
+    (SQLite + Postgres portable).
 - **Household timezone — correct "today" anywhere (Meal Plans C-2.K).** A new
   **Settings → System → Timezone** picker sets the household's IANA timezone
   (with a "Use this device's timezone" shortcut). The meal planner's date

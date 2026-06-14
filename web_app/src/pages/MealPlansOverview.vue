@@ -1,5 +1,15 @@
 <template>
     <div class="q-pa-md">
+        <div class="row items-center q-mb-sm">
+            <q-space />
+            <q-btn
+                no-caps outline color="primary"
+                :icon="ICONS.lightbulb"
+                label="Plan step-by-step"
+                @click="builderOpen = true"
+            />
+        </div>
+
         <div class="row q-col-gutter-md">
             <!-- ── Left: recipe list ──────────────────────────────────── -->
             <div class="col-12 col-md-3">
@@ -287,8 +297,113 @@
                         </q-item>
                     </q-list>
                 </q-expansion-item>
+
+                <!-- Templates (C-2.F) ───────────────────────────────── -->
+                <q-card flat bordered class="q-mt-sm">
+                    <q-card-section class="q-pb-none">
+                        <div class="text-subtitle1">Templates</div>
+                        <div class="text-caption dora-text-muted">
+                            Save a week's meals and re-use them on any other week.
+                        </div>
+                    </q-card-section>
+                    <q-card-actions class="column items-stretch q-gutter-xs">
+                        <q-btn
+                            v-if="focusedPlan && focusedPlan.entries.length > 0"
+                            no-caps
+                            outline
+                            color="primary"
+                            label="Save this week as a template"
+                            @click="openSaveTemplate"
+                        />
+                        <q-btn
+                            no-caps
+                            outline
+                            color="primary"
+                            :icon="ICONS.event_repeat"
+                            label="Apply a template…"
+                            @click="openApplyTemplate"
+                        />
+                        <q-btn
+                            no-caps
+                            outline
+                            color="primary"
+                            :icon="ICONS.event_repeat"
+                            label="Apply recurring…"
+                            @click="openRecurring"
+                        />
+                        <q-btn
+                            no-caps
+                            flat
+                            color="primary"
+                            label="Manage templates"
+                            @click="goToManageTemplates"
+                        />
+                    </q-card-actions>
+                </q-card>
             </div>
         </div>
+
+        <!-- Save the focused week as a template ─────────────────────── -->
+        <BaseDialog v-model="saveTemplateOpen" title="Save as a template" closable card-style="min-width: 340px">
+            <q-card-section class="q-pt-none q-gutter-sm">
+                <q-input v-model="templateName" outlined dense autofocus label="Template name" :disable="savingTemplate" />
+                <q-input
+                    v-model="templateDescription"
+                    outlined dense type="textarea" autogrow
+                    label="Description (optional)"
+                    :disable="savingTemplate"
+                />
+            </q-card-section>
+            <template #actions>
+                <q-btn flat no-caps label="Cancel" v-close-popup />
+                <q-btn
+                    color="primary" no-caps label="Save template"
+                    :loading="savingTemplate"
+                    :disable="!templateName.trim()"
+                    @click="confirmSaveTemplate"
+                />
+            </template>
+        </BaseDialog>
+
+        <!-- Sequential builder (fresh-cooker flow) ─────────────────── -->
+        <SequentialBuilderDialog
+            v-model="builderOpen"
+            :recipes="recipes"
+            :target-count="BUILDER_TARGET_MEALS"
+            :build-plan="builderBuildPlan"
+            :print-week="builderPrint"
+        />
+
+        <!-- Apply a template recurringly over a week range ─────────── -->
+        <BaseDialog v-model="recurringOpen" title="Apply recurring" closable card-style="min-width: 360px; max-width: 95vw">
+            <q-card-section class="q-pt-none q-gutter-sm">
+                <q-select
+                    v-model="recurringSource"
+                    outlined dense
+                    :options="recurringSourceOptions"
+                    emit-value map-options
+                    label="Template or rotating set"
+                    :disable="recurringApplying"
+                />
+                <div class="row q-col-gutter-sm">
+                    <q-input class="col" v-model="recurringStart" outlined dense type="date" label="From (week of)" :disable="recurringApplying" />
+                    <q-input class="col" v-model="recurringEnd" outlined dense type="date" label="To (week of)" :disable="recurringApplying" />
+                </div>
+                <div class="text-caption dora-text-muted">
+                    Each week is forked from the template (a set rotates through its templates).
+                    Past days are skipped; up to 26 weeks.
+                </div>
+            </q-card-section>
+            <template #actions>
+                <q-btn flat no-caps label="Cancel" v-close-popup />
+                <q-btn
+                    color="primary" no-caps label="Apply"
+                    :loading="recurringApplying"
+                    :disable="!recurringSource || !recurringStart || !recurringEnd"
+                    @click="confirmRecurring"
+                />
+            </template>
+        </BaseDialog>
 
         <!-- Log cook from a recipe row ─────────────────────────────── -->
         <BaseDialog v-model="paletteLogCookOpen" title="Log a cook" closable card-style="min-width: 320px">
@@ -326,18 +441,20 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import MealPlanCalendar from 'components/MealPlanCalendar.vue';
     import MealPlanEntryChip from 'components/MealPlanEntryChip.vue';
+    import SequentialBuilderDialog from 'components/SequentialBuilderDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useMealPlanExport } from 'src/composables/useMealPlanExport';
     import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
     import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
-    import { needsRestockSequence } from 'src/helpers/stockStatus';
+    import { useStockStatus } from 'src/composables/useStockStatus';
     import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
     import type { Recipe } from 'src/models/recipe';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
+    import { useMealPlanTemplateSetStore } from 'src/stores/mealPlanTemplateSetStore';
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -352,6 +469,8 @@
     const route = useRoute();
     const planExport = useMealPlanExport();
     const mealPlanStore = useMealPlanStore();
+    const mealPlanTemplateStore = useMealPlanTemplateStore();
+    const mealPlanTemplateSetStore = useMealPlanTemplateSetStore();
     const mealSlotStore = useMealSlotStore();
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
@@ -361,9 +480,9 @@
 
     const { mealPlans, shortfall, today } = storeToRefs(mealPlanStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
+    const { templates } = storeToRefs(mealPlanTemplateStore);
+    const { sets } = storeToRefs(mealPlanTemplateSetStore);
     const { recipes } = storeToRefs(recipeStore);
-    const { stockItems } = storeToRefs(stockItemStore);
-    const { stockLevels } = storeToRefs(stockLevelStore);
 
     const ingredients = ref<MealPlanIngredient[]>([]);
     const ingredientsLoading = ref(false);
@@ -624,35 +743,10 @@
         if (dy > 0) goPrevWeek(); else goNextWeek();
     }
 
-    // ── Stock status ───────────────────────────────────────────────────────
-    // Resolves by sequence (§3.1 contract) — renaming a level row in the UI
-    // doesn't shift which bucket a stock item lands in.
-    const stockItemById = computed(() => {
-        const map = new Map<string, typeof stockItems.value[number]>();
-        stockItems.value.forEach((s) => map.set(s.stock_item_id, s));
-        return map;
-    });
-    function levelSequenceForItem(stockItemId: string): number | null {
-        const item = stockItemById.value.get(stockItemId);
-        if (!item) return null;
-        if (typeof item.stock_level_sequence === 'number') return item.stock_level_sequence;
-        return stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence ?? null;
-    }
-    function stockStatusLabel(stockItemId: string): string {
-        const item = stockItemById.value.get(stockItemId);
-        if (!item) return 'Not tracked';
-        return stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name ?? 'Not tracked';
-    }
-    // F7 — use the app-wide sequence→colour mapping so the sidebar matches
-    // every other stock-status surface (R-003: one mapping, not a local palette).
-    function stockStatusColour(stockItemId: string): string {
-        return colourForSequence(levelSequenceForItem(stockItemId));
-    }
+    // ── Stock status (shared composable, R-003) ────────────────────────────
+    const { stockStatusLabel, stockStatusColour, needsBuying } = useStockStatus();
     const needToBuy = computed(() =>
-        ingredients.value.filter((ing) => {
-            const seq = levelSequenceForItem(ing.stock_item_id);
-            return seq === null || needsRestockSequence(seq);
-        }),
+        ingredients.value.filter((ing) => needsBuying(ing.stock_item_id)),
     );
 
     // ── Shopping-list status (F31) + hover-to-highlight (F30, C-2.H) ───────
@@ -832,6 +926,208 @@
         await Promise.all([loadIngredients(), mealPlanStore.getShortfallAsync()]);
     }
 
+    // ── Templates (C-2.F) ──────────────────────────────────────────────────
+    const saveTemplateOpen = ref(false);
+    const templateName = ref('');
+    const templateDescription = ref('');
+    const savingTemplate = ref(false);
+
+    function openSaveTemplate() {
+        templateName.value = `Week of ${formatDate(focusedMonday.value)}`;
+        templateDescription.value = '';
+        saveTemplateOpen.value = true;
+    }
+    async function confirmSaveTemplate() {
+        if (!focusedPlan.value || !templateName.value.trim()) return;
+        savingTemplate.value = true;
+        try {
+            await mealPlanTemplateStore.createFromPlanAsync({
+                name: templateName.value.trim(),
+                source_meal_plan_id: focusedPlan.value.meal_plan_id,
+                ...(templateDescription.value.trim() ? { description: templateDescription.value.trim() } : {}),
+            });
+            saveTemplateOpen.value = false;
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Saved this week as a template.' });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save the template.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            savingTemplate.value = false;
+        }
+    }
+
+    async function openApplyTemplate() {
+        await mealPlanTemplateStore.getTemplatesAsync();
+        if (templates.value.length === 0) {
+            $q.notify({ type: 'info', position: 'bottom-right', message: 'No templates yet — save a week first.' });
+            return;
+        }
+        const choice = await new Promise<string | undefined>((resolve) => {
+            $q.dialog({
+                title: 'Apply a template',
+                message: "Fork a saved week onto the week you're viewing.",
+                options: {
+                    type: 'radio',
+                    model: templates.value[0]!.meal_plan_template_id,
+                    items: templates.value.map((t) => ({
+                        label: `${t.name} (${t.entry_count} meal${t.entry_count === 1 ? '' : 's'})`,
+                        value: t.meal_plan_template_id,
+                    })),
+                },
+                cancel: { noCaps: true },
+                ok: { label: 'Apply', noCaps: true, color: 'primary' },
+                persistent: false,
+            })
+                .onOk((v: string) => resolve(v))
+                .onCancel(() => resolve(undefined))
+                .onDismiss(() => {});
+        });
+        if (!choice) return;
+
+        // Warn before replacing the focused week's future meals (Decision 1 copy).
+        const futureCount = (focusedPlan.value?.entries ?? []).filter(
+            (e) => !e.consumed_at && !isPastDay(toIso(e.scheduled_for)),
+        ).length;
+        if (futureCount > 0) {
+            const confirmed = await new Promise<boolean>((resolve) => {
+                $q.dialog({
+                    title: 'Replace this week?',
+                    message: `This week has ${futureCount} planned meal${futureCount === 1 ? '' : 's'}. `
+                        + `Applying the template will replace ${futureCount === 1 ? 'it' : 'them'}.`,
+                    cancel: { noCaps: true },
+                    ok: { label: 'Replace', noCaps: true, color: 'primary' },
+                    persistent: false,
+                })
+                    .onOk(() => resolve(true))
+                    .onCancel(() => resolve(false))
+                    .onDismiss(() => resolve(false));
+            });
+            if (!confirmed) return;
+        }
+        await applyTemplate(choice);
+    }
+
+    // ── Recurring apply (template or rotating set over a range) ────────────
+    const recurringOpen = ref(false);
+    const recurringSource = ref<string | null>(null);
+    const recurringStart = ref('');
+    const recurringEnd = ref('');
+    const recurringApplying = ref(false);
+
+    const recurringSourceOptions = computed(() => [
+        ...templates.value.map((t) => ({ label: `Template · ${t.name}`, value: `t:${t.meal_plan_template_id}` })),
+        ...sets.value.map((s) => ({ label: `Set · ${s.name}`, value: `s:${s.meal_plan_template_set_id}` })),
+    ]);
+
+    async function openRecurring() {
+        await Promise.all([mealPlanTemplateStore.getTemplatesAsync(), mealPlanTemplateSetStore.getSetsAsync()]);
+        if (recurringSourceOptions.value.length === 0) {
+            $q.notify({ type: 'info', position: 'bottom-right', message: 'Save a template first.' });
+            return;
+        }
+        recurringSource.value = recurringSourceOptions.value[0]?.value ?? null;
+        recurringStart.value = focusedMonday.value;
+        recurringEnd.value = shiftDays(focusedMonday.value, 28); // default 4 weeks
+        recurringOpen.value = true;
+    }
+
+    async function confirmRecurring() {
+        if (!recurringSource.value || !recurringStart.value || !recurringEnd.value) return;
+        const [kind, id] = [recurringSource.value.slice(0, 1), recurringSource.value.slice(2)];
+        recurringApplying.value = true;
+        try {
+            const result = await mealPlanTemplateStore.applyRecurringAsync({
+                ...(kind === 't' ? { template_id: id } : { template_set_id: id }),
+                start_monday: mondayOf(recurringStart.value),
+                end_monday: mondayOf(recurringEnd.value),
+            });
+            await refreshAfterMutation();
+            recurringOpen.value = false;
+            let message = `Planned ${result.weeks_applied} week${result.weeks_applied === 1 ? '' : 's'} `
+                + `(${result.total_added} meal${result.total_added === 1 ? '' : 's'}).`;
+            if (result.total_skipped_past) message += ` ${result.total_skipped_past} past day(s) skipped.`;
+            $q.notify({ type: 'positive', position: 'bottom-right', message });
+            if (result.first_meal_plan_id) focusedMonday.value = mondayOf(recurringStart.value);
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not apply the recurring plan.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            recurringApplying.value = false;
+        }
+    }
+
+    function goToManageTemplates() {
+        void router.push('/meal-plans/templates');
+    }
+
+    // ── Sequential builder (C-2.J) ─────────────────────────────────────────
+    const builderOpen = ref(false);
+    const BUILDER_TARGET_MEALS = 7;
+
+    async function builderBuildPlan(recipeIds: string[]) {
+        const futureDays = weekDays.value.map((d) => d.iso).filter((iso) => !isPastDay(iso));
+        if (futureDays.length === 0) {
+            $q.notify({
+                type: 'warning', position: 'bottom-right',
+                message: 'This week has no upcoming days — pick a future week first.',
+            });
+            throw new Error('no future days');
+        }
+        const slots = slotNames.value.length ? slotNames.value : ['Dinner'];
+        // Spread the picks across upcoming days (day-major), wrapping to the
+        // next slot if there are more meals than days.
+        const newCmds: MealPlanEntryCommand[] = recipeIds.map((rid, i) => ({
+            recipe_id: rid,
+            scheduled_for: futureDays[i % futureDays.length]!,
+            servings: 1,
+            slot: slots[Math.floor(i / futureDays.length) % slots.length]!,
+        }));
+        if (!focusedPlan.value) {
+            await mealPlanStore.createMealPlanAsync({ start_date: focusedMonday.value, entries: newCmds });
+            await refreshAfterMutation();
+        } else {
+            await persistEntries(
+                focusedPlan.value.meal_plan_id,
+                [...planEntryCommands(focusedPlan.value), ...newCmds],
+            );
+        }
+        await generateListForWeek();
+    }
+    function builderPrint() {
+        if (focusedPlan.value) planExport.openPrintView(focusedPlan.value.meal_plan_id);
+    }
+
+    async function applyTemplate(templateId: string) {
+        try {
+            const result = await mealPlanTemplateStore.applyAsync({
+                template_id: templateId,
+                monday_of_week: focusedMonday.value,
+            });
+            await refreshAfterMutation();
+            if (result.added_count === 0) {
+                $q.notify({ type: 'info', position: 'bottom-right', message: 'Nothing added — those days are in the past.' });
+                return;
+            }
+            let message = `Added ${result.added_count} meal${result.added_count === 1 ? '' : 's'}.`;
+            if (result.skipped_past_count) {
+                message += ` ${result.skipped_past_count} past day${result.skipped_past_count === 1 ? '' : 's'} skipped.`;
+            }
+            $q.notify({ type: 'positive', position: 'bottom-right', message });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not apply the template.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
+
     watch(() => focusedPlan.value?.meal_plan_id, loadIngredients);
 
     onMounted(async () => {
@@ -842,6 +1138,8 @@
             mealPlanStore.getShortfallAsync(),
             mealPlanStore.getTodayAsync(),
             mealSlotStore.getMealSlotsAsync(),
+            mealPlanTemplateStore.getTemplatesAsync(),
+            mealPlanTemplateSetStore.getSetsAsync(),
             recipeStore.getRecipesAsync(),
             stockItemStore.getStockItemsAsync(),
             stockLevelStore.getStockLevelsAsync(),

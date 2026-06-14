@@ -11,6 +11,10 @@ from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_plan_template import (MealPlanTemplate,
+                                                         MealPlanTemplateEntry,
+                                                         MealPlanTemplateSet,
+                                                         MealPlanTemplateSetItem)
 from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.price_alert import PriceAlert
@@ -476,6 +480,10 @@ def configure_mappings(db: SQLAlchemy):
         # C-2.E — instances are nameless (UI shows "Week starting <date>").
         Column("name", String(255), nullable=True),
         Column("start_date", Date, nullable=False),
+        # C-2.F / C-2.G — provenance only (plain ids, no DB FK; see entity).
+        Column("source_template_id", UUIDType, nullable=True),
+        Column("source_template_set_id", UUIDType, nullable=True),
+        Column("rotation_index", Integer, nullable=True),
     )
 
     meal_plan_entry_table = Table(
@@ -487,6 +495,44 @@ def configure_mappings(db: SQLAlchemy):
         Column("servings", Integer, nullable=False, server_default="1"),
         Column("slot", String(50), nullable=False),
         Column("consumed_at", DateTime(timezone=True), nullable=True),
+    )
+
+    meal_plan_template_table = Table(
+        "MealPlanTemplate", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("description", String(2000), nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
+
+    meal_plan_template_entry_table = Table(
+        "MealPlanTemplateEntry", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("template_id", UUIDType, ForeignKey("MealPlanTemplate.id", ondelete="CASCADE"), nullable=False),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
+        Column("offset_from_monday", Integer, nullable=False),
+        Column("slot", String(50), nullable=False),
+        Column("servings", Integer, nullable=False, server_default="1"),
+    )
+
+    meal_plan_template_set_table = Table(
+        "MealPlanTemplateSet", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("description", String(2000), nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+    )
+
+    meal_plan_template_set_item_table = Table(
+        "MealPlanTemplateSetItem", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("set_id", UUIDType, ForeignKey("MealPlanTemplateSet.id", ondelete="CASCADE"), nullable=False),
+        # Plain id (no DB FK) so deleting a template doesn't blow up a set row;
+        # the set CRUD validates membership at write-time instead.
+        Column("template_id", UUIDType, nullable=False),
+        Column("position", Integer, nullable=False, server_default="0"),
     )
 
     user_table = Table(
@@ -774,6 +820,52 @@ def configure_mappings(db: SQLAlchemy):
             foreign_keys=[meal_plan_entry_table.c.meal_plan_id],
         ),
     })
+
+    _mapper_registry.map_imperatively(
+        MealPlanTemplateEntry, meal_plan_template_entry_table, properties={
+            "_id_col": meal_plan_template_entry_table.c.id,
+            "id": meal_plan_template_entry_table.c.id,
+        }
+    )
+
+    _mapper_registry.map_imperatively(
+        MealPlanTemplate, meal_plan_template_table, properties={
+            "_id_col": meal_plan_template_table.c.id,
+            "id": meal_plan_template_table.c.id,
+            "entries": relationship(
+                MealPlanTemplateEntry,
+                primaryjoin=(
+                    meal_plan_template_table.c.id
+                    == meal_plan_template_entry_table.c.template_id
+                ),
+                cascade="all",
+                lazy="noload",
+            ),
+        }
+    )
+
+    _mapper_registry.map_imperatively(
+        MealPlanTemplateSetItem, meal_plan_template_set_item_table, properties={
+            "_id_col": meal_plan_template_set_item_table.c.id,
+            "id": meal_plan_template_set_item_table.c.id,
+        }
+    )
+
+    _mapper_registry.map_imperatively(
+        MealPlanTemplateSet, meal_plan_template_set_table, properties={
+            "_id_col": meal_plan_template_set_table.c.id,
+            "id": meal_plan_template_set_table.c.id,
+            "items": relationship(
+                MealPlanTemplateSetItem,
+                primaryjoin=(
+                    meal_plan_template_set_table.c.id
+                    == meal_plan_template_set_item_table.c.set_id
+                ),
+                cascade="all",
+                lazy="noload",
+            ),
+        }
+    )
 
     # ShoppingListLine exposes its FK columns directly as `shopping_list_id`,
     # `stock_item_id`, and `selected_product_id` on the dataclass (raw UUIDs,

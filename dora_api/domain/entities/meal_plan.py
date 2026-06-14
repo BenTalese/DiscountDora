@@ -9,7 +9,10 @@ from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 @dataclass
 class MealPlan(BaseEntity):
     entries: List[MealPlanEntry]
-    name: str
+    # Instances no longer carry a user-facing name (C-2.E) — the planner shows
+    # "Week starting <date>". Kept nullable for back-compat / log readability;
+    # templates (a separate entity) keep their name.
+    name: str | None
     start_date: date
 
     class Fields(BaseEntity.Fields):

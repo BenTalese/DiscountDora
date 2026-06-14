@@ -11,7 +11,7 @@ export type MealPlanEntryCommand = {
 };
 
 export type CreateMealPlanCommand = {
-    name: string;
+    name?: string; // C-2.E: optional — the planner creates nameless week-plans.
     start_date: string;
     entries: MealPlanEntryCommand[];
 };
@@ -52,4 +52,9 @@ export default class MealPlanApiService {
 
     getShortfallAsync = async (): Promise<Shortfall[]> =>
         await this.httpClient.get<Shortfall[]>('/meal-plans/shortfall');
+
+    /** The household's current date (ISO) in the install's configured
+     *  timezone — the planner trusts this over the browser clock (C-2.K). */
+    getTodayAsync = async (): Promise<string> =>
+        (await this.httpClient.get<{ today: string }>('/meal-plans/today')).today;
 }

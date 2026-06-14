@@ -10,7 +10,8 @@ export type MealPlanEntry = {
 
 export type MealPlan = {
     meal_plan_id: string;
-    name: string;
+    // C-2.E: instances are nameless (UI shows "Week starting <date>").
+    name: string | null;
     start_date: string;
     entries: MealPlanEntry[];
 };

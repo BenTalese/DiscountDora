@@ -15,6 +15,8 @@ export type AppSettings = {
     // `complex` nutrition mode. Free-form for now; later complex-mode
     // work parses it.
     nutrition_db_source: string;
+    // Meal Plans C-2.K — household IANA timezone for the "today" boundary.
+    timezone: string;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

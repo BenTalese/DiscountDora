@@ -143,6 +143,12 @@ class RecipeDto:
     # commitment — NOT floored, unlike unallocated_meals). Lets the UI show a
     # shortfall (committed > available) in red. Hydrated post-query.
     committed_meals: int
+    # C-2.I — "haven't had in a while" (last_made_on NULL or older than the
+    # household 21-day window) + how often this recipe appears across meal
+    # plans ("frequently planned"). Both hydrated post-query — the server owns
+    # the window + the count (R-003); the client just renders the trays.
+    not_made_recently: bool
+    plan_count: int
     # C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
     # edit-form selects + client filters; the name is carried for cheap
     # display (card subtitle, search, export) without a client-side join.
@@ -230,6 +236,8 @@ class RecipeDto:
             available_meals = _Available,
             unallocated_meals = _Available if unallocated_meals is None else unallocated_meals,
             committed_meals = 0,
+            not_made_recently = False,
+            plan_count = 0,
             cuisine_id = recipe.cuisine.id if recipe.cuisine else None,
             cuisine_name = recipe.cuisine.name if recipe.cuisine else None,
             category_id = recipe.category.id if recipe.category else None,
@@ -601,11 +609,17 @@ class GetRecipesHandler:
         if not dtos:
             return dtos
         import dataclasses
-        from datetime import date
+        from datetime import timedelta
 
         from sqlalchemy import bindparam, text
 
         from dora_api.app import db
+        from dora_api.features.app_settings.clock import household_today
+
+        # "Today" in the household timezone (C-2.K), consistent with the
+        # meal-plan rules — not server-local.
+        _Today = household_today(self.repository)
+        _Ids = [str(d.recipe_id) for d in dtos]
 
         _Stmt = text(
             "SELECT recipe_id, SUM(servings) "
@@ -615,13 +629,18 @@ class GetRecipesHandler:
             "GROUP BY recipe_id"
         ).bindparams(bindparam("ids", expanding=True))
         # SQLite's driver can't bind raw UUID objects through text(); stringify.
-        _Rows = db.session.execute(
-            _Stmt,
-            {"today": date.today(), "ids": [str(d.recipe_id) for d in dtos]},
-        ).all()
-        # UUIDType columns are 16-byte BLOBs in SQLite; text() reads
-        # bring them back as bytes. Normalise to UUID then to str so the
-        # dict lookup keys on a stable form.
+        _Rows = db.session.execute(_Stmt, {"today": _Today, "ids": _Ids}).all()
+
+        # C-2.I — how often each recipe appears across *all* meal plans (the
+        # "frequently planned" tray): a plain all-time entry count.
+        _CountStmt = text(
+            'SELECT recipe_id, COUNT(*) FROM "MealPlanEntry" '
+            "WHERE recipe_id IN :ids GROUP BY recipe_id"
+        ).bindparams(bindparam("ids", expanding=True))
+        _CountRows = db.session.execute(_CountStmt, {"ids": _Ids}).all()
+
+        # UUIDType columns are 16-byte BLOBs in SQLite; text() reads bring them
+        # back as bytes. Normalise to a stable str key.
         def _key(v) -> str:
             if isinstance(v, UUID):
                 return str(v)
@@ -629,11 +648,22 @@ class GetRecipesHandler:
                 return str(UUID(bytes=v))
             return str(v)
         _Committed = {_key(row[0]): int(row[1] or 0) for row in _Rows}
+        _PlanCount = {_key(row[0]): int(row[1] or 0) for row in _CountRows}
+
+        # C-2.I — "haven't had in a while": never made, or last made before the
+        # household 21-day window. The server owns the threshold (R-003).
+        _StaleCutoff = _Today - timedelta(days=21)
+
+        def _stale(d: RecipeDto) -> bool:
+            return d.last_made_on is None or d.last_made_on.date() < _StaleCutoff
+
         return [
             dataclasses.replace(
                 d,
                 committed_meals = _Committed.get(str(d.recipe_id), 0),
                 unallocated_meals = max(d.available_meals - _Committed.get(str(d.recipe_id), 0), 0),
+                plan_count = _PlanCount.get(str(d.recipe_id), 0),
+                not_made_recently = _stale(d),
             )
             for d in dtos
         ]

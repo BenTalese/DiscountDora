@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.features.app_settings.access import get_or_create_app_setting
+from dora_api.features.app_settings.clock import is_valid_timezone
 from dora_api.features.app_settings.get_app_settings import AppSettingsDto, _to_dto
 from dora_api.features.routers import APP_SETTINGS_ROUTER
 from dora_api.features.users.update_user_as_admin import _require_admin
@@ -35,6 +36,8 @@ class UpdateAppSettingsRequest(BaseModel):
     # string is allowed (and is the default-seam state); the actual
     # source schema lands when the complex-mode integration ships.
     nutrition_db_source: str | None = Field(default=None, max_length=255)
+    # Meal Plans C-2.K — household IANA timezone (validated below).
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 @dataclass(slots=True)
@@ -77,6 +80,17 @@ class UpdateAppSettingsHandler:
         # later complex-mode work parses it. Strip on save.
         if "nutrition_db_source" in set_fields:
             setting.nutrition_db_source = (request.nutrition_db_source or "").strip()
+
+        # Meal Plans C-2.K — household timezone. Validate against the IANA
+        # database so an unparseable zone can't silently degrade the "today"
+        # boundary to UTC for the whole install.
+        if "timezone" in set_fields and request.timezone is not None:
+            _Tz = request.timezone.strip()
+            if not is_valid_timezone(_Tz):
+                return UpdateAppSettingsResponse(
+                    invalid_reason=f"'{_Tz}' is not a recognised IANA timezone."
+                )
+            setting.timezone = _Tz
 
         # Enabling without a connection is a misconfiguration — the assistant
         # would just silently fall back. Reject it so the admin gets told.

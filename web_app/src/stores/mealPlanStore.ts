@@ -12,6 +12,8 @@ const api = new MealPlanApiService();
 export const useMealPlanStore = defineStore('mealPlan', () => {
     const mealPlans: Ref<MealPlan[]> = ref([]);
     const shortfall: Ref<Shortfall[]> = ref([]);
+    // Household "today" (ISO) in the install's timezone — server-owned (C-2.K).
+    const today: Ref<string | null> = ref(null);
 
     const getMealPlansAsync = async () => {
         const page = await api.getAllAsync();
@@ -40,15 +42,21 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
         shortfall.value = await api.getShortfallAsync();
     };
 
+    const getTodayAsync = async () => {
+        today.value = await api.getTodayAsync();
+    };
+
     return {
         mealPlans,
         shortfall,
+        today,
         getMealPlansAsync,
         createMealPlanAsync,
         updateMealPlanAsync,
         deleteMealPlanAsync,
         getIngredientsForPlanAsync,
         getShortfallAsync,
+        getTodayAsync,
     };
 });
 

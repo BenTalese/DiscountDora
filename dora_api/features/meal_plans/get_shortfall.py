@@ -7,8 +7,10 @@ from uuid import UUID
 from sqlalchemy import text
 
 from dora_api.app import db
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import ok
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 def _coerce_uuid(value) -> UUID:
@@ -38,7 +40,7 @@ class GetShortfallHandler:
         # compare its pool to the sum of committed servings. Anything
         # where commitments outstrip the pool is a shortfall the user
         # needs to cook before `earliest_needed`.
-        _Today = date.today()
+        _Today = household_today(SqlAlchemyRepository())
         _Rows = db.session.execute(
             text(
                 "SELECT r.id, r.name, r.available_meals, "

@@ -6,6 +6,19 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Household timezone — correct "today" anywhere (Meal Plans C-2.K).** A new
+  **Settings → System → Timezone** picker sets the household's IANA timezone
+  (with a "Use this device's timezone" shortcut). The meal planner's date
+  boundary — which days are in the past, what "today" is — is now worked out in
+  that timezone on the **server**, so it's correct no matter where the server is
+  hosted (e.g. an Australian household on a US-hosted server no longer sees the
+  wrong day). Fixes the past-day-drop error where dropping a recipe near
+  midnight could be rejected as "in the past".
+  - New `AppSetting.timezone` (defaults to UTC) + `GET /api/meal-plans/today`;
+    the meal-plan past-day rules and the consumed-meal reconcile sweep all
+    evaluate "today" in the household zone. The planner trusts the server's
+    date rather than the browser clock. Bundles `tzdata` so named zones work on
+    Windows/desktop too.
 - **Meal-slot vocabulary — household-wide & editable (Meal Plans C-2.A).**
   The meal-time slots (Breakfast / Lunch / Dinner / Snack / Dessert) are no
   longer a hard-coded constant — they're now an editable **household-wide
@@ -25,6 +38,79 @@ semver — major bumps signal schema or breaking-config changes.
     referencing an off-vocabulary slot are rejected at the API.
 
 ### Changed
+- **Meal Plans recipe trays (Meal Plans C-2.I).** The planner's recipe list now
+  groups into collapsible trays above the full list: **Favourites**, **Haven't
+  had in a while** (never cooked or not in 21 days, oldest first), and
+  **Frequently planned** (your household's most-planned recipes). Searching
+  collapses to a single results list. The "haven't had" window and the
+  "frequently planned" ranking are computed on the server (so the rule lives in
+  one place), with the 21-day window evaluated in the household timezone.
+- **Meal Plans shopping sidebar — per-item add, list status, hover-highlight (Meal Plans C-2.H).**
+  Each ingredient you'll need to buy now shows **whether it's already on a
+  shopping list** ("on Groceries" / "not on a list") and gets its own
+  **add-to-list button** (the same one used across the app, so it knows what's
+  already on a list and opens the list-picker when there's a choice). Hovering an
+  ingredient (desktop) **highlights the meals in the week that use it**. The
+  per-item stock-status colours now use the **app-wide** stock-level palette, so
+  they match the Stock and Cookbook pages instead of a planner-only colour set.
+- **Meal Plans — nameless week-plans + no more create/edit dialog (Meal Plans C-2.E).**
+  A meal plan no longer has a user-typed name (feedback flagged it as useless) —
+  a week is identified by its dates ("Week starting …"). Consequences:
+  - **Creating is implicit:** navigate to any week and tap a slot + a recipe;
+    the week's plan is created automatically. The **"New plan" button and the
+    whole add/edit-entries dialog are gone** — servings and slot are edited
+    directly on the meal chips.
+  - **"Clear this week"** removes the focused week's plan; "Delete plan" as a
+    concept is retired.
+  - Backend: `MealPlan.name` is now nullable (migration `e1f7b3d9a2c4`,
+    batch-mode, SQLite + Postgres); the create endpoint accepts a missing name.
+    Existing named rows keep their name (ignored by the UI). Generated shopping
+    lists are named "Meals: week of <date>".
+- **Meal Plans calendar widget (Meal Plans C-2.D).** The right column gains a
+  compact **month calendar** above the shopping summary: ~6 week-rows of small
+  rounded day-squares with **status underlines** — green = planned, amber = a
+  meal that day still needs cooking, dotted-grey = all cooked — plus a dot on
+  today and a brand-coloured outline around the week you're viewing. Click any
+  week to jump the carousel to it (they stay in sync); the month banner +
+  earlier/later arrows let you browse. The focused week is now remembered in the
+  URL (`?monday=…`), so a refresh lands you back on the same week, and the old
+  "Jump to a plan" dropdown is gone.
+- **Meal Plans planner rebuilt — vertical week carousel + tap-to-add (Meal Plans C-2.C).**
+  The planner is now a three-column workspace: a searchable **recipe list** on
+  the left, a **vertical week carousel** in the middle, and the shopping summary
+  on the right.
+  - **Week carousel:** up/down arrows (plus ↑/↓ keys and mobile swipe) move
+    between weeks with a slide animation that respects "reduce motion". Each week
+    is a vertical stack of day cards, and each day shows **named meal-slot rows**
+    (Breakfast / Lunch / Dinner / … from your household vocabulary; off-vocab
+    historical entries gather under "Other").
+  - **Tap to add (no more drag-only, no more always-"Dinner"):** tap a day's
+    slot to target it, then tap a recipe — the entry lands in *that* slot, so the
+    long-standing "everything becomes Dinner" bug is gone by construction. Adding
+    the same recipe to the same slot bumps its servings instead of duplicating.
+    Desktop users can still drag a recipe onto a slot (mouse only; touch uses
+    tap). The first add to an empty week creates that week's plan automatically.
+  - **Inline editing:** each meal chip has a servings ± stepper and view / cook /
+    remove actions in its menu — the separate "Edit entries" dialog is gone.
+  - **Recipe rows** show "N free" (unallocated) with an inline ± to adjust the
+    cooked pool and a quick "log a cook" action. Today is marked with a badge,
+    past days are dimmed and read-only, and the whole surface reads the
+    household "today" from the server (C-2.K) so date boundaries are correct.
+- **Meal Plans page chrome cleanup (Meal Plans C-2.B).** First visible pass of
+  the planner redesign — decluttering before the carousel rebuild:
+  - The page-top **"You need to cook" shortfall banner is gone**; the summary
+    moves into the sidebar as a single **chef-hat** line ("N to cook by <day>",
+    not a warning triangle).
+  - The **"Suggest meals I can cook now" button + modal are removed** —
+    cookable-now belongs on the Cookbook, not the planner.
+  - The **"Week of <date>" heading is removed** (the calendar widget will be
+    the title) and the **Meal Plans nav icon is now a chef's hat** (was a
+    calendar).
+  - **Entry chips redesigned** into a reusable `MealPlanEntryChip` component:
+    recipe name (wraps) + a separated **`×servings` pill**, with at most one
+    status icon (a "consumed" check *or* a "needs cooking" warning, never both)
+    — fixes the icon/text overflow. Theme-token colours throughout (the old
+    `grey-5` consumed state now uses the neutral surface tokens).
 - **Dialog chrome unified across the app (FU-008).** All 26 `BaseDialog`
   usages now drive their header through the `title` prop (or `#header`
   slot for the icon+title cheatsheet) and their footer through the

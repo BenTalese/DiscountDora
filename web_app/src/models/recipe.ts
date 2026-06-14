@@ -46,6 +46,11 @@ export type Recipe = {
     /** Raw sum of future un-consumed meal-plan servings (NOT floored).
      *  `committed_meals > available_meals` ⇒ a shortfall (shown red). */
     committed_meals: number;
+    /** C-2.I — server-derived planner-tray facts. `not_made_recently`: never
+     *  made or last made before the household 21-day window. `plan_count`: how
+     *  often the recipe appears across all meal plans. */
+    not_made_recently: boolean;
+    plan_count: number;
     // C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
     // edit-form selects + filters; the name is carried for display.
     cuisine_id: string | null;

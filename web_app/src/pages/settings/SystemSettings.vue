@@ -21,6 +21,47 @@
         </q-card-section>
 
         <template v-else>
+            <!-- Household timezone (C-2.K) ─────────────────────────────── -->
+            <q-card-section>
+                <div class="text-subtitle1 text-weight-medium">
+                    <q-icon :name="ICONS.event" size="20px" class="q-mr-xs" />
+                    Timezone
+                </div>
+                <div class="text-caption dora-text-muted">
+                    The household's timezone. Dates like "today" on the meal
+                    planner are worked out here, so they stay correct no matter
+                    where the server runs.
+                </div>
+            </q-card-section>
+            <q-card-section v-if="!loading" class="row q-col-gutter-md items-center">
+                <q-select
+                    :model-value="timezoneDraft"
+                    :options="timezoneOptions"
+                    label="Household timezone"
+                    outlined
+                    dense
+                    use-input
+                    input-debounce="0"
+                    options-dense
+                    class="col-12 col-sm-8"
+                    :disable="savingTimezone"
+                    :loading="savingTimezone"
+                    @filter="onTimezoneFilter"
+                    @update:model-value="onSaveTimezone"
+                />
+                <div class="col-12 col-sm-4">
+                    <q-btn
+                        color="secondary"
+                        no-caps
+                        outline
+                        label="Use this device's timezone"
+                        :disable="savingTimezone"
+                        @click="onDetectTimezone"
+                    />
+                </div>
+            </q-card-section>
+            <q-separator />
+
             <!-- AI assistant ─────────────────────────────────────────── -->
             <q-card-section>
                 <div class="text-subtitle1 text-weight-medium">
@@ -368,12 +409,14 @@
         nutrition_enabled?: boolean;
         companion_ingestion_enabled?: boolean;
         deals_email_enabled?: boolean;
+        timezone?: string;
     };
     function applyLoaded(s: LoadedSettings) {
         enabledDraft.value = s.llm_enabled;
         baseUrlDraft.value = s.llm_base_url;
         modelDraft.value = s.llm_model;
         scanningDraft.value = s.scanning_enabled;
+        if (s.timezone) timezoneDraft.value = s.timezone;
         saved.value = { enabled: s.llm_enabled, baseUrl: s.llm_base_url, model: s.llm_model };
         // The new feature-flag fields might be absent on older /api/app-settings
         // responses (server-side default in the dataclass means they always
@@ -445,6 +488,51 @@
         } finally {
             savingFeatures.value.delete(key);
             savingFeatures.value = new Set(savingFeatures.value);
+        }
+    }
+
+    // ── Household timezone (C-2.K) ───────────────────────────────────────
+    const timezoneDraft = ref<string>('UTC');
+    const savingTimezone = ref(false);
+    // `Intl.supportedValuesOf` ships in modern engines but isn't in every TS
+    // lib target — feature-detect with a precise type rather than `any`.
+    type IntlWithSupported = typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+    const _supportedValuesOf = (Intl as IntlWithSupported).supportedValuesOf;
+    const allTimezones: string[] = _supportedValuesOf ? _supportedValuesOf('timeZone') : ['UTC'];
+    const timezoneOptions = ref<string[]>(allTimezones);
+
+    function onTimezoneFilter(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            timezoneOptions.value = needle
+                ? allTimezones.filter((t) => t.toLowerCase().includes(needle))
+                : allTimezones;
+        });
+    }
+
+    function onDetectTimezone() {
+        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (detected) void onSaveTimezone(detected);
+    }
+
+    async function onSaveTimezone(value: string) {
+        if (!value || value === timezoneDraft.value) return;
+        savingTimezone.value = true;
+        try {
+            const result = await api.updateAsync({ timezone: value });
+            timezoneDraft.value = result.timezone;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: `Household timezone set to ${result.timezone}.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save the timezone.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            savingTimezone.value = false;
         }
     }
 

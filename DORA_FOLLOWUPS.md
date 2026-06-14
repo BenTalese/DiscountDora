@@ -52,6 +52,79 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-179 — Browser-verify Meal Plans C-2.C/D/H/I (carousel + calendar + sidebar + trays)
+- **Raised:** 2026-06-14 (C-2.C/D/H/I — big interaction rebuild, static-only verified)
+- **C-2.I trays additions:** left column groups into Favourites · Haven't-had
+  (oldest/never first) · Frequently-planned · All recipes; curated trays hide
+  when empty; searching collapses to a single "Results" tray; rows still
+  pick/drag/±/log-cook in every tray. Spot-check the 21-day "haven't had" window
+  (a recipe cooked 25 days ago shows; one cooked yesterday doesn't) and that
+  "frequently planned" ranks by how often it's been put on plans.
+- **C-2.H sidebar additions to the checklist:** each needed-ingredient row shows
+  its list status ("on <list>" / "not on a list") + an add-to-list button that
+  reflects on-list state and opens the picker on multi-list; hovering a row
+  (desktop) outlines the meals that use that ingredient; the per-item stock
+  chips now use the **app-wide colours** (intentional change — confirm they read
+  sensibly and match Stock/Cookbook). Membership loads on the planner (the
+  add-button + status aren't blank).
+- **C-2.D calendar additions to the checklist:** the right-column calendar shows
+  ~6 weeks; **status underlines** are correct (green planned / amber short /
+  dotted-grey all-consumed / none empty); **today** has a dot; the **focused
+  week** is outlined; clicking a week jumps the carousel (and vice-versa keeps
+  them synced); the month banner + earlier/later arrows page the window;
+  reloading with `?monday=YYYY-MM-DD` resumes on that week; the old "Jump to a
+  plan" dropdown is gone.
+- **Type:** finding (verification gate)
+- **What:** C-2.C rebuilt `MealPlansOverview.vue` (3-column carousel) and passed
+  vue-tsc + eslint, but the interaction layer needs a human pass. Checklist:
+  1. **Carousel nav** — up/down arrows, ↑/↓ keys, and mobile swipe move weeks
+     with a slide animation; `prefers-reduced-motion` disables it; `weekRangeLabel`
+     updates.
+  2. **Tap-add** — tap a day's slot (it highlights + the left banner shows the
+     target), tap a recipe → entry lands in **that** slot (NOT always "Dinner",
+     F35). Re-adding the same recipe to the same slot **increments servings**.
+  3. **Drag** — on desktop, drag a recipe onto a slot adds it; on touch, drag is
+     disabled and tap-add works (verify no scroll-jank).
+  4. **Implicit create** — first add to an unplanned week silently creates the
+     plan; the sidebar switches from "no meals planned" to the shopping summary.
+  5. **Inline servings** — the chip menu's ± stepper adjusts servings live and
+     removes the entry at 0; view/cook/remove work.
+  6. **Past days** dimmed + reject taps/drops; **Today** badge on the right day;
+     **the Thu-8am-AEST drop repro** (F29) no longer 400s (ties to C-2.K).
+  7. **Left list** — search filters; "N free" + inline ± pool stepper + log-cook
+     work; no cookable colour/check.
+  8. **Off-vocab** — an entry with a deleted/legacy slot renders under "Other".
+  9. **Sidebar/generate** still work bound to the focused week; "Jump to a plan"
+     dropdown focuses the chosen week; "Clear this week" empties it.
+- **Recommended resolution:** end-of-build browser pass (bundle with FU-032 /
+  FU-135 / the timezone verify).
+
+## [OPEN] FU-178 — Full-chain SQLite `flask db upgrade` is broken (batch-mode constraint naming) — prod-SQLite boot blocker
+- **Raised:** 2026-06-14 (surfaced by C-2.K's scratch-DB migration check)
+- **Type:** finding (pre-existing defect; **blocks fresh SQLite prod boot**)
+- **What:** Running the migration chain base→head on a fresh SQLite DB fails at
+  **`d7c9e4a8c2b1_20260612_shopping_list_line_product_anchor.py:29`** —
+  `with op.batch_alter_table('ShoppingListLine')` raises
+  **`ValueError: Constraint must have a name`**. Alembic batch mode on SQLite
+  recreates the table and re-adds its constraints; with no `naming_convention`
+  configured, an unnamed constraint on `ShoppingListLine` can't be reproduced.
+  Likely **several** later batch migrations share the issue (e.g. the
+  `recipe_ingredient_optional` b9e5c2a78f31 batch `add_column` on
+  `RecipeIngredient`, the FU-163 `drop_finish_snapshot` batch op on
+  `ShoppingList`) — the chain just dies at the first one.
+- **Why it went unnoticed:** dev + tests use `db.create_all()` (table_mappings),
+  never the migrations. Only the **prod, non-debug** path runs `upgrade()`
+  (`startup.py:107`). So a fresh **self-host SQLite prod** install fails to boot.
+  **Postgres is unaffected** (batch mode is a passthrough there — real ALTER, no
+  table recreation), so the standard target (R-005) still boots.
+- **Recommended resolution:** **before any SQLite prod release.** Systemic fix:
+  add a SQLAlchemy `MetaData(naming_convention=...)` (in `app.py` /
+  `configure_mappings`) and pass `render_as_batch=True` + that convention in
+  `migrations/env.py`'s `context.configure(...)`, then run a full base→head
+  `upgrade` + `downgrade` on a scratch SQLite to confirm every batch migration
+  reproduces its constraints. Cross-ref R-005/R-006. (C-2.K's own migration was
+  switched to a plain `op.add_column` so it does **not** depend on this fix.)
+
 ## [OPEN] FU-177 — Pre-existing ESLint errors block `npm run build`
 - **Raised:** 2026-06-14 (surfaced by C-2.A adversarial review)
 - **Type:** finding (pre-existing debt)
@@ -162,11 +235,20 @@ long session summary. Distinct from the other logs:
   FU-135 (generate-via-Axis-B choice modal, C-2.H); F34 ingredient-math +
   F29 past-day-drop browser-verifies to be logged when their chunks run.
 - **Why deferred:** the plan is authored; execution is the next work unit.
-- **Progress:** **C-2.A landed & verified 2026-06-14** (household-wide MealSlot
-  vocab; 11 e2e + 261 e2e + 49 unit green, vue-tsc clean). **Next: C-2.B**
-  (page-chrome cleanup). 10 chunks remain.
-- **Recommended resolution:** continue the build — C-2.B next; C-2.F is the
-  parallel-safe pick if a second agent helps.
+- **Progress (2026-06-14):** **A** (MealSlot vocab) + **B** (chrome +
+  `MealPlanEntryChip`) + **K** (household-tz "today") + **C** (carousel + slot
+  rows + tap-add) + **D** (calendar widget + `weekDates.ts` + `?monday=` URL) +
+  **E** (nameless plans + nullable `MealPlan.name` migration + retired
+  `MealPlanEditDialog` + implicit-create-on-tap) + **H** (sidebar: per-item
+  list-status + `AddToListButton` + hover-highlight + colour unification) all
+  landed (e2e 264, unit 49, vue-tsc + eslint clean; migrations verified in
+  isolation) + **I** (left-column trays: Favourites/Haven't-had/Frequently-planned
+  via server-derived `not_made_recently` + `plan_count`). **Next: C-2.F**
+  (templates). 3 chunks remain (F, G, J). Open finds: **FU-178** (SQLite
+  migration chain), **FU-179** (browser-verify C/D/H/I), **FU-175** (bulk-week
+  editor).
+- **Recommended resolution:** continue the build — **C-2.F → C-2.G** (templates +
+  recurring; the big remaining lift) then **C-2.J** (sequential builder).
 
 ## [OPEN] FU-171 — Recipe image hide/show toggle reported broken — no static repro
 - **Raised:** 2026-06-13 (FU-088 → Cookbook card revision Chunk A §1.1)

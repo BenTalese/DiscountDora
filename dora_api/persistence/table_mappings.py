@@ -72,6 +72,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("deals_email_enabled", Boolean, nullable=False, server_default="0"),
         # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
         Column("nutrition_db_source", String(255), nullable=False, server_default=""),
+        # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
+        Column("timezone", String(64), nullable=False, server_default="UTC"),
     )
 
     product_offer_table = Table(
@@ -472,7 +474,8 @@ def configure_mappings(db: SQLAlchemy):
     meal_plan_table = Table(
         "MealPlan", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("name", String(255), nullable=False),
+        # C-2.E — instances are nameless (UI shows "Week starting <date>").
+        Column("name", String(255), nullable=True),
         Column("start_date", Date, nullable=False),
     )
 

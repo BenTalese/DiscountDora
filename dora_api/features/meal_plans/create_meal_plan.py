@@ -10,6 +10,7 @@ from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.types import EMPTY_UUID
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.meal_plans.get_meal_plans import get_meal_plans
 from dora_api.features.meal_slots.slot_validation import (
     find_invalid_slot, get_valid_slot_names, invalid_slot_message)
@@ -34,7 +35,9 @@ class CreateMealPlanEntryRequest(BaseModel):
 class CreateMealPlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length = 1, max_length = 255)
+    # Optional (C-2.E): the planner creates nameless week-plans. A name may
+    # still be supplied (e.g. templates / legacy callers).
+    name: str | None = Field(default = None, max_length = 255)
     start_date: date
     entries: List[CreateMealPlanEntryRequest] = Field(default_factory = list)
 
@@ -52,7 +55,7 @@ class CreateMealPlanHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateMealPlanRequest) -> CreateMealPlanResponse:
-        _Today = date.today()
+        _Today = household_today(self.repository)
 
         # C-2.A — validate slot names against the household MealSlot
         # vocabulary at the boundary (R-010). Slots are free-text labels,

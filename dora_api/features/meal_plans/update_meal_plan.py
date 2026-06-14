@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.meal_slots.slot_validation import (
     find_invalid_slot, get_valid_slot_names, invalid_slot_message)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
@@ -89,7 +90,7 @@ class UpdateMealPlanHandler:
                     invalid_slot_message = invalid_slot_message(_BadSlot, _ValidSlots)
                 )
 
-            _Today = date.today()
+            _Today = household_today(self.repository)
             # Don't overwrite already-consumed entries (past days are
             # locked read-only); keep them as-is and replace only the
             # forward-looking portion of the plan.

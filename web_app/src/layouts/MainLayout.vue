@@ -173,7 +173,7 @@
         { label: 'Product Search', icon: ICONS.search, link: '/product-search' },
         { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
         { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
-        { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
+        { label: 'Meal Plans', icon: ICONS.chef_hat, link: '/meal-plans' },
         { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
         { label: 'Data', icon: ICONS.storage, link: '/data' },
         { label: 'Reports', icon: ICONS.insights, link: '/reports' },

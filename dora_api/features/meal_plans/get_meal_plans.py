@@ -44,7 +44,7 @@ class MealPlanEntryDto:
 @dataclass(frozen=True, slots=True)
 class MealPlanDto:
     meal_plan_id: UUID
-    name: str
+    name: str | None
     start_date: date
     entries: List[MealPlanEntryDto]
 

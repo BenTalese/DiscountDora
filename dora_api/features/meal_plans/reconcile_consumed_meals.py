@@ -1,8 +1,9 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 
 from dora_api.app import db
+from dora_api.features.app_settings.clock import today_in_timezone
 
 
 def reconcile_consumed_meals() -> None:
@@ -20,10 +21,14 @@ def reconcile_consumed_meals() -> None:
     decrement. Floors `available_meals` at zero — a slot that's planned
     without anything in the pool just locks read-only.
     """
-    _Today = date.today()
     _Now = datetime.now(UTC)
 
     with db.engine.begin() as _Conn:
+        # Evaluate the "past day" boundary in the household timezone (C-2.K),
+        # not server-local — read it on this same connection to stay decoupled
+        # from the per-request ORM session. No row yet ⇒ UTC default.
+        _TzRow = _Conn.execute(text('SELECT timezone FROM "AppSetting" LIMIT 1')).first()
+        _Today = today_in_timezone(_TzRow[0] if _TzRow else None)
         _Consumed = _Conn.execute(
             text(
                 'UPDATE "MealPlanEntry" '

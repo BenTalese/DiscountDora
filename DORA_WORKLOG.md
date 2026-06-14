@@ -9,6 +9,320 @@ next.
 
 ---
 
+## 2026-06-14 — Meal Plans C-2.I — left-column recipe trays
+**Status:** complete & verified. Backend e2e **264** + unit **49** pass; vue-tsc
+**0** + eslint **clean**. Backend touch (two derived DTO fields, no migration).
+Built directly (ultracode off).
+
+**What:** Grouped the planner's recipe list into curated trays.
+- **Backend (R-003 — windows/ranking server-side):** `get_recipes` RecipeDto
+  gains `not_made_recently: bool` (last_made_on NULL or < household_today − 21d)
+  + `plan_count: int` (all-time count of MealPlanEntry rows per recipe). Both
+  hydrated in `_hydrate_unallocated` (added a COUNT GROUP BY + a `_stale()`
+  check). **Also** switched that function's `date.today()` → `household_today`
+  (C-2.K consistency — shrinks FU-174 by one call; the recipe-list "committed"
+  boundary is now household-tz too).
+- **Frontend:** left column → `trays` computed: Favourites (`is_favourite`,
+  pinned) · Haven't-had (`not_made_recently`, oldest/never first, cap 10) ·
+  Frequently-planned (`plan_count` desc, cap 10) · All recipes. Curated trays
+  hidden when empty; searching collapses to a single "Results" tray. Rendered as
+  `q-expansion-item`s; the recipe-row markup is written **once** inside the
+  nested v-for (no duplication — R-001 without premature cross-page extraction;
+  C-4 owns the reusable tray component per the plan).
+
+**Charter/standards:** R-003 (21-day window + frequency ranking server-owned;
+client renders/sorts/caps only), R-001 (row markup single-source via nested
+loop; no dup), R-007 (the `date.today()`→household_today tweak is in the same
+function I was extending — noted, not a wider sweep; FU-174 still owns the rest),
+R-008 (no dead code). No migration, no ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D+E+H+I done; next **C-2.F**). FU-179 extended
+(trays). FU-178/177/175 still open.
+
+**Next up:** **C-2.F** — templates (single): `MealPlanTemplate` +
+`MealPlanTemplateEntry` entities/tables/migration; `POST/GET/PATCH/DELETE
+/meal-plan-templates`; `POST /meal-plans/from-template` (skip past offsets);
+`MealPlan.source_template_id` provenance; save-week-as-template + apply-one-week
+UI. First new-entity chunk — the biggest remaining backend lift (F + G).
+
+---
+
+## 2026-06-14 — Meal Plans C-2.H — sidebar redesign (status + add + hover)
+**Status:** complete; verified at type/lint level (vue-tsc **0**, eslint
+**clean**). Frontend-only — composes existing C-7 infra (no backend change → 264
+e2e unaffected). Built directly (ultracode off).
+
+**What:** Finished the shopping sidebar (the "N to buy" / chef-hat cook-by line
+/ generate-choice-modal already existed).
+- **Per-item shopping-list status (F31):** each needed-ingredient row shows a
+  caption — "needs N · on <list>" or "… · not on a list" — via
+  `listStatusLabel()` reading `shoppingListStore.membership` (items +
+  active_lists). `shoppingListStore.refreshAsync()` added to `onMounted` so
+  membership is loaded on the planner.
+- **Per-item add (F32):** each row gets `<AddToListButton variant="row"
+  :stock-item-id>` — the C-7 button (reused, not re-implemented) that shows
+  on-list state + opens the list-picker on multi-list.
+- **Token unification (F7):** `stockStatusColour` dropped its **one-off local
+  switch** (out=negative/low=warning/sufficient=info — a planner-only palette)
+  for the app-wide `colourForSequence` (stockLevelLogic). The sidebar stock
+  chips now match Stock/Cookbook (R-003 — one mapping). **Visible colour change**
+  (intentional) — flag for browser-verify.
+- **Hover-to-highlight (F30):** hovering a needed-ingredient row sets
+  `hoveredRecipeIds` (from `used_in_recipe_ids`); matching meal chips get a
+  `--highlight` outline (new `highlight` prop on `MealPlanEntryChip`). Desktop
+  only (mouse events).
+
+**Charter/standards:** R-001 (reused `AddToListButton`; added one chip prop),
+R-002 (highlight outline + chips use tokens/semantics), R-003 (one stock-colour
+mapping; membership read from the store, not shadowed), R-007 (composed C-7, no
+fork), R-008 (deleted the dead local switch). No backend, no ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D+E+H done; next **C-2.I** trays). FU-179
+extended (per-item add, hover-highlight, the intentional sidebar colour change).
+FU-178/177/175 still open.
+
+**Next up:** **C-2.I** — left-column trays: Favourites · Haven't-had-in-21-days ·
+Frequently-planned, above the all-recipes list. Both windows + the frequency
+ranking are **server-side** (R-003) — likely a small `get_recipes` addition
+(flags or `?tray=`), so this is the next backend touch.
+
+---
+
+## 2026-06-14 — Meal Plans C-2.E — drop MealPlan.name + retire the dialog
+**Status:** complete & verified. Backend e2e **264** + unit **49** pass; migration
+verified up/down in isolation (name → nullable → NOT NULL); vue-tsc **0** + eslint
+**clean**. One small backend migration (first backend touch since C-2.K). Built
+directly (ultracode off).
+
+**What:** Finished the create/edit flow — instances are nameless; creation is
+implicit; the dialog is gone.
+- **Backend:** `MealPlan.name` is now **nullable** — entity (`name: str | None`),
+  table mapping, read DTO (`MealPlanDto.name: str | None`), and
+  `CreateMealPlanRequest.name` (optional, default None). Migration
+  `e1f7b3d9a2c4` (batch `alter_column`, SQLite recreate / Postgres DROP NOT
+  NULL; MealPlan has no constraints so it's clear of FU-178). `get_meal_plans`
+  still emits the stored name (ignored by the UI). Templates keep names (C-2.F).
+- **Frontend:** the implicit-create-on-tap (bridged in C-2.C) now sends **no
+  name**; generated lists are named "Meals: week of <date>". **Removed** the
+  "New plan" button + `onCreatePlan`/`onPlanSaved`/`editingPlan`/`editDialogOpen`,
+  the `MealPlanEditDialog` import + usage, and **deleted
+  `MealPlanEditDialog.vue`** (its only caller). `BaseButton` import dropped (it
+  was only the New-plan button). `models/mealPlan.ts` + `CreateMealPlanCommand`
+  name → optional/nullable.
+- **Display/clear:** "Week starting <date>" is conveyed by the carousel's week
+  range + the calendar; "Clear this week" (landed in C-2.C) deletes the focused
+  week's plan.
+
+**Scope note:** the "delete-row-only-when-not-in-a-recurring-set-window" nuance
+(§3.5) waits for C-2.G (no sets exist yet, so deleting the emptied plan is
+correct now). A purpose-built bulk-week editor is still **FU-175** (assess after
+living with inline edit).
+
+**Charter/standards:** R-005/R-006 (portable batch alter, reversible), R-007
+(scope held; recurring-window nuance deferred to G), R-008 (deleted the dialog +
+dead refs/imports, no shims), R-010 (optional typed name, not a sentinel). No ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D+E done; next **C-2.H**). FU-175 (bulk-week
+editor), FU-179 (browser-verify C/D), FU-178/177 still open.
+
+**Next up:** **C-2.H** — sidebar redesign: per-stock-item **shopping-list
+status** (on list X / not yet) + per-item add (compose the C-7 `AddToListButton`
+/ target picker) + hover-to-highlight the day cells using an ingredient (desktop).
+The "Add to / Generate" choice modal + chef-hat cook-by line already exist.
+
+---
+
+## 2026-06-14 — Meal Plans C-2.D — custom calendar widget
+**Status:** complete; verified at type/lint level (vue-tsc **0**, eslint **clean**
+on all touched files). Frontend-only (no backend change). Browser-verify folded
+into FU-179. Built directly (ultracode off).
+
+**What:** New right-column calendar widget, synced with the carousel; replaces
+the "Jump to a plan" dropdown.
+- **New `web_app/src/components/MealPlanCalendar.vue`** — self-contained (reads
+  `mealPlanStore` mealPlans/shortfall/today). ~6 week-rows of rounded day-squares
+  (first square shows `DD`, rest silent); **status underlines** (A1 tokens):
+  planned = `--semantic-positive`, short = `--semantic-warning`, all-consumed =
+  dotted `--text-muted`, empty = none. Focused week = `--brand-primary` border;
+  today = accent dot. Month-banner + earlier/later window paging. `v-model:focused-monday`
+  two-way binds to the page; clicking a week sets it. Status derived from the
+  server shortfall set (R-003) — no client cookability re-judgement.
+- **New `web_app/src/helpers/weekDates.ts`** — extracted `isoDate` / `localTodayIso`
+  / `shiftDays` / `mondayOf` (were duplicated in the page; now one source, R-003/
+  R-001). Page imports them (`isoDate as toIso`); the calendar imports them too.
+- **Page refactor:** removed the "Jump to a plan" `q-select` + `planOptions` +
+  `selectedPlanIdProxy`; added `<MealPlanCalendar>` above the shopping card; one
+  consolidated `watch(focusedMonday)` now sets the slide direction, clears the
+  add-target, **and writes `?monday=` to the URL**; `onMounted` resumes from
+  `?monday=` if present (F28), else the household current week.
+
+**Charter/standards:** R-001 (calendar is its own component, cookbook-reusable;
+date helpers extracted not copied), R-002 (every underline/border/dot is a
+token), R-003 (status from server shortfall; one week-date helper module),
+R-008 (removed the duplicated helpers + dropdown), R-011 (`defineModel`,
+`<transition>`, writable-ref idioms). No backend, no ADR.
+
+**Open loops:** FU-172 (A+B+K+C+D done; next **C-2.E**). FU-179 extended to
+cover the calendar (click-to-focus, status underlines, today dot, window
+paging, `?monday=` resume). FU-178 / FU-177 still open.
+
+**Next up:** **C-2.E** — drop `MealPlan.name` from the UI + "Week starting X"
+labels + finalize implicit-create (already bridged in C-2.C) + the "Clear week"
+delete-row-when-empty nuance. Backend: make `MealPlan.name` nullable (migration)
+so the planner stops sending an auto-name.
+
+---
+
+## 2026-06-14 — Meal Plans C-2.C — vertical carousel + slot rows + tap-add
+**Status:** complete; verified at type/lint level (vue-tsc **0 errors**, eslint
+**clean** on touched files). Frontend-only (no backend change → the 264 e2e are
+unaffected). **Big interaction rebuild — needs a browser pass (FU-179).** Built
+directly (ultracode off).
+
+**What:** Rebuilt `MealPlansOverview.vue` into the 3-column workspace (recipe
+list | vertical week carousel | shopping sidebar), replacing the
+single-week horizontal grid + the draggable chip palette.
+- **Carousel:** `focusedMonday` ref is the source of truth; up/down arrows +
+  ↑/↓ keys + touch-swipe move weeks; Vue `<transition mode="out-in">`
+  (`wk-up`/`wk-down`) gated on `prefers-reduced-motion`. Each week = vertical
+  stack of 7 day-cards; each day = named slot rows from `mealSlotStore`
+  (+ an "Other" row for off-vocab entries). `weekRangeLabel` + a "Today" badge
+  + past-day dimming (reads server `today` from C-2.K).
+- **Tap-add:** `selectSlot(day,slot)` focuses a target (highlighted); `pickRecipe`
+  adds to it with slot **auto-derived from the row** → kills always-"Dinner"
+  (F35). Same recipe+day+slot increments servings. Desktop drag still works
+  (`dragAllowed` gated on `pointerType==='mouse'`); touch = tap. First add to an
+  empty week implicitly creates the (auto-named) plan carrying that entry
+  (bridge until C-2.E drops the name).
+- **Inline edit:** `MealPlanEntryChip` extended with an `@adjust(delta)` emit +
+  a servings ± stepper in its menu (stays open for rapid taps); used with
+  `:show-slot="false"` in the carousel. "Edit entries" button + path removed.
+- **Left list:** searchable recipe rows showing "N free" (unallocated) + inline
+  ± pool stepper + log-cook; **no cookable colour/check** (Decision 7 —
+  `recipeCookable` deleted). Tap a row → pick for the focused slot.
+- **Sidebar / generate / shortfall** rebound from `selectedPlan` → `focusedPlan`;
+  the "Jump to a plan" dropdown sets `focusedMonday` (stays until C-2.D's
+  calendar replaces it).
+
+**Scope note:** the toolbar "Delete plan" became **"Clear this week"**
+(confirmClearWeek/doClearWeek) early — cosmetic, follows from week-based
+semantics; C-2.E still owns the `MealPlan.name` drop + the delete-row-when-empty
+/ recurring-window nuance. The `MealPlanEditDialog` create path ("New plan")
+stays as the bridge until C-2.E retires it.
+
+**Charter/standards:** R-001 (reused `MealPlanEntryChip`; carousel/slot-row are
+in-page sections — extract further if reused), R-002 (token-only styles), R-003
+(reads server `unallocated_meals` + `today` + slot vocab; no client re-derivation;
+FU-154 store-routing preserved), R-007 (deferred D/E/H/I scope held; "Clear week"
+label noted), R-008 (dead `recipeCookable`/`Recipe` import removed), R-011
+(`<transition>`, writable computed proxy, pointer events). No ADR.
+
+**Open loops:** FU-172 (A+B+K+C done; next **C-2.D** calendar widget). **FU-179**
+(browser-verify the carousel/tap-add/drag/inline-servings/past-day/Thu-8am
+repro). FU-178 (SQLite migration chain), FU-177 (pre-existing lint) still open.
+
+**Next up:** **C-2.D** — custom calendar widget (right column; ~6 weeks, month
+banner, status underlines, focused-week outline, today dot; replaces the "Jump
+to a plan" dropdown; `?monday=` URL for refresh-resume; syncs with the carousel).
+
+---
+
+## 2026-06-14 — Meal Plans C-2.K — household-timezone date correctness
+**Status:** complete & verified. Full backend e2e **264 passed** (incl. 3 new
+timezone tests), unit **49 passed**, vue-tsc **0 errors**, eslint **0 new** on
+touched files. My migration verified up+down in isolation on scratch SQLite
+(timezone added w/ UTC default, removed on downgrade). Built directly (ultracode
+off).
+
+**What:** "Today" is now evaluated in a household IANA timezone, server-side,
+so the date boundary is correct regardless of server location — the user's
+explicit requirement. Fixes the past-day-drop 400 (F29) properly, not with a
+client-local patch.
+- **Backend:** `AppSetting.timezone` (IANA, default UTC) — entity + mapping +
+  migration `c3a7e1f9d4b6` (plain `op.add_column`, see migration note below) +
+  GET/PATCH DTO + IANA validation on PATCH. New `app_settings/clock.py`
+  (`today_in_timezone` / `household_today` / `is_valid_timezone`, via
+  `zoneinfo`). All four meal-plan "today" boundaries now use it:
+  `create_meal_plan`, `update_meal_plan`, `get_shortfall` (repo-based) and the
+  `reconcile_consumed_meals` raw-SQL sweep (reads tz on its own connection).
+  New `GET /api/meal-plans/today` → `{today}`. Added `tzdata` to
+  `requirements.txt` (Windows/desktop have no system zoneinfo).
+- **Frontend:** `mealPlanApiService.getTodayAsync` + store `today` +
+  `getTodayAsync`; `MealPlansOverview.isPastDay` trusts the server `today`
+  (local-components fallback that never uses `toISOString()`); fetched on mount.
+  New **Timezone** card in `SystemSettings.vue` — filterable IANA `q-select`
+  (`Intl.supportedValuesOf`) + "Use this device's timezone"
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone`), auto-saves on change,
+  reverts on error.
+- **Tests:** `test_meal_plan_today.py` (3) — /today returns the household date;
+  setting a far-offset zone (Pacific/Kiritimati, UTC+14) shifts /today; an
+  invalid zone is rejected 400 and not stored.
+
+**Migration note (important):** the scratch-DB full-chain check surfaced a
+**pre-existing** defect — `flask db upgrade` base→head on a fresh **SQLite** DB
+dies at `d7c9e4a8c2b1` (Cart-Button Chunk 3) with
+`ValueError: Constraint must have a name` (Alembic batch-mode recreation needs a
+naming convention). Dev/test use `create_all`, so only **prod-SQLite** boot hits
+it; **Postgres is unaffected**. Logged as **FU-178** (SQLite-prod boot blocker;
+systemic naming-convention fix recommended). To stay independent of it, C-2.K's
+migration uses a plain `op.add_column` (a constant default needs no table
+rebuild), verified working in isolation.
+
+**Charter/standards:** R-003 (one server-owned "today"; client reads it),
+R-005/R-006 (portable plain-add migration, reversible), R-010 (IANA validated at
+the boundary; `Intl.supportedValuesOf` typed without `any`), R-007 (FU-178 +
+the pre-existing lint flagged, not fixed inline), R-011 (idiomatic Quasar
+select/store). **New ADR? No** — but FU-178's batch-naming fix may warrant one
+when done.
+
+**Open loops:** FU-172 (A+B+K done; next **C-2.C** the carousel). **FU-178**
+(SQLite migration chain), FU-177 (pre-existing lint). Browser-verify the
+Thu-8am-AEST drop repro + the timezone picker rolls into the end-of-build pass.
+
+**Next up:** **C-2.C** — vertical week carousel + named slot rows +
+cell-targeted tap-add (consumes the server `today`; reuses `MealPlanEntryChip`;
+fixes FU-154 store-bypass). The big interaction chunk.
+
+---
+
+## 2026-06-14 — Meal Plans C-2.B — page-chrome cleanup
+**Status:** complete & verified (vue-tsc **0 errors**; eslint on touched files
+**0 new errors** — the 5 pre-existing are FU-177). Frontend-only chunk; built
+directly (ultracode off → no per-chunk workflow).
+
+**What:** Removals + an extracted, relaid-out entry chip — decluttering the
+planner ahead of the C-2.C carousel rebuild.
+- **Removed:** the page-top shortfall `q-banner`; the "Suggest meals I can cook
+  now" CTA + its `BaseDialog` modal; the "Week of <date>" heading. Dead script
+  dropped with them (`suggestOpen`, `cookableRecipes`, `addRecipeToday`) +
+  dead `.entry-chip` CSS. CSV confirmed already gone (FU-168).
+- **New `web_app/src/components/MealPlanEntryChip.vue`** — recipe name (wraps)
+  + a separated `×servings` pill (`--surface-elevated`), at-most-one status
+  icon (consumed check XOR shortfall warning). Self-contained: emits
+  `view`/`cook`/`remove`; the day grid (and later C-2.C's carousel) consume it.
+  Fixes the old `grey-5` R-002 violation (neutral now via `dora-bg-sunken
+  dora-text-muted`).
+- **Sidebar chef-hat line** ("N to cook by <day>", `cookByLabel` computed off
+  the shortfall store's earliest `earliest_needed`) replaces the page banner
+  (F4 — chef-hat, not warning triangle).
+- **Nav icon** `MainLayout.vue:176` `calendar_month` → `chef_hat` (F3).
+- **Deferred, deliberately not touched** (R-007): "Active plan" dropdown (→
+  C-2.D), "Edit entries" button + modal (→ C-2.C), "Delete plan"→"Clear week"
+  (→ C-2.E). The always-"Dinner" tap-add (`onDropOnDay`) also stays until C-2.C.
+
+**Charter/standards:** R-001 (chip extracted as a component for carousel reuse),
+R-002 (tokens; killed the `grey-5`), R-007 (removals scoped; deferrals flagged),
+R-008 (dead code removed). No ADR.
+
+**Open loops:** FU-172 (C-2.A+B done; next C-2.K). FU-177 (pre-existing lint).
+Browser-verify the chip relayout + chef-hat icon + sidebar line rolls into the
+end-of-build visual pass.
+
+**Next up:** **C-2.K** — household-timezone date correctness (`AppSetting.timezone`
++ server-owned "today"), the foundation C-2.C's carousel renders against.
+
+---
+
 ## 2026-06-14 — Meal Plans C-2.A — household-wide meal-slot vocabulary
 **Status:** complete & verified. Backend e2e **261 passed** (incl. 11 new
 meal-slot tests), unit **49 passed**, migration up+seed+down OK on scratch

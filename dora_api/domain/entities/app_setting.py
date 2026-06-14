@@ -40,6 +40,11 @@ class AppSetting(BaseEntity):
     # user cannot save `nutrition_mode='complex'` (rejected at the
     # `update_me.py` boundary).
     nutrition_db_source: str = ""
+    # Meal Plans C-2.K — household IANA timezone (e.g. "Australia/Sydney").
+    # The "today" date boundary is evaluated here, not server-local, so a
+    # household is correct regardless of where the server is hosted. Default
+    # UTC until an admin sets it in System settings. App-wide adoption: FU-174.
+    timezone: str = "UTC"
 
     class Fields(BaseEntity.Fields):
         LLM_ENABLED = "llm_enabled"
@@ -52,3 +57,4 @@ class AppSetting(BaseEntity):
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
         NUTRITION_DB_SOURCE = "nutrition_db_source"
+        TIMEZONE = "timezone"

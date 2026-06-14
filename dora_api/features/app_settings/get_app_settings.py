@@ -28,6 +28,8 @@ class AppSettingsDto:
     # C-cross Chunk 3 — reserved seam for nutrition complex-mode. Empty
     # string ⇒ no source configured ⇒ users can't pick `complex`.
     nutrition_db_source: str
+    # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
+    timezone: str
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -42,6 +44,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),
         deals_email_enabled=bool(setting.deals_email_enabled),
         nutrition_db_source=setting.nutrition_db_source or "",
+        timezone=setting.timezone or "UTC",
     )
 
 

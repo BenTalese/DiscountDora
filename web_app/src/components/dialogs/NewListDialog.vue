@@ -5,11 +5,12 @@
          router landing page and the detail page (Chunk 5). -->
     <BaseDialog
         :model-value="modelValue"
+        title="New shopping list"
+        closable
         card-style="min-width: 360px; max-width: 520px"
         @update:model-value="$emit('update:modelValue', $event)"
     >
         <q-card-section>
-            <div class="text-h6">New shopping list</div>
             <div class="text-caption dora-text-muted">
                 Build a fresh list, or top up an existing one.
                 Items are deduped, so nothing gets added twice.
@@ -122,7 +123,7 @@
                 :hint="mergeOptions.length === 0 ? 'No active lists yet — switch back to Create new.' : ''"
             />
         </q-card-section>
-        <q-card-actions align="right">
+        <template #actions>
             <q-btn flat label="Cancel" no-caps v-close-popup />
             <q-btn
                 no-caps
@@ -133,7 +134,7 @@
                 :loading="creating || autogenerating"
                 @click="submit"
             />
-        </q-card-actions>
+        </template>
     </BaseDialog>
 </template>
 

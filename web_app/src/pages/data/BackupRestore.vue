@@ -275,7 +275,7 @@
                         </q-list>
                     </q-expansion-item>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Close" @click="reportOpen = false" />
                     <q-btn
                         v-if="report?.ok"
@@ -284,7 +284,7 @@
                         label="Reload now"
                         @click="reloadNow"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </div>
 </template>

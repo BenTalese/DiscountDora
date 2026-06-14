@@ -24,6 +24,37 @@ semver — major bumps signal schema or breaking-config changes.
     entries** (they keep their label, just drop out of the picker). New writes
     referencing an off-vocabulary slot are rejected at the API.
 
+### Changed
+- **Dialog chrome unified across the app (FU-008).** All 26 `BaseDialog`
+  usages now drive their header through the `title` prop (or `#header`
+  slot for the icon+title cheatsheet) and their footer through the
+  `#actions` slot, instead of repeating bespoke `<q-card-section>` /
+  `<q-card-actions>` markup. Add/Edit/Picker/Confirm dialogs across
+  recipes, stock, products, meal plans, shopping lists, scanning,
+  backup/restore, audit log, and onboarding all share the same chrome.
+  Form-submit-style dialogs were rebound to explicit `@click` submit
+  handlers when their action buttons moved outside `<q-form>`.
+- **Logs rotate by date instead of by size (FU-027).** Switched
+  `dora_api/infrastructure/logging_setup.py` from `RotatingFileHandler`
+  (10 MB × 5) to `TimedRotatingFileHandler` (`when="midnight"`,
+  `backupCount=14`, `suffix="%Y-%m-%d"`). The active `<service>.log`
+  now contains only the current date's entries; previous days roll
+  off into `<service>.log.YYYY-MM-DD` files, ~2 weeks kept.
+- **Onboarding tour Alerts card now points at `/alerts` (FU-015).**
+  `WelcomeWizard.vue` `TOUR_CARDS` Alerts entry no longer deep-links
+  into Stock with `?attention=true`; it routes to the dedicated alerts
+  page that already exists.
+
+### Fixed
+- **Session-secret file now lives under `DORA_DATA_DIR` (FU-037).**
+  `dora_api/app.py` resolved `.secret_key` as a literal CWD-relative
+  `./data/` path, escaping the configured data dir on the desktop
+  build and silently invalidating session cookies if the app was
+  launched from a different folder. Now resolved via
+  `config_manager.get_data_dir() / '.secret_key'` (parent created
+  on first run). The SQLAlchemy `data/` mkdir nearby was also rerouted
+  through `get_data_dir()` for consistency.
+
 ### Removed
 - **App-wide undo / shopping-list Reopen — gone (FU-163).** The user
   retired the whole undo posture: "decided undo feature does not make sense,

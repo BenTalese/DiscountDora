@@ -236,7 +236,7 @@
                     <div class="text-subtitle2 q-mb-sm">Payload</div>
                     <pre class="audit-payload">{{ formatPayload(detail.payload) }}</pre>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn
                         v-if="detail?.request_id"
                         flat
@@ -247,7 +247,7 @@
                         @click="findRelated(detail.request_id)"
                     />
                     <BaseButton variant="ghost" label="Close" v-close-popup />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </q-card>
 </template>

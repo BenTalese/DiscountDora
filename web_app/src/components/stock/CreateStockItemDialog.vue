@@ -1,13 +1,12 @@
 <template>
     <BaseDialog
         :model-value="modelValue"
+        title="Add a stock item"
+        closable
         card-style="width: 600px; max-width: 95vw"
         @update:model-value="onDialogUpdate"
         @cancel="resetForm"
     >
-            <q-card-section>
-                <div class="text-h6">Add a stock item</div>
-            </q-card-section>
             <q-card-section>
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
                     <FormErrorSummary :message="generalError" />
@@ -63,12 +62,12 @@
                         @update:model-value="clearField('stock_location_id')"
                     />
 
-                    <q-card-actions align="right">
-                        <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                        <BaseButton type="submit" variant="primary" label="Add" :loading="saving" />
-                    </q-card-actions>
                 </q-form>
             </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton variant="primary" label="Add" :loading="saving" @click="onSubmit" />
+            </template>
     </BaseDialog>
 </template>
 

@@ -849,9 +849,8 @@
         <!-- P6-01 Chunk 7 — planned-shop-date editor. Sets/changes/clears
              the planned day for this list. Sort + next-up + button tone
              all read from it. -->
-        <BaseDialog v-model="plannedDateOpen" card-style="min-width: 280px">
+        <BaseDialog v-model="plannedDateOpen" title="Plan this shop for" closable card-style="min-width: 280px">
             <q-card-section>
-                <div class="text-h6">Plan this shop for</div>
                 <div class="text-caption dora-text-muted">
                     Sets which list opens first on shopping day, and labels
                     self-named lists with the date.
@@ -869,7 +868,7 @@
                     @keydown.enter.prevent="savePlannedDate"
                 />
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <BaseButton
                     v-if="detail?.planned_shop_date"
@@ -884,15 +883,14 @@
                     :disable="!plannedDateDraft"
                     @click="savePlannedDate"
                 />
-            </q-card-actions>
+            </template>
         </BaseDialog>
 
         <!-- UX-v2 M12 — restock review. One-click "Restock & finish" with
              every ticked item listed and individually adjustable (default
              Well-Stocked). Replaces the old text-only confirm dialog. -->
-        <BaseDialog v-model="finishReviewOpen" card-style="min-width: 320px; max-width: 480px">
+        <BaseDialog v-model="finishReviewOpen" title="Finish & restock" closable card-style="min-width: 320px; max-width: 480px">
             <q-card-section>
-                <div class="text-h6">Finish & restock</div>
                 <div class="text-body2 dora-text-muted">
                     {{
                         finishEntries.length === 0
@@ -932,7 +930,7 @@
                     them later if they're still wanted.
                 </div>
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <q-btn
                     unelevated
@@ -943,7 +941,7 @@
                     :loading="finishing"
                     @click="confirmFinish"
                 />
-            </q-card-actions>
+            </template>
         </BaseDialog>
     </q-page>
 </template>

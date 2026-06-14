@@ -294,12 +294,7 @@
         </div>
 
         <!-- Suggest cookable recipes ───────────────────────────────── -->
-        <BaseDialog v-model="suggestOpen" card-style="width: 460px; max-width: 95vw">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Recipes you can cook now</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="suggestOpen" title="Recipes you can cook now" closable card-style="width: 460px; max-width: 95vw">
                 <q-card-section>
                     <div v-if="cookableRecipes.length === 0" class="dora-text-muted">
                         Nothing's fully in stock right now. Restock or pick a recipe with fewer
@@ -330,8 +325,7 @@
         <MealPlanEditDialog v-model="editDialogOpen" :plan="editingPlan" @saved="onPlanSaved" />
 
         <!-- Log cook from the planner palette ─────────────────────── -->
-        <BaseDialog v-model="paletteLogCookOpen" card-style="min-width: 320px">
-                <q-card-section class="text-h6">Log a cook</q-card-section>
+        <BaseDialog v-model="paletteLogCookOpen" title="Log a cook" closable card-style="min-width: 320px">
                 <q-card-section class="q-pt-none">
                     <q-input
                         v-model.number="paletteLogCookCount"
@@ -345,7 +339,7 @@
                         hint="Adds to the recipe's pool."
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn
                         color="primary"
@@ -355,7 +349,7 @@
                         :disable="!(paletteLogCookCount > 0)"
                         @click="confirmPaletteLogCook"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </div>
 </template>

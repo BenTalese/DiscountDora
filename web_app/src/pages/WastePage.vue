@@ -226,10 +226,9 @@
         </q-card>
 
         <!-- Log-waste dialog -->
-        <BaseDialog v-model="wasteDialogOpen" card-style="min-width: 320px">
-                <q-card-section>
-                    <div class="text-h6">Log as wasted</div>
-                    <div v-if="wasteTarget" class="text-caption dora-text-muted">
+        <BaseDialog v-model="wasteDialogOpen" title="Log as wasted" closable card-style="min-width: 320px">
+                <q-card-section v-if="wasteTarget">
+                    <div class="text-caption dora-text-muted">
                         {{ wasteTarget.name }}
                     </div>
                 </q-card-section>
@@ -266,7 +265,7 @@
                         label="Also mark as Out of Stock"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn
                         unelevated
@@ -276,7 +275,7 @@
                         :loading="wasteSaving"
                         @click="submitWaste"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </q-page>
 </template>

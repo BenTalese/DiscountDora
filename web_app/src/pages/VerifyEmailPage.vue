@@ -39,10 +39,7 @@
             </q-card-actions>
         </q-card>
 
-        <BaseDialog v-model="resendOpen" card-style="min-width: 320px">
-                <q-card-section>
-                    <div class="text-h6">Resend verification</div>
-                </q-card-section>
+        <BaseDialog v-model="resendOpen" title="Resend verification" closable card-style="min-width: 320px">
                 <q-card-section>
                     <q-input
                         v-model="resendEmail"
@@ -53,7 +50,7 @@
                         autofocus
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Cancel" v-close-popup />
                     <BaseButton
                         variant="primary"
@@ -62,7 +59,7 @@
                         :disable="!resendEmail.trim() || resending"
                         @click="onResend"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </div>
 </template>

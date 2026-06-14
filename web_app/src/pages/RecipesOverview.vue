@@ -47,9 +47,8 @@
         </div>
 
         <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe surface. -->
-        <BaseDialog v-model="importOpen" card-style="min-width: 460px; max-width: 600px">
+        <BaseDialog v-model="importOpen" title="Import from URL" closable card-style="min-width: 460px; max-width: 600px">
             <q-card-section>
-                <div class="text-h6">Import from URL</div>
                 <div class="text-caption dora-text-muted q-mt-xs">
                     Works on recipe sites that publish
                     <strong>schema.org Recipe JSON-LD</strong> — the format
@@ -71,7 +70,7 @@
                     @keydown.enter.prevent="onConfirmImport"
                 />
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <BaseButton
                     variant="primary"
@@ -80,7 +79,7 @@
                     :disable="importUrl.trim().length === 0"
                     @click="onConfirmImport"
                 />
-            </q-card-actions>
+            </template>
         </BaseDialog>
 
         <!-- ── Filter bar ─ standardised via FilterBar (A4) ───────── -->

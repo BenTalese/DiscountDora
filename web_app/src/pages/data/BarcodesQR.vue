@@ -191,7 +191,7 @@
                         yet.
                     </div>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                     <q-btn
                         v-if="matchedItem"
@@ -202,7 +202,7 @@
                         color="primary"
                         @click="openDetail(matchedItem.stock_item_id)"
                     />
-                </q-card-actions>
+                </template>
             </BaseDialog>
         </template>
     </div>

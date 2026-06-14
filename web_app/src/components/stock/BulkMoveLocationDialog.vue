@@ -1,12 +1,11 @@
 <template>
     <BaseDialog
         :model-value="modelValue"
+        :title="`Move ${count} item${count === 1 ? '' : 's'}`"
+        closable
         card-style="width: 480px; max-width: 95vw"
         @update:model-value="onDialogUpdate"
     >
-            <q-card-section>
-                <div class="text-h6">Move {{ count }} item{{ count === 1 ? '' : 's' }}</div>
-            </q-card-section>
             <q-card-section>
                 <q-select
                     v-model="targetLocationId"
@@ -18,7 +17,7 @@
                     label="Destination location"
                 />
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <BaseButton
                     variant="primary"
@@ -26,7 +25,7 @@
                     :loading="busy"
                     @click="emit('confirm', targetLocationId)"
                 />
-            </q-card-actions>
+            </template>
     </BaseDialog>
 </template>
 

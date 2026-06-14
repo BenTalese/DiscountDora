@@ -117,22 +117,13 @@
         </div>
 
         <!-- Edit-items dialog ──────────────────────────────────────────── -->
-        <BaseDialog v-model="editorOpen" :maximized="$q.screen.lt.sm" card-style="min-width: 480px; max-width: 720px; width: 100%">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="col">
-                        <div class="text-h6">{{ editingDetail?.name ?? 'Loading…' }}</div>
-                        <div class="text-caption dora-text-muted">
-                            {{ editingDetail?.lines.length ?? 0 }} item{{
-                                editingDetail?.lines.length === 1 ? '' : 's'
-                            }}
-                        </div>
-                    </div>
-                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
-                </q-card-section>
-
-                <q-separator />
-
+        <BaseDialog v-model="editorOpen" :title="editingDetail?.name ?? 'Loading…'" closable :maximized="$q.screen.lt.sm" card-style="min-width: 480px; max-width: 720px; width: 100%">
                 <q-card-section v-if="editingDetail">
+                    <div class="text-caption dora-text-muted q-mb-md">
+                        {{ editingDetail.lines.length }} item{{
+                            editingDetail.lines.length === 1 ? '' : 's'
+                        }}
+                    </div>
                     <q-select
                         v-model="lineAddSelection"
                         use-input
@@ -219,11 +210,9 @@
                     </q-list>
                 </q-card-section>
 
-                <q-separator />
-
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Done" v-close-popup />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </q-page>
 </template>

@@ -207,12 +207,7 @@
         </q-page-sticky>
 
         <!-- ─── Comparison dialog ──────────────────────────────────────── -->
-        <BaseDialog v-model="compareOpen" card-style="min-width: 320px; max-width: 95vw">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Compare products</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="compareOpen" title="Compare products" closable card-style="min-width: 320px; max-width: 95vw">
                 <q-card-section>
                     <q-markup-table flat bordered dense>
                         <thead>
@@ -252,12 +247,7 @@
         </BaseDialog>
 
         <!-- ─── Link-to-stock-item dialog ──────────────────────────────── -->
-        <BaseDialog v-model="linkOpen" card-style="width: 460px; max-width: 95vw">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Link to a stock item</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="linkOpen" title="Link to a stock item" closable card-style="width: 460px; max-width: 95vw">
                 <q-card-section>
                     <div class="text-caption dora-text-muted q-mb-sm" v-if="linkTargetOffer">
                         {{ linkTargetOffer.name }}
@@ -272,10 +262,10 @@
                         @filter="filterStockItems"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Link" :loading="linking" :disable="!linkStockItemId" @click="confirmLink" />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </div>
 </template>

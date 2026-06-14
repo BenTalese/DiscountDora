@@ -185,13 +185,7 @@
         </div>
 
         <!-- ── Alerts modal ──────────────────────────────────────── -->
-        <BaseDialog v-model="alertsOpen" card-style="min-width: 420px">
-                <q-card-section class="row items-center">
-                    <div class="text-h6">Price alerts</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
-                <q-separator />
+        <BaseDialog v-model="alertsOpen" title="Price alerts" closable card-style="min-width: 420px">
                 <q-card-section v-if="alerts.length === 0" class="dora-text-secondary">
                     No active alerts yet.
                 </q-card-section>

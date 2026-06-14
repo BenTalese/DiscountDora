@@ -2271,36 +2271,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** extracting a single helper is one line of value today; both copies are 4-line, Type-C display logic, and the two dialogs *do* differ (Detail has the copy-unticked-to-new-list radio, ShopMode appends a one-line note). Worth a helper only if a third caller appears, or if the wording becomes prose worth localising.
 - **Recommended resolution:** opportunistic — when C-locale (FU-043) lands, fold both summaries through one localised builder. Otherwise leave alone.
 
-## [OPEN] FU-062 — Doc-graph: verify cited paths + original-spec Feature Board mappings
-- **Raised:** 2026-06-08 (doc-graph build)
-- **Type:** finding
-- **What:** `docs/00_DOC_GRAPH.md` was assembled with heavy use of Grep/Glob but no per-citation existence pass. Two specific gaps to close:
-  1. Walk every cited path in the graph and confirm the file exists at that path (catch typos and stale references introduced by the agent).
-  2. The original-spec `Feature Boards/*.md` mappings (one per surface) were inferred by filename-to-surface heuristic, not by opening each board. Open each Feature Board and confirm the surface mapping is right; correct any mis-mappings.
-- **Why deferred:** the build pass prioritised breadth (every prompt has a section) over per-citation verification; doing both in one pass would have blown the context budget.
-- **Recommended resolution:** opportunistic — fold into the first prompt run that actually consumes the graph (FU-063), or run as a standalone audit.
-
-## [OPEN] FU-063 — Doc-graph: first-use stress test
-- **Raised:** 2026-06-08 (doc-graph build)
-- **Type:** follow-up
-- **What:** The graph is unproven until a prompt is actually executed through it. The next time any `03_prompts/` prompt is run, do the full ritual: open the row, read every cited doc, then run. Record whether the cited docs surfaced anything the prompt body alone would have missed, and whether anything *should* have been cited but wasn't. Update the graph from what you learn.
-- **Why deferred:** can only be tested by running a prompt; no prompt run this session.
-- **Recommended resolution:** when next executing a `03_prompts/` prompt.
-
-## [OPEN] FU-064 — Doc-graph: maintenance cadence / regeneration prompt
-- **Raised:** 2026-06-08 (doc-graph build)
-- **Type:** deferred job
-- **What:** The graph will go stale as new proposals/investigations/FUs land and prompts complete. Decide: (a) add a small `docs/03_prompts/META_refresh_doc_graph.md` prompt that re-runs the cross-reference, OR (b) make graph-update part of every prompt's close-gate (cheaper, more drift-prone). User flagged this as an open question in the worklog.
-- **Why deferred:** needs user direction.
-- **Recommended resolution:** awaiting user decision; revisit after FU-063 confirms the graph is paying off.
-
-## [OPEN] FU-061 — Promote doc-graph to in-prompt blocks (Option B) if agents skip the ritual
-- **Raised:** 2026-06-08 (doc-graph build)
-- **Type:** deferred job
-- **What:** Today the per-prompt required-reading lives in one central file (`docs/00_DOC_GRAPH.md`). If sessions skip the ritual (don't open the graph), promote to Option B: edit every `03_prompts/*.md` to add a `## Required reading (do this first)` block above `## Impact & decisions`, copying its row from the graph. Higher maintenance, impossible to skip.
-- **Why deferred:** start with the lighter scheme; only escalate on evidence of drift.
-- **Recommended resolution:** when a worklog entry shows the agent didn't consult the graph (a clear miss), OR after 5–10 prompts have run and you want to audit consultation rate.
-
 ## [OPEN] FU-060 — Chunk 2 browser smoke: 2+-draft picker, shop-now routing, set-primary removal
 - **Raised:** 2026-06-07 (P6-01 Chunk 2 implementation)
 - **Type:** finding / browser verification
@@ -2431,45 +2401,6 @@ long session summary. Distinct from the other logs:
   `isMissingItem` (already server-boolean-based) instead of `recipe.value` — a
   small, contract-clean change.
 
-## [OPEN] FU-048 — e2e suite (`tests/e2e/dora_api/`) is pre-existing broken on this branch
-- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
-- **Type:** finding
-- **What:** Running `tests/e2e/dora_api/test_stock_level_router.py` /
-  `test_stock_item_router.py` yields dozens of failures/errors. They fail
-  **identically with my Chunk-1 changes stashed**, so they predate this work.
-  Sampled root cause: `test_stock_level_router.py:17` does
-  `requests.get('/api/stock-levels').json()[0]` and gets `KeyError: 0` — the
-  endpoint returns a paginated/enveloped shape now, but the tests still assert a
-  bare list. Likely a broad response-shape/auth drift the e2e tests were never
-  updated for. The server itself boots and returns 200s.
-- **Why deferred:** out of scope for Chunk 1 (the contract change is verified by
-  the new unit test + in-process smoke). Fixing the e2e harness is its own job and
-  touches many test files.
-- **Recommended resolution:** **later — dedicated "repair e2e suite" pass** (align
-  the e2e assertions with the current paginated response shape + auth/session
-  setup). Until then the e2e suite can't gate Phase 1 work; lean on unit tests +
-  in-process smokes.
-
-## [OPEN] FU-047 — `confirm_actions._resolve_level` still maps phrases → hardcoded level names
-- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
-- **Type:** finding
-- **What:** `dora_api/features/assistant/confirm_actions.py` `_LEVEL_ALIASES`
-  maps user phrasings ("out", "gone", "low", "plenty") to canonical level
-  **name** strings, then `_resolve_level` looks the level up by `name.eq(...)`
-  with a substring fallback. This is NLU input resolution (deliberately left out
-  of the Chunk-1 sequence migration), but it's still name-coupled and brittle:
-  the aliases use `"Sufficient"` / `"Well Stocked"` which do **not** exactly match
-  the seeded `"Sufficient Stock"` / `"Well-Stocked"`, so those alias paths fall
-  through to the substring fallback (latent — "ok"→"Sufficient" won't exact-match).
-- **Why deferred:** §3.1 scope is server-*derived* status facts, not free-text
-  user→level resolution; converting it cleanly means mapping phrase → `StockStatus`
-  → `level_for_status(...)`, a small assistant-side refactor better done with the
-  assistant work.
-- **Recommended resolution:** later during the assistant/SLM work (or
-  opportunistic) — re-key `_LEVEL_ALIASES` to `StockStatus` and resolve via
-  `level_for_status`, fixing the `"Sufficient"`/`"Well Stocked"` mismatch at the
-  same time.
-
 ## [OPEN] FU-046 — A1 theme chunks D–F regressed since "done"; CHANGELOG over-claims
 - **Raised:** 2026-06-06 (A1 STEP 2 Chunk D verify/finish)
 - **Type:** finding
@@ -2578,23 +2509,6 @@ long session summary. Distinct from the other logs:
   and the seed checkboxes are enabled. If it DOES appear, find what's seeding user
   groups/locations and fix. Folded into the C-5 §2.6 design either way.
 
-## [OPEN] FU-037 — `.secret_key` hardcoded to `./data/`, ignores DORA_DATA_DIR
-- **Raised:** 2026-06-06 (INV-3 re-verification)
-- **Type:** finding (latent bug)
-- **What:** `dora_api/app.py:23` resolves the session-secret file as
-  `Path('data') / '.secret_key'` — a literal CWD-relative path, NOT
-  `DORA_CONFIG.get_data_dir()`. Everything else (DB, config, uploads, logs)
-  honours `DORA_DATA_DIR`. So on the desktop app (data dir =
-  `%LOCALAPPDATA%\BenTalese\Dora`) the secret key instead writes to `./data/`
-  relative to the launch CWD.
-- **Why it matters:** the secret escapes the configured/backed-up data dir; it's
-  CWD-dependent, so launching from a different folder regenerates it and silently
-  invalidates all existing session cookies (everyone logged out). Found via
-  static read; not yet observed at runtime.
-- **Recommended resolution:** now/soon — change to resolve via
-  `DORA_CONFIG.get_data_dir() / '.secret_key'`. Low-risk one-liner. Confirm in
-  browser/desktop that sessions persist across a restart from a different CWD.
-
 ## [OPEN] FU-034 — Wire up `StockItemSubstitute.notes` (substitution notes)
 - **Raised:** 2026-06-06 (INV-1)
 - **Type:** deferred job
@@ -2659,47 +2573,6 @@ long session summary. Distinct from the other logs:
      row (transaction visibility / date filter).
   3. With that one bit of evidence the root cause collapses to either
      a Vue reactivity patch or a backend date / commit-visibility fix.
-
-## [OPEN] FU-031 — B9.3: stale "Recipes" labels after A8 cookbook rename
-- **Raised:** 2026-06-06 (B9.3 sweep)
-- **Type:** leftover
-- **What:** A8 renamed Recipes → Cookbook (`/cookbook`; `/recipes`
-  redirects). ~~The command palette still says "Go to Recipes"~~
-  (palette retired 2026-06-12 — see FU-029 resolution; that
-  source of the bug is mooted). The remaining sweep concern is
-  **other static lists** — tour cards, help text, onboarding
-  copy — that may still say "Recipes" where they should say
-  "Cookbook". Worth a one-shot grep for `Recipes` in the SPA
-  text + a re-check.
-- **Recommended resolution:** opportunistic — fold into the
-  next polish pass.
-
-## [OPEN] FU-027 — B9.7: log-rotation model decision (timed vs size)
-- **Raised:** 2026-06-06 (B9.7)
-- **Type:** open decision
-- **What:** `dora_api/infrastructure/logging_setup.py:87` wires
-  `RotatingFileHandler` size-based at 10MB × 5 backups. The current
-  ~46k-line file is well below the 10MB trigger, so it has simply not
-  rotated yet. The user's reported symptom — "logs span the wrong date
-  range" — implies an expectation of *time-based* rotation (e.g. one
-  file per day).
-- **Decision needed:** keep size-based (and just trust the threshold), or
-  switch to `TimedRotatingFileHandler` (and pick `when` — typically
-  'midnight' for daily). Could also go hybrid (whichever fires first)
-  but Python's stdlib doesn't ship that out of the box.
-- **Recommended resolution:** decide before any other log-related work
-  (INV touches `.local` folder layout — natural pair).
-- **State note:** 2026-06-06 (INV-3) — root cause confirmed and a concrete
-  recommendation written in `docs/05_investigations/LOGGING_AND_DATA_LAYOUT.md`
-  (switch to `TimedRotatingFileHandler`, midnight, ~14 backups; keep `data/` +
-  `cache/` split; no `.local` folder exists). Still `[OPEN]` pending the
-  user's go-ahead to implement.
-- **State note:** 2026-06-06 (post re-verification) — user asked whether the
-  folder layout was actually verified; it was NOT originally (code-resolved paths
-  described as if observed). Re-read the resolver directly: layout is less clean
-  than first stated — `.secret_key` hardcoded escape (FU-037) + dev-vs-desktop
-  log-nesting difference. On-disk confirmation still pending (app never run on
-  this checkout); checklist added to the memo.
 
 ## [OPEN] FU-025 — A6 text scale: many surfaces still don't respond (likely needs its own sweep)
 - **Raised:** 2026-06-05 (A6); user-verified gap 2026-06-12
@@ -2798,51 +2671,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fold into a Wave-A or polish
   pass once one obvious symptom shows up; not worth a dedicated session.
 
-## [OPEN] FU-015 — B5: Onboarding tour "Alerts" card points at stock, not /alerts
-- **Raised:** 2026-06-05 (B5)
-- **Type:** finding
-- **What:** `WelcomeWizard.vue` `TOUR_CARDS` "Alerts — Dora pings you" still
-  routes to `/stock?attention=true` (its description even says "deep-link
-  into Stock"). Now that `/alerts` exists as a real page, the tour card
-  could go there instead — or keep both as different teaching moments
-  (Stock + filter vs the dedicated list).
-- **Why deferred:** out of B5's bug-fix scope; user-style decision.
-- **Recommended resolution:** opportunistic, or fold into the C-wave
-  alerts control centre brief.
-
-## [OPEN] FU-014 — Product image round-trip is broken (read side decodes binary as utf-8)
-- **Raised:** 2026-06-05 (B1); re-diagnosed 2026-06-12 after user repro
-- **Type:** finding (now: active bug being fixed)
-- **What (revised diagnosis):** user saved a product from search → image rendered
-  as squished text (the product name) inside the 40px avatar slot. Cause is **on
-  the read side, not create**. Pipeline:
-  1. `merchant_api` already downloads + base64-encodes the merchant image
-     (`product_image_provider.py:53`); `offer.image` reaching the frontend is
-     raw base64 (no data-URL prefix).
-  2. Frontend POSTs that base64 to `/products`; backend's `Base64Bytes` field
-     decodes it back into raw image bytes — **correct so far**.
-  3. DB stores raw PNG/JPEG bytes — **correct**.
-  4. `get_products.py:56` does `product.image.decode('utf-8', 'ignore')` on
-     those raw image bytes. UTF-8 ignores nearly everything in binary → garbage
-     tiny string returned as `image: str | None`.
-  5. Frontend renders `<img :src="garbage_string">` → broken image → browser
-     falls back to `alt=product.name` text squished into the avatar.
-- **Fix in flight (2026-06-12):** adopt the stock-item / recipe pattern.
-  - Backend: `CreateProductRequest.image` → `str | None` (data URL string,
-    `max_length=6_000_000`) matching `CreateStockItemRequest`. Encode utf-8 →
-    bytes in the handler.
-  - Backend: new `GET /products/<id>/image` route mirroring
-    `get_stock_item_image.py` (data-URL decode + raw bytes response).
-  - Backend: `GetProductsResponse.image` → `has_image: bool` (no inline bytes
-    in list payload).
-  - Backend: one-shot null-out of existing garbage rows where
-    `image` doesn't start with `data:`.
-  - Frontend: `Product` model drops `image`, gains `has_image`. `MyProductsPage`
-    + `ProductChip` use `/api/products/<id>/image`. `ProductSearch.ensureSaved`
-    wraps `offer.image` (raw base64) as a data URL with sniffed mime
-    (PNG/JPEG/WebP magic bytes) before POSTing.
-- **Recommended resolution:** in progress now (2026-06-12).
-
 ## [OPEN] FU-013 — A4 leftover: "consistent multi-select control" only partial
 - **Raised:** 2026-06-05 (A4)
 - **Type:** leftover
@@ -2901,28 +2729,6 @@ long session summary. Distinct from the other logs:
   polish)** or just before **Phase 4 (commercialize)**, once the app is feature-
   complete enough to eyeball holistically. Requires the app actually running
   (deps installed) and ideally a side-by-side across all themes.
-
-## [OPEN] FU-009 — Decide fate of the 3 specialised overlays vs BaseDialog
-- **Raised:** 2026-06-05 (A3)
-- **Type:** finding
-- **What:** `AlertsBell` (seamless drawer), `CommandPalette` (search overlay), and
-  `ScanOverlay` (persistent camera) were intentionally left on raw `q-dialog` —
-  they aren't standard card modals.
-- **Why deferred:** folding them into BaseDialog adds no value and risks their
-  custom layout/positioning.
-- **Recommended resolution:** now (quick yes/no from user) — otherwise leave as the
-  documented permanent exception.
-
-## [OPEN] FU-008 — Unify dialog chrome via BaseDialog `title`/`#actions` slots
-- **Raised:** 2026-06-05 (A3)
-- **Type:** deferred job
-- **What:** A3 migrated dialogs as a shell transform; each still carries its own
-  header/footer markup. BaseDialog already exposes `title`/`closable`/`#actions`
-  to standardise chrome.
-- **Why deferred:** rewriting ~28 heterogeneous dialogs' internals is large and
-  risky for a cosmetic-consistency gain.
-- **Recommended resolution:** opportunistic — convert a dialog's chrome whenever
-  it's being touched for another reason; no dedicated pass needed.
 
 ## [OPEN] FU-006 — Migrate the remaining ~289 `q-btn` to BaseButton
 - **Raised:** 2026-06-04 (A2 Phase 2); rescoped 2026-06-05

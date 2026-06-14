@@ -102,9 +102,8 @@
         </div>
 
         <!-- ── Level picker dialog ────────────────────────────────── -->
-        <BaseDialog v-model="changeOpen" card-style="min-width: 280px">
+        <BaseDialog v-model="changeOpen" title="Set level" closable card-style="min-width: 280px">
                 <q-card-section>
-                    <div class="text-h6 q-mb-sm">Set level</div>
                     <q-list>
                         <q-item
                             v-for="level in stockLevels"

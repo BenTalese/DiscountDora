@@ -1,11 +1,9 @@
 <template>
-    <BaseDialog v-model="cheatsheetOpen" card-style="width: 560px; max-width: 95vw">
-            <q-card-section class="row items-center q-pb-none">
+    <BaseDialog v-model="cheatsheetOpen" closable card-style="width: 560px; max-width: 95vw">
+            <template #header>
                 <q-icon :name="ICONS.keyboard" size="24px" class="q-mr-sm" />
-                <div class="text-h6">Keyboard shortcuts</div>
-                <q-space />
-                <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-            </q-card-section>
+                <div class="text-h6 col">Keyboard shortcuts</div>
+            </template>
 
             <q-card-section style="max-height: 70vh; overflow-y: auto">
                 <div v-if="shortcuts.length === 0" class="dora-text-muted">

@@ -44,13 +44,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # True has been deprecated
 # DORA_SECRET_KEY in the environment for prod; the dev fallback writes a
 # stable random key to disk so sessions survive restarts. Never commit the
 # generated file — it's already covered by the .data folder gitignore.
-_SecretKeyFile = Path('data') / '.secret_key'
+_SecretKeyFile = config_manager.get_data_dir() / '.secret_key'
 _SecretKeyFromEnv = os.environ.get('DORA_SECRET_KEY')
 if _SecretKeyFromEnv:
     app.config['SECRET_KEY'] = _SecretKeyFromEnv
 else:
     if not _SecretKeyFile.exists():
-        Path('data').mkdir(exist_ok=True)
+        _SecretKeyFile.parent.mkdir(parents=True, exist_ok=True)
         _SecretKeyFile.write_text(secrets.token_hex(32))
     app.config['SECRET_KEY'] = _SecretKeyFile.read_text().strip()
 
@@ -64,7 +64,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('DORA_SECURE_COOKIES', '').lower() in ('1', 'true', 'yes')
 
 db = SQLAlchemy()
-Path('data').mkdir(exist_ok=True)
+config_manager.get_data_dir().mkdir(parents=True, exist_ok=True)
 db.init_app(app)
 
 

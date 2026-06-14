@@ -1,7 +1,6 @@
 <template>
-    <BaseDialog v-model="open" card-style="min-width: 420px; max-width: 560px">
+    <BaseDialog v-model="open" title="Add ingredients to a list" closable card-style="min-width: 420px; max-width: 560px">
         <q-card-section>
-            <div class="text-h6">Add ingredients to a list</div>
             <div class="text-caption dora-text-muted">
                 {{ recipe?.name ?? 'Recipe' }}
             </div>
@@ -116,7 +115,7 @@
             </q-list>
         </q-card-section>
 
-        <q-card-actions align="right">
+        <template #actions>
             <q-btn flat no-caps label="Cancel" v-close-popup />
             <q-btn
                 unelevated
@@ -127,7 +126,7 @@
                 :disable="checkedCount === 0 || !targetListId"
                 @click="onConfirm"
             />
-        </q-card-actions>
+        </template>
     </BaseDialog>
 </template>
 

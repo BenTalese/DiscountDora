@@ -419,7 +419,7 @@
             icon: ICONS.shopping_cart,
         },
         {
-            path: '/stock?attention=true',
+            path: '/alerts',
             title: 'Alerts — Dora pings you',
             shortTitle: 'Alerts',
             description:

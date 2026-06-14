@@ -1,11 +1,5 @@
 <template>
-    <BaseDialog v-model="open" position="bottom" card-style="width: 520px; max-width: 96vw" @cancel="onHide">
-            <q-card-section class="row items-center q-pb-none">
-                <div class="text-h6">Quick add to list</div>
-                <q-space />
-                <q-btn flat round dense :icon="ICONS.close" v-close-popup />
-            </q-card-section>
-
+    <BaseDialog v-model="open" title="Quick add to list" closable position="bottom" card-style="width: 520px; max-width: 96vw" @cancel="onHide">
             <q-card-section>
                 <!-- Target list -->
                 <q-select
@@ -113,7 +107,7 @@
                 </template>
             </q-card-section>
 
-            <q-card-actions v-if="selectedItem" align="right">
+            <template v-if="selectedItem" #actions>
                 <q-btn flat no-caps label="Cancel" v-close-popup />
                 <q-btn
                     unelevated
@@ -124,7 +118,7 @@
                     :disable="!targetListId"
                     @click="confirmAdd"
                 />
-            </q-card-actions>
+            </template>
     </BaseDialog>
 </template>
 

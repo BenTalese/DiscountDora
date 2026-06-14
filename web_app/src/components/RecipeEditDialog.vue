@@ -1,13 +1,11 @@
 <template>
     <BaseDialog
         :model-value="modelValue"
+        :title="recipe ? 'Edit Recipe' : 'New Recipe'"
+        closable
         card-style="width: 800px; max-width: 95vw"
         @update:model-value="$emit('update:modelValue', $event)"
     >
-            <q-card-section>
-                <div class="text-h5">{{ recipe ? 'Edit Recipe' : 'New Recipe' }}</div>
-            </q-card-section>
-
             <q-card-section>
                 <q-form @submit.prevent="onSubmit" class="q-gutter-md">
                     <FormErrorSummary :message="generalError" />
@@ -221,12 +219,12 @@
                     </div>
                     <BaseButton variant="ghost" :icon="ICONS.add" label="Add ingredient" @click="addIngredient" />
 
-                    <q-card-actions align="right">
-                        <BaseButton variant="ghost" label="Cancel" @click="$emit('update:modelValue', false)" />
-                        <BaseButton type="submit" variant="primary" label="Save" :loading="saving" />
-                    </q-card-actions>
                 </q-form>
             </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" @click="$emit('update:modelValue', false)" />
+                <BaseButton variant="primary" label="Save" :loading="saving" @click="onSubmit" />
+            </template>
     </BaseDialog>
 </template>
 

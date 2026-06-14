@@ -9,7 +9,10 @@ Formatter:
 
 Handlers:
     stdout         — for docker-style log aggregation.
-    RotatingFile   — ${log_dir}/<service>.log, 10 MB × 5 backups.
+    TimedRotatingFile — ${log_dir}/<service>.log, rotates at local midnight,
+                        14 daily backups kept (<service>.log.YYYY-MM-DD).
+                        One file per date — current file only holds today's
+                        entries. (FU-027)
 
 Level:
     INFO by default, DEBUG when `debug=True` is passed (typically when
@@ -26,7 +29,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from dora_api.infrastructure.log_context import LogContextFilter
@@ -37,9 +40,8 @@ _FORMAT = (
     "[req=%(request_id)s] [user=%(user_id)s] %(message)s"
 )
 
-# 10 MB per file, 5 files = 50 MB historic per service.
-_FILE_MAX_BYTES = 10 * 1024 * 1024
-_FILE_BACKUP_COUNT = 5
+# One file per day; keep ~2 weeks of history.
+_FILE_BACKUP_COUNT = 14
 
 
 def configure_logging(
@@ -84,12 +86,15 @@ def configure_logging(
     stream.addFilter(context_filter)
     root.addHandler(stream)
 
-    rotating = RotatingFileHandler(
+    rotating = TimedRotatingFileHandler(
         log_dir_path / f"{service_name}.log",
-        maxBytes=_FILE_MAX_BYTES,
+        when="midnight",
         backupCount=_FILE_BACKUP_COUNT,
         encoding="utf-8",
     )
+    # Rotated files become <service>.log.YYYY-MM-DD so the active file
+    # only ever contains entries from the current date (FU-027).
+    rotating.suffix = "%Y-%m-%d"
     rotating.setFormatter(formatter)
     rotating.addFilter(context_filter)
     root.addHandler(rotating)

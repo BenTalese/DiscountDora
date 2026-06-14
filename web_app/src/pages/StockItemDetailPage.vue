@@ -68,16 +68,15 @@
             </div>
 
             <!-- ── QR dialog ────────────────────────────────────────── -->
-            <BaseDialog v-model="showQrOpen" card-style="min-width: 280px; max-width: 400px">
+            <BaseDialog v-model="showQrOpen" :title="detail.name" closable card-style="min-width: 280px; max-width: 400px">
                     <q-card-section class="text-center">
-                        <div class="text-h6 q-mb-sm">{{ detail.name }}</div>
                         <img
                             :src="qrSrc"
                             alt="QR code"
                             style="width: 256px; height: 256px; max-width: 100%;"
                         />
                     </q-card-section>
-                    <q-card-actions align="right">
+                    <template #actions>
                         <BaseButton variant="ghost" label="Close" v-close-popup />
                         <BaseButton
                             variant="primary"
@@ -85,7 +84,7 @@
                             label="Print one"
                             @click="openSingleQrSheet"
                         />
-                    </q-card-actions>
+                    </template>
             </BaseDialog>
 
             <q-tabs v-model="tab" dense align="left" class="dora-text-secondary q-mb-sm" no-caps>
@@ -450,25 +449,19 @@
         </FadeTransition>
 
         <!-- ── Set-expiry dialog ──────────────────────────────────────── -->
-        <BaseDialog v-model="expiryDialogOpen" card-style="min-width: 320px">
-                <q-card-section class="text-h6">Set expiry</q-card-section>
+        <BaseDialog v-model="expiryDialogOpen" title="Set expiry" closable card-style="min-width: 320px">
                 <q-card-section>
                     <q-date v-model="expiryDraft" mask="YYYY-MM-DD" />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="danger-ghost" label="Clear" @click="onSetExpiry(null)" />
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- ── Link-product picker dialog ─────────────────────────────── -->
-        <BaseDialog v-model="pickerOpen" card-style="width: 640px; max-width: 95vw">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Link a product</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="pickerOpen" title="Link a product" closable card-style="width: 640px; max-width: 95vw">
                 <q-card-section>
                     <q-input v-model="pickerSearch" outlined dense debounce="150" placeholder="Search saved products" clearable>
                         <template #prepend><q-icon :name="ICONS.search" /></template>
@@ -497,12 +490,7 @@
         </BaseDialog>
 
         <!-- ── Add-substitute picker dialog ───────────────────────────── -->
-        <BaseDialog v-model="subPickerOpen" card-style="width: 560px; max-width: 95vw">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Add a substitute</div>
-                    <q-space />
-                    <q-btn flat dense round :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="subPickerOpen" title="Add a substitute" closable card-style="width: 560px; max-width: 95vw">
                 <q-card-section>
                     <q-input v-model="subSearch" outlined dense autofocus debounce="150" placeholder="Search stock items" clearable>
                         <template #prepend><q-icon :name="ICONS.search" /></template>

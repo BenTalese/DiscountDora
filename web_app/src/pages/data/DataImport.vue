@@ -249,7 +249,7 @@
                         </q-item>
                     </q-virtual-scroll>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn
                         v-if="errorRows.length"
                         flat
@@ -258,7 +258,7 @@
                         @click="downloadErrorRows"
                     />
                     <BaseButton variant="ghost" label="Close" @click="onResultClose" />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </div>
 </template>

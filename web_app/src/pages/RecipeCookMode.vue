@@ -360,9 +360,7 @@
         </template>
 
         <!-- B8 — cook-session substitute picker (temporary; never edits recipe) -->
-        <BaseDialog v-model="swapPickerOpen" card-style="min-width: 360px; max-width: 520px">
-            <q-card-section class="text-h6">Substitute for {{ swapForName }}</q-card-section>
-            <q-separator />
+        <BaseDialog v-model="swapPickerOpen" :title="`Substitute for ${swapForName}`" closable card-style="min-width: 360px; max-width: 520px">
             <q-card-section v-if="loadingSwapOptions" class="text-center q-py-lg">
                 <AppSpinner size="32px" />
             </q-card-section>
@@ -387,9 +385,9 @@
                     </q-chip>
                 </div>
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Close" v-close-popup />
-            </q-card-actions>
+            </template>
         </BaseDialog>
 
         <!-- C-3 Chunk 1 — finish-flow rewrite. Per-ingredient level control
@@ -398,8 +396,7 @@
              common case); click-out cancels (BaseDialog v-model leaves the
              state untouched until "Done"). Celebration message lands as a
              toast after success. -->
-        <BaseDialog v-model="finishDialogOpen" card-style="min-width: 360px; max-width: 720px">
-            <q-card-section class="text-h6">Finished cooking?</q-card-section>
+        <BaseDialog v-model="finishDialogOpen" title="Finished cooking?" closable card-style="min-width: 360px; max-width: 720px">
             <q-card-section v-if="finishRows.length === 0" class="dora-text-muted">
                 This recipe has no ingredients to adjust — tap "Done" to log the meals.
             </q-card-section>
@@ -475,10 +472,10 @@
                     hint="Added to this recipe's pool. Leave at 0 if you just ate it."
                 />
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" @click="finishDialogOpen = false" />
                 <BaseButton variant="primary" label="Done" :loading="finishing" @click="confirmFinish" />
-            </q-card-actions>
+            </template>
         </BaseDialog>
     </div>
 </template>

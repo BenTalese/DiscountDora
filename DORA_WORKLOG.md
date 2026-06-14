@@ -172,6 +172,118 @@ PR.
 
 ---
 
+## 2026-06-14 — FU-008/9/14/15/27/31/37/47/48/61-64 — followups sweep
+**Status:** complete. `vue-tsc --noEmit` clean, backend unit suite 49/49.
+
+**What:** User-directed sweep through a batch of open follow-ups, mixing
+real fixes with "this is already done — verify and close" passes. Per-FU
+breakdown:
+
+- **FU-008 — BaseDialog chrome unification (full sweep).** All 26
+  `BaseDialog` usages were carrying their own `<q-card-section>` title
+  block + `<q-card-actions align="right">` footer. Migrated every one to
+  the BaseDialog `title` prop (with `closable` where there was a hand-rolled
+  close button) and `#actions` slot. `ShortcutsCheatsheet` uses the
+  `#header` slot because its title is icon + text. `AuditLogSettings` keeps
+  its `q-toolbar` header (maximized-dialog convention) but switched its
+  footer to `#actions`. Dialogs whose footer used to live inside a
+  `<q-form>` (`MealPlanEditDialog`, `CreateStockItemDialog`,
+  `RecipeEditDialog`) had their submit button rebound from form-submit to
+  an explicit `@click="onSubmit"` so the action still fires after the
+  button moves outside the form. Files touched:
+  `MealPlanEditDialog.vue`, `QuickAddSheet.vue`,
+  `stock/CreateStockItemDialog.vue`,
+  `recipes/RecipeIngredientPickerDialog.vue`, `RecipeEditDialog.vue`,
+  `stock/BulkMoveLocationDialog.vue`, `dialogs/NewListDialog.vue`,
+  `ShortcutsCheatsheet.vue`, `PriceHistoryPage.vue`,
+  `RecipeDetailPage.vue` (×4 dialogs), `RecipesOverview.vue`,
+  `MyProductsPage.vue` (×3 dialogs), `ProductSearch.vue` (×2 dialogs),
+  `data/BarcodesQR.vue`, `data/DataImport.vue`, `StocktakeRunner.vue`,
+  `WastePage.vue`, `ShoppingListDetail.vue` (×2 dialogs),
+  `settings/UsersAdminSettings.vue` (×2 dialogs), `RecipeCookMode.vue`
+  (×2 dialogs), `MealPlansOverview.vue` (×2 dialogs),
+  `VerifyEmailPage.vue`, `ShoppingListTemplates.vue`,
+  `StockItemDetailPage.vue` (×4 dialogs), `settings/AuditLogSettings.vue`,
+  `data/BackupRestore.vue`.
+
+- **FU-009 — three specialised overlays** (AlertsBell drawer,
+  CommandPalette, ScanOverlay) confirmed as the documented permanent
+  exception. CommandPalette was retired separately on 2026-06-12 anyway,
+  so only AlertsBell + ScanOverlay remain as live carve-outs.
+
+- **FU-014 — product-image round-trip.** Static verification: the data-URL
+  pipeline + `has_image` + `GET /api/products/<id>/image` route are all in
+  place (`get_products.py`, `get_product_image.py`, `create_product.py`),
+  with FU-014 explicitly referenced in code comments. The squished-text-in-
+  avatar bug is fixed end-to-end.
+
+- **FU-015 — onboarding tour Alerts card.** `WelcomeWizard.vue:422`
+  re-pointed from `/stock?attention=true` to `/alerts` (the real dedicated
+  page; route `routes.ts:76`).
+
+- **FU-027 — log rotation.** Switched
+  `dora_api/infrastructure/logging_setup.py` to `TimedRotatingFileHandler`,
+  `when="midnight"`, `backupCount=14`, `suffix="%Y-%m-%d"`. Active log only
+  ever contains the current date.
+
+- **FU-031 — stale "Recipes" labels post-A8 rename.** Grep sweep across the
+  SPA returned four candidates: `DashboardPage.vue:638` Recipes-card title,
+  `DashboardPage.vue:814` card-visibility config label, `HelpPage.vue:251`
+  section title "Recipes & meals", `BackupRestore.vue:402` data-type label.
+  Per the user's framing ("the page is the cookbook, that has recipes in
+  it"), all four refer to recipes-as-content rather than to the page itself
+  — no edits needed.
+
+- **FU-037 — `.secret_key` escape.** `dora_api/app.py:47` switched from
+  `Path('data') / '.secret_key'` to
+  `config_manager.get_data_dir() / '.secret_key'`, with
+  `mkdir(parents=True, exist_ok=True)` on the parent. The dev-mode
+  SQLAlchemy `data/` mkdir at line 68 was rerouted through `get_data_dir()`
+  too for consistency. Whole app now honours `DORA_DATA_DIR`. Desktop
+  smoke test (sessions survive a CWD change) recommended but not in scope.
+
+- **FU-047 — `_LEVEL_ALIASES`.** Static verification: the refactor already
+  shipped — `confirm_actions.py` imports `StockStatus` + `level_for_status`,
+  `_LEVEL_ALIASES` is keyed to `StockStatus` enum members (not name
+  strings), and `_resolve_level` resolves via `level_for_status(...)`.
+
+- **FU-048 — e2e suite.** Resolved per user. The pre-existing-broken e2e
+  suite was repaired in commit `8793648 Fix e2e tests`.
+
+- **FU-061/062/063/064 — doc graph maintenance** all resolved per user
+  ("feels fine"). Keep the centralised graph file, no per-prompt inlined
+  blocks, no per-citation existence audit, no first-use stress test, no
+  refresh-prompt cadence.
+
+**Charter/standards check:** Clean.
+- R-001 (componentisation): all dialog changes route through BaseDialog
+  rather than fresh ad-hoc chrome. ✓
+- R-002 (theme tokens): no palette literals introduced. ✓
+- R-003 (state ownership): no rule changes. ✓
+- R-005 (Postgres/SQLite portability): n/a (no schema work). ✓
+- R-007 (scope discipline): FU-008 *is* a "broad refactor across the app",
+  but explicitly user-directed for this session (full sweep recommended
+  was the chosen option); not creeping outside the FU. ✓
+- R-008 (safe mutations): backend changes are read-path or path-resolution
+  only; no destructive migrations. ✓
+
+No ADR added.
+
+**Open loops:**
+- **FU-008 browser verification.** Touched 26 dialog files; static checks
+  clean (`vue-tsc --noEmit` + lint baseline unchanged) but the variety of
+  dialog shapes means an in-browser pass over the matrix is warranted.
+- **FU-037 desktop CWD smoke test.** Confirmed correct statically; the
+  desktop "launch from a different folder → sessions survive" check still
+  needs a real desktop run.
+
+**Next up:** browser-verify FU-088 (cookbook revision Chunk C end-to-end)
+**plus** spot-check the touched dialogs from FU-008's sweep, especially
+the form-submit-rebound ones (`MealPlanEditDialog`, `CreateStockItemDialog`,
+`RecipeEditDialog`).
+
+---
+
 ## 2026-06-14 — Cookbook card revision Chunk C — optional ingredients
 **Status:** complete (vue-tsc clean; full unit suite 299 passed). Session
 was ended abruptly mid-Chunk-C and resumed cautiously — see "Resumption

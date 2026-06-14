@@ -122,12 +122,7 @@
         </q-inner-loading>
 
         <!-- Edit dialog ─────────────────────────────────────────── -->
-        <BaseDialog v-model="editOpen" card-style="min-width: 320px; max-width: 480px">
-                <q-card-section class="row items-center q-pb-none">
-                    <div class="text-h6">Edit {{ editingUser?.username }}</div>
-                    <q-space />
-                    <BaseButton variant="icon" :icon="ICONS.close" v-close-popup />
-                </q-card-section>
+        <BaseDialog v-model="editOpen" :title="`Edit ${editingUser?.username ?? ''}`" closable card-style="min-width: 320px; max-width: 480px">
                 <q-card-section>
                     <q-input
                         v-model="editingUsername"
@@ -144,7 +139,7 @@
                         placeholder="No email on file"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Cancel" v-close-popup />
                     <q-btn
                         color="primary"
@@ -154,13 +149,12 @@
                         :disable="!editingUsername.trim()"
                         @click="onSaveEdit"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- Password-reset result dialog ────────────────────────── -->
-        <BaseDialog v-model="resetResultOpen" card-style="min-width: 320px">
+        <BaseDialog v-model="resetResultOpen" title="Password reset" closable card-style="min-width: 320px">
                 <q-card-section>
-                    <div class="text-h6">Password reset</div>
                     <div class="text-caption dora-text-muted">
                         Copy this and pass it to {{ resetTargetName }} out-of-band.
                         It's shown once.
@@ -185,9 +179,9 @@
                         </template>
                     </q-input>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Done" v-close-popup />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </q-card>
 </template>

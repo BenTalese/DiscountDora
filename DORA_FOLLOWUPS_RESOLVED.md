@@ -10,6 +10,142 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-008 — Unify dialog chrome via BaseDialog `title`/`#actions` slots
+- **Raised:** 2026-06-05 (A3)
+- **Type:** deferred job
+- **What:** A3 migrated dialogs as a shell transform; each still carried its own
+  header/footer markup. BaseDialog already exposes `title`/`closable`/`#actions`
+  to standardise chrome.
+- **State note:** 2026-06-14 — **RESOLVED.** Full sweep across all 26 BaseDialog
+  files. Replaced bespoke `text-h6` header card-sections with the BaseDialog
+  `title` prop (or `#header` slot for the icon+title case in `ShortcutsCheatsheet`),
+  added `closable` where the original had a hand-rolled close button, and moved
+  every `<q-card-actions align="right">` block into the BaseDialog `#actions`
+  slot. Form-submit buttons in dialogs whose footers moved outside the `<q-form>`
+  were rebound to `@click="onSubmit"` so the submit path still fires. Captions /
+  sub-headers that lived next to the title were preserved as body
+  `<q-card-section>` content. `vue-tsc --noEmit` clean; backend unit suite 49/49.
+  Browser verification still recommended across the dialog matrix.
+
+## [RESOLVED] FU-009 — Decide fate of the 3 specialised overlays vs BaseDialog
+- **Raised:** 2026-06-05 (A3)
+- **Type:** finding
+- **What:** `AlertsBell` (seamless drawer), `CommandPalette` (search overlay),
+  and `ScanOverlay` (persistent camera) were intentionally left on raw
+  `q-dialog` — they aren't standard card modals.
+- **State note:** 2026-06-14 — **RESOLVED.** User confirmed leaving as the
+  documented permanent exception. (Command palette was retired separately on
+  2026-06-12 anyway; only AlertsBell + ScanOverlay remain as live carve-outs,
+  both intentional.)
+
+## [RESOLVED] FU-014 — Product image round-trip is broken (read side decodes binary as utf-8)
+- **Raised:** 2026-06-05 (B1); re-diagnosed 2026-06-12 after user repro
+- **Type:** finding (now: active bug being fixed)
+- **What:** `get_products.py:56` did `product.image.decode('utf-8', 'ignore')`
+  on raw image bytes, returning garbage. Fix: adopt the stock-item/recipe data-URL
+  pattern + `has_image` list payload + a dedicated `GET /products/<id>/image`
+  route.
+- **State note:** 2026-06-14 — **RESOLVED.** Verified statically: the fix
+  shipped in full — `get_products.py` now exposes `has_image: bool` (stamped
+  in bulk via `stamp_has_image` referencing FU-014 in code comments),
+  `get_product_image.py` provides the dedicated `GET /api/products/<id>/image`
+  endpoint, and `create_product.py` accepts the data-URL string and decodes it
+  to UTF-8 bytes on the entity. Frontend `MyProductsPage` / `ProductChip` /
+  `ProductSearch.ensureSaved` migration also landed.
+
+## [RESOLVED] FU-015 — B5: Onboarding tour "Alerts" card points at stock, not /alerts
+- **Raised:** 2026-06-05 (B5)
+- **Type:** finding
+- **What:** `WelcomeWizard.vue` `TOUR_CARDS` "Alerts — Dora pings you" routed
+  to `/stock?attention=true` instead of the real `/alerts` page.
+- **State note:** 2026-06-14 — **RESOLVED.** Repointed the tour card to
+  `/alerts` in `web_app/src/pages/onboarding/WelcomeWizard.vue:422`. The
+  `/alerts` route exists (`router/routes.ts:76`) and `AlertsPage.vue` is the
+  real destination.
+
+## [RESOLVED] FU-027 — B9.7: log-rotation model decision (timed vs size)
+- **Raised:** 2026-06-06 (B9.7)
+- **Type:** open decision
+- **What:** Size-based `RotatingFileHandler` (10MB × 5) — user wanted the active
+  log file to contain only the current date's entries.
+- **State note:** 2026-06-14 — **RESOLVED.** Switched
+  `dora_api/infrastructure/logging_setup.py` to `TimedRotatingFileHandler`
+  with `when="midnight"`, `backupCount=14`, and `suffix="%Y-%m-%d"`. The
+  active `<service>.log` now only ever contains the current date; rotated
+  files are kept as `<service>.log.YYYY-MM-DD` for ~2 weeks. Backend unit
+  suite passes (49/49).
+
+## [RESOLVED] FU-031 — B9.3: stale "Recipes" labels after A8 cookbook rename
+- **Raised:** 2026-06-06 (B9.3 sweep)
+- **Type:** leftover
+- **What:** Possible stale "Recipes" labels in tour cards / help / static
+  lists after A8 renamed the page to Cookbook.
+- **State note:** 2026-06-14 — **RESOLVED** after a one-shot grep. Only four
+  candidates surfaced and all read logically per the user's framing ("the
+  page is the cookbook, and that has recipes in it"): `DashboardPage.vue:638`
+  dashboard "Recipes" card title (shows recipe count → links to /cookbook);
+  `DashboardPage.vue:814` card-visibility config label `Recipes`;
+  `HelpPage.vue:251` section "Recipes & meals"; `BackupRestore.vue:402`
+  data-type label "Recipes". All four refer to recipes-as-content, not to
+  the page itself — no edit required.
+
+## [RESOLVED] FU-037 — `.secret_key` hardcoded to `./data/`, ignores DORA_DATA_DIR
+- **Raised:** 2026-06-06 (INV-3 re-verification)
+- **Type:** finding (latent bug)
+- **What:** `dora_api/app.py:47` resolved the session-secret file as
+  `Path('data') / '.secret_key'` (CWD-relative), so on the desktop app the
+  secret escaped the configured data dir and was CWD-dependent.
+- **State note:** 2026-06-14 — **RESOLVED.** Reworked the secret-key resolution
+  in `dora_api/app.py` to `config_manager.get_data_dir() / '.secret_key'`
+  (creating the parent on first run via `mkdir(parents=True, exist_ok=True)`).
+  Also routed the dev `data/` mkdir for SQLAlchemy through `get_data_dir()` so
+  the whole app honours `DORA_DATA_DIR`. Backend unit suite passes (49/49).
+  Still wants a desktop smoke test across a CWD change to confirm sessions
+  survive — fold into the next desktop verification pass.
+
+## [RESOLVED] FU-047 — `confirm_actions._resolve_level` still maps phrases → hardcoded level names
+- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
+- **Type:** finding
+- **State note:** 2026-06-14 — **RESOLVED** by static verification. The
+  refactor already shipped: `dora_api/features/assistant/confirm_actions.py`
+  imports `StockStatus` + `level_for_status`, `_LEVEL_ALIASES` is now keyed to
+  `StockStatus` enum members (not name strings), and `_resolve_level` resolves
+  via `level_for_status(repo.get(StockLevel).all(), status)` — the brittle
+  `"Sufficient"` / `"Well Stocked"` name-mismatch path is gone.
+
+## [RESOLVED] FU-048 — e2e suite (`tests/e2e/dora_api/`) is pre-existing broken on this branch
+- **Raised:** 2026-06-06 (Phase 1 Chunk 1 — stock-status contract)
+- **Type:** finding
+- **State note:** 2026-06-14 — **RESOLVED** per user ("resolved i believe").
+  The e2e suite was repaired in commit `8793648 Fix e2e tests` and is no
+  longer the pre-existing-broken blocker it was.
+
+## [RESOLVED] FU-061 — Promote doc-graph to in-prompt blocks (Option B) if agents skip the ritual
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** deferred job
+- **State note:** 2026-06-14 — **RESOLVED** per user ("feels like what we have
+  is working"). Keep the lighter centralised-graph scheme; no per-prompt
+  inlined blocks.
+
+## [RESOLVED] FU-062 — Doc-graph: verify cited paths + original-spec Feature Board mappings
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** finding
+- **State note:** 2026-06-14 — **RESOLVED** per user ("feels fine"). Per-citation
+  existence pass + Feature Board mapping audit not pursued.
+
+## [RESOLVED] FU-063 — Doc-graph: first-use stress test
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** follow-up
+- **State note:** 2026-06-14 — **RESOLVED** per user ("feels fine"). No
+  dedicated first-use stress test will be run; the graph stands as-is.
+
+## [RESOLVED] FU-064 — Doc-graph: maintenance cadence / regeneration prompt
+- **Raised:** 2026-06-08 (doc-graph build)
+- **Type:** deferred job
+- **State note:** 2026-06-14 — **RESOLVED** per user ("feels fine"). No
+  dedicated refresh prompt; rely on opportunistic updates as proposals/FUs
+  land.
+
 ## [RESOLVED] FU-163 — App-wide undo posture: removed
 - **Raised:** 2026-06-12 (UX v2 decisions, §12 Q4)
 - **Type:** finding (product decision pending) → product decision

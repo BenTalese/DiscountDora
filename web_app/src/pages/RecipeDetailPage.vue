@@ -880,9 +880,8 @@
         </FadeTransition>
 
         <!-- â”€â”€ Substitutes dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="substitutesOpen" card-style="min-width: 460px; max-width: 640px">
+        <BaseDialog v-model="substitutesOpen" title="Substitutes for missing ingredients" closable card-style="min-width: 460px; max-width: 640px">
                 <q-card-section>
-                    <div class="text-h6">Substitutes for missing ingredients</div>
                     <div class="text-caption dora-text-muted">
                         These are recorded on each item's detail page. To cook
                         with one, start cook mode and tap the swap icon on the
@@ -922,15 +921,14 @@
                         </div>
                     </div>
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Close" v-close-popup />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- â”€â”€ Import-from-URL dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="importOpen" card-style="min-width: 460px; max-width: 600px">
+        <BaseDialog v-model="importOpen" title="Import from URL" closable card-style="min-width: 460px; max-width: 600px">
                 <q-card-section>
-                    <div class="text-h6">Import from URL</div>
                     <div class="text-caption dora-text-muted q-mt-xs">
                         Works on recipe sites that publish
                         <strong>schema.org Recipe JSON-LD</strong> — the
@@ -954,7 +952,7 @@
                         @keydown.enter.prevent="onConfirmImport"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Cancel" v-close-popup />
                     <BaseButton
                         variant="primary"
@@ -963,7 +961,7 @@
                         :disable="importUrl.trim().length === 0"
                         @click="onConfirmImport"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- ── Per-ingredient picker (Chunk B §1.4) ──────────────── -->
@@ -976,8 +974,7 @@
         />
 
         <!-- Log cook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="logCookOpen" card-style="min-width: 320px">
-                <q-card-section class="text-h6">Log a cook</q-card-section>
+        <BaseDialog v-model="logCookOpen" title="Log a cook" closable card-style="min-width: 320px">
                 <q-card-section class="q-pt-none">
                     <q-input
                         v-model.number="logCookCount"
@@ -991,7 +988,7 @@
                         hint="Adds to this recipe's pool."
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <BaseButton variant="ghost" label="Cancel" v-close-popup />
                     <BaseButton
                         variant="primary"
@@ -1000,14 +997,13 @@
                         :disable="!(logCookCount > 0)"
                         @click="onLogCook"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- Cook-mode guard (L297/L299/L309). Click-out / Esc just closes
              (BaseDialog v-model), never navigates. -->
-        <BaseDialog v-model="cookGuardOpen" card-style="min-width: 340px; max-width: 460px">
+        <BaseDialog v-model="cookGuardOpen" title="Start cook mode?" closable card-style="min-width: 340px; max-width: 460px">
             <q-card-section>
-                <div class="text-h6">Start cook mode?</div>
                 <ul class="q-mt-sm q-mb-none dora-text-secondary">
                     <li v-if="isDirty">You have unsaved changes.</li>
                     <li v-if="!cookableNow">
@@ -1016,7 +1012,7 @@
                     </li>
                 </ul>
             </q-card-section>
-            <q-card-actions align="right">
+            <template #actions>
                 <BaseButton variant="ghost" label="Cancel" @click="cookGuardOpen = false" />
                 <BaseButton
                     v-if="isDirty"
@@ -1037,7 +1033,7 @@
                     label="Start anyway"
                     @click="goToCookMode"
                 />
-            </q-card-actions>
+            </template>
         </BaseDialog>
     </q-page>
 </template>

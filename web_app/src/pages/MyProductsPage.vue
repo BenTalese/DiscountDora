@@ -408,9 +408,8 @@
         <PageCountsFooter v-if="products.length > 0" :counts="footerCounts" />
 
         <!-- ── Bulk-add target-list picker ────────────────────────── -->
-        <BaseDialog v-model="bulkAddOpen" card-style="min-width: 380px">
+        <BaseDialog v-model="bulkAddOpen" title="Add to which list?" closable card-style="min-width: 380px">
                 <q-card-section>
-                    <div class="text-h6">Add to which list?</div>
                     <div class="text-caption dora-text-muted">
                         {{ bulkAddCandidates.length }} stock item{{
                             bulkAddCandidates.length === 1 ? '' : 's'
@@ -428,7 +427,7 @@
                         label="Active list"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn
                         unelevated
@@ -439,30 +438,26 @@
                         :disable="!bulkAddTargetListId"
                         @click="confirmBulkAdd"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
 
         <!-- ── Stock items without products dialog ────────────────── -->
         <BaseDialog
             v-model="orphansOpen"
+            title="Stock items without products"
+            closable
             :maximized="$q.screen.lt.sm"
             card-style="width: 560px; max-width: 100vw; height: 90vh"
             card-class="column"
         >
-                <q-card-section class="row items-center q-pb-sm">
-                    <div>
-                        <div class="text-h6">Stock items without products</div>
-                        <div class="text-caption dora-text-muted">
-                            {{ stockItemsMissingProducts.length }} item{{
-                                stockItemsMissingProducts.length === 1 ? '' : 's'
-                            }} that no product in My Products is linked to.
-                            Hop into Product Search to find one.
-                        </div>
+                <q-card-section class="q-pb-sm">
+                    <div class="text-caption dora-text-muted">
+                        {{ stockItemsMissingProducts.length }} item{{
+                            stockItemsMissingProducts.length === 1 ? '' : 's'
+                        }} that no product in My Products is linked to.
+                        Hop into Product Search to find one.
                     </div>
-                    <q-space />
-                    <q-btn flat round dense :icon="ICONS.close" v-close-popup />
                 </q-card-section>
-                <q-separator />
                 <q-card-section class="col scroll">
                     <q-list separator>
                         <q-item
@@ -509,9 +504,8 @@
         </BaseDialog>
 
         <!-- ── Link-to-stock-item dialog ──────────────────────────── -->
-        <BaseDialog v-model="linkOpen" card-style="min-width: 420px">
+        <BaseDialog v-model="linkOpen" title="Link to a stock item" closable card-style="min-width: 420px">
                 <q-card-section>
-                    <div class="text-h6">Link to a stock item</div>
                     <div class="text-caption dora-text-muted">
                         {{ linkTarget?.name }}
                     </div>
@@ -531,7 +525,7 @@
                         label="Stock item"
                     />
                 </q-card-section>
-                <q-card-actions align="right">
+                <template #actions>
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn
                         unelevated
@@ -542,7 +536,7 @@
                         :disable="!linkChoiceStockItemId"
                         @click="confirmLink"
                     />
-                </q-card-actions>
+                </template>
         </BaseDialog>
     </q-page>
 </template>

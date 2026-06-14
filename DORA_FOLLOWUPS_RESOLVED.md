@@ -45,6 +45,81 @@ resolutions go at the **top**.
   builder Email **shown-disabled** when SMTP unset per new rule **R-014** /
   ADR-009 (app-wide reveal-disable sweep [[FU-176]]). Plan is 11 chunks (K split out).
 
+## [RESOLVED] FU-057 — P6-02: browser-verify the gated scanning surface + apply migration
+- **Raised:** 2026-06-07 (P6-02 implementation)
+- **Type:** finding
+- **What:** The scanning/QR gating was verified by static read + frontend sweep only. Not
+  confirmed in a running app: toggling `scanning_enabled` in Settings → System actually
+  shows/hides the Stock Overview scan/print buttons, stock-item "Show QR", and the Data →
+  "Scanning & QR labels" section/off-state banner. Migration `a3f1c7d2e9b4` (drops
+  `StockItem.barcode`, adds `AppSetting.scanning_enabled`) has not been applied to a live DB.
+- **Why deferred:** e2e suite pre-existing broken ([[FU-048]]); no browser smoke test this
+  session.
+- **Recommended resolution:** **confirm in browser** + run migration on a dev DB before P6-01.
+- **State note:** 2026-06-14 — closed by user. Gating confirmed in browser (toggling
+  `scanning_enabled` shows/hides the Stock Overview scan/print buttons, stock-item "Show QR",
+  and the Data → "Scanning & QR labels" section) and migration `a3f1c7d2e9b4` has been
+  applied. Also noted as no-longer-relevant given current scope.
+
+## [RESOLVED] FU-141 — Browser-verify State Ownership Chunk 4
+- **Raised:** 2026-06-12 (State Ownership Chunk 4 impl;
+  static-only, no env)
+- **Type:** finding / verification
+- **What:** Eyeball that the rename-safety refactor preserved
+  every visual decision it was supposed to preserve:
+  - `StockItemChip` — colour band + short label ("OK" / "Mid" /
+    "Low" / "Out") still match each level. Renaming "Out of
+    Stock" to "Empty" in Settings should leave colour + label
+    unchanged.
+  - `StockItemRow` — dim treatment fires for out-of-stock
+    rows; level button colour follows the current level.
+  - `useStockFilters` — summary counts (top of Stock Overview)
+    + sticky-footer tones still light up correctly when a
+    level is renamed.
+  - `WastePage` — "Mark used" sets the level to whichever row
+    matches `OUT_OF_STOCK_SEQUENCE` (rename it first to
+    confirm).
+  - `MealPlansOverview` — "Need to buy" lists ingredients
+    whose level is None/low/out; status chip colours match the
+    bucket.
+  - `ProductSearch` quick-add — new tracked items still start
+    in the out-of-stock bucket.
+  - `RecipeCookMode` finish-rows — "leave out of stock"
+    action resolves to the right level after a rename.
+- **Why deferred:** static-only impl; needs a running app +
+  level-rename action to exercise the renaming property
+  end-to-end.
+- **Recommended resolution:** confirm in browser — high-priority
+  for this chunk because the whole point is "renaming a level
+  no longer breaks anything". Rename one level as part of the
+  smoke pass.
+- **State note:** 2026-06-14 — closed by user. The non-rename surfaces
+  (chip colour bands, row dim treatment, summary counts, waste "Mark
+  used", meal-plan "Need to buy" colours, quick-add seeding, cook-mode
+  finish rows) are confirmed working in use. The rename-property half
+  is moot: **stock-level renaming is not a supported user action**, so
+  the "rename one level as part of the smoke pass" step has nothing to
+  exercise.
+
+## [RESOLVED] FU-013 — A4 leftover: "consistent multi-select control" only partial
+- **Raised:** 2026-06-05 (A4)
+- **Type:** leftover
+- **What:** A4 standardised the filter-bar shell (panel/search/active-count/clear)
+  but did NOT build a dedicated shared multi-select control. Multi-selects remain
+  page-specific: `RecipesOverview` uses `q-select multiple use-chips`,
+  `ProductSearch` merchant picker + `StockOverview` levels are bespoke chip UIs.
+- **Why deferred:** the bespoke chip pickers carry extra behaviour (health
+  icons, level colours, counts) that a generic control would lose; forcing one
+  control would be a regression. The shell was the high-value standardisation.
+- **Recommended resolution:** opportunistic — only if a future page needs a plain
+  multi-select; otherwise leave the bespoke ones. Not no-regret.
+- **State note:** 2026-06-14 — closed as wontfix. StockOverview's level filter is
+  now a single-select `q-select` (C-1 Chunk 2 retired the per-level chips, see
+  `StockOverview.vue:103-115`), so the original "bespoke multi-selects" list
+  has shrunk. Remaining surfaces (`RecipesOverview`'s `q-select multiple use-chips`,
+  `ProductSearch` merchant picker) are accepted as-is per the original "leave the
+  bespoke ones" recommendation — no shared control needed.
+
 ## [RESOLVED] FU-125 — Stock Overview Chunk 6 / FU-033 — image surface fixes
 - **Raised:** 2026-06-12 (Chunk 6 impl; static-only, no env)
 - **Type:** finding / verification → product-defect resolution

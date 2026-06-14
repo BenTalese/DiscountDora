@@ -48,11 +48,18 @@
         position: sticky;
         bottom: 0;
         z-index: 5;
-        margin-top: var(--space-4, 16px);
+        // Outdent to consume the page wrapper's `q-pa-md` padding (16px on
+        // all sides). Without this, when the user scrolls to the very end
+        // of the page the sticky element stops sticking and reverts to its
+        // in-flow position — the parent's bottom padding then shows as a
+        // visible gap below it, breaking the "flush with viewport bottom"
+        // feel the sticky mode gives mid-scroll. The negative side
+        // margins also let the bar stretch to the page edges so the
+        // border-top / shadow read as a true full-width divider.
+        margin: var(--space-4, 16px) -16px -16px;
         background: var(--surface-component);
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
         box-shadow: 0 -2px 10px color-mix(in srgb, var(--text-primary) 8%, transparent);
-        border-radius: var(--radius-md, 6px) var(--radius-md, 6px) 0 0;
     }
     .page-counts-footer__inner {
         /* `.row` wraps by default → responsive on narrow screens. */

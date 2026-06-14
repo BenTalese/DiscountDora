@@ -52,6 +52,35 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-182 — Treat the minimal/Products-off user as a first-class workflow
+- **Raised:** 2026-06-14 (talk-time assessment)
+- **Type:** open decision / design follow-up
+- **What:** Audit every surface for the "Products feature off" path and treat
+  the minimal user (pantry + recipes + meal plan + checklist shopping list,
+  no merchants/offers/price-history/cart) as a first-class workflow — not a
+  fallback that empties out around them. Scratch dump with the full friction
+  inventory + upgrade levers lives at
+  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`. Key threads to
+  resolve: (a) shopping-list "checklist mode" when Products is off; (b)
+  onboarding wizard branching on the feature-flag step (skip the stock-vs-
+  product explainer + preferred-stores when Products off); (c) nav/settings
+  rendering *conditionally* (hidden, not disabled); (d) stock-item
+  create/edit and recipe-ingredient rows shedding product affordances; (e)
+  persona-led onboarding preset ("Pantry & meal planning" vs "Pantry + save
+  money on groceries") so the effortless path doesn't require flipping
+  individual flags; (f) elevate Products in C-cross §2.6 from "one candidate
+  flag" to *the* app-shaping flag with a per-surface coverage audit.
+  Principle to anchor the work: **minimal users must be supported as much as
+  power users** — same charter-level care, not a degraded fallback.
+- **Why deferred:** Talk-time scope. Needs to be promoted into a proper
+  assessment / §2.6 amendment with the cross-check coverage table before any
+  code lands.
+- **Recommended resolution:** later during Phase 3 polish — promote the
+  scratch into a `04_proposals/` amendment to PROPOSAL_CONFIG_AND_OPTINS.md
+  (or a sibling proposal) before the C-cross implementation chunk audits
+  Products-touching surfaces. Earlier if the onboarding (C-5) chunk picks
+  up first, since the persona-preset decision lives upstream of both.
+
 ## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
 - **Raised:** 2026-06-14 (C-2.J sequential builder)
 - **Type:** follow-up (deferred sub-feature)
@@ -653,39 +682,6 @@ long session summary. Distinct from the other logs:
   + a live offer to verify price-moved-between-states.
 - **Recommended resolution:** confirm in browser — same
   high-priority slot as the other Chunk-N verify items.
-
-## [OPEN] FU-141 — Browser-verify State Ownership Chunk 4
-- **Raised:** 2026-06-12 (State Ownership Chunk 4 impl;
-  static-only, no env)
-- **Type:** finding / verification
-- **What:** Eyeball that the rename-safety refactor preserved
-  every visual decision it was supposed to preserve:
-  - `StockItemChip` — colour band + short label ("OK" / "Mid" /
-    "Low" / "Out") still match each level. Renaming "Out of
-    Stock" to "Empty" in Settings should leave colour + label
-    unchanged.
-  - `StockItemRow` — dim treatment fires for out-of-stock
-    rows; level button colour follows the current level.
-  - `useStockFilters` — summary counts (top of Stock Overview)
-    + sticky-footer tones still light up correctly when a
-    level is renamed.
-  - `WastePage` — "Mark used" sets the level to whichever row
-    matches `OUT_OF_STOCK_SEQUENCE` (rename it first to
-    confirm).
-  - `MealPlansOverview` — "Need to buy" lists ingredients
-    whose level is None/low/out; status chip colours match the
-    bucket.
-  - `ProductSearch` quick-add — new tracked items still start
-    in the out-of-stock bucket.
-  - `RecipeCookMode` finish-rows — "leave out of stock"
-    action resolves to the right level after a rename.
-- **Why deferred:** static-only impl; needs a running app +
-  level-rename action to exercise the renaming property
-  end-to-end.
-- **Recommended resolution:** confirm in browser — high-priority
-  for this chunk because the whole point is "renaming a level
-  no longer breaks anything". Rename one level as part of the
-  smoke pass.
 
 ## [OPEN] FU-140 — Sweep Cart Button Chunk 3 typing fallout (nullable `stock_item_id`)
 - **Raised:** 2026-06-12 (State Ownership Chunk 4 typecheck)
@@ -2325,18 +2321,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later during **Phase 2 (ingestion API)** — design is in
   `docs/04_proposals/PROPOSAL_BARCODE_SCANNING.md` §5–§6.
 
-## [OPEN] FU-057 — P6-02: browser-verify the gated scanning surface + apply migration
-- **Raised:** 2026-06-07 (P6-02 implementation)
-- **Type:** finding
-- **What:** The scanning/QR gating was verified by static read + frontend sweep only. Not
-  confirmed in a running app: toggling `scanning_enabled` in Settings → System actually
-  shows/hides the Stock Overview scan/print buttons, stock-item "Show QR", and the Data →
-  "Scanning & QR labels" section/off-state banner. Migration `a3f1c7d2e9b4` (drops
-  `StockItem.barcode`, adds `AppSetting.scanning_enabled`) has not been applied to a live DB.
-- **Why deferred:** e2e suite pre-existing broken ([[FU-048]]); no browser smoke test this
-  session.
-- **Recommended resolution:** **confirm in browser** + run migration on a dev DB before P6-01.
-
 ## [OPEN] FU-052 — Switch cookable surfaces to the server query + optimise the helper
 - **Raised:** 2026-06-07 (Phase 1 Chunk 4 — queryable cookability)
 - **Type:** follow-up
@@ -2689,19 +2673,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** out of B5's bug-fix scope; cross-cutting audit.
 - **Recommended resolution:** opportunistic — fold into a Wave-A or polish
   pass once one obvious symptom shows up; not worth a dedicated session.
-
-## [OPEN] FU-013 — A4 leftover: "consistent multi-select control" only partial
-- **Raised:** 2026-06-05 (A4)
-- **Type:** leftover
-- **What:** A4 standardised the filter-bar shell (panel/search/active-count/clear)
-  but did NOT build a dedicated shared multi-select control. Multi-selects remain
-  page-specific: `RecipesOverview` uses `q-select multiple use-chips`,
-  `ProductSearch` merchant picker + `StockOverview` levels are bespoke chip UIs.
-- **Why deferred:** the bespoke chip pickers carry extra behaviour (health
-  icons, level colours, counts) that a generic control would lose; forcing one
-  control would be a regression. The shell was the high-value standardisation.
-- **Recommended resolution:** opportunistic — only if a future page needs a plain
-  multi-select; otherwise leave the bespoke ones. Not no-regret.
 
 ## [OPEN] FU-012 — FilterBar panel has no visual container
 - **Raised:** 2026-06-05 (A4)

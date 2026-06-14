@@ -30,7 +30,12 @@
         position: relative;
         overflow: hidden;
         background: transparent;
-        transition: background-color 0.3s ease;
+        // `color` matches the strip's slide indicator (0.42s + same easing)
+        // so icon + label tint slides in sync with the accent bar
+        // underneath rather than snapping ahead of it.
+        transition:
+            background-color 0.3s ease,
+            color 0.42s cubic-bezier(0.65, 0, 0.2, 1);
 
         &::before {
             content: '';
@@ -103,6 +108,15 @@
     }
 
     .dora-mainMenuButton-active {
+        color: var(--q-accent);
+    }
+
+    // Hover tint on inactive buttons — previews the active accent colour,
+    // animated on the same timing as the active-route slide indicator
+    // (see `transition` above). `:not(...)` excludes the active button so
+    // there's no specificity flicker (CSS would otherwise let `:hover`
+    // override the active rule).
+    .dora-mainMenuButton:not(.dora-mainMenuButton-active):hover {
         color: var(--q-accent);
     }
 

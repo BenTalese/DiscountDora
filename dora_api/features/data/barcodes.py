@@ -317,22 +317,16 @@ def barcode_lookup():
         EntityField(ProductBarcode, "barcode").eq(raw)
     )
     if product_match is not None:
-        linked_item: StockItem | None = repo.get(StockItem).one(
-            EntityField(StockItem, "preferred_product_id").eq(product_match.product_id)
-        )
-        # Fallback: any stock item with this product in its m2m. The
-        # repository doesn't expose secondary-table queries cleanly, so we
-        # touch SQLAlchemy directly for the lookup.
-        if linked_item is None:
-            from sqlalchemy import select
-            from dora_api.app import db
-            assoc = db.metadata.tables["StockItemProduct"]
-            row = db.session.execute(
-                select(assoc.c.stock_item_id).where(assoc.c.product_id == product_match.product_id)
-            ).first()
-            linked_stock_item_id = str(row[0]) if row else None
-        else:
-            linked_stock_item_id = str(linked_item.id)
+        # Any stock item with this product in its m2m. The repository doesn't
+        # expose secondary-table queries cleanly, so we touch SQLAlchemy
+        # directly for the lookup.
+        from sqlalchemy import select
+        from dora_api.app import db
+        assoc = db.metadata.tables["StockItemProduct"]
+        row = db.session.execute(
+            select(assoc.c.stock_item_id).where(assoc.c.product_id == product_match.product_id)
+        ).first()
+        linked_stock_item_id = str(row[0]) if row else None
 
         return ok({
             "kind": "product",

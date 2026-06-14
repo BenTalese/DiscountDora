@@ -35,7 +35,6 @@ class LineProductOfferDto:
     price_now: float | None
     price_was: float | None
     is_selected: bool
-    is_preferred: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,7 +248,6 @@ class GetShoppingListDetailHandler:
         for line in _Lines:
             item = _StockItems.get(line.stock_item_id) if line.stock_item_id else None
             offers: List[LineProductOfferDto] = []
-            preferred_id: UUID | None = item.preferred_product_id if item else None
             if item is not None:
                 for product in item.products or []:
                     offers.append(LineProductOfferDto(
@@ -262,14 +260,9 @@ class GetShoppingListDetailHandler:
                         price_now = product.current_offer.price_now if product.current_offer else None,
                         price_was = product.current_offer.price_was if product.current_offer else None,
                         is_selected = line.selected_product_id == product.id,
-                        is_preferred = preferred_id is not None and preferred_id == product.id,
                     ))
-                # Sort offers: preferred merchant first, then cheapest, then
-                # alphabetical. The picker shows preferred up top because the
-                # user has explicitly marked it; cheapest is the next-best
-                # tiebreak.
+                # Sort offers: cheapest first, then alphabetical by merchant.
                 offers.sort(key=lambda o: (
-                    0 if o.is_preferred else 1,
                     o.price_now if o.price_now is not None else float("inf"),
                     o.merchant_name.lower(),
                 ))

@@ -108,15 +108,17 @@ class StockValueOverTimeHandler:
 
     Per-bucket formula: sum over stock items of
         (stock_level.sequence as-of bucket date) *
-        (preferred product's most-recent unit price as-of bucket date)
+        (cheapest linked-product unit price as-of bucket date)
 
     Level rank uses StockLevelChange history; price uses ProductOffer +
-    ProductHistoricOffer combined and filtered to "most recent ≤ bucket".
-    Items without a preferred product, or whose preferred product has no
-    pricing history, contribute zero.
+    ProductHistoricOffer combined and filtered to "most recent ≤ bucket"
+    per linked product, then the minimum across the item's linked products.
+    Items with no linked products, or whose linked products have no pricing
+    history ≤ bucket, contribute zero.
 
-    Cost: O(buckets × items) in Python after one bulk load of changes and
-    offers, which is fine for the pantry sizes this app targets.
+    Cost: O(buckets × items × linked-products-per-item) in Python after one
+    bulk load of changes and offers, which is fine for the pantry sizes this
+    app targets.
     """
 
     def __init__(self):
@@ -150,24 +152,28 @@ class StockValueOverTimeHandler:
             for i in items
         }
 
-        # Preferred product → most recent price history. We pull current
-        # offers + historic offers, merge, sort ascending.
-        preferred_ids = {i.preferred_product_id for i in items if i.preferred_product_id}
-        prices_by_product: Dict[UUID, list] = {pid: [] for pid in preferred_ids}
-        if preferred_ids:
+        # Linked products per item (m2m) → most-recent price history. Pull
+        # current + historic offers across every linked product, merge per
+        # product, sort ascending.
+        product_ids_by_item: Dict[UUID, list[UUID]] = {
+            i.id: [p.id for p in (i.products or [])] for i in items
+        }
+        all_product_ids = {pid for ids in product_ids_by_item.values() for pid in ids}
+        prices_by_product: Dict[UUID, list] = {pid: [] for pid in all_product_ids}
+        if all_product_ids:
             current_rows = session.execute(
                 select(
                     ProductOffer._product_id,  # noqa: SLF001 — mapped col alias
                     ProductOffer.offered_on,
                     ProductOffer.price_now,
-                ).where(ProductOffer._product_id.in_(preferred_ids))
+                ).where(ProductOffer._product_id.in_(all_product_ids))
             ).all()
             historic_rows = session.execute(
                 select(
                     ProductHistoricOffer._product_id,  # noqa: SLF001
                     ProductHistoricOffer.offered_on,
                     ProductHistoricOffer.price_now,
-                ).where(ProductHistoricOffer._product_id.in_(preferred_ids))
+                ).where(ProductHistoricOffer._product_id.in_(all_product_ids))
             ).all()
             for pid, offered_on, price_now in list(current_rows) + list(historic_rows):
                 if offered_on is None or price_now is None:
@@ -203,10 +209,10 @@ class StockValueOverTimeHandler:
                 )
                 if rank <= 0:
                     continue
-                preferred = item.preferred_product_id
-                if preferred is None:
+                linked = product_ids_by_item.get(item.id) or []
+                if not linked:
                     continue
-                price = _price_as_of(preferred, cursor, prices_by_product)
+                price = _cheapest_as_of(linked, cursor, prices_by_product)
                 if price is None:
                     continue
                 total += rank * price
@@ -268,6 +274,21 @@ def _price_as_of(
     return last_price
 
 
+def _cheapest_as_of(
+    product_ids: list[UUID],
+    cursor: datetime,
+    prices_by_product: Dict[UUID, list],
+) -> float | None:
+    cheapest = None
+    for pid in product_ids:
+        price = _price_as_of(pid, cursor, prices_by_product)
+        if price is None:
+            continue
+        if cheapest is None or price < cheapest:
+            cheapest = price
+    return cheapest
+
+
 @REPORTS_ROUTER.route("/stock-value-over-time", methods=["GET"])
 def stock_value_over_time():
     _Since = _parse_range(request.args.get("range"))
@@ -275,7 +296,7 @@ def stock_value_over_time():
     return ok({
         "range": request.args.get("range", "30d"),
         "estimate_note": (
-            "Estimate: level rank × most-recent preferred-product price. "
+            "Estimate: level rank × cheapest most-recent linked-product price. "
             "Not accounting."
         ),
         "points": [asdict(p) for p in _Points],

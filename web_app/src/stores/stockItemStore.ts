@@ -42,6 +42,23 @@ export const useStockItemStore = defineStore('stockItem', () => {
     const stockItems: Ref<StockItem[]> = ref([]);
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
+    /** FU-125 — per-item image-version counter. Bumped whenever an
+     *  `image` field is sent on an `updateStockItemAsync` call so any
+     *  consumer that paints the image URL can append `?v=...` and
+     *  reliably bust the browser cache after upload / clear (the bytes
+     *  endpoint sends `Cache-Control: no-cache`, but a reactive query
+     *  param is the surest cross-surface live-refresh signal). */
+    const imageVersions = ref<Record<string, number>>({});
+    function imageVersionOf(stockItemId: string): number {
+        return imageVersions.value[stockItemId] ?? 0;
+    }
+    function bumpImageVersion(stockItemId: string): void {
+        imageVersions.value = {
+            ...imageVersions.value,
+            [stockItemId]: (imageVersions.value[stockItemId] ?? 0) + 1,
+        };
+    }
+
     /** C-1 Stock Overview Chunk 1 — page until exhausted so a pantry of
      *  >50 items doesn't silently get truncated to the first page
      *  (FU-035). Callers that only need a quick prefix (autocomplete-
@@ -128,6 +145,9 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[idx] = refreshed;
             stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
         }
+        // FU-125 — bump the image version when the PATCH touched the image
+        // so every surface displaying this item refetches the bytes.
+        if ('image' in cmd) bumpImageVersion(stock_item_id);
     };
 
     const deleteStockItemAsync = async (stockItemID: string) => {
@@ -141,7 +161,9 @@ export const useStockItemStore = defineStore('stockItem', () => {
         createStockItemAsync,
         updateStockLevelAsync,
         updateStockItemAsync,
-        deleteStockItemAsync
+        deleteStockItemAsync,
+        imageVersions: readonly(imageVersions),
+        imageVersionOf,
     };
 });
 

@@ -157,7 +157,6 @@ HARD_FK_PULL_IN: dict[tuple[str, str], str] = {
 # Soft FKs (nullable in schema): if the target is missing at insert time and
 # isn't in the pull-in set, null the column and emit a warning.
 SOFT_FK_NULLABLE: set[tuple[str, str]] = {
-    ("stock_items", "preferred_product_id"),
     ("shopping_list_items", "selected_product_id"),
 }
 

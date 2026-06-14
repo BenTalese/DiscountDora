@@ -134,7 +134,6 @@ export type UpdateStockItemCommand = {
     auto_add_when_low?: boolean;
     is_open?: boolean;
     opened_on?: string | null;
-    preferred_product_id?: string | null;
     /** C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
      *  clear, omit to leave untouched. */
     image?: string | null;

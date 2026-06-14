@@ -85,7 +85,6 @@ class StockItemDetailDto:
     opened_on: date | None
     is_flagged: bool
     auto_add_when_low: bool
-    preferred_product_id: UUID | None
     attention_score: int
     attention_reasons: dict
     products: List[LinkedProductDto]
@@ -96,6 +95,11 @@ class StockItemDetailDto:
     # product image fallback). Bytes served via
     # `GET /stock-items/<id>/image`; never inlined in the JSON.
     has_image: bool = False
+    # FU-125 — true only when the stock item carries its OWN uploaded
+    # image (no fallback). Lets the detail page render "Add image" instead
+    # of "Change image / Remove" when the preview is being served from a
+    # linked product (there's nothing the user could "remove").
+    has_own_image: bool = False
 
 
 class GetStockItemDetailHandler:
@@ -244,7 +248,6 @@ class GetStockItemDetailHandler:
             opened_on = _StockItem.opened_on,
             is_flagged = bool(_StockItem.is_flagged),
             auto_add_when_low = bool(_StockItem.auto_add_when_low),
-            preferred_product_id = _StockItem.preferred_product_id,
             attention_score = _Reasons.score(),
             attention_reasons = asdict(_Reasons),
             products = _LinkedProducts,
@@ -256,6 +259,7 @@ class GetStockItemDetailHandler:
             has_image = bool(_StockItem.image) or any(
                 bool(getattr(p, "image", None)) for p in (_StockItem.products or [])
             ),
+            has_own_image = bool(_StockItem.image),
         )
 
 

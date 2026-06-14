@@ -43,8 +43,6 @@ class UpdateStockItemRequest(BaseModel):
     # `is_open` flips True, but the spec also wants a manual edit path
     # ("I can edit the date a stock item was opened on…").
     opened_on: date | None = None
-    # The linked product the user prefers to buy. Present-but-None clears it.
-    preferred_product_id: UUID | None = None
     # C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
     # clear, omit to leave untouched. Mirrors the recipe-update contract.
     image: str | None = Field(default = None, max_length = 6_000_000)
@@ -173,12 +171,6 @@ class UpdateStockItemHandler:
 
         if "opened_on" in _SetFields:
             _StockItem.opened_on = request.opened_on
-
-        # Preferred product: present-but-None clears it. No strict validation
-        # that it's a linked product — pre-release, the UI only offers linked
-        # products as options.
-        if "preferred_product_id" in _SetFields:
-            _StockItem.preferred_product_id = request.preferred_product_id
 
         # Auto-add hook: if this update transitioned the item from "ok" to
         # low-or-out and `auto_add_when_low` is set, drop it onto the

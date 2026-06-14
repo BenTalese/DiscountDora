@@ -528,16 +528,6 @@
                                                 @click="onPickOffer(line.line_id, offer.product_id)"
                                             >
                                                 <q-icon
-                                                    v-if="offer.is_preferred"
-                                                    name="star"
-                                                    size="14px"
-                                                    color="warning"
-                                                    class="q-mr-xs"
-                                                >
-                                                    <q-tooltip>Preferred merchant for this item</q-tooltip>
-                                                </q-icon>
-                                                <q-icon
-                                                    v-else
                                                     name="storefront"
                                                     size="14px"
                                                     class="q-mr-xs"

@@ -10,6 +10,110 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-125 — Stock Overview Chunk 6 / FU-033 — image surface fixes
+- **Raised:** 2026-06-12 (Chunk 6 impl; static-only, no env)
+- **Type:** finding / verification → product-defect resolution
+- **What:** Browser verify revealed three real problems beyond the original
+  verification checklist, all fixed this session:
+  1. **Live update / cache-bust.** Uploading from the detail page didn't
+     refresh the overview row (even on hard reload in one of the user's
+     repros). Cache busting was a *local* `imageVersion` ref on the detail
+     page — the row's `<img src>` had no query param and the browser served
+     the cached copy. Moved cache-bust into `stockItemStore` as a per-item
+     `imageVersions` map with `imageVersionOf(id)` + `bumpImageVersion(id)`;
+     `updateStockItemAsync` bumps automatically when the PATCH payload
+     includes `image`. Row + detail page both read the store-derived
+     version, so any surface displaying the item refetches reactively.
+     `imgFailed` latch on the row is now reset when the version bumps.
+  2. **Inconsistent row position.** The image slot used to live *after* the
+     name+zone column, so its x-position drifted with name length — read as
+     "all over the place" across a list. Moved it to the **first** slot in
+     the row, stretched to fill the row height, with the leading corners
+     rounded to match the card. Bumped from 40×40 to 64-wide; the placeholder
+     glyph went from 20 to 24 px to match. Looks like the leading edge of
+     the card itself.
+  3. **"Remove" on product-fallback preview.** The detail page's
+     `ImageUploadField` rendered "Change image" + "Remove" whenever
+     `has_image` was true — including when the preview came from a linked
+     product. There's nothing for the user to remove in that state. Added
+     `has_own_image: bool` to `StockItemDetailDto` (true only when the
+     stock item carries its own uploaded bytes; doesn't include
+     fallback), surfaced it on the frontend model, and gated the field's
+     `canClear` prop on `has_own_image || pendingImage` so the button
+     reads "Add image" and Remove is hidden during a fallback render.
+- **Browser verification:** items 1–6 from the original verification list
+  (own-upload save, product fallback, both-empty placeholder, list-payload
+  perf, show/hide toggle, race protection) are unblocked by the fixes
+  above and should be re-spot-checked next time the surface is open.
+
+## [RESOLVED] FU-126 — Rename `RecipeImageField` → `ImageUploadField`
+- **Raised:** 2026-06-12 (Stock Overview Chunk 6 / FU-033 impl)
+- **Type:** tidy-up
+- **What:** With the stock-item surface adopting the recipe-image field,
+  R-001's second-consumer threshold was hit; the component carries no
+  recipe-specific logic.
+- **State note:** 2026-06-14 — **RESOLVED.** Moved
+  `components/recipes/RecipeImageField.vue` → `components/ImageUploadField.vue`
+  (renamed class prefixes too). Added an optional `alt` prop so the
+  hard-coded "Recipe image" text no longer leaks into other surfaces
+  (defaults to the `name` prop, which mirrors the previous behaviour for
+  recipes). The same change introduced the optional `canClear` prop
+  used by FU-125 to hide Remove on product-fallback previews. Updated
+  the three import sites (`RecipeEditDialog`, `RecipeDetailPage`,
+  `StockItemDetailPage`).
+
+## [RESOLVED] FU-127 — Browser-verify Cart Button Chunk 1 (AddToListButton + double-toast fix)
+- **Raised:** 2026-06-12 (Cart Button Chunk 1 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify the row/toolbar/bulk variants of `AddToListButton` on
+  Stock overview, Recipe detail, Stock-item detail, plus the bulk-add target
+  resolution + FU-038 double-toast guard.
+- **State note:** 2026-06-14 — **RESOLVED.** User: "all good". Browser
+  verification passed on the surfaces in scope. The "Add to another list"
+  popover toast bug surfaced during this verification — fixed in the
+  feedback sweep this session, not a Chunk 1 regression.
+
+## [RESOLVED] FU-128 — Adopt `AddToListButton` on remaining cart surfaces
+- **Raised:** 2026-06-12 (Cart Button Chunk 1 scope cap)
+- **Type:** rollout
+- **What:** Chunk 1 left four hand-rolled cart surfaces in place
+  (#6 MyProductsPage, #7 MealPlansOverview, #11 ProductSearch,
+  #13 QuickAddSheet entry buttons). The FU framed them as mechanical
+  q-btn → AddToListButton swaps.
+- **State note:** 2026-06-14 — **RESOLVED.** Per-surface investigation
+  showed only one is mechanical; the rest carry compound semantics that
+  the existing AddToListButton variants don't model:
+  - **#6 MyProductsPage per-product cart — adopted.** Extended
+    `AddToListButton` with an optional `selected-product-id` prop
+    ([AddToListButton.vue](web_app/src/components/AddToListButton.vue)):
+    when set on the `row` variant, the add records `selected_product_id`
+    on the line and skips the 2+-products combined-modal branch
+    (the product is already chosen). MyProducts per-product button is now
+    `<AddToListButton variant="row" :stock-item-id :selected-product-id>`
+    and the old `onAddSingle` handler is gone — picks up the popover for
+    on-2+-lists, smart-remove for exactly-one-list, and the unified toast
+    behaviour the rest of the app has.
+  - **#6 MyProductsPage bulk on-deal — kept.** The "Add N on-deal to list"
+    button uses an explicit BaseDialog target picker (different UX from
+    AddToListButton bulk's sessionStorage-remembered target). Intentional
+    — keeps the explicit-choice posture for on-deal adds.
+  - **#7 MealPlansOverview "Generate shopping list for this week" — kept.**
+    Not an add-to-existing-list action; it generates a *new* list from the
+    plan via `generateListForWeek`. The per-ingredient cart button already
+    uses `AddToListButton variant="row"`.
+  - **#11 ProductSearch quick-add — kept.** Composite "track + create stock
+    item + link product + add to list" flow (`quickAddOffer`, ~30 lines
+    around `ProductSearch.vue:559`). Specific to onboarding a new offer;
+    doesn't fit AddToListButton's "stock item already exists, add it" model.
+  - **#13 QuickAddSheet — kept.** The sheet itself is mounted once globally
+    and popped by `openQuickAdd()` from many call sites (Dashboard, etc.).
+    Those entry buttons are general "open the picker" actions, not "add
+    this specific item", so AddToListButton would be the wrong shape.
+- **How to apply:** when adopting AddToListButton elsewhere later, pass
+  `selected-product-id` whenever the caller has already picked the product
+  (per-product cards, comparison results); leave it unset for stock-item-
+  row cases so the 2+-products combined modal still surfaces.
+
 ## [RESOLVED] FU-008 — Unify dialog chrome via BaseDialog `title`/`#actions` slots
 - **Raised:** 2026-06-05 (A3)
 - **Type:** deferred job

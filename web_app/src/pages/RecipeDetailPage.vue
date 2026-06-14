@@ -133,9 +133,10 @@
                     <!-- C-4 Chunk 5 — recipe image (FU-039). -->
                     <q-card flat bordered class="q-mb-md">
                         <q-card-section>
-                            <RecipeImageField
+                            <ImageUploadField
                                 :preview-url="imagePreviewUrl"
                                 :name="form.name"
+                                alt="Recipe image"
                                 @pick="onPickImage"
                                 @clear="onClearImage"
                             />
@@ -1047,7 +1048,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
-    import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
+    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';
     import type {
         EditableStep as EditableRecipeStep,

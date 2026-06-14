@@ -143,29 +143,48 @@ class GetStockItemsHandler:
         linked product carries one (the product-image fallback). Mirrors
         the get-image route's fallback rule so the SPA's "show thumbnail"
         decision matches what the bytes endpoint will actually serve.
+
+        Built with the ORM `select()` (not raw `text()`) so SQLAlchemy
+        adapts UUID bindings to whatever the column type uses on each
+        engine — the original raw-SQL version silently never matched on
+        SQLite because the string IDs in the IN clause didn't compare
+        against the UUIDType column (`project_sqlite_uuid_text_binding`
+        memory). Symptom was every row falling back to placeholder
+        regardless of own/product image.
         """
         if not dtos:
             return dtos
         import dataclasses
-        from sqlalchemy import bindparam, text
+        from sqlalchemy import case, func, literal, select
         from dora_api.app import db
 
-        ids = [str(d.stock_item_id) for d in dtos]
+        stock_item_table = db.metadata.tables["StockItem"]
+        link_table = db.metadata.tables["StockItemProduct"]
+        product_table = db.metadata.tables["Product"]
+
+        ids = [d.stock_item_id for d in dtos]
         # Own-image OR (linked product with an image). LEFT JOIN keeps
         # rows that have no link rows at all (own-image only path); the
         # GROUP BY collapses the multi-product case to one row per item.
-        stmt = text(
-            'SELECT si.id, '
-            '       CASE WHEN si.image IS NOT NULL THEN 1 '
-            '            WHEN MAX(CASE WHEN p.image IS NOT NULL THEN 1 ELSE 0 END) = 1 THEN 1 '
-            '            ELSE 0 END AS has_image '
-            'FROM "StockItem" si '
-            'LEFT JOIN "StockItemProduct" sip ON sip.stock_item_id = si.id '
-            'LEFT JOIN "Product" p ON p.id = sip.product_id '
-            'WHERE si.id IN :ids '
-            'GROUP BY si.id, si.image'
-        ).bindparams(bindparam("ids", expanding=True))
-        rows = db.session.execute(stmt, {"ids": ids}).all()
+        stmt = (
+            select(
+                stock_item_table.c.id,
+                case(
+                    (stock_item_table.c.image.isnot(None), literal(1)),
+                    else_=func.max(
+                        case((product_table.c.image.isnot(None), literal(1)), else_=literal(0))
+                    ),
+                ).label("has_image"),
+            )
+            .select_from(
+                stock_item_table
+                .outerjoin(link_table, link_table.c.stock_item_id == stock_item_table.c.id)
+                .outerjoin(product_table, product_table.c.id == link_table.c.product_id)
+            )
+            .where(stock_item_table.c.id.in_(ids))
+            .group_by(stock_item_table.c.id, stock_item_table.c.image)
+        )
+        rows = db.session.execute(stmt).all()
 
         def _key(v) -> str:
             if isinstance(v, UUID):

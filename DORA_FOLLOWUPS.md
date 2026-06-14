@@ -52,6 +52,35 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-180 — Reassess "preferred product" before commercialise (Phase 4)
+- **Raised:** 2026-06-14 (preferred-product removal sweep)
+- **Type:** open decision
+- **What:** `StockItem.preferred_product_id` was removed end-to-end this
+  session — column dropped, two sort orders degraded to `cheapest → name`,
+  barcode lookup collapsed to the m2m fallback, stock-value report rebased on
+  cheapest most-recent linked-product price. The original concern was your
+  own (feedback L131 — "Not sold... fluff vs noise"), and the manual per-item
+  annotation never earned its keep at this stage of the build. **Open
+  question:** once the rest of the app is built out (and the cart-button
+  picker, shop-mode, and stock-value report have real usage data), revisit
+  whether a "preferred *product*" or "preferred *merchant*" affordance is
+  worth adding back. The original spec wanted preferred *store/merchant*
+  (Feature Board L66, Unprocessed-Ideas #48/49/52) — a different shape from
+  the per-product field we deleted, and arguably more defensible because one
+  merchant choice would travel across all products from that merchant.
+- **Why deferred:** the existing design instinct (cart-button proposal open-Q
+  2: "always show the picker; preferred only pre-selects") means even a
+  rebuilt preferred only changes *order*, not *behaviour* — which cheapest-
+  first already does for free. Only worth revisiting if real usage shows
+  users wanting to express brand loyalty / size preference / allergen
+  avoidance and the current sort isn't getting them there.
+- **Recommended resolution:** later — end of app build (Phase 3 polish or
+  the first Phase 4 commercialise pass). Inputs to weigh: (a) any signals
+  in feedback that users wished they could pin a specific product; (b) the
+  cart-button picker's actual UX with cheapest-first sort; (c) whether a
+  preferred-*merchant* model (one annotation, app-wide) earns its keep
+  better than the per-stock-item preferred-product we just deleted.
+
 ## [OPEN] FU-179 — Browser-verify Meal Plans C-2.C/D/H/I (carousel + calendar + sidebar + trays)
 - **Raised:** 2026-06-14 (C-2.C/D/H/I — big interaction rebuild, static-only verified)
 - **C-2.I trays additions:** left column groups into Favourites · Haven't-had
@@ -934,104 +963,15 @@ long session summary. Distinct from the other logs:
 - **Why:** the modal-routing gate is new code; verify the count
   hydration stays O(1) DB calls per list page (single GROUP BY).
 - **Recommended resolution:** now (next session).
-
-## [OPEN] FU-127 — Browser-verify Cart Button Chunk 1 (AddToListButton + double-toast fix)
-- **Raised:** 2026-06-12 (Cart Button Chunk 1 impl; static-only, no env)
-- **Type:** finding / verification
-- **What:** Verify, in order:
-  1. **Stock overview row cart button** behaves: not-on → adds (one
-     toast); on exactly 1 list → click removes silently; on 2+ →
-     popover with each list's "Remove from <name>" + "Remove from
-     all" + "Add to another list".
-  2. **Recipe detail ingredient row** cart button: same behaviour.
-  3. **Stock item detail toolbar** "Add to list" button: same
-     behaviour at a larger size + label.
-  4. **Bulk-add from Stock Overview**: select N items → toolbar "Add
-     N to list" → resolves the target ONCE (uses sessionStorage
-     pick or membership's quick_add_target) and surfaces a single
-     summary toast (no per-item toasts).
-  5. **FU-038 specifically**: re-adding an already-on-list item via
-     the row button **never** produces the contradictory pair
-     ("0 added, 1 already" + "Added").
-  6. **No regressions**: keyboard shortcut `a` (add focused or
-     selected) still works via the legacy `bulkAddToPrimary`
-     pathway (kept for keyboard ergonomics).
-- **Why:** ~3 visible surfaces adopted in this chunk; the popover
-  + bulk variants are new code paths. The remaining hand-rolled
-  cart paths on other surfaces (Cookbook overview card,
-  MyProductsPage, MealPlansOverview, QuickAddSheet entry,
-  ProductSearch) will be adopted opportunistically — they were
-  left in-place this chunk for risk control. **Logged as FU-128.**
-- **Recommended resolution:** now (next session).
-
-## [OPEN] FU-128 — Adopt `AddToListButton` on remaining cart surfaces
-- **Raised:** 2026-06-12 (Cart Button Chunk 1 scope cap)
-- **Type:** rollout
-- **What:** Chunk 1 spec'd ~9 surfaces from proposal §1 (#1, #3, #5,
-  #6, #7, #11 row/toolbar/menu + #2, #9, #13 bulk). This commit
-  adopted **#1 StockItemRow**, **#3 StockItemDetailPage toolbar**,
-  **#5 RecipeDetailPage ingredient row**, **#9 StockOverview bulk**.
-  The remaining surfaces still carry hand-rolled add buttons:
-  - **#6 MyProductsPage**
-  - **#7 MealPlansOverview**
-  - **#11 ProductSearch**
-  - **#13 QuickAddSheet** (entry buttons elsewhere)
-  Each is mechanically the same change: swap the hand-rolled q-btn
-  for `<AddToListButton variant="row|toolbar" :stock-item-id="..." />`
-  and delete the dead handler.
-- **Why deferred:** plan says "do them in one PR so the old paths
-  all die together" — I held the line on risk by adopting only the
-  highest-traffic surfaces. The rest are mechanical follow-ups.
-- **Recommended resolution:** opportunistic — pair with the next
-  edit to each surface, or do them as one tidy sweep before
-  Chunk 2.
-
-## [OPEN] FU-126 — Rename `RecipeImageField` → `ImageUploadField`
-- **Raised:** 2026-06-12 (Stock Overview Chunk 6 / FU-033 impl)
-- **Type:** tidy-up
-- **What:** `RecipeImageField` is now used by both
-  `RecipeDetailPage` and `StockItemDetailPage` — it carries no
-  recipe-specific logic, just `previewUrl` + `name` props +
-  `pick` / `clear` emits. R-001's threshold (second consumer)
-  has been hit; rename to `ImageUploadField` + move to
-  `components/` (not `components/recipes/`). Touch points:
-  the component file, the two import sites, and the inline
-  "Recipe image" alt text (parameterise via a prop).
-- **Why deferred:** scope discipline this chunk. Trivial rename,
-  no behavioural change.
-- **Recommended resolution:** opportunistic — pair with the next
-  image-touching change, or do as a standalone tidy when convenient.
-
-## [OPEN] FU-125 — Browser-verify Stock Overview Chunk 6 / FU-033 (stock images + product fallback)
-- **Raised:** 2026-06-12 (Chunk 6 impl; static-only, no env)
-- **Type:** finding / verification
-- **What:** Verify, in order:
-  1. **Upload from detail page.** Open a stock item → Overview tab.
-     Upload a photo via the new image field at the top of the right
-     column → saves immediately, row in the overview gains a
-     thumbnail on next load. "Remove" clears it.
-  2. **Product fallback.** Pick a stock item with no own image but a
-     linked product that has one → the row's thumbnail shows the
-     product's image. The detail page's `has_image` flag should
-     still be true. Unlink the product → flag goes false, row drops
-     back to placeholder.
-  3. **Both empty.** Stock item with no own image + no linked
-     product image → row shows the neutral placeholder; the bytes
-     endpoint 404s (check Network tab — no broken-image icon).
-  4. **List endpoint performance.** With a >50-item pantry, watch
-     the network panel during overview load — `GET /stock-items`
-     response should be small, no image bytes inlined. Bytes only
-     load when the row actually mounts an `<img>`.
-  5. **Show/hide toggle from Chunk 3** still flips the image
-     column on/off (denser rows).
-  6. **Race protection** — uploading while the row is mounted
-     should bump `imageVersion` and the row should refetch the
-     new image on the next list refresh (the toggle does that, or
-     reload the page).
-- **Why:** the image route + fallback query are new server code;
-  the deferred-column mapping is a SQLAlchemy behaviour change.
-  Both need a real DB to confirm.
-- **Recommended resolution:** now (next session).
+- **State note:** 2026-06-14 — user-reported the picker modal is **not
+  popping up** when adding to a list with 2+ linked products; AddToListButton
+  is going straight to the silent-add path instead of opening QuickAddSheet
+  pre-populated. Needs a live repro before root-causing — likely candidates:
+  `linked_product_count` not hydrating on the relevant payload,
+  `shouldUseCombinedModal.value` evaluating false because of a store
+  mismatch, or the new `selected-product-id` short-circuit (FU-128) firing
+  on the wrong surface. Revisit when the user can capture which screen +
+  which item it fails on.
 
 ## [OPEN] FU-124 — Browser-verify Stock Overview Chunk 5 (responsive detail nav + long-press)
 - **Raised:** 2026-06-12 (Stock Overview Chunk 5 impl; static-only, no env)

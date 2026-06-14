@@ -149,7 +149,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_level_last_updated", DateTime(timezone=True)),
         Column("stock_location_id", UUIDType, ForeignKey("StockLocation.id", ondelete="SET NULL"), nullable=True),
         Column("stocktake_alerts_are_enabled", Boolean),
-        Column("preferred_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         Column("last_checked_at", DateTime(timezone=True), nullable=True),
     )
 
@@ -614,7 +613,6 @@ def configure_mappings(db: SQLAlchemy):
         "stock_level": relationship(StockLevel, lazy="noload"),
         "stock_location": relationship(StockLocation, lazy="noload"),
         "products": relationship(Product, secondary=stock_item_product_table, lazy="noload"),
-        # preferred_product_id auto-maps from the column of the same name.
         # Substitutes (StockItemSubstitute) are a self-referential m2m accessed
         # via the association table directly — no relationship is mapped because
         # the generic query builder can't self-join StockItem to itself.

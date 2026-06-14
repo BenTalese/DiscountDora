@@ -48,7 +48,10 @@ export type StockItemDetail = {
     opened_on: string | null;
     is_flagged: boolean;
     auto_add_when_low: boolean;
-    preferred_product_id: string | null;
+    /** FU-125 — true only when the user has uploaded their own image (no
+     *  product-fallback). Drives whether the image field reads "Add" /
+     *  "Change + Remove" — a fallback preview shouldn't show Remove. */
+    has_own_image?: boolean;
     attention_score: number;
     attention_reasons: AttentionReasons;
     products: LinkedProduct[];

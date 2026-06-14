@@ -37,7 +37,7 @@ def seed_dev_data():
     """Populate a rich dev dataset that exercises every screen.
 
     Covers: multiple merchants and products (with current + historic offers
-    for sparklines), product↔stock-item links and a preferred product, a deep
+    for sparklines), product↔stock-item links, a deep
     location hierarchy, stock items across all levels / expiry states / flags /
     open markers, substitutes, level-change history, recipes (cookable and
     not) across collections, meals, a full week's meal plan, primary /
@@ -212,7 +212,6 @@ def seed_dev_data():
             is_open=kw.get("is_open", False),
             opened_on=kw.get("opened_on"),
             products=kw.get("products", []),
-            preferred_product_id=kw.get("preferred"),
         )
         repo.add(item)
         return item
@@ -227,11 +226,11 @@ def seed_dev_data():
     icecream = make_item(name="Vanilla Ice Cream", group=g_frozen, level=low, location=freezer,
                          stocktake_alerts=True, expiry=today - timedelta(days=3))
     pasta = make_item(name="Barilla Pasta", group=g_pantry, level=well, location=top_shelf,
-                      products=[pasta_barilla], preferred=pasta_barilla.id)
+                      products=[pasta_barilla])
     milk = make_item(name="Full Cream Milk", group=g_dairy, level=low, location=fridge,
                      expiry=today + timedelta(days=2), auto_add=True, is_open=True,
                      opened_on=today - timedelta(days=2), products=[milk_woolies, milk_coles],
-                     preferred=milk_woolies.id, updated_days_ago=1)
+                     updated_days_ago=1)
     eggs = make_item(name="Free Range Eggs", group=g_dairy, level=sufficient, location=fridge,
                      flagged=True, products=[eggs_woolies])
     butter = make_item(name="Butter", group=g_dairy, level=well, location=fridge,
@@ -241,7 +240,7 @@ def seed_dev_data():
     garlic = make_item(name="Garlic", group=g_fruit, level=well, location=pantry)
     olive_oil = make_item(name="Olive Oil", group=g_pantry, level=sufficient, location=top_shelf,
                           flagged=True, is_open=True, opened_on=today - timedelta(days=20),
-                          products=[oil_aldi], preferred=oil_aldi.id)
+                          products=[oil_aldi])
     parmesan = make_item(name="Parmesan Cheese", group=g_dairy, level=out, location=fridge,
                          auto_add=True, products=[parmesan_coles])
     chicken = make_item(name="Chicken Breast", group=g_meat, level=sufficient, location=freezer)
@@ -253,7 +252,7 @@ def seed_dev_data():
                       flagged=True, auto_add=True)
     coffee = make_item(name="Coffee Beans", group=g_pantry, level=well, location=top_shelf,
                        flagged=True, is_open=True, opened_on=today - timedelta(days=3),
-                       products=[coffee_iga], preferred=coffee_iga.id)
+                       products=[coffee_iga])
 
     repo.save_changes()  # items need ids before substitutes / history / lines
 

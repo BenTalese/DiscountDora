@@ -49,7 +49,6 @@ export type LineProductOffer = {
     price_now: number | null;
     price_was: number | null;
     is_selected: boolean;
-    is_preferred: boolean;
 };
 
 export type AddedVia =

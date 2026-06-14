@@ -152,9 +152,10 @@
                         label="Tools (optional)"
                     />
 
-                    <RecipeImageField
+                    <ImageUploadField
                         :preview-url="form.image"
                         :name="form.name"
+                        alt="Recipe image"
                         @pick="(url) => { form.image = url; }"
                         @clear="() => { form.image = null; }"
                     />
@@ -234,7 +235,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
-    import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
+    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService, {
         type CreateRecipeIngredientCommand,

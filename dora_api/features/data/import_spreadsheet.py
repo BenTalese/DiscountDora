@@ -476,7 +476,6 @@ class CommitSpreadsheetHandler:
                     is_open=False,
                     auto_add_when_low=False,
                     opened_on=None,
-                    preferred_product_id=None,
                 ))
                 existing_item_names[row_name.lower()] = True  # mark for downstream dup checks
                 reports.append(RowReport(

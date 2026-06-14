@@ -5,8 +5,13 @@
         L90 / L91 (+ L81 main-zone display, L66 essential-as-filter).
 
         Left → right:
-          [bulk?]  [■ LEVEL button]  Name (emphasised) · Zone  [img?]
+          [img?]  [bulk?]  [■ LEVEL button]  Name (emphasised) · Zone
             · · · spacer · · ·  [⏰ expiry] [🍽 #recipes] [open] [🛒 cart]
+        Image (FU-125) is the first slot so its left edge inherits the
+        section's natural left padding — same x where the level button
+        sits when the image is hidden. Square, stretched to the row
+        content height minus a small margin so it stays inside the
+        row's status outline.
 
         Status drives a whole-row outline (decision 6); selection fills
         the row (L91). All colours via theme tokens — no raw values.
@@ -20,6 +25,33 @@
         @click="emit('click', item.stock_item_id)"
     >
         <q-card-section class="row items-center no-wrap q-py-sm q-gutter-x-sm">
+            <!-- ──────────────────────────────────────────────────────
+                 Leading image slot (FU-125). First child so its left
+                 edge sits at the section's natural left padding —
+                 i.e. exactly where the stock-level button sits when
+                 the image is hidden. Square, stretches to the row
+                 content height minus a small margin so it stays
+                 inside the row's status outline.
+            ────────────────────────────────────────────────────────── -->
+            <div
+                v-if="showStockImages"
+                class="stock-row__image"
+                :aria-hidden="true"
+            >
+                <img
+                    v-if="item.has_image && !imgFailed"
+                    :src="stockItemImageUrl(item.stock_item_id, stockItemStore.imageVersionOf(item.stock_item_id))"
+                    :alt="item.name"
+                    @error="imgFailed = true"
+                />
+                <q-icon
+                    v-else
+                    :name="ICONS.image"
+                    size="22px"
+                    class="dora-text-muted"
+                />
+            </div>
+
             <q-checkbox
                 v-if="bulkMode"
                 :model-value="selected"
@@ -88,32 +120,6 @@
                     </q-tooltip>
                     <q-tooltip v-else>Filter to this location</q-tooltip>
                 </button>
-            </div>
-
-            <!-- ──────────────────────────────────────────────────────
-                 Image slot (FU-106 + C-cross §2.8 + FU-033).
-                 Renders only when the user opts in (showStockImages).
-                 Server falls back to a linked product's image when the
-                 stock item has none of its own; if both are absent the
-                 server 404s and the SPA shows the placeholder.
-            ────────────────────────────────────────────────────────── -->
-            <div
-                v-if="showStockImages"
-                class="stock-row__image"
-                :aria-hidden="true"
-            >
-                <img
-                    v-if="item.has_image && !imgFailed"
-                    :src="stockItemImageUrl(item.stock_item_id)"
-                    :alt="item.name"
-                    @error="imgFailed = true"
-                />
-                <q-icon
-                    v-else
-                    :name="ICONS.image"
-                    size="20px"
-                    class="dora-text-muted"
-                />
             </div>
 
             <q-space />
@@ -254,7 +260,7 @@
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { useLocationStore } from 'src/stores/locationStore';
     import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
-    import { computed, ref } from 'vue';
+    import { computed, ref, watch } from 'vue';
 
     const props = defineProps<{
         item: StockItem;
@@ -280,9 +286,15 @@
     // C-1 Chunk 6 / FU-033 — defensive fallback. If the bytes endpoint
     // 404s mid-render (race with a delete, transient error), drop the
     // <img> rather than show a broken icon — placeholder takes over.
+    // FU-125 — reset the latch when the image-version bumps (a new
+    // upload may succeed where the previous attempt failed).
     const imgFailed = ref(false);
 
     const stockItemStore = useStockItemStore();
+    watch(
+        () => stockItemStore.imageVersionOf(props.item.stock_item_id),
+        () => { imgFailed.value = false; },
+    );
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
     const locationStore = useLocationStore();
@@ -588,23 +600,28 @@
         color: var(--text-primary);
     }
 
-    /* Image slot. Renders an <img> when has_image; otherwise a neutral
-       placeholder (sunken square with an "image" glyph). */
+    /* FU-125 — leading image slot. Fixed-width tile, stretched
+       vertically past the section's q-py-sm padding so it visually
+       fills more of the row height while leaving a small gap to the
+       row's status outline. Pulled partway toward the card's left
+       edge by a small negative margin-left for visual weight. */
     .stock-row__image {
-        width: 40px;
-        height: 40px;
-        flex: 0 0 40px;
+        flex: 0 0 56px;
+        width: 56px;
+        height: 56px;
+        margin-left: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: var(--radius-sm, 4px);
         background: var(--surface-sunken, color-mix(in srgb, var(--text-primary) 6%, transparent));
         overflow: hidden;
+        border-radius: var(--radius-sm, 4px);
     }
     .stock-row__image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
+        transform: scale(1.18);
     }
 </style>

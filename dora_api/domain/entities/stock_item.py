@@ -44,10 +44,6 @@ class StockItem(BaseEntity):
     # SKUs are tracked here". Default empty so callers that don't care about
     # the m2m don't have to pass it.
     products: List[Product] = field(default_factory=list)
-    # The linked product the user prefers to buy (drives "preferred merchant
-    # first" ordering). FK to Product, cleared (SET NULL) if that product is
-    # deleted. Stored as a raw UUID rather than a relationship.
-    preferred_product_id: UUID | None = None
     # NOTE: substitutes are a self-referential m2m stored in the
     # StockItemSubstitute table and accessed directly (the generic repository
     # can't self-join an entity to itself), so there's no relationship field
@@ -63,7 +59,6 @@ class StockItem(BaseEntity):
         NAME = "name"
         NOTES = "notes"
         OPENED_ON = "opened_on"
-        PREFERRED_PRODUCT_ID = "preferred_product_id"
         PRODUCTS = "products"
         STOCK_GROUP = "stock_group"
         STOCK_LEVEL = "stock_level"

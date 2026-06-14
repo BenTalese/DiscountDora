@@ -320,19 +320,19 @@
                         >
                             <q-tooltip>Open at merchant</q-tooltip>
                         </q-btn>
-                        <q-btn
+                        <!-- FU-128 — adopted AddToListButton row variant with
+                             `selected-product-id` so this carries the same
+                             cart-state UX (popover on 2+ lists, smart-remove
+                             on exactly one) the rest of the app uses. The
+                             product is pre-decided here, so the line records
+                             `selected_product_id`. -->
+                        <AddToListButton
                             v-if="product.linked_stock_item_id"
-                            flat
-                            dense
-                            no-caps
-                            :icon="ICONS.add_shopping_cart"
-                            color="primary"
-                            @click.stop="onAddSingle(product)"
-                        >
-                            <q-tooltip>
-                                Add the linked stock item to your draft list
-                            </q-tooltip>
-                        </q-btn>
+                            variant="row"
+                            :stock-item-id="product.linked_stock_item_id"
+                            :selected-product-id="product.product_id"
+                            @click.stop
+                        />
                         <!-- C-7 Chunk 3 — unlinked products add as a
                              product-only line (L191 standalone). -->
                         <AddToListButton
@@ -916,26 +916,6 @@
     }
 
     // ── Per-product actions ─────────────────────────────────────────
-    async function onAddSingle(product: Product) {
-        if (!product.linked_stock_item_id) return;
-        const primary = shoppingListStore.quickAddTargetListId;
-        if (!primary) {
-            $q.dialog({
-                title: 'No primary list',
-                message: 'Set a primary shopping list to use the cart shortcut.',
-                ok: { label: 'Open lists', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            }).onOk(() => { void router.push('/shopping-lists'); });
-            return;
-        }
-        await addItems(primary, [
-            {
-                stock_item_id: product.linked_stock_item_id,
-                selected_product_id: product.product_id,
-            },
-        ]);
-    }
-
     async function onUnlinkSingle(product: Product) {
         if (!product.linked_stock_item_id) return;
         try {

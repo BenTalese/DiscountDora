@@ -142,6 +142,20 @@ semver — major bumps signal schema or breaking-config changes.
   through `get_data_dir()` for consistency.
 
 ### Removed
+- **"Preferred product" annotation — gone end-to-end.** The
+  `StockItem.preferred_product_id` field (driving the star toggle on the
+  stock-item detail page) carried weight in only one place that changed
+  behaviour — the stock-value report — and excluded every item the user
+  hadn't manually starred. Removed in one pass: the report now estimates
+  from the **cheapest** most-recent linked-product price instead (which is
+  always available when offers are linked); the stock-item products list
+  and shopping-list offer picker sort `cheapest → name` (was preferred
+  first); the barcode-lookup → stock-item path collapsed to the m2m
+  fallback it already had; the star toggle, API field, frontend models,
+  and the table column + FK are gone. Reversible Alembic migration
+  `d2a7f4c9e6b1` (batch mode, SQLite + Postgres). End-of-build follow-up
+  FU-180 tracks whether a preferred-merchant (rather than per-product)
+  affordance is worth adding back once real usage data exists.
 - **App-wide undo / shopping-list Reopen — gone (FU-163).** The user
   retired the whole undo posture: "decided undo feature does not make sense,
   remove. Even the reopen functionality — once a list is done, it's done.

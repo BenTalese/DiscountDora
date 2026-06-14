@@ -123,6 +123,7 @@
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import { ICONS } from 'src/style/icons';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { cartStateFor, type ActiveListInfo, type Membership } from 'src/models/shoppingList';
@@ -141,6 +142,13 @@
              *  stock-item placeholder). Pairs with `variant="inline-product"`
              *  on the My Products row. */
             productId?: string;
+            /** Pre-decided linked product to record on the line. When set on
+             *  the `row` variant (e.g. the per-product cart on My Products),
+             *  the add skips the 2+-products combined modal because the user
+             *  has already chosen which product to buy, and the line stores
+             *  `selected_product_id` so the price picker sticks to that
+             *  product. Cart state still keys off the stock item. */
+            selectedProductId?: string;
             items?: string[];
             variant?: 'row' | 'toolbar' | 'menu' | 'bulk' | 'inline-product';
             /** Optional override for the row tooltip / toolbar / menu label. */
@@ -314,9 +322,14 @@
             // Ambiguous / no-draft path — let the single-item flow
             // resolve the target (it prompts + remembers in
             // sessionStorage). After the first item lands, batch the
-            // rest into the now-known target.
+            // rest into the now-known target. Read the *remembered pick*
+            // — `quick_add_target_list_id` only fires when exactly one
+            // draft exists, so it stays null here and would silently
+            // drop items 2..N (the original bug).
+            const pick = useQuickAddTargetPick();
             await actions.addToList(ids[0]!);
-            const targetAfter = membership.value?.quick_add_target_list_id ?? null;
+            const targetAfter =
+                pick.load() ?? (membership.value?.quick_add_target_list_id ?? null);
             if (targetAfter && ids.length > 1) {
                 await listActions.addItems(
                     targetAfter,
@@ -409,6 +422,28 @@
         if (!props.stockItemId) return;
         const stockItemId = props.stockItemId;
         if (cartState.value === 'none') {
+            // Pre-decided product (My Products per-product cart) — user
+            // has already chosen which linked product to buy, so skip the
+            // combined modal and record `selected_product_id` on the line
+            // directly. Falls back to the inferred quick-add target; on
+            // ambiguous / no-draft, defers to the standard flow.
+            if (props.selectedProductId) {
+                const target = membership.value?.quick_add_target_list_id ?? null;
+                busy.value = true;
+                try {
+                    if (target) {
+                        await listActions.addItems(target, [{
+                            stock_item_id: stockItemId,
+                            selected_product_id: props.selectedProductId,
+                        }]);
+                    } else {
+                        await actions.addToList(stockItemId);
+                    }
+                } finally {
+                    busy.value = false;
+                }
+                return;
+            }
             // C-7 Chunk 2 — 2+ products (and/or both axes ambiguous)
             // → combined modal so the user makes both picks in one
             // surface. Quantity lives only here (decision 5); quick
@@ -503,11 +538,52 @@
                         onClick: async () => {
                             if (!props.stockItemId) return;
                             multiPopoverOpen.value = false;
+                            const stockItemId = props.stockItemId;
+                            // "Add to another" — pick from active lists the
+                            // item is NOT already on. Routing through the
+                            // inferred-target path here picks one of the
+                            // lists it's already on and toasts
+                            // "Already on your list" (the original bug).
+                            const onListIds = new Set(
+                                onLists.value.map((l) => l.shopping_list_id),
+                            );
+                            const candidates = (
+                                membership.value?.active_lists ?? []
+                            ).filter((l) => !onListIds.has(l.shopping_list_id));
+                            if (candidates.length === 0) {
+                                $q.notify({
+                                    type: 'info',
+                                    position: 'bottom-right',
+                                    message: 'Already on every active list.',
+                                });
+                                return;
+                            }
+                            const chosen = candidates.length === 1
+                                ? candidates[0]!.shopping_list_id
+                                : await new Promise<string | null>((resolve) => {
+                                    $q.dialog({
+                                        title: 'Add to which list?',
+                                        message: 'Pick another active list.',
+                                        options: {
+                                            type: 'radio',
+                                            model: candidates[0]!.shopping_list_id,
+                                            items: candidates.map((c) => ({
+                                                label: c.name,
+                                                value: c.shopping_list_id,
+                                            })),
+                                        },
+                                        cancel: { noCaps: true },
+                                        ok: { noCaps: true, label: 'Add', color: 'primary' },
+                                        persistent: false,
+                                    })
+                                        .onOk((val: string) => resolve(val))
+                                        .onCancel(() => resolve(null))
+                                        .onDismiss(() => {});
+                                });
+                            if (!chosen) return;
                             busy.value = true;
                             try {
-                                // "Add to another" — defer to the existing
-                                // add-to-list flow, which prompts for a target.
-                                await actions.addToList(props.stockItemId);
+                                await actions.addToList(stockItemId, chosen);
                             } finally {
                                 busy.value = false;
                             }

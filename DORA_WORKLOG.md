@@ -9,6 +9,81 @@ next.
 
 ---
 
+## 2026-06-14 — Cut "preferred product" end-to-end
+**Status:** complete. vue-tsc clean (0 errors); backend unit suite 49/49.
+
+**What:** User-approved removal of `StockItem.preferred_product_id` end-to-end
+after a value analysis. The field's only behaviour-changing consumer was the
+stock-value report (which silently excluded every item without a manually-set
+preferred); the rest was UI sort order + a barcode fast path with an existing
+fallback. Per the proposed five-step order, executed in a single pass:
+
+1. **Stock-value report (`reports.py`)** — `StockValueOverTimeHandler` now
+   builds `product_ids_by_item` from the m2m and uses a new
+   `_cheapest_as_of()` helper to take the minimum "most-recent ≤ cursor"
+   across the item's linked products. Docstring + estimate-note copy updated
+   ("cheapest most-recent linked-product price"). Pulls offers for every
+   linked product, not just preferred.
+2. **Sort orders + DTOs** — `get_shopping_list_detail.py` dropped
+   `is_preferred` from `LineProductOfferDto`, removed the preferred-merchant
+   sort key (now `cheapest → merchant.lower()`). `get_stock_item_detail.py`
+   dropped `preferred_product_id` from `StockItemDetailDto`.
+   `StockItemDetailPage.vue` `sortedProducts` rewrote to `cheapest → name`.
+   Frontend `models/shoppingList.ts` `LineProductOffer.is_preferred` and
+   `models/stockItemDetail.ts` `preferred_product_id` removed.
+   `ShoppingListDetail.vue` star-icon branch deleted.
+3. **Barcode lookup (`barcodes.py`)** — collapsed the `preferred_product_id`
+   one-shot lookup; the m2m `StockItemProduct` fallback is now the only
+   path. Comments updated.
+4. **UI star toggle** — `StockItemDetailPage.vue` star button + `togglePreferred`
+   handler deleted. `UpdateStockItemRequest` (backend) + `UpdateStockItemCommand`
+   (frontend service) dropped the `preferred_product_id` field. Domain
+   entity `StockItem` lost the field + the `PREFERRED_PRODUCT_ID` Fields enum
+   entry.
+5. **Schema** — new migration
+   `d2a7f4c9e6b1_20260614_drop_stock_item_preferred_product.py` (down_revision
+   `e1f7b3d9a2c4`, the prior head). Batch-mode drop of FK + column,
+   reversible downgrade (recreates the column NULLABLE — values can't be
+   recovered, that's noted in the docstring). Column + mapper entry removed
+   from `table_mappings.py`.
+6. **Misc cleanup** — `restore_shared.py` SOFT_FK_NULLABLE entry removed;
+   `import_spreadsheet.py` `preferred_product_id=None` kwarg gone;
+   `seed.py` `preferred=` kwarg + the four call sites + the docstring
+   mention cleaned. Test stub `tests/test_shopping_list_totals.py` had its
+   `_offer()` helper updated to drop `is_preferred` after the DTO change.
+
+**Follow-up logged:** **FU-180** to reassess at end of build (Phase 3 polish
+or first Phase 4 commercialise pass) whether a *preferred merchant* (the
+original spec's intent — Feature Board L66, Unprocessed-Ideas #48/49/52)
+earns its keep with real usage data. Notes the existing cart-button
+design instinct ("always show the picker; preferred only pre-selects")
+which means even a rebuilt preferred only changes *order*, not *behaviour*.
+
+**Charter/standards check:** Clean.
+- R-001 (componentisation): n/a (deletion). ✓
+- R-002 (theme tokens): n/a. ✓
+- R-003 (state ownership): the report's per-bucket cheapest computation is
+  server-owned (single derived fact, no client duplication). ✓
+- R-005 (Postgres/SQLite portability): batch-mode migration. ✓
+- R-006 (clean migrations): single migration, reversible downgrade, no
+  conditional/idempotent guards. ✓
+- R-007 (scope discipline): touched only the eight files the field crossed
+  + their test stub; no opportunistic cleanup. ✓
+
+No ADR added — feature deletion, not a recurring pattern.
+
+**Open loops:**
+- **FU-180** (recorded) — reassess preferred-merchant late in build.
+- **Browser verification recommended** for the three surfaces whose sort
+  changed: stock-item detail products list, shopping-list offer picker,
+  stock-value report (visual sanity-check that the dollar curve still
+  looks reasonable on seed data).
+
+**Next up:** unblocks the user from working with the cleaner data model;
+no immediate follow-on task in this branch.
+
+---
+
 ## 2026-06-14 — Meal Plans C-2.I — left-column recipe trays
 **Status:** complete & verified. Backend e2e **264** + unit **49** pass; vue-tsc
 **0** + eslint **clean**. Backend touch (two derived DTO fields, no migration).

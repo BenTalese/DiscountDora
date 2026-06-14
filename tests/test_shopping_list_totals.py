@@ -12,11 +12,11 @@ from dora_api.features.shopping_lists.get_shopping_list_detail import (
     LineProductOfferDto, ShoppingListLineDto, compute_list_totals)
 
 
-def _offer(price_now, price_was, *, is_selected=False, is_preferred=False):
+def _offer(price_now, price_was, *, is_selected=False):
     return LineProductOfferDto(
         product_id=uuid4(), name="p", brand=None, merchant_id=uuid4(),
         merchant_name="m", size=None, price_now=price_now, price_was=price_was,
-        is_selected=is_selected, is_preferred=is_preferred,
+        is_selected=is_selected,
     )
 
 

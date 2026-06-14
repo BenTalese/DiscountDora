@@ -164,14 +164,19 @@
 
                         <div class="col-12 col-md-6">
                             <!-- C-1 Chunk 6 / FU-033 — image upload + clear.
-                                 Reuses the RecipeImageField pattern so the
-                                 stock + recipe surfaces look the same.
-                                 Saves immediately (no "Save" coupling with
-                                 the basics form) — uploading a photo isn't
-                                 the same intent as renaming. -->
-                            <RecipeImageField
+                                 Shared `ImageUploadField` (renamed from
+                                 RecipeImageField — FU-126). Saves immediately
+                                 (no "Save" coupling with the basics form) —
+                                 uploading a photo isn't the same intent as
+                                 renaming. `can-clear` is gated on
+                                 `has_own_image` (FU-125): a product-fallback
+                                 preview must read "Add image", not Change/
+                                 Remove — the user never uploaded that image. -->
+                            <ImageUploadField
                                 :preview-url="imagePreviewUrl"
                                 :name="detail?.name"
+                                :alt="detail?.name ?? 'Stock item image'"
+                                :can-clear="!!pendingImage || !!detail?.has_own_image"
                                 class="q-mb-md"
                                 @pick="onPickImage"
                                 @clear="onClearImage"
@@ -239,9 +244,18 @@
 
                 <!-- ── Linked products ────────────────────────────────── -->
                 <q-tab-panel name="products">
-                    <div class="row items-center q-mb-sm">
+                    <div class="row items-center q-mb-sm q-gutter-sm">
                         <div class="text-subtitle1">Linked products</div>
                         <q-space />
+                        <q-btn
+                            v-if="cheapestProduct && detail.products.length > 1"
+                            color="primary"
+                            no-caps
+                            :icon="ICONS.add_shopping_cart"
+                            :label="`Get cheapest ($${cheapestProduct.price_now?.toFixed(2)})`"
+                            :loading="busy"
+                            @click="onAddCheapest"
+                        />
                         <BaseButton variant="primary" :icon="ICONS.add" label="Link product" @click="openProductPicker" />
                     </div>
 
@@ -274,18 +288,6 @@
                                     >
                                         {{ discountPct(prod) }}% off
                                     </q-chip>
-                                    <q-btn
-                                        flat
-                                        dense
-                                        round
-                                        :icon="detail.preferred_product_id === prod.product_id ? 'star' : 'star_border'"
-                                        :color="detail.preferred_product_id === prod.product_id ? 'amber-9' : 'grey'"
-                                        @click="togglePreferred(prod.product_id)"
-                                    >
-                                        <q-tooltip>
-                                            {{ detail.preferred_product_id === prod.product_id ? 'Preferred merchant' : 'Set as preferred' }}
-                                        </q-tooltip>
-                                    </q-btn>
                                 </q-card-section>
 
                                 <q-card-section class="row items-center q-py-xs">
@@ -307,6 +309,16 @@
                                 <q-separator />
                                 <q-card-actions align="right">
                                     <q-btn
+                                        flat
+                                        dense
+                                        no-caps
+                                        :icon="ICONS.add_shopping_cart"
+                                        label="Add to list"
+                                        color="primary"
+                                        :loading="busy"
+                                        @click="onAddProductToList(prod.product_id)"
+                                    />
+                                    <q-btn
                                         v-if="prod.web_url"
                                         flat
                                         dense
@@ -324,17 +336,6 @@
                                 </q-card-actions>
                             </q-card>
                         </div>
-                    </div>
-
-                    <div v-if="cheapestProduct" class="q-mt-md">
-                        <q-btn
-                            color="primary"
-                            no-caps
-                            :icon="ICONS.add_shopping_cart"
-                            :label="`Add cheapest to list ($${cheapestProduct.price_now?.toFixed(2)} · ${cheapestProduct.merchant_name})`"
-                            :loading="busy"
-                            @click="onAddCheapest"
-                        />
                     </div>
                 </q-tab-panel>
 
@@ -523,7 +524,7 @@
     import { useQuasar } from 'quasar';
     import MerchantLogo from 'src/components/MerchantLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
-    import RecipeImageField from 'src/components/recipes/RecipeImageField.vue';
+    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -643,16 +644,19 @@
     useUnsavedChangesGuard(isDirty);
     // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
     // Saves immediately — uploading a photo isn't coupled to the basics
-    // form's Save button. `imageVersion` busts the <img> cache after a
-    // save so the new bytes show without a hard reload.
+    // form's Save button. Cache-bust is owned by the store now (FU-125
+    // `imageVersionOf`) so a save here reactively refreshes every row /
+    // surface displaying the same item, not just this detail page.
     const pendingImage = ref<string | null>(null);
     const imageCleared = ref(false);
-    const imageVersion = ref(0);
     const imagePreviewUrl = computed<string | null>(() => {
         if (pendingImage.value) return pendingImage.value;
         if (imageCleared.value) return null;
         if (!detail.value?.has_image) return null;
-        return stockItemImageUrl(detail.value.stock_item_id, imageVersion.value);
+        return stockItemImageUrl(
+            detail.value.stock_item_id,
+            stockItemStore.imageVersionOf(detail.value.stock_item_id),
+        );
     });
     async function onPickImage(dataUrl: string) {
         if (!detail.value) return;
@@ -664,7 +668,6 @@
             });
             imageCleared.value = false;
             pendingImage.value = null;
-            imageVersion.value++;
             await loadDetail();
             $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image updated.' });
         } catch (err) {
@@ -680,7 +683,6 @@
                 image: null,
             });
             imageCleared.value = true;
-            imageVersion.value++;
             await loadDetail();
             $q.notify({ type: 'positive', position: 'bottom-right', message: 'Image removed.' });
         } catch (err) {
@@ -766,15 +768,14 @@
         return Math.round(((p.price_was - p.price_now) / p.price_was) * 100);
     }
 
-    // Preferred product first, then cheapest, then by name.
-    const sortedProducts = computed(() => {
-        const preferred = detail.value?.preferred_product_id;
-        return [...(detail.value?.products ?? [])].sort((a, b) => {
-            if (a.product_id === preferred) return -1;
-            if (b.product_id === preferred) return 1;
-            return (a.price_now ?? Infinity) - (b.price_now ?? Infinity);
-        });
-    });
+    // Cheapest first, then by name.
+    const sortedProducts = computed(() =>
+        [...(detail.value?.products ?? [])].sort((a, b) => {
+            const priceDiff = (a.price_now ?? Infinity) - (b.price_now ?? Infinity);
+            if (priceDiff !== 0) return priceDiff;
+            return a.name.localeCompare(b.name);
+        }),
+    );
     const cheapestProduct = computed<LinkedProduct | null>(() => {
         const withPrice = (detail.value?.products ?? []).filter((p) => p.price_now != null);
         if (withPrice.length === 0) return null;
@@ -799,19 +800,13 @@
         priceHistory.value = map;
     }
 
-    async function togglePreferred(productId: string) {
-        if (!detail.value) return;
-        const next = detail.value.preferred_product_id === productId ? null : productId;
-        await withBusyReload(() =>
-            stockItemStore.updateStockItemAsync({
-                stock_item_id: stockItemId.value,
-                preferred_product_id: next,
-            }),
-        );
-    }
 
     async function onAddCheapest() {
         if (!cheapestProduct.value) return;
+        await onAddProductToList(cheapestProduct.value.product_id);
+    }
+
+    async function onAddProductToList(productId: string) {
         const primary = shoppingListStore.quickAddTargetListId;
         busy.value = true;
         try {
@@ -819,7 +814,7 @@
                 await slActions.addItems(primary, [
                     {
                         stock_item_id: stockItemId.value,
-                        selected_product_id: cheapestProduct.value.product_id,
+                        selected_product_id: productId,
                     },
                 ]);
             } else {

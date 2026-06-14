@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
+from dora_api.features.meal_slots.slot_validation import (
+    find_invalid_slot, get_valid_slot_names, invalid_slot_message)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failures,
@@ -48,6 +50,7 @@ class UpdateMealPlanResponse:
     missing_recipe_ids: tuple[UUID, ...] = ()
     has_past_entry: bool = False
     needs_clear_confirmation: bool = False
+    invalid_slot_message: str | None = None
 
 
 class UpdateMealPlanHandler:
@@ -74,6 +77,18 @@ class UpdateMealPlanHandler:
         if "entries" in _SetFields and request.entries is not None:
             if len(request.entries) == 0 and not request.confirm_clear_entries:
                 return UpdateMealPlanResponse(needs_clear_confirmation = True)
+
+            # C-2.A — validate slot names against the household MealSlot
+            # vocabulary (R-010); off-vocab names rejected on new writes.
+            _ValidSlots = get_valid_slot_names(self.repository)
+            _BadSlot = find_invalid_slot(
+                (_EntryRequest.slot for _EntryRequest in request.entries), _ValidSlots
+            )
+            if _BadSlot is not None:
+                return UpdateMealPlanResponse(
+                    invalid_slot_message = invalid_slot_message(_BadSlot, _ValidSlots)
+                )
+
             _Today = date.today()
             # Don't overwrite already-consumed entries (past days are
             # locked read-only); keep them as-is and replace only the
@@ -120,6 +135,9 @@ def update_meal_plan(meal_plan_id: UUID):
 
     if _Response.meal_plan_not_found:
         return not_found(MealPlan.__name__, meal_plan_id)
+
+    if _Response.invalid_slot_message:
+        return bad_request(_Response.invalid_slot_message)
 
     if _Response.has_past_entry:
         return bad_request("Meal plan entries cannot be scheduled in the past.")

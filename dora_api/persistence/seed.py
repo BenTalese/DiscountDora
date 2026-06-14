@@ -12,6 +12,7 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
+from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.tool import Tool
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_collection import RecipeCollection
@@ -355,6 +356,12 @@ def seed_dev_data():
     tools = {n: Tool(name=n, sequence=i) for i, n in enumerate(_tool_names)}
     for t in tools.values():
         repo.add(t)
+
+    # C-2.A — household-wide meal-slot vocabulary. Mirror the migration's
+    # default seed so a create_all dev/test DB matches a migrated prod DB.
+    _meal_slot_names = ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"]
+    for i, n in enumerate(_meal_slot_names):
+        repo.add(MealSlot(name=n, sequence=i))
 
     # ---------------- RECIPES ---------------- #
     def ingredient(item, qty, unit, notes=None):

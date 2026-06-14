@@ -5,6 +5,25 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Meal-slot vocabulary — household-wide & editable (Meal Plans C-2.A).**
+  The meal-time slots (Breakfast / Lunch / Dinner / Snack / Dessert) are no
+  longer a hard-coded constant — they're now an editable **household-wide
+  vocabulary**, managed in **Settings → Recipe vocab** alongside Cuisines /
+  Categories / Tools (a 4th card on the same `VocabListEditor`). You can add,
+  rename, reorder (up/down), and delete slots.
+  - New `MealSlot` `{name, sequence}` table + `GET/POST/PATCH/DELETE
+    /api/meal-slots` (+ `PATCH /reorder`), mirroring the existing recipe-vocab
+    CRUD. Seeded with the five defaults via a reversible migration
+    (`b9f6d3a8c1e2`), SQLite + Postgres portable.
+  - The planner's meal-plan edit dialog and every recipe `time_of_day` picker
+    now read the household list (the planner dialog had silently dropped
+    "Dessert" — restored).
+  - **Slots are stored by name, not by foreign key:** meal-plan entries and
+    recipes keep the slot *label*, so **deleting a slot never alters existing
+    entries** (they keep their label, just drop out of the picker). New writes
+    referencing an off-vocabulary slot are rejected at the API.
+
 ### Removed
 - **App-wide undo / shopping-list Reopen — gone (FU-163).** The user
   retired the whole undo posture: "decided undo feature does not make sense,

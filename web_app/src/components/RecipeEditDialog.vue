@@ -242,6 +242,7 @@
         type CreateRecipeIngredientCommand,
     } from 'src/services/api/recipeApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -251,7 +252,6 @@
     } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
 
-    const timeOfDayOptions = [...DEFAULT_MEAL_SLOTS];
     const difficultyOptions = [...DIFFICULTY_VALUES];
 
     const props = defineProps<{ modelValue: boolean; recipe: Recipe | null }>();
@@ -263,9 +263,17 @@
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
     const recipeVocabStore = useRecipeVocabStore();
+    const mealSlotStore = useMealSlotStore();
     const { recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
     const { cuisines, categories, tools } = storeToRefs(recipeVocabStore);
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
+
+    // C-2.A — `time_of_day` reads the household meal-slot vocabulary; falls
+    // back to the seed constant only before the store's first load.
+    const timeOfDayOptions = computed(() =>
+        mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
+    );
 
     type IngredientForm = CreateRecipeIngredientCommand;
 
@@ -350,6 +358,7 @@
     onMounted(async () => {
         // Vocab lists for the cuisine/category selects (load if not already cached).
         recipeVocabStore.getAllAsync().catch(() => undefined);
+        mealSlotStore.getMealSlotsAsync().catch(() => undefined);
         try {
             tagCatalogue.value = await recipeApi.getTagCatalogueAsync();
         } catch {

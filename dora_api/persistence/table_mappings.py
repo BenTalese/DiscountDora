@@ -11,6 +11,7 @@ from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.price_alert import PriceAlert
 from dora_api.domain.entities.product import Product
@@ -346,6 +347,18 @@ def configure_mappings(db: SQLAlchemy):
     # C-4 Chunk 5 — user-configurable kitchen-tool vocabulary.
     tool_table = Table(
         "Tool", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("name", String(255), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+    )
+
+    # C-2.A — household-wide meal-slot vocabulary. Same {id, name, sequence}
+    # lookup shape as the recipe vocabs, but NOT an FK target:
+    # `MealPlanEntry.slot` / `Recipe.time_of_day` hold the slot name as free
+    # text, validated against this table at write-time. Deleting a row leaves
+    # those labels intact (no cascade).
+    meal_slot_table = Table(
+        "MealSlot", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("name", String(255), nullable=False),
         Column("sequence", Integer, nullable=False, server_default="0"),
@@ -706,6 +719,11 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(Tool, tool_table, properties={
         "_id_col": tool_table.c.id,
         "id": tool_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(MealSlot, meal_slot_table, properties={
+        "_id_col": meal_slot_table.c.id,
+        "id": meal_slot_table.c.id,
     })
 
     _mapper_registry.map_imperatively(Recipe, recipe_table, properties={

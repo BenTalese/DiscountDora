@@ -9,13 +9,14 @@ from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.recipe import (
     ALLOWED_DIFFICULTY_VALUES,
-    DEFAULT_MEAL_SLOTS,
     Recipe,
 )
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.types import EMPTY_UUID
+from dora_api.features.meal_slots.slot_validation import (
+    get_valid_slot_names, invalid_slot_message)
 from dora_api.features.recipes.get_recipes import get_recipes
 from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
 from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
@@ -158,13 +159,17 @@ class CreateRecipeHandler:
                     f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
                 ),
             )
-        if request.time_of_day is not None and request.time_of_day not in DEFAULT_MEAL_SLOTS:
-            return CreateRecipeResponse(
-                invalid_vocabulary_message=(
-                    f"Invalid time of day '{request.time_of_day}'. "
-                    f"Allowed: {', '.join(DEFAULT_MEAL_SLOTS)}."
-                ),
-            )
+        # C-2.A — `time_of_day` is the household meal-slot vocabulary
+        # (MealSlot table), validated at the boundary (R-010). Off-vocab
+        # values are rejected on new writes; legacy stored values persist.
+        if request.time_of_day is not None:
+            _ValidSlots = get_valid_slot_names(self.repository)
+            if request.time_of_day not in _ValidSlots:
+                return CreateRecipeResponse(
+                    invalid_vocabulary_message=invalid_slot_message(
+                        request.time_of_day, _ValidSlots
+                    ),
+                )
 
         _RecipeName = EntityField(Recipe, Recipe.Fields.NAME)
         _ExistingRecipe: Recipe | None = (

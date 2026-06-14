@@ -1078,6 +1078,7 @@
         UpdateRecipeCommand,
     } from 'src/services/api/recipeApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -1089,7 +1090,6 @@
     } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
 
-    const timeOfDayOptions = [...DEFAULT_MEAL_SLOTS];
     const difficultyOptions = [...DIFFICULTY_VALUES];
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -1103,6 +1103,7 @@
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
     const recipeVocabStore = useRecipeVocabStore();
+    const mealSlotStore = useMealSlotStore();
     const recipeApi = new RecipeApiService();
     // C-cross Chunk 5 — recipe-image render gate (covers the saved-
     // preview branch only; pick/clear is always live).
@@ -1120,6 +1121,13 @@
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
+
+    // C-2.A — `time_of_day` reads the household meal-slot vocabulary; falls
+    // back to the seed constant only before the store's first load.
+    const timeOfDayOptions = computed(() =>
+        mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
+    );
 
     const recipeId = computed(() => String(route.params.id ?? ''));
     const recipe = ref<Recipe | null>(null);
@@ -2079,6 +2087,7 @@
             stockLevelStore.getStockLevelsAsync(),
             shoppingListStore.refreshAsync(),
             recipeVocabStore.getAllAsync(),
+            mealSlotStore.getMealSlotsAsync(),
         ]);
         await loadRecipe();
     });

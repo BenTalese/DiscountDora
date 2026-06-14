@@ -106,6 +106,7 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 | `04_proposals/PROPOSAL_HELP_OVERLAY.md` | C-help (opt-in contextual help overlay) |
 | `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md` | Shopping-list overhaul (pre-Wave-C) |
 | `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` | C-impl: shopping-lists phased plan |
+| `04_proposals/IMPL_PLAN_MEAL_PLANS.md` | C-2 impl: meal-plans phased plan (C-2.A…K) |
 | `04_proposals/STATE_OWNERSHIP_REFACTOR_PROPOSAL.md` | State-ownership proposal |
 | `04_proposals/IMPL_PLAN_STATE_OWNERSHIP.md` | C-impl: state-ownership phased plan |
 | `04_proposals/DORA_ASSISTANT_ARCHITECTURE_PROPOSAL.md` | Dora assistant SLM design |

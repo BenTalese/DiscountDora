@@ -56,7 +56,7 @@
                             outlined
                             label="Slot"
                             v-model="entry.slot"
-                            :options="['Breakfast', 'Lunch', 'Dinner', 'Snack']"
+                            :options="slotOptions"
                         />
                         <q-select
                             class="col-12 col-sm-4"
@@ -104,9 +104,11 @@
     import type { MealPlan } from 'src/models/mealPlan';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
-    import { computed, reactive, ref, watch } from 'vue';
+    import { computed, onMounted, reactive, ref, watch } from 'vue';
 
     const props = defineProps<{ modelValue: boolean; plan: MealPlan | null }>();
     const emit = defineEmits<{
@@ -115,12 +117,24 @@
     }>();
 
     const mealPlanStore = useMealPlanStore();
+    const mealSlotStore = useMealSlotStore();
     const recipeStore = useRecipeStore();
     const { recipes } = storeToRefs(recipeStore);
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
 
     const mealOptions = computed(() =>
         recipes.value.map((r) => ({ label: r.name, value: r.recipe_id }))
     );
+
+    // C-2.A — household meal-slot vocabulary (restores "Dessert"). Falls back
+    // to the seed constant only until the store's first load lands.
+    const slotOptions = computed(() =>
+        mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
+    );
+
+    onMounted(() => {
+        void mealSlotStore.getMealSlotsAsync().catch(() => undefined);
+    });
 
     type Form = { name: string; start_date: string; entries: MealPlanEntryCommand[] };
 

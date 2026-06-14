@@ -15,10 +15,12 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 # readable but new writes must match.
 ALLOWED_DIFFICULTY_VALUES = ("Easy", "Medium", "Hard")
 
-# Cookbook card revision §1.12 — shared with `MealPlanEntry.slot`
-# (PROPOSAL_MEAL_PLANS.md §4). Closed-set today; will become
-# user-configurable when §4 lands its settings page, at which point this
-# constant becomes the seeded default rather than the hard list.
+# C-2.A — the seeded default meal-slot set. Since C-2.A the household
+# `MealSlot` table is the source of truth for the slot vocabulary; new
+# `Recipe.time_of_day` / `MealPlanEntry.slot` writes validate against that
+# table (see dora_api/features/meal_slots/slot_validation.py). This constant
+# is retained only as the canonical seed (mirrored by the seed migration and
+# seed.py) and as documentation of the default set.
 DEFAULT_MEAL_SLOTS = ("Breakfast", "Lunch", "Dinner", "Snack", "Dessert")
 
 

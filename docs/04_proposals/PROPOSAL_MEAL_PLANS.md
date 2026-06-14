@@ -264,6 +264,15 @@ for shortfall give us a coherent identity.
 
 ## 4. Slots — configurable times-of-day
 
+> **Correction (2026-06-14, IMPL_PLAN_MEAL_PLANS review):** this section's
+> "user-scoped" framing is **superseded**. Meal plans are household-wide
+> (`MealPlan` has no `user_id`), and the recipe vocabularies are already
+> install-wide tables. The slot vocabulary is therefore a **household-wide
+> `MealSlot` vocab table** edited alongside Cuisine/Category/Tool in
+> `RecipeVocabSettings.vue`, **not** a per-user preference. See
+> `IMPL_PLAN_MEAL_PLANS.md` C-2.A. The rest of this section (defaults,
+> free-text `slot` string, off-vocab preservation, tap-add derivation) stands.
+
 Today: `MealPlanEntry.slot` is free-text `str(50)`; unconstrained.
 
 Proposed:

@@ -9,6 +9,169 @@ next.
 
 ---
 
+## 2026-06-14 — Meal Plans C-2.A — household-wide meal-slot vocabulary
+**Status:** complete & verified. Backend e2e **261 passed** (incl. 11 new
+meal-slot tests), unit **49 passed**, migration up+seed+down OK on scratch
+SQLite, `vue-tsc` clean (0 errors), **0 new** lint errors. First implementation
+chunk of the meal-plans build. Built via a map→implement→adversarial-review
+workflow (3 reviewers: R-rules, correctness+tests, acceptance — all PASS, no
+blockers).
+
+**What:** Replaced the hard-coded `DEFAULT_MEAL_SLOTS` constant with an
+editable **household-wide** `MealSlot` vocabulary, mirroring the shipped
+cuisine/category/tool vocab pattern.
+- **Backend:** `MealSlot` entity + `{name, sequence}` table + mapper;
+  `manage_meal_slots.py` (`MEAL_SLOT_ROUTER` → `/api/meal-slots`: GET w/ usage
+  count, POST dup-check, `PATCH /reorder`, PATCH rename, DELETE); shared
+  `slot_validation.py`; reversible seed migration `b9f6d3a8c1e2` (chains from
+  head `b9e5c2a78f31`); `seed.py` seeds the 5 defaults for create_all/test DBs;
+  `time_of_day` (create/update recipe) + `slot` (create/update meal_plan) now
+  validated against the table at the write boundary (off-vocab → 400).
+- **Frontend:** `mealSlotStore` + `mealSlotApiService`; 4th `<VocabListEditor>`
+  card on `RecipeVocabSettings.vue` (reorder + preserves-label opts, added
+  additively — other 3 cards untouched); the planner edit dialog (Dessert
+  restored) + all recipe `time_of_day` pickers read the store reactively
+  (constant kept only as a pre-load fallback).
+- **Tests:** `test_meal_slot_router.py` (11) — CRUD + reorder + dup/unknown +
+  off-vocab-rejection (meal-plan & recipe) + delete-preserves-label.
+
+**Key design point:** slots are **not** an FK — entries/recipes store the slot
+*name*, so deleting a slot never mutates existing data (they keep the label,
+drop out of the picker). Validation lives once on the server (R-003).
+
+**Review nits applied this session:** capped `MealSlot` name to 50 chars (was
+255) to match the `String(50)` columns that store it — prevents creating a
+slot that's then unusable downstream; corrected a misleading "batch mode"
+sentence in the migration docstring (a plain `create_table` is already
+portable). Re-ran the 11 e2e tests after — still green.
+
+**Charter/standards check:** clean. R-001 (reused VocabListEditor, no new
+page), R-003 (vocab + validation server-owned; client read-only), R-005/R-006
+(portable reversible seed migration, no guards), R-010 (typed UUID params,
+boundary validation), R-007 (scope held; the always-"Dinner" tap-add in
+`MealPlansOverview.vue:557,579` is **deferred to C-2.C** by design, not fixed
+here), R-008/R-011 clean. No ADR (feature-add on an established pattern).
+
+**Open loops:** FU-172 (C-2.A done; next C-2.B). **FU-177** logged — 5
+pre-existing ESLint errors block `npm run build` (surfaced by the reviewers;
+not from C-2.A).
+
+**Next up:** **C-2.B** — page-chrome cleanup (drop Suggest CTA + page
+shortfall banner + "Week of" title, chef-hat icon, entry-chip relayout).
+
+---
+
+## 2026-06-14 — Meal Plans impl plan authored (C-2 → IMPL_PLAN_MEAL_PLANS)
+**Status:** complete (planning artifact; **no code**). The biggest
+designed-but-unbuilt block now has an executable, chunked plan.
+
+**What:** Turned `PROPOSAL_MEAL_PLANS.md` (C-2) into
+`docs/04_proposals/IMPL_PLAN_MEAL_PLANS.md`, following the house impl-plan
+shape (verify-state-first → chunked PRs → first-chunk DoD → risks/open
+decisions → feedback-coverage table → run order). This was the "Next up"
+from the 2026-06-12 progress report.
+
+**Grounded against live code first** (Explore pass): confirmed what's
+already built and must be *read, not rebuilt* — B6 allocation SSOT
+(`unallocated_meals` in `get_recipes.py:597-639`), the reconcile
+`before_request` hook, shortfall + ingredients endpoints, CRUD with
+server-side past-day refusal, the existing palette/grid/sidebar/generate
+surfaces, and the **hard-coded** `DEFAULT_MEAL_SLOTS` mirrored in
+`recipe.py:22` + `recipeVocabulary.ts:20-27`. Confirmed what's missing
+(templates/sets/recurring, carousel, calendar widget, trays, sequential
+builder, per-user slot vocab, name-drop) and two live bugs to fold in:
+the past-day-drop UTC/local date drift (`MealPlansOverview.vue:425-436`,
+F29) and the FU-154 page-local-collection R-003 smell.
+
+**Plan shape — 11 chunks (proposal's C-2.A…K), re-sequenced by
+dependency/risk in §5:**
+- **C-2.A** per-user slot vocabulary (`User.meal_slots` JSON column,
+  settings sub-page, read-site swaps) — ★ first PR, lowest risk, data
+  foundation; restores "Dessert" in the planner.
+- **C-2.B** page-chrome cleanup (drop Suggest CTA, page shortfall banner,
+  "Week of" title; chef-hat icon; entry-chip relayout) — removals only.
+- **C-2.C** vertical carousel + named slot rows + cell-targeted tap-add
+  (slot auto-derived → kills always-"Dinner" by construction) + inline
+  servings edit (retires the edit modal's entry path) + **K date fix
+  folded in**; fixes FU-154 in passing. Load-bearing chunk.
+- **C-2.D** custom calendar widget (replaces "Active plan" dropdown;
+  `?monday=` URL for refresh-resume).
+- **C-2.E** drop `MealPlan.name` from UI + implicit create-on-first-tap +
+  "Clear week" (nullable-name migration).
+- **C-2.H** sidebar redesign (list-status per item, per-item add, Add-to/
+  Generate choice modal) — **composes C-7, don't fork**; carries FU-135.
+- **C-2.I** Favourites + Haven't-had trays (21-day window kept
+  **server-side**, R-003).
+- **C-2.F** templates (single) + **C-2.G** sets/recurring/manage page —
+  new entities, batch migrations.
+- **C-2.J** sequential builder (composes the recipe row + H's choice modal).
+
+**Decisions (settled in a review pass with the user, same session):**
+- **Full build** — all 10 chunks (incl. templates/sets/recurring + sequential
+  builder).
+- **Slot scoping corrected to household-wide.** The user flagged that meal
+  planning is a household activity ("mum plans for a family of 4"), not
+  per-user. Code confirms it — `MealPlan` has **no `user_id`** and
+  `get_meal_plans` returns every plan; vocabularies (Cuisine/Category/Tool)
+  are already install-wide tables edited via `RecipeVocabSettings.vue` +
+  `VocabListEditor.vue`. So C-2.A was rewritten: meal slots become a
+  **household-wide `MealSlot` vocab table** (mirroring `manage_cuisines.py`),
+  edited as a 4th `VocabListEditor` card — **not** the `User.meal_slots` JSON
+  + new PreferencesSettings sub-page the first draft (and the proposal §4
+  "user-scoped" wording) assumed. `MealPlanEntry.slot`/`Recipe.time_of_day`
+  stay free-text *names* validated against the table; deletes preserve labels.
+  A dated correction note was added to proposal §4.
+- **3 trays** (Favourites + Haven't-had-in-21-days + Frequently-planned) — the
+  user opted into the 3rd "frequently-planned" tray. Both windows kept
+  server-side (R-003).
+- **21-day** "haven't had" window; **26-week** recurring cap;
+  **`/meal-plans/templates`** route; **apply-time** set-rotation anchor;
+  **slot-remap deferred** ([[FU-173]]).
+- **Lower-level calls also settled in review:**
+  - **Past-day fix → household-timezone-correct** (not a local patch). C-2.K
+    grows into its own chunk: `AppSetting.timezone` + a server-owned "today"
+    evaluated in the household tz, exposed to the client, so a household
+    anywhere is correct regardless of server location. App-wide datetime sweep
+    logged as **FU-174** (large; to be promoted to an ADR/R-rule when the
+    mechanism is proven).
+  - **`MealPlanEditDialog` retired** (C-2.E); a purpose-built bulk-week action
+    assessed separately (**FU-175**).
+  - **C-2.J adds `POST /meal-plans/preview-ingredients`** for unsaved selections.
+  - **New rule R-014 + ADR-009 (reveal-and-disable):** adoptable-but-unconfigured
+    features show **disabled with a "not set up" hint**, not hidden — per the
+    user ("SHOW features exist … but obvious it's not set up"). The builder's
+    Email button adopts it (disabled when SMTP unset); the app-wide application
+    (notably the **scanning button**, currently hidden under ADR-002) is
+    **FU-176**.
+  - Interaction defaults confirmed: inline `[−N+]` stepper, drag desktop-only,
+    chip = name+×servings, H/I ahead of F/G. Plan is now 11 chunks (K split out).
+
+**Charter/standards check:** plan-authoring task; no code → no R-rule
+violations introduced. The plan itself enforces R-003 (allocation/slot-cap/
+21-day window stay server-owned), R-005/R-006 (batch-mode reversible
+migrations, no backfills), R-001 (carousel/calendar/tray/chip as components),
+R-007 (compose C-7, don't fork; ship 2 trays not 3). No ADR — authoring a
+plan isn't a recurring engineering decision.
+
+**Docs touched:** `IMPL_PLAN_MEAL_PLANS.md` (new), `00_DOCS_INDEX.md`
+(indexed it), `PROPOSAL_MEAL_PLANS.md` (dated §4 scope-correction note),
+`ENGINEERING_STANDARDS.md` (new **R-014** + **ADR-009** reveal-and-disable),
+`DORA_FOLLOWUPS.md` (FU-172…176).
+
+**Open loops:** FU-172 (execute C-2.A…K — recommended *now*, start C-2.A),
+FU-173 (slot-remap deferred), **FU-174** (app-wide datetime/timezone sweep —
+large), **FU-175** (assess bulk-week action), **FU-176** (apply R-014
+app-wide — scanning button etc.). On plan approval, flip the covered
+`§MEAL PLANS` rows in `COVERAGE_GAPS.md` from gap → covered.
+
+**Next up:** **build C-2.A** — the household-wide `MealSlot` vocab table
+(entity + `manage_meal_slots.py` mirroring `manage_cuisines.py` + seed
+migration + a 4th `VocabListEditor` card on `RecipeVocabSettings.vue` + slot
+read-site swaps). Plan + decisions are approved; this is the first reviewable
+PR.
+
+---
+
 ## 2026-06-14 — Cookbook card revision Chunk C — optional ingredients
 **Status:** complete (vue-tsc clean; full unit suite 299 passed). Session
 was ended abruptly mid-Chunk-C and resumed cautiously — see "Resumption

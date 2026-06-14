@@ -323,6 +323,36 @@ exceptions, which still must be commented) · **Source** (where it was establish
   tests do not.
 - **Source:** ADR-008; FU-166 (legacy e2e suite triage).
 
+### R-014 — Reveal-and-disable: show a feature exists even when it isn't set up
+- **Rule:** Prefer to **surface a feature's entry point even when the feature
+  is not yet configured/enabled**, rendered in an obvious **disabled / "not set
+  up" state** (a `:disable`d control + a tooltip/hint that says how to enable
+  it), rather than `v-if`-removing it. The goal is discovery — users should
+  learn a capability exists so they can choose to turn it on. Applies **where
+  it makes sense** (judgement, not a blanket reveal of everything gated).
+- **Why:** A hidden feature is one the user never discovers and never adopts.
+  The product should advertise its own capabilities (show the email/scan
+  affordance, disabled, with "Set up emailing in Settings" — not a blank
+  space). Distinct from ADR-002, which gates *functionality* behind the flag;
+  this rule governs the **presentation of the off/unconfigured state** —
+  visible-disabled, not absent. It therefore partially revisits ADR-002's
+  hide-when-off presentation.
+- **Apply:** When gating an action on a config/enable flag (SMTP configured,
+  `scanning_enabled`, an integration set up), render the control disabled with
+  a one-line reason + a path to enable it, instead of removing it. The disabled
+  affordance must read "available, not yet set up", **not** "broken"; the action
+  must not fire while disabled.
+- **Violation signal:** a `v-if="featureEnabled"` that removes an *adoptable*
+  feature's only entry point (vs `:disable` + a hint); a blank toolbar where a
+  setup-able action could advertise itself.
+- **Carve-outs (must be commented):** features genuinely inapplicable to the
+  install (not merely unconfigured); surfaces where a disabled control would
+  mislead or clutter; security-sensitive surfaces that shouldn't advertise
+  their existence.
+- **Source:** ADR-009; meal-plans impl review (user: builder Email button
+  disabled-not-hidden; "we want to SHOW features exist … but obvious it's not
+  set up"; scanning button should now show disabled instead of hidden).
+
 ---
 
 ## ADR process (evaluate every task)
@@ -544,6 +574,28 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   carve-out). Adapter must grow to cover any new transport feature
   (multipart already handled).
 - **Promotes rule:** R-013.
+
+---
+
+### ADR-009 — Reveal-and-disable unconfigured features instead of hiding them
+- **Date / task:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review, user directive)
+- **Status:** accepted
+- **Context:** Gating discussion for the meal-plan sequential builder's Email
+  button — SMTP may be unconfigured per install (INV-4). The user wants
+  features advertised so users get interested and adopt them, but with the
+  off/unconfigured state obvious. This refines ADR-002, which hid off-by-default
+  gated surfaces entirely; the user's example is that the `scanning_enabled`
+  button should now show **disabled**, not vanish.
+- **Decision:** Adopt R-014. Surface an adoptable feature's entry point in a
+  visible disabled "not set up" state with a path to enable, rather than hiding
+  it; gate *functionality* (not visibility) on the flag. Apply with judgement —
+  inapplicable or security-sensitive surfaces may still be hidden.
+- **Consequences:** Gated features become discoverable; each gated surface now
+  needs a disabled-state affordance + reason. Partially revisits ADR-002's
+  hide-when-off *presentation* (the functionality gating is unchanged).
+  App-wide application (the scanning button, any other hidden gated surfaces)
+  is a follow-up sweep, not a blanket immediate change.
+- **Promotes rule:** R-014.
 
 ---
 

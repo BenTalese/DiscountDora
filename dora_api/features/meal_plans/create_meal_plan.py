@@ -11,6 +11,8 @@ from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.meal_plans.get_meal_plans import get_meal_plans
+from dora_api.features.meal_slots.slot_validation import (
+    find_invalid_slot, get_valid_slot_names, invalid_slot_message)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, created,
                                                   entity_existence_failures)
@@ -42,6 +44,7 @@ class CreateMealPlanResponse:
     new_meal_plan_id: UUID = EMPTY_UUID
     missing_recipe_ids: tuple[UUID, ...] = ()
     has_past_entry: bool = False
+    invalid_slot_message: str | None = None
 
 
 class CreateMealPlanHandler:
@@ -50,6 +53,19 @@ class CreateMealPlanHandler:
 
     def handle(self, request: CreateMealPlanRequest) -> CreateMealPlanResponse:
         _Today = date.today()
+
+        # C-2.A — validate slot names against the household MealSlot
+        # vocabulary at the boundary (R-010). Slots are free-text labels,
+        # not FKs; off-vocab names are rejected on new writes.
+        _ValidSlots = get_valid_slot_names(self.repository)
+        _BadSlot = find_invalid_slot(
+            (_EntryRequest.slot for _EntryRequest in request.entries), _ValidSlots
+        )
+        if _BadSlot is not None:
+            return CreateMealPlanResponse(
+                invalid_slot_message = invalid_slot_message(_BadSlot, _ValidSlots)
+            )
+
         for _EntryRequest in request.entries:
             if _EntryRequest.scheduled_for < _Today:
                 return CreateMealPlanResponse(has_past_entry = True)
@@ -91,6 +107,9 @@ def create_meal_plan():
     _Handler = get_container().inject(CreateMealPlanHandler)
     _Request: CreateMealPlanRequest = get_request_body()
     _Response = _Handler.handle(_Request)
+
+    if _Response.invalid_slot_message:
+        return bad_request(_Response.invalid_slot_message)
 
     if _Response.has_past_entry:
         return bad_request("Meal plan entries cannot be scheduled in the past.")

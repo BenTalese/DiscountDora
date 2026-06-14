@@ -397,6 +397,7 @@
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import RecipeApiService from 'src/services/api/recipeApiService';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -422,6 +423,7 @@
     const shoppingListStore = useShoppingListStore();
     const mealPlanStore = useMealPlanStore();
     const recipeVocabStore = useRecipeVocabStore();
+    const mealSlotStore = useMealSlotStore();
     const recipeApi = new RecipeApiService();
     const { addItems } = useShoppingListActions();
 
@@ -429,6 +431,7 @@
     const { stockItems } = storeToRefs(stockItemStore);
     const { mealPlans } = storeToRefs(mealPlanStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
     const { showRecipeImages, setRecipeImages } = useImagePrefs();
     // C-4 Chunk 9 — nutrition flag gates the kcal axis + filter.
@@ -511,10 +514,12 @@
     // C-4 Chunk 9 — "Kcal" axis added when the nutrition opt-in is on.
     // The sort menu options are computed below; the static list keeps
     // the always-on axes.
-    // §1.12 — time-of-day vocabulary mirrors the server's
-    // DEFAULT_MEAL_SLOTS (recipe.py) which is also the seed for the
-    // meal-plans slot list (PROPOSAL_MEAL_PLANS.md §4).
-    const TIME_OF_DAY_OPTIONS = [...DEFAULT_MEAL_SLOTS];
+    // C-2.A — time-of-day reads the household meal-slot vocabulary
+    // (MealSlot table), falling back to the seed constant only before the
+    // store's first load.
+    const TIME_OF_DAY_OPTIONS = computed(() =>
+        mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
+    );
     // §1.7 — difficulty closed vocabulary; mirrors ALLOWED_DIFFICULTY_VALUES
     // on the server.
     const DIFFICULTY_OPTIONS = [...DIFFICULTY_VALUES];
@@ -1272,6 +1277,8 @@
                 // C-4 Chunk 2 — vocabularies for the cuisine/category/dietary
                 // filters (sourced from the editable settings tables).
                 recipeVocabStore.getAllAsync(),
+                // C-2.A — household meal-slot vocabulary for the time-of-day filter.
+                mealSlotStore.getMealSlotsAsync(),
                 // Disclaimer text for the dietary filter. Errors non-fatal.
                 recipeApi.getTagCatalogueAsync()
                     .then((c) => { tagCatalogue.value = c; })

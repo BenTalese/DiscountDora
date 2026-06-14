@@ -39,6 +39,26 @@
             @delete="onDeleteTool"
         />
 
+        <!-- C-2.A — household-wide meal-slot vocabulary. Reorderable (slot
+             order is user-facing) and free-text labels (delete keeps the
+             label, no FK). -->
+        <VocabListEditor
+            title="Meal slots"
+            description="The meal slot options shown in meal plans and on recipes."
+            noun="meal slot"
+            noun-plural="meal slots"
+            usage-label="entry"
+            :preserves-label="true"
+            :reorderable="true"
+            :items="mealSlotItems"
+            :loading="loading"
+            :busy="busy"
+            @create="onCreateMealSlot"
+            @rename="onRenameMealSlot"
+            @reorder="onReorderMealSlot"
+            @delete="onDeleteMealSlot"
+        />
+
         <!-- Dietary tags carry a grouping label, so they get a bespoke editor. -->
         <q-card flat bordered>
             <q-card-section class="row items-center">
@@ -100,6 +120,7 @@
     import CategoryApiService from 'src/services/api/categoryApiService';
     import DietaryTagApiService from 'src/services/api/dietaryTagApiService';
     import ToolApiService from 'src/services/api/toolApiService';
+    import MealSlotApiService from 'src/services/api/mealSlotApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { computed, onMounted, ref } from 'vue';
 
@@ -108,11 +129,13 @@
     const categoryApi = new CategoryApiService();
     const dietaryTagApi = new DietaryTagApiService();
     const toolApi = new ToolApiService();
+    const mealSlotApi = new MealSlotApiService();
 
     const cuisines = ref<Awaited<ReturnType<CuisineApiService['getAllAsync']>>>([]);
     const categories = ref<Awaited<ReturnType<CategoryApiService['getAllAsync']>>>([]);
     const dietaryTags = ref<DietaryTag[]>([]);
     const tools = ref<Awaited<ReturnType<ToolApiService['getAllAsync']>>>([]);
+    const mealSlots = ref<Awaited<ReturnType<MealSlotApiService['getAllAsync']>>>([]);
     const loading = ref(false);
     const busy = ref(false);
 
@@ -125,16 +148,24 @@
     const toolItems = computed(() =>
         tools.value.map((t) => ({ id: t.tool_id, name: t.name, recipe_count: t.recipe_count ?? 0 })),
     );
+    // Slots are stored sorted by the list endpoint (sequence, then name); the
+    // up/down controls rely on that order. `recipe_count` carries the usage
+    // tally the generic editor renders.
+    const mealSlotItems = computed(() =>
+        mealSlots.value.map((s) => ({ id: s.meal_slot_id, name: s.name, recipe_count: s.usage_count })),
+    );
 
     async function load() {
         loading.value = true;
         try {
-            [cuisines.value, categories.value, dietaryTags.value, tools.value] = await Promise.all([
-                cuisineApi.getAllAsync(),
-                categoryApi.getAllAsync(),
-                dietaryTagApi.getAllAsync(),
-                toolApi.getAllAsync(),
-            ]);
+            [cuisines.value, categories.value, dietaryTags.value, tools.value, mealSlots.value] =
+                await Promise.all([
+                    cuisineApi.getAllAsync(),
+                    categoryApi.getAllAsync(),
+                    dietaryTagApi.getAllAsync(),
+                    toolApi.getAllAsync(),
+                    mealSlotApi.getAllAsync(),
+                ]);
         } catch (err) {
             notifyError('Could not load recipe vocabularies.', err);
         } finally {
@@ -177,6 +208,25 @@
     const onCreateTool = (name: string) => run(() => toolApi.createAsync({ name }));
     const onRenameTool = (id: string, name: string) => run(() => toolApi.updateAsync(id, { name }));
     const onDeleteTool = (id: string) => run(() => toolApi.deleteAsync(id).then(() => undefined));
+
+    // ── Meal slots (household-wide, reorderable, free-text labels) ─────
+    const onCreateMealSlot = (name: string) => run(() => mealSlotApi.createAsync({ name }));
+    const onRenameMealSlot = (id: string, name: string) => run(() => mealSlotApi.updateAsync(id, { name }));
+    const onDeleteMealSlot = (id: string) =>
+        run(() => mealSlotApi.deleteAsync(id).then(() => undefined));
+
+    // Swap the moved slot's sequence with its up/down neighbour, then persist
+    // the new ordering in one reorder call. `mealSlots` is already in
+    // (sequence, name) order from the list endpoint.
+    const onReorderMealSlot = (id: string, direction: 'up' | 'down') => {
+        const ordered = [...mealSlots.value];
+        const index = ordered.findIndex((s) => s.meal_slot_id === id);
+        const target = direction === 'up' ? index - 1 : index + 1;
+        if (index < 0 || target < 0 || target >= ordered.length) return;
+        [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
+        const slots = ordered.map((s, i) => ({ meal_slot_id: s.meal_slot_id, sequence: i }));
+        return run(() => mealSlotApi.reorderAsync({ slots }));
+    };
 
     // ── Dietary tags (name + grouping category) ───────────────────────
     async function promptText(title: string, message: string, initial = ''): Promise<string | null> {

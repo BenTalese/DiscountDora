@@ -3,10 +3,10 @@
 // constants in `dora_api/domain/entities/recipe.py`
 // (`ALLOWED_DIFFICULTY_VALUES`, `DEFAULT_MEAL_SLOTS`).
 //
-// §1.12 caveat: `DEFAULT_MEAL_SLOTS` will become the *seeded default* of
-// a user-configurable meal-slot list when `PROPOSAL_MEAL_PLANS.md §4`
-// lands. Until then, this constant is the single source of truth for
-// both the cookbook surfaces and the (future) planner.
+// C-2.A: the meal-slot vocabulary is now the household-wide `MealSlot`
+// table (mealSlotStore / `/api/meal-slots`). `DEFAULT_MEAL_SLOTS` here is
+// kept only as the seeded default + a pre-first-load fallback for the slot
+// dropdowns — the store is the live source of truth once loaded.
 
 export const DIFFICULTY_VALUES = ['Easy', 'Medium', 'Hard'] as const;
 export type Difficulty = (typeof DIFFICULTY_VALUES)[number];

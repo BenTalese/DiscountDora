@@ -52,6 +52,122 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-177 — Pre-existing ESLint errors block `npm run build`
+- **Raised:** 2026-06-14 (surfaced by C-2.A adversarial review)
+- **Type:** finding (pre-existing debt)
+- **What:** 5 ESLint errors exist on the current tree, **unrelated to C-2.A**
+  (verified identical on a stashed clean tree): `useFeatureFlags.ts:31`,
+  `useStockFilters.ts:75` + `:92`, `RecipeDetailPage.vue` (~`:1117`),
+  `AboutSettings.vue:82`. `npm run build` runs ESLint first and **aborts on
+  these before reaching `vue-tsc`**, so a production `quasar build` currently
+  fails. `vue-tsc --noEmit` itself is clean.
+- **Why deferred:** out of C-2.A scope (R-007); they live in unrelated files.
+- **Recommended resolution:** **soon** — a focused cleanup before the
+  end-of-build browser-verification pass (a broken `build` blocks shipping the
+  polished page). Investigate each (likely `no-unused-vars` /
+  `no-explicit-any`-class); fix or justify per the lint config.
+
+## [OPEN] FU-176 — Apply R-014 (reveal-and-disable) app-wide
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; new rule R-014 / ADR-009)
+- **Type:** follow-up
+- **What:** New engineering rule **R-014** says adoptable features that aren't
+  yet configured/enabled should be **shown disabled with a "not set up" hint**,
+  not hidden — so users discover they exist. The meal-plan builder's Email
+  button adopts this in C-2.J. The rest of the app needs a sweep: most notably
+  the **scanning button**, which today is *hidden* when `scanning_enabled` is
+  off (ADR-002) and per the user should now render **disabled-with-a-hint**
+  instead. Audit other gated/`v-if`-hidden adoptable surfaces (LLM/assistant
+  affordances, any integration entry points) and convert the *presentation* of
+  the off state from hidden → visible-disabled where it makes sense (R-014
+  carve-outs: genuinely inapplicable or security-sensitive surfaces stay hidden).
+- **Why deferred:** out of the meal-plans scope (R-007); it's a cross-cutting
+  presentation change touching the scanning gate + others.
+- **Recommended resolution:** opportunistic / a focused small sweep — pair with
+  the next touch of each gated surface, and update ADR-002's note to point at
+  R-014 for the presentation of the off state.
+
+## [OPEN] FU-175 — Assess a purpose-built "bulk edit the week" meal-plan action
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; C-2.E retires MealPlanEditDialog)
+- **Type:** follow-up
+- **What:** C-2.E deletes `MealPlanEditDialog` — inline servings/slot edit on
+  the carousel + implicit create-on-tap cover its jobs. The user wants a
+  *purpose-built* bulk-week action assessed separately (it "may not even need a
+  modal"): e.g. select multiple entries on the canvas and bump servings /
+  reslot / remove in one go, or a compact week-table editor. Assess the real
+  need (does inline editing already make this unnecessary?) before building.
+- **Why deferred:** the canvas inline-edit (C-2.C) may already satisfy the need;
+  building a bulk surface now would be speculative (Anti-creep).
+- **Recommended resolution:** after C-2.C/E land and the inline-edit UX has
+  been used — assess whether a bulk action earns its place; design a brief if so.
+
+## [OPEN] FU-174 — App-wide datetime / timezone correctness sweep (household tz)
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review; C-2.K)
+- **Type:** deferred job (large)
+- **What:** C-2.K introduces `AppSetting.timezone` (household IANA tz) and
+  evaluates the meal-plan "today" boundary **in the household timezone**
+  (server-owned, exposed to the client) so a household anywhere in the world is
+  correct regardless of where the server is hosted — fixing the past-day-drop
+  400 (F29) properly rather than with a local patch. The same correctness is
+  needed **everywhere dates/date-boundaries matter**: every `date.today()` /
+  server-local date use (the reconcile hook, shortfall deadlines, alerts,
+  dashboard "next up", any "N days ago/until" logic) and every client-side
+  `toISOString()`-derived "today". Datetime is tricky (DST, offsets, storage in
+  UTC vs local) — this is a careful, app-wide sweep.
+- **Why deferred:** out of the meal-plans scope (R-007); C-2.K lands the
+  mechanism for the planner surface only.
+- **Recommended resolution:** a focused sweep after C-2.K proves the mechanism.
+  **Promote the household-tz date rule into an ADR + a new `R-0NN`** at that
+  point (the standard: date-boundary logic evaluates in the household timezone,
+  never server-local or client-`toISOString()`). Cross-ref ADR-007 (ISO
+  serialisation) — that's the wire format; this is the boundary semantics.
+
+## [OPEN] FU-173 — Slot-vocabulary "remap legacy entries" UI — deferred
+- **Raised:** 2026-06-14 (authoring IMPL_PLAN_MEAL_PLANS — C-2.A scope call)
+- **Type:** deferred job
+- **What:** `PROPOSAL_MEAL_PLANS.md §4 / §11.4` describes a one-shot
+  "remap legacy/off-vocabulary `MealPlanEntry.slot` strings to the user's
+  current slot list" action in settings. C-2.A deliberately ships the
+  per-user vocabulary **without** it (off-vocab strings are preserved verbatim
+  and rendered in an "Other" row, C-2.C) — Anti-creep: the cleanup earns its
+  place only if real off-vocab data accumulates.
+- **Why deferred:** no off-vocab data exists yet (slot is currently picked from
+  a fixed 5-value constant); building the remap tool now is speculative.
+- **Recommended resolution:** opportunistic — build only if users accumulate
+  off-vocabulary slot strings after C-2.A ships the editable list.
+
+## [OPEN] FU-172 — Execute IMPL_PLAN_MEAL_PLANS (C-2.A…K)
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS authored from C-2 proposal)
+- **Type:** deferred job
+- **What:** `docs/04_proposals/IMPL_PLAN_MEAL_PLANS.md` turns the C-2 Meal
+  Plans proposal into eleven reviewable chunks. Build order (§5):
+  **C-2.A** slot vocabulary (per-user) ★ first PR → **C-2.B** page-chrome
+  cleanup → **C-2.C** vertical carousel + slot rows + tap-add (+ K date fix;
+  fixes FU-154 in passing) → **C-2.D** calendar widget → **C-2.E** drop
+  `MealPlan.name` + implicit create + "Clear week" → **C-2.H** sidebar redesign
+  (composes C-7; carries FU-135) → **C-2.I** trays → **C-2.F** templates
+  (single) → **C-2.G** template sets + recurring + manage page → **C-2.J**
+  sequential builder. Each ships in isolation; the canvas keeps working through
+  every phase.
+- **Decisions settled (review 2026-06-14):** full build; **slots are a
+  household-wide `MealSlot` vocab table** (corrects proposal §4 "user-scoped"
+  — `MealPlan` has no `user_id`); **3 trays** (incl. Frequently-planned);
+  21-day "haven't had" window; recurring cap 26wk; templates at
+  `/meal-plans/templates`; apply-time rotation; slot-remap deferred ([[FU-173]]).
+- **Lower-level (also settled):** past-day fix → **household-timezone** correct
+  (C-2.K; app-wide sweep [[FU-174]]); `MealPlanEditDialog` **retired** (C-2.E;
+  bulk-week assessed in [[FU-175]]); C-2.J adds `POST /meal-plans/preview-ingredients`;
+  builder Email **shown-disabled** when SMTP unset per new rule **R-014** /
+  ADR-009 (app-wide reveal-disable sweep [[FU-176]]). Plan is 11 chunks (K split out).
+- **Verification gates folded in:** FU-032 (B6 allocation, C-2.C surface),
+  FU-135 (generate-via-Axis-B choice modal, C-2.H); F34 ingredient-math +
+  F29 past-day-drop browser-verifies to be logged when their chunks run.
+- **Why deferred:** the plan is authored; execution is the next work unit.
+- **Progress:** **C-2.A landed & verified 2026-06-14** (household-wide MealSlot
+  vocab; 11 e2e + 261 e2e + 49 unit green, vue-tsc clean). **Next: C-2.B**
+  (page-chrome cleanup). 10 chunks remain.
+- **Recommended resolution:** continue the build — C-2.B next; C-2.F is the
+  parallel-safe pick if a second agent helps.
+
 ## [OPEN] FU-171 — Recipe image hide/show toggle reported broken — no static repro
 - **Raised:** 2026-06-13 (FU-088 → Cookbook card revision Chunk A §1.1)
 - **Type:** finding (reported defect; didn't reproduce in code)

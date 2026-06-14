@@ -27,7 +27,7 @@
         <q-separator />
 
         <q-list separator>
-            <q-item v-for="item in items" :key="item.id" class="q-py-sm">
+            <q-item v-for="(item, index) in items" :key="item.id" class="q-py-sm">
                 <q-item-section avatar>
                     <q-icon :name="ICONS.label" />
                 </q-item-section>
@@ -44,11 +44,37 @@
                         @keydown.esc.prevent="editingId = null"
                     />
                     <q-item-label caption>
-                        {{ item.recipe_count ?? 0 }} recipe{{ (item.recipe_count ?? 0) === 1 ? '' : 's' }}
+                        {{ item.recipe_count ?? 0 }}
+                        {{ usageLabel }}{{ (item.recipe_count ?? 0) === 1 ? '' : 's' }}
                     </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                    <div class="row q-gutter-xs">
+                    <div class="row q-gutter-xs items-center">
+                        <!-- C-2.A — optional reorder affordance (slot order is
+                             user-facing). Opt-in via `reorderable`; the other
+                             vocab cards omit it and are unchanged. -->
+                        <template v-if="reorderable">
+                            <q-btn
+                                flat
+                                dense
+                                round
+                                :icon="ICONS.arrow_upward"
+                                :disable="index === 0"
+                                @click="emit('reorder', item.id, 'up')"
+                            >
+                                <q-tooltip>Move up</q-tooltip>
+                            </q-btn>
+                            <q-btn
+                                flat
+                                dense
+                                round
+                                :icon="ICONS.arrow_downward"
+                                :disable="index === items.length - 1"
+                                @click="emit('reorder', item.id, 'down')"
+                            >
+                                <q-tooltip>Move down</q-tooltip>
+                            </q-btn>
+                        </template>
                         <q-btn flat dense round :icon="ICONS.edit" @click="startRename(item)">
                             <q-tooltip>Rename</q-tooltip>
                         </q-btn>
@@ -78,20 +104,33 @@
 
     type VocabItem = { id: string; name: string; recipe_count?: number };
 
-    const props = defineProps<{
-        title: string;
-        description: string;
-        noun: string;
-        nounPlural: string;
-        items: VocabItem[];
-        loading: boolean;
-        busy: boolean;
-    }>();
+    const props = withDefaults(
+        defineProps<{
+            title: string;
+            description: string;
+            noun: string;
+            nounPlural: string;
+            items: VocabItem[];
+            loading: boolean;
+            busy: boolean;
+            // C-2.A — opt in to the up/down reorder controls (meal slots).
+            reorderable?: boolean;
+            // What uses an item (for the count caption + delete warning). FK
+            // vocabs use the default "recipe"; meal slots are free-text labels
+            // on entries, so they pass "entry" + `preservesLabel`.
+            usageLabel?: string;
+            // When true the delete warning says usages keep their label (slots,
+            // no FK) rather than the FK-nulled "the recipes themselves stay".
+            preservesLabel?: boolean;
+        }>(),
+        { reorderable: false, usageLabel: 'recipe', preservesLabel: false },
+    );
 
     const emit = defineEmits<{
         (e: 'create', name: string): void;
         (e: 'rename', id: string, name: string): void;
         (e: 'delete', id: string): void;
+        (e: 'reorder', id: string, direction: 'up' | 'down'): void;
     }>();
 
     const $q = useQuasar();
@@ -126,12 +165,16 @@
 
     async function onDelete(item: VocabItem) {
         const count = item.recipe_count ?? 0;
+        const plural = count === 1 ? '' : 's';
+        const usageMessage = props.preservesLabel
+            ? `${count} ${props.usageLabel}${plural} use this ${props.noun}; they'll keep the label.`
+            : `${count} ${props.usageLabel}${plural} using this ${props.noun} will lose it. The ${props.usageLabel}s themselves stay.`;
         const ok = await new Promise<boolean>((resolve) => {
             $q.dialog({
                 title: `Delete "${item.name}"?`,
                 message:
                     count > 0
-                        ? `${count} recipe${count === 1 ? '' : 's'} using this ${props.noun} will lose it. The recipes themselves stay.`
+                        ? usageMessage
                         : `Nothing currently uses this ${props.noun}.`,
                 cancel: true,
             })

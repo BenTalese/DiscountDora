@@ -40,7 +40,7 @@
         &::before {
             content: '';
             position: absolute;
-            inset: 6px;
+            inset: 2px;
             border-radius: 10px;
             background: var(--overlay-hover-on-coloured);
             opacity: 0;

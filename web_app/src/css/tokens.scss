@@ -112,6 +112,13 @@
     --dora-halo: hsla(150, 76%, 39%, 0.32);
     --dora-halo-strong: hsla(150, 76%, 39%, 0.55);
 
+    /* ────────────────────────────── Navigation ───────────────────── */
+    /* Striking colour the main-menu strip's active-route indicator
+       flashes to while it slides between buttons. Each theme picks a
+       hue that pops against its toolbar without leaving the family.
+       Default mirrors Pesto. */
+    --nav-slide-flash: hsl(330 90% 65%);
+
     /* ────────────────────────────── Chart palette ────────────────── */
     /* Six categorical hues per theme. Used by ECharts series (Reports
        page), cytoscape group colouring (Substitutes), and any future

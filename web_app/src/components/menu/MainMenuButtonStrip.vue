@@ -13,9 +13,11 @@
             v-bind="link"
         />
         <div
+            ref="indicatorEl"
             class="dora-mainMenuButtonStrip-indicator"
-            :class="{ 'is-ready': indicator.ready }"
+            :class="{ 'is-ready': indicator.ready, 'is-sliding': indicator.sliding }"
             :style="indicatorStyle"
+            @transitionend="onIndicatorTransitionEnd"
         />
     </div>
 </template>
@@ -33,15 +35,16 @@
 
     const route = useRoute();
     const stripEl = ref<HTMLElement | null>(null);
+    const indicatorEl = ref<HTMLElement | null>(null);
     const isHovering = ref(false);
 
     // Sliding active-route indicator. Measured from the DOM rather than computed
     // from widths because each button uses flex: 1 with clamp()'d label sizes,
     // so positions only resolve after layout.
-    const indicator = reactive({ left: 0, width: 0, ready: false });
+    const indicator = reactive({ left: 0, width: 0, ready: false, sliding: false });
 
     const indicatorStyle = computed(() => ({
-        transform: `translateX(${indicator.left}px)`,
+        translate: `${indicator.left}px 0`,
         width: `${indicator.width}px`,
     }));
 
@@ -79,8 +82,15 @@
 
     watch(
         () => route.fullPath,
-        () => void nextTick(measure),
+        () => {
+            indicator.sliding = true;
+            void nextTick(measure);
+        },
     );
+
+    function onIndicatorTransitionEnd(e: TransitionEvent) {
+        if (e.propertyName === 'translate') indicator.sliding = false;
+    }
     watch(
         () => props.isVisible,
         () => void nextTick(measure),
@@ -111,14 +121,30 @@
         box-shadow: 0 0 8px color-mix(in srgb, var(--brand-accent) 55%, transparent);
         opacity: 0;
         transition:
-            transform 0.42s cubic-bezier(0.65, 0, 0.2, 1),
-            width 0.42s cubic-bezier(0.65, 0, 0.2, 1),
-            opacity 0.25s ease;
+            translate 0.55s cubic-bezier(0.65, 0, 0.2, 1),
+            width 0.55s cubic-bezier(0.65, 0, 0.2, 1),
+            opacity 0.25s ease,
+            background-color 0.3s ease,
+            box-shadow 0.3s ease;
         pointer-events: none;
-        will-change: transform, width;
+        will-change: translate, width, scale;
     }
 
     .dora-mainMenuButtonStrip-indicator.is-ready {
         opacity: 1;
+    }
+
+    .dora-mainMenuButtonStrip-indicator.is-sliding {
+        background: var(--nav-slide-flash);
+        box-shadow: 0 0 8px color-mix(in srgb, var(--nav-slide-flash) 60%, transparent);
+        animation: nav-indicator-wobble 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes nav-indicator-wobble {
+        0%   { scale: 1 1; }
+        25%  { scale: 1.22 1.5; }
+        55%  { scale: 1.42 1.75; }
+        80%  { scale: 1.0 1.12; }
+        100% { scale: 1 1; }
     }
 </style>

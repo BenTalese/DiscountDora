@@ -20,10 +20,12 @@ from sqlalchemy import select
 from dora_api.app import db
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import effective_expiring_soon_window
 from dora_api.features.locations.attention import reasons_for_item
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
@@ -229,7 +231,11 @@ class GetStockItemDetailHandler:
             for c in _Changes[:20]
         ]
 
-        _Reasons = reasons_for_item(_StockItem)
+        # C-9.2 — same household-configured expiring-soon window as the alerts
+        # list + heatmap (R-003), falling back to the default.
+        _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
+        _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
+        _Reasons = reasons_for_item(_StockItem, expiring_soon_window=_Window)
 
         return StockItemDetailDto(
             stock_item_id = _StockItem.id,

@@ -10,8 +10,10 @@ alert means changing the underlying state so it doesn't re-fire:
     changing the level (the user has "looked at it" but doesn't want to
     change anything)
 
-The alert_id format is `<stock_item_id>:<kind>` — we extract the UUID and
-match the action against the kind.
+The alert_id is the stable scoped key `<scope>:<id>:<kind>` (alert_key.py).
+Only stock-scoped alerts carry actions today; we extract the stock item id
+and route by the action in the body. Non-stock scopes (meal / list / system,
+C-9.4+) have no act_on_alert actions yet.
 """
 import logging
 from dataclasses import dataclass
@@ -23,6 +25,7 @@ from pydantic import BaseModel, ConfigDict
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.features.alerts.alert_key import SCOPE_STOCK, parse_alert_key
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
@@ -84,14 +87,12 @@ class AlertActionHandler:
 @has_request_body(AlertActionRequest)
 def act_on_alert(alert_id: str):
     _Logger = logging.getLogger(__name__)
-    # `<stock_item_id>:<kind>` — split, validate the UUID, route by action.
-    parts = alert_id.split(":", 1)
-    if len(parts) != 2:
-        return bad_request(f"Malformed alert id '{alert_id}'.")
-    try:
-        stock_item_id = UUID(parts[0])
-    except ValueError:
-        return bad_request(f"Malformed alert id '{alert_id}'.")
+    # `<scope>:<id>:<kind>` — only stock-scoped alerts carry actions; parse
+    # out the stock item id and route by the action in the body.
+    parsed = parse_alert_key(alert_id)
+    if parsed is None or parsed.scope != SCOPE_STOCK or parsed.stock_item_id is None:
+        return bad_request(f"Malformed or non-actionable alert id '{alert_id}'.")
+    stock_item_id = parsed.stock_item_id
 
     _Request: AlertActionRequest = get_request_body()
     _Response = get_container().inject(AlertActionHandler).handle(

@@ -39,8 +39,25 @@ OUT_OF_STOCK_SEQUENCE = int(StockStatus.OUT_OF_STOCK)
 
 # Days from "today" within which an item is considered "expiring soon" for alerts,
 # location attention scores, and the assistant's expiring-soon filter. Single
-# source — do not redeclare a 7 elsewhere.
+# source — do not redeclare a 7 elsewhere. Since C-9.2 this is the *default*;
+# an admin can override it household-wide via AppSetting.expiring_soon_window_days
+# (resolve through `effective_expiring_soon_window`, never a second literal).
 EXPIRING_SOON_WINDOW_DAYS = 7
+
+
+def effective_expiring_soon_window(app_setting) -> int:  # noqa: ANN001 — duck-typed AppSetting
+    """The configured expiring-soon window (days), falling back to
+    ``EXPIRING_SOON_WINDOW_DAYS`` when unset/invalid (C-9.2).
+
+    Single source (R-003): callers pass the already-fetched ``AppSetting`` (or
+    ``None``) so this module stays repository-free, and the constant above
+    remains the one default the override layers on top of.
+    """
+    if app_setting is not None:
+        value = getattr(app_setting, "expiring_soon_window_days", None)
+        if isinstance(value, int) and value > 0:
+            return value
+    return EXPIRING_SOON_WINDOW_DAYS
 
 
 def _sequence_of(level) -> Optional[int]:

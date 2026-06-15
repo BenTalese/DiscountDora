@@ -6,6 +6,43 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **A proper Alerts control centre (Alerts C-9.3).** The Alerts page is now a real hub:
+  **summary tiles** (an at-a-glance "5 expiring soon · 2 expired" per type), the full **active
+  list grouped by priority** with per-type icons and read items dimmed, a **Mark all read**
+  control, a **Manage** panel to turn any alert kind off or move it between the badge-counted
+  "Needs action" tier and "FYI" (the C-9.2 preferences, now with a UI), and a collapsible
+  **History** of what you've read, snoozed, or dismissed. The bell becomes a fast **peek +
+  jump**: the top few rows with their key action, the bulk "add low/out to my list" shortcut,
+  and an **Open Alerts** button to the hub — no more two competing alert surfaces.
+  - Shared `AlertRow` / `AlertList` components back both the bell and the page (one source of
+    truth for how an alert renders); new `GET /api/alerts/history`.
+- **Tune which alerts shout and which whisper (Alerts C-9.2).** Set **per-person alert
+  preferences** — turn any alert kind off, or move it between the badge-counted
+  "actionable" tier and the quieter "FYI" tier — so the bell is as noisy or as calm as
+  *you* want, without changing what anyone else sees. Disabling a kind drops it from your
+  list and your badge (and, later, your notifications); promoting a kind to actionable
+  bumps your badge. Admins also get **household-wide alert thresholds** in
+  Settings → System: the **expiring-soon window** (how many days ahead counts as "expiring
+  soon") and a **default stocktake reminder** pre-filled on new items. The expiring-soon
+  window now flows from one place into both the alerts list and the location heatmap, so
+  changing it re-tunes them together.
+  - New `AlertPreference` table (migration `b1e7d3f9a2c4`) + `GET`/`PATCH /api/alerts/prefs`
+    (per user); `expiring_soon_window_days` + `default_days_until_stocktake_alert` added to
+    app settings. *(The user-facing manage panel lands with the alerts hub page in a later
+    C-9 chunk; this chunk ships the engine + the admin thresholds.)*
+- **Alerts now remember what you've seen, snoozed, and dismissed (Alerts C-9.1).**
+  Alert read/unread, snooze, and dismiss are now **saved server-side per user**, so they
+  follow you across devices instead of living in one browser — snoozing on your phone
+  hides the alert on your laptop too. And the **bell badge now matches the list**: it
+  counts the **actionable** alerts (high + medium) actually shown, derived once on the
+  server and respecting your snoozes/dismissals, so the "I see 6 but the bell shows 10"
+  mismatch is gone. Low-severity items still appear as a clearly-separate FYI tier; they
+  just don't inflate the badge.
+  - New endpoints: `POST /api/alerts/<id>/read` · `/unread` · `/snooze` · `/dismiss`,
+    `DELETE /api/alerts/<id>/suppression`, `POST /api/alerts/read-all`. Alert ids are now
+    scoped keys (`stock:<id>:<kind>`) so non-stock alerts can join later. New
+    `AlertInteraction` table (migration `f4d2a9c7b3e1`). *(In-app behaviour now; the
+    read/dismiss/history UI and the email/push channels land in later C-9 chunks.)*
 - **"Plan step-by-step" guided builder (Meal Plans C-2.J).** A guided flow for
   fresh-cooks: **pick** the meals you want this week → **see what you'd need to
   buy** (in-stock vs to-buy, computed with the same scaling as the saved-plan

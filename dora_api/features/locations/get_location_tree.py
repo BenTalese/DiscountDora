@@ -10,8 +10,10 @@ from dataclasses import asdict, dataclass, field
 from typing import List
 from uuid import UUID
 
+from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.stock_status import effective_expiring_soon_window
 from dora_api.features.locations.attention import (AttentionReasons,
                                                    reasons_for_item)
 from dora_api.features.routers import LOCATION_ROUTER
@@ -60,6 +62,11 @@ class GetLocationTreeHandler:
             .all()
         )
 
+        # C-9.2 — heatmap honours the household-configured expiring-soon window
+        # (same source as the alerts list, R-003), falling back to the default.
+        _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
+        _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
+
         # Bucket items by their location_id (None = unassigned, surfaced
         # separately in the UI).
         items_by_location: dict[UUID, List[StockItem]] = {}
@@ -78,7 +85,7 @@ class GetLocationTreeHandler:
             node_reasons = AttentionReasons()
             item_dtos: List[LocationItemDto] = []
             for item in direct_items:
-                ir = reasons_for_item(item)
+                ir = reasons_for_item(item, expiring_soon_window=_Window)
                 node_reasons = node_reasons.merge(ir)
                 item_dtos.append(LocationItemDto(
                     stock_item_id = item.id,

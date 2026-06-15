@@ -78,14 +78,21 @@ class AttentionReasons:
         return None
 
 
-def reasons_for_item(item: StockItem, today: date | None = None) -> AttentionReasons:
+def reasons_for_item(
+    item: StockItem,
+    today: date | None = None,
+    expiring_soon_window: int = EXPIRING_SOON_WINDOW_DAYS,
+) -> AttentionReasons:
+    # `expiring_soon_window` defaults to the constant but callers thread the
+    # household-configured value (AppSetting, C-9.2) so the heatmap re-derives
+    # consistently with the alerts list when an admin changes it (R-003).
     today = today or date.today()
     r = AttentionReasons()
 
     if item.expiry_date is not None:
         if item.expiry_date < today:
             r.expired = 1
-        elif (item.expiry_date - today).days <= EXPIRING_SOON_WINDOW_DAYS:
+        elif (item.expiry_date - today).days <= expiring_soon_window:
             r.expiring_soon = 1
 
     if item.stock_level is not None:
@@ -112,8 +119,14 @@ def reasons_for_item(item: StockItem, today: date | None = None) -> AttentionRea
     return r
 
 
-def reasons_for_items(items: Iterable[StockItem], today: date | None = None) -> AttentionReasons:
+def reasons_for_items(
+    items: Iterable[StockItem],
+    today: date | None = None,
+    expiring_soon_window: int = EXPIRING_SOON_WINDOW_DAYS,
+) -> AttentionReasons:
     total = AttentionReasons()
     for item in items:
-        total = total.merge(reasons_for_item(item, today=today))
+        total = total.merge(reasons_for_item(
+            item, today=today, expiring_soon_window=expiring_soon_window
+        ))
     return total

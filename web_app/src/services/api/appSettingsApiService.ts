@@ -17,6 +17,9 @@ export type AppSettings = {
     nutrition_db_source: string;
     // Meal Plans C-2.K — household IANA timezone for the "today" boundary.
     timezone: string;
+    // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
+    expiring_soon_window_days: number;
+    default_days_until_stocktake_alert: number;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

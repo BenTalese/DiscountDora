@@ -9,6 +9,457 @@ next.
 
 ---
 
+## ⏭️ NEXT SESSION — START HERE (handoff snapshot, 2026-06-15)
+
+> Verbatim pickup note. The 2026-06-15 session was a **design sprint** — four big-rock surfaces
+> were planned (proposal + impl plan each). When the user asks "what to do next," present the
+> **menu** at the bottom of this entry.
+
+**What got designed this session (all proposal + impl plan authored under `docs/04_proposals/`):**
+
+| Surface | Docs | Build state |
+|---|---|---|
+| **Alerts (C-9)** | `PROPOSAL_ALERTS.md` + `IMPL_PLAN_ALERTS.md` | **C-9.1 VERIFIED** + **C-9.2 & C-9.3 built/test-verified** (prefs · thresholds · hub page + slim bell + history; 287 e2e green; browser pending — FU-183) |
+| **Onboarding (C-5 v3)** | `PROPOSAL_ONBOARDING.md` + `IMPL_PLAN_ONBOARDING.md` | design only (+ 3 hero prototypes shown in chat); copy-honesty gate FU-184 |
+| **Stock Item Detail (C-1b)** | `PROPOSAL_STOCK_ITEM_DETAIL.md` + `IMPL_PLAN_STOCK_ITEM_DETAIL.md` | design only (NEW home; closes COVERAGE_GAPS A-1) |
+| **Ingestion API (C-10 v2)** | `PROPOSAL_INGESTION_API.md` + `IMPL_PLAN_INGESTION_API.md` | design only |
+
+**THE HARD BLOCKER IS GONE (2026-06-15):** the dev env is now provisioned on this machine —
+real **Python 3.11.9** + `.venv` (deps installed) and `web_app/node_modules` present. Backend
+e2e, alembic, vue-tsc + eslint all run here now. The only thing still NOT done for alerts is a
+**browser** smoke pass (FU-183); C-9.1 + C-9.2 are both code-complete + automated-verified.
+
+**Open verification / ripple FUs (in `DORA_FOLLOWUPS.md`):**
+- **FU-183** — Alerts C-9.1 + C-9.2 are automated-verified; **only the browser smoke remains**
+  (bell badge==list, snooze-across-reload, the prefs/threshold UI). Flip **FU-042** with it.
+- **FU-187** (NEW) — the assistant still reads the expiring-soon *default* constant, not the
+  configurable AppSetting window (constant-as-default carve-out; flagged in `tools.py`).
+- **FU-184** — reconcile onboarding sell-copy + the emerging "Insight" feature against the running
+  app before copy ships (P3 honesty close-gate on the onboarding copy chunks).
+- **FU-185** — Stock Item Detail recipe-tab favourite/add-all are dead (B8 residue; homed in C-1b.4).
+- **FU-186** — decommission in-app live product search / `merchant_api` post-scraping-divorce
+  (repoint at the ingested catalogue or move to companion; reshapes C-1b §2.4; folds FU-053).
+
+**Standing context worth remembering:** scraping is **divorced** → the producer is the user's
+**private personal companion** ("Discount Dora") that pushes via `/api/ingest`; its existence is
+**invisible in the app** (hard rule). `products_enabled` flag (C-5) + **FU-182** make Stock Item
+Detail / product surfaces collapse for the "Cooking" persona. Preferred product **removed** (FU-180).
+
+### 🔀 THE MENU — "what to do next" (present these)
+1. **Build C-9.4** (recommended — continues C-9) — new evaluator types **`no_planned_meals`**
+   (next week empty → FYI; uses the C-2.K household tz) + **`shopping_day`** (a list's
+   `planned_shop_date` within N days) + the expiry-after-alert nudge. Additive generators on the
+   evaluator; they render through the now-shared `AlertRow`. (Then C-9.5 subscriptions, C-9.6 timeline.)
+2. **Build another surface's first chunk** — **C-5.1** (onboarding quick wins), **C-1b.1**
+   (stock-detail overview tidy), **C-10.1** (IngestionSource + keys page). Env is up — build *and run*.
+3. **Browser-smoke the alerts work** (FU-183) — run the app, confirm the hub page / slim bell /
+   prefs / thresholds, then flip **FU-042** + **FU-183**.
+4. **Plan another surface** (design-sprint pattern) — Dora Assistant architecture, Dashboard,
+   Data page, Help overlay, Barcode scanning, Locale/i18n.
+
+---
+
+## 2026-06-15 — Alerts C-9.3 — hub page + slim bell + shared components + history
+**Status:** code-complete + automated-verified (browser pending — FU-183). Built directly
+(ultracode off). The largest C-9 UI chunk: the Alerts page becomes the control centre and the
+bell becomes a peek.
+
+**Built:**
+- **Shared components (R-001):** new `AlertRow.vue` (avatar + message + per-kind icon + read
+  de-emphasis + an action bar that *emits* semantic events) and `AlertList.vue` (groups the
+  active set into the "Needs action" / "FYI" tiers). Both the bell and the page render through
+  them — the duplicated row markup previously copy-pasted between the two is gone.
+- **`AlertsPage.vue` rebuilt as the hub:** summary tiles (per-kind count + theme + colour), the
+  tiered active list (mark-all-read; per-row act/read/snooze/dismiss/view-in-context), a
+  **Manage** panel (per-user on/off + tier override via the C-9.2 `alertPrefsStore`, with a link
+  to System settings for the household thresholds), and a collapsible **History** (lazy-loaded
+  ledger audit). The Snoozed expansion stays for un-hiding.
+- **Slimmed `AlertsBell.vue`:** top-N peek rows (shared `AlertRow` in `slim` mode = primary
+  action + read toggle), the bulk add-low/out shortcut, and **"Open Alerts" → the hub**. Rich
+  management/history moved to the page (no two competing surfaces — R-007).
+- **`GET /api/alerts/history`** (`get_alert_history.py`) — the user's read/snooze/dismiss
+  decisions from the ledger, each enriched with the stock item's current name (or "(removed
+  item)"), most-recent first. **Per-kind identity** added to `models/alert.ts` (`colorForKind`,
+  `kindTheme`, `tierLabel`); `markUnread` added to `alertStore`; `tier`/`AlertPref`/history types
+  on the model + service.
+
+**Verify — GREEN:** backend e2e **287 passed** (+1 history test); `vue-tsc` clean; `eslint` only
+the 5 pre-existing FU-177 errors (none in alert files).
+
+**Charter/standards close-gate:** R-001 (shared `AlertRow`/`AlertList`; no duplicated markup),
+R-002 (Quasar palette names matching `colorFor`'s convention + theme CSS vars in styles, dark-mode
+safe), R-003 (bell + page read the same store/canonical set; mutations go through the store/api,
+never recomputed per-surface), R-007 (bell slimmed to a peek; no second action system — `AlertRow`
+is the one action surface). **ADR eval:** the "presentational row emits semantic events, parent
+owns side effects" split is standard Vue/R-001, not a new standing rule. **Note:** `npm run build`
+still fails on the pre-existing **FU-177** eslint errors (unrelated); `vue-tsc` is clean.
+
+**Scope held:** the **Upcoming "this fortnight" timeline (§3.7 / L61) stays deferred to C-9.6**
+per the impl plan — NOT built here. COVERAGE_GAPS L437/L59/L60/L224 flip after the full Phase A +
+browser pass (impl plan §4).
+
+**Open loops:** none new. **FU-183** browser checklist extended to cover the C-9.3 hub + slim bell.
+
+**Next up:** **C-9.4** (new evaluator types `no_planned_meals` + `shopping_day` + the expiry-
+after-alert nudge) — additive generators that render through the now-shared `AlertRow`. Then C-9.5
+(subscriptions tier) → C-9.6 (Upcoming timeline). Or browser-smoke the alerts surface (FU-183).
+
+---
+
+## 2026-06-15 — Env provisioned · Alerts C-9.1 VERIFIED · C-9.2 built (per-user prefs + thresholds)
+**Status:** code-complete + automated-verified (browser pending). Set up the dev env, verified
+the static-only C-9.1 against it, then built **C-9.2** on top. Built directly (ultracode off).
+
+**Env (the old hard blocker, now gone):** real Python 3.11.9 was on PATH (no longer the
+Windows-Store stub), so created `.venv` + `pip install -r requirements.txt` and `npm install` in
+`web_app`. Backend e2e, alembic, vue-tsc, eslint all run here now. *(Surfaced while answering a
+git question first: the user's zip→Google-Drive→unzip round-trip had thrown ~880 phantom
+"modified" files — diagnosed as a stale git index stat-cache from changed mtimes, cleared with
+`git add -A && git reset`, no content touched. The 24 real changes were the C-9.1 work + the
+design-sprint docs.)*
+
+**C-9.1 verification — all GREEN:** `test_alerts.py` 7/7; full backend e2e **286 passed**; the
+migration `f4d2a9c7b3e1` up **and** down verified in isolation + single alembic head; vue-tsc
+clean; eslint only the 5 pre-existing FU-177 errors. One unrelated brittle pagination assertion
+in `test_stock_item_router.py` was hardened (assert pagination *mechanics*, not specific seeded
+names) — the new `alert-*` test items sort first under NOCASE collation and exposed it; same fix
+already applied to its sibling sort tests, not a C-9 bug (R-007 carve-out, logged in the gate).
+
+**C-9.2 built (closes L439/L440/L441 — pending browser):**
+- **`AlertPreference`** entity/table/migration `b1e7d3f9a2c4` `(user_id, kind, enabled,
+  tier_override)` + unique `(user_id, kind)` index; `GET`/`PATCH /api/alerts/prefs` (per user;
+  R-010 validates kind + tier on write).
+- **`alert_kinds.py`** — one registry of the 6 kinds + default tiers (§5) + TIER constants.
+- **`get_alerts.py`** applies the user's prefs: a disabled kind is omitted from their
+  set/counts/channels; a `tier_override` moves a kind between the badge-counted **actionable**
+  tier and **FYI**. Each `AlertDto` now carries its effective `tier`; `actionable_count`/
+  `fyi_count` are tier-derived (with no override the C-9.1 invariant `actionable == high+medium`
+  still holds — test-proven).
+- **Thresholds on `AppSetting`** — `expiring_soon_window_days` + `default_days_until_stocktake_
+  alert`, admin `GET`/`PATCH /app-settings` + new System-settings UI fields. The expiring-soon
+  window resolves through one pure helper `stock_status.effective_expiring_soon_window` (the
+  constant is the seeded default — R-003) and is threaded into the alerts evaluator **and** the
+  location heatmap (`attention.py` ← `get_location_tree` + `get_stock_item_detail`).
+  `create_stock_item` now seeds a new item's stocktake cadence from the household default (was a
+  hardcoded 0). The assistant keeps the constant default (carve-out → **FU-187**).
+- **Frontend** — `alertPrefsStore` + `alertApiService.getPrefs/updatePref`; `tier`/`AlertPref`
+  on the alert model; threshold fields on `SystemSettings.vue`. 5 new e2e cover default prefs,
+  disable-removes-from-count, tier-override, write validation, and the window re-deriving.
+
+**Charter/standards close-gate:** R-003 (one server "what counts" + one threshold source via the
+resolver; client never recomputes), R-005/006 (plain reversible portable migration, single head),
+R-010 (kind/tier validated on write + pydantic bounds on the thresholds), R-008 (trimmed an unused
+import). **R-007 carve-out:** the pagination-test hardening (broken *by* the new alert test data).
+**ADR eval:** "household threshold = constant-as-seeded-default + a pure resolver the callers
+thread" is a clean *application* of R-003, not yet a new standing rule — left as a pattern;
+promote to an ADR if C-9.4's `no_planned_meals`/`shopping_day` windows repeat it.
+
+**Open loops:** **FU-187 new** (assistant reads the window default, not the override — flagged in
+`tools.py`). **FU-183** narrowed to browser-only (then flip **FU-042**, which is now code-fixed +
+test-proven). COVERAGE_GAPS L439/L440/L441 flip after full Phase A + browser (impl plan §4).
+
+**Next up:** **C-9.3** (alerts hub page + slim bell + history) — consumes the now-built C-9.1
+ledger + C-9.2 prefs/threshold store. Or browser-smoke the alerts work to close FU-183/FU-042.
+
+---
+
+## 2026-06-15 — Ingestion API C-10 v2 — proposal rewrite + impl plan (architecture + value layer)
+**Status:** design complete (no code). Rewrote `PROPOSAL_INGESTION_API.md` → **v2** + authored
+`IMPL_PLAN_INGESTION_API.md`. Co-designed with the user (architecture clarified + 3 question
+rounds). Built directly (ultracode off).
+
+**Architecture settled (user-confirmed):** the ingestion API is **NOT a separate service** — it's
+new routes (`POST /api/ingest`) + a **bearer-auth lane inside the existing `dora_api` core** (the
+app that owns the DB). "Didn't want another moving part." The *producer* is the separate app: the
+user's **private personal scraper** (heritage-named "Discount Dora" — **kept out of the committed
+docs + the app entirely**, see below); today's `merchant_api` sibling (port 5172) is its prototype.
+
+**HARD RULE — invisibility:** the producer/companion's existence must **not be referenced anywhere
+in the app** (no "scraper/companion/import deals/brand", no "where products come from" copy in UI/
+help/settings/empty-states). `/api/ingest` is **fully source-agnostic** — accepts batches from *an
+authenticated source*, full stop. Committed planning docs also kept generic about it (referenced
+as "an external/admin-owned ingestion source", not by name).
+
+**Decisions (co-designed):**
+- **Auth = admin-minted API keys** (`IngestionSource`, SHA-256 hashed, bearer). A new **generic
+  "API access" admin Settings page**: create (one-time key reveal) / label / revoke **+
+  observability** (per-key last-used + accepted/skipped/failed counts).
+- **Scope = plumbing + keys page + the "your prices" intelligence layer** (the user-facing payoff):
+  union **pushed offers ∪ the user's own receipt snapshots** (`ShoppingListLine.actual_unit_price`
+  etc.) into a personal price history + a **"paying more than usual" signal**. This is the honest,
+  legal "spend smarter" value AND **what makes the onboarding Insight stage real (FU-184)**.
+- **Accepted contract defaults:** sync v1; `Idempotency-Key`; `source` as a string column (taxonomy
+  → C-8); **append-only** dedup (product+source+observed_at+price); **keep `POST /products`, refactor
+  to share the ingest mapping**; shared catalogue (defer multi-user → Phase 4); carry `trust`,
+  enforce later.
+
+**Verify-state-first:** confirmed product/offer model + append-only historic log; **`create_product`
+409s on dup and never appends a new offer** — so price history barely accrues today; the ingest
+`offer` record fixes exactly this. No machine auth / `/ingest` / `PriceObservation` / `source` /
+idempotency today; `companion_ingestion_enabled` flag exists, unconsumed.
+
+**Charter/standards:** P9 No-scrape (passive inbound; Dora never calls out) + P3 Honest + P12
+No-invent; §7.5 (machine auth behind a helper, portable SQLite+Postgres, degrades w/ no source).
+Plan close-gates cite R-003 (one shared offer-append mapping for /products + /ingest),
+R-005/006/010 + the invisibility rule.
+
+**Open loops:** **FU-186 new** — decommission the in-app **live product search / `merchant_api`**
+(can't live-scrape post-divorce; repoint at the ingested catalogue or move to the companion;
+reshapes C-1b §2.4 "find & link"; folds FU-053). Plus the build-time call on whether
+`price_observations` needs a small `PriceObservation` table.
+
+**Next up:** same env blocker (static-only if building). If building, **C-10.1** (IngestionSource +
+bearer lane + admin keys page). Four surfaces now designed this session: Alerts (C-9, C-9.1 built
+static), Onboarding (C-5 v3 + prototypes), Stock Item Detail (C-1b), Ingestion API (C-10 v2).
+
+---
+
+## 2026-06-15 — Stock Item Detail C-1b — design brief + impl plan authored (NEW design home)
+**Status:** design complete (no code). Authored `PROPOSAL_STOCK_ITEM_DETAIL.md` (brand new — this
+surface had **no prior design home**; closes the COVERAGE_GAPS **A-1** gap) + `IMPL_PLAN_
+STOCK_ITEM_DETAIL.md`. Co-designed with the user (one question round). Same brief as
+Alerts/Onboarding. Built directly (ultracode off).
+
+**Decisions (co-designed):**
+- **Polish-in-place** — keep the tab structure (Overview/Products/Recipes/Substitutes/Lists/
+  History); tidy within it (single-column inline-editable overview, dedupe the level, toolbar
+  cleanup, theme-aware tabs). NOT a hero/single-scroll teardown.
+- **Design both Products-on AND Products-off states here** (this is the #1 FU-182 "Products off"
+  surface); **FU-182 implements the flag-gating**, C-1b owns the design (R-007 split).
+- **History tab → item lifecycle timeline** (INV-7 rework: merge waste events + list-add
+  provenance + open/expiry/check context; no schema change).
+- **Keep Notes (calm) + make Stock Group settable here** (thread `stock_group_id` into the detail
+  DTO; closes the L115 "forgotten field").
+
+**Verify-state-first (lots of stale feedback corrected via an Explore sweep):** delete-cascade
+(B4), PATCH edit (B3), unlink-product, **per-product add-to-list (L130)**, and essential-settable
+are **already fixed/present**; **preferred product was removed this session (FU-180)** so L131 is
+closed by removal; recipe-row nav fixed. **Still broken:** recipe-tab `@toggle-favourite` +
+`@add-all-to-list` aren't listened to (B8 residue → **FU-185**, homed in C-1b.4); stock-group
+unsettable. Split-view is 58%/`[40,100]` (want 50% + min&max). Substitute *swap* → Shop Mode
+(INV-8), out of this surface.
+
+**Charter/standards:** proposal carries the mandatory §8 coverage table (all L112-140; L131
+removed/FU-180, L136 → INV-8 out-of-scope). Plan close-gates cite R-001/002/003/007/008. No
+schema change (DTO threading only). The "✅ fixed" rows are **confirm-in-browser**, not re-fixes.
+
+**Open loops:** **FU-185 new** (recipe-tab dead actions — B8 residue). COVERAGE_GAPS A-1 now has a
+home (this brief) — flip gap→covered after build + browser-confirms.
+
+**Next up:** same env blocker (static-only if building). If building: **C-1b.1** (overview tidy +
+inline edits + toolbar cleanup — the bulk of "it's messy"). Three surfaces now fully designed
+this session: Alerts (C-9, C-9.1 built static), Onboarding (C-5 v3), Stock Item Detail (C-1b).
+
+---
+
+## 2026-06-15 — Onboarding C-5 v3 — cinematic experience + loop reframe + hero prototypes
+**Status:** design elevated (no code). User raised the bar: "frictionless, REALLY sell it,
+Apple-commercial, perfect brief." Elevated `PROPOSAL_ONBOARDING.md` to **v3** + updated
+`IMPL_PLAN_ONBOARDING.md`. Two→three interactive hero prototypes built in-chat for the user to
+play with; they picked the hybrid.
+
+**What changed from v2:**
+- **Added the experience layer (the heart of the brief):** narrative/sell arc (3–4 punchy
+  cinematic scenes: problem → the loop → Dora-the-brain → you're-in-control); **motion language**
+  (big visuals, scale/fade eased reveals, the loop draws itself, **mandatory
+  `prefers-reduced-motion`** + keyboard a11y, 60fps budget, production dark canvas + real Dora
+  yellow); **navigation/progress model** (cinematic *Story* ↔ *Setup* with **instant cross-jump**,
+  a **free non-linear step rail** that's also the progress indicator, nothing gated,
+  draft-until-finish).
+- **Hero "how it all connects" prototypes** (visualize tool): A = auto-reveal/narrated (+ persona
+  toggle), C = tap-to-drill-in, then a corrected **hybrid v2** (auto-reveal once → tappable).
+  **User chose hybrid, Dora at centre, no persona-dimming** (sells full power). One reusable
+  `OnboardingLoop` component, reused at the finish recap (R-001).
+- **Core loop reframed (big one):** **dropped "Deals"** — auto deal-scraping is divorced from the
+  app (companion-only; aligns with the master-plan removed-features). New honest spine: **Stock →
+  Plan → List → Shop → Restock → Cook**, Dora-centre. Money story shifts prospective→retrospective
+  (**price memory from receipts + waste reduction + buy-only-what-you-need**), surfaced as an
+  **emerging "Insight/Spend-smarter" stage** (link products → flag inflated prices) — **flagged
+  NOT-final**.
+- **Personas reframed:** Cooking / **Spend-tracking** (was "grocery savings") / Everything.
+- **Hard honesty gate (P3):** the loop stages + all sell-copy are **provisional — must be
+  reconciled against the running app before copy ships** (new **FU-184**); it's a close-gate on
+  the onboarding-copy chunks (C-5.1/.2/.6), not optional. Can't be done from a static read.
+
+**Charter/standards:** P1 Effortless + P3 Honest + P10 Anti-creep drive it; §10 coverage table
+intact (L45 out-of-scope → FU-180). Impl-plan close-gate now cites reduced-motion a11y + the
+FU-184 copy-honesty gate. R-001 (one OnboardingLoop), R-007 (Products-off sweep stays FU-182).
+
+**Open loops:** **FU-184 new** (validate sell vs real behaviour + the emerging Insight feature).
+FU-182 / FU-180 notes still stand from the v2 entry below.
+
+**Next up:** same env blocker — building remains static-only. If building, C-5.1 (quick wins).
+The marquee chunk is **C-5.2** (cinematic intro + `OnboardingLoop` hero + motion/nav/progress
+shell), gated by FU-184 copy validation. The prototypes (`onboarding_loop_hybrid_v2`) are the
+build reference for the hero.
+
+---
+
+## 2026-06-15 — Onboarding C-5 — proposal rewrite + impl plan authored (design unit)
+**Status:** design complete (no code yet). Rewrote `PROPOSAL_ONBOARDING.md` (supersedes the
+2026-06-06 draft) + authored `IMPL_PLAN_ONBOARDING.md`. Co-designed with the user (two question
+rounds), same brief as Alerts: "fully polished, feature-rich onboarding." Built directly
+(ultracode off).
+
+**What (design decisions, all co-designed):**
+- **Reframe: persona-led + branching.** Onboarding leads with a **3-persona fork** (Pantry &
+  cooking / Pantry + grocery savings / Everything-power-user, + a "Customise" escape to the flat
+  toggles). The persona sets the install feature flags and **branches** the wizard — the Cooking
+  persona **skips the stock-vs-product explainer** (FU-182's "don't teach the concept they
+  opted out of"); Savings/Everything show it.
+- **New `AppSetting.products_enabled` flag** (default **True**; the Cooking persona turns it
+  off). C-5 **introduces + sets** it via the existing C-cross flag machinery; **the per-surface
+  Products-off gating is FU-182's chunk**, NOT C-5 (R-007 scope guard).
+- **`User.household_headcount`** (single int) — resolves the `RecipeCookMode.vue:545-547` TODO;
+  cook mode initialises its scaler from it.
+- **Starter data = category starter-packs + opt-in demo recipe/meal/plan** (demo rows **plain,
+  no `is_demo` marking** — deleted like any row) + groups/locations preview + inline un-named
+  import + slim "added" list. New `starter_packs.json` + demo seed payload(s).
+- **Vision + finish = rich-but-skimmable diagrams** (the loop) + confetti + persona-relevant
+  flow-cards deep-linking into the **existing** `/help` guides (fixes FU-015 tour Alerts card).
+- **Preferred stores DROPPED** (L45) — user flagged it's in the same uncertain bucket as the
+  preferred-*product* removal (FU-180), tangled with stock-items-only friction + whether the
+  companion ships. Folded into the FU-180 reconsideration.
+
+**Verify-state-first catches (docs stale):** the **feature-flag settings panel already EXISTS**
+(`SystemSettings.vue` + `AppSetting` flags + admin PATCH — the old proposal's "deferred panel"
+is obsolete; persona is a thin writer over it); **help/guides section exists** (`HelpPage.vue`);
+**meal slots seeded by migration**, not onboarding; **B5 nav fixed**, theme already
+system/light/dark, admin already says "Invite teammates later", inline "(N added)" counter
+present. `household_headcount` confirmed as C-5's to add (cook-mode TODO waits on it).
+
+**Charter/standards:** proposal carries the mandatory §8 feedback-coverage table (L24-46; L45
+out-of-scope → FU-180). Plan's per-chunk close-gates cite R-001/002/003/005/006/007/008 + §7.5.
+Hard R-007 guard recorded: the Products-off surface sweep is **FU-182**, not C-5.
+
+**Open loops:** **FU-182 updated** (C-5 now delivers its `products_enabled` prerequisite; its
+remaining scope is the surface sweep). **FU-180 updated** (absorbs preferred-stores). FU-015 /
+FU-041 addressed by the C-5 design (build/confirm pending). No new FU.
+
+**Next up:** decide build vs hold (env still unprovisioned — same blocker as Alerts). If
+building, **C-5.1** (copy/label/persistence + theme mapping — the quick wins) is the first
+chunk; then C-5.2 vision, C-5.3 persona+flag+branching (the reframe).
+
+---
+
+## 2026-06-15 — Alerts C-9.1 — spine: scoped keys + interaction ledger + one count ⚠️ STATIC-ONLY
+**Status:** code complete, **NOT verified** — this machine has no Python env (Win Store
+stub only; no venv; `web_app/node_modules` missing), so backend e2e / migration up-down /
+vue-tsc / eslint were **not run**. User chose "build static-only now" knowingly; **logged
+FU-183 — must verify on a provisioned machine before C-9.1 closes.** Built directly
+(ultracode off).
+
+**What (first chunk of IMPL_PLAN_ALERTS):**
+- **Generalised alert key** → `<scope>:<id>:<kind>` (`features/alerts/alert_key.py`:
+  `stock_alert_key` + `parse_alert_key`). `get_alerts.py` emits `stock:<uuid>:<disc>`;
+  `act_on_alert.py` parses by scope (rejects non-stock with 400). Frontend treats the id
+  as opaque, so the value change is contained to those two backend files.
+- **Per-user interaction ledger** — filled the empty `notification.py` stub →
+  **`AlertInteraction`** entity (`{user_id, alert_key, created_at, read_at, snoozed_until,
+  dismissed_at}`), table-mapping + migration **`f4d2a9c7b3e1`** (down_revision
+  `a3c9e7b2f5d8`, the confirmed single head). Mirrors `DoraSuggestionSuppression` + a
+  per-user `user_id`/`read_at`. **`notification.py` stub deleted** (R-008; nothing imported
+  it). **Dropped `first_seen_at`** from the plan's field list — it'd equal `created_at`
+  (rows are created on first interaction, not first view), so "new since last visit"
+  tracking is deferred to C-9.3 where the read-state UI lands.
+- **Server-side snooze + one "what counts"** — `get_alerts.py` rewritten: builds the raw
+  derived set, overlays the current user's interactions (`_current_user_id()` via session,
+  mirroring suggestions), then splits into **active** (not snoozed/dismissed) vs **snoozed**,
+  computes `actionable_count` (active high+med = the badge) + `fyi_count` (active low) +
+  per-severity counts. Dismissed → hidden everywhere. **Closes the L438 count mismatch
+  (FU-042)** at the source: badge == its tier's list, server-derived, snooze-aware.
+- **New endpoints** (`features/alerts/interact_with_alert.py`, auto-registered via the
+  feature-discovery import walk): `POST /alerts/<id>/{read,unread,snooze,dismiss}`,
+  `DELETE /alerts/<id>/suppression`, `POST /alerts/read-all`. `AlertInteractionHandler`
+  upserts one row per (user, alert_key).
+- **Frontend** — `models/alert.ts` (Alert + `read`/`snoozed_until`; Alerts + `snoozed`/
+  `actionable_count`/`fyi_count`/`snoozed_count`, kept high/med/low). `alertApiService.ts`
+  (+ read/unread/snooze/dismiss/clearSuppression/readAll). **`alertStore.ts` rewritten
+  server-backed** — dropped the localStorage snooze map + `useAuthStore`; badge =
+  server `actionable_count`; snooze/unsnooze/dismiss/markRead/markAllRead all hit the API +
+  refresh. `AlertsBell.vue` — snooze/unsnooze made async; tooltip "on this device" → honest
+  copy. **`AlertsPage.vue` unchanged** (only uses preserved store members; the hub rebuild
+  is C-9.3).
+- **e2e** `tests/e2e/dora_api/test_alerts.py` (new, 7 tests): scoped-key shape, the
+  actionable-count invariant, snooze→clear round-trip, read/unread/read-all, dismiss-hides,
+  action endpoint accepts scoped key + rejects non-stock.
+
+**Cross-consumers checked safe:** assistant `tools.py::get_alerts` (calls `.handle()`
+no-arg — default `user_id=None`, reads only preserved AlertDto fields) and
+`DoraChat.vue::fetchAttention` (reads high/med/low + items — all preserved).
+
+**Charter/standards (close-gate):** R-003 (one server-derived "what counts" + snooze;
+client recomputes nothing — was the whole point), R-008 (deleted the dead stub),
+R-005/R-006 (portable reversible migration; single head re-confirmed `a3c9e7b2f5d8`),
+R-007 (behaviour/spine only — did **not** redesign the bell/page UI; that's C-9.3),
+R-014 n/a. **ADR candidate:** the derived-conditions + per-user-interaction-ledger pattern
+— promote to an ADR if reused (e.g. folding suggestions suppression into it). Deferred the
+decision pending C-9.2/3. **Cannot run the standards-relevant checks (tests/lint) — see
+FU-183.**
+
+**Open loops:** **FU-183 new** (verify C-9.1 on a provisioned machine — blocks close).
+FU-042 will flip to resolved **once browser/e2e-verified** (not yet — static read isn't
+proof). Minor noted findings: assistant `get_alerts` tool doesn't apply the user's
+snooze/dismiss overlay (passes no user_id); no ledger-prune sweep yet (stale interaction
+rows are harmless, filtered at read). Both folded into FU-183's notes.
+
+**Next up:** verify C-9.1 (env + e2e + vue-tsc + eslint), then **C-9.2** — `AlertPreference`
+(per-user on/off + tier override) + configurable thresholds on `AppSetting`
+(`expiring_soon_window_days`, `default_days_until_stocktake_alert`; `EXPIRING_SOON_WINDOW_DAYS`
+becomes the seed default).
+
+---
+
+## 2026-06-15 — Alerts C-9 — proposal rewrite + impl plan authored (design unit)
+**Status:** design complete (no code yet). Rewrote `PROPOSAL_ALERTS.md` (supersedes the
+2026-06-06 draft) and authored `IMPL_PLAN_ALERTS.md`. Co-designed with the user across four
+question rounds — they asked for a "fully polished, professional, feature-rich" alerts
+section. Built directly (ultracode off).
+
+**What (design decisions, all co-designed):**
+- **Architecture:** keep the **live evaluator** as the source of truth (alerts are *conditions*,
+  not events — storing them goes stale on restock); add a **per-user interaction ledger** (fill
+  the empty `notification.py` stub → `AlertInteraction`) holding read/unread + server-side
+  snooze + dismiss + (later) delivery dedup, keyed by a **generalised `alert_key`**
+  (`<scope>:<kind>[:disc]`). Mirrors `DoraSuggestionSuppression` + a per-user `user_id`/`read_at`.
+- **Multi-user / "notify another user" (L505): dropped entirely**, not even a seam — shared-
+  household means everyone already sees the same alerts; §7.5 forbids speculative tenancy. The
+  per-user `user_id` on the ledger is legitimate read-state scoping, not tenancy.
+- **One "what counts"** (fixes L438/L439 + FU-042): one server-derived, per-user-filtered count;
+  **badge == its tier** (actionable = high+med), lows in a labelled FYI section.
+- **Per-type prefs per-user** (on/off **+ tier override** — full "smarter priority" L439);
+  **channel prefs per-user, global** across types. **Thresholds → `AppSetting`** (household,
+  R-003; `EXPIRING_SOON_WINDOW_DAYS` becomes the seed default).
+- **Channels phased:** in-app hub → email digest (configurable daily/weekly/off, SMTP-gated) →
+  web push (PWA). **The existing `BackgroundScheduler` (startup.py) means no new scheduling
+  infra**; `emailer` (INV-4) reused.
+- **New types:** `no_planned_meals` (L442), `shopping_day` (L403 — reads the **existing**
+  `ShoppingList.planned_shop_date`, P6-01 Chunk 7; no new column), subscriptions tier surfacing
+  `PriceAlert` (L224), system tier (offline/error). **Upcoming "this fortnight" mini-calendar**
+  pulled into the hub (L61, was deferred to dashboard) — may reuse the C-2.D calendar.
+- **Page = full hub; bell = slim peek+jump** (shared `AlertRow`/`AlertList`, R-001).
+
+**Verify-state-first catches (docs were stale):** `ShoppingList.planned_shop_date` already
+exists (shopping-day alert is a pure read); `BackgroundScheduler` already wired; `notification.py`
+is an empty stub ready to fill; `DoraSuggestionSuppression` is the ledger pattern.
+
+**Charter/standards:** proposal carries the mandatory §10 feedback-coverage table (L437–442 +
+L59/L60/L61 + L224 + L403; L505/L506 out-of-scope with reasons). Plan's per-chunk close-gates
+cite R-001/002/003/005/006/007/008/010/014 + §7.5. ADR candidate flagged: the per-user-ledger-
+over-derived-conditions pattern (C-9.1) if reused.
+
+**Open loops:** FU-042 (count mismatch) will be **closed by C-9.1**. New build chunks
+C-9.1…C-9.10 to log as they ship. Proposal §7 open-1 (email delivery-dedup storage) deferred
+to Phase B.
+
+**Next up:** **build C-9.1** — generalise the alert key, fill `AlertInteraction` (+ table +
+migration), move snooze server-side, derive one canonical per-user count, refactor
+`act_on_alert` to route by scope/kind. Verify-state-first against `table_mappings.py`, the
+`ALERT_ROUTER` registration, and the existing alert e2e test structure first. After the full
+Phase A (C-9.1…C-9.6), browser-verify, then flip COVERAGE_GAPS rows.
+
+---
+
 ## 2026-06-14 — Meal Plans C-2.J — sequential builder ✅ (C-2 plan COMPLETE)
 **Status:** complete & verified. Backend e2e **274** (incl. 2 new preview tests)
 + unit **49** pass; vue-tsc **0** + eslint **clean**. **This finishes the entire

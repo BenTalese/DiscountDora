@@ -36,6 +36,8 @@ from dora_api.domain.entities.tool import Tool
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.dora_suggestion_suppression import \
     DoraSuggestionSuppression
+from dora_api.domain.entities.alert_interaction import AlertInteraction
+from dora_api.domain.entities.alert_preference import AlertPreference
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
@@ -78,6 +80,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("nutrition_db_source", String(255), nullable=False, server_default=""),
         # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
         Column("timezone", String(64), nullable=False, server_default="UTC"),
+        # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
+        Column("expiring_soon_window_days", Integer, nullable=False, server_default="7"),
+        Column("default_days_until_stocktake_alert", Integer, nullable=False, server_default="0"),
     )
 
     product_offer_table = Table(
@@ -300,6 +305,32 @@ def configure_mappings(db: SQLAlchemy):
         Column("decision", String(16), nullable=False),
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # C-9.1 — per-user interaction state for derived alerts (read / snooze /
+    # dismiss). One row per (user_id, alert_key); absence = untouched. The
+    # alerts themselves are never stored — only the user's decisions.
+    alert_interaction_table = Table(
+        "AlertInteraction", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, nullable=False),
+        Column("alert_key", String(255), nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("read_at", DateTime(timezone=True), nullable=True),
+        Column("snoozed_until", DateTime(timezone=True), nullable=True),
+        Column("dismissed_at", DateTime(timezone=True), nullable=True),
+    )
+
+    # C-9.2 — per-user, per-kind alert preference (enable/disable + tier
+    # override). One row per (user_id, kind); absence = default (enabled +
+    # the kind's default tier, PROPOSAL_ALERTS §5).
+    alert_preference_table = Table(
+        "AlertPreference", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, nullable=False),
+        Column("kind", String(64), nullable=False),
+        Column("enabled", Boolean, nullable=False, server_default="1"),
+        Column("tier_override", String(16), nullable=True),
     )
 
     # P2-06 — append-only log of discarded food. FK is SET NULL (not
@@ -677,6 +708,16 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(DoraSuggestionSuppression, dora_suggestion_suppression_table, properties={
         "_id_col": dora_suggestion_suppression_table.c.id,
         "id": dora_suggestion_suppression_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(AlertInteraction, alert_interaction_table, properties={
+        "_id_col": alert_interaction_table.c.id,
+        "id": alert_interaction_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(AlertPreference, alert_preference_table, properties={
+        "_id_col": alert_preference_table.c.id,
+        "id": alert_preference_table.c.id,
     })
 
     _mapper_registry.map_imperatively(ProductBarcode, product_barcode_table, properties={

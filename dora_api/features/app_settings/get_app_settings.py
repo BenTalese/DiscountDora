@@ -30,6 +30,9 @@ class AppSettingsDto:
     nutrition_db_source: str
     # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
     timezone: str
+    # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
+    expiring_soon_window_days: int
+    default_days_until_stocktake_alert: int
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -45,6 +48,8 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         deals_email_enabled=bool(setting.deals_email_enabled),
         nutrition_db_source=setting.nutrition_db_source or "",
         timezone=setting.timezone or "UTC",
+        expiring_soon_window_days=int(setting.expiring_soon_window_days),
+        default_days_until_stocktake_alert=int(setting.default_days_until_stocktake_alert),
     )
 
 

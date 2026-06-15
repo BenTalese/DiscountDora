@@ -45,6 +45,16 @@ class AppSetting(BaseEntity):
     # household is correct regardless of where the server is hosted. Default
     # UTC until an admin sets it in System settings. App-wide adoption: FU-174.
     timezone: str = "UTC"
+    # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
+    # These shape the shared derived alert set + the location heatmap, so they
+    # live here (one server-side source — R-003), never copied to the client.
+    # `expiring_soon_window_days` supersedes the `EXPIRING_SOON_WINDOW_DAYS`
+    # constant, which is now the seeded default (resolved via
+    # `stock_status.effective_expiring_soon_window`). `default_days_until_
+    # stocktake_alert` is the new-item default for the per-item stocktake
+    # cadence (0 = off, matching the previous hardcoded create default).
+    expiring_soon_window_days: int = 7
+    default_days_until_stocktake_alert: int = 0
 
     class Fields(BaseEntity.Fields):
         LLM_ENABLED = "llm_enabled"
@@ -58,3 +68,5 @@ class AppSetting(BaseEntity):
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
         NUTRITION_DB_SOURCE = "nutrition_db_source"
         TIMEZONE = "timezone"
+        EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
+        DEFAULT_DAYS_UNTIL_STOCKTAKE_ALERT = "default_days_until_stocktake_alert"

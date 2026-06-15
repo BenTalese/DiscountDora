@@ -1,202 +1,195 @@
-# Proposal — Ingestion-API Contract (C-10)
+# Proposal — Ingestion API + "Your Prices" intelligence (C-10)
 
-**Status:** Draft for discussion · **Date:** 2026-06-06 · Changes NO code.  
-**Scope:** Design the authenticated, Dora-core endpoint that **external sources
-push product / offer / price data into**. The seam between Dora and the scraper
-companion (C-6/C-8), reused later by P8-03 (loyalty email) and P8-04 (crowd
-prices). Dora-core only — the companion is a separate project.
+**Status:** Co-designed draft v2 (supersedes 2026-06-06) · **Date:** 2026-06-15 · Changes NO code.
+**Scope:** An authenticated, **source-agnostic** inbound endpoint **inside Dora-core (`dora_api`)**
+that external sources push product / offer / price data into, with **admin-managed API keys**
+(a Settings page) as the auth, and a **"your prices" intelligence layer** that turns the
+ingested data + the user's own receipts into a personal price history with a "paying more than
+usual" signal. **Dora-core only** — the producer is a separate, private, off-by-default app the
+admin runs; **its existence is never referenced anywhere in the app.**
 
-> **Why this exists (and the dependency to be honest about):** this contract is
-> necessary **because of** the resolved decision to extract the scraper into a
-> companion (`RECONCILED_FINISHING_PLAN.md §7 Decision 1`). If that decision were
-> reversed, in-process scraping would write to the DB directly and this API would
-> not be needed. It is downstream of that call — confirmed in-scope.
+> **Architecture (settled with the user):** the ingestion API is **NOT its own service** — it's
+> new routes (`POST /api/ingest`) + a bearer-auth lane inside the existing `dora_api` Flask app
+> (the one that owns the DB). No new moving part. The *producer* (an external scraper the admin
+> runs) is the separate app; today's `merchant_api` sibling service is the prototype of that
+> producer. The charter boundary (P9: Dora never calls out; sources call in) is preserved by
+> *direction* — `/api/ingest` is passive inbound — not by hosting it elsewhere.
 
-> **Charter tie-break:** the boundary is the point — **Dora never calls out;
-> sources call in.** Dora-core stays Charter-clean (no scraping, no merchant
-> connections), legally safe, and sellable; the messy outside world is held behind
-> one well-defined door.
+> **Charter tie-break:** P9 No-scrape + P3 Honest + P12 No-invent. One well-defined inbound door;
+> Dora-core stays scrape-free, legally clean, sellable, and **ignorant of who's pushing**.
+
+> **Invisibility principle (HARD RULE — new):** the producer/companion's existence must **not be
+> known or referenced anywhere in the app** — no "scraper", "companion", "import deals", brand
+> name, or "where do products come from" copy in any UI, empty state, help, or setting. The
+> ingestion API is **fully source-agnostic**: it accepts batches from *an authenticated source*,
+> full stop. The admin labels their own key (free text); the app never names or assumes the
+> other end. These committed planning docs also stay generic about the producer (referenced only
+> as "an external/admin-owned ingestion source").
 
 ---
 
 ## 1. Current state (what we map into)
 
 Products are a **shared catalogue** (no `user_id`):
+- `Product` — name, brand, size/size_unit/size_value, `merchant`, `merchant_stockcode`, image,
+  is_active, is_available, web_url, **`current_offer`** (1:1 `ProductOffer`), **`historic_offers`**
+  (1:N `ProductHistoricOffer`, append-only — what the price-history view reads).
+- `ProductOffer` / `ProductHistoricOffer` — `offered_on`, `price_now`, `price_was`.
+- `Merchant` — **just `name`** (no source/provider/`is_enabled` — C-8 territory).
+- `ShoppingListLine` carries the **user's own receipt snapshots**: `actual_unit_price`,
+  `picked_offer_price`, `list_price_at_pick`, `purchased_merchant_id`. **These are the receipts
+  half of "your prices" and are not unioned into price history today.**
 
-- `Product` — name, brand, size/size_unit/size_value, `merchant`, `merchant_stockcode`,
-  image, is_active, is_available, web_url, **`current_offer`** (a `ProductOffer`),
-  **`historic_offers`** (a list of `ProductHistoricOffer`).
-- `ProductOffer` — `offered_on`, `price_now`, `price_was`. The *current* price.
-- `ProductHistoricOffer` — an **append-only log** of past offers; this is what the
-  **price-history view (P6) reads** (`price_history.py:8-10`) for the series +
-  all-time-low; the current point comes from `ProductOffer`.
-- `Merchant` — **just a `name`** (no source/provider concept — C-8 territory).
-- `PriceAlert` — per-user "notify under" subscription.
-
-How data enters today:
-- The **separate `merchant_api` service** scrapes live (per-merchant providers) and
-  the product-search UI shows results.
-- Saving one is `POST /api/products` (`create_product.py`) — **single item,
-  logged-in user session, dedupe-by (name+merchant+stockcode)-or-skip**, creates a
-  fresh `ProductOffer` each call. A de-facto single-item ingestion, but built for
-  interactive UI saves.
-
-**Gaps vs a push seam:** no machine auth (only `AuthToken`, which is email-flow
-only), no batching, no idempotency, **no `source` label**, no first-class
-`price_observation`, no conflict policy.
+How data enters today + the gaps:
+- `POST /api/products` (`create_product.py`) — single item, session auth, dedupe by
+  **(stockcode + merchant + name)**, creates a `ProductOffer`. **Confirmed gap:** it **409s on a
+  duplicate and does NOT append a new offer** — so there's *no clean "new price for an existing
+  product" path*, and price history barely accrues. The ingestion `offer` record fixes exactly
+  this.
+- **No machine auth** (session-cookie only: `require_auth_if_protected` middleware + `_require_admin`
+  for admin). `IngestionSource` + a bearer lane is net-new but small.
+- **`companion_ingestion_enabled` flag exists but nothing consumes it.** No `/ingest`, no ingestion
+  folder. `merchant_api` (port 5172) is a sibling scraper service — post-divorce it (or a successor)
+  becomes the private external producer that pushes via `/ingest`.
+- **No `PriceObservation`**, no `source` label, no batching, no idempotency, no conflict policy.
 
 ---
 
 ## 2. The contract
 
-### 2.1 Auth — a machine credential, not a user session
-Introduce an **`IngestionSource`** credential, separate from user auth:
-
-- Fields: `id`, `label` (e.g. "companion-scraper", "loyalty-email", "crowd"),
-  `key_hash` (SHA-256 of the secret, like `AuthToken.token_hash`), `enabled`,
-  `created_at`, `last_used_at`, optional `trust` tier (§2.6 / P8-04).
-- The ingestion endpoints authenticate via a **bearer token** (the raw key);
-  Dora hashes + matches. **Admin creates/revokes** sources (Settings → admin).
-- The authenticated source provides the **default `source` label**; a payload may
-  carry a finer `source` (a multi-provider companion pushing for several
-  providers) — but only within what its credential is allowed to assert.
-
-> No machine auth exists today, so this is net-new (small: one table + a
-> decorator mirroring the existing auth middleware).
+### 2.1 Auth — admin-minted API keys (the Settings page)
+An **`IngestionSource`** credential, separate from user auth: `id`, `label` (admin free-text,
+e.g. "home box"), `key_hash` (SHA-256 of the secret, mirroring `AuthToken.token_hash`), `enabled`,
+`trust` (tier, §2.6), `created_at`, `last_used_at`.
+- `/api/ingest` is **exempt from the session middleware** and instead validates a **`Bearer
+  <key>`** header (hash + match + enabled). A small auth helper mirrors `auth_helpers._hash_token`.
+- **Admin Settings page — "API access" (generic name):** create (shows the raw key **once**),
+  label, enable/disable, **revoke** keys — plus **observability** per key: `last_used_at` and
+  recent **accepted / skipped / failed** counts, so the admin can see a source is working. No
+  scraping references anywhere on the page.
 
 ### 2.2 Payloads (batched; each record carries `source`)
-One endpoint, batched, three record types (per §6.6, fleshed against the model):
-
 ```
-POST /api/ingest        Authorization: Bearer <source-key>
-Idempotency-Key: <client batch id>
+POST /api/ingest        Authorization: Bearer <key>        Idempotency-Key: <batch id>
 {
-  "products": [
-    { "ref": "<client-stable id>", "name", "brand?", "size?", "size_unit?",
-      "size_value?", "merchant", "merchant_stockcode?", "web_url?", "source" }
-  ],
-  "offers": [
-    { "product_ref": "<ref|stockcode>", "price_now", "price_was?",
-      "valid_until?", "observed_at", "source" }
-  ],
-  "price_observations": [
-    { "product_ref?" , "stock_item_ref?", "price", "observed_at", "source" }
-  ]
+  "products":           [ { ref, name, brand?, size?, size_unit?, size_value?, merchant,
+                            merchant_stockcode?, web_url?, source } ],
+  "offers":             [ { product_ref, price_now, price_was?, valid_until?, observed_at, source } ],
+  "price_observations": [ { product_ref?, stock_item_ref?, price, observed_at, source } ]
 }
 ```
+- **product** → upsert the catalogue. **offer** → set `current_offer` + **append a
+  `ProductHistoricOffer`** (the history point). **price_observation** → a lighter point (price +
+  when + source) that attaches to a product **or** a stock item, feeding personal price history
+  without a full product row.
 
-- **product** → upsert into the catalogue.
-- **offer** → set the product's `current_offer` + **append a `ProductHistoricOffer`**
-  (the price-history point).
-- **price_observation** → a lighter point (price + when + source) that may attach
-  to a product **or** a stock item, feeding **personal price history** (P6-01
-  costing, P6-03 intelligence) without requiring a full product row.
+### 2.3 Idempotency & dedup (accepted defaults)
+- **Batch idempotency** via `Idempotency-Key` (store processed keys w/ TTL; re-send = no-op).
+- **Record dedup:** products by (source + merchant + stockcode), fallback (source + merchant +
+  name); offers/observations by (product + source + observed_at + price). **Append-only; never
+  overwrite.** Unchanged offer → nothing; changed price → one new historic point + move
+  `current_offer`.
 
-### 2.3 Idempotency & dedup
-- **Batch idempotency** via an `Idempotency-Key` header — re-sending the same batch
-  is a no-op (store processed keys with a TTL).
-- **Record dedup** by natural key: products by **(source + merchant +
-  stockcode)**, falling back to (source + merchant + name) when no stockcode;
-  offers/observations deduped by **(product, source, observed_at, price)** so a
-  re-push doesn't double the history.
-- Re-pushing an unchanged offer updates nothing; a changed price appends one new
-  historic point and moves `current_offer`.
+### 2.4 The `source` seam (string now; C-8 later)
+Every record carries a `source` string; store it as a **column** on historic offers / observations
+(provenance). The **full merchant↔provider taxonomy is C-8** — C-10 only reserves the seam.
 
-### 2.4 The `source` seam (where C-8 lands)
-Every record carries a **`source` label** — the merchant/provider origin. Today
-`Merchant` is only a name and offers have no source. **Minimum for C-10:** store
-the `source` string on the historic offer / observation (a column), so provenance
-is captured. **Full merchant↔data-provider model is C-8** (companion-informed) —
-C-10 just **reserves the seam** (the `source` field + storage), it does not build
-the provider taxonomy.
+### 2.5 "Your prices" intelligence layer ★ (the user-facing payoff — in scope)
+The reason the data is worth pushing. A **personal price-history service** that **unions**:
+- **pushed** data (`ProductHistoricOffer` / observations for products linked to the item), and
+- the **user's own receipts** (`ShoppingListLine.actual_unit_price` / `picked_offer_price` for that
+  stock item) —
+into one per-item/per-product timeline ("what this has cost, from offers *and* what you've paid").
+From that series, compute a **typical/baseline price** and a **"paying more than usual" signal**
+(latest/current notably above baseline) — the honest, legal "spend smarter" insight (no scraping,
+all from data the install already holds).
+- **Surfacing (reuse existing surfaces, no new page):** the **Stock Item Detail** price section
+  (C-1b consumes this), the existing **Price History** page, and **optionally a C-9 "inflated
+  price" alert** (cross-ref; fed by ingestion). **This is also what makes the onboarding "Insight"
+  stage real** (FU-184).
+- **v1 producer:** designed source-agnostic; the **admin's own private external source** is the
+  first producer (high `trust`), with **in-app receipt logging** already contributing the receipts
+  half. Parsed receipt emails (P8-03) and crowd (P8-04) are later sources on the same contract.
 
-### 2.5 Mapping & ownership (multi-user)
-Pushed `product`/`offer` data lands in the **shared catalogue** (all users see it);
-**personal price history** is the per-user view that unions pushed data with the
-user's **own shopping picks** (the `actual_unit_price` / `picked_offer_price`
-snapshots on shopping-list lines — see INV-1). So the ingestion API feeds the
-*pushed* half; the user's receipts feed the *personal* half. On a single-user
-desktop install this distinction is moot; on a shared install it matters
-(open decision §5).
-
-### 2.6 Trust & P8-03/P8-04 reuse
-The same contract serves later sources with **different trust**:
-- **P8-03 loyalty email** — parsed receipts; high trust (the user's own data).
-- **P8-04 crowd** — other users' submissions; **lower trust**. The `IngestionSource.trust`
-  tier lets Dora label/segregate crowd observations (e.g. show but don't treat as
-  authoritative). Design the contract to carry trust now; enforcement is later.
+### 2.6 Trust & later sources
+`IngestionSource.trust` is carried now (high = the admin's own data; low = future crowd P8-04) so
+observations can be labelled/segregated later; **enforcement is deferred**, the field is captured.
 
 ### 2.7 Errors & response
-Per-record results (mirrors the seed endpoint's result-DTO pattern):
-`{ accepted, skipped (already-present), failed: [{ ref, reason }] }`. A bad record
-never fails the batch.
-
-> **Open (brief):** **sync vs async** (§5) — validate-and-commit inline (simple,
-> immediate result) vs accept-202-and-queue (resilient to big batches). Recommend
-> **sync for v1** (batches are bounded; simpler), async only if batch sizes grow.
+Per-record result DTO (mirrors the seed-result pattern): `{ accepted, skipped, failed: [{ ref,
+reason }] }`; a bad record never fails the batch. **Sync (validate-and-commit) v1** (batches are
+bounded); async only if sizes grow.
 
 ---
 
-## 3. Boundary (the non-negotiable)
-- **Sources call in; Dora never calls out.** No scraping, no merchant connections,
-  no search/comparison UI in Dora-core — all companion (C-6/C-8).
-- Dora owns the product/price **data model** + the "your prices" views; the
-  companion owns acquisition.
-- This is what keeps Dora-core legally clean and sellable (Decision 1).
+## 3. Boundary (non-negotiable)
+Sources call in; **Dora never calls out**. No scraping, no merchant connections, no live
+product-search/comparison in Dora-core. Dora owns the data model + the "your prices" views; the
+external producer owns acquisition. This is what keeps Dora-core legally clean and sellable
+(Decision 1) — and the invisibility rule (§ header) keeps the producer unmentioned.
 
 ---
 
-## 4. From the original spec (historical — `docs/00_original_spec/`)
-
+## 4. From the original spec (historical)
 | Original note | Verdict | Effect |
 |---|---|---|
-| Taskboard: *"Require an API key to hit the backend API"* | **keep (corroborates §2.1)** | The machine-auth need was anticipated; the `IngestionSource` key is its concrete form for this seam. |
-| *"I can manually add product offers to saved scraped products"* | **consider** | A *user-side* manual offer entry — same mapping as an `offer` record but via the UI, not the ingest endpoint. Could share the offer-append path. |
-| *"I am notified when a merchant's product comes back in stock"* | **consider → C-9** | A back-in-stock signal could be derived from offer pushes (is_available flips); the alert lives in C-9, fed by ingestion. |
+| Taskboard "require an API key to hit the backend API" | **keep** | The `IngestionSource` key is its concrete form (§2.1). |
+| "Manually add product offers to saved products" | **keep → share path** | A user-side manual offer-add reuses the same offer-append mapping as an `offer` record. |
+| "Notified when a product comes back in stock" | **consider → C-9** | Derivable from offer pushes (is_available flips); the alert lives in C-9, fed by ingestion. |
 
 ---
 
-## 5. Open decisions (for co-design)
-1. **Conflict/overwrite policy for price history** (brief) — proposed **append-only,
-   dedup identical (product+source+observed_at+price), never overwrite**. Confirm
-   (vs upsert-latest-per-day, or allow corrections).
-2. **Sync vs async** (brief) — proposed **sync v1** (§2.7).
-3. **`source` storage** — a plain string column now vs a light `DataProvider`
-   record; full taxonomy deferred to C-8.
-4. **Shared-catalogue ownership** on multi-user installs (§2.5) — does pushed data
-   land in one shared catalogue for everyone (proposed), or scope by source/user?
-5. **Fate of `POST /products`** — retire it in favour of `/ingest`, or keep it as
-   the interactive single-save path (which would then just call the same mapping
-   internally)? Proposed: **keep, refactor it to reuse the ingest mapping**.
-6. **Trust enforcement** for crowd (P8-04) — carry `trust` now, enforce later
-   (proposed), or define enforcement up front?
+## 5. Resolved decisions (co-design 2026-06-15)
+- **In `dora_api` core**, not a separate service. **Source-agnostic + invisible producer** (hard
+  rule).
+- **Scope = plumbing + admin keys page (CRUD + observability) + the "your prices" intelligence
+  layer** (§2.5).
+- Auth = admin-minted bearer keys (`IngestionSource`); **keys page is generically named**.
+- Sync v1; `Idempotency-Key`; `source` as a string column; **append-only** dedup by
+  (product+source+observed_at+price); **keep `POST /products`, refactor to reuse the ingest
+  mapping**; **shared catalogue, defer multi-user scoping** (Phase 4); carry `trust`, enforce later.
+- **Open (build-time):** whether `price_observations` needs a small new `PriceObservation` table or
+  can be a query-time union of historic offers + receipt snapshots (lean to: products+offers fully
+  in v1; a minimal observation store only if the producer pushes item-level points).
 
 ---
 
-## 6. Suggested sequencing (Phase 2 — after the loop, per master plan)
-1. **`IngestionSource` model + bearer-auth decorator** (§2.1) + admin create/revoke.
-2. **Payload schema + per-record validation + result DTO** (§2.2, §2.7).
-3. **Mapping + dedup + idempotency** (§2.3, §2.5) — products/offers into the
-   catalogue + historic log; observations into personal history.
-4. **`source` column** on offers/observations (§2.4) — reserve the seam.
-5. **Refactor `POST /products`** to reuse the mapping (§5.5); point the **companion**
-   at `/ingest`.
-6. Later: **P8-03 email** + **P8-04 crowd** as additional sources; trust enforcement.
+## 6. Suggested sequencing (Phase 2 — after the loop) → IMPL_PLAN_INGESTION_API
+1. **`IngestionSource` model + bearer-auth lane + admin keys CRUD + the Settings "API access" page**
+   (§2.1).
+2. **`POST /api/ingest`** — payload schema + per-record validation + idempotency + result DTO +
+   the upsert/dedup mapping into catalogue + historic log + `source` column; **refactor
+   `create_product` to share the mapping** (§2.2-2.4, §2.7).
+3. **Keys-page observability** — record per-source accepted/skipped/failed + last-used; surface on
+   the page (§2.1).
+4. **"Your prices" intelligence layer** — the pushed∪receipts union + baseline + "above usual"
+   signal; surface on Stock Item Detail (C-1b) + Price History (§2.5).
+5. Later: P8-03 email + P8-04 crowd as sources; trust enforcement; the C-9 inflated-price alert.
 
 ---
 
-## 7. Coverage & motivation
+## 7. Ripple & dependencies
+- **`merchant_api` / in-app live product search (big ripple):** post-divorce, Dora-core must **not
+  scrape live**. The in-app product search that calls `merchant_api` to scrape becomes either a
+  search over the **already-ingested catalogue** (products your source pushed) or moves entirely
+  to the companion. **This reshapes C-1b's "find & link a product"** (it can't live-search) and is
+  a decommissioning sweep — **logged as a follow-up**, not built inside C-10.
+- **C-1b (Stock Item Detail):** consumes the "your prices" layer in its price section.
+- **C-9 (Alerts):** an optional "inflated price" / back-in-stock alert type fed by ingestion
+  (the price/back-in-stock subscriptions tier C-9 reserved).
+- **Onboarding C-5 / FU-184:** the "your prices" layer is what makes the **Insight** stage real —
+  validate the onboarding copy against it.
+- **FU-180:** preferred product removed; doesn't affect ingestion. **FU-053:** best-deals card
+  fetches all products client-side — a server seam this work can help retire.
+- **FU-045 (Postgres):** keep the new tables/queries portable (SQLite + Postgres, §7.5).
+- **products_enabled (C-5):** the "your prices" surfaces are products-layer — hidden for the
+  Cooking persona (FU-182), shown for Spend-tracking/Everything.
 
-This is **plan-motivated, not feedback-bullet-motivated** — it exists to enable
-Decision 1 (extract the scraper), not to fix a reported UI defect. The only
-directly-related inputs:
+---
 
-| Input | Where |
-|---|---|
-| Taskboard "require an API key to hit the backend API" (original spec) | §2.1 |
-| "Product search is very slow" + product-search/merchant feedback | **Companion scope** (C-6/C-8) — this contract is the seam they target, not the fix itself |
-| "Manually add product offers" (original spec) | §4 (shared offer-append path) |
-| Personal price history / costing (P6-01/P6-03) | §2.2, §2.5 (the destination for observations) |
-
-**Gates:** C-6 and C-8 (the companion targets this contract). **Reused by:** P8-03,
-P8-04.
+## 8. Coverage & motivation
+Plan-motivated (enables Decision 1's scraper extraction), not feedback-bullet-motivated. Related
+inputs: original-spec "API key" (§2.1) + "manually add offers" (§4); personal price history /
+costing P6-01/P6-03 (§2.5 is its destination); "product search slow" = **companion scope**, this
+is the seam not the fix. **Gates:** the external producer targets this contract. **Reused by:**
+P8-03, P8-04, C-9 (alerts), C-1b (detail price section).

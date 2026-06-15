@@ -23,6 +23,12 @@ points at this file.
 
 ### A-1 STOCK ITEM DETAIL polish
 
+> **Update 2026-06-15:** this cluster now HAS a design home —
+> `04_proposals/PROPOSAL_STOCK_ITEM_DETAIL.md` (C-1b) + `IMPL_PLAN_STOCK_ITEM_DETAIL.md`.
+> The §8 coverage table there maps every L112-140 bullet. Bullets stay listed
+> as gaps below until C-1b builds + the "already fixed" rows are browser-confirmed;
+> flip gap → covered then.
+
 Feedback `§STOCK ITEM DETAIL` has ~30 bullets. The bug-shaped ones are
 covered by B-prompts (B3 PATCH, B4 cascade, B8 dead actions). The
 **layout / button-placement / open-design** bullets have no brief:

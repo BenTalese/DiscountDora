@@ -38,6 +38,10 @@ class UpdateAppSettingsRequest(BaseModel):
     nutrition_db_source: str | None = Field(default=None, max_length=255)
     # Meal Plans C-2.K — household IANA timezone (validated below).
     timezone: str | None = Field(default=None, max_length=64)
+    # Alerts C-9.2 — household-wide alert thresholds (bounds double as R-010
+    # validation: the window is 1–365 days; the stocktake default 0–3650).
+    expiring_soon_window_days: int | None = Field(default=None, ge=1, le=365)
+    default_days_until_stocktake_alert: int | None = Field(default=None, ge=0, le=3650)
 
 
 @dataclass(slots=True)
@@ -91,6 +95,16 @@ class UpdateAppSettingsHandler:
                     invalid_reason=f"'{_Tz}' is not a recognised IANA timezone."
                 )
             setting.timezone = _Tz
+
+        # Alerts C-9.2 — household-wide alert thresholds. Bounds enforced by
+        # the request model above (R-010).
+        if "expiring_soon_window_days" in set_fields and request.expiring_soon_window_days is not None:
+            setting.expiring_soon_window_days = request.expiring_soon_window_days
+        if (
+            "default_days_until_stocktake_alert" in set_fields
+            and request.default_days_until_stocktake_alert is not None
+        ):
+            setting.default_days_until_stocktake_alert = request.default_days_until_stocktake_alert
 
         # Enabling without a connection is a misconfiguration — the assistant
         # would just silently fall back. Reject it so the admin gets told.

@@ -52,6 +52,120 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-187 — Assistant ignores the configurable expiring-soon window (uses the constant default)
+- **Raised:** 2026-06-15 (Alerts C-9.2 — threshold threading)
+- **Type:** finding / consistency gap
+- **What:** C-9.2 moved the expiring-soon window onto `AppSetting.expiring_soon_window_days`
+  and threaded it through the alerts evaluator (`get_alerts.py`) and the location heatmap
+  (`attention.py`, via `get_location_tree` + `get_stock_item_detail`) using one resolver,
+  `stock_status.effective_expiring_soon_window`. The **assistant** (`features/assistant/
+  tools.py`, ~4 sites near lines 903/1480/1570/2025) still reads the bare
+  `EXPIRING_SOON_WINDOW_DAYS` *default* constant, so if an admin changes the household window
+  the assistant's "expiring soon" answers won't match the alerts list / heatmap. This is the
+  constant-as-default carve-out the impl plan explicitly allowed for C-9.2; flagged inline at
+  the `tools.py` import. It's the one default (R-003 — not a second literal), just not
+  honouring the override.
+- **Why deferred:** threading the `AppSetting` fetch through the 4 assistant tool sites was
+  out of C-9.2's tested scope (acceptance named only bell/page/heatmap); low impact (assistant
+  expiry answers only drift if an admin retunes the window).
+- **Recommended resolution:** opportunistic — when the assistant's expiry tools are next
+  touched, or fold into the FU-174 app-wide date/threshold sweep. Pass the resolved window
+  (same `effective_expiring_soon_window`) into the 4 sites.
+
+## [OPEN] FU-186 — Decommission in-app live product search / `merchant_api` (scraping-divorce ripple)
+- **Raised:** 2026-06-15 (C-10 ingestion API design)
+- **Type:** deferred job / decommission
+- **What:** With scraping divorced and `/api/ingest` (C-10) as the **only** inbound product path,
+  Dora-core must **not scrape live**. The current in-app **product search calls the sibling
+  `merchant_api` (port 5172) to live-scrape** — that has to go. Options: (a) repoint in-app
+  product search at the **already-ingested local catalogue** (search what your source pushed), or
+  (b) move product search entirely to the companion. This **reshapes C-1b's "find & link a
+  product"** (it can no longer live-search) and the "Find deals" / best-deals surfaces; `merchant_api`'s
+  live-scrape role moves to the private external producer. Folds in **FU-053** (best-deals card
+  fetches all products client-side).
+- **Why deferred:** a cross-cutting decommission sweep, distinct from building the ingestion seam;
+  needs `/ingest` landed first so the catalogue is populated to search against.
+- **Recommended resolution:** after **C-10.2** (the ingest path exists); pair with **FU-182**
+  (Products-off) since both reshape the product surfaces, and re-confirm C-1b §2.4's "find & link"
+  against it. Keep the **invisibility rule** — no scraper references in whatever replaces search.
+
+## [OPEN] FU-185 — Stock Item Detail recipe-tab actions are dead (B8 residue)
+- **Raised:** 2026-06-15 (C-1b design — Explore sweep)
+- **Type:** finding / bug
+- **What:** On `StockItemDetailPage.vue`, `RecipeCard` **emits** `@toggle-favourite` +
+  `@add-all-to-list` but the detail page **doesn't listen** to them (only `@open`/`@cook`/
+  `@add-missing` are wired). So "remove from favourites does nothing" (feedback L132) and most
+  recipe actions beyond Cook (L134) are dead on this surface. Recipe-row navigation IS fixed.
+- **Why deferred:** found during the C-1b design sweep; **homed in C-1b.4** (wire the listeners)
+  but C-1b isn't built yet. Static read confirms the handlers are missing.
+- **Recommended resolution:** fix in **C-1b.4** (Recipes-tab chunk); until then it's a live defect
+  — **confirm in browser** that favourite-toggle/add-all are dead, then wire them. Cites B8.
+
+## [OPEN] FU-184 — Reconcile onboarding sell-copy + loop stages against actual app behaviour
+- **Raised:** 2026-06-15 (Onboarding C-5 v3 design)
+- **Type:** finding / deferred verification (P3 Honest gate)
+- **What:** The C-5 onboarding redesign sells "the loop" cinematically (Stock → Plan → List →
+  Shop → Restock → Cook, Dora at centre) with one-line claims per stage. These claims + the loop
+  stages are **PROVISIONAL** (PROPOSAL_ONBOARDING §6). Before any onboarding copy ships, **walk
+  the running app** and confirm each claim is literally true (does finishing a shop really
+  auto-restock? does cook mode decrement stock? does price memory + an "inflated price" signal
+  actually exist?). Cut/soften anything the app doesn't back.
+- **The emerging "Insight / Spend-smarter" stage** (user links products to stock items → Dora
+  flags prices that are higher than usual, from their own receipts) is the honest replacement
+  for the divorced deal-scraping — but it **isn't a finished feature**. Do NOT promise it in
+  onboarding copy until it's real; it's a design placeholder until then. Decide whether to build
+  it (it's the spine of the **Spend-tracking** persona).
+- **Why deferred:** needs the running app to verify; can't be cleared by a static read (env
+  unprovisioned this session, same blocker as FU-183).
+- **Recommended resolution:** **close-gate on the onboarding-copy chunks (C-5.1/C-5.2/C-5.6)** —
+  validate when building them on a provisioned app. Not optional polish.
+
+## [OPEN] FU-183 — Verify Alerts C-9.1 on a provisioned machine (built static-only)
+- **Raised:** 2026-06-15 (Alerts C-9.1 — spine)
+- **Type:** finding / deferred verification
+- **What:** C-9.1 (generalised alert key + `AlertInteraction` ledger + server-side
+  snooze/read/dismiss + the single server-derived "what counts" + 6 new endpoints + the
+  server-backed `alertStore`) was **written without running anything** — this machine has
+  no Python env (Windows-Store stub only, no venv, deps not importable) and
+  `web_app/node_modules` is absent. The user chose "build static-only now" with that
+  known. Nothing was executed: no backend e2e, no `migrate up/down` on `f4d2a9c7b3e1`, no
+  single-head re-confirm under alembic, no `vue-tsc`, no `eslint`.
+- **Must verify (provisioned machine):** (1) `pip install -r requirements.txt` + run
+  `tests/e2e/dora_api/test_alerts.py` (7 tests) + the full backend e2e (regression — the
+  alert DTO shape changed); (2) migration `f4d2a9c7b3e1` up **and** down in isolation +
+  `alembic heads` shows a single head; (3) `npm install` in `web_app` → `vue-tsc` + eslint
+  clean (alert model/service/store/bell touched); (4) **browser**: bell badge == actionable
+  list count; snooze persists across a reload (server-side); dismiss hides; the existing
+  inline actions still work with the new scoped key. Only then flip **FU-042** to resolved.
+- **Sub-findings to confirm while there:** (a) assistant `tools.py::get_alerts` passes no
+  `user_id`, so it ignores the requesting user's snooze/dismiss overlay — decide whether to
+  thread the session user in (minor consistency); (b) no prune sweep for stale
+  `AlertInteraction` rows yet (harmless — filtered at read; add to the existing
+  `BackgroundScheduler` if it ever matters).
+- **Why deferred:** environment not set up on this machine; building static-only was the
+  user's explicit choice this session.
+- **Update 2026-06-15 (env provisioned — automated verification DONE):** the machine now has
+  a working dev env (real Python 3.11.9 + venv + deps; `npm install` done). Verified GREEN:
+  (1) `tests/e2e/dora_api/test_alerts.py` 7/7 + full backend e2e **286 passed** (no regression
+  from the DTO `tier`/count changes — one unrelated brittle pagination test in
+  `test_stock_item_router.py` was hardened to assert pagination mechanics, not specific seeded
+  names; not a C-9 bug); (2) migration `f4d2a9c7b3e1` up **and** down verified in isolation +
+  `alembic heads` = single head; (3) `vue-tsc` clean + `eslint` shows only the 5 pre-existing
+  FU-177 errors (none in alert files). **C-9.2 (per-user prefs + thresholds) was also built +
+  test-verified this session** (5 new e2e). Only the in-browser smoke remains.
+- **Remaining (browser only):** bell badge == actionable list count; snooze persists across a
+  reload; dismiss hides; inline actions still work with the scoped key. **C-9.2 additions:**
+  admin System-settings threshold fields save + round-trip; disabling a kind removes it from
+  the list + drops the badge; promoting/demoting a kind moves it between badge/FYI.
+  **C-9.3 additions:** the Alerts **hub page** (summary tiles + tiered active list + Manage panel
+  + collapsible History) renders; the bell is now a slim peek (top rows + bulk-add + "Open
+  Alerts"); the shared `AlertRow` act/read actions work from both; History lists past
+  dismiss/snooze/read with the stock name resolved; dark-mode clean; no bell/page divergence.
+- **Recommended resolution:** **browser-confirm, opportunistic** (next time the app runs) —
+  then flip **FU-042** to resolved. Automated verification no longer blocks; only browser
+  smoke remains. (Sub-finding (a) — assistant `get_alerts` ignores the user overlay — and the
+  new expiring-soon override gap are split out as **FU-187**.)
+
 ## [OPEN] FU-182 — Treat the minimal/Products-off user as a first-class workflow
 - **Raised:** 2026-06-14 (talk-time assessment)
 - **Type:** open decision / design follow-up
@@ -80,6 +194,15 @@ long session summary. Distinct from the other logs:
   (or a sibling proposal) before the C-cross implementation chunk audits
   Products-touching surfaces. Earlier if the onboarding (C-5) chunk picks
   up first, since the persona-preset decision lives upstream of both.
+- **Update 2026-06-15 (C-5 design):** the upstream pieces are now spec'd in
+  `IMPL_PLAN_ONBOARDING.md` — **C-5.3** introduces the **`products_enabled`** install
+  flag + the **3-persona fork** (Cooking / Savings / Everything) that sets it and
+  branches the wizard (Cooking skips the stock-vs-product explainer). FU-182's
+  **remaining** scope therefore narrows to the **per-surface Products-off sweep**
+  (nav/tabs/columns removed not greyed; shopping-list checklist mode; stock-item-detail
+  + recipe-ingredient product affordances hidden; settings sections hidden) — i.e.
+  *consume* the flag C-5 ships. Promote the scratch into the per-surface coverage table
+  when that sweep is picked up.
 
 ## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
 - **Raised:** 2026-06-14 (C-2.J sequential builder)
@@ -129,6 +252,14 @@ long session summary. Distinct from the other logs:
   cart-button picker's actual UX with cheapest-first sort; (c) whether a
   preferred-*merchant* model (one annotation, app-wide) earns its keep
   better than the per-stock-item preferred-product we just deleted.
+- **Update 2026-06-15 (C-5 onboarding design):** the onboarding **preferred-stores**
+  capture (feedback L45) was **dropped** and folded into this reconsideration — per the
+  user, it's the same uncertain bucket (stock-items-only friction + whether the companion
+  app ships, which would otherwise force custom/receipt product entry). So this FU now also
+  owns: **does onboarding ever capture preferred stores/merchants, and what would they
+  do** — revisit alongside the preferred-product question when the cart/companion surfaces
+  make a merchant preference earn its keep. (Merchant currently has only `name`; no
+  `is_enabled`/`preferred` field exists.)
 
 ## [OPEN] FU-179 — Browser-verify the whole Meal Plans surface (C-2 — all chunks)
 - **Raised:** 2026-06-14 (C-2.A…J — full redesign, static-only verified)
@@ -2496,6 +2627,13 @@ long session summary. Distinct from the other logs:
   the badge, bell list, dashboard card, and page from it — badge number must equal
   the count of items in its tier, and snooze must apply everywhere. Confirm in
   browser after. Can ship ahead of the control-centre page.
+- **Update 2026-06-15 (fixed in C-9.1, pending browser):** resolved in code — the server now
+  derives ONE canonical count (`get_alerts.py`: `actionable_count` = the active actionable-tier
+  list) and the badge reads it directly with no client recompute (R-003); server-side per-user
+  snooze/dismiss apply everywhere by construction. The exact invariant
+  (`actionable_count == #(actionable items in the list)`) is asserted by a passing e2e
+  (`test__alerts__actionable_count_equals_high_plus_medium_in_items`). Kept OPEN only for the
+  in-browser confirm, tracked on **FU-183**'s browser checklist — flip both together.
 
 ## [OPEN] FU-041 — Onboarding "you already have groups/locations" copy on first-run
 - **Raised:** 2026-06-06 (C-5 brief; feedback L32/L33)

@@ -30,6 +30,11 @@ from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+# C-9.2 note: the assistant reads the EXPIRING_SOON_WINDOW_DAYS *default* (not
+# the admin-configured AppSetting.expiring_soon_window_days that alerts + the
+# heatmap now honour). This is the constant-as-default carve-out allowed by
+# IMPL_PLAN_ALERTS C-9.2; threading the override through here is deferred
+# (DORA_FOLLOWUPS FU-187). It's the one default, not a second literal (R-003).
 from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
                                           LOW_STOCK_SEQUENCE, is_out_of_stock,
                                           needs_restock)

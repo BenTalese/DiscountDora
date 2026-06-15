@@ -367,8 +367,12 @@ def test__get_stock_items__GettingTwoStockItemsPerPage__GetsPageOfTwoStockItems(
     assert _Response.headers['Content-Type'] == 'application/json'
     _Items = _Response.json()['items']
     assert len(_Items) == 2
-    assert _Items[0]['name'] == 'Barilla Pasta'
-    assert _Items[1]['name'] == 'Brazil Nuts'
+    # Exact names aren't stable — other suites create stock items into the
+    # shared DB (and the API sorts case-insensitively, NOCASE collation) — so
+    # assert page 1 is the first two of the full ascending sort, not specific
+    # seeded names. Same robustness rationale as the sort tests above.
+    _AllNames = [i['name'] for i in _items('?sort=name:asc&limit=500')]
+    assert [i['name'] for i in _Items] == _AllNames[:2]
 
 
 def test__get_stock_items__GettingSecondPage__GetsSecondPageOfStockItems(api):

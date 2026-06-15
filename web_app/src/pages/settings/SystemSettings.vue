@@ -62,6 +62,50 @@
             </q-card-section>
             <q-separator />
 
+            <!-- Alert thresholds (C-9.2) ───────────────────────────────── -->
+            <q-card-section>
+                <div class="text-subtitle1 text-weight-medium">
+                    <q-icon :name="ICONS.notifications" size="20px" class="q-mr-xs" />
+                    Alert thresholds
+                </div>
+                <div class="text-caption dora-text-muted">
+                    Household-wide tuning for inventory alerts. These shape the
+                    alerts list and the location heatmap for everyone; each
+                    account's own on/off and priority preferences layer on top.
+                </div>
+            </q-card-section>
+            <q-card-section v-if="!loading" class="row q-col-gutter-md items-start">
+                <q-input
+                    v-model.number="expiringSoonWindowDraft"
+                    type="number"
+                    label="Expiring-soon window (days)"
+                    outlined
+                    dense
+                    class="col-12 col-sm-6"
+                    :min="1"
+                    :max="365"
+                    :disable="savingThresholds"
+                    :loading="savingThresholds"
+                    hint="Items within this many days of their expiry date show as 'expiring soon'."
+                    @blur="() => onSaveThreshold('expiring_soon_window_days', expiringSoonWindowDraft)"
+                />
+                <q-input
+                    v-model.number="stocktakeDefaultDraft"
+                    type="number"
+                    label="Default stocktake reminder (days)"
+                    outlined
+                    dense
+                    class="col-12 col-sm-6"
+                    :min="0"
+                    :max="3650"
+                    :disable="savingThresholds"
+                    :loading="savingThresholds"
+                    hint="Pre-filled check-in cadence for new stock items (0 = no reminder)."
+                    @blur="() => onSaveThreshold('default_days_until_stocktake_alert', stocktakeDefaultDraft)"
+                />
+            </q-card-section>
+            <q-separator />
+
             <!-- AI assistant ─────────────────────────────────────────── -->
             <q-card-section>
                 <div class="text-subtitle1 text-weight-medium">
@@ -410,6 +454,8 @@
         companion_ingestion_enabled?: boolean;
         deals_email_enabled?: boolean;
         timezone?: string;
+        expiring_soon_window_days?: number;
+        default_days_until_stocktake_alert?: number;
     };
     function applyLoaded(s: LoadedSettings) {
         enabledDraft.value = s.llm_enabled;
@@ -417,6 +463,14 @@
         modelDraft.value = s.llm_model;
         scanningDraft.value = s.scanning_enabled;
         if (s.timezone) timezoneDraft.value = s.timezone;
+        if (s.expiring_soon_window_days !== undefined) {
+            savedThresholds.expiring_soon_window_days = s.expiring_soon_window_days;
+            expiringSoonWindowDraft.value = s.expiring_soon_window_days;
+        }
+        if (s.default_days_until_stocktake_alert !== undefined) {
+            savedThresholds.default_days_until_stocktake_alert = s.default_days_until_stocktake_alert;
+            stocktakeDefaultDraft.value = s.default_days_until_stocktake_alert;
+        }
         saved.value = { enabled: s.llm_enabled, baseUrl: s.llm_base_url, model: s.llm_model };
         // The new feature-flag fields might be absent on older /api/app-settings
         // responses (server-side default in the dataclass means they always
@@ -533,6 +587,54 @@
             });
         } finally {
             savingTimezone.value = false;
+        }
+    }
+
+    // ── Alert thresholds (C-9.2) ─────────────────────────────────────────
+    // Household-wide. Saved on blur (one PATCH per committed edit), mirroring
+    // the timezone field; a no-op blur (unchanged value) is skipped.
+    const expiringSoonWindowDraft = ref<number>(7);
+    const stocktakeDefaultDraft = ref<number>(0);
+    const savedThresholds = reactive({
+        expiring_soon_window_days: 7,
+        default_days_until_stocktake_alert: 0,
+    });
+    const savingThresholds = ref(false);
+
+    type ThresholdKey = 'expiring_soon_window_days' | 'default_days_until_stocktake_alert';
+
+    function resetThresholdDrafts() {
+        expiringSoonWindowDraft.value = savedThresholds.expiring_soon_window_days;
+        stocktakeDefaultDraft.value = savedThresholds.default_days_until_stocktake_alert;
+    }
+
+    async function onSaveThreshold(key: ThresholdKey, value: number) {
+        // q-input can hand back '' / NaN mid-edit; ignore those and reset the
+        // field, and skip a no-op save (blur fires even with no change).
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+            resetThresholdDrafts();
+            return;
+        }
+        if (value === savedThresholds[key]) return;
+        savingThresholds.value = true;
+        try {
+            const result = await api.updateAsync({ [key]: value });
+            savedThresholds.expiring_soon_window_days = result.expiring_soon_window_days;
+            savedThresholds.default_days_until_stocktake_alert = result.default_days_until_stocktake_alert;
+            resetThresholdDrafts();
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: 'Alert thresholds saved.',
+            });
+        } catch (err) {
+            resetThresholdDrafts();
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save alert thresholds.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            savingThresholds.value = false;
         }
     }
 

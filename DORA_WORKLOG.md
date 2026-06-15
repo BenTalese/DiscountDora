@@ -19,7 +19,7 @@ next.
 
 | Surface | Docs | Build state |
 |---|---|---|
-| **Alerts (C-9)** | `PROPOSAL_ALERTS.md` + `IMPL_PLAN_ALERTS.md` | **C-9.1 VERIFIED** + **C-9.2 & C-9.3 built/test-verified** (prefs · thresholds · hub page + slim bell + history; 287 e2e green; browser pending — FU-183) |
+| **Alerts (C-9)** | `PROPOSAL_ALERTS.md` + `IMPL_PLAN_ALERTS.md` | **C-9.1 VERIFIED** + **C-9.2/.3/.4/.5/.6 built/test-verified** (prefs · thresholds · hub page + slim bell + history + forward-looking nudges + price-watch subscriptions tier + Upcoming fortnight timeline; **Phase A COMPLETE**; 297 e2e green; browser pending — FU-183) |
 | **Onboarding (C-5 v3)** | `PROPOSAL_ONBOARDING.md` + `IMPL_PLAN_ONBOARDING.md` | design only (+ 3 hero prototypes shown in chat); copy-honesty gate FU-184 |
 | **Stock Item Detail (C-1b)** | `PROPOSAL_STOCK_ITEM_DETAIL.md` + `IMPL_PLAN_STOCK_ITEM_DETAIL.md` | design only (NEW home; closes COVERAGE_GAPS A-1) |
 | **Ingestion API (C-10 v2)** | `PROPOSAL_INGESTION_API.md` + `IMPL_PLAN_INGESTION_API.md` | design only |
@@ -46,16 +46,210 @@ e2e, alembic, vue-tsc + eslint all run here now. The only thing still NOT done f
 Detail / product surfaces collapse for the "Cooking" persona. Preferred product **removed** (FU-180).
 
 ### 🔀 THE MENU — "what to do next" (present these)
-1. **Build C-9.4** (recommended — continues C-9) — new evaluator types **`no_planned_meals`**
-   (next week empty → FYI; uses the C-2.K household tz) + **`shopping_day`** (a list's
-   `planned_shop_date` within N days) + the expiry-after-alert nudge. Additive generators on the
-   evaluator; they render through the now-shared `AlertRow`. (Then C-9.5 subscriptions, C-9.6 timeline.)
+1. **Browser-verify Phase A, then Phase B** (recommended — **Phase A is now COMPLETE**) — all of
+   C-9.1→C-9.6 are built + automated-verified. The remaining gate before Phase B is the **browser
+   smoke** (FU-183): hub page / slim bell / prefs / thresholds / forward-looking nudges / price-
+   watch tier / **the new Upcoming fortnight timeline** (dots land on the right days, click expands,
+   links navigate). Flip **FU-042** + **FU-183** with it. Then **Phase B** = C-9.7 email digest,
+   C-9.8 web push.
 2. **Build another surface's first chunk** — **C-5.1** (onboarding quick wins), **C-1b.1**
    (stock-detail overview tidy), **C-10.1** (IngestionSource + keys page). Env is up — build *and run*.
-3. **Browser-smoke the alerts work** (FU-183) — run the app, confirm the hub page / slim bell /
-   prefs / thresholds, then flip **FU-042** + **FU-183**.
-4. **Plan another surface** (design-sprint pattern) — Dora Assistant architecture, Dashboard,
+3. **Plan another surface** (design-sprint pattern) — Dora Assistant architecture, Dashboard,
    Data page, Help overlay, Barcode scanning, Locale/i18n.
+
+---
+
+## 2026-06-15 — Simple Mode proposal (FU-182 promoted)
+**Status:** complete — talk-time discussion + scratch promoted to formal proposal.
+No code changes.
+
+**What:** Multi-turn brainstorm with the user on the workflow of a minimal /
+"fuss-free" user who may not want the Products feature. Produced:
+- **`docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`** (new) — the formal proposal.
+  Owns: pricing substrate (`StockItemPriceObservation` + `get_stock_item_unit_
+  cost_at`); Money + Products independence (the 2×2); per-surface sweep of
+  what disappears/collapses when `products_enabled` is off; "Simple mode" as a
+  named user-facing identity decoupled from the flag; stock-item-vs-product
+  confusion mitigations (layered: onboarding copy + glossary + micro-copy +
+  empty-state); Stores rename surface dependency; non-destructive mode-flip
+  behaviour. Coverage table maps 14 feedback bullets. Sequencing in 6 chunks
+  with C-5 + FU-189 as prereqs.
+- **`docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`** (updated earlier
+  in session) — the raw assessment + brainstorm addendum the proposal
+  promotes. Kept as the discussion record.
+- **`docs/04_proposals/PROPOSAL_ONBOARDING.md`** — added explainer copy
+  guidance (§3.3, milk example + "don't name stock items after brands") and
+  the §3.2.a open thread flagging the (Products off + money on) gap in the
+  current persona table.
+- **`docs/04_proposals/PROPOSAL_HELP_OVERLAY.md`** — added §2.3 note on the
+  stock-item-vs-product glossary entry (Products-on only).
+
+**Follow-ups touched:**
+- **FU-182** updated — now tracks co-design + implementation of the proposal,
+  not the writing phase.
+- **FU-189 (new)** — Merchants → Stores entity + UI rename; single management
+  page; user-uploaded store images (Dora ships zero logos for legal safety);
+  no auto-create rule; `StockItem.usual_store_id` field.
+- **FU-190 (new)** — PROPOSAL_INGESTION_API.md must be amended to honour the
+  no-auto-create-stores rule (recommended: setup mapping step + quarantine
+  queue fallback).
+
+**Charter/standards check:** Design work, not code. Proposal §9 runs the
+engineering-standards check against the *proposed* implementation: R-001
+(componentisation), R-002 (theme tokens), R-003 (state ownership — the
+`get_stock_item_unit_cost_at` substrate helper is the spine and explicitly
+forbids client-side cost math), R-005 (Postgres/SQLite portability), R-006
+(clean migrations), R-007 (scope discipline — §2.9 enumerates what the
+proposal does NOT own). No new ADR — the substrate reframe is a R-003
+application, not a new pattern.
+
+**Open loops:**
+- FU-182 (proposal awaits co-design + implementation scheduling).
+- FU-189 (Stores rename + management page).
+- FU-190 (ingestion API amendment).
+- C-5 v3 persona-table gap — confirm the (Products off + money on)
+  combination is reachable via Customise before C-5 ships (proposal §2.2
+  open thread, also flagged in PROPOSAL_ONBOARDING.md §3.2.a).
+
+**Next up:** Proposal awaits the user's co-design pass on the five open
+decisions in §4. After that, sequencing decides whether FU-189 (Stores) or
+the substrate Chunk A lands first. No immediate follow-on task this branch.
+
+**Amendment (same session) — hero loop persona-preview affordance:**
+- **`PROPOSAL_ONBOARDING.md` §2.3** rewritten — hero now has a persona-
+  preview segmented control (Simple / Mid / Full working labels) below the
+  loop. Tapping a button smoothly transitions the loop shape (nodes
+  fade/scale in/out, subtitles + Dora-centre copy update). Sub-cinematic
+  motion budget (~250–350ms), transform/opacity only, reduced-motion
+  cross-fade path. Auto-reveal still plays the Full state once; persona
+  buttons appear after.
+- **§5 (resolved decisions)** — the prior "no persona-dim in the hero" call
+  is explicitly amended; default-on-load remains Full so the cinematic
+  reveal still sells the ceiling.
+- **New §2.3.a open threads** — button labels (persona names vs outcome-
+  led vs icons), default-on-paint sanity check, the persona-fork-step
+  relationship (recommendation: pre-confirmation, pre-fill the §3.2 fork
+  from the previewed persona), Customise visibility on the hero,
+  layout-stability behaviour for removed nodes.
+- **Standards check:** preserves R-001 (one `OnboardingLoop` component;
+  persona-preview is a mode prop on the existing component, not a new
+  one). Reduced-motion path explicit (§2.4 mandatory rule honoured). No
+  new rules.
+
+---
+
+## 2026-06-15 — Alerts C-9.6 — Upcoming "this fortnight" timeline (LAST Phase-A chunk)
+**Status:** code-complete + **automated-verified** (297 backend e2e green, +5 new; vue-tsc +
+eslint + R-002 grep clean). Browser pending — FU-183. Built directly (ultracode off).
+**This completes Phase A** — browser-verify before Phase B (C-9.7 email digest, C-9.8 web push).
+
+**Key decision (R-001 verify-before-fork):** the menu suggested reusing the C-2.D
+`MealPlanCalendar.vue`. Read it — it's `mealPlanStore`-bound and renders a single `DayStatus`
+per day (one state), not multi-category dots. It doesn't fit the "expiry + shopping + meal dots
+on one day" model, so a **purpose-built `UpcomingTimeline.vue`** is justified (not a silent fork).
+
+**Built:**
+- **`GET /api/alerts/upcoming?days=14`** (`features/alerts/get_upcoming.py`) — a **server-owned
+  aggregation** (R-003): window is `household_today()` → `+ (days-1)` (household timezone, C-2.K);
+  `_DEFAULT_DAYS=14`, `_MAX_DAYS=31` (route clamps `max(1, min(days, 31))`). Queries StockItem
+  `EXPIRY_DATE.between`, ShoppingList `PLANNED_SHOP_DATE.between & STATUS.ne(done)`, MealPlanEntry
+  `SCHEDULED_FOR.between` (`.include(RECIPE)`). Groups into per-date `UpcomingDay` (expiries /
+  shopping / meals), returns **non-empty days only**, sorted, inner lists sorted. Auto-registers
+  via the pkgutil walk (no manual wiring). Frozen-slots DTOs.
+- **`UpcomingTimeline.vue`** (new, R-001) — a two-week mini-calendar: Mon–Sun-aligned weeks from
+  `mondayOf(start)` covering start..end, out-of-window cells dimmed, today ringed. Per-day **dots**
+  per category (token colours, R-002: `--semantic-warning` expiry / `--brand-primary` shopping /
+  `--semantic-positive` meal). Click a day with events → expands a detail list (expiries → `/stock/:id`,
+  shopping → `/shopping-lists/:id`, meals → `/cookbook/:recipe_id`). Legend + refresh + empty/error
+  states. All grid date math via `weekDates.ts` UTC string helpers (no `toISOString()` drift).
+- **`alert.ts`** + **`alertApiService.ts`:** added `Upcoming`/`UpcomingDay`/`UpcomingExpiry`/
+  `UpcomingShopping`/`UpcomingMeal` types + `getUpcomingAsync(days=14)`.
+- **`AlertsPage.vue`:** mounts `<UpcomingTimeline>` after the summary boxes (not money-gated — it
+  aggregates expiries/shopping/meals, all present regardless of the money flag).
+
+**Tests (5 new in `test_alerts.py`):** window == household-today for N days (start/days/end);
+shopping + meal land on their dates (create list +2 + meal on next Monday, assert, cleanup);
+expiry lands on its date (create stock item +1, assert, cleanup); respects the window bound
+(list +20 absent at default, present at days=25); clamps excessive days (9999 → 31). All use
+try/finally cleanup (no per-test DB isolation, FU-169).
+
+**Engineering close-gate:** R-001 (verify-before-fork — done, justified), R-002 (token dots, no
+palette literals), R-003 (server owns the window + aggregation; client renders only). No new ADR.
+
+**Next up:** **Phase A is complete.** Browser-smoke all of C-9 (FU-183), flip FU-042 + FU-183,
+then Phase B (C-9.7 email digest, C-9.8 web push).
+
+---
+
+## 2026-06-15 — Alerts C-9.5 — subscriptions tier (price-watch surfacing on the hub)
+**Status:** code-complete + automated-verified (browser pending — FU-183). Built directly
+(ultracode off). **Frontend-only** — no backend written.
+
+**Key decision (deviates from impl plan, user-confirmed):** the impl plan specified a new
+`GET /alerts/subscriptions` endpoint. Verify-state-first found the existing
+`GET`/`DELETE /api/price-history/alerts` (in `price_history.py`) + the frontend
+`PriceHistoryApiService.listAlertsAsync/deleteAlertAsync` already list & manage armed
+`PriceAlert`s with product/merchant/threshold/last-fired. Building a parallel endpoint would
+duplicate that read (R-003) and re-surface the same rows. **Chose to reuse the existing
+endpoints** (R-007 — surface/manage only; the scrape/ingestion side still fires them). The
+**back-in-stock placeholder** from the plan was **skipped** (anti-creep — no data source exists
+yet; companion-scope) and logged as a follow-up.
+
+**Built:**
+- **`SubscriptionsPanel.vue`** (new shared component, R-001): a "Price watch" card — armed-
+  thresholds tier with its own icon/styling (L224). Lists the user's `PriceAlert`s (product,
+  merchant, "notify below $X", last-alerted date), each row **links to the set-point**
+  (`/price-history?product_id=<id>`, which the explorer reads on mount) + a **Remove** that calls
+  `deleteAlertAsync`. Clean loading / empty / error states. Self-contained (service direct, local
+  state — no cross-component shared state to hoist).
+- **`AlertsPage.vue`:** mounts `<SubscriptionsPanel>` between the active list and the Manage
+  panel, **gated by `useFeatureFlags().money`** so it collapses for the Products/money-off persona
+  (FU-182 alignment).
+
+**Verification:** vue-tsc clean, eslint clean on changed files. No backend change → backend e2e
+stays **292 green** (not re-run; nothing touched). Set-point creation still lives only on the
+explorer; no firing logic added.
+
+**Next up:** C-9.6 (Upcoming "this fortnight" timeline) — the last Phase-A chunk; then browser-
+verify Phase A before Phase B (C-9.7 email digest, C-9.8 web push). Browser smoke (FU-183) should
+also eyeball the Price-watch tier (rows render, View → explorer with the product selected, Remove
+deletes, empty-state when nothing armed, hidden when money flag off).
+
+---
+
+## 2026-06-15 — Alerts C-9.4 — forward-looking nudges (no_planned_meals + shopping_day)
+**Status:** code-complete + automated-verified (browser pending — FU-183). Built directly
+(ultracode off). Additive generators on the alerts evaluator; both render through the shared
+`AlertRow` (R-001) — no new row markup.
+
+**Built:**
+- **Two new derived alert kinds** (server owns the rule — R-003):
+  - **`no_planned_meals`** (meal scope, FYI): if next week's `MealPlanEntry` set is empty, emit
+    one alert. Week boundary uses the **household timezone** via `household_today()` (C-2.K) —
+    `next_monday = today + (7 - today.weekday())`, through next Sunday. Stable key
+    `meal:no_planned_meals:<ISO-week>` so the same empty week stays one interaction across reloads.
+  - **`shopping_day`** (list scope, FYI): for each `ShoppingList` whose `planned_shop_date` is
+    within `SHOPPING_DAY_WINDOW_DAYS = 3` of household-today **and** not already `done`, emit one
+    alert. Message renders "today"/"tomorrow"/"in N days" + the list display name. Key
+    `list:<list_id>:shopping_day`; `target_id` deep-links the row.
+- **AlertDto reshaped:** `stock_item_id`/`stock_item_name` made optional (non-stock alerts have
+  none) + added `target_id`. Fixed the `_sort_key` crash on null `stock_item_name` (falls back to
+  `message`). `alert_key.py` learned list-scope parse + `list_alert_key`/`meal_alert_key` helpers.
+- **Frontend:** `alert.ts` gained the two kinds (icon/colour/theme/no actions) + a `linkFor()`
+  deep-link helper (meals → `/meal-plans`, shopping_day → `/shopping-lists/<id>`, stock → detail).
+  `AlertsPage`, `AlertsBell`, `DashboardPage` all route through `linkFor()` and guard the now-
+  nullable stock fields. Prefs auto-register the new kinds (manage_alert_prefs iterates KNOWN_KINDS).
+- **Expiry-after-alert nudge:** already satisfied by the existing `extend_expiry`/`reset_expiry`
+  actions on expiry alerts (proposal §3.8) — no new code.
+
+**Verification:** vue-tsc clean, eslint clean on changed files, +5 new e2e (fire/clear/re-fire for
+both kinds, FYI/no-stock-item assertion, out-of-window silence, prefs exposure) — **292 backend e2e
+green** (287 baseline + 5). Seed plans only *this* week, so `no_planned_meals` fires deterministically
+on a fresh seed.
+
+**Next up:** C-9.5 (subscriptions tier) → C-9.6 (Upcoming timeline). Browser smoke (FU-183) should
+now also eyeball the two nudge rows + their deep-links. COVERAGE_GAPS L442/L403 row flips stay
+deferred until after that browser pass (per proposal).
 
 ---
 

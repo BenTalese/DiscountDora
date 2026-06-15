@@ -132,7 +132,192 @@ wins.
 
 ## Next step
 
-Tracked as FU-181 — promote this scratch into a proper assessment / §2.6
+Tracked as FU-182 — promote this scratch into a proper assessment / §2.6
 amendment with a per-surface coverage table against the feedback bullets, so
 the minimal-user path is supported as a first-class workflow rather than a
 fallback.
+
+---
+
+# Addendum — 2026-06-15 brainstorm round (data model, naming, ingestion)
+
+Continuing the talk-time. Captures the model + UX decisions reached after
+the initial assessment so they're not lost before promotion to a proposal.
+Some of this overlaps the onboarding C-5 v3 redesign — see §3.2 personas +
+§3.3 conditional explainer there for what's already in flight; this scratch
+holds the *deeper* model + naming decisions C-5 doesn't own.
+
+## 1. Pricing model — unify the read path, don't flatten
+
+Reframe: **`StockItem` + `StockItemPriceObservation` is the universal
+substrate. `Product` + `ProductOffer` is an optional SKU-resolution layer
+that feeds the same substrate.**
+
+- New canonical record: `StockItemPriceObservation(stock_item_id, price,
+  qty, unit, observed_at, source: 'manual' | 'shopping_close_out' |
+  'product_offer')`. **No merchant on the observation** — see §3.
+- Stock-item price-history chart reads `direct observations ∪
+  observations-derived-from-linked-products` (Products on) or just direct
+  observations (Products off).
+- "Products off" is not a degraded mode — it's the substrate without the
+  optional overlay. Every consumer (cost estimates, stock-value report,
+  shopping-list pricing, recipe budgets) is rewritten *against the
+  substrate*, with Products as an enriching data source when present.
+- Server-owned helper `get_stock_item_unit_cost_at(item, when)` picks the
+  best signal (product-derived if available + Products on, else direct
+  observation, else null). R-003 — single derived fact, server-owned.
+
+### Mode-flip behaviour (non-destructive both ways)
+
+- **Off → on:** existing direct observations stay; new ProductOffers add
+  merchant-attributed points alongside on the chart.
+- **On → off:** ProductOffer history isn't deleted, just hidden from the
+  chart. Don't roll up — mixing sources after a mode switch is exactly the
+  messiness the user flagged. Hidden ≠ destroyed.
+
+### Money + Products are independent layers (2×2)
+
+|  | Money on | Money off |
+|---|---|---|
+| **Products on** | full SKU + price (today) | SKU mapping only, no $ |
+| **Products off** | stock-item price logging | pure checklist |
+
+The bottom-left (Products off + money on) is the persona the current C-5
+v3 onboarding does **not** directly expose — both "Pantry & cooking" and
+"Pantry + spend tracking" bundle products+money together. **Open thread
+for onboarding:** ensure the Customise branch lets this combo be reached,
+or add it as a fourth preset.
+
+## 2. Shopping-list-as-receipt — yes, and not only in shopping mode
+
+- Shopping-list close-out is the most natural place for the price input,
+  but log-a-price affordances should also live on: stock-item detail
+  ("log a price" button), a quick-add modal, future receipt-import flow.
+- All write into `StockItemPriceObservation` with appropriate `source`.
+- Gated by **money opt-in**, not Products. The price input simply doesn't
+  render when money is off, regardless of Products.
+
+## 3. Merchant on observations — DROPPED for simple mode
+
+Decision: `StockItemPriceObservation` carries no merchant attribution.
+Rationale: in simple mode prices are just "how much does this cost me,"
+not a cross-merchant comparison. Comparison is exactly what
+Products-on is for.
+
+For shopping-list grouping (still useful in simple mode):
+
+- **`StockItem.usual_merchant_id` (nullable)** — user sets "I usually buy
+  this at Coles" once. Shopping list groups by it.
+- **Per-shopping-list-line override** — user reassigns at trip-build time
+  (e.g. "this week I'm doing one big Woolies shop, group everything under
+  Woolies"). Override lives on the line, not the stock item.
+- Single field, no auto-derivation from observation history (because the
+  history doesn't carry merchant). Cheap, intuitive, no drift.
+
+## 4. Merchants → Stores rename + user-uploaded logos
+
+UI **and entity** rename to "Store" (pre-release, no compat shims —
+R-007 / honest naming). "Merchant" is payments/e-commerce jargon; "Store"
+is what a normal person calls Coles.
+
+Sanity checks before the rename:
+
+- Verify no existing `Store` symbol in the codebase means something else
+  (Pinia store, "store of value" etc.). Locations is the most adjacent
+  concept but unambiguous (locations are in-home, stores are external).
+- Future payments/checkout integrations will likely use "merchant" at the
+  integration boundary — translate there, not in the domain model.
+
+Management page:
+
+- Single management surface (settings → Stores). **No auto-create from
+  any other code path** (notably ingestion — see §6).
+- **No prefilled list.** Sidesteps locale-coupling and the legal-logos
+  issue in one move. Users add their own (Coles, ALDI, the corner deli,
+  whatever).
+- **User-uploaded image per store.** Reuse existing image-upload infra
+  (recipes/stock items have it from C-cross §2.8). **Dora ships zero
+  logos** — legal safety.
+- **Fallback when no image:** the existing hash-swatch + initial pattern
+  from `ProductSearchCard` (referenced in ENGINEERING_STANDARDS.md). No
+  new pattern needed.
+- Edit / disable / delete (soft, with referential safety on offers +
+  shopping-list lines).
+
+## 5. The stock-item vs product confusion — the real UX risk
+
+Data model is clean, but the *concept* is two-thirds of the way up the
+abstraction ladder for non-technical users. Mitigations need to be
+layered:
+
+1. **Onboarding explainer** — already planned in C-5 §3.3, conditional on
+   `products_enabled`. **Copy guidance for that step:** use the milk
+   example concretely — *"'Milk' is a stock item — a thing you keep.
+   'Vitasoy Oat Milky 1L @ Coles' is a product — a specific thing you can
+   buy."* Pair with a *don't*: *"Don't name your stock items after
+   brands."*
+2. **Glossary / help entry** — short, plain, milk example. Linked from
+   anywhere the term appears. Lives in PROPOSAL_HELP_OVERLAY.md content
+   scope.
+3. **In-context micro-copy** — stock-item-create form gets a one-line
+   tooltip when Products is on: *"A type of thing you keep — like 'milk'
+   or 'flour.' Don't name it after a brand — that's what products are
+   for."* (In simple mode the tooltip drops the second sentence — the
+   word "product" doesn't appear in simple-mode UI at all.)
+4. **Empty-state copy** on My Products: *"Products are the specific
+   brands/SKUs you buy. They link to stock items."* with the milk →
+   Vitasoy example.
+5. **Simple mode amplifies clarity, doesn't muddy it.** In simple mode,
+   "product" effectively disappears from the UI — there's only one
+   concept. Confusion can only arise in Products-on mode or at the
+   transition. Argument for simple mode being a strong default for new
+   users: zero confusion until they opt into the richer model.
+
+## 6. "Simple mode" as a named identity, not the absence of Products
+
+- Don't expose the flag as "Products feature off" anywhere user-visible.
+  UI label: **Simple mode** (or co-design something better).
+- **Onboarding preset** — C-5 v3's "Pantry & cooking" persona is
+  effectively this; consider surfacing "simple mode" as the explicit
+  label outside the persona moment (e.g. a small chip in settings).
+- **Settings indicator** — small "Simple mode" chip on the settings page,
+  one-line explainer, "switch to full mode" affordance. No persistent
+  app-shell badge (would feel like a downgrade reminder; the point is
+  simple mode is a *complete* product).
+- **Codebase flag name** stays technical (`products_enabled`). UI label
+  decoupled. (Standard pattern.)
+
+## 7. No-auto-create implication for the ingestion API (Phase 2)
+
+The companion scraper pushes products + offers + price-observations to
+Dora. Each offer references a merchant/store. The "no auto-create" rule
+must propagate into the ingestion API design — it cannot silently
+materialise stores the user hasn't approved.
+
+Three viable shapes:
+
+- (a) **Hard reject** unknown-store offers. Strictest. Sender must
+  pre-register stores via API.
+- (b) **Quarantine queue** — unknown-store offers land in "pending
+  review"; user resolves by mapping to an existing store or creating a
+  new one.
+- (c) **Setup mapping step** — user maps each companion-side merchant to
+  a Dora store once, before ingestion is live.
+
+Recommendation: **(c) as the happy path, (b) as the safety net** for
+never-seen-before stores that appear after setup. This is a hard
+constraint on PROPOSAL_INGESTION_API.md — tracked separately as a
+follow-up so it lands in that proposal's coverage table.
+
+## 8. Misc decisions confirmed in this round
+
+- **Brand specificity dies in simple mode.** Accepted — don't half-solve
+  with a "preferred brand" string field.
+- **Receipt OCR — not in scope.** The shopping list *is* the receipt;
+  paper-receipt parsing isn't going to ship.
+- **Barcode scanning in simple mode** — scan still resolves Dora's own
+  QR labels (navigation); real-world EAN scans just don't do anything.
+  Acceptable for the minimal user.
+- **No cross-user comparison.** Multi-tenancy is deferred (Decision 5);
+  this is moot for current scope. Forecloses a future SaaS community-
+  price feature, noted not blocking.

@@ -31,7 +31,7 @@ actionable/FYI bucket the counts use.
 """
 import logging
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
@@ -40,12 +40,17 @@ from flask import session
 from dora_api.domain.entities.alert_interaction import AlertInteraction
 from dora_api.domain.entities.alert_preference import AlertPreference
 from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
+                                                    ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.stock_status import (effective_expiring_soon_window,
                                           is_low_stock, is_out_of_stock)
-from dora_api.features.alerts.alert_key import stock_alert_key
+from dora_api.features.alerts.alert_key import (list_alert_key, meal_alert_key,
+                                                stock_alert_key)
 from dora_api.features.alerts.alert_kinds import (TIER_ACTIONABLE,
                                                   default_tier_for)
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.utils import get_container
@@ -62,6 +67,19 @@ SEVERITY_LOW = "low"
 
 _SEVERITY_ORDER = {SEVERITY_HIGH: 0, SEVERITY_MEDIUM: 1, SEVERITY_LOW: 2}
 
+# C-9.4 — how soon a list's planned shop date must be to nudge. A small
+# constant default (not yet admin-tunable — these are FYI nudges, and per-user
+# on/off already covers "I don't want this"); one source here (R-003).
+SHOPPING_DAY_WINDOW_DAYS = 3
+
+
+def _iso_week_label(day: date) -> str:
+    """Stable ``YYYY-Www`` label for the ISO week containing ``day`` — the
+    no_planned_meals discriminator, so the key matches across evaluations
+    within the same week (ledger discipline, alert_key.py)."""
+    iso = day.isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
 
 @dataclass(frozen=True, slots=True)
 class AlertDto:
@@ -70,12 +88,20 @@ class AlertDto:
     # endpoints. Named `alert_id` for frontend continuity; its *value* is the
     # generalised key (alert_key.py).
     alert_id: str
-    kind: str  # 'expired' | 'expiring_soon' | 'out_of_stock' | 'low_stock' | 'stocktake_overdue' | 'essential_low'
+    # 'expired' | 'expiring_soon' | 'out_of_stock' | 'low_stock' |
+    # 'stocktake_overdue' | 'essential_low' | 'no_planned_meals' | 'shopping_day'
+    kind: str
     severity: str
-    stock_item_id: UUID
-    stock_item_name: str
     message: str
     detail: str | None
+    # Stock-scoped alerts carry the owning item; the C-9.4 non-stock kinds
+    # (no_planned_meals / shopping_day) leave these None.
+    stock_item_id: UUID | None = None
+    stock_item_name: str | None = None
+    # Deep-link target id for non-stock kinds (e.g. the shopping list uuid for
+    # shopping_day). The client maps kind + this id to a route; None when the
+    # kind links to a fixed page (no_planned_meals → the planner).
+    target_id: str | None = None
     # ISO date string (if relevant — e.g. expiry alerts include the date).
     related_date: str | None = None
     # Per-user interaction overlay (C-9.1). `read` reflects this user; for an
@@ -249,6 +275,14 @@ class GetAlertsHandler:
                         related_date = None,
                     ))
 
+        # ── Forward-looking nudges (C-9.4) ─────────────────────────────
+        # Not per-item, so they sit outside the loop. Both read the household
+        # "today" boundary so the week / day maths is correct regardless of
+        # where the server is hosted (R-003 — same boundary as meal plans).
+        household_now = household_today(self.repository)
+        raw.extend(self._no_planned_meals_alerts(household_now))
+        raw.extend(self._shopping_day_alerts(household_now))
+
         # ── Per-user overlay (C-9.1 interactions + C-9.2 preferences) ───
         # One bounded fetch each of this user's interactions + preferences,
         # then a Python-side filter — same shape as the suggestions flow.
@@ -309,7 +343,10 @@ class GetAlertsHandler:
 
         # Severity-first ordering so the panel scans top-down.
         def _sort_key(a: AlertDto):
-            return (_SEVERITY_ORDER.get(a.severity, 99), a.stock_item_name.lower())
+            # Non-stock kinds (C-9.4) have no item name — fall back to the
+            # message so the secondary sort stays total.
+            label = a.stock_item_name or a.message
+            return (_SEVERITY_ORDER.get(a.severity, 99), label.lower())
 
         active.sort(key=_sort_key)
         snoozed.sort(key=_sort_key)
@@ -324,6 +361,63 @@ class GetAlertsHandler:
             fyi_count=fyi,
             snoozed_count=len(snoozed),
         )
+
+    def _no_planned_meals_alerts(self, today: date) -> List[AlertDto]:
+        """One FYI nudge when *next* week has no meal-plan entries. The key is
+        keyed on next week's ISO label so it clears the moment a meal lands in
+        that week and re-fires for the following empty week."""
+        # Next week = the seven days following this week's Sunday. weekday():
+        # Mon=0 … Sun=6, so days to next Monday is 7 - weekday().
+        next_monday = today + timedelta(days=7 - today.weekday())
+        next_sunday = next_monday + timedelta(days=6)
+        entries: List[MealPlanEntry] = self.repository.get(MealPlanEntry).all(
+            EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR)
+            .between(next_monday, next_sunday)
+        )
+        if entries:
+            return []
+        return [AlertDto(
+            alert_id = meal_alert_key(f"no_planned_meals:{_iso_week_label(next_monday)}"),
+            kind = "no_planned_meals",
+            severity = SEVERITY_LOW,
+            message = "No meals planned for next week",
+            detail = (
+                f"Next week ({next_monday.strftime('%a %d %b')} – "
+                f"{next_sunday.strftime('%a %d %b')}) has nothing on the plan yet."
+            ),
+            related_date = next_monday.isoformat(),
+        )]
+
+    def _shopping_day_alerts(self, today: date) -> List[AlertDto]:
+        """One FYI nudge per not-yet-done list whose planned shop date falls in
+        the next `SHOPPING_DAY_WINDOW_DAYS` (today inclusive). Reads the existing
+        `planned_shop_date` (P6-01) — no schema. Clears when the list is done or
+        the day passes."""
+        horizon = today + timedelta(days=SHOPPING_DAY_WINDOW_DAYS)
+        lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
+            EntityField(ShoppingList, ShoppingList.Fields.PLANNED_SHOP_DATE)
+            .between(today, horizon)
+            & EntityField(ShoppingList, ShoppingList.Fields.STATUS)
+            .ne(SHOPPING_LIST_STATUS_DONE)
+        )
+        out: List[AlertDto] = []
+        for lst in lists:
+            days = (lst.planned_shop_date - today).days
+            when = (
+                "today" if days == 0
+                else "tomorrow" if days == 1
+                else f"in {days} days"
+            )
+            out.append(AlertDto(
+                alert_id = list_alert_key(lst.id, "shopping_day"),
+                kind = "shopping_day",
+                severity = SEVERITY_LOW,
+                message = f"Shopping day {when}: {lst.display_name}",
+                detail = "Open the list to get ready.",
+                target_id = str(lst.id),
+                related_date = lst.planned_shop_date.isoformat(),
+            ))
+        return out
 
 
 @ALERT_ROUTER.route("", methods=["GET"])

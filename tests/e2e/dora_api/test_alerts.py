@@ -13,6 +13,9 @@ import requests
 BASE = "http://localhost:5170/api"
 PREFS = f"{BASE}/alerts/prefs"
 APP_SETTINGS = f"{BASE}/app-settings"
+MEAL_PLANS = f"{BASE}/meal-plans"
+SHOPPING_LISTS = f"{BASE}/shopping-lists"
+RECIPES = f"{BASE}/recipes"
 
 
 def _any_stock_level_id() -> str:
@@ -262,3 +265,220 @@ def test__alerts__history_lists_dismissed_with_resolved_label(api):
     assert entry["state"] == "dismissed"
     assert entry["label"] == name, "stock item name resolved from the alert key"
     assert entry["kind"] == "expired"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# C-9.4 — forward-looking nudges: `no_planned_meals` (next week empty) and
+# `shopping_day` (a list's planned shop date is near). Both are non-stock kinds:
+# they carry no stock_item_id and deep-link via kind (+ target_id for the list).
+# ─────────────────────────────────────────────────────────────────────────
+def _find_kind(data: dict, kind: str, target_id: str | None = None):
+    return next(
+        (
+            a for a in data["items"]
+            if a["kind"] == kind and (target_id is None or a.get("target_id") == target_id)
+        ),
+        None,
+    )
+
+
+def _household_today() -> date:
+    return date.fromisoformat(requests.get(f"{MEAL_PLANS}/today").json()["today"])
+
+
+def test__alerts__no_planned_meals_fires_when_next_week_empty_and_clears(api):
+    # The seed plans only THIS week, so next week starts empty → the nudge fires.
+    assert _find_kind(_alerts(), "no_planned_meals") is not None, \
+        "an empty next week should surface the no-planned-meals nudge"
+
+    today = _household_today()
+    next_monday = today + timedelta(days=7 - today.weekday())
+    recipe_id = requests.get(f"{RECIPES}?limit=1").json()["items"][0]["recipe_id"]
+    created = requests.post(MEAL_PLANS, json={
+        "start_date": next_monday.isoformat(),
+        "entries": [{
+            "recipe_id": recipe_id,
+            "scheduled_for": next_monday.isoformat(),
+            "servings": 2,
+            "slot": "Dinner",
+        }],
+    })
+    assert created.status_code in (200, 201), created.text
+    plan_id = created.json()["meal_plan_id"]
+    try:
+        assert _find_kind(_alerts(), "no_planned_meals") is None, \
+            "planning a meal next week clears the nudge"
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+    # Removing the only next-week plan empties it again → the nudge re-fires.
+    assert _find_kind(_alerts(), "no_planned_meals") is not None, \
+        "deleting the plan re-empties next week and re-fires the nudge"
+
+
+def test__alerts__no_planned_meals_is_fyi_and_carries_no_stock_item(api):
+    alert = _find_kind(_alerts(), "no_planned_meals")
+    assert alert is not None
+    assert alert["alert_id"].startswith("meal:no_planned_meals:")
+    assert alert["tier"] == "fyi"
+    assert alert["stock_item_id"] is None
+    assert alert["target_id"] is None
+
+
+def test__alerts__shopping_day_fires_within_window_and_clears_when_done(api):
+    today = _household_today()
+    created = requests.post(SHOPPING_LISTS, json={
+        "name": f"shopping-day-{uuid.uuid4().hex[:8]}",
+        "planned_shop_date": (today + timedelta(days=2)).isoformat(),
+    })
+    assert created.status_code == 201, created.text
+    list_id = created.json()["shopping_list_id"]
+    try:
+        alert = _find_kind(_alerts(), "shopping_day", target_id=list_id)
+        assert alert is not None, "a list two days out should surface a shopping-day nudge"
+        assert alert["alert_id"] == f"list:{list_id}:shopping_day"
+        assert alert["tier"] == "fyi"
+        assert alert["stock_item_id"] is None
+
+        # Finishing the list (→ done) clears the nudge.
+        assert requests.post(f"{SHOPPING_LISTS}/{list_id}/start").status_code == 204
+        assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+        assert _find_kind(_alerts(), "shopping_day", target_id=list_id) is None, \
+            "a done list no longer nudges"
+    finally:
+        requests.delete(f"{SHOPPING_LISTS}/{list_id}")
+
+
+def test__alerts__shopping_day_silent_outside_window(api):
+    # A planned date well beyond the window must not nudge.
+    today = _household_today()
+    created = requests.post(SHOPPING_LISTS, json={
+        "name": f"shopping-day-far-{uuid.uuid4().hex[:8]}",
+        "planned_shop_date": (today + timedelta(days=30)).isoformat(),
+    })
+    assert created.status_code == 201, created.text
+    list_id = created.json()["shopping_list_id"]
+    try:
+        assert _find_kind(_alerts(), "shopping_day", target_id=list_id) is None, \
+            "a list 30 days out is outside the shopping-day window"
+    finally:
+        requests.delete(f"{SHOPPING_LISTS}/{list_id}")
+
+
+def test__alert_prefs__exposes_the_new_c94_kinds_as_fyi(api):
+    prefs = _prefs()
+    for kind in ("no_planned_meals", "shopping_day"):
+        assert kind in prefs, f"{kind} missing from prefs"
+        assert prefs[kind]["enabled"] is True
+        assert prefs[kind]["default_tier"] == "fyi"
+
+
+# ── C-9.6 — Upcoming "this fortnight" timeline (server-owned aggregation) ──
+
+UPCOMING = f"{BASE}/alerts/upcoming"
+
+
+def _upcoming(days: int | None = None) -> dict:
+    url = UPCOMING + (f"?days={days}" if days is not None else "")
+    resp = requests.get(url)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def _upcoming_day(data: dict, iso: str):
+    return next((d for d in data["dates"] if d["date"] == iso), None)
+
+
+def test__upcoming__window_is_household_today_for_n_days(api):
+    today = _household_today()
+    data = _upcoming()  # default 14-day window
+    assert data["start"] == today.isoformat()
+    assert data["days"] == 14
+    assert data["end"] == (today + timedelta(days=13)).isoformat()
+
+
+def test__upcoming__shopping_and_meal_land_on_their_dates(api):
+    today = _household_today()
+    shop_date = today + timedelta(days=2)
+    created = requests.post(SHOPPING_LISTS, json={
+        "name": f"upcoming-shop-{uuid.uuid4().hex[:8]}",
+        "planned_shop_date": shop_date.isoformat(),
+    })
+    assert created.status_code == 201, created.text
+    list_id = created.json()["shopping_list_id"]
+
+    # A meal next week (within the 14-day window) — its date is empty in the
+    # seed, so the assertion is deterministic.
+    meal_date = today + timedelta(days=7 - today.weekday())
+    recipe_id = requests.get(f"{RECIPES}?limit=1").json()["items"][0]["recipe_id"]
+    plan = requests.post(MEAL_PLANS, json={
+        "start_date": meal_date.isoformat(),
+        "entries": [{
+            "recipe_id": recipe_id,
+            "scheduled_for": meal_date.isoformat(),
+            "servings": 2,
+            "slot": "Dinner",
+        }],
+    })
+    assert plan.status_code in (200, 201), plan.text
+    plan_id = plan.json()["meal_plan_id"]
+    try:
+        data = _upcoming()
+        shop_day = _upcoming_day(data, shop_date.isoformat())
+        assert shop_day is not None, "the planned shop date should appear in the window"
+        assert any(s["list_id"] == list_id for s in shop_day["shopping"]), \
+            "the created list should be aggregated under its planned shop date"
+
+        meal_day = _upcoming_day(data, meal_date.isoformat())
+        assert meal_day is not None, "the planned meal date should appear in the window"
+        assert any(m["recipe_id"] == recipe_id for m in meal_day["meals"]), \
+            "the planned meal should be aggregated under its scheduled date"
+    finally:
+        requests.delete(f"{MEAL_PLANS}/{plan_id}")
+        requests.delete(f"{SHOPPING_LISTS}/{list_id}")
+
+
+def test__upcoming__expiry_lands_on_its_date(api):
+    today = _household_today()
+    expiry = today + timedelta(days=1)
+    created = requests.post(f"{BASE}/stock-items", json={
+        "name": f"upcoming-expiry-{uuid.uuid4().hex[:8]}",
+        "stock_level_id": _any_stock_level_id(),
+        "expiry_date": expiry.isoformat(),
+    })
+    assert created.status_code in (200, 201), created.text
+    item_id = created.json()["stock_item_id"]
+    try:
+        day = _upcoming_day(_upcoming(), expiry.isoformat())
+        assert day is not None, "the expiry date should appear in the window"
+        assert any(e["stock_item_id"] == item_id for e in day["expiries"]), \
+            "the expiring item should be aggregated under its expiry date"
+    finally:
+        requests.delete(f"{BASE}/stock-items/{item_id}")
+
+
+def test__upcoming__respects_the_window_bound(api):
+    # A shop date beyond the default window is excluded, but visible once the
+    # window is widened to include it — proving the bound is honoured, not cosmetic.
+    today = _household_today()
+    far_date = today + timedelta(days=20)
+    created = requests.post(SHOPPING_LISTS, json={
+        "name": f"upcoming-far-{uuid.uuid4().hex[:8]}",
+        "planned_shop_date": far_date.isoformat(),
+    })
+    assert created.status_code == 201, created.text
+    list_id = created.json()["shopping_list_id"]
+    try:
+        assert _upcoming_day(_upcoming(), far_date.isoformat()) is None, \
+            "a date 20 days out is outside the default 14-day window"
+        wide = _upcoming(days=25)
+        day = _upcoming_day(wide, far_date.isoformat())
+        assert day is not None and any(s["list_id"] == list_id for s in day["shopping"]), \
+            "widening the window to 25 days should surface the far list"
+    finally:
+        requests.delete(f"{SHOPPING_LISTS}/{list_id}")
+
+
+def test__upcoming__clamps_excessive_days(api):
+    # The window is clamped to a sane max so a caller can't request an
+    # unbounded scan (R-003 — one bound, server-side).
+    assert _upcoming(days=9999)["days"] == 31

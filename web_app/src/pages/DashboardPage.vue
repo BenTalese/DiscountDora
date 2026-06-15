@@ -118,13 +118,14 @@
                                 size="18px"
                             />
                             <a
+                                v-if="alert.stock_item_name"
                                 href="#"
                                 class="dora-attn-name"
-                                @click.prevent="goTo(`/stock/${alert.stock_item_id}`)"
+                                @click.prevent="goToAlert(alert)"
                             >
                                 {{ alert.stock_item_name }}
                             </a>
-                            <span class="dora-attn-msg">{{ alert.message }}</span>
+                            <span class="dora-attn-msg" @click="goToAlert(alert)">{{ alert.message }}</span>
                             <span class="dora-attn-actions">
                                 <q-btn
                                     v-for="a in alertActionsFor(alert.kind)"
@@ -754,6 +755,7 @@
         actionsFor as alertActionsFor,
         colorFor as alertColorFor,
         iconFor as alertIconFor,
+        linkFor as alertLinkFor,
         type Alert,
         type AlertAction,
     } from 'src/models/alert';
@@ -1118,6 +1120,12 @@
 
     function goTo(path: string) {
         void router.push(path);
+    }
+
+    // Open an alert's linked surface (stock item, list, or planner — C-9.4).
+    function goToAlert(alert: Alert) {
+        const link = alertLinkFor(alert);
+        if (link) void router.push(link);
     }
 
     // ── Needs your attention ─────────────────────────────────────────────

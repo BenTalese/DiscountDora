@@ -52,6 +52,21 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5)
+- **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)
+- **Type:** deferred job
+- **What:** The proposal/impl plan for the subscriptions tier mentioned a **back-in-stock**
+  subscription shape ("notify me when a merchant's product comes back in stock") alongside the
+  price-watch (`PriceAlert`) tier that C-9.5 shipped. C-9.5 built **only** the price-watch
+  surface (`SubscriptionsPanel.vue`, money-gated, reusing `/price-history/alerts`). Back-in-stock
+  was **not** built: there is no data source / entity for it yet — it's companion/ingestion-scope
+  (the producer would push availability), and the in-app side would just surface/manage rows like
+  price watches do.
+- **Why deferred:** anti-creep — no back-in-stock data exists to surface, so a placeholder UI/shape
+  now would be speculative (charter: don't pre-build). User confirmed skipping it for C-9.5.
+- **Recommended resolution:** **when** the companion/ingestion path (C-10) defines a back-in-stock
+  signal — then add a second tier to `SubscriptionsPanel.vue` (same list/manage shape) reading it.
+
 ## [OPEN] FU-187 — Assistant ignores the configurable expiring-soon window (uses the constant default)
 - **Raised:** 2026-06-15 (Alerts C-9.2 — threshold threading)
 - **Type:** finding / consistency gap
@@ -161,48 +176,138 @@ long session summary. Distinct from the other logs:
   + collapsible History) renders; the bell is now a slim peek (top rows + bulk-add + "Open
   Alerts"); the shared `AlertRow` act/read actions work from both; History lists past
   dismiss/snooze/read with the stock name resolved; dark-mode clean; no bell/page divergence.
+  **C-9.4 additions (forward-looking nudges):** with next week's meal plan empty, a
+  `no_planned_meals` FYI row shows and deep-links to `/meal-plans`; planning a meal for next week
+  clears it. A `shopping_day` FYI row shows for a list with `planned_shop_date` within 3 days and
+  deep-links to that list (`/shopping-lists/<id>`); marking the list done clears it. Both render
+  cleanly through the shared `AlertRow` (icon/colour/theme), carry no stock name, and snooze/dismiss
+  from the hub + bell.
+  **C-9.5 additions (subscriptions / price-watch tier):** with money flag ON and an armed price
+  alert, the **Price watch** region renders on the hub listing it (product · merchant · "notify
+  below $X" · last-alerted); **View** opens the price-history explorer with that product selected;
+  **Remove** deletes it (row disappears + toast); empty-state shows cleanly when nothing is armed;
+  the whole region is **hidden when the money flag is off**.
+  **C-9.6 additions (Upcoming fortnight timeline) — Phase A is now COMPLETE:** the **Upcoming**
+  mini-calendar renders on the hub; days with events show the right per-category dots (warning =
+  expiry, primary = shopping, positive = meal); out-of-window cells dimmed, today ringed; clicking
+  a day expands its detail list and the links navigate (expiry → `/stock/:id`, shopping →
+  `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`); refresh works; empty-state shows when
+  nothing is scheduled; dark-mode clean (token dots survive theme switch).
 - **Recommended resolution:** **browser-confirm, opportunistic** (next time the app runs) —
   then flip **FU-042** to resolved. Automated verification no longer blocks; only browser
   smoke remains. (Sub-finding (a) — assistant `get_alerts` ignores the user overlay — and the
   new expiring-soon override gap are split out as **FU-187**.)
 
+## [OPEN] FU-190 — Ingestion API must honour "no auto-create stores"
+- **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
+- **Type:** design constraint / proposal amendment
+- **What:** The companion scraper (Phase 2 ingestion API) pushes products +
+  offers + price-observations, each referencing a merchant/store. The
+  no-auto-create rule for stores (FU-189) must propagate into the ingestion
+  API design — it cannot silently materialise stores the user hasn't
+  approved. Three viable shapes: (a) hard-reject unknown-store offers; (b)
+  quarantine queue ("pending review" until user maps/creates); (c) setup
+  mapping step where user maps each companion-side merchant to a Dora store
+  once before ingestion goes live. Recommendation in the scratch:
+  **(c) happy path + (b) safety net** for never-seen-before stores
+  appearing post-setup. Scratch §7 in
+  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` has the rationale.
+- **Why deferred:** PROPOSAL_INGESTION_API.md predates this rule. Fold the
+  constraint into the proposal before any ingestion-API code starts.
+- **Recommended resolution:** during Phase 2 ingestion-API design — amend
+  PROPOSAL_INGESTION_API.md §2 with the "no auto-create stores" constraint
+  + the (c)+(b) sequencing, and add a row to its feedback-coverage table
+  citing FU-189. Block ingestion implementation until the proposal is
+  updated.
+
+## [OPEN] FU-189 — Rename Merchants → Stores, add management page + user-uploaded logos
+- **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
+- **Type:** refactor + small feature
+- **What:** Three coupled changes:
+  1. **Entity + UI rename `Merchant` → `Store`** app-wide. Plain-language
+     ("Coles is a store, not a merchant"). Pre-release → no compat shims,
+     one migration, one mechanical pass. Sanity-check first that no
+     existing `Store` symbol in the codebase already means something else
+     (Pinia store, etc.); locations is adjacent but unambiguous.
+  2. **Single management page in settings.** User-curated list. **No
+     prefilled stores** (sidesteps locale-coupling + the legal-logos
+     issue). **No auto-create** from any other code path — notably the
+     ingestion API must respect this (see FU-190). Edit / disable /
+     delete with referential safety against existing offers + shopping
+     lines.
+  3. **Per-store image upload.** Reuse the existing image-upload infra
+     (recipes/stock items already use it from C-cross §2.8). **Dora
+     ships zero logos** — legal safety. Fallback when no image: the
+     existing hash-swatch + initial pattern from `ProductSearchCard`
+     (referenced in ENGINEERING_STANDARDS.md).
+  Full rationale in `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`
+  §4. Note: a `StockItem.usual_merchant_id` (rename → `usual_store_id`)
+  nullable field also lands here — see FU-182's brainstorm scratch §3 for
+  the shopping-list grouping use case.
+- **Why deferred:** Cross-cutting refactor + new image-upload consumer +
+  ingestion implication. Needs scheduling alongside the simple-mode sweep
+  (FU-182) since they share data-model territory.
+- **Recommended resolution:** schedule as a dedicated work unit before
+  FU-182's per-surface sweep, since simple mode's shopping-list grouping
+  depends on `usual_store_id` existing. Earlier still if the C-cross §2.6
+  feature-flag panel work picks up first.
+
 ## [OPEN] FU-182 — Treat the minimal/Products-off user as a first-class workflow
-- **Raised:** 2026-06-14 (talk-time assessment)
+- **Raised:** 2026-06-14 (talk-time assessment); refined 2026-06-15 (round 2); **promoted to proposal 2026-06-15** — see `docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`. This ledger entry now tracks **co-design + implementation**, not the writing phase.
 - **Type:** open decision / design follow-up
 - **What:** Audit every surface for the "Products feature off" path and treat
   the minimal user (pantry + recipes + meal plan + checklist shopping list,
   no merchants/offers/price-history/cart) as a first-class workflow — not a
-  fallback that empties out around them. Scratch dump with the full friction
-  inventory + upgrade levers lives at
-  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`. Key threads to
-  resolve: (a) shopping-list "checklist mode" when Products is off; (b)
-  onboarding wizard branching on the feature-flag step (skip the stock-vs-
-  product explainer + preferred-stores when Products off); (c) nav/settings
-  rendering *conditionally* (hidden, not disabled); (d) stock-item
-  create/edit and recipe-ingredient rows shedding product affordances; (e)
-  persona-led onboarding preset ("Pantry & meal planning" vs "Pantry + save
-  money on groceries") so the effortless path doesn't require flipping
-  individual flags; (f) elevate Products in C-cross §2.6 from "one candidate
-  flag" to *the* app-shaping flag with a per-surface coverage audit.
-  Principle to anchor the work: **minimal users must be supported as much as
-  power users** — same charter-level care, not a degraded fallback.
-- **Why deferred:** Talk-time scope. Needs to be promoted into a proper
-  assessment / §2.6 amendment with the cross-check coverage table before any
-  code lands.
+  fallback that empties out around them. **Principle:** minimal users must
+  be supported as much as power users — same charter-level care, not a
+  degraded fallback.
+
+  Full discussion + model + UX decisions in
+  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` (initial assessment
+  + the 2026-06-15 addendum). Headlines from round-2:
+  - **Pricing model reframe** — `StockItem` + `StockItemPriceObservation` is
+    the universal substrate; `Product` + `ProductOffer` is an optional
+    overlay feeding the same substrate. Unify read paths, never flatten.
+    Mode-flips non-destructive both ways (scratch §1).
+  - **Shopping-list-as-receipt** with stock-item-level price entry, gated by
+    money opt-in (not Products). Log-a-price affordances also outside
+    shopping (stock-item detail, quick-add). (Scratch §2.)
+  - **Observations carry no merchant** in simple mode — "your paid price
+    over time," not cross-merchant comparison. Shopping-list grouping uses
+    `StockItem.usual_store_id` (single nullable field) + per-line override.
+    (Scratch §3 — depends on FU-189.)
+  - **Stock-item-vs-product confusion** is the real UX risk — layered
+    mitigations: onboarding explainer copy (milk example, "don't name stock
+    items after brands"), glossary entry, in-context micro-copy on stock-
+    item-create, empty-state copy on My Products. (Scratch §5; pointer
+    notes added to PROPOSAL_ONBOARDING.md §3.3 + PROPOSAL_HELP_OVERLAY.md
+    §2.3.)
+  - **"Simple mode" as a named identity**, not the absence of Products.
+    UI label decoupled from the `products_enabled` flag. (Scratch §6.)
+  - **Money + Products are independent layers (2×2).** Open thread for
+    onboarding: the C-5 v3 personas bundle products+money; ensure the
+    (Products off + money on) combination is reachable via Customise, or
+    add a fourth preset. (Scratch §1 tail; flagged in
+    PROPOSAL_ONBOARDING.md §3.2.a.)
+
+  **Update 2026-06-15 (C-5 design):** the upstream pieces are now spec'd in
+  `IMPL_PLAN_ONBOARDING.md` — **C-5.3** introduces the **`products_enabled`**
+  install flag + the **3-persona fork** (Cooking / Savings / Everything) that
+  sets it and branches the wizard (Cooking skips the stock-vs-product
+  explainer). FU-182's **remaining** scope therefore narrows to the
+  **per-surface Products-off sweep**: nav/tabs/columns removed not greyed;
+  shopping-list checklist mode; stock-item-detail + recipe-ingredient
+  product affordances hidden; settings sections hidden; stock-value report
+  + recipe cost estimate rebased on the substrate; "Simple mode" chip in
+  settings — i.e. *consume* the flag C-5 ships.
+- **Why deferred:** Talk-time scope. Needs promotion to a proper proposal
+  (or amendment to PROPOSAL_CONFIG_AND_OPTINS.md §2.6) with a per-surface
+  coverage table before any code lands.
 - **Recommended resolution:** later during Phase 3 polish — promote the
   scratch into a `04_proposals/` amendment to PROPOSAL_CONFIG_AND_OPTINS.md
-  (or a sibling proposal) before the C-cross implementation chunk audits
-  Products-touching surfaces. Earlier if the onboarding (C-5) chunk picks
-  up first, since the persona-preset decision lives upstream of both.
-- **Update 2026-06-15 (C-5 design):** the upstream pieces are now spec'd in
-  `IMPL_PLAN_ONBOARDING.md` — **C-5.3** introduces the **`products_enabled`** install
-  flag + the **3-persona fork** (Cooking / Savings / Everything) that sets it and
-  branches the wizard (Cooking skips the stock-vs-product explainer). FU-182's
-  **remaining** scope therefore narrows to the **per-surface Products-off sweep**
-  (nav/tabs/columns removed not greyed; shopping-list checklist mode; stock-item-detail
-  + recipe-ingredient product affordances hidden; settings sections hidden) — i.e.
-  *consume* the flag C-5 ships. Promote the scratch into the per-surface coverage table
-  when that sweep is picked up.
+  (or a sibling proposal). Sequence after FU-189 (stores rename +
+  `usual_store_id`) since the simple-mode shopping-list grouping depends on
+  it.
 
 ## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
 - **Raised:** 2026-06-14 (C-2.J sequential builder)

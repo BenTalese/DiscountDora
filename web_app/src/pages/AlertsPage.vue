@@ -52,6 +52,9 @@
             </div>
         </div>
 
+        <!-- ── Upcoming "this fortnight" timeline ─────────────────────── -->
+        <UpcomingTimeline class="q-mb-md" />
+
         <!-- ── Empty state ────────────────────────────────────────────── -->
         <div
             v-if="!loading && totalCount === 0 && snoozedCount === 0"
@@ -113,6 +116,9 @@
                 </q-item>
             </q-list>
         </q-expansion-item>
+
+        <!-- ── Subscriptions (armed price watches) ────────────────────── -->
+        <SubscriptionsPanel v-if="money" class="q-mb-md" />
 
         <!-- ── Manage (per-user prefs) ────────────────────────────────── -->
         <q-card flat bordered class="q-mb-md">
@@ -205,11 +211,14 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import AlertList from 'src/components/AlertList.vue';
+    import SubscriptionsPanel from 'src/components/SubscriptionsPanel.vue';
+    import UpcomingTimeline from 'src/components/UpcomingTimeline.vue';
     import {
         colorFor,
         colorForKind,
         iconFor,
         kindTheme,
+        linkFor,
         tierLabel,
         type Alert,
         type AlertAction,
@@ -223,6 +232,7 @@
     import { useAlertStore } from 'src/stores/alertStore';
     import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, onMounted, ref } from 'vue';
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
@@ -232,6 +242,7 @@
     const alertStore = useAlertStore();
     const alertPrefsStore = useAlertPrefsStore();
     const api = new AlertApiService();
+    const { money } = useFeatureFlags();
 
     const alerts = computed(() => alertStore.alerts);
     const loading = computed(() => alertStore.loading);
@@ -252,7 +263,8 @@
     // ── Summary boxes — per-kind counts over the active set, in a fixed
     // worst-first order so the layout is stable as counts change.
     const SUMMARY_ORDER: AlertKind[] = [
-        'expired', 'essential_low', 'expiring_soon', 'out_of_stock', 'low_stock', 'stocktake_overdue',
+        'expired', 'essential_low', 'expiring_soon', 'out_of_stock', 'low_stock',
+        'stocktake_overdue', 'shopping_day', 'no_planned_meals',
     ];
     const summaryBoxes = computed(() => {
         const counts = new Map<AlertKind, number>();
@@ -281,11 +293,18 @@
     }
 
     function onOpen(alert: Alert): void {
-        void router.push(`/stock/${alert.stock_item_id}`);
+        const link = linkFor(alert);
+        if (link) void router.push(link);
     }
 
-    function onViewInContext(): void {
-        // Stock's `attention` filter collects expiring/low/out/flagged items.
+    function onViewInContext(alert: Alert): void {
+        // Non-stock nudges open their own surface; stock alerts go to the
+        // attention-filtered overview (expiring/low/out/flagged items).
+        const link = linkFor(alert);
+        if (alert.kind === 'no_planned_meals' || alert.kind === 'shopping_day') {
+            if (link) void router.push(link);
+            return;
+        }
         void router.push({ path: '/stock', query: { attention: 'true' } });
     }
 
@@ -310,7 +329,9 @@
         await alertStore.snoozeAlert(alert.alert_id, 7);
         $q.notify({
             type: 'info', position: 'bottom-right',
-            message: `Snoozed "${alert.stock_item_name}" for 7 days.`,
+            message: alert.stock_item_name
+                ? `Snoozed "${alert.stock_item_name}" for 7 days.`
+                : 'Snoozed for 7 days.',
             actions: [{ label: 'Undo', color: 'white', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
         });
     }
@@ -319,7 +340,9 @@
         await alertStore.dismissAlert(alert.alert_id);
         $q.notify({
             type: 'info', position: 'bottom-right',
-            message: `Dismissed "${alert.stock_item_name}".`,
+            message: alert.stock_item_name
+                ? `Dismissed "${alert.stock_item_name}".`
+                : 'Dismissed.',
             caption: 'It returns only if the condition clears and re-fires.',
             actions: [{ label: 'Undo', color: 'white', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
         });

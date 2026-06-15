@@ -77,8 +77,65 @@ present from scene 1.
 The centrepiece of "how it all connects." A ring of stages with **Dora at the centre as the
 brain**. **Interaction = hybrid** (decided from the prototypes): it **auto-plays the reveal
 once** (each stage lights and hands off to the next), then **stays on screen and becomes
-tappable** — tap any stage, or Dora, to drill into what it does and how it hands off. No
-persona-dimming; it sells the full power.
+tappable** — tap any stage, or Dora, to drill into what it does and how it hands off.
+
+**Default state = full power** — the auto-reveal plays the Everything-persona shape (all
+stages + Dora-centre + the candidate Insight node) so the first impression sells the
+ceiling. **Persona-preview affordance** (amends the earlier "no persona-dim" call —
+2026-06-15): a small segmented control sits below the loop with three buttons — *Simple*,
+*Mid*, *Full* (working labels — co-design open thread §2.3.a below). Tapping a button
+smoothly transitions the loop to that persona's shape: nodes fade/scale in or out, stage
+subtitles update, and the Dora-centre copy swaps. Tapping the currently-selected button is
+a no-op. The persona buttons **do not restart the auto-reveal** — once the reveal has
+played, the loop is in interactive mode.
+
+**What each preview shows:**
+
+| Preview | Loop shape | Stage-subtitle differences | Dora-centre copy |
+|---|---|---|---|
+| **Simple** (Cooking) | Stock → Plan → List → Shop → Restock → Cook; **no Insight node**. | List/Shop drop the "log what you paid" beat (Money off) or keep it without merchant attribution (Money on, Products off). | *"Watching expiry & stock, suggesting what to cook."* |
+| **Mid** (Spend-tracking) | All 6 stages + **Insight node** illuminated. | Shop carries the full "log what you paid — Dora remembers every price" subtitle. | *"…and learning what you pay."* |
+| **Full** (Everything) | Mid state + any **peripheral nodes** the Everything persona turns on (e.g. scanning, companion/ingestion, nutrition — whichever survive §6 validation). | Full copy on every stage. | Full copy. |
+
+**Animation principles for the persona transition:**
+- Sub-cinematic budget — the persona transition is **lighter than the auto-reveal** (≈250–
+  350ms, single eased curve). It's a UI affordance, not a second show; users will tap
+  through multiple times and a heavy animation would grate.
+- **Transform + opacity only** (GPU-friendly, consistent with §2.4).
+- **Reduced-motion path** — under `prefers-reduced-motion`, the transition becomes a
+  near-instant cross-fade with no scale/translate. No autoplay loops on either path.
+- **Layout stability** — the loop's outer footprint stays constant across personas;
+  removed nodes leave their slot collapsed-but-allocated so the ring doesn't reflow and
+  jump nearby content. (Implementation detail to confirm in prototyping.)
+
+**Loop draw-in still plays once** (full state) as the cinematic moment; the persona
+buttons appear *after* the reveal completes (or immediately if the user has skipped/seen
+it before per the draft-until-finish state).
+
+#### 2.3.a Open threads on the persona-preview affordance
+- **Button labels** — *Simple / Mid / Full* are working labels. Alternatives to weigh:
+  (a) the persona names themselves (*Cooking / Spend-tracking / Everything*) for
+  consistency with §3.2; (b) outcome-led labels (*Just cooking / + Spend tracking /
+  Everything*); (c) icon-first with a tooltip. Co-design.
+- **Default button on first paint** — *Full* by intent (sells the ceiling). Confirm
+  this isn't read as "you're being shown the busy option first" by users who'd prefer
+  the calmer start. Worst case, the auto-reveal plays Full → the first interactive
+  state remains Full → user can downshift.
+- **Relationship to the §3.2 persona fork step** — does the persona-preview *replace*
+  the discrete fork step (the previewed persona becomes the selection), become a
+  *pre-confirmation* ("you previewed Simple — set this as your starting point?"), or
+  stay purely illustrative with the fork step unchanged? Recommendation: **pre-
+  confirmation** — the hero introduces the concept and lets users preview; the fork
+  step is where they commit, pre-filled with whatever they last previewed. Preserves
+  the explicit choice moment while removing the blind-commit friction. Confirm.
+- **Customise visibility** — *Customise* is an existing fourth persona (§3.2). It
+  doesn't fit the loop-preview metaphor (it's "pick your own flags," not a shaped
+  loop). Recommendation: keep it off the hero buttons; surface it only at the §3.2
+  fork step, labelled e.g. "or customise it yourself." Confirm.
+- **Layout-stability collapse** — confirm in prototyping whether removed nodes
+  collapse-but-allocate (cleanest, no reflow) or whether the ring should subtly
+  re-circle to fewer nodes (more honest to the simpler shape but reflows surrounding
+  copy). Trade-off; both defensible.
 
 **Working loop (provisional spine):**
 
@@ -159,6 +216,22 @@ Shows **only when `products_enabled`** (Spend-tracking / Everything). The Cookin
 **skips it** — teaching the product concept to someone who opted out is the friction FU-182
 flags. Before any add-items step.
 
+**Copy guidance (from FU-182 brainstorm — `99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md`
+§5).** The explainer must use the milk example concretely — *"'Milk' is a stock item — a
+thing you keep. 'Vitasoy Oat Milky 1L @ Coles' is a product — a specific thing you can
+buy."* Pair with a direct *don't*: *"Don't name your stock items after brands — that's
+what products are for."* The stock-item-vs-product confusion is the dominant UX risk of
+the Products-on model; this step is the primary mitigation, with the help-overlay
+glossary (`PROPOSAL_HELP_OVERLAY.md` §2.3) as the secondary surface.
+
+### 3.2.a Open thread — Products off + money on combination
+The persona table in §3.2 bundles `products` and `money/spend` together (both off in
+Cooking, both on in Spend-tracking). FU-182's resolved decisions accept (B) — money is a
+**separate question** from products, so the (Products off + money on) combination must
+be reachable somewhere: either via the Customise branch (preferred) or by splitting
+"Pantry & cooking" into two variants. Confirm before C-5 ships. Not adding a fourth
+preset speculatively — Customise is the existing escape hatch.
+
 ### 3.4 Household headcount (L44) — single number
 **`User.household_headcount`** (new); cook mode's scaler initialises from it (resolves the
 `RecipeCookMode.vue:545-547` TODO).
@@ -199,8 +272,12 @@ to apply it is premature. Folded into FU-180.
 ## 5. Resolved decisions (co-design 2026-06-15)
 - Cinematic **intro → setup, instant cross-jump, shared progress**; **free non-linear** nav,
   nothing gated; **3–4 punchy scenes**, big visuals, minimal words.
-- Hero = **hybrid** (auto-reveal once → tappable), **Dora at centre**, **no persona-dim** in the
-  hero (sell full power).
+- Hero = **hybrid** (auto-reveal once → tappable), **Dora at centre**. **Default state =
+  full power** (Everything shape) so the first impression sells the ceiling. *Amended
+  2026-06-15:* the original "no persona-dim in the hero" call is superseded by a
+  **persona-preview segmented control** (Simple / Mid / Full) under the loop — users can
+  smoothly preview how the loop collapses for each persona without leaving the hero
+  (§2.3). Default-on-load remains Full so the cinematic reveal still sells the ceiling.
 - Core loop **drops Deals** (scraping divorced); **Stock → Plan → List → Shop → Restock → Cook**
   + Dora-centre; an **emerging Spend-smarter/Insight stage** flagged provisional.
 - Personas: **Cooking / Spend-tracking / Everything** (+ Customise).

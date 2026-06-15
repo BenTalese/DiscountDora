@@ -103,7 +103,7 @@
     import { useQuasar } from 'quasar';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import AlertRow from 'src/components/AlertRow.vue';
-    import { type Alert, type AlertAction } from 'src/models/alert';
+    import { linkFor, type Alert, type AlertAction } from 'src/models/alert';
     import AlertApiService from 'src/services/api/alertApiService';
     import { useAlertStore } from 'src/stores/alertStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -153,7 +153,8 @@
         ...new Set(
             alerts.value.items
                 .filter((a) => lowOrOutKinds.has(a.kind))
-                .map((a) => a.stock_item_id),
+                .map((a) => a.stock_item_id)
+                .filter((id): id is string => id !== null),
         ),
     ]);
 
@@ -162,8 +163,10 @@
     }
 
     function goToItem(alert: Alert) {
+        const link = linkFor(alert);
+        if (!link) return;
         open.value = false;
-        void router.push(`/stock/${alert.stock_item_id}`);
+        void router.push(link);
     }
 
     function openHub() {

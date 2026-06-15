@@ -3,6 +3,7 @@ import type {
     AlertHistory,
     AlertPrefs,
     Alerts,
+    Upcoming,
     UpdateAlertPrefCommand,
 } from 'src/models/alert';
 import AxiosHttpClient from './axiosHttpClient';
@@ -56,4 +57,9 @@ export default class AlertApiService {
     // ── History (C-9.3) — the ledger audit trail for the hub's History section.
     getHistoryAsync = async (limit = 50): Promise<AlertHistory> =>
         await this.httpClient.get<AlertHistory>(`/alerts/history?limit=${limit}`);
+
+    // ── Upcoming "this fortnight" timeline (C-9.6) — server-aggregated dated
+    // events (expiries / planned shopping / meal-plan days) over the next N days.
+    getUpcomingAsync = async (days = 14): Promise<Upcoming> =>
+        await this.httpClient.get<Upcoming>(`/alerts/upcoming?days=${days}`);
 }

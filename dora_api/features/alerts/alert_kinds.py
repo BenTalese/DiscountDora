@@ -8,9 +8,9 @@ disable a kind or override its tier — this module owns the defaults those
 overrides start from and validates incoming pref writes (R-010).
 
 Kinds are emitted by `get_alerts.py`; the default tiers below stay aligned with
-the per-kind severities assigned there (the four high/medium kinds are
-actionable, the two low kinds are FYI). New kinds (`no_planned_meals`,
-`shopping_day` — C-9.4) register here when they land.
+the per-kind severities assigned there (the four high/medium stock kinds are
+actionable, the rest are FYI). The C-9.4 non-stock kinds (`no_planned_meals`,
+`shopping_day`) are forward-looking nudges, so they default to FYI.
 """
 
 TIER_ACTIONABLE = "actionable"
@@ -25,6 +25,9 @@ DEFAULT_TIER_BY_KIND: dict[str, str] = {
     "out_of_stock": TIER_ACTIONABLE,
     "low_stock": TIER_FYI,
     "stocktake_overdue": TIER_FYI,
+    # C-9.4 — forward-looking nudges (no stock item): planner + shopping-day.
+    "no_planned_meals": TIER_FYI,
+    "shopping_day": TIER_FYI,
 }
 KNOWN_KINDS = frozenset(DEFAULT_TIER_BY_KIND)
 

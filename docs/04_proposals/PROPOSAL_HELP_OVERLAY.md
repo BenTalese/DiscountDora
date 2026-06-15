@@ -89,6 +89,16 @@ Hints are **content, written per surface**, so this brief defines the *system* a
   the heaviest feedback clusters: stock overview (the stock-level button, the cart
   button, expiry), the meal-plan builder (the calendar widget, allocation), cook
   mode, the cookbook card. These are where "what does this do?" is most asked.
+- **Key-concept glossary entries** (separate from per-element hints) — FU-182's
+  brainstorm (`99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` §5) identifies the
+  **stock-item-vs-product distinction** as the dominant Products-on UX risk. The
+  help overlay should expose a "What's a stock item?" / "What's a product?" pair
+  reachable from any surface where either term appears — content uses the milk →
+  Vitasoy example consistent with the onboarding explainer copy
+  (`PROPOSAL_ONBOARDING.md` §3.3). Only shown when `products_enabled` (in simple
+  mode the word "product" doesn't appear in the UI, so the glossary entry is
+  moot). Other candidate glossary pairs to consider as content rolls out: stock
+  item vs location, recipe vs meal plan entry.
 - **Each Wave-C surface adds its own hints as it's implemented** — fold "register
   help hints for the new controls" into each per-surface implementation prompt, so
   content lands with the feature instead of as a doomed retro-documentation pass.

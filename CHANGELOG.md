@@ -6,6 +6,29 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **An "Upcoming" fortnight timeline on the Alerts hub (Alerts C-9.6).** The Alerts page now
+  looks *ahead* with a two-week mini-calendar: each day shows coloured dots for what's coming —
+  expiries, planned shopping days, and planned meals — and clicking a day expands the detail with
+  one-tap links to the item, the list, or the recipe. The window and aggregation are computed
+  server-side against your household's timezone, so "the next 14 days" is right wherever the
+  server lives. New `GET /api/alerts/upcoming`.
+- **Price watches on the Alerts hub (Alerts C-9.5).** Your armed "notify me below $X" price
+  alerts now show up in a dedicated **Price watch** region on the Alerts page — each one listing
+  the product, merchant, your target price, and when it last alerted, with a one-click jump back
+  to the price-history explorer and a Remove button. Set new watches where you always have (the
+  explorer); the hub is now where you see and manage them all in one place. The region only
+  appears when the money/deals feature is on.
+- **Forward-looking alert nudges (Alerts C-9.4).** Alerts now look *ahead*, not just at what
+  already broke. Two new (FYI, default-on, per-person dismissable) kinds:
+  - **"No meals planned for next week"** — a single gentle nudge when next week's planner is
+    empty, clearing the moment you plan a meal for that week. Computed against your household's
+    timezone so the week boundary is right wherever the server lives.
+  - **"Shopping day coming up"** — a reminder for any not-yet-finished list whose planned shop
+    date is within the next few days, deep-linking straight to that list and clearing once the
+    list is done. Reads the planned-shop-date you already set; no new setup.
+  Both render through the same alert row as everything else, carry their own icons, and appear
+  in the bell, the Alerts hub, and the dashboard attention card — clicking one opens the planner
+  or the list rather than a stock item.
 - **A proper Alerts control centre (Alerts C-9.3).** The Alerts page is now a real hub:
   **summary tiles** (an at-a-glance "5 expiring soon · 2 expired" per type), the full **active
   list grouped by priority** with per-type icons and read items dimmed, a **Mark all read**

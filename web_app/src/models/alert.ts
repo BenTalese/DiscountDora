@@ -13,7 +13,10 @@ export type AlertKind =
     | 'out_of_stock'
     | 'low_stock'
     | 'stocktake_overdue'
-    | 'essential_low';
+    | 'essential_low'
+    // C-9.4 — forward-looking nudges (no stock item).
+    | 'no_planned_meals'
+    | 'shopping_day';
 
 export type Alert = {
     // Stable scoped key `<scope>:<id>:<kind>` — opaque to the client; posted
@@ -21,8 +24,11 @@ export type Alert = {
     alert_id: string;
     kind: AlertKind;
     severity: AlertSeverity;
-    stock_item_id: string;
-    stock_item_name: string;
+    // Stock-scoped alerts carry the owning item; C-9.4 non-stock kinds null these.
+    stock_item_id: string | null;
+    stock_item_name: string | null;
+    // Deep-link target id for non-stock kinds (e.g. the shopping list uuid).
+    target_id: string | null;
     message: string;
     detail: string | null;
     related_date: string | null;
@@ -83,6 +89,29 @@ export type AlertHistory = {
     entries: AlertHistoryEntry[];
 };
 
+// Upcoming "this fortnight" timeline (C-9.6) — mirrors UpcomingDto from
+// dora_api/features/alerts/get_upcoming.py. A server-owned aggregation (R-003);
+// the client only renders the grid + per-category dots.
+export type UpcomingCategory = 'expiry' | 'shopping' | 'meal';
+
+export type UpcomingExpiry = { stock_item_id: string; name: string };
+export type UpcomingShopping = { list_id: string; name: string };
+export type UpcomingMeal = { recipe_id: string; recipe_name: string; slot: string };
+
+export type UpcomingDay = {
+    date: string;                 // ISO date
+    expiries: UpcomingExpiry[];
+    shopping: UpcomingShopping[];
+    meals: UpcomingMeal[];
+};
+
+export type Upcoming = {
+    start: string;                // household-today (first grid cell)
+    end: string;                  // last day (inclusive)
+    days: number;                 // window length
+    dates: UpcomingDay[];         // non-empty days only
+};
+
 export type AlertAction =
     | 'reset_expiry'
     | 'extend_expiry'
@@ -104,6 +133,10 @@ export function iconFor(kind: AlertKind): string {
             return ICONS.fact_check;
         case 'essential_low':
             return ICONS.priority_high;
+        case 'no_planned_meals':
+            return ICONS.restaurant;
+        case 'shopping_day':
+            return ICONS.shopping_cart;
     }
 }
 
@@ -130,6 +163,10 @@ export function colorForKind(kind: AlertKind): string {
             return 'amber-7';
         case 'stocktake_overdue':
             return 'blue-grey-6';
+        case 'no_planned_meals':
+            return 'teal-6';
+        case 'shopping_day':
+            return 'indigo-5';
     }
 }
 
@@ -148,6 +185,10 @@ export function kindTheme(kind: AlertKind): string {
             return 'essential low';
         case 'stocktake_overdue':
             return 'stocktake due';
+        case 'no_planned_meals':
+            return 'meals to plan';
+        case 'shopping_day':
+            return 'shopping day';
     }
 }
 
@@ -177,5 +218,25 @@ export function actionsFor(kind: AlertKind): { action: AlertAction; label: strin
             return [
                 { action: 'acknowledge_stocktake', label: 'Looks fine', icon: ICONS.check },
             ];
+        case 'no_planned_meals':
+        case 'shopping_day':
+            // Navigation-only nudges — acting on them means opening the linked
+            // surface (linkFor), not a server-side state change.
+            return [];
+    }
+}
+
+// Where opening an alert (row click / "View in context") navigates. Stock kinds
+// go to the item; the C-9.4 nudges deep-link to their surface — shopping_day to
+// the list (target_id), no_planned_meals to the planner. Routing lives client-
+// side (presentation); the server only supplies the ids.
+export function linkFor(alert: Alert): string | null {
+    switch (alert.kind) {
+        case 'no_planned_meals':
+            return '/meal-plans';
+        case 'shopping_day':
+            return alert.target_id ? `/shopping-lists/${alert.target_id}` : '/shopping-lists';
+        default:
+            return alert.stock_item_id ? `/stock/${alert.stock_item_id}` : null;
     }
 }

@@ -76,6 +76,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("nutrition_enabled", Boolean, nullable=False, server_default="0"),
         Column("companion_ingestion_enabled", Boolean, nullable=False, server_default="0"),
         Column("deals_email_enabled", Boolean, nullable=False, server_default="0"),
+        # Onboarding C-5.3 — products feature flag (default on; Cooking persona off).
+        Column("products_enabled", Boolean, nullable=False, server_default="1"),
         # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
         Column("nutrition_db_source", String(255), nullable=False, server_default=""),
         # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
@@ -598,6 +600,8 @@ def configure_mappings(db: SQLAlchemy):
         # Default True (visual richness on by default; users opt out).
         Column("show_recipe_images", Boolean, nullable=False, server_default="1"),
         Column("show_stock_images", Boolean, nullable=False, server_default="1"),
+        # Onboarding C-5.4 — household cooking headcount (NULL = not set).
+        Column("household_headcount", Integer, nullable=True),
     )
 
     auth_token_table = Table(

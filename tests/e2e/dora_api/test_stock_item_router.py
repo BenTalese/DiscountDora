@@ -627,6 +627,81 @@ def test__delete_stock_item__DeletingAlreadyDeletedStockItem__StockItemNotFound(
     }
 
 
+# ── C-1b.5 — detail DTO surfaces lifecycle inputs (INV-7) ───────────
+
+
+def test__get_stock_item_detail__exposes_lifecycle_keys(api):
+    # Pins the History-timeline contract: the three new DTO surfaces must
+    # be present (lists may be empty) and last_checked_at must serialise
+    # (null is fine when the item has never been checked).
+    _AnyItem = _items('?limit=1')[0]
+
+    _Detail = requests.get(f'{base_route}/{_AnyItem["stock_item_id"]}/detail').json()
+
+    assert isinstance(_Detail.get('waste_events'), list)
+    assert isinstance(_Detail.get('recent_list_adds'), list)
+    assert 'last_checked_at' in _Detail
+
+
+# ── C-1b.1 — detail DTO threads stock_group_id/name ─────────────────
+
+
+def test__get_stock_item_detail__exposes_stock_group_keys(api):
+    # Both fields must be on the DTO so the inline picker has something to
+    # render (populated or empty). The roundtrip test below covers the
+    # populated path; this one pins the shape contract.
+    _AnyItem = _items('?limit=1')[0]
+
+    _Detail = requests.get(f'{base_route}/{_AnyItem["stock_item_id"]}/detail').json()
+
+    assert 'stock_group_id' in _Detail
+    assert 'stock_group_name' in _Detail
+
+
+def test__get_stock_item_detail__null_stock_group_serialises_as_null(api, stock_level_id):
+    # An item created without a stock group must return null on both DTO
+    # fields — the detail page reads these to render the inline picker's
+    # "Set group" empty state.
+    _Created = requests.post(base_route, json=CreateStockItemRequest(
+        name='C1b1 Detail Group Null',
+        stock_level_id=stock_level_id,
+    ).model_dump(mode="json")).json()
+
+    _Detail = requests.get(f'{base_route}/{_Created["stock_item_id"]}/detail').json()
+
+    assert _Detail['stock_group_id'] is None
+    assert _Detail['stock_group_name'] is None
+
+
+def test__get_stock_item_detail__stock_group_roundtrips_via_patch(api, stock_level_id):
+    # Setting + clearing stock_group_id through the existing partial PATCH
+    # is reflected on the next detail read (the inline picker's contract).
+    _Created = requests.post(base_route, json=CreateStockItemRequest(
+        name='C1b1 Detail Group Roundtrip',
+        stock_level_id=stock_level_id,
+    ).model_dump(mode="json")).json()
+    _ItemId = _Created["stock_item_id"]
+    _Groups = requests.get('http://localhost:5170/api/stock-groups').json()
+    assert _Groups, "seed DB has at least one stock group"
+    _GroupId = _Groups[0]['stock_group_id']
+    _GroupName = _Groups[0]['name']
+
+    assert requests.patch(
+        f'{base_route}/{_ItemId}', json={'stock_group_id': _GroupId},
+    ).status_code == 204
+    _DetailWithGroup = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert _DetailWithGroup['stock_group_id'] == _GroupId
+    assert _DetailWithGroup['stock_group_name'] == _GroupName
+
+    # Null clears it back to "no group set".
+    assert requests.patch(
+        f'{base_route}/{_ItemId}', json={'stock_group_id': None},
+    ).status_code == 204
+    _DetailCleared = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert _DetailCleared['stock_group_id'] is None
+    assert _DetailCleared['stock_group_name'] is None
+
+
 def test__delete_stock_item__DeletedItemNoLongerReturnedInGetAll(api):
     _StockItemRequest = CreateStockItemRequest(
         name="Item To Verify Gone",

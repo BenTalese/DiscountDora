@@ -7,9 +7,9 @@ import { cartStateFor, type CartState, type Membership } from 'src/models/shoppi
 import type { Recipe } from 'src/models/recipe';
 import type { StockGroup } from 'src/models/stockGroup';
 import type { StockItem } from 'src/models/stockItem';
+import type { LocationNode } from 'src/models/location';
 import type { StockLevel } from 'src/models/stockLevel';
-import type { StockLocation } from 'src/services/api/stockLocationApiService';
-import { computed, ref, type DeepReadonly } from 'vue';
+import { computed, ref, watch, type DeepReadonly } from 'vue';
 
 export type StockSortKey =
     | 'name_asc'
@@ -44,7 +44,7 @@ type ReadList<T> = ReadonlyArray<DeepReadonly<T>>;
 export function useStockFilters(sources: {
     stockItems: () => ReadList<StockItem>;
     stockLevels: () => ReadList<StockLevel>;
-    stockLocations: () => ReadList<StockLocation>;
+    locationTree: () => ReadList<LocationNode>;
     recipes: () => ReadList<Recipe>;
     stockGroups: () => ReadList<StockGroup>;
     membership: () => Membership | null;
@@ -57,9 +57,6 @@ export function useStockFilters(sources: {
     const essentialsOnly = ref(false);
     const openOnly = ref(false);
     const hasAlertOnly = ref(false);
-    // C-1 Chunk 2 / L96 — `usedInRecipeOnly` filter retired. The cross-
-    // feature index (`recipesByStockItem`) survives because per-row
-    // "used in N recipes" badges still consume it.
     // X5 — "items that will silently jump onto my list when low". Surfaced
     // as its own chip so users can audit / find auto-add-prone items.
     const autoAddOnly = ref(false);
@@ -67,16 +64,6 @@ export function useStockFilters(sources: {
     const sortBy = ref<StockSortKey>('name_asc');
 
     // ── Lookup maps ─────────────────────────────────────────────────────
-    const stockLevelById = computed(() => {
-        const map = new Map<string, StockLevel>();
-        for (const l of sources.stockLevels()) map.set(l.stock_level_id, l);
-        return map;
-    });
-    function stockLevelName(id: string | null): string {
-        if (!id) return '';
-        return stockLevelById.value.get(id)?.name ?? '';
-    }
-
     const levelSequenceById = computed(() => {
         const map = new Map<string, number>();
         for (const l of sources.stockLevels())
@@ -87,22 +74,6 @@ export function useStockFilters(sources: {
         if (!id) return -1;
         return levelSequenceById.value.get(id) ?? -1;
     }
-
-    // ── Cross-feature indexes ───────────────────────────────────────────
-    const recipesByStockItem = computed(() => {
-        const map = new Map<string, { recipe_id: string; name: string }[]>();
-        for (const r of sources.recipes()) {
-            const seen = new Set<string>();
-            for (const ing of r.ingredients) {
-                if (seen.has(ing.stock_item_id)) continue;
-                seen.add(ing.stock_item_id);
-                const arr = map.get(ing.stock_item_id) ?? [];
-                arr.push({ recipe_id: r.recipe_id, name: r.name });
-                map.set(ing.stock_item_id, arr);
-            }
-        }
-        return map;
-    });
 
     const cartStateById = computed(() => {
         const map = new Map<string, CartState>();
@@ -126,12 +97,34 @@ export function useStockFilters(sources: {
     }
 
     // ── Dropdown option lists ───────────────────────────────────────────
-    const locationOptions = computed(() =>
-        sources.stockLocations().map((l) => ({
-            label: l.name,
-            value: l.stock_location_id,
-        })),
-    );
+    // Full-path location labels ("Pantry › Middle shelf › Left side"), built
+    // once from the tree. `allLocationOptions` is the canonical full list
+    // (consumers that need the unfiltered set — e.g. the bulk-move dialog —
+    // read this); `locationOptions` is the narrowing ref bound to the
+    // searchable q-select via `filterLocations` (same UX as the detail page).
+    type LocationOption = { label: string; value: string };
+    const allLocationOptions = computed<LocationOption[]>(() => {
+        const out: LocationOption[] = [];
+        const walk = (nodes: ReadList<LocationNode>, prefix: string) => {
+            for (const n of nodes) {
+                const path = prefix ? `${prefix} › ${n.name}` : n.name;
+                out.push({ label: path, value: n.location_id });
+                walk(n.children, path);
+            }
+        };
+        walk(sources.locationTree(), '');
+        return out.sort((a, b) => a.label.localeCompare(b.label));
+    });
+    const locationOptions = ref<LocationOption[]>([]);
+    watch(allLocationOptions, (v) => { locationOptions.value = v; }, { immediate: true });
+    function filterLocations(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            locationOptions.value = needle
+                ? allLocationOptions.value.filter((o) => o.label.toLowerCase().includes(needle))
+                : allLocationOptions.value;
+        });
+    }
     const groupOptions = computed(() =>
         sources.stockGroups().map((g) => ({
             label: g.name,
@@ -331,6 +324,8 @@ export function useStockFilters(sources: {
         sortBy,
         // option lists
         locationOptions,
+        allLocationOptions,
+        filterLocations,
         groupOptions,
         // derived
         summaryCounts,

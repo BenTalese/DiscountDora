@@ -1,6 +1,8 @@
 <template>
     <div :class="embedded ? 'q-pa-sm' : 'q-pa-md'">
-        <!-- Header + toolbar ──────────────────────────────────────────── -->
+        <!-- Header — back/close · name · level (chip = editor) · Delete top-right.
+             C-1b.1 (L121): level lives once, in the header. C-1b.1 (L122):
+             Delete moves out of the toolbar to a destructive top-right slot. -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
@@ -10,15 +12,37 @@
                 <AppSkeleton v-if="loading && !detail" type="line" width="180px" height="1.6rem" />
                 <template v-else>{{ detail?.name || 'Stock item' }}</template>
             </div>
-            <q-chip
-                v-if="detail?.stock_level_name"
+            <q-btn-dropdown
+                v-if="detail"
+                outline
                 dense
-                :color="getStockLevelColour(detail.stock_level_name)"
-                text-color="white"
+                no-caps
+                :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
+                :label="detail.stock_level_name ?? 'Set level'"
             >
-                {{ detail.stock_level_name }}
-            </q-chip>
+                <q-list dense>
+                    <q-item
+                        v-for="level in stockLevelStore.stockLevels"
+                        :key="level.stock_level_id"
+                        clickable
+                        v-close-popup
+                        @click="onChangeStockLevel(level.stock_level_id)"
+                    >
+                        <q-item-section avatar>
+                            <q-avatar :color="getStockLevelColour(level.name)" size="16px" />
+                        </q-item-section>
+                        <q-item-section>{{ level.name }}</q-item-section>
+                    </q-item>
+                </q-list>
+            </q-btn-dropdown>
             <q-space />
+            <BaseButton
+                v-if="detail"
+                variant="danger-ghost"
+                :icon="ICONS.delete"
+                label="Delete"
+                @click="confirmDelete"
+            />
         </div>
 
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
@@ -38,7 +62,9 @@
         </div>
 
         <div v-else-if="detail" key="sid-content">
-            <!-- Toolbar actions ─────────────────────────────────────────── -->
+            <!-- Toolbar — C-1b.1 (L123, L125): pared to Mark open · Set expiry ·
+                 Add-to-list · (Show QR). Restock belongs to list-finalisation,
+                 not here. Find-deals moves to the Products tab in C-1b.3. -->
             <div class="row q-gutter-sm q-mb-md items-center">
                 <BaseButton
                     variant="secondary"
@@ -47,10 +73,7 @@
                     :loading="busy"
                     @click="onToggleOpen"
                 />
-                <BaseButton variant="secondary" :icon="ICONS.refresh" label="Restock" :loading="busy" @click="onRestock" />
                 <BaseButton variant="secondary" :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
-                <BaseButton variant="secondary" :icon="ICONS.local_offer" label="Find deals" @click="onFindDeals" />
-                <!-- C-7 Chunk 1 — unified AddToListButton (toolbar). -->
                 <AddToListButton
                     v-if="detail"
                     variant="toolbar"
@@ -63,8 +86,14 @@
                     icon="qr_code_2"
                     label="Show QR"
                     @click="showQrOpen = true"
-                />
-                <BaseButton variant="danger-ghost" :icon="ICONS.delete" label="Delete" @click="confirmDelete" />
+                >
+                    <q-tooltip max-width="280px">
+                        Prints Dora's own label for this item — a scannable QR
+                        that opens this page. It's *not* the product's real
+                        EAN/UPC barcode (that's managed on Data → Barcodes and
+                        links a barcode to a Product, not a stock item).
+                    </q-tooltip>
+                </BaseButton>
             </div>
 
             <!-- ── QR dialog ────────────────────────────────────────── -->
@@ -87,9 +116,19 @@
                     </template>
             </BaseDialog>
 
-            <q-tabs v-model="tab" dense align="left" class="dora-text-secondary q-mb-sm" no-caps>
+            <!-- L120 / R-002: route tab colours through theme tokens so the
+                 active tab + indicator stay legible in every theme. -->
+            <q-tabs
+                v-model="tab"
+                dense
+                align="left"
+                class="text-primary q-mb-sm"
+                active-color="primary"
+                indicator-color="primary"
+                no-caps
+            >
                 <q-tab name="overview" :icon="ICONS.info" label="Overview" />
-                <q-tab name="products" :icon="ICONS.local_offer" :label="`Products (${detail.products.length})`" />
+                <q-tab v-if="productsEnabled" name="products" :icon="ICONS.local_offer" :label="`Products (${detail.products.length})`" />
                 <q-tab name="recipes" :icon="ICONS.menu_book" :label="`Recipes (${detail.recipes.length})`" />
                 <q-tab name="substitutes" :icon="ICONS.swap_horiz" :label="`Substitutes (${detail.substitutes.length})`" />
                 <q-tab name="lists" :icon="ICONS.shopping_cart" :label="`Lists (${onLists.length})`" />
@@ -98,170 +137,248 @@
             <q-separator />
 
             <q-tab-panels v-model="tab" animated>
-                <!-- ── Overview ───────────────────────────────────────── -->
-                <q-tab-panel name="overview">
-                    <div class="row q-col-gutter-md">
-                        <div class="col-12 col-md-6">
-                            <q-list bordered separator class="rounded-borders">
-                                <q-item>
-                                    <q-item-section>Stock level</q-item-section>
-                                    <q-item-section side>
-                                        <q-btn-dropdown
-                                            outline
-                                            dense
-                                            no-caps
-                                            :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
-                                            :label="detail.stock_level_name ?? 'Set level'"
-                                        >
-                                            <q-list dense>
-                                                <q-item
-                                                    v-for="level in stockLevelStore.stockLevels"
-                                                    :key="level.stock_level_id"
-                                                    clickable
-                                                    v-close-popup
-                                                    @click="onChangeStockLevel(level.stock_level_id)"
-                                                >
-                                                    <q-item-section avatar>
-                                                        <q-avatar :color="getStockLevelColour(level.name)" size="16px" />
-                                                    </q-item-section>
-                                                    <q-item-section>{{ level.name }}</q-item-section>
-                                                </q-item>
-                                            </q-list>
-                                        </q-btn-dropdown>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item>
-                                    <q-item-section>Location</q-item-section>
-                                    <!-- C-cross Chunk 4 — zone-default
-                                         + hover for the full breadcrumb. -->
-                                    <q-item-section side class="dora-text-primary">
-                                        {{ formatLocation(detail.stock_location_breadcrumb, 'zone') || '—' }}
-                                        <q-tooltip v-if="locationHasDetail(detail.stock_location_breadcrumb)">
-                                            {{ formatLocation(detail.stock_location_breadcrumb, 'full') }}
-                                        </q-tooltip>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item>
-                                    <q-item-section>Expiry</q-item-section>
-                                    <q-item-section side class="dora-text-primary">
-                                        {{ detail.expiry_date || 'Not set' }}
-                                    </q-item-section>
-                                </q-item>
-                                <q-item>
-                                    <q-item-section>Open / in-use</q-item-section>
-                                    <q-item-section side class="dora-text-primary">
-                                        {{ detail.is_open ? `Yes${detail.opened_on ? ' — since ' + detail.opened_on : ''}` : 'Sealed' }}
-                                    </q-item-section>
-                                </q-item>
-                                <q-item>
-                                    <q-item-section>Level updated</q-item-section>
-                                    <q-item-section side class="dora-text-primary">
-                                        {{ relativeTime(detail.stock_level_last_updated) }}
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
-                        </div>
-
-                        <div class="col-12 col-md-6">
-                            <!-- C-1 Chunk 6 / FU-033 — image upload + clear.
-                                 Shared `ImageUploadField` (renamed from
-                                 RecipeImageField — FU-126). Saves immediately
-                                 (no "Save" coupling with the basics form) —
-                                 uploading a photo isn't the same intent as
-                                 renaming. `can-clear` is gated on
-                                 `has_own_image` (FU-125): a product-fallback
-                                 preview must read "Add image", not Change/
-                                 Remove — the user never uploaded that image. -->
+                <!-- ── Overview ───────────────────────────────────────────
+                     C-1b.1: single-column inline-edit fact list. Each row
+                     IS its editor; toggles/selects/dates save immediately
+                     on change, text rows save on blur. No separate q-form
+                     + Save/Reset (the old 2-col "facts | edit form" split
+                     is what L127 called "messy"). Level dedupe (L121): the
+                     header chip is the only level editor.
+                -->
+                <q-tab-panel name="overview" class="q-pa-none q-pt-md">
+                    <div class="row q-col-gutter-md items-start">
+                        <div class="col-12 col-sm-5 col-md-4">
                             <ImageUploadField
                                 :preview-url="imagePreviewUrl"
                                 :name="detail?.name"
                                 :alt="detail?.name ?? 'Stock item image'"
                                 :can-clear="!!pendingImage || !!detail?.has_own_image"
-                                class="q-mb-md"
                                 @pick="onPickImage"
                                 @clear="onClearImage"
                             />
-                            <q-form @submit.prevent="onSaveBasics" class="q-gutter-md">
-                                <q-input
-                                    v-model="form.name"
-                                    outlined
-                                    dense
-                                    label="Name"
-                                    :rules="[(v: string) => (!!v && v.length > 0) || 'Name required']"
-                                />
-                                <q-select
-                                    v-model="form.stock_location_id"
-                                    :options="locationOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    outlined
-                                    dense
-                                    label="Location"
-                                />
-                                <q-input v-model="form.notes" outlined dense type="textarea" autogrow label="Notes" />
-                                <div class="row items-center q-gutter-sm">
-                                    <q-toggle
-                                        v-model="form.auto_add_when_low"
-                                        label="Auto-add when low or out"
-                                    />
-                                    <q-icon :name="ICONS.info_outline" size="18px" class="dora-text-secondary">
-                                        <q-tooltip max-width="320px">
-                                            Drops this item onto your primary
-                                            shopping list the moment its level
-                                            falls to Low or Out — silent, with
-                                            an undoable toast. Use for
-                                            essentials you never want to run
-                                            out of.
-                                        </q-tooltip>
-                                    </q-icon>
-                                </div>
-                                <div class="row items-center q-gutter-sm">
-                                    <q-toggle
-                                        v-model="form.is_flagged"
-                                        label="Always include in auto-generated lists"
-                                    />
-                                    <q-icon :name="ICONS.info_outline" size="18px" class="dora-text-secondary">
-                                        <q-tooltip max-width="320px">
-                                            Flagged items show up in the
-                                            "essentials" auto-generate sources
-                                            even when they're well-stocked.
-                                            Different from auto-add: this one
-                                            only matters when you explicitly
-                                            run an auto-generate, not on every
-                                            stock change.
-                                        </q-tooltip>
-                                    </q-icon>
-                                </div>
-                                <div class="row justify-end q-gutter-sm">
-                                    <BaseButton variant="ghost" label="Reset" :disable="!isDirty || savingBasics" @click="resetBasicsForm" />
-                                    <BaseButton type="submit" variant="primary" label="Save" :disable="!isDirty" :loading="savingBasics" />
-                                </div>
-                            </q-form>
+                        </div>
+                        <div class="col-12 col-sm-7 col-md-8">
+                            <q-list separator class="dora-inline-edit">
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Name</q-item-section>
+                                    <q-item-section>
+                                        <q-input
+                                            v-model="form.name"
+                                            dense
+                                            borderless
+                                            placeholder="Name this item"
+                                            :rules="[(v: string) => (!!v && v.length > 0) || 'Name required']"
+                                            hide-bottom-space
+                                            @blur="saveNameIfDirty"
+                                            @keyup.enter="saveNameIfDirty"
+                                        />
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Location</q-item-section>
+                                    <q-item-section>
+                                        <q-select
+                                            v-model="form.stock_location_id"
+                                            :options="locationOptions"
+                                            emit-value
+                                            map-options
+                                            use-input
+                                            fill-input
+                                            hide-selected
+                                            input-debounce="200"
+                                            clearable
+                                            dense
+                                            borderless
+                                            placeholder="Not set"
+                                            @filter="filterLocations"
+                                            @update:model-value="onChangeLocation"
+                                        />
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Stock group</q-item-section>
+                                    <q-item-section>
+                                        <q-select
+                                            v-model="form.stock_group_id"
+                                            :options="groupOptions"
+                                            emit-value
+                                            map-options
+                                            clearable
+                                            dense
+                                            borderless
+                                            placeholder="Not set"
+                                            @update:model-value="onChangeGroup"
+                                        />
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Expiry</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-xs">
+                                            <span class="dora-text-primary">
+                                                {{ detail.expiry_date || 'Not set' }}
+                                            </span>
+                                            <q-space />
+                                            <q-btn flat dense no-caps size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
+                                            <q-btn flat dense no-caps size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
+                                            <q-btn flat dense no-caps size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
+                                            <q-btn flat dense no-caps size="sm" :icon="ICONS.event" @click="expiryDialogOpen = true">
+                                                <q-tooltip>Pick a date</q-tooltip>
+                                            </q-btn>
+                                            <q-btn
+                                                v-if="detail.expiry_date"
+                                                flat
+                                                dense
+                                                round
+                                                size="sm"
+                                                :icon="ICONS.close"
+                                                color="negative"
+                                                :disable="busy"
+                                                @click="clearExpiry"
+                                            >
+                                                <q-tooltip>Clear expiry</q-tooltip>
+                                            </q-btn>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Open / in-use</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-sm">
+                                            <q-toggle
+                                                :model-value="detail.is_open"
+                                                :disable="busy"
+                                                @update:model-value="onToggleOpen"
+                                            />
+                                            <span v-if="detail.is_open && detail.opened_on" class="dora-text-secondary text-caption">
+                                                Opened {{ detail.opened_on }}
+                                            </span>
+                                            <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                                                <q-tooltip max-width="320px">
+                                                    Opening an item doesn't
+                                                    change its expiry date —
+                                                    but for perishables it's
+                                                    the cue to set or shorten
+                                                    one. Use the expiry row
+                                                    above to do that.
+                                                </q-tooltip>
+                                            </q-icon>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Essential</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-sm">
+                                            <q-toggle
+                                                :model-value="detail.is_flagged"
+                                                :disable="busy"
+                                                @update:model-value="onToggleFlagged"
+                                            />
+                                            <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                                                <q-tooltip max-width="320px">
+                                                    Flagged items show up in
+                                                    "essentials" auto-generate
+                                                    sources even when they're
+                                                    well-stocked. Different
+                                                    from auto-add: this one
+                                                    only matters when you run
+                                                    auto-generate, not on
+                                                    every stock change.
+                                                </q-tooltip>
+                                            </q-icon>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Auto-add when low</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-sm">
+                                            <q-toggle
+                                                :model-value="detail.auto_add_when_low"
+                                                :disable="busy"
+                                                @update:model-value="onToggleAutoAdd"
+                                            />
+                                            <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                                                <q-tooltip max-width="320px">
+                                                    Drops this item onto your
+                                                    primary shopping list the
+                                                    moment its level falls to
+                                                    Low or Out — silent, with
+                                                    an undoable toast. Use for
+                                                    essentials you never want
+                                                    to run out of.
+                                                </q-tooltip>
+                                            </q-icon>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Level updated</q-item-section>
+                                    <q-item-section class="dora-text-primary">
+                                        {{ relativeTime(detail.stock_level_last_updated) }}
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+
+                            <!-- Notes — calm/secondary (L129). Kept because
+                                 it's cheap and occasionally useful; not a
+                                 headline. Save on blur. -->
+                            <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">Notes</div>
+                            <q-input
+                                v-model="form.notes"
+                                outlined
+                                dense
+                                type="textarea"
+                                autogrow
+                                placeholder="Anything you want to remember about this item"
+                                class="dora-notes-calm"
+                                @blur="saveNotesIfDirty"
+                            />
                         </div>
                     </div>
                 </q-tab-panel>
 
-                <!-- ── Linked products ────────────────────────────────── -->
-                <q-tab-panel name="products">
-                    <div class="row items-center q-mb-sm q-gutter-sm">
+                <!-- ── Linked products ──────────────────────────────────
+                     C-1b.3 (L125, L130, L131): Find-deals lives here now,
+                     not in the toolbar. Empty state = a primary CTA; when
+                     products exist, header carries a quieter "Link another"
+                     that goes to the same place. The "Get cheapest" button
+                     is gone — cheaper option is emphasised via card style
+                     and each product carries its own Add-to-list (per §2.4).
+                     Hidden entirely when `products` is off (§2.5). -->
+                <q-tab-panel v-if="productsEnabled" name="products">
+                    <div v-if="detail.products.length > 0" class="row items-center q-mb-sm q-gutter-sm">
                         <div class="text-subtitle1">Linked products</div>
                         <q-space />
-                        <q-btn
-                            v-if="cheapestProduct && detail.products.length > 1"
-                            color="primary"
-                            no-caps
-                            :icon="ICONS.add_shopping_cart"
-                            :label="`Get cheapest ($${cheapestProduct.price_now?.toFixed(2)})`"
-                            :loading="busy"
-                            @click="onAddCheapest"
+                        <BaseButton
+                            variant="ghost"
+                            :icon="ICONS.add"
+                            label="Link another"
+                            @click="onFindAndLink"
                         />
-                        <BaseButton variant="primary" :icon="ICONS.add" label="Link product" @click="openProductPicker" />
                     </div>
 
-                    <div v-if="detail.products.length === 0" class="dora-text-muted text-caption q-pa-md">
-                        No products linked yet. Linked products surface deals and prices for this
-                        stock item.
+                    <div v-if="detail.products.length === 0" class="column items-center q-py-xl q-gutter-md">
+                        <q-icon :name="ICONS.local_offer" size="48px" class="dora-text-secondary" />
+                        <div class="text-subtitle1">No products linked yet</div>
+                        <div class="dora-text-secondary text-caption text-center" style="max-width: 360px">
+                            Link a product to surface live deals and price
+                            history for this stock item.
+                        </div>
+                        <BaseButton
+                            variant="primary"
+                            :icon="ICONS.local_offer"
+                            label="Find &amp; link a product"
+                            @click="onFindAndLink"
+                        />
                     </div>
 
                     <div v-else class="row q-col-gutter-md">
@@ -270,7 +387,15 @@
                             :key="prod.product_id"
                             class="col-12 col-md-6"
                         >
-                            <q-card bordered flat>
+                            <!-- C-1b.3: cheapest card carries a "Cheapest"
+                                 chip + a subtle highlight class so the
+                                 cheaper option pops without needing a
+                                 separate "Add cheapest" button (§2.4). -->
+                            <q-card
+                                bordered
+                                flat
+                                :class="{ 'dora-product-card--cheapest': isCheapest(prod) }"
+                            >
                                 <q-card-section class="row items-center no-wrap q-pb-xs">
                                     <MerchantLogo :name="prod.merchant_name" :height="20" :width="34" class="q-mr-sm" />
                                     <div class="col">
@@ -280,6 +405,14 @@
                                             <span v-if="prod.size"> · {{ prod.size }}</span>
                                         </div>
                                     </div>
+                                    <q-chip
+                                        v-if="isCheapest(prod)"
+                                        dense
+                                        color="positive"
+                                        text-color="white"
+                                    >
+                                        Cheapest
+                                    </q-chip>
                                     <q-chip
                                         v-if="discountPct(prod) !== null"
                                         dense
@@ -350,12 +483,21 @@
                             :key="r.recipe_id"
                             class="col-12 col-sm-6 col-md-4"
                         >
+                            <!-- C-1b.4 / FU-185 / B8 residue: wire the
+                                 favourite-toggle + add-all-to-list events
+                                 RecipeCard emits. Previously dropped, so
+                                 "remove from favourites does nothing" and
+                                 "every recipe action except Cook is dead"
+                                 (feedback L132 / L134) were live defects
+                                 on this surface. -->
                             <RecipeCard
                                 :recipe="r"
                                 :highlight-stock-item-ids="[detail.stock_item_id]"
                                 @open="goToRecipe"
                                 @cook="goToCook"
+                                @toggle-favourite="onToggleFavourite"
                                 @add-missing="onAddMissing"
+                                @add-all-to-list="onAddAllToList"
                             />
                         </div>
                     </div>
@@ -389,21 +531,17 @@
                                     <StockLevelDot :stock-item="stockItemFor(sub)" />
                                 </div>
                             </q-item-section>
+                            <!-- C-1b.4 (L136): the "Swap into list" affordance
+                                 moves to Shop Mode (INV-8) — the moment a
+                                 substitute swap actually makes sense is when
+                                 you're at the shelf and the original is out,
+                                 not when browsing the substitute roster.
+                                 Removed from this surface; the per-item
+                                 substitutes list itself stays (L137). -->
                             <q-item-section side>
-                                <div class="row q-gutter-xs">
-                                    <q-btn
-                                        flat
-                                        dense
-                                        no-caps
-                                        :icon="ICONS.swap_horiz"
-                                        label="Swap into list"
-                                        :loading="busy"
-                                        @click="onSwapSubstitute(sub.stock_item_id)"
-                                    />
-                                    <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onRemoveSubstitute(sub.stock_item_id)">
-                                        <q-tooltip>Remove substitute</q-tooltip>
-                                    </BaseButton>
-                                </div>
+                                <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onRemoveSubstitute(sub.stock_item_id)">
+                                    <q-tooltip>Remove substitute</q-tooltip>
+                                </BaseButton>
                             </q-item-section>
                         </q-item>
                     </q-list>
@@ -415,6 +553,12 @@
                         Not on any active shopping list.
                         <q-btn flat dense no-caps color="primary" label="Add to primary" @click="onAddToList" />
                     </div>
+                    <!-- C-1b.4 (L138): rows already navigate to the list,
+                         so the inert open_in_new arrow on the right was
+                         decoration only — gone. "(primary)" is now a real
+                         styled badge instead of plain text, surfacing the
+                         inferred primary draft from the shopping-list
+                         membership (R-003 — server decides primary). -->
                     <q-list v-else separator>
                         <q-item
                             v-for="l in onLists"
@@ -424,25 +568,45 @@
                         >
                             <q-item-section avatar><q-icon :name="ICONS.shopping_cart" /></q-item-section>
                             <q-item-section>
-                                {{ l.name }}
+                                <div class="row items-center q-gutter-sm">
+                                    <span>{{ l.name }}</span>
+                                    <q-badge
+                                        v-if="l.shopping_list_id === primaryListId"
+                                        color="primary"
+                                        text-color="white"
+                                        label="Primary"
+                                    />
+                                </div>
                             </q-item-section>
-                            <q-item-section side><q-icon :name="ICONS.open_in_new" size="16px" /></q-item-section>
                         </q-item>
                     </q-list>
                 </q-tab-panel>
 
-                <!-- ── History ────────────────────────────────────────── -->
+                <!-- ── History (lifecycle timeline) ────────────────────────
+                     C-1b.5 / INV-7 / L139: rework the level-only log into a
+                     unified item lifecycle. Merges level changes, waste
+                     events, list-add provenance, and synthesises Opened /
+                     Checked rows from current state. Date-sorted, newest
+                     first; entries colour-keyed by event kind. -->
                 <q-tab-panel name="history">
-                    <div v-if="detail.level_history.length === 0" class="dora-text-muted text-caption q-pa-md">
-                        No level changes recorded yet.
+                    <div v-if="lifecycleEvents.length === 0" class="dora-text-muted text-caption q-pa-md">
+                        Nothing logged for this item yet — once you change
+                        its stock level, add it to a list, mark it open or
+                        log waste, it'll show up here.
                     </div>
                     <q-timeline v-else color="primary">
                         <q-timeline-entry
-                            v-for="(h, i) in detail.level_history"
-                            :key="i"
-                            :title="h.stock_level_name ?? 'Level changed'"
-                            :subtitle="formatDateTime(h.changed_at)"
-                        />
+                            v-for="ev in lifecycleEvents"
+                            :key="ev.id"
+                            :title="ev.title"
+                            :subtitle="formatDateTime(ev.at)"
+                            :icon="ev.icon"
+                            :color="ev.color"
+                        >
+                            <div v-if="ev.body" class="dora-text-secondary">
+                                {{ ev.body }}
+                            </div>
+                        </q-timeline-entry>
                     </q-timeline>
                 </q-tab-panel>
             </q-tab-panels>
@@ -459,35 +623,6 @@
                     <q-btn flat no-caps label="Cancel" v-close-popup />
                     <q-btn color="primary" no-caps label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
                 </template>
-        </BaseDialog>
-
-        <!-- ── Link-product picker dialog ─────────────────────────────── -->
-        <BaseDialog v-model="pickerOpen" title="Link a product" closable card-style="width: 640px; max-width: 95vw">
-                <q-card-section>
-                    <q-input v-model="pickerSearch" outlined dense debounce="150" placeholder="Search saved products" clearable>
-                        <template #prepend><q-icon :name="ICONS.search" /></template>
-                    </q-input>
-                </q-card-section>
-                <q-card-section class="q-pt-none" style="max-height: 60vh; overflow: auto">
-                    <q-banner v-if="pickerLoading" class="dora-bg-sunken" dense>Loading products…</q-banner>
-                    <q-banner v-else-if="pickerCandidates.length === 0" class="dora-bg-sunken" dense>
-                        No matching saved products.
-                    </q-banner>
-                    <q-list v-else separator>
-                        <q-item v-for="prod in pickerCandidates" :key="prod.product_id" clickable @click="onLink(prod.product_id)">
-                            <q-item-section avatar>
-                                <q-avatar rounded size="36px" class="dora-bg-sunken dora-text-secondary">
-                                    {{ prod.merchant_name.substring(0, 1).toUpperCase() }}
-                                </q-avatar>
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label class="ellipsis">{{ prod.name }}</q-item-label>
-                                <q-item-label caption>{{ prod.merchant_name }}<span v-if="prod.size"> · {{ prod.size }}</span></q-item-label>
-                            </q-item-section>
-                            <q-item-section side><q-btn flat round dense :icon="ICONS.add_link" color="primary" /></q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
         </BaseDialog>
 
         <!-- ── Add-substitute picker dialog ───────────────────────────── -->
@@ -527,25 +662,26 @@
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import type { Product } from 'src/models/product';
+    import type { LocationNode } from 'src/models/location';
+    import type { StockGroup } from 'src/models/stockGroup';
+    import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import type { Recipe } from 'src/models/recipe';
     import type { LinkedProduct, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
     import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import StockItemApiService, { stockItemImageUrl } from 'src/services/api/stockItemApiService';
-    import { useProductStore } from 'src/stores/productStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { useStockLocationStore } from 'src/stores/stockLocationStore';
-    import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
+    import { useLocationStore } from 'src/stores/locationStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -559,15 +695,14 @@
 
     const stockItemApi = new StockItemApiService();
     const productApi = new ProductApiService();
+    const stockGroupApi = new StockGroupApiService();
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
-    const stockLocationStore = useStockLocationStore();
-    const productStore = useProductStore();
+    const locationStore = useLocationStore();
     const recipeStore = useRecipeStore();
     const shoppingListStore = useShoppingListStore();
 
-    const { stockLocations } = storeToRefs(stockLocationStore);
     const { stockItems } = storeToRefs(stockItemStore);
     const { recipes } = storeToRefs(recipeStore);
 
@@ -583,6 +718,10 @@
 
     // ── QR labels (gated by the install-wide scanning flag) ──────────
     const { scanningEnabled } = useScanningEnabled();
+    // C-1b.3 (§2.5): when `products` is off the Products tab + per-product
+    // surfaces disappear entirely; FU-182 owns the app-wide sweep, this
+    // page just consumes the flag.
+    const { products: productsEnabled } = useFeatureFlags();
     const showQrOpen = ref(false);
     const qrSrc = computed(() => {
         const baseUrl = resolveBaseURL('dora');
@@ -601,47 +740,87 @@
     const tab = ref<string>(
         typeof route.query.section === 'string' ? route.query.section : 'overview',
     );
-
-    const locationOptions = computed(() =>
-        stockLocations.value.map((l) => ({ label: l.name, value: l.stock_location_id })),
+    // C-1b.3 (§2.5): if the URL pointed at ?section=products but products
+    // is off (or the admin flips it off later), fall back to Overview so
+    // we don't strand the user on an invisible tab.
+    watch(
+        [productsEnabled, tab],
+        ([enabled, current]) => {
+            if (!enabled && current === 'products') tab.value = 'overview';
+        },
+        { immediate: true },
     );
 
-    // ── Basics form ──────────────────────────────────────────────────────
+    // Full-path location options (e.g. "Pantry › Middle shelf › Left side"),
+    // built once from the location tree so the picker reads like the other
+    // location pickers — searchable + path-labelled rather than leaf-only.
+    type LocationOption = { label: string; value: string };
+    const allLocationOptions = computed<LocationOption[]>(() => {
+        const out: LocationOption[] = [];
+        const walk = (nodes: LocationNode[], prefix: string) => {
+            for (const n of nodes) {
+                const path = prefix ? `${prefix} › ${n.name}` : n.name;
+                out.push({ label: path, value: n.location_id });
+                walk(n.children, path);
+            }
+        };
+        walk(locationStore.tree, '');
+        return out.sort((a, b) => a.label.localeCompare(b.label));
+    });
+
+    // Quasar local-filter pattern: the bound list narrows on type, reset to
+    // the full set when the query is cleared.
+    const locationOptions = ref<LocationOption[]>([]);
+    watch(allLocationOptions, (v) => { locationOptions.value = v; }, { immediate: true });
+    function filterLocations(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            locationOptions.value = needle
+                ? allLocationOptions.value.filter((o) => o.label.toLowerCase().includes(needle))
+                : allLocationOptions.value;
+        });
+    }
+
+    // ── Inline-edit state (C-1b.1) ──────────────────────────────────────
+    // Text rows (name/notes) live in `form` and save on blur if changed;
+    // toggles/selects/dates save immediately on change (see handlers
+    // below). The Save/Reset coupling from the old 2-col form is gone —
+    // each row IS its editor.
     type BasicsForm = {
         name: string;
         notes: string;
         stock_location_id: string | null;
-        auto_add_when_low: boolean;
-        is_flagged: boolean;
+        stock_group_id: string | null;
     };
-    const emptyBasics = (): BasicsForm => ({ name: '', notes: '', stock_location_id: null, auto_add_when_low: false, is_flagged: false });
+    const emptyBasics = (): BasicsForm => ({
+        name: '', notes: '', stock_location_id: null, stock_group_id: null,
+    });
     const form = reactive<BasicsForm>(emptyBasics());
-    const savingBasics = ref(false);
 
     function hydrateForm(d: StockItemDetail) {
         form.name = d.name;
         form.notes = d.notes ?? '';
         form.stock_location_id = d.stock_location_id;
-        form.auto_add_when_low = d.auto_add_when_low;
-        form.is_flagged = d.is_flagged;
+        form.stock_group_id = d.stock_group_id;
     }
-    function resetBasicsForm() {
-        if (detail.value) hydrateForm(detail.value);
-    }
+    // The unsaved-changes guard now only covers text rows — selects/toggles/
+    // dates persist on change, so they can never be "dirty but not saved."
     const isDirty = computed(() => {
         if (!detail.value) return false;
         return (
-            form.name !== detail.value.name ||
-            (form.notes ?? '') !== (detail.value.notes ?? '') ||
-            form.stock_location_id !== detail.value.stock_location_id ||
-            form.auto_add_when_low !== detail.value.auto_add_when_low ||
-            form.is_flagged !== detail.value.is_flagged
+            form.name.trim() !== detail.value.name ||
+            (form.notes ?? '') !== (detail.value.notes ?? '')
         );
     });
-    // FU-156 — block sidebar/router-link/back/refresh while the basics
-    // form has unsaved edits. Image upload saves immediately so it's not
-    // part of dirty state.
     useUnsavedChangesGuard(isDirty);
+
+    // Stock groups — loaded once for the inline picker. (Owned locally
+    // rather than via a store; this is the only consumer on this page
+    // and the list is small.)
+    const stockGroups = ref<StockGroup[]>([]);
+    const groupOptions = computed(() =>
+        stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
+    );
     // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
     // Saves immediately — uploading a photo isn't coupled to the basics
     // form's Save button. Cache-bust is owned by the store now (FU-125
@@ -690,25 +869,72 @@
         }
     }
 
-    async function onSaveBasics() {
+    // ── Inline-edit field savers (C-1b.1) ───────────────────────────────
+    // Each row's editor calls one of these; the partial PATCH already
+    // supports per-field updates so we don't need a Save button. Reloads
+    // detail to pick up any server-derived state changes (e.g. auto-add
+    // hook firing when level transitions).
+    type FieldPatch = {
+        name?: string;
+        notes?: string | null;
+        stock_location_id?: string | null;
+        stock_group_id?: string | null;
+        is_flagged?: boolean;
+        auto_add_when_low?: boolean;
+        expiry_date?: string | null;
+    };
+    async function saveField(patch: FieldPatch) {
         if (!detail.value) return;
-        savingBasics.value = true;
+        busy.value = true;
         try {
             await stockItemStore.updateStockItemAsync({
                 stock_item_id: detail.value.stock_item_id,
-                name: form.name,
-                notes: form.notes.length > 0 ? form.notes : null,
-                stock_location_id: form.stock_location_id,
-                auto_add_when_low: form.auto_add_when_low,
-                is_flagged: form.is_flagged,
+                ...patch,
             });
             await loadDetail();
-            $q.notify({ type: 'positive', message: 'Saved.', position: 'bottom-right' });
         } catch (err) {
             notifyErr('Save failed.', err);
         } finally {
-            savingBasics.value = false;
+            busy.value = false;
         }
+    }
+    async function saveNameIfDirty() {
+        if (!detail.value) return;
+        const next = form.name.trim();
+        if (!next || next === detail.value.name) return;
+        await saveField({ name: next });
+    }
+    async function saveNotesIfDirty() {
+        if (!detail.value) return;
+        const next = form.notes ?? '';
+        if (next === (detail.value.notes ?? '')) return;
+        await saveField({ notes: next.length > 0 ? next : null });
+    }
+    async function onChangeLocation(value: string | null) {
+        if (!detail.value || value === detail.value.stock_location_id) return;
+        await saveField({ stock_location_id: value });
+    }
+    async function onChangeGroup(value: string | null) {
+        if (!detail.value || value === detail.value.stock_group_id) return;
+        await saveField({ stock_group_id: value });
+    }
+    async function onToggleFlagged(value: boolean) {
+        await saveField({ is_flagged: value });
+    }
+    async function onToggleAutoAdd(value: boolean) {
+        await saveField({ auto_add_when_low: value });
+    }
+    function shiftExpiry(days: number) {
+        // From the current expiry if set, otherwise from today. Date math in
+        // UTC so DST boundaries don't shift the displayed day.
+        const baseISO = detail.value?.expiry_date ?? new Date().toISOString().slice(0, 10);
+        const [y, m, d] = baseISO.split('-').map(Number) as [number, number, number];
+        const t = new Date(Date.UTC(y, m - 1, d));
+        t.setUTCDate(t.getUTCDate() + days);
+        void saveField({ expiry_date: t.toISOString().slice(0, 10) });
+    }
+    function clearExpiry() {
+        void saveField({ expiry_date: null });
     }
 
     // ── Toolbar actions ──────────────────────────────────────────────────
@@ -728,14 +954,8 @@
             stockItemStore.updateStockItemAsync({ stock_item_id: stockItemId.value, is_open: next }),
         );
     }
-    async function onRestock() {
-        await withBusyReload(() => actions.markRestocked(stockItemId.value));
-    }
     async function onAddToList() {
         await withBusyReload(() => actions.addToList(stockItemId.value));
-    }
-    function onFindDeals() {
-        void router.push({ path: '/product-search', query: { q: detail.value?.name ?? '' } });
     }
     async function onChangeStockLevel(stockLevelId: string) {
         await withBusyReload(() =>
@@ -801,9 +1021,22 @@
     }
 
 
-    async function onAddCheapest() {
-        if (!cheapestProduct.value) return;
-        await onAddProductToList(cheapestProduct.value.product_id);
+    // C-1b.3 (L130 emphasis): the cheapest product gets a chip + highlight
+    // style rather than a separate "Add cheapest" button — each product
+    // carries its own Add-to-list.
+    function isCheapest(p: LinkedProduct): boolean {
+        return cheapestProduct.value?.product_id === p.product_id;
+    }
+
+    // C-1b.3 (L125): Find-deals now lives only inside the Products tab
+    // (empty-state CTA + "Link another" when products exist). Both route
+    // to product-search seeded with the item name; that page already owns
+    // the link flow.
+    function onFindAndLink() {
+        void router.push({
+            path: '/product-search',
+            query: { q: detail.value?.name ?? '' },
+        });
     }
 
     async function onAddProductToList(productId: string) {
@@ -849,6 +1082,35 @@
             busy.value = false;
         }
     }
+    // C-1b.4 / FU-185 — B8 residue: the favourite toggle on this surface
+    // was wired to a dead listener. Mirror RecipesOverview's handler shape
+    // (toggle on the recipe store; the card re-renders via the store).
+    function onToggleFavourite(recipeId: string) {
+        const r = recipes.value.find((x) => x.recipe_id === recipeId);
+        if (r) void recipeStore.toggleFavouriteAsync(r as unknown as Recipe);
+    }
+    // Cookable card → "Add all" pushes every ingredient onto the primary
+    // draft. Matches the existing onAddMissing pattern (no picker dialog
+    // on this surface — RecipesOverview's richer picker is overkill here).
+    async function onAddAllToList(recipeId: string) {
+        const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
+        if (!recipe || recipe.ingredients.length === 0) return;
+        const ids = recipe.ingredients
+            .map((ing) => ing.stock_item_id)
+            .filter((id): id is string => !!id);
+        if (ids.length === 0) return;
+        const primary = shoppingListStore.quickAddTargetListId;
+        if (!primary) {
+            await actions.addToList(ids[0] ?? stockItemId.value);
+            return;
+        }
+        busy.value = true;
+        try {
+            await slActions.addItems(primary, ids.map((id) => ({ stock_item_id: id })));
+        } finally {
+            busy.value = false;
+        }
+    }
 
     // ── Substitutes ──────────────────────────────────────────────────────
     function stockItemFor(sub: Substitute): StockItem {
@@ -887,9 +1149,6 @@
     async function onRemoveSubstitute(substituteId: string) {
         await withBusyReload(() => stockItemApi.removeSubstituteAsync(stockItemId.value, substituteId));
     }
-    async function onSwapSubstitute(substituteId: string) {
-        await withBusyReload(() => actions.addToList(substituteId));
-    }
 
     // ── On shopping lists ────────────────────────────────────────────────
     const onLists = computed(() => {
@@ -901,45 +1160,146 @@
             (lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const },
         );
     });
+    // C-1b.4 (L138): the server-inferred primary draft list (R-003) — the
+    // Lists tab decorates that row with a styled "Primary" badge instead
+    // of plain text.
+    const primaryListId = computed(() => shoppingListStore.quickAddTargetListId ?? null);
     function goToList(listId: string) {
         void router.push(`/shopping-lists/${listId}`);
     }
 
-    // ── Link / unlink products ───────────────────────────────────────────
-    const pickerOpen = ref(false);
-    const pickerSearch = ref('');
-    const pickerLoading = ref(false);
-    const allSavedProducts = computed<Product[]>(() => [...(productStore.products ?? [])]);
-    const pickerCandidates = computed(() => {
-        if (!detail.value) return [];
-        const linked = new Set(detail.value.products.map((p) => p.product_id));
-        const q = pickerSearch.value.trim().toLowerCase();
-        return allSavedProducts.value.filter((p) => {
-            if (linked.has(p.product_id)) return false;
-            if (!q) return true;
-            return (
-                p.name.toLowerCase().includes(q) ||
-                p.merchant_name?.toLowerCase().includes(q) ||
-                (p.brand ?? '').toLowerCase().includes(q)
-            );
-        });
-    });
-    async function openProductPicker() {
-        pickerSearch.value = '';
-        pickerOpen.value = true;
-        if (allSavedProducts.value.length === 0) {
-            pickerLoading.value = true;
-            try {
-                await productStore.getProductsAsync();
-            } finally {
-                pickerLoading.value = false;
+    // ── Lifecycle timeline (C-1b.5 / INV-7) ─────────────────────────────
+    // Merge the per-kind event lists into one date-sorted timeline. Each
+    // entry carries its own colour + icon so the user can scan an item's
+    // purchase → use → waste → restock loop at a glance (P5).
+    type LifecycleEvent = {
+        id: string;
+        at: string;
+        title: string;
+        body?: string;
+        icon: string;
+        color: string;
+    };
+    const ADDED_VIA_LABELS: Record<string, string> = {
+        manual: 'Added manually',
+        auto_low_stock: 'Auto-added: low stock',
+        auto_essential: 'Auto-added: essential',
+        auto_flagged: 'Auto-added: essential',
+        auto_recipe: 'Auto-added from a recipe',
+        auto_meal_plan: 'Auto-added from meal plan',
+        auto_frequently_added: 'Auto-added: frequently added',
+    };
+    const WASTE_REASON_LABELS: Record<string, string> = {
+        expired: 'expired',
+        spoiled: 'spoiled',
+        did_not_like: "didn't like",
+        overbought: 'overbought',
+        other: 'other reason',
+    };
+    function humaniseAddedVia(via: string): string {
+        return ADDED_VIA_LABELS[via] ?? 'Added to a list';
+    }
+    function humaniseWasteReason(reason: string): string {
+        return WASTE_REASON_LABELS[reason] ?? reason;
+    }
+    const lifecycleEvents = computed<LifecycleEvent[]>(() => {
+        const d = detail.value;
+        if (!d) return [];
+        const out: LifecycleEvent[] = [];
+
+        // Level history — newest level at top of `level_history` already.
+        // Walk *forwards in time* (older→newer) so we can infer "restocked"
+        // vs "dropped to X" by comparing to the previous level name.
+        const levels = [...d.level_history].sort(
+            (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
+        );
+        for (let i = 0; i < levels.length; i++) {
+            const cur = levels[i]!;
+            const prev = i > 0 ? levels[i - 1] : null;
+            const name = cur.stock_level_name ?? 'Level changed';
+            let title = `Level → ${name}`;
+            if (prev && prev.stock_level_name && cur.stock_level_name) {
+                // Cheap heuristic: any move from Low/Out → not-Low/Out reads as
+                // "restocked"; the opposite reads as "dropped to X". Otherwise
+                // just show the destination.
+                const wasShort = /^(low|out)/i.test(prev.stock_level_name);
+                const nowShort = /^(low|out)/i.test(cur.stock_level_name);
+                if (wasShort && !nowShort) title = `Restocked → ${name}`;
+                else if (!wasShort && nowShort) title = `Dropped to ${name}`;
             }
+            out.push({
+                id: `level-${cur.changed_at}-${i}`,
+                at: cur.changed_at,
+                title,
+                icon: ICONS.refresh,
+                color: 'primary',
+            });
         }
-    }
-    async function onLink(productId: string) {
-        pickerOpen.value = false;
-        await withBusyReload(() => stockItemApi.linkProductAsync(stockItemId.value, productId));
-    }
+
+        // Waste events.
+        for (const w of d.waste_events ?? []) {
+            const reason = humaniseWasteReason(w.reason);
+            const qty = w.quantity != null ? `${w.quantity} ` : '';
+            const value = w.estimated_value != null
+                ? ` (~$${w.estimated_value.toFixed(2)})`
+                : '';
+            const entry: LifecycleEvent = {
+                id: `waste-${w.occurred_at}-${reason}`,
+                at: w.occurred_at,
+                title: `Wasted: ${qty}${reason}${value}`.trim(),
+                icon: ICONS.delete_outline,
+                color: 'negative',
+            };
+            if (w.note) entry.body = w.note;
+            out.push(entry);
+        }
+
+        // Past list-adds — list name + provenance ("auto: low stock").
+        for (const a of d.recent_list_adds ?? []) {
+            out.push({
+                id: `add-${a.added_at}-${a.shopping_list_id}`,
+                at: a.added_at,
+                title: `${humaniseAddedVia(a.added_via)} → ${a.shopping_list_name}`,
+                icon: ICONS.shopping_cart,
+                color: 'accent',
+            });
+        }
+
+        // Synthetic "Opened" — single entry derived from current state.
+        // opened_on is a date; widen to start-of-day for ordering.
+        if (d.is_open && d.opened_on) {
+            out.push({
+                id: `opened-${d.opened_on}`,
+                at: `${d.opened_on}T00:00:00`,
+                title: 'Opened',
+                icon: 'lock_open',
+                color: 'amber-9',
+            });
+        }
+
+        // Synthetic "Checked" — only if last_checked_at differs from the
+        // most recent level change (otherwise it's the same event).
+        const lastLevelAt = levels.length > 0
+            ? levels[levels.length - 1]!.changed_at
+            : null;
+        if (d.last_checked_at && d.last_checked_at !== lastLevelAt) {
+            out.push({
+                id: `checked-${d.last_checked_at}`,
+                at: d.last_checked_at,
+                title: 'Checked (still correct)',
+                icon: ICONS.event,
+                color: 'positive',
+            });
+        }
+
+        // Sort newest first and cap so a chatty item doesn't blow the tab.
+        out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+        return out.slice(0, 60);
+    });
+
+    // ── Unlink products ──────────────────────────────────────────────────
+    // C-1b.3 retired the saved-products picker dialog in favour of the
+    // single Find-&-link CTA → /product-search (which owns the link flow).
     async function onUnlink(productId: string) {
         await withBusyReload(() => stockItemApi.unlinkProductAsync(stockItemId.value, productId));
     }
@@ -1043,9 +1403,12 @@
     });
 
     onMounted(async () => {
+        // Stock groups are page-local (only consumer); load alongside the
+        // other dropdowns so the inline picker has options on first paint.
+        void stockGroupApi.getAllAsync().then((g) => { stockGroups.value = g; });
         await Promise.all([
             stockLevelStore.getStockLevelsAsync(),
-            stockLocationStore.getStockLocationsAsync(),
+            locationStore.refreshAsync(),
             stockItemStore.getStockItemsAsync(),
             recipeStore.getRecipesAsync(),
             shoppingListStore.refreshAsync(),
@@ -1057,5 +1420,12 @@
 <style scoped>
     .strike {
         text-decoration: line-through;
+    }
+    /* C-1b.3 — emphasise the cheapest linked product per §2.4 (style, not a
+       separate "Add cheapest" button). Subtle outline + tinted background
+       via the brand-primary token so it follows the active theme. */
+    .dora-product-card--cheapest {
+        border-color: var(--brand-primary) !important;
+        background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
     }
 </style>

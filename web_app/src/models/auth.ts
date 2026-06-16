@@ -76,4 +76,7 @@ export type AuthenticatedUser = {
     // read + write — the composable owns the optimistic-flip + rollback.
     show_recipe_images: boolean;
     show_stock_images: boolean;
+    // Onboarding C-5.4 — household cooking headcount; null = not set (cook
+    // mode falls back to each recipe's own serving size).
+    household_headcount: number | null;
 };

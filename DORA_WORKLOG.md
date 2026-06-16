@@ -52,12 +52,725 @@ Detail / product surfaces collapse for the "Cooking" persona. Preferred product 
    watch tier / **the new Upcoming fortnight timeline** (dots land on the right days, click expands,
    links navigate). Flip **FU-042** + **FU-183** with it. Then **Phase B** = C-9.7 email digest,
    C-9.8 web push.
-2. **Build another surface's first chunk** — **C-5.1** (onboarding quick wins), **C-1b.1**
-   (stock-detail overview tidy), **C-10.1** (IngestionSource + keys page). Env is up — build *and run*.
+2. **Build another surface's first chunk** — **C-5.1 + C-5.2 + C-5.3 DONE 2026-06-16** (see entries
+   below); **C-5.4, C-5.5, C-5.6 also DONE 2026-06-16 — the whole C-5 onboarding surface is now
+   built** (only the optional demo data is deferred → FU-194). Other unbuilt first chunks: **C-1b.1**
+   (stock-detail overview tidy), **C-10.1** (IngestionSource + keys page). **Note:** the C-5.x stack
+   is built but **unverified in a browser / backend** — FU-192 (FE smoke) + FU-193 (C-5.3/.4/.5 BE
+   migrate + e2e) + FU-183 (alerts) are the batch to run on a provisioned machine.
 3. **Plan another surface** (design-sprint pattern) — Dora Assistant architecture, Dashboard,
    Data page, Help overlay, Barcode scanning, Locale/i18n.
 
 ---
+
+## 2026-06-16 — C-1b.5: History tab → item lifecycle timeline (INV-7) — closes the C-1b stack
+**Status:** code complete, **browser-unverified** (per working-style). The final and meatiest
+C-1b chunk per the impl plan; closes L139 (and rolls the cluster's design home into the running
+surface — **COVERAGE_GAPS A-1 flipped gap → covered**).
+
+**What changed (backend — `get_stock_item_detail.py`):**
+- DTO gains three new surfaces, server-aggregated per R-003 / INV-7's spec:
+  - `waste_events: WasteEventDto[]` — `StockItemWasteEvent` rows for this item, newest first,
+    capped at 20. Fields: `occurred_at`, `reason`, `quantity`, `estimated_value`, `note`.
+  - `recent_list_adds: ListAddEventDto[]` — `ShoppingListLine` rows with this `stock_item_id`
+    and a non-null `added_at`, regardless of list status (the timeline is about the item's
+    history, not the current cart). Resolves `shopping_list_name` via a single batched lookup
+    (no N+1). Capped at 20.
+  - `last_checked_at` — X1 "still correct" timestamp; surfaced as a synthetic timeline entry
+    only when it differs from the most recent level change.
+- No schema change; the underlying entities (`StockItemWasteEvent` and `ShoppingListLine.added_at
+  /added_via`) already exist.
+- New e2e (`test__get_stock_item_detail__exposes_lifecycle_keys`) pins the keys-present
+  contract. Full e2e **307 passed** (was 306).
+
+**What changed (frontend — `StockItemDetailPage.vue` + `stockItemDetail.ts`):**
+- `StockItemDetail` extended with `waste_events?: WasteEvent[]`, `recent_list_adds?:
+  ListAddEvent[]`, `last_checked_at?: string | null` (and the new `WasteEvent` + `ListAddEvent`
+  types).
+- New `lifecycleEvents` computed merges all five sources into a single date-sorted
+  `LifecycleEvent[]`:
+  - **Level history** with inferred context: walking older→newer, any move from Low/Out →
+    not-Low/Out reads as "Restocked → X"; the reverse reads as "Dropped to X"; otherwise
+    "Level → X". (Cheap regex heuristic; deliberately no client-side seq-comparison — server
+    owns level semantics, R-003.)
+  - **Waste** events: `Wasted: <qty> <reason> (~$value)` + optional note as the entry body.
+    `WASTE_REASON_LABELS` humanises reason codes ("did_not_like" → "didn't like", etc.).
+  - **List-add provenance**: `<humanised added_via> → <list name>`. `ADDED_VIA_LABELS` maps
+    all the `ADDED_VIA_*` sentinels to readable copy.
+  - **Synthetic Opened** entry when `is_open && opened_on` (widened to start-of-day for
+    ordering alongside datetimes).
+  - **Synthetic Checked** entry when `last_checked_at` differs from the latest level change
+    (avoiding the dup that would happen because every level change also bumps last_checked_at).
+  - Newest first; capped at 60 entries so chatty items don't blow the tab.
+- Each entry carries its own `icon` + `color` (`primary` for level, `negative` for waste,
+  `accent` for list-add, `amber-9` for opened, `positive` for checked) so the timeline is
+  scannable at a glance — the P5 purchase→use→waste→restock loop in one place.
+- The empty-state copy is honest: "Nothing logged for this item yet — once you change its stock
+  level, add it to a list, mark it open or log waste, it'll show up here."
+
+**Verified:** `vue-tsc --noEmit` clean, `eslint` clean on the touched files, backend e2e
+**307 passed**.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation / reuse): re-used `q-timeline` / `q-timeline-entry`, the existing
+  `formatDateTime` helper, `ICONS` tokens. No new components.
+- R-002 (theme tokens): entry colours are Quasar token names (`primary`/`negative`/`accent`/
+  `positive`/`amber-9`), which the theme resolves.
+- R-003 (server owns aggregates): all event lists come from the server; the client only
+  merges + presents. The "restocked vs dropped" labelling is presentation-only inference from
+  level names the server provides.
+- R-007 (scope discipline): didn't touch the waste-insights or spend-report surfaces; the
+  20-row cap means this isn't the audit log surface (those stay where they live).
+- R-008 (no dead code): the old "No level changes recorded yet" message is replaced by a more
+  inclusive empty state; old single-source `level_history` render is gone.
+
+**Cluster status:** the **C-1b stack is complete** (.1 marquee · .2 split-view · .3 Products +
+products-off · .4 tabs polish · .5 lifecycle timeline). `COVERAGE_GAPS.md` A-1 flipped gap →
+covered, with the L112-140 bullet table now pointing at each landing chunk. The only remaining
+gate is browser-verification (FU-202, extended throughout the stack).
+
+**Next per master plan:** with C-1b done, the next big-rock surfaces to pick up are
+**C-1b.next-of-kin** (none in this stack), **C-10.1** (IngestionSource + API keys page — Phase 2
+work, the ingestion API), or any **browser-verify** gate the user wants to clear first
+(FU-202 / FU-183 / FU-192). See the worklog top-snapshot's "🔀 THE MENU" for the broader
+choices.
+
+---
+
+## 2026-06-16 — C-1b.4: recipe-tab dead actions + lists tab polish + substitutes chip
+**Status:** code complete, **browser-unverified** (per working-style). Low-risk chunk per the
+impl plan; closes L132, L133 (confirm), L134, L138, L136 (cross-ref), L137 — and **resolves
+FU-185** (the B8-residue dead-handler defect).
+
+**What changed (`StockItemDetailPage.vue`):**
+- **Recipes tab (L132, L134 / FU-185 / B8 residue):** wired the two `RecipeCard` events the
+  page was previously dropping.
+  - `@toggle-favourite="onToggleFavourite"` — mirrors `RecipesOverview`: looks the recipe up in
+    the store and calls `recipeStore.toggleFavouriteAsync(r)`. "Remove from favourites" now
+    actually does something here.
+  - `@add-all-to-list="onAddAllToList"` — collects the recipe's ingredient stock-item ids and
+    pushes them via `slActions.addItems(primary, …)` onto the inferred primary draft. Empty
+    recipe / no primary fall back the same way `onAddMissing` does, so the surface stays
+    consistent. The richer per-ingredient picker dialog stays in `RecipesOverview` — overkill on
+    a per-stock-item detail page, and the proposal explicitly says "Bug-shaped — fold the fix
+    in" (no new picker plumbing here).
+  - **FU-185 moved to `DORA_FOLLOWUPS_RESOLVED.md`** with a state note. Browser verification of
+    the fix rolls up under FU-202 (extended).
+- **Substitutes tab (L136 cross-ref, L137):** dropped the per-row **"Swap into list"** button —
+  swap-into-list moves to **Shop Mode (INV-8)** since the moment a substitute swap actually
+  helps is at the shelf, not when browsing the substitute roster. The per-item substitutes list
+  itself stays. Row still has name (link) + `StockLevelDot` + Remove (icon button). The
+  `onSwapSubstitute` handler is gone (R-008).
+- **Shopping Lists tab (L138):** rows already navigated to the list, so the inert `open_in_new`
+  arrow on the right was decoration only — removed. **"Primary"** now renders as a real `q-badge`
+  (color="primary", text-color="white", label="Primary") next to the list name, picked from the
+  server-inferred `shoppingListStore.quickAddTargetListId` (R-003 — server decides primary, not
+  the client). Added a small `primaryListId` computed for readability.
+
+**Out of scope per plan (logged where it lives):**
+- L133 recipe-row navigation is already correct — confirm-in-browser via FU-202.
+- L137 substitute *chip* design (level dot + outline) — the per-stock-item substitute display
+  on this surface is already a `q-list` row with name + level dot, which matches the spec. The
+  proposal text about a "chip" referred to the retired substitute-graph chrome, not anything
+  currently rendered here. No work required.
+
+**Verified:** `vue-tsc --noEmit` clean, `eslint` clean on the touched file. Backend untouched —
+no e2e implication.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation / reuse): re-used `RecipeCard`, `BaseButton`, `q-badge`. No new
+  components.
+- R-003 (server owns state): "primary" badge reads `quickAddTargetListId` from the shopping-list
+  membership the server publishes — no client-side primary-inference.
+- R-007 (scope discipline): no second picker dialog; no Shop Mode swap rework (INV-8 owns that);
+  no rebuild of the substitute-chip outside the curated list.
+- R-008 (no dead code): removed `onSwapSubstitute` along with the swap button.
+
+**Next per plan:** **C-1b.5** — History tab → item lifecycle timeline (INV-7). Medium risk; needs
+detail DTO additions for recent `StockItemWasteEvent` + recent `ShoppingListLine` add-events and
+a merged timeline render. That's the **last** chunk of the C-1b stack and closes COVERAGE_GAPS
+A-1 once the browser-confirms land.
+
+---
+
+## 2026-06-16 — C-1b.3: Products tab contextual + products-off design
+**Status:** code complete, **browser-unverified** (per working-style). Low-medium-risk chunk per
+the impl plan; closes L125 + L130 (emphasis) + L131 (closed) + proposal §2.5.
+
+**What changed (`StockItemDetailPage.vue`):**
+- **Empty Products tab → primary CTA.** When the item has no linked products, the tab now shows
+  a centred empty state with a **"Find & link a product"** primary CTA that routes to
+  `/product-search?q=<item-name>`. The old plain-text "no products linked" caption is gone.
+- **Non-empty → quieter "Link another".** When products exist, the header carries a ghost-styled
+  `Link another` button (same route). One contextual affordance, per §2.4 ("a quieter
+  'link another / find more.'").
+- **"Get cheapest" toolbar button removed.** Per §2.4 ("style, not a separate 'Add cheapest'
+  button"). The cheapest card is now visually emphasised — `Cheapest` chip + a subtle
+  brand-primary outline + 8% tint (via `color-mix` on `--brand-primary` so it follows the active
+  theme, R-002). The per-product `Add to list` button is the only add path for a specific
+  product. `onAddCheapest` handler is gone (R-008).
+- **Saved-products dialog picker retired.** `openProductPicker`/`onLink`/`pickerOpen`/
+  `pickerSearch`/`pickerLoading`/`allSavedProducts`/`pickerCandidates` and the `BaseDialog`
+  block were all deleted (R-008). The `useProductStore` + `Product` type imports went with
+  them — `productStore` had no other consumer on this page. Linking is now: Find & link CTA →
+  `/product-search` (which already owns the link flow via its own picker dialog).
+- **Products-off (`useFeatureFlags().products === false`)** consumed:
+  - The **Products tab is hidden** from the `q-tabs` row (`v-if="productsEnabled"`).
+  - The Products `q-tab-panel` is also `v-if="productsEnabled"` (defensive: even if the tab
+    appeared somehow, the panel wouldn't render).
+  - A `watch([productsEnabled, tab], …, { immediate: true })` falls back to `overview` if the
+    URL had `?section=products` or the admin flips the flag off while the page is open.
+  - Per-product price sparklines + the Find-deals affordance live entirely inside the Products
+    tab, so they disappear cleanly with it (no orphan UI elsewhere).
+- **R-007 scope discipline:** the **app-wide** Products-off sweep stays FU-182 — this brief only
+  designs the on/off states for this surface. Did not touch other consumers (`StockOverview`,
+  shopping list, product search, nav). Did not add deep-link pre-selection to ProductSearch
+  (would touch adjacent scope); the seeded `?q=<name>` is enough for now.
+
+**Verified:** `vue-tsc --noEmit` clean, `eslint` clean on the touched file. Backend untouched —
+no e2e implication.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation / reuse): re-used `BaseButton` (primary + ghost), `useFeatureFlags`,
+  the existing `/product-search` page's link flow. No new components.
+- R-002 (theme tokens): cheapest-card highlight reads from `--brand-primary` via `color-mix`,
+  so it tracks the theme.
+- R-003 (server owns state): no client-side derived rules added — `cheapestProduct` is local
+  presentation derivation, same as before.
+- R-007 (scope discipline): didn't touch FU-182's app-wide sweep, didn't change
+  `ProductSearch.vue` to pre-select the stock item, didn't reshape the link flow.
+- R-008 (no dead code): every retired symbol removed (`onAddCheapest`, the picker dialog block,
+  `openProductPicker`, `onLink`, four picker refs/computeds, the productStore import + use).
+
+**Next per the plan:** **C-1b.4** — recipe-tab dead actions (B8 residue / **FU-185**), Shopping
+Lists tab polish (clickable rows + "primary" badge, drop dead arrow), Substitutes chip (level
+indicator + outline). Low risk. **FU-185** closes here.
+
+---
+
+## 2026-06-16 — C-1b.2: split-view defaults (50% + min/max clamp)
+**Status:** code complete, **browser-unverified** (per working-style). Tiny scoped chunk per the
+impl plan; closes L117 + L118.
+
+**What changed (`StockOverview.vue`):**
+- Splitter default while peeking: **50%** (was 58%).
+- Drag-range while peeking clamped to **[40%, 65%]** (was `[40, 100]` — no max, so the user could
+  squish the list to a sliver). Outside the peek, limits stay `[40, 100]` so the list can take the
+  full width when no peek is open.
+- Implemented as `splitterLimits` computed that reads `peekId.value`, swapped into `:limits` on the
+  `<q-splitter>`. The existing `:disable="!peekId"` already locks dragging when there's no peek.
+
+**Verified:** `vue-tsc --noEmit` clean, `eslint` clean on the touched file. No backend / e2e
+touched.
+
+**Engineering-standards close-gate:** R-007 (scope discipline — touched only the splitter config
+and its computed limits, as the chunk gate requires). No new ADR.
+
+**Next:** user browser-verify the new defaults (peek opens at 50%; can't drag either pane past the
+clamps; with no peek the list still goes full-width). FU-202 already covers the broader C-1b
+browser verification — extending it for this chunk too. After verification, next chunk is **C-1b.3**
+(Products tab + contextual Find-deals + Products-off design — Low-medium risk, consumes
+`products_enabled` and is FU-182's headline example).
+
+---
+
+## 2026-06-16 — C-1b.1 marquee: Stock Item Detail overview tidy + inline edits + dedupe level + toolbar cleanup
+**Status:** code complete; **frontend browser-unverified** (handed to user per working-style);
+backend verified — 306 e2e pass (was 303). The "big" C-1b chunk per the impl plan; closes the
+A-1 cluster's L121, L122, L123, L124, L127, L128, L112, L115, L114, L120, L126, L129, L113.
+
+**What changed (backend):**
+- `get_stock_item_detail.py` + `stockItemDetail.ts` now thread **`stock_group_id` / `stock_group_name`**
+  (no schema change — the FK existed; the detail DTO just didn't carry it). Eager-loads via
+  `.include(StockItem.Fields.STOCK_GROUP)`. The existing partial PATCH on `update_stock_item.py`
+  already accepted `stock_group_id`.
+- **Bug fix surfaced by the e2e:** `PATCH stock_group_id: null` was silently a no-op. Root cause:
+  the relationship is mapped `lazy="noload"` so `_StockItem.stock_group` reads as `None` on the
+  loaded entity; assigning `None` doesn't dirty the FK column. Fix: also set
+  `_StockItem._stock_group_id = None` on clear. **The same root cause likely affects
+  `stock_location_id: null` clears via the existing q-select clearable**; logged as **FU-203** rather
+  than silently expanding C-1b.1's scope (per R-007).
+- E2E (`tests/e2e/dora_api/test_stock_item_router.py`): 3 new tests pin (a) keys-present, (b) null
+  serialisation, (c) PATCH roundtrip (set + clear). All other stock-item e2e still green.
+
+**What changed (frontend — `StockItemDetailPage.vue`):**
+- **Header (L121, L122):** the **level chip is the editor** — header becomes back/close · name ·
+  q-btn-dropdown (level) · ↦ space ↦ **Delete (danger-ghost, top-right)**. The duplicate "Stock
+  level" row in Overview is gone.
+- **Toolbar (L123, L125):** pared to **Mark open · Set expiry · Add-to-list · (Show QR)**. Removed
+  Restock (`onRestock` + the `markRestocked` call) and Find-deals (`onFindDeals` + the route push)
+  — dead code deleted per R-008. Find-deals will land contextually in the Products tab in C-1b.3;
+  there's a short-lived gap on the detail page between .1 and .3, accepted per plan.
+- **Overview (L127, L128, L112, L115, L114, L129, L113):** collapsed the 2-col "facts | edit-form"
+  split into a **single-column inline-edit fact list**. Each row IS its editor:
+  - Name — `q-input` borderless; saves on blur/Enter if dirty.
+  - Location — searchable path picker (the FU-202 builder); saves on change.
+  - Stock group — new inline picker (`groupOptions` from `stockGroupApi`); saves on change.
+  - Expiry — value + ±1d / +7d / +14d quick-set + `event` icon → date dialog + **× clear**
+    (negative round button, only when set). UTC date math so DST doesn't shift days.
+  - Open / in-use — toggle on the row + "Opened {date}" caption + an open↔expiry info tooltip
+    (L113: opening doesn't change expiry, but for perishables it's the cue to set/shorten one).
+  - Essential (`is_flagged`) — toggle on its own row with an info tooltip.
+  - Auto-add when low — toggle on its own row with the existing tooltip.
+  - Level updated — read-only relative time (only row that isn't editable, since it's derived).
+  - **Notes — calm/secondary** (L129): rendered after the fact list with a softer label, autogrow
+    textarea, save on blur. Cheap, not promoted.
+  - The Save/Reset buttons are gone (each editor saves on its own); `useUnsavedChangesGuard` now
+    only fires for in-progress text edits (name/notes).
+- **Tabs (L120 / R-002):** routed through theme tokens — `class="text-primary"`
+  + `active-color="primary"` + `indicator-color="primary"`, matching the HelpPage pattern. The
+  active tab + indicator now stay legible in every theme.
+- **QR vs barcode (L126):** added a one-line tooltip on the Show-QR toolbar button clarifying
+  that it's Dora's own per-item label (a scannable QR back to this page), distinct from real
+  EAN/UPC barcodes (those live on Data → Barcodes and link to a Product, not a stock item).
+- **Open↔expiry copy (L113):** info tooltip on the Open row, see above.
+
+**Verified:** `vue-tsc --noEmit` clean; `eslint` clean on the touched files; backend e2e
+**306 passed** (3 new). Production build not run this pass — chunk gate is tsc + eslint + e2e
+per the impl plan; no template construct here that the build would catch and tsc wouldn't.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation / reuse): re-used `BaseButton`, `AddToListButton`, the existing
+  `BaseDialog` set-expiry dialog, and the FU-202 location path-options builder. New picker logic
+  for stock groups is page-local (single consumer) — promoting to a store is premature.
+- R-002 (theme tokens): tabs now drive colour through `text-primary` / `active-color="primary"` /
+  `indicator-color="primary"` — matches the established A1 pattern.
+- R-003 (server owns writes): every inline editor saves via the existing partial PATCH; no
+  client-side derived rules added.
+- R-007 (scope discipline): Find-deals rebuilt-elsewhere is C-1b.3 (not done here); Products-off
+  gating is FU-182 (not done here); recipe-tab dead actions are C-1b.4 (FU-185 still open). The
+  stock_location clear bug noticed adjacent to the stock_group fix was logged as **FU-203** rather
+  than silently expanded into this chunk.
+- R-008 (no dead code): removed `onRestock`, `onFindDeals`, the read-only level row, the old
+  q-form + `onSaveBasics` + `resetBasicsForm`, the now-unused `formatLocation`/`locationHasDetail`
+  imports, and `savingBasics` (write-only after the refactor — collapsed into `busy`).
+
+**Next:** user browser-smoke the C-1b.1 acceptance set — see updated FU-202. After verification,
+the next chunk is **C-1b.2** (split-view 50% default + min/max clamp in `StockOverview.vue` —
+small, Low risk).
+
+---
+
+## 2026-06-16 — Stock Item Detail (C-1b) focused feedback pass
+**Status:** code complete, **browser-unverified** (handed to user per working-style). A focused
+3-item polish pass on the Stock Item Detail surface — **not** the full C-1b.1 marquee refactor
+(that stays deferred). Scope was locked with the user before editing.
+
+**User feedback addressed (3 items):**
+1. **Location picker now shows the full path and is searchable.** The Overview tab's location
+   **picker** options are now **full-path labels** ("Pantry › Middle shelf › Left side") built from
+   the `locationStore` tree, and the `q-select` is **searchable/filterable** (`use-input` + `@filter`
+   local filter), matching the other location pickers. This page now sources locations from
+   `locationStore` (tree) instead of the flat `stockLocationStore` — the picker was its only consumer,
+   so the flat store + `stockLocations` ref were removed from the page (no dead code). The read-only
+   "Location" row was left as-is (zone + hover tooltip per C-cross Chunk 4) — the original feedback
+   was targeting the picker, not the summary row.
+2. **Image buttons get breathing room.** `ImageUploadField` call-site margin bumped `q-mb-md` →
+   `q-mb-lg` so the Change/Remove buttons aren't crowding the basics form below.
+3. **Toolbar "Add to list" now matches the other buttons.** `AddToListButton`'s `toolbar` variant
+   renders the shared `BaseButton variant="secondary"` instead of a bare flat `q-btn`, so it sits
+   flush with Mark open / Restock / Set expiry / Find deals. Cart-state icon still swaps (add vs
+   in-cart) to signal on/off-list; the multi-list popover still anchors to it. `toolbar` is only used
+   on this page, so the change is fully scoped.
+4. **Stock Overview location filter matches the detail picker.** The `StockOverview` "Any location"
+   `q-select` is now searchable + path-labelled with the same `use-input` + `@filter` UX. The
+   `useStockFilters` composable's `sources.stockLocations` was swapped for `locationTree` (single
+   consumer, pre-release, no compat shim); it now exposes `locationOptions` (narrowing ref bound to
+   the q-select) **and** `allLocationOptions` (full list — the `BulkMoveLocationDialog` reads this
+   one so the move dropdown isn't accidentally narrowed by the page's search box) **and**
+   `filterLocations`. The page itself swapped `stockLocationStore` → `locationStore`.
+
+**Verified:** `vue-tsc --noEmit` clean; `eslint` clean on both touched files
+(`StockItemDetailPage.vue`, `AddToListButton.vue`).
+
+**Engineering-standards close-gate:** reused `BaseButton`/`ImageUploadField` (R-001); removed the
+now-dead flat-store wiring rather than leaving it (no-dead-code); client-side path assembly mirrors
+the existing `StockItemRow` pattern off the same tree (presentation of server-provided data, not a
+relocated domain rule — consistent with state-ownership). No new ADR warranted.
+
+**Next:** user to browser-verify (full path in Overview, tooltip-free; picker searchable + path
+labels + save round-trips; image spacing; toolbar button visually flush). Logged as FU-202.
+
+---
+
+## 2026-06-16 — Ship-blocker FU-201 (build) fixed + FU-193 backend verified
+**Status:** complete (code + tests). User picked "fix the build, then run the verification batch"
+off the senior-review roadmap. This machine is **fully provisioned** (Python 3.11.15 + `.venv`,
+`web_app/node_modules`), so fixes were actually run, not static-only.
+
+**What changed:**
+- **FU-201 (ship-blocker) — RESOLVED.** Removed the 4 dead symbols gating `vite-plugin-checker`'s
+  ESLint lintCommand: `useStockFilters.ts` `stockLevelName` + `recipesByStockItem` (removing the
+  former orphaned `stockLevelById`, also removed; dropped a stale comment claiming the index still
+  had consumers); `RecipeDetailPage.vue` `stockActions` + its now-unused `useStockItemActions`
+  import; `AboutSettings.vue` unused `ICONS` import. `npm run lint` clean; `npm run build` (quasar
+  SPA) **succeeds**. CI (`.github/workflows/ci.yml`) already runs lint + vue-tsc + build + pytest,
+  so the gate the FU asked for already exists — the break was simply never built locally before the
+  "green" handoff claim.
+- **FU-193 (backend verification) — RESOLVED.** New `tests/e2e/dora_api/test_onboarding_flags.py`
+  (6 tests). Full e2e **303 pass** (was 297). Covers: `products_enabled` default-True + `GET`/`PATCH
+  /api/app-settings` round-trip + `/api/health features.products` agreement; `household_headcount`
+  round-trip via `PATCH /api/auth/me` (1–99, null clears, surfaces on `/me`) + 0/100 rejected 400;
+  `GET /api/onboarding/catalog` (groups + nested locations + 5 packs); `POST
+  /api/onboarding/seed-items` pre-located creation + idempotent re-run dedupe. Alembic **single
+  head** (`e2a9c5f1b7d4`) confirmed; both new migrations are well-formed batch add/drop-column.
+
+**Decisions made:**
+- Did **not** drive a browser. Per standing working-style (the user runs/tests all code), the
+  browser smoke (FU-192 onboarding, FU-183 alerts) is handed back to the user, not automated here.
+- Full-chain SQLite `flask db upgrade head` still **fails at the pre-existing `d7c9e4a8c2b1`**
+  (FU-178, batch unnamed-constraint), upstream of the two new migrations — so their full up/down
+  round-trip can't be exercised via the chain on SQLite yet. DDL verified by reading + behavioural
+  round-trips (test env builds schema via ORM `create_all`). Logged as a caveat on resolved FU-193;
+  FU-178 stays open.
+
+**Files touched:**
+- `web_app/src/composables/useStockFilters.ts`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `web_app/src/pages/settings/AboutSettings.vue`
+- `tests/e2e/dora_api/test_onboarding_flags.py` (new)
+- `DORA_FOLLOWUPS.md` (removed FU-201, FU-193), `DORA_FOLLOWUPS_RESOLVED.md` (added both), `CHANGELOG.md`
+
+**Verification:**
+- `npm run lint` → clean. `npm run build` → "Build succeeded" (SPA, vite 7.3.3).
+- `pytest tests/e2e` → **303 passed**. New file alone → 6 passed.
+- `flask db heads` → single head `e2a9c5f1b7d4`.
+- **Not run:** browser smoke (user's to do) and full-chain SQLite migration (blocked by FU-178).
+
+**Engineering-standards close-gate:** changes were dead-symbol removal + new tests — no new R-00x
+violations introduced. The orphaned-symbol cleanup aligns with scope discipline. ADR eval: no new rule.
+
+**Next up:**
+- **User browser-smokes** the built surfaces: Onboarding C-5.1..5.6 (FU-192) + Alerts Phase A
+  (FU-183). Run `flask run` (backend, :5170) + `quasar dev` (FE) from `web_app/`.
+- Then the rest of the Tier-1 ship-blockers from the senior review: **FU-200** (admin bootstrap),
+  **FU-197** (CSRF + email-change password proof), **FU-199** (SSRF import-from-URL), **FU-198**
+  (DB restore / uploads admin gate). These get to "deployable."
+
+**Open questions for user:** want me to take the next Tier-1 security blocker (FU-200) next, or
+pause for the browser smoke first?
+
+---
+
+## 2026-06-16 — Senior-engineer + tech-lead review (read-only) — REPORT DELIVERED
+**Status:** complete. User asked for a thorough senior-engineer (code quality/robustness) + tech-lead
+(architecture/standards) review toward a "polished, professional, sellable" bar, written to scratch.
+Continued a review the prior GPT-5.5 session started but hit a usage limit before writing up.
+
+**Deliverable:** `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md` — full report (verdict, ship-blockers,
+tech-lead lens, senior-engineer lens, what's strong, verification gap, prioritized roadmap). Synthesized
+from three parallel deep-dive subagents (backend architecture, frontend quality, security) plus
+independently spot-checked the two headline claims (admin-bootstrap, broken build) and reproduced lint.
+
+**Verdict:** not sellable *today*, but close — blockers are concrete and cheap. Three tiers:
+- **Ship-blockers (Tier 1):** prod frontend **does not build** (4 unused-symbol lint errors gate it via
+  `vite-plugin-checker`; `vue-tsc` is green) → **FU-201**. Security chain: **first registrant becomes
+  self-verified admin** + `ADMIN_BOOTSTRAP_EMAIL` is never read → **FU-200**; **SSRF** in
+  import-from-URL → **FU-199**; **DB restore/uploads ungated**, no shared admin gate → **FU-198**;
+  **CSRF absent** + email-change w/o password proof (confirms prior-art A.1/A.2) → **FU-197**.
+- **Tier 2/3 (professional polish / finishing):** Postgres unreachable (overlaps FU-045), no
+  request-level unit-of-work, reflection-wiring has no boot assertion, `requests` CVE, orphaned base
+  components, ~237 prompt-ID comments, `.npmrc` warnings → batched in **FU-196**.
+- **Genuinely strong (preserve):** API client layer, TS discipline (1 `as any` app-wide), migration
+  linearity (64 revs, single head), auth fundamentals, token system, Pinia store hygiene.
+
+**Could NOT verify:** backend e2e suite — this checkout has **no `.venv`** and `python` is the Windows
+Store stub (despite the handoff snapshot claiming a provisioned env on the prior machine). All backend
+behavioral claims are static reads; security findings flagged **"confirm in a running app."**
+
+**Engineering-standards close-gate:** read-only review introduced no code changes → no R-00x
+violations to fix. The review itself audits the codebase against R-001..R-014 (scorecard in §3 of the
+report). New findings + confirmed prior-art logged to `DORA_FOLLOWUPS.md` (FU-196..FU-201) per the
+"reported defect / non-issue still gets a follow-up" rule. **ADR eval:** no new rule.
+
+**Next up:** user's call. If acting on this: Tier 1 (FU-201 build → FU-200 admin → FU-197 CSRF+email →
+FU-199 SSRF + FU-198 restore gate) clears "deployable," ideally on a provisioned machine so the security
+fixes can be confirmed in-browser. Pre-existing open verification batch (FU-183/192/193) is unaffected.
+
+---
+
+## 2026-06-16 — Onboarding C-5.5 (starter data) + C-5.6 (finish) — BUILT (one pass)
+**Status:** complete with **2 documented trims** (below). **Frontend static-verified** (eslint +
+vue-tsc green; `starter_packs.json` validated via node — 5 packs / 23 items, all group/location
+names resolve against the defaults). **Backend NOT run** (no Python here) → **FU-193**. This
+**finishes the C-5 onboarding surface** (C-5.1 → C-5.6 all built). Built per `PROPOSAL_ONBOARDING`
+§3.5/§3.6 + `IMPL_PLAN_ONBOARDING` C-5.5/C-5.6, continuing the build-to-plan cadence.
+
+**C-5.5 — starter data (new files / endpoints):**
+- `dora_api/features/onboarding/starter_packs.json` — 5 packs → items with group/location **names**
+  (all matching the default catalogues).
+- `onboarding.py` — `GET /api/onboarding/catalog` (default groups + locations tree + packs;
+  `LocationNodeDto`/`StarterPackDto`) and `POST /api/onboarding/seed-items` (creates items by
+  **name**, resolving group/location against the just-seeded catalogues, level → most-stocked,
+  **idempotent** dedupe by item name — same discipline as the existing `SeedHandler`).
+- `WelcomeWizard.vue` — seed step gains a **starter-packs** UI (tri-state pack header + expand to
+  tick items); first-item step reworked to **name-based** pickers (defaults + pack groups + existing)
+  + a **slim "added" list** (removable). `draftItems` is now name-based; on Finish, `applyDraft`
+  seeds groups/locations then calls `seed-items` with pack picks + first items. **FU-191 resolved**
+  (name-resolution). Models + `onboardingApiService` extended (`getCatalogAsync`/`seedItemsAsync`).
+  Removed the now-dead `stockItemApi`/`stockLevelStore`/level-picker.
+
+**C-5.6 — finish:**
+- New `OnboardingConfetti.vue` (deterministic, reduced-motion-suppressed one-shot burst).
+- `WelcomeWizard.vue` — the last step is now **`finish`** (was `tour`): confetti + a **recap of the
+  `OnboardingLoop`** (reused, `autoplay=false` — R-001 bookend) + **persona-relevant `flowCards`**
+  (gated by the chosen flags) that "Open" each area or link to `/help`; **Alerts card → `/alerts`**
+  (FU-015 intent satisfied). The footer Finish + each card complete onboarding via the existing
+  `finish()`/`complete()`.
+
+**Trims (documented; not acceptance-blockers):**
+- **Demo data (L38)** — deferred → **FU-194**. Highest blind-backend risk (Recipe + non-null
+  RecipeIngredient→StockItem FKs + MealPlan, untestable here); explicitly *optional* in the proposal.
+  No dead toggle shipped.
+- **Inline import (in-page) + groups/locations "some" ticking** — scoped to link + static preview +
+  pack-level item ticking → **FU-195**. Acceptance centres on packs + added-list, which shipped.
+
+**Engineering-standards close-gate:** R-001 (reused `OnboardingLoop` at finish; new
+`OnboardingConfetti` componentised; seed-items reuses the catalogue-dedupe discipline) ✓ · R-003
+(seed/dedupe + name-resolution server-side; catalogue served from the JSON, not duplicated on the
+client) ✓ · R-002 (tokens; confetti uses `--brand-*`/`--q-info` + motion tokens, reduced-motion
+path) ✓ · R-005/R-006 (no schema/migration in C-5.5/.6) ✓ · R-007 (demo/import trims logged, not
+silently dropped) ✓ · R-008 (removed dead `stockItemApi`/`stockLevelStore`/`TOUR_CARDS`).
+**ADR eval:** no new rule.
+
+**Next up:** the **C-5 surface is built** — remaining is **verification** (FU-192 FE smoke +
+FU-193 BE migrate/e2e + FU-183 alerts) on a provisioned machine, then **FU-194** (demo) when
+testable. Other unbuilt surfaces: **C-1b** (stock item detail), **C-10** (ingestion API),
+Dashboard, Data page, Help overlay, Barcode, Locale/i18n.
+
+## 2026-06-16 — Onboarding C-5.4 (household headcount → cook-mode scaler) — BUILT
+**Status:** complete. **Frontend static-verified** (eslint + vue-tsc green). **Backend NOT run**
+(no Python here) → folded into **FU-193**. Built per `PROPOSAL_ONBOARDING` §3.4 + `IMPL_PLAN_ONBOARDING`
+C-5.4. Resolves the long-standing `RecipeCookMode.vue` headcount TODO.
+
+**Backend — new nullable `User.household_headcount` via the existing scalar-pref pattern:**
+- `user.py` (`household_headcount: int | None = None` + `Fields.HOUSEHOLD_HEADCOUNT`);
+  `register_user.py` `AuthenticatedUserDto` (+ field + `from_entity`); `update_me.py` (request field
+  `ge=1, le=99` + present-in-body apply, null clears); `table_mappings.py`
+  (`Column(..., Integer, nullable=True)`).
+- Migration **`e2a9c5f1b7d4_20260616_user_household_headcount.py`** — revises the C-5.3 head
+  `d1f4b8c3e7a9` (chain now `b1e7d3f9a2c4 → d1f4b8c3e7a9 → e2a9c5f1b7d4`, single head). Nullable add,
+  no backfill (NULL = not set).
+
+**Frontend:**
+- `models/auth.ts` (+`household_headcount: number | null`).
+- `WelcomeWizard.vue` — a "How many people do you usually cook for?" number field folded into the
+  welcome ("make it yours") step; into the **draft**; applied on Finish via `persistPreferences`
+  (`PATCH /api/users/me`); `onHeadcountBlur` clamps to null or a 1–99 int.
+- `RecipeCookMode.vue` — moved `const authStore` **up** to the stores block (the `cookingFor` watch
+  is `immediate: true`, so referencing a later-declared `authStore` would TDZ-crash on mount), then
+  seeded the per-session `cookingFor` scaler from `household_headcount` when set, else the recipe's
+  `servings`. Removed the now-duplicate `authStore` decl in the voice section.
+
+**Engineering-standards close-gate:** R-003 (server owns the default; cook mode *reads* it, no
+client-side domain constant) ✓ · R-005/R-006 (nullable, reversible `batch_alter_table` migration,
+single head, SQLite + Postgres) ✓ · R-008 (resolved the dead TODO; no dead code). **ADR eval:** none
+— textbook scalar-pref addition. **Scope (R-007):** only the field + the cook-mode read; nothing else.
+
+**Next up:** **C-5.5** (starter packs + opt-in demo + the FU-191 name-resolution for first-item
+group/location) — the big-rock chunk — or **C-5.6** (finish: celebration + loop recap reusing
+`OnboardingLoop` + persona flow-cards into help; fixes FU-015). Then the C-5.x verification batch
+(FU-192 + FU-193 + FU-183) on a provisioned machine.
+
+## 2026-06-16 — Onboarding C-5.3 (persona fork + `products_enabled` + branching + explainer) — BUILT
+**Status:** complete. **Frontend static-verified** (eslint + vue-tsc green). **Backend NOT run**
+(no Python on this machine — Windows-Store stub, no venv) → migrate/e2e is **FU-193**. Built per
+`PROPOSAL_ONBOARDING` §3.2/§3.3/§4 + `IMPL_PLAN_ONBOARDING` C-5.3 + DOC_GRAPH; continued the
+build-to-plan cadence.
+
+**Backend — new `AppSetting.products_enabled` via the ONE flag path (R-003, no parallel):**
+- `app_setting.py` (field `= True` + `Fields.PRODUCTS_ENABLED`); `table_mappings.py`
+  (`server_default "1"`); `get_app_settings.py` (DTO + `_to_dto`); `update_app_settings.py`
+  (request field + the partial-update loop); `health_check.py` (`features.products` default + resolve).
+- Migration **`d1f4b8c3e7a9_20260616_appsetting_products_enabled.py`** — revises the single head
+  **`b1e7d3f9a2c4`**, `batch_alter_table` add/drop, default `'1'` (existing installs keep products on).
+
+**Frontend:**
+- `appSettingsApiService.ts` (+`products_enabled`), `useFeatureFlags.ts` (+`products`; also fixed a
+  pre-existing `no-self-assign` no-op in the catch — the file came under the gate once I touched it).
+- `onboardingContent.ts` — `PERSONA_PRESETS` (Cooking / Spend / Everything → install-flag maps +
+  per-user prefs), `INSTALL_FLAG_META` (the Customise list), `DEFAULT_CUSTOM_FLAGS`, `InstallFlags`.
+- `WelcomeWizard.vue` — **persona step** (3 preset cards + Customise → flat flag toggles) and the
+  conditional **stock-vs-product explainer**; `visibleSteps` now built dynamically (admin + persona
+  are first-user-only; explainer shows only when `productsEnabledDraft`); persona/customFlags added
+  to the **draft** (persist + resume); `applyPersona()` writes install flags (admin PATCH) + the
+  first user's money/nutrition (PATCH /api/users/me) in `applyDraft()` on Finish; the hero **preview
+  pre-fills the fork** (watch mirrors `personaPreview` → `personaChoice` while in the story) —
+  resolving the §2.3.a pre-confirmation thread.
+
+**Resolved open threads (proposal defaults):** §3.2.a (products-off + money-on) → reachable via
+**Customise** (didn't add a 4th preset). §2.3.a pre-confirmation → preview pre-fills, fork commits.
+
+**Scope discipline (R-007):** C-5 only **introduces + sets** `products_enabled`. The per-surface
+Products-off sweep stays **FU-182** (updated — the lever now exists, so it's unblocked). Did not
+build headcount (C-5.4), packs (C-5.5), or finish (C-5.6).
+
+**Engineering-standards close-gate:** R-003 (one flag machinery — products joins the C-cross path
+end-to-end; persona is a thin writer over existing PATCH endpoints, no new "apply persona" endpoint)
+✓ · R-005/R-006 (portable reversible `batch_alter_table` migration, single head `b1e7d3f9a2c4` →
+`d1f4b8c3e7a9`, SQLite + Postgres) ✓ · R-002 (explainer tip uses `--brand-accent-soft` + tokens) ✓ ·
+R-007 (flag only; gating is FU-182) ✓ · R-008 (removed the dead self-assign). §7.5: flags needing
+external config (companion/scanning/llm) already degrade gracefully; persona just sets booleans.
+**ADR eval:** no new rule — this is a textbook application of the existing C-cross flag pattern + ADR-002.
+
+**Leftovers / notes:** (1) explainer is gated on **first_user**; a non-first user on a products-on
+install won't see it — acceptable for C-5.3 (acceptance is first-user-framed), could later read the
+`products` health flag (small; relates to FU-182). (2) admin-step "scrape merchants" copy is stale
+post-divorce — logged on **FU-184**.
+
+**Next up:** **C-5.4** (`User.household_headcount` + cook-mode scaler — small) or **C-5.5** (starter
+packs + demo + the FU-191 name-resolution). Or browser+backend verify the C-5.x stack together
+(FU-192 + FU-193 + FU-183) on a provisioned machine.
+
+## 2026-06-16 — Onboarding C-5.2 (cinematic intro + hero loop + nav shell) — BUILT
+**Status:** complete, **frontend-only**, static-verified (eslint + vue-tsc green). Behavioural/
+visual verification deferred to **FU-192**; copy-honesty to **FU-184**. Built per the user's two
+decisions: **(1)** "build it to plan now — I'll revisit via the follow-up to confirm it's true to
+the finished app"; **(2)** "build the whole chunk in one pass." Ran against `PROPOSAL_ONBOARDING`
+§2/§3.1/§5/§6 + `IMPL_PLAN_ONBOARDING` C-5.2 + DOC_GRAPH required reading.
+
+**What shipped (new files unless noted):**
+- `web_app/src/pages/onboarding/onboardingContent.ts` — **single source of truth** for all
+  provisional sell-copy (loop stages, Dora-centre, the provisional Insight node, narrative scenes,
+  persona previews). Heavy header flags the FU-184 gate; this is the one file the revisit edits.
+- `web_app/src/components/onboarding/OnboardingLoop.vue` — the **reusable hero** (R-001; reused at
+  the C-5.6 finish later). Ring of 6 stages (positions computed by angle) on a self-drawing SVG
+  circle, **`DoraMascot` at centre** (reused), auto-reveal-once → tappable (detail panel, aria-live),
+  **persona-preview** segmented control (Cooking/Spend/Everything) toggling the dimmed **Insight**
+  candidate + centre copy. `autoplay`/`interactive` props so the finish recap can render it static.
+- `web_app/src/components/onboarding/OnboardingScene.vue` — presentational full-bleed scene
+  (kicker/headline/sub + visual slot, staggered rise-in).
+- `web_app/src/components/onboarding/OnboardingStepRail.vue` — the **non-linear progress rail**
+  (Story + Setup dots, nothing gated, jump anywhere; doubles as progress).
+- `web_app/src/pages/onboarding/OnboardingStory.vue` — orchestrates the 4 scenes, **autoplay**
+  (forward-only, pauses on the interactive loop, cancels on Back), the per-scene visuals, and the
+  Skip / Skip-to-setup / Back / Next controls.
+- `web_app/src/composables/useReducedMotion.ts` — reactive `prefers-reduced-motion` for the
+  **JS-driven** sequences (autoplay, reveal) that CSS can't neutralise; CSS still handles the rest
+  via `motion.scss`'s global kill-switch.
+- `WelcomeWizard.vue` — now hosts **two sections**: `view: 'story' | 'setup'` with the shared rail
+  on top, the `OnboardingStory` (story) and the **existing C-5.1 setup stepper** (`v-else`, intact).
+  `view` / `storySceneIndex` / `personaPreview` added to the **draft** (persist + resume). Setup's
+  draft-until-finish from C-5.1 is unchanged.
+
+**Honesty handling (FU-184 — built to plan, gate stays open):** all sell-lines are provisional and
+isolated in `onboardingContent.ts`. The **Insight / "spend smarter"** beat is rendered as a *dimmed,
+"soon"-tagged candidate*, never a plain promise; Shop's old "log what you paid — remembers every
+price" claim was **moved off Shop** onto that provisional node (the rest of Shop = ticking/finish,
+which is real). FU-184 updated: the revisit is now "walk the app → edit the one content file."
+
+**Scope discipline (R-007):** C-5.2 builds the experience spine + the persona **preview** only. It
+does **not** build the persona **fork** / `products_enabled` (C-5.3), headcount (C-5.4), starter
+packs/demo (C-5.5), or the finish celebration (C-5.6) — though `OnboardingLoop` is built reusable
+for C-5.6. Open co-design threads (§2.3.a) taken at the proposal's recommended defaults: persona
+labels = persona-aligned (Cooking/Spend/Everything); default preview = Everything; Insight kept as
+a centre-cluster candidate (no ring reflow); preview is illustrative + remembered (the
+pre-confirmation relationship to the fork is C-5.3's call, reading the persisted `personaPreview`).
+
+**Engineering-standards close-gate:** R-001 (one reusable `OnboardingLoop` + `OnboardingScene` /
+`OnboardingStepRail` / `useReducedMotion`; reused `DoraMascot` + motion tokens, didn't rebuild) ✓ ·
+R-002 (theme tokens only — `--surface-*`/`--text-*`/`--brand-*`/`--space-*`/`--radius-*`/`--motion-*`;
+no raw hex; the "dark canvas" reads as dark via the user's dark themes, per the close-gate's
+"tokens + dark-mode" reconciliation, not a hardcoded dark) ✓ · a11y (full keyboard nav, visible
+focus rings, aria-pressed/aria-current/role=radiogroup, aria-live detail; **reduced-motion** path
+shows final state, no autoplay/draw) ✓ · R-007 (spine + preview only) ✓ · R-008 (no dead code).
+**ADR eval:** the "single content module for provisional, gated copy" is a nice pattern but
+single-instance — not promoted; revisit if another gated-copy surface appears.
+
+**Next up:** **C-5.3** — persona fork + **new `AppSetting.products_enabled`** + wizard branching +
+the conditional stock-vs-product explainer. It should **read the persisted `personaPreview`** to
+pre-fill the fork (resolves the §2.3.a pre-confirmation thread). Or browser-verify C-5.1+C-5.2
+(+Alerts) together on this now-provisioned machine (FU-192 + FU-183).
+
+## 2026-06-16 — Onboarding C-5.1 (copy / labels / draft-until-finish / theme mapping) — BUILT
+**Status:** complete, **frontend-only**, static-verified (eslint + vue-tsc green). Browser smoke
+deferred to **FU-192**. Ran the prompt per `IMPL_PLAN_ONBOARDING.md` §1 C-5.1 + DOC_GRAPH
+required reading (feedback §ONBOARDING L24-46, charter P1/P10, `PROPOSAL_CONFIG_AND_OPTINS`).
+
+**What shipped (all in `web_app/src/pages/onboarding/WelcomeWizard.vue`):**
+- **L35 — "Skip everything" → "Skip"**, and **draft-until-finish**: removed the per-step side
+  effects (prefs PATCH on the welcome step; seed POST on the seed step). Everything the user
+  chooses — display name / theme / font, the group+location seed toggles, **and queued first
+  stock items** — is now collected and applied **once in `complete()`**, in dependency order
+  (prefs → seeds → items). A mid-wizard bail (**Skip**) applies **nothing**.
+- **L28 — theme picker** now offers System / Light / Dark only, persisting the real keys
+  `system` / `pesto` / `pesto-dark` (was the legacy `light`/`dark` aliases). Full palette stays
+  in Preferences. Init pre-fills from the user's saved theme; if it's outside the three options
+  the select shows blank and we never clobber it.
+- **L30 — import copy** no longer names Grocy ("import from a spreadsheet or another app"); still
+  links to `/data/import` (verified route exists). True inline-on-page import remains **C-5.5**.
+- **L32/L33 (FU-041) — verified statically:** the initial migration only seeds **stock levels**
+  (+ creates the group/location *tables*); **no migration inserts group/location rows** — the
+  "you already have…" copy only fires against `seed_dev_data()`. Kept FU-041 open for a clean-DB
+  browser check (folded into FU-192).
+
+**Scope decisions (flagged for the reviewer):**
+- **First-item creation was deferred too** (queued into a `draftItems` draft, created on Finish).
+  Required to satisfy the literal acceptance "**bailing mid-wizard applies nothing**" — an
+  immediately-created item would survive a bail, and (since seeds now apply at Finish) couldn't
+  reference a seeded group anyway. This is the minimal mechanism; the richer added-list/packs/
+  preview UI + **name-resolution** stays **C-5.5** (logged **FU-191**). Slight overlap with C-5.5
+  is additive, not rework.
+- **`WizardDraft.theme`/`fontFamily` retyped to the canonical `ThemePreference`/
+  `FontFamilyPreference`** (were a too-narrow 3-value union while the font select offered 6) —
+  a pre-existing latent type mismatch fixed in the same decl I was editing (R-008 hygiene).
+- Removed now-dead refs (`advancing`, `addingItem`, `firstItemsAdded`) (R-008).
+
+**Engineering-standards close-gate:** R-002 (no raw colours; theme *keys* not hex) ✓ · R-003
+(no domain constant duplicated — the 3-option list is client-owned view config, not a server
+rule) ✓ · R-007 (only listed edits + the two justified extras above) ✓ · R-008 (dead code
+removed, none added) ✓ · R-001 (no new components; `OnboardingLoop` is C-5.2) ✓. **ADR eval:**
+the "defer all wizard side-effects to one atomic apply, caller-navigates-on-success" pattern is
+a candidate principle but single-instance so far — **not promoted**; revisit if another
+multi-step flow needs it.
+
+**Env note:** `web_app/node_modules` was **absent on this machine** (the 2026-06-15 snapshot was
+from a different computer). Installed via **`npm ci`** (npm, `package-lock.json`; pnpm absent);
+`postinstall`'s `quasar prepare` generated `.quasar/tsconfig.json` so `vue-tsc` runs. No Python
+touched → backend e2e unaffected.
+
+**Follow-ups:** **FU-192** (browser-smoke C-5.1 acceptance; folds FU-041) · **FU-191** (first-item
+empty pickers → fix via name-resolution in C-5.5) · FU-184 noted (C-5.1 didn't trip the sell-copy
+gate; the "deals" blurb + loop copy bite in C-5.2/C-5.6).
+
+**Next up:** **C-5.2** (cinematic intro + `OnboardingLoop` hero — the experience spine; gated by
+FU-184 copy-honesty), or browser-verify C-5.1+Alerts together (FU-192 + FU-183) on this now-
+provisioned machine. C-5.3 (persona + `products_enabled`) is the reframe after that.
+
+## 2026-06-16 — Disposition of the standalone `emailer/` (scraping-divorce ripple)
+**Status:** complete — decision + doc fold-in. **No code changes** (the actual removal is deferred
+into FU-186's sweep).
+
+**What:** User asked what to do with the half-finished `emailer/` now that deal scraping is being
+pulled out into their private companion app. Investigated and found:
+- `emailer/` is a **standalone, broken-scaffold** "Weekly Price Report" deals-email service —
+  coupled to the scraper (commented-out core fetches `/api/webScraper/offers`; `product_model.py`
+  mirrors the merchant-offer shape), won't even import cleanly (`delivery.py` calls a non-existent
+  `mjml_test`), and isn't wired into the running app (only shares `logging_setup`).
+- It is **distinct** from `dora_api/infrastructure/email_sender.py` — the working transactional
+  sender (password resets, INV-4), which **stays**.
+- The legitimate in-app email need is already designed as **Alerts C-9.7 email digest** (per-user
+  opt-in, hangs off the alerts evaluator, reuses `email_sender.py`) — so retiring `emailer/` leaves
+  **no in-app gap**.
+
+**Decision (user):** Option 1 + finish it properly — **move `emailer/` into the private companion
+app and finish it off there** (deals + mailing belong with the scraper, invisible to Dora), **then
+delete it from this repo.** Per the user, this is **not** a new standalone task — it gets **rolled
+into the existing surgical-removal instructions**, which are **FU-186** (the `merchant_api` /
+in-app live-search decommission; the proposal/impl-plan deliberately log this as a follow-up rather
+than building it inside C-10).
+
+**Edits made:**
+- `DORA_FOLLOWUPS.md` FU-186 — retitled to include `emailer/`; added a "Surgical removal — emailer"
+  sub-bullet (move-to-companion-and-finish → delete here → clean dead `SOURCE_EMAILER` /
+  `get_audit_events` / `logging_setup` refs), a "keep `email_sender.py` / C-9.7 covers the gap"
+  note, and the invisibility-rule reminder extended to the companion-hosted emailer.
+- `docs/04_proposals/PROPOSAL_INGESTION_API.md §7` — one-line cross-ref so a reader of the ripple
+  section sees the emailer is part of the same FU-186 sweep.
+
+**Next up:** unchanged — the menu in the handoff snapshot still stands (recommended: browser-verify
+Alerts Phase A / FU-183). The emailer removal fires with FU-186 **after C-10.2**, paired with
+FU-182, once the companion repo exists to land it in.
 
 ## 2026-06-15 — Simple Mode proposal (FU-182 promoted)
 **Status:** complete — talk-time discussion + scratch promoted to formal proposal.

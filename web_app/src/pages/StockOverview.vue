@@ -154,9 +154,14 @@
                 outlined
                 emit-value
                 map-options
+                use-input
+                fill-input
+                hide-selected
+                input-debounce="200"
                 clearable
                 label="Any location"
                 style="min-width: 180px"
+                @filter="filters.filterLocations"
             />
 
             <q-select
@@ -241,10 +246,14 @@
             </template>
         </q-banner>
 
-        <!-- Splitter: item list on the left, in-page detail peek on the right -->
+        <!-- Splitter: item list on the left, in-page detail peek on the right.
+             C-1b.2 (L117, L118): peek opens at 50% (not 58%), and while a peek
+             is open the drag-range is clamped to [40%, 65%] so neither pane
+             gets squished to an unusable width. When no peek is open we let
+             the list go full-width (100%), so the limits are dynamic. -->
         <q-splitter
             v-model="splitPct"
-            :limits="[40, 100]"
+            :limits="splitterLimits"
             :disable="!peekId"
             unit="%"
             class="stock-splitter"
@@ -352,7 +361,7 @@
         <BulkMoveLocationDialog
             v-model="moveDialogOpen"
             :count="bulkSelection.size"
-            :location-options="filters.locationOptions.value"
+            :location-options="filters.allLocationOptions.value"
             :busy="bulkBusy"
             @confirm="bulkMove"
         />
@@ -398,7 +407,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { useStockLocationStore } from 'src/stores/stockLocationStore';
+    import { useLocationStore } from 'src/stores/locationStore';
     import StockItemDetailPage from 'src/pages/StockItemDetailPage.vue';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -427,13 +436,12 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
-    const stockLocationStore = useStockLocationStore();
+    const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
     const recipeStore = useRecipeStore();
 
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { stockLocations } = storeToRefs(stockLocationStore);
     const { recipes } = storeToRefs(recipeStore);
 
     // Stock groups load locally — no store yet, only needed by the filter
@@ -471,7 +479,7 @@
     const filters = useStockFilters({
         stockItems: () => stockItems.value,
         stockLevels: () => stockLevels.value,
-        stockLocations: () => stockLocations.value,
+        locationTree: () => locationStore.tree,
         recipes: () => recipes.value,
         stockGroups: () => stockGroups.value,
         membership: () => shoppingListStore.membership as Membership | null,
@@ -499,9 +507,14 @@
     });
 
     // ── Splitter peek ────────────────────────────────────────────────────
+    // C-1b.2: opens at 50% (was 58%); drag-range clamped to [40, 65] while
+    // peeking, [40, 100] when closed (so the list can take the full width).
     const peekId = ref<string | null>(null);
     const splitPct = ref(100);
-    watch(peekId, (v) => (splitPct.value = v ? 58 : 100));
+    const splitterLimits = computed<[number, number]>(() =>
+        peekId.value ? [40, 65] : [40, 100],
+    );
+    watch(peekId, (v) => (splitPct.value = v ? 50 : 100));
 
     // C-1 Chunk 5 / L68 / L71 — two-frame detail nav:
     //   Desktop  → splitter peek (the embedded drawer).
@@ -759,7 +772,7 @@
         await Promise.all([
             stockItemStore.getStockItemsAsync(),
             stockLevelStore.getStockLevelsAsync(),
-            stockLocationStore.getStockLocationsAsync(),
+            locationStore.refreshAsync(),
             shoppingListStore.refreshAsync(),
             recipeStore.getRecipesAsync(),
             loadStockGroups(),

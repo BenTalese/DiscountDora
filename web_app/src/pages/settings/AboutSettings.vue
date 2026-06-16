@@ -79,7 +79,6 @@
 </template>
 
 <script lang="ts" setup>
-    import { ICONS } from 'src/style/icons';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
     import { computed } from 'vue';
 

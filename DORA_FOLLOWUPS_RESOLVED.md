@@ -10,6 +10,74 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-185 — Stock Item Detail recipe-tab actions are dead (B8 residue)
+- **Raised:** 2026-06-15 (C-1b design — Explore sweep)
+- **Type:** finding / bug
+- **What:** On `StockItemDetailPage.vue`, `RecipeCard` **emits** `@toggle-favourite` +
+  `@add-all-to-list` but the detail page **doesn't listen** to them (only `@open`/`@cook`/
+  `@add-missing` are wired). So "remove from favourites does nothing" (feedback L132) and most
+  recipe actions beyond Cook (L134) are dead on this surface. Recipe-row navigation IS fixed.
+- **Why deferred:** found during the C-1b design sweep; **homed in C-1b.4** (wire the listeners)
+  but C-1b isn't built yet. Static read confirms the handlers are missing.
+- **Recommended resolution:** fix in **C-1b.4** (Recipes-tab chunk); until then it's a live defect
+  — **confirm in browser** that favourite-toggle/add-all are dead, then wire them. Cites B8.
+- **State note:** 2026-06-16 — wired both listeners on `StockItemDetailPage.vue` in **C-1b.4**.
+  `@toggle-favourite="onToggleFavourite"` mirrors `RecipesOverview` (calls
+  `recipeStore.toggleFavouriteAsync`). `@add-all-to-list="onAddAllToList"` collects the recipe's
+  ingredient stock-item ids and pushes them via `slActions.addItems` to the inferred primary draft
+  (lightweight path; the richer per-ingredient picker stays in `RecipesOverview`). Browser
+  verification of the fix rolls up under FU-202 (now extended for the C-1b.4 acceptance).
+
+## [RESOLVED] FU-201 — Production frontend build is broken (4 lint errors gate it)
+- **Raised:** 2026-06-16 (senior/tech-lead review — `docs/99_scratch/SENIOR_REVIEW_2026-06-16.md`)
+- **Type:** finding (ship-blocker)
+- **State note (2026-06-16):** **resolved** — removed the 4 dead symbols
+  (`useStockFilters.ts` `stockLevelName` + `recipesByStockItem`, which also orphaned
+  `stockLevelById`; `RecipeDetailPage.vue` `stockActions` + its `useStockItemActions` import;
+  `AboutSettings.vue` `ICONS` import). `npm run lint` clean and `npm run build` (quasar SPA)
+  succeeds. The "should land with a CI gate" recommendation is **already satisfied**:
+  `.github/workflows/ci.yml` already runs lint + `vue-tsc --noEmit` + build + pytest — the break
+  would have lit up red in CI. The real gap was that the handoff "green static-verified" claim
+  was never locally built; CI config itself is correct. (If merges aren't actually blocked on CI,
+  that's branch-protection config, outside the codebase.)
+- **What:** `npm run build` failed via `vite-plugin-checker`'s ESLint lintCommand on 4 unused symbols.
+
+## [RESOLVED] FU-193 — Verify C-5.3 + C-5.4 + C-5.5 backend on a provisioned machine
+- **Raised:** 2026-06-16 (Onboarding C-5.3)
+- **Type:** deferred verification
+- **State note (2026-06-16):** **resolved backend** on the now-provisioned machine
+  (Python 3.11.15 + `.venv`). Added `tests/e2e/dora_api/test_onboarding_flags.py` (6 tests);
+  full suite **303 pass** (was 297). Verified: `products_enabled` defaults True and round-trips
+  via `GET`/`PATCH /api/app-settings` with `/api/health features.products` agreeing (single source
+  of truth); `household_headcount` round-trips via `PATCH /api/auth/me` (1–99, null clears) and
+  surfaces on `/me`, with out-of-range (0, 100) rejected 400; `GET /api/onboarding/catalog`
+  serialises groups + nested location nodes + **5** starter packs; `POST /api/onboarding/seed-items`
+  creates **pre-located** items (group/location resolved by name) and is **idempotent** on re-run
+  (created:1→skipped:1, no duplicate). Alembic **single head** confirmed (`e2a9c5f1b7d4`); both new
+  migrations are trivial batch `add_column`/`drop_column` with a linear revise chain — well-formed.
+- **Caveat (not a regression of these migrations):** a clean **full-chain SQLite `flask db upgrade
+  head`** still fails at the pre-existing `d7c9e4a8c2b1` (2026-06-12 shopping-list product anchor)
+  with "Constraint must have a name" in batch mode — that's **FU-178**, upstream of these two
+  migrations, so the new migrations' full up/down round-trip can't be exercised through the chain on
+  SQLite until FU-178 is fixed (or on Postgres, FU-196). The DDL was verified by reading + the
+  behavioural round-trips above (test env builds schema via ORM `create_all`).
+- **Remaining (separate FUs):** the **browser** verification of the cook-mode serving scaler
+  (household_headcount) and the persona-fork UI lives in **FU-192**; this entry covers backend only.
+- **What:** behavioural backend coverage for the Onboarding C-5.3/.4/.5 flags + endpoints.
+
+## [RESOLVED] FU-191 — First-item group/location pickers empty during onboarding (deferred-seed ripple)
+- **Raised:** 2026-06-16 (Onboarding C-5.1)
+- **Type:** leftover / known limitation
+- **State note (2026-06-16, C-5.5):** **resolved** — the first-item flow is now **name-based**.
+  Items are queued with a group/location *name* and created on Finish by the new
+  `POST /api/onboarding/seed-items`, which resolves names against the catalogues seeded earlier in
+  the same apply. The first-item pickers offer names from the chosen default groups + any starter-pack
+  groups + existing rows, so a fresh user CAN categorise their first item against a default group.
+  (Backend round-trip verification rides with **FU-193**.)
+- **What:** C-5.1 deferred the catalogue seed to Finish, leaving the first-item group/location
+  pickers empty (no ids existed at pick time). The fix needed name-based resolution — C-5.5's
+  starter-data mechanism — which is what shipped.
+
 ## [RESOLVED] FU-172 — Execute IMPL_PLAN_MEAL_PLANS (C-2.A…K)
 - **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS authored from C-2 proposal)
 - **Type:** deferred job

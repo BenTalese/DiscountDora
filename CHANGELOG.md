@@ -6,6 +6,63 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **A "you're all set" finish (Onboarding C-5.6).** Onboarding now ends on a celebration — a
+  **confetti** moment, a **recap of the loop** (the same interactive diagram from the intro), and
+  **flow-cards** for the areas that matter to your setup (pantry, recipes, meal plans, shopping,
+  alerts, price history when spend is on, and Dora's guides) — each jumping straight into that area
+  or its help guide. Reduced-motion users get the calm version (no confetti).
+- **Starter packs for a faster start (Onboarding C-5.5).** The setup step now offers **starter
+  packs** of common items (Fridge staples, Pantry basics, Fruit & veg, Freezer, Cleaning &
+  household) — tick a whole pack or expand it to choose individual items, all pre-grouped and
+  located. Items you add show in a **slim "added" list** you can prune, and everything is created
+  only when you press Finish (bailing creates nothing). First-item group/location pickers now offer
+  the seeded defaults by name, so a brand-new pantry can be categorised straight away. New
+  `GET /api/onboarding/catalog` + idempotent `POST /api/onboarding/seed-items`. *(Opt-in demo data
+  is coming separately.)*
+- **Tell Dora your household size (Onboarding C-5.4).** Onboarding now asks **"How many people do
+  you usually cook for?"** — and **cook mode opens pre-scaled to that number** instead of each
+  recipe's default servings (you can still nudge it per cook). Leave it blank and cook mode behaves
+  as before. New `User.household_headcount` (nullable; migration `e2a9c5f1b7d4`), saved via
+  `PATCH /api/users/me`.
+- **Pick what Dora does for you, at setup (Onboarding C-5.3).** First-run now has a **persona
+  step** (first user / admin): choose **Pantry & cooking**, **Pantry + spend tracking**, or
+  **Everything** — or **Customise** to flip individual features yourself. Your pick sets the
+  install's feature flags + your own money/nutrition preferences, applied in one go when you
+  Finish (bailing changes nothing).
+  - New install flag **`products_enabled`** (default **on**, so existing installs are unchanged) —
+    the **Cooking** persona turns the products/prices layer off. It joins the existing feature-flag
+    machinery (admin `PATCH /api/app-settings`, `GET /api/health` `features.products`); migration
+    `d1f4b8c3e7a9`. *(Per-surface hiding when products are off is tracked separately and not part of
+    this change.)*
+  - When products are on, a short **"stock items vs products"** explainer ("Milk" is a stock item;
+    "Vitasoy Oat Milky 1L @ Coles" is a product) appears before you add items; the Cooking persona
+    skips it for a shorter setup.
+- **A cinematic first-run intro (Onboarding C-5.2).** First-run now opens on a short, skippable
+  "here's what Dora does" story instead of dropping you straight into a form:
+  - **Three big, minimal scenes** (the problem → Dora is the brain → you're in control) wrapped
+    around a **hero "loop" diagram** — a ring of Stock → Plan → List → Shop → Restock → Cook with
+    **Dora at the centre**. It draws itself once, then every stage (and Dora) is **tappable** to
+    see what it does and how it hands off to the next.
+  - A **persona preview** under the loop (Cooking / Spend / Everything) lets you see how Dora
+    shapes for each, before you choose — purely illustrative here; the actual choice comes later.
+  - A persistent **progress rail** spans the Story and Setup sections so you can **jump anywhere,
+    nothing gated**, and **"Skip to setup"** / **"Skip"** are always one tap.
+  - Fully **keyboard-navigable** and honours **reduced-motion** (no autoplay, the final state is
+    shown). Reuses the existing Dora mascot + motion tokens; the loop component is built to be
+    reused at the finish step later.
+  - *Note: the loop's sell-copy is provisional and will be reconciled against real app behaviour
+    before it's considered final.*
+- **Onboarding quick wins (Onboarding C-5.1).** First-run setup got safer and clearer:
+  - **Nothing is saved until you press Finish.** Your name, theme, font, the default
+    group/location seeds, and any first stock items you add are now collected as you go and
+    applied in one step at the end — so bailing out part-way (the **"Skip"** button, renamed
+    from "Skip everything") leaves your account exactly as it was, instead of silently keeping
+    half your choices.
+  - **Theme picker is just System / Light / Dark** here, mapping to Dora's brand palettes
+    (Light → Pesto, Dark → Pesto Dark); the full palette catalogue stays available later in
+    Settings → Preferences.
+  - **Import copy no longer name-drops a specific app** ("import from a spreadsheet or another
+    app"), and still links straight to the importer.
 - **An "Upcoming" fortnight timeline on the Alerts hub (Alerts C-9.6).** The Alerts page now
   looks *ahead* with a two-week mini-calendar: each day shows coloured dots for what's coming —
   expiries, planned shopping days, and planned meals — and clicking a day expands the detail with
@@ -132,6 +189,51 @@ semver — major bumps signal schema or breaking-config changes.
     referencing an off-vocabulary slot are rejected at the API.
 
 ### Changed
+- **Stock item detail — History tab is now an actual lifecycle.** The old level-only log on the
+  **History** tab is replaced by a unified **item lifecycle timeline** — level changes (with
+  inferred context like "Restocked → Well-stocked" or "Dropped to Low"), **waste events** you've
+  logged (with reason + estimated value + your note), **past list-adds** with their provenance
+  ("Auto-added: low stock → Tuesday shop"), and synthesised **Opened** and **Checked** entries
+  from the item's current state. Each entry is colour-coded by event kind so the
+  purchase → use → waste → restock loop is scannable at a glance. (Closes the Stock Item Detail
+  cluster — feedback A-1.)
+- **Stock item detail — Recipes, Lists and Substitutes tabs do what they look like they do.**
+  On the **Recipes** tab, the heart icon now actually toggles the recipe's favourite, and
+  **"Add all to list"** on a cookable recipe drops every ingredient onto your primary draft (both
+  were dead before — feedback L132 / L134). On the **Shopping Lists** tab, the inert little arrow
+  on each row is gone (the whole row was already clickable) and **"Primary"** shows as a real
+  badge next to the primary draft's name instead of plain text. On the **Substitutes** tab, the
+  per-row **"Swap into list"** button is gone — that affordance is being relocated to **Shop
+  Mode**, where "this is out at the shelf, swap to a substitute" is the moment it actually helps.
+- **Stock item detail — Products tab does the right thing in every state.** When you haven't
+  linked any products yet, the **Products** tab now leads with a clear **"Find & link a product"**
+  CTA (instead of a quiet "no products" line) — one click takes you to product search, seeded with
+  this item's name. When products exist, the header carries a quieter **"Link another"**. The
+  **cheapest** linked product is now visually highlighted (chip + tint) instead of needing a
+  separate "Add cheapest" shortcut — use the cheapest card's own Add-to-list. When the Products
+  feature is **turned off** (Cooking persona), the whole **Products tab disappears** — no empty
+  state, no orphan price chrome; the page reads as a clean pantry + cooking detail.
+- **Stock overview peek opens at 50% and can't be squished.** When you open a stock item's peek
+  panel from the overview, it now opens at a balanced **50/50 split** (was 58/42) and the drag
+  splitter is clamped so neither pane can be squashed below ~40% or grow past ~65% — both sides
+  stay usable. With no peek open, the list still goes full-width.
+- **Stock item detail — directly editable, much less messy.** A stock item's detail page is now a
+  single-column overview where **every fact is its own editor** — click and type, no more separate
+  "facts on the left, edit form on the right" split. The **level chip in the header is the editor**
+  (no duplicate row), **Delete** moves to a quiet top-right slot, and the toolbar pares down to the
+  things you actually use mid-pantry: **Mark open · Set expiry · Add to list · (Show QR)**. The
+  Overview adds an inline **Stock group** picker (previously you couldn't set it from here at all),
+  an **× clear** on Expiry with **+1d / +7d / +14d** quick-bumps, an **Opened toggle on the row**,
+  and an **info tooltip** explaining opening doesn't change the expiry date. **Notes** are kept but
+  calm at the bottom (cheap, occasionally useful — not a headline). Tabs go through theme tokens so
+  the active tab is legible in every theme, and **Show QR** has a tooltip clarifying it's Dora's own
+  per-item label, not the product's real barcode.
+- **Stock — searchable location pickers everywhere, tidier buttons.** A stock item's **location
+  picker** and the **stock overview's "Any location" filter** are both now **searchable** and list
+  each option by its **full path** ("Pantry › Middle shelf › Left side"), so you can tell two "Left
+  side" shelves apart. The image buttons on the detail page have a little more breathing room, and
+  the toolbar **"Add to list"** button now matches the other toolbar buttons instead of looking like
+  an odd one out.
 - **Meal Plans recipe trays (Meal Plans C-2.I).** The planner's recipe list now
   groups into collapsible trays above the full list: **Favourites**, **Haven't
   had in a while** (never cooked or not in 21 days, oldest first), and
@@ -226,6 +328,10 @@ semver — major bumps signal schema or breaking-config changes.
   page that already exists.
 
 ### Fixed
+- **Production frontend build restored (FU-201).** `npm run build` was failing
+  on four unused-symbol lint errors (surfaced via `vite-plugin-checker`'s ESLint
+  step); the dead symbols were removed so the SPA builds cleanly again. No
+  user-visible behaviour change — purely an unblock of the release build.
 - **Session-secret file now lives under `DORA_DATA_DIR` (FU-037).**
   `dora_api/app.py` resolved `.secret_key` as a literal CWD-relative
   `./data/` path, escaping the configured data dir on the desktop

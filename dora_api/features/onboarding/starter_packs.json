@@ -1,0 +1,60 @@
+[
+    {
+        "key": "fridge_staples",
+        "label": "Fridge staples",
+        "blurb": "The things most fridges always have.",
+        "items": [
+            { "name": "Milk", "group": "Fridge", "location": "Fridge" },
+            { "name": "Eggs", "group": "Fridge", "location": "Fridge" },
+            { "name": "Butter", "group": "Fridge", "location": "Fridge" },
+            { "name": "Cheese", "group": "Fridge", "location": "Fridge" },
+            { "name": "Yoghurt", "group": "Fridge", "location": "Fridge" }
+        ]
+    },
+    {
+        "key": "pantry_basics",
+        "label": "Pantry basics",
+        "blurb": "Dry goods you cook from most nights.",
+        "items": [
+            { "name": "Pasta", "group": "Pantry", "location": "Pantry" },
+            { "name": "Rice", "group": "Pantry", "location": "Pantry" },
+            { "name": "Olive oil", "group": "Pantry", "location": "Pantry" },
+            { "name": "Canned tomatoes", "group": "Pantry", "location": "Pantry" },
+            { "name": "Flour", "group": "Pantry", "location": "Pantry" },
+            { "name": "Salt", "group": "Pantry", "location": "Pantry" }
+        ]
+    },
+    {
+        "key": "fruit_and_veg",
+        "label": "Fruit & veg",
+        "blurb": "Fresh basics for everyday cooking.",
+        "items": [
+            { "name": "Onions", "group": "Pantry", "location": "Pantry" },
+            { "name": "Garlic", "group": "Pantry", "location": "Pantry" },
+            { "name": "Potatoes", "group": "Pantry", "location": "Pantry" },
+            { "name": "Carrots", "group": "Fridge", "location": "Fridge" },
+            { "name": "Apples", "group": "Fridge", "location": "Fridge" }
+        ]
+    },
+    {
+        "key": "freezer",
+        "label": "Freezer",
+        "blurb": "Frozen back-ups.",
+        "items": [
+            { "name": "Frozen peas", "group": "Freezer", "location": "Freezer" },
+            { "name": "Frozen berries", "group": "Freezer", "location": "Freezer" },
+            { "name": "Ice cream", "group": "Freezer", "location": "Freezer" }
+        ]
+    },
+    {
+        "key": "cleaning_household",
+        "label": "Cleaning & household",
+        "blurb": "Non-food things that still run out.",
+        "items": [
+            { "name": "Dish soap", "group": "Cleaning", "location": null },
+            { "name": "Laundry detergent", "group": "Cleaning", "location": "Shelf" },
+            { "name": "Paper towels", "group": "Other", "location": null },
+            { "name": "Bin bags", "group": "Other", "location": null }
+        ]
+    }
+]

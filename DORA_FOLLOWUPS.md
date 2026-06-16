@@ -52,6 +52,221 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-203 — `PATCH stock_location_id: null` likely fails to clear the location (same root cause as the C-1b.1 stock_group fix)
+- **Raised:** 2026-06-16 (C-1b.1 backend pass)
+- **Type:** finding (bug, likely)
+- **What:** `update_stock_item.py` clears `stock_location` via `_StockItem.stock_location = None`.
+  The relationship is mapped `lazy="noload"`, so the attribute reads as `None` even when an FK
+  exists; SQLAlchemy sees no change and the `stock_location_id` column never goes to NULL. C-1b.1
+  hit the identical bug for `stock_group` and fixed it by also setting the FK column
+  (`_StockItem._stock_group_id = None`). The same one-line fix should apply to `_stock_location_id`.
+  Pattern reaches the user via the existing detail page's clearable location `q-select` — clicking
+  the × and saving silently doesn't clear.
+- **Why deferred:** scope discipline — C-1b.1 is the inline stock-group picker; the location clear
+  is adjacent and the fix is mechanical, but should land with its own regression test rather than
+  riding on the stock-group test. Logging per R-007 instead of silently expanding scope.
+- **Recommended resolution:** **now or opportunistically with C-1b.1** — apply the FK-set fix in
+  `update_stock_item.py` and add an e2e: set location, PATCH `stock_location_id: null`, GET detail,
+  assert null. Quick + low-risk; the only reason it's a separate FU is brief discipline.
+
+## [OPEN] FU-202 — Browser-verify Stock Item Detail (C-1b focused pass + C-1b.1 marquee)
+- **Raised:** 2026-06-16 (extended after C-1b.1)
+- **Type:** follow-up (verification)
+- **What:** Code-complete, browser-unverified. Two passes to confirm in the running app:
+  - **Focused pass (prior):** (a) detail-page location picker is searchable + path-labelled and
+    saving a changed location round-trips; (b) Stock Overview "Any location" filter has the same
+    searchable + path-labelled UX and narrows the list; (c) BulkMoveLocationDialog dropdown still
+    lists the **full** set (`allLocationOptions`, not narrowed by the filter's search box);
+    (d) the toolbar **Add-to-list** button is visually flush with the other toolbar buttons and
+    still toggles on/off-list + opens the multi-list popover.
+  - **C-1b.5 lifecycle timeline:** on the **History** tab, confirm the timeline now shows
+    multiple event kinds (level changes with inferred "Restocked"/"Dropped" labels, any waste
+    events you've logged, past list-adds with their provenance, and a synthetic Opened entry
+    when the item is open). Empty items should read "Nothing logged for this item yet — once
+    you change its stock level…". Open a busy item and confirm the order is newest → oldest
+    and capped sensibly.
+  - **C-1b.4 tabs polish:** on **Recipes**, click a recipe's heart and confirm the favourite
+    toggles (and that "remove from favourites" works); on a **cookable** recipe, click "Add all
+    to list" and confirm every ingredient lands on the primary draft (closes the FU-185 defect).
+    On **Lists**, confirm the dead `open_in_new` arrow is gone and the primary draft row carries
+    a styled **Primary** badge next to its name. On **Substitutes**, confirm the per-row "Swap
+    into list" button is gone (Remove still works); the curated substitute list itself stays.
+  - **C-1b.3 Products tab + products-off:** empty Products tab shows a centred **Find & link a
+    product** CTA → seeded `/product-search?q=<name>`; non-empty shows the quieter **Link another**
+    in the header; the **cheapest** linked product is visually highlighted (chip + tinted card);
+    no **Get cheapest** toolbar button or saved-products picker dialog anymore. With Products **on**,
+    the tab and per-product surfaces look correct; with Products **off** (admin flips
+    `products_enabled` to false), the **Products tab disappears entirely** from the tabs row and
+    a stranded `?section=products` URL falls back to Overview.
+  - **C-1b.2 split-view:** peek opens at **50%** (was 58%); while peeking, drag is clamped to
+    [40%, 65%]; closing the peek restores the list to 100%. Verify by opening a peek, dragging the
+    splitter to both extremes, and closing.
+  - **C-1b.1 marquee:** (1) header shows back/close · name · **level chip = editor** (click → menu) ·
+    space · **Delete top-right (danger-ghost)** in both full-page and embedded modes; (2) toolbar is
+    Mark open · Set expiry · Add-to-list · (Show QR) — no Restock, no Find-deals; (3) Overview is a
+    single column where every row IS its editor: name (blur saves), location, **stock group**
+    (new), expiry **value + ±1d/+7d/+14d + date dialog + × clear**, open toggle with "Opened {date}"
+    + tooltip, essential toggle, auto-add toggle, level-updated read-only, **Notes calm at the
+    bottom**; (4) editors save immediately on change/blur without any Save button — confirm a
+    toggle/select round-trips and the page reflects the new value; (5) the unsaved-changes guard
+    still fires for in-progress text edits (name/notes); (6) **tabs** are legible in light + dark
+    + any other theme (active tab + indicator stay readable); (7) **Show QR** tooltip explains the
+    QR vs real-barcode distinction.
+  Touched (C-1b.1 + prior): `web_app/src/pages/StockItemDetailPage.vue`,
+  `web_app/src/pages/StockOverview.vue`, `web_app/src/composables/useStockFilters.ts`,
+  `web_app/src/components/AddToListButton.vue`, `web_app/src/models/stockItemDetail.ts`,
+  `dora_api/features/stock_items/get_stock_item_detail.py`,
+  `dora_api/features/stock_items/update_stock_item.py`.
+- **Why deferred:** standing working-style — the user runs/tests all code; static read + tsc/eslint +
+  e2e is not browser proof.
+- **Recommended resolution:** **now / confirm in browser** (next time the app is up).
+
+## [OPEN] FU-200 — Admin bootstrap is a fiction: first registrant becomes self-verified admin
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (security, HIGH)
+- **What:** `register_user.py:159` `is_first_user = repo.get(User).count() == 0` → `:166-167`
+  `is_admin=is_first_user, email_verified=is_first_user`. On a fresh public deploy whoever hits
+  `/register` first becomes a self-verified admin. Masked by a false assurance: `profile.py:72` lists
+  `ADMIN_BOOTSTRAP_EMAIL` as production-required, but it is **never read** anywhere else in the code.
+- **Why deferred:** read-only review; new finding (not in the prior security investigation).
+- **Recommended resolution:** **now / before any internet-facing deploy** — honor
+  `ADMIN_BOOTSTRAP_EMAIL` (only that email becomes admin) or gate first-user via a one-time setup token;
+  remove the dead var from the required set if not honored. **Confirm in a running app.**
+
+## [OPEN] FU-199 — SSRF in recipe import-from-URL
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (security, HIGH)
+- **What:** `POST /api/recipes/import-from-url` fetches an arbitrary user URL with no scheme/host
+  validation and `allow_redirects=True` (`import_recipe_from_url.py:66` accepts a bare string; `:310-314`
+  `requests.get(...)`). Any authed user can reach cloud metadata (169.254.169.254), localhost services
+  (the Ollama LLM), or intranet hosts. Byte cap + timeout exist; destination filtering does not.
+- **Why deferred:** read-only review; new finding.
+- **Recommended resolution:** **before managed/SaaS (Path A/B) deploy** — validate scheme; resolve
+  hostname and reject RFC-1918/loopback/link-local before connecting; re-validate each redirect hop.
+  **Confirm in a running app.**
+
+## [OPEN] FU-198 — DB restore + chunked uploads not admin-gated; no shared @require_admin
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (security, HIGH)
+- **What:** `data/restore_backup.py:358-363` and the `uploads.py` chunk chain require only a logged-in
+  session — restore inserts arbitrary rows across every table. Root cause: no shared admin gate; three
+  ad-hoc copies (`users/update_user_as_admin.py:43`, `audit/get_audit_events.py:59`, reused by
+  `update_app_settings.py:15`). Ad-hoc gating is how restore shipped ungated.
+- **Why deferred:** read-only review; new finding.
+- **Recommended resolution:** **now** — introduce one shared admin dependency, audit every mutating
+  route for it, gate restore + uploads. **Confirm in a running app.**
+
+## [OPEN] FU-197 — CSRF absent + email-change needs no password proof (confirms prior art)
+- **Raised:** 2026-06-16 (senior/tech-lead review; confirms prior-art A.1/A.2 in
+  `docs/05_investigations/AUTH_ASSISTANT_SECURITY_FINDINGS.md`)
+- **Type:** finding (security, HIGH — combine into account-takeover chain)
+- **What:** No CSRF token / Origin check on any mutation (`app.py:60-64` `SameSite=Lax`;
+  `middleware.py:115-125` checks only session presence). And `email_flows.py:260-304`
+  (`request_email_change`) requires no `current_password`, unlike `change_password.py:41,60`. CSRF +
+  email-change-without-proof = full account takeover.
+- **Why deferred:** prior-art items confirmed still-open against current code; read-only review.
+- **Recommended resolution:** **before internet-facing deploy** — double-submit CSRF token enforced in
+  middleware (or SameSite=Strict + Origin allow-list); require `current_password` re-proof on email
+  change + notify old address. **Confirm in a running app.**
+
+## [OPEN] FU-196 — Postgres target unreachable in running app; review's lower-severity hardening batch
+- **Raised:** 2026-06-16 (senior/tech-lead review)
+- **Type:** finding (architecture + hardening)
+- **What:** Umbrella for the review's MEDIUM/LOW items. (a) Postgres is the R-005 standard target but
+  `configuration_manager.py:145` hardcodes `sqlite:///`, no PG branch/driver — **overlaps FU-045**, add
+  a Postgres CI lane. (b) In-request multi-commit, no unit-of-work, global handler doesn't roll back
+  (`create_recipe.py:258/302/317/347`, `startup.py:140-150`). (c) Reflection-based wiring has no
+  boot-time resolved-route assertion (`startup.py:135`, `service_wiring.py:17`, `decorators.py:13`).
+  (d) `requests==2.31.0` CVE-2024-35195 → bump ≥2.32.4; `fuzzywuzzy` unmaintained. (e) assistant
+  endpoints unthrottled (`ask_assistant.py:331,367`); `SESSION_COOKIE_SECURE` off by default
+  (`app.py:64`); no app-wide security headers; no account-deletion endpoint (GDPR). (f) orphaned base
+  components `CardComponent.vue`/`SelectComponent.vue`; ~237 prompt-ID comments to sweep pre-release;
+  `.npmrc` pnpm-only keys warn on every npm command. Full detail in the review doc.
+- **Why deferred:** read-only review; these are Tier-2/Tier-3 polish, not ship-blockers.
+- **Recommended resolution:** Tier-2 (a–e) before "professional"; Tier-3 (f) pre public release.
+  Postgres CI lane folds into FU-045.
+
+## [OPEN] FU-194 — Onboarding demo data (L38) — deferred from C-5.5
+- **Raised:** 2026-06-16 (Onboarding C-5.5)
+- **Type:** deferred job
+- **What:** C-5.5 left out the optional **demo recipe (+ meal / meal-plan)** toggle (proposal §3.5,
+  feedback L38). It was the highest-risk piece to build blind: a Recipe needs a RecipeCollection +
+  **non-nullable** RecipeIngredient → StockItem FKs + a MealPlan/Entry, and this machine has **no
+  Python** to test the seed — a bug would 500 on Finish. Everything else in C-5.5 shipped.
+- **Why deferred:** explicitly optional in the proposal; far safer to build where the backend can be
+  run + tested so the FK graph is verified.
+- **Recommended resolution:** on a provisioned machine (alongside FU-193), or a small dedicated chunk:
+  add `POST /api/onboarding/seed-demo` (+ a warned toggle in the starter-data step) creating plain,
+  user-deletable rows (**no `is_demo` marking**), mirroring `seed.py`'s `make_recipe`/`make_item`/
+  `plan_entry`. Then flip L38 in COVERAGE_GAPS.
+
+## [OPEN] FU-195 — Onboarding starter-data: in-page import + groups/locations "some" (trims from C-5.5)
+- **Raised:** 2026-06-16 (Onboarding C-5.5)
+- **Type:** leftover
+- **What:** Two C-5.5 sub-asks were scoped down: (1) **inline import** (L30) — the starter-data step
+  still **links** to `/data/import` rather than embedding the importer on the page (embedding the
+  full importer was disproportionate for this build); (2) **groups/locations "some"** (L34) — the
+  step offers all/none per catalogue **+ a static preview** (captions list the default names), and
+  the **packs** give item-level ticking, but there's no individual tick-list for the default
+  groups/locations themselves.
+- **Why deferred:** size of the combined C-5.5 + C-5.6 build; both are enhancements, not
+  acceptance-blockers (the acceptance centres on packs + the added-list, which shipped).
+- **Recommended resolution:** opportunistic — (1) embed a slim importer (or a "paste rows"
+  affordance) when the importer is next touched; (2) add a per-name checklist for default
+  groups/locations (needs `/seed` to accept name lists, or a `seed-items`-style call for them).
+
+## [OPEN] FU-192 — Browser-verify Onboarding C-5.1 + C-5.2 (built + static-verified only)
+- **Raised:** 2026-06-16 (Onboarding C-5.1; C-5.2 added same day)
+- **Type:** deferred verification
+- **What (C-5.1):** C-5.1 shipped frontend-only (`WelcomeWizard.vue`) and passed **eslint + vue-tsc**, but
+  its acceptance is behavioural and needs the running app. Confirm in browser: (1) the header
+  button reads **"Skip"** and bailing mid-wizard (Skip) applies **nothing** — no username/theme/
+  font change, no seeded groups/locations, **no stock items created**; (2) **Finish** applies
+  everything in dependency order (prefs → seeds → queued first items) and lands on `/`; (3)
+  **"Show me X"** on the tour applies the draft then navigates to that screen (and does NOT
+  navigate if the apply fails — e.g. invalid display name jumps back to the welcome step with the
+  error); (4) theme picks persist as `system`/`pesto`/`pesto-dark` and actually repaint; (5) the
+  import line reads "spreadsheet or another app" and links to `/data/import`; (6) a mid-wizard
+  refresh resumes the draft **including queued first items**.
+- **What (C-5.2 — the cinematic intro):** new `OnboardingStory` + `OnboardingLoop` +
+  `OnboardingScene` + `OnboardingStepRail` (+ `useReducedMotion`); copy centralised in
+  `onboardingContent.ts`. Confirm in browser: (a) first-run opens on the story; scenes auto-advance
+  but the **hero loop pauses** for exploration; (b) the loop **draws itself once**, then stages +
+  Dora are **tappable** and the detail panel updates; (c) the **persona preview** (Cooking/Spend/
+  Everything) toggles the provisional **Insight** chip + Dora-centre copy, and the previewed persona
+  persists in the draft (for the C-5.3 fork to pre-fill); (d) the **rail** jumps freely across
+  Story↔Setup, nothing gated; **Skip to setup** + **Skip** work from any scene; (e) **reduced-motion**:
+  no autoplay/draw, final state shown, still fully usable; (f) **keyboard**: every node / persona /
+  rail dot is tabbable with visible focus; (g) layout holds at a narrow phone width. The **FU-184
+  copy-honesty** gate is separate — this FU is mechanics/UX only.
+- **What (C-5.3 — persona fork + branching):** as the **first user**, confirm in browser: (a) the
+  persona step shows 3 preset cards + Customise, pre-selected from the hero preview; (b) picking
+  **Cooking** drops the explainer + shortens the wizard, while **Spend/Everything** show the
+  stock-vs-product explainer before seeding; (c) **Customise** reveals the flat flag toggles and the
+  (products-off + money-on) combo is reachable; (d) flags land **only on Finish** — bailing changes
+  nothing; (e) after Finish the install reflects the chosen flags (Settings → System) and the first
+  user's money/nutrition per-user prefs match; (f) a **second (non-first) user** sees no persona /
+  explainer. Backend migrate + e2e for the flag is **FU-193** (separate, needs a Python env).
+- **What (C-5.4 — household headcount):** confirm the welcome step's "how many people do you cook
+  for?" field saves on Finish (blank leaves it unset), then open **cook mode**: with a headcount set
+  the serving scaler opens pre-scaled to it; with none set it falls back to the recipe's servings
+  (per-cook nudging still works). Backend round-trip = FU-193.
+- **What (C-5.5 — starter data):** on the seed step, **starter packs** render (5 packs); ticking a
+  pack header selects all its items (tri-state when partial); expanding lets you tick individual
+  items; the first-item step's group/location pickers offer **names** (defaults + pack groups +
+  existing) and queued items show in the **slim "added" list** (removable). On Finish: ticked pack
+  items + first items are created **pre-located**, with **no duplicates** on a re-run. Backend = FU-193.
+- **What (C-5.6 — finish):** the last step shows a **confetti** burst (suppressed under
+  reduced-motion), the **OnboardingLoop recap** (no autoplay, tappable), and **persona-relevant
+  flow-cards** that "Open" each area + link to the guides; the **Alerts card → /alerts** (FU-015).
+  Finish / "Open X" completes onboarding (router guard clears).
+- **Why deferred:** static gates are green; behavioural verification needs the full stack (mirrors
+  the Alerts **FU-183** pattern). `node_modules` was not present on this machine until this session
+  (installed via `npm ci`).
+- **Recommended resolution:** **now / opportunistic** — batch with **FU-183** (alerts browser
+  smoke) + **FU-193** (C-5.3 backend) on a provisioned machine. **Folds FU-041** (clean-DB "already
+  have…" copy check).
+
 ## [OPEN] FU-188 — Back-in-stock subscriptions tier (deferred from Alerts C-9.5)
 - **Raised:** 2026-06-15 (Alerts C-9.5 — subscriptions tier)
 - **Type:** deferred job
@@ -87,8 +302,8 @@ long session summary. Distinct from the other logs:
   touched, or fold into the FU-174 app-wide date/threshold sweep. Pass the resolved window
   (same `effective_expiring_soon_window`) into the 4 sites.
 
-## [OPEN] FU-186 — Decommission in-app live product search / `merchant_api` (scraping-divorce ripple)
-- **Raised:** 2026-06-15 (C-10 ingestion API design)
+## [OPEN] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
+- **Raised:** 2026-06-15 (C-10 ingestion API design); **emailer scope added 2026-06-16**
 - **Type:** deferred job / decommission
 - **What:** With scraping divorced and `/api/ingest` (C-10) as the **only** inbound product path,
   Dora-core must **not scrape live**. The current in-app **product search calls the sibling
@@ -98,23 +313,28 @@ long session summary. Distinct from the other logs:
   product"** (it can no longer live-search) and the "Find deals" / best-deals surfaces; `merchant_api`'s
   live-scrape role moves to the private external producer. Folds in **FU-053** (best-deals card
   fetches all products client-side).
+  - **Surgical removal — `emailer/` (the standalone weekly-deals email service):** the half-finished
+    `emailer/` package (`generate.py` / `delivery.py` / `startup.py` / `product_model.py` /
+    `user_model.py` / `templates/` / `food_emojis.txt`) is the **old "Weekly Price Report" deals
+    email** — it's coupled to the scraper (its commented-out core fetches `/api/webScraper/offers`;
+    `product_model.py` mirrors the merchant-offer shape) and isn't wired into the running app (only
+    shares `logging_setup`). Per the user (2026-06-16) it is **part of this same surgical-removal
+    sweep**: (1) **move it into the private companion app and finish it off properly there** —
+    that's where deals + mailing belong (the companion gathers offers and mails the user; invisible
+    to Dora per the hard rule); (2) **then delete `emailer/` from this repo.** Also clean the
+    now-dead refs left behind: `SOURCE_EMAILER` (`audit_event.py:12`) + the `emailer` arm in
+    `get_audit_events.py` / `logging_setup.py` docs once nothing emits them.
+  - **Not in scope / keep:** `dora_api/infrastructure/email_sender.py` is the **transactional**
+    sender (password-reset etc., works OOTB per INV-4) — **stays**. The legitimate in-app
+    "email me stuff" need is the **Alerts C-9.7 email digest** (per-user opt-in, hangs off the
+    alerts evaluator, reuses `email_sender.py`) — so removing `emailer/` leaves **no in-app gap**.
 - **Why deferred:** a cross-cutting decommission sweep, distinct from building the ingestion seam;
-  needs `/ingest` landed first so the catalogue is populated to search against.
+  needs `/ingest` landed first so the catalogue is populated to search against. The `emailer/` move
+  needs the companion repo to land it in.
 - **Recommended resolution:** after **C-10.2** (the ingest path exists); pair with **FU-182**
   (Products-off) since both reshape the product surfaces, and re-confirm C-1b §2.4's "find & link"
-  against it. Keep the **invisibility rule** — no scraper references in whatever replaces search.
-
-## [OPEN] FU-185 — Stock Item Detail recipe-tab actions are dead (B8 residue)
-- **Raised:** 2026-06-15 (C-1b design — Explore sweep)
-- **Type:** finding / bug
-- **What:** On `StockItemDetailPage.vue`, `RecipeCard` **emits** `@toggle-favourite` +
-  `@add-all-to-list` but the detail page **doesn't listen** to them (only `@open`/`@cook`/
-  `@add-missing` are wired). So "remove from favourites does nothing" (feedback L132) and most
-  recipe actions beyond Cook (L134) are dead on this surface. Recipe-row navigation IS fixed.
-- **Why deferred:** found during the C-1b design sweep; **homed in C-1b.4** (wire the listeners)
-  but C-1b isn't built yet. Static read confirms the handlers are missing.
-- **Recommended resolution:** fix in **C-1b.4** (Recipes-tab chunk); until then it's a live defect
-  — **confirm in browser** that favourite-toggle/add-all are dead, then wire them. Cites B8.
+  against it. Keep the **invisibility rule** — no scraper references in whatever replaces search,
+  and none of the companion's existence (incl. the emailer it now hosts) surfaces in the app.
 
 ## [OPEN] FU-184 — Reconcile onboarding sell-copy + loop stages against actual app behaviour
 - **Raised:** 2026-06-15 (Onboarding C-5 v3 design)
@@ -130,6 +350,22 @@ long session summary. Distinct from the other logs:
   for the divorced deal-scraping — but it **isn't a finished feature**. Do NOT promise it in
   onboarding copy until it's real; it's a design placeholder until then. Decide whether to build
   it (it's the spine of the **Spend-tracking** persona).
+- **2026-06-16 (C-5.1 closed without tripping this gate):** C-5.1's copy edits are **labels +
+  import wording only** (Skip; "spreadsheet or another app"), not aspirational feature claims, so
+  the sell-copy honesty gate didn't apply to it. **Still open:** the welcome-card blurb mentions
+  *"deals"* (flagged above) and the loop/Insight sell-copy land in **C-5.2/C-5.6** — those are the
+  chunks this gate really bites on.
+- **2026-06-16 (C-5.2 shipped the copy — gate now LIVE):** the cinematic intro + hero loop are built
+  with the **provisional** sell-lines, centralised in **one file**:
+  `web_app/src/pages/onboarding/onboardingContent.ts` (`LOOP_STAGES`, `LOOP_CENTRE`, `LOOP_INSIGHT`,
+  `NARRATIVE_SCENES`, `PERSONA_PREVIEWS`). The user explicitly chose to **build-to-plan now and
+  revisit with the assistant later** to confirm each claim against the finished app. The Insight beat
+  is rendered as a dimmed, "soon"-tagged candidate (not a promise), and Shop's old "log what you paid"
+  price claim was moved off Shop onto that provisional node. **Revisit = walk the running app, then
+  edit that one content file** (cut/soften per claim); no component changes needed for copy-only fixes.
+- **2026-06-16 (also spotted, C-5.3):** the onboarding **admin step** still says *"Pick which
+  merchants to **scrape**"* (`WelcomeWizard.vue` admin card) — stale post scraping-divorce. Out of
+  C-5.1/2/3 scope; reword in the loop/Insight copy pass (or the P8 rename), not piecemeal.
 - **Why deferred:** needs the running app to verify; can't be cleared by a static read (env
   unprovisioned this session, same blocker as FU-183).
 - **Recommended resolution:** **close-gate on the onboarding-copy chunks (C-5.1/C-5.2/C-5.6)** —
@@ -255,6 +491,12 @@ long session summary. Distinct from the other logs:
 ## [OPEN] FU-182 — Treat the minimal/Products-off user as a first-class workflow
 - **Raised:** 2026-06-14 (talk-time assessment); refined 2026-06-15 (round 2); **promoted to proposal 2026-06-15** — see `docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`. This ledger entry now tracks **co-design + implementation**, not the writing phase.
 - **Type:** open decision / design follow-up
+- **2026-06-16 (C-5.3 delivered the lever):** the **`AppSetting.products_enabled`** flag now exists
+  across the one flag path (entity + Fields, migration `d1f4b8c3e7a9`, table-mapping, DTO + admin
+  PATCH, `/api/health` `features.products`, `useFeatureFlags().products`), and the onboarding
+  **persona fork** sets it (Cooking ⇒ off). This sweep is now **unblocked**: per-surface hiding
+  (nav, stock-item detail, shopping-list checklist mode, product search / cart, etc.) can read
+  `products` and collapse. C-5.3 deliberately did **not** start the sweep (R-007) — still this FU.
 - **What:** Audit every surface for the "Products feature off" path and treat
   the minimal user (pantry + recipes + meal plan + checklist shopping list,
   no merchants/offers/price-history/cart) as a first-class workflow — not a
@@ -2750,10 +2992,16 @@ long session summary. Distinct from the other logs:
   shouldn't render on a clean install. The user likely had dev/seed data or a prior
   seed run. No migration pre-creates *user* groups/locations (confirmed).
 - **Why open:** the report came from real usage; a static read isn't proof.
+- **2026-06-16 (C-5.1) re-confirm:** re-read the initial migration
+  (`6e127e3cfa54`) — it only `bulk_insert`s **stock levels** and `create_table`s
+  StockGroup/StockLocation (schema, no rows). The 8d3f/e9c2 migrations are
+  schema-only. So **no migration inserts group/location rows**; the "already
+  have" copy can only fire against `seed_dev_data()` output (dev dataset). Still
+  needs a live clean-DB confirmation per the reported-defect rule.
 - **Recommended resolution:** **confirm in browser** on a genuinely fresh DB
   (register first user → onboarding) that the "already have" copy does NOT appear
   and the seed checkboxes are enabled. If it DOES appear, find what's seeding user
-  groups/locations and fix. Folded into the C-5 §2.6 design either way.
+  groups/locations and fix. **Folded into FU-192** (C-5.1 browser smoke).
 
 ## [OPEN] FU-034 — Wire up `StockItemSubstitute.notes` (substitution notes)
 - **Raised:** 2026-06-06 (INV-1)

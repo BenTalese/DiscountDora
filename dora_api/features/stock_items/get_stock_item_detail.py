@@ -10,7 +10,7 @@ for the overview grid. This one is used by the detail page and includes:
   * linked recipes (just id + name) — derived via the RecipeIngredient join
 """
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from typing import List
 from uuid import UUID
@@ -21,7 +21,9 @@ from dora_api.app import db
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
@@ -69,6 +71,28 @@ class LevelChangeDto:
     stock_level_name: str | None
 
 
+# C-1b.5 / INV-7 — lifecycle timeline inputs. The frontend merges these
+# with `level_history` (and synthesises open/checked rows from current
+# state) into a single date-sorted q-timeline. Keeping them as separate
+# typed lists rather than a pre-merged union lets the client style each
+# event kind on its own without re-parsing strings.
+@dataclass(frozen=True, slots=True)
+class WasteEventDto:
+    occurred_at: datetime
+    reason: str
+    quantity: int | None
+    estimated_value: float | None
+    note: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ListAddEventDto:
+    added_at: datetime
+    added_via: str
+    shopping_list_id: UUID
+    shopping_list_name: str
+
+
 @dataclass(frozen=True, slots=True)
 class StockItemDetailDto:
     stock_item_id: UUID
@@ -81,6 +105,8 @@ class StockItemDetailDto:
     stock_location_id: UUID | None
     stock_location_name: str | None
     stock_location_breadcrumb: List[str]
+    stock_group_id: UUID | None
+    stock_group_name: str | None
     stock_level_last_updated: datetime
     expiry_date: date | None
     is_open: bool
@@ -93,6 +119,15 @@ class StockItemDetailDto:
     recipes: List[LinkedRecipeDto]
     substitutes: List[SubstituteDto]
     level_history: List[LevelChangeDto]
+    # C-1b.5 / INV-7 — last-N lifecycle inputs for the History tab. Capped
+    # at the handler so the JSON stays light on busy items; older history
+    # is intentionally not surfaced here (it lives in the waste-insights /
+    # spend reports surfaces instead).
+    waste_events: List[WasteEventDto] = field(default_factory=list)
+    recent_list_adds: List[ListAddEventDto] = field(default_factory=list)
+    # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
+    # the timeline whenever it differs from the most recent level change.
+    last_checked_at: datetime | None = None
     # C-1 Chunk 6 / FU-033 — image presence flag (own-image OR linked-
     # product image fallback). Bytes served via
     # `GET /stock-items/<id>/image`; never inlined in the JSON.
@@ -114,6 +149,7 @@ class GetStockItemDetailHandler:
             .get(StockItem)
             .include(StockItem.Fields.STOCK_LEVEL)
             .include(StockItem.Fields.STOCK_LOCATION)
+            .include(StockItem.Fields.STOCK_GROUP)
             # merchant and current_offer are siblings on Product, so each needs
             # its own include("products") branch — chaining then_include would
             # try to resolve current_offer on Merchant.
@@ -231,6 +267,51 @@ class GetStockItemDetailHandler:
             for c in _Changes[:20]
         ]
 
+        # C-1b.5 / INV-7 — lifecycle inputs (read-only, capped).
+        # Waste events: append-only log (P2-06); newest first.
+        _Wastes = self.repository.get(StockItemWasteEvent).all(
+            EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+        )
+        _Wastes.sort(key=lambda w: w.occurred_at, reverse=True)
+        _WasteEvents = [
+            WasteEventDto(
+                occurred_at = w.occurred_at,
+                reason = w.reason,
+                quantity = w.quantity,
+                estimated_value = w.estimated_value,
+                note = w.note,
+            )
+            for w in _Wastes[:20]
+        ]
+
+        # Past list-adds: every line for this stock item that has an
+        # added_at stamp. Lines on done/archived lists are intentionally
+        # included — the timeline is about the *item's* history, not the
+        # current cart. Look up list names from a tiny cache to avoid
+        # N+1 SELECTs. Filter at the field; sort + cap on the result.
+        _Lines = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+        )
+        _Lines = [l for l in _Lines if l.added_at is not None]
+        _Lines.sort(key=lambda l: l.added_at, reverse=True)
+        _Lines = _Lines[:20]
+        _ListAdds: List[ListAddEventDto] = []
+        if _Lines:
+            _ListIds = {l.shopping_list_id for l in _Lines}
+            _Lists = list(_Session.execute(
+                select(ShoppingList).where(ShoppingList.id.in_(_ListIds))
+            ).scalars())
+            _ListNameLookup = {lst.id: lst.display_name for lst in _Lists}
+            _ListAdds = [
+                ListAddEventDto(
+                    added_at = l.added_at,
+                    added_via = l.added_via,
+                    shopping_list_id = l.shopping_list_id,
+                    shopping_list_name = _ListNameLookup.get(l.shopping_list_id, '(deleted list)'),
+                )
+                for l in _Lines
+            ]
+
         # C-9.2 — same household-configured expiring-soon window as the alerts
         # list + heatmap (R-003), falling back to the default.
         _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
@@ -248,6 +329,8 @@ class GetStockItemDetailHandler:
             stock_location_id = _StockItem.stock_location.id if _StockItem.stock_location else None,
             stock_location_name = _StockItem.stock_location.name if _StockItem.stock_location else None,
             stock_location_breadcrumb = _Breadcrumb,
+            stock_group_id = _StockItem.stock_group.id if _StockItem.stock_group else None,
+            stock_group_name = _StockItem.stock_group.name if _StockItem.stock_group else None,
             stock_level_last_updated = _StockItem.stock_level_last_updated,
             expiry_date = _StockItem.expiry_date,
             is_open = bool(_StockItem.is_open),
@@ -259,6 +342,9 @@ class GetStockItemDetailHandler:
             products = _LinkedProducts,
             recipes = _LinkedRecipes,
             substitutes = _Substitutes,
+            waste_events = _WasteEvents,
+            recent_list_adds = _ListAdds,
+            last_checked_at = _StockItem.last_checked_at,
             level_history = _LevelHistory,
             # C-1 Chunk 6 / FU-033 — own-image OR any linked product image.
             # `_LinkedProducts` already loaded above; checks are cheap.

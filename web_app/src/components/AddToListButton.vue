@@ -67,15 +67,14 @@
     </q-item>
 
     <!-- ── Toolbar variant ──────────────────────────────────────────────
-         Flat labelled button (recipe detail "add to list", stock detail
-         toolbar, etc.). Wears a popover on `on_multiple`. -->
-    <q-btn
+         Renders the shared BaseButton (secondary) so it sits flush with the
+         other toolbar actions on the detail/recipe pages. The cart-state
+         icon still swaps to signal on/off-list; the popover anchors to it
+         on `on_multiple`. -->
+    <BaseButton
         v-else-if="variant === 'toolbar'"
-        flat
-        no-caps
-        dense
+        variant="secondary"
         :icon="iconFor"
-        :color="iconColour ?? undefined"
         :label="toolbarLabel"
         :loading="busy"
         :aria-label="toolbarLabel"
@@ -89,7 +88,7 @@
         >
             <component :is="MultiListPopover" />
         </q-popup-proxy>
-    </q-btn>
+    </BaseButton>
 
     <!-- ── Row variant (default) ────────────────────────────────────────
          Flat round icon — fits in a dense list row. -->
@@ -121,6 +120,7 @@
     import { storeToRefs } from 'pinia';
     import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator, useQuasar } from 'quasar';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';

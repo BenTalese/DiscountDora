@@ -29,6 +29,24 @@ export type LevelChange = {
     stock_level_name: string | null;
 };
 
+// C-1b.5 / INV-7 — lifecycle timeline inputs. The History tab merges
+// these with `level_history` (and synthesises Opened/Checked rows from
+// current state) into a single date-sorted q-timeline.
+export type WasteEvent = {
+    occurred_at: string; // ISO datetime
+    reason: string;
+    quantity: number | null;
+    estimated_value: number | null;
+    note: string | null;
+};
+
+export type ListAddEvent = {
+    added_at: string; // ISO datetime
+    added_via: string;
+    shopping_list_id: string;
+    shopping_list_name: string;
+};
+
 import type { AttentionReasons } from 'src/models/location';
 
 export type StockItemDetail = {
@@ -42,6 +60,8 @@ export type StockItemDetail = {
     stock_location_id: string | null;
     stock_location_name: string | null;
     stock_location_breadcrumb: string[];
+    stock_group_id: string | null;
+    stock_group_name: string | null;
     stock_level_last_updated: string; // ISO datetime
     expiry_date: string | null;
     is_open: boolean;
@@ -58,6 +78,18 @@ export type StockItemDetail = {
     recipes: LinkedRecipe[];
     substitutes: Substitute[];
     level_history: LevelChange[];
+    /** C-1b.5 / INV-7 — append-only waste log entries for this item,
+     *  newest first, capped on the server. Empty when nothing thrown
+     *  out (the common case). */
+    waste_events?: WasteEvent[];
+    /** C-1b.5 / INV-7 — past shopping-list adds for this item (any list
+     *  status), newest first, capped on the server. The History tab
+     *  humanises `added_via` ("auto: low stock" / "auto: recipe" / …). */
+    recent_list_adds?: ListAddEvent[];
+    /** X1 — last "still correct" check; surfaced in the lifecycle
+     *  timeline as a synthetic Checked entry when it differs from the
+     *  most recent level change. Null = never checked. */
+    last_checked_at?: string | null;
     /** C-1 Chunk 6 / FU-033 — true when the item has its own image OR a
      *  linked product carries one. Bytes served via
      *  `GET /stock-items/<id>/image`. */

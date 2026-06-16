@@ -1,5 +1,8 @@
 import type {
+    OnboardingCatalog,
     OnboardingState,
+    SeedItemsRequest,
+    SeedItemsResult,
     SeedRequest,
     SeedResult,
 } from 'src/models/onboarding';
@@ -26,6 +29,15 @@ export default class OnboardingApiService {
     seedAsync = async (request: SeedRequest): Promise<SeedResult> =>
         await this.httpClient.post<SeedResult, SeedRequest>(
             '/onboarding/seed',
+            request,
+        );
+
+    getCatalogAsync = async (): Promise<OnboardingCatalog> =>
+        await this.httpClient.get<OnboardingCatalog>('/onboarding/catalog');
+
+    seedItemsAsync = async (request: SeedItemsRequest): Promise<SeedItemsResult> =>
+        await this.httpClient.post<SeedItemsResult, SeedItemsRequest>(
+            '/onboarding/seed-items',
             request,
         );
 }

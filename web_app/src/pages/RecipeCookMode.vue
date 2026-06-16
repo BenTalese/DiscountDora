@@ -527,6 +527,7 @@
     const recipeApiService = new RecipeApiService();
     const stockItemApi = new StockItemApiService();
     const slActions = useShoppingListActions();
+    const authStore = useAuthStore();
 
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
@@ -542,13 +543,25 @@
     const loading = ref(true);
     const currentStepIndex = ref(0);
 
-    // C-3 Chunk 6 — session-only headcount. Defaults to the recipe's own
-    // `servings` (until C-5 onboarding ships a `household_headcount`
-    // user-setting to seed this). Never writes back to the saved recipe —
+    // C-3 Chunk 6 / C-5.4 — session-only headcount. Seeds from the user's
+    // `household_headcount` (set in onboarding) when present, otherwise the
+    // recipe's own `servings`. Never writes back to the saved recipe —
     // matches the B8-substitute discipline of "this cook only".
-    const cookingFor = ref<number>(1);
+    const householdHeadcount = computed(
+        () => authStore.currentUser?.household_headcount ?? null,
+    );
+    const cookingFor = ref<number>(
+        householdHeadcount.value && householdHeadcount.value > 0
+            ? householdHeadcount.value
+            : 1,
+    );
     watch(recipe, (next) => {
-        if (next?.servings && next.servings > 0) cookingFor.value = next.servings;
+        const headcount = householdHeadcount.value;
+        if (headcount && headcount > 0) {
+            cookingFor.value = headcount;
+        } else if (next?.servings && next.servings > 0) {
+            cookingFor.value = next.servings;
+        }
     }, { immediate: true });
 
     /** Format a recipe ingredient's quantity for display, rescaled to the
@@ -573,8 +586,8 @@
 
     // ── P2-13 voice (extracted into composables) ────────────────────────
     // The user's persisted preference seeds the local toggle; subsequent
-    // in-page taps flip the session view and persist back via authStore.
-    const authStore = useAuthStore();
+    // in-page taps flip the session view and persist back via authStore
+    // (declared above with the other stores).
     const speechOut = useSpeechOutput();
     const speechEnabled = ref<boolean>(
         authStore.currentUser?.voice_output_enabled ?? false,

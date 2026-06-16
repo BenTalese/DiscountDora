@@ -27,8 +27,8 @@ function load(): Promise<void> {
             .catch(() => {
                 // Network failure → leave the previous map intact (likely
                 // empty on first call); consumers will see every flag as
-                // false until the next refresh succeeds.
-                flagsRaw.value = flagsRaw.value;
+                // false until the next refresh succeeds. Intentionally a
+                // no-op — we keep whatever flags we already had.
             })
             .finally(() => {
                 loaded.value = true;
@@ -64,6 +64,9 @@ export function useFeatureFlags() {
         nutrition: computed(() => readFlag('nutrition')),
         companionIngestion: computed(() => readFlag('companion_ingestion')),
         dealsEmail: computed(() => readFlag('deals_email')),
+        // Onboarding C-5.3 — products feature (linked products, price history,
+        // ingestion). Per-surface gating when off is FU-182.
+        products: computed(() => readFlag('products')),
         // C-cross Chunk 3 — derived capability (admin configured a
         // nutrition source). Gates the per-user `complex` mode toggle.
         nutritionComplexAvailable: computed(() => readFlag('nutrition_complex_available')),

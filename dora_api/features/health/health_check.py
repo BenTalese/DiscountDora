@@ -72,6 +72,9 @@ def _feature_flags() -> dict[str, bool]:
         "nutrition": False,
         "companion_ingestion": False,
         "deals_email": False,
+        # Onboarding C-5.3 — products feature (linked products, price history,
+        # ingestion). Default on; the Cooking persona turns it off.
+        "products": True,
         # C-cross Chunk 3 — derived capability. True when an admin has
         # configured a nutrition source (reserved seam — the integration
         # itself ships later). The per-user Settings page gates the
@@ -93,6 +96,7 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition"] = bool(setting.nutrition_enabled)
         flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
         flags["deals_email"] = bool(setting.deals_email_enabled)
+        flags["products"] = bool(setting.products_enabled)
         # C-cross Chunk 3 — derived from the seam value; never publish the
         # source string itself.
         flags["nutrition_complex_available"] = bool(

@@ -159,6 +159,10 @@ class User(BaseEntity):
     # regardless; only the *render* is suppressed.
     show_recipe_images: bool = True
     show_stock_images: bool = True
+    # Onboarding C-5.4 — how many people the household usually cooks for.
+    # NULL = not set (cook mode falls back to each recipe's own `servings`).
+    # Read by RecipeCookMode to seed its per-session serving scaler (L44).
+    household_headcount: int | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -184,3 +188,4 @@ class User(BaseEntity):
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         SHOW_STOCK_IMAGES = "show_stock_images"
+        HOUSEHOLD_HEADCOUNT = "household_headcount"

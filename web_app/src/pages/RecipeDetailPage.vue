@@ -1060,7 +1060,6 @@
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Recipe } from 'src/models/recipe';
     import type { Substitute } from 'src/models/stockItemDetail';
@@ -1111,7 +1110,6 @@
     const { moneyEnabled } = useMoneyEnabled();
     const { nutritionEnabled } = useNutritionMode();
     const stockItemApi = new StockItemApiService();
-    const stockActions = useStockItemActions();
     const { addItems } = useShoppingListActions();
 
     const { recipeCollections } = storeToRefs(recipeStore);

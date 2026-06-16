@@ -1,6 +1,27 @@
 <template>
     <q-page padding>
         <div class="wizard-shell q-mx-auto">
+            <!-- ── Shared, non-linear progress rail (Story + Setup) ────── -->
+            <div class="wizard-rail q-mb-lg">
+                <OnboardingStepRail
+                    :sections="railSections"
+                    :active-section="view"
+                    :active-index="railActiveIndex"
+                    @jump="onRailJump"
+                />
+            </div>
+
+            <!-- ══ STORY — cinematic intro + the hero loop ══════════════ -->
+            <OnboardingStory
+                v-if="view === 'story'"
+                v-model:scene-index="storySceneIndex"
+                v-model:persona="personaPreview"
+                @enter-setup="enterSetup"
+                @skip="onSkipEverything"
+            />
+
+            <!-- ══ SETUP — the steps (draft-until-finish; applied on Finish) ══ -->
+            <template v-else>
             <!-- ── Header: progress + skip-everything ─────────────────── -->
             <div class="row items-center q-mb-md">
                 <div class="col">
@@ -14,7 +35,7 @@
                     variant="ghost"
                     class="dora-text-secondary"
                     :icon="ICONS.skip_next"
-                    label="Skip everything"
+                    label="Skip"
                     :loading="completing"
                     @click="onSkipEverything"
                 />
@@ -62,7 +83,7 @@
                         :error="!!displayNameError"
                         :error-message="displayNameError ?? undefined"
                         @update:model-value="displayNameError = null"
-                        @keydown.enter.prevent="onNext"
+                        @keydown.enter.prevent="advance"
                     />
                     <div class="row q-col-gutter-md">
                         <q-select
@@ -86,6 +107,17 @@
                             class="col-12 col-sm-6"
                         />
                     </div>
+                    <q-input
+                        v-model.number="form.headcount"
+                        outlined
+                        dense
+                        type="number"
+                        min="1"
+                        max="99"
+                        label="How many people do you usually cook for?"
+                        hint="Cook mode scales recipes to this. Leave blank to use each recipe's own serving size."
+                        @blur="onHeadcountBlur"
+                    />
                 </q-card-section>
             </q-card>
 
@@ -131,6 +163,150 @@
                             </q-item-section>
                         </q-item>
                     </q-list>
+                </q-card-section>
+            </q-card>
+
+            <!-- ── Step: Persona fork (first user only) ───────────────── -->
+            <q-card
+                v-show="currentStep?.id === 'persona'"
+                flat
+                bordered
+                class="q-mb-md"
+            >
+                <q-card-section>
+                    <div class="text-h6 q-mb-sm">What do you want Dora to do for you?</div>
+                    <div class="text-body2 dora-text-secondary q-mb-md">
+                        Pick a starting point — you can change any of this later in Settings.
+                    </div>
+                    <div class="row q-col-gutter-md">
+                        <div
+                            v-for="preset in PERSONA_PRESETS"
+                            :key="preset.key"
+                            class="col-12 col-sm-6"
+                        >
+                            <q-card
+                                flat
+                                bordered
+                                class="persona-card"
+                                :class="{ 'persona-card--picked': personaChoice === preset.key }"
+                                @click="selectPersona(preset.key)"
+                            >
+                                <q-card-section>
+                                    <div class="row items-center no-wrap">
+                                        <div class="col text-subtitle1">{{ preset.label }}</div>
+                                        <q-icon
+                                            v-if="personaChoice === preset.key"
+                                            :name="ICONS.check_circle"
+                                            color="primary"
+                                            size="20px"
+                                        />
+                                    </div>
+                                    <div class="text-caption dora-text-muted q-mt-xs">
+                                        {{ preset.promise }}
+                                    </div>
+                                </q-card-section>
+                            </q-card>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <q-card
+                                flat
+                                bordered
+                                class="persona-card"
+                                :class="{ 'persona-card--picked': personaChoice === 'custom' }"
+                                @click="selectPersona('custom')"
+                            >
+                                <q-card-section>
+                                    <div class="row items-center no-wrap">
+                                        <div class="col text-subtitle1">Customise</div>
+                                        <q-icon
+                                            v-if="personaChoice === 'custom'"
+                                            :name="ICONS.check_circle"
+                                            color="primary"
+                                            size="20px"
+                                        />
+                                    </div>
+                                    <div class="text-caption dora-text-muted q-mt-xs">
+                                        Turn individual features on or off yourself.
+                                    </div>
+                                </q-card-section>
+                            </q-card>
+                        </div>
+                    </div>
+
+                    <q-list
+                        v-if="personaChoice === 'custom'"
+                        bordered
+                        class="rounded-borders q-mt-md"
+                    >
+                        <q-item
+                            v-for="meta in INSTALL_FLAG_META"
+                            :key="meta.key"
+                            tag="label"
+                        >
+                            <q-item-section>
+                                <q-item-label>{{ meta.label }}</q-item-label>
+                                <q-item-label caption>{{ meta.blurb }}</q-item-label>
+                            </q-item-section>
+                            <q-item-section side>
+                                <q-toggle v-model="customFlags[meta.key]" />
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-card-section>
+            </q-card>
+
+            <!-- ── Step: Stock-item vs product explainer (products on) ── -->
+            <q-card
+                v-show="currentStep?.id === 'explainer'"
+                flat
+                bordered
+                class="q-mb-md"
+            >
+                <q-card-section>
+                    <div class="text-h6 q-mb-sm">Stock items vs products</div>
+                    <div class="text-body2 dora-text-secondary q-mb-md">
+                        One quick distinction makes the rest click:
+                    </div>
+                    <div class="row q-col-gutter-md">
+                        <div class="col-12 col-sm-6">
+                            <q-card flat bordered class="full-height">
+                                <q-card-section>
+                                    <q-icon :name="ICONS.inventory_2" color="primary" size="28px" />
+                                    <div class="text-subtitle1 q-mt-sm">“Milk” is a stock item</div>
+                                    <div class="text-caption dora-text-muted q-mt-xs">
+                                        A thing you keep on hand — what you track levels
+                                        and expiry for.
+                                    </div>
+                                </q-card-section>
+                            </q-card>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <q-card flat bordered class="full-height">
+                                <q-card-section>
+                                    <q-icon :name="ICONS.local_offer" color="primary" size="28px" />
+                                    <div class="text-subtitle1 q-mt-sm">
+                                        “Vitasoy Oat Milky 1L @ Coles” is a product
+                                    </div>
+                                    <div class="text-caption dora-text-muted q-mt-xs">
+                                        A specific thing you can buy — linked to a stock
+                                        item, with its own price.
+                                    </div>
+                                </q-card-section>
+                            </q-card>
+                        </div>
+                    </div>
+                    <div class="explainer-tip q-mt-md row items-center no-wrap">
+                        <q-icon
+                            :name="ICONS.lightbulb"
+                            color="primary"
+                            size="22px"
+                            class="q-mr-sm"
+                        />
+                        <div class="text-body2">
+                            Don’t name your stock items after brands — that’s what
+                            products are for.
+                        </div>
+                    </div>
                 </q-card-section>
             </q-card>
 
@@ -208,8 +384,62 @@
                 <div class="col-12 text-caption dora-text-muted q-mt-xs">
                     Prefer to bring in your own data?
                     <router-link to="/data/import" class="text-primary">
-                        Import from Grocy or a spreadsheet instead →
+                        Import from a spreadsheet or another app instead →
                     </router-link>
+                </div>
+
+                <!-- Starter packs (L37) — tick a pack to add its common items. -->
+                <div v-if="(catalog?.packs?.length ?? 0) > 0" class="col-12">
+                    <div class="text-subtitle1 q-mt-sm">Starter packs</div>
+                    <div class="text-caption dora-text-muted q-mb-sm">
+                        Tick a pack to add its common items (already grouped + located).
+                        Expand one to choose individual items.
+                    </div>
+                    <q-list bordered class="rounded-borders">
+                        <q-expansion-item
+                            v-for="pack in catalog?.packs ?? []"
+                            :key="pack.key"
+                        >
+                            <template #header>
+                                <q-item-section avatar>
+                                    <q-checkbox
+                                        :model-value="packState(pack)"
+                                        toggle-indeterminate
+                                        @update:model-value="togglePack(pack, $event)"
+                                        @click.stop
+                                    />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>{{ pack.label }}</q-item-label>
+                                    <q-item-label caption>
+                                        {{ pack.blurb }} ·
+                                        {{ packSelectedCount(pack) }}/{{ pack.items.length }} chosen
+                                    </q-item-label>
+                                </q-item-section>
+                            </template>
+                            <q-list>
+                                <q-item
+                                    v-for="item in pack.items"
+                                    :key="item.name"
+                                    tag="label"
+                                    dense
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ item.name }}</q-item-label>
+                                        <q-item-label
+                                            v-if="item.group || item.location"
+                                            caption
+                                        >
+                                            {{ [item.group, item.location].filter(Boolean).join(' · ') }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-checkbox v-model="packItemSelected[item.name]" />
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </q-expansion-item>
+                    </q-list>
                 </div>
             </div>
 
@@ -238,36 +468,22 @@
                         />
                         <div class="row q-col-gutter-sm">
                             <q-select
-                                v-model="firstItem.stock_group_id"
+                                v-model="firstItem.group_name"
                                 outlined
                                 dense
                                 label="Group"
-                                :options="groupOptions"
-                                emit-value
-                                map-options
+                                :options="groupNameOptions"
                                 clearable
-                                class="col-12 col-sm-4"
+                                class="col-12 col-sm-6"
                             />
                             <q-select
-                                v-model="firstItem.stock_location_id"
+                                v-model="firstItem.location_name"
                                 outlined
                                 dense
                                 label="Location"
-                                :options="locationOptions"
-                                emit-value
-                                map-options
+                                :options="locationNameOptions"
                                 clearable
-                                class="col-12 col-sm-4"
-                            />
-                            <q-select
-                                v-model="firstItem.stock_level_id"
-                                outlined
-                                dense
-                                label="Level"
-                                :options="levelOptions"
-                                emit-value
-                                map-options
-                                class="col-12 col-sm-4"
+                                class="col-12 col-sm-6"
                             />
                         </div>
                         <div class="row justify-end q-gutter-sm">
@@ -280,50 +496,103 @@
                             <BaseButton
                                 variant="primary"
                                 :icon="ICONS.add"
-                                :label="firstItemsAdded > 0
-                                    ? `Add another (${firstItemsAdded} added)`
+                                :label="draftItems.length > 0
+                                    ? `Add another (${draftItems.length} added)`
                                     : 'Add stock item'"
-                                :loading="addingItem"
                                 type="submit"
                             />
                         </div>
                     </q-form>
+
+                    <!-- Slim "added" list (L36) — the queued first items. -->
+                    <q-list
+                        v-if="draftItems.length > 0"
+                        bordered
+                        class="rounded-borders q-mt-md"
+                    >
+                        <q-item-label header class="q-pb-xs">
+                            Added ({{ draftItems.length }}) — saved when you finish
+                        </q-item-label>
+                        <q-item v-for="(item, idx) in draftItems" :key="idx">
+                            <q-item-section>
+                                <q-item-label>{{ item.name }}</q-item-label>
+                                <q-item-label
+                                    v-if="item.group_name || item.location_name"
+                                    caption
+                                >
+                                    {{ [item.group_name, item.location_name].filter(Boolean).join(' · ') }}
+                                </q-item-label>
+                            </q-item-section>
+                            <q-item-section side>
+                                <BaseButton
+                                    variant="icon"
+                                    :icon="ICONS.delete"
+                                    aria-label="Remove"
+                                    @click="removeDraftItem(idx)"
+                                />
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
                 </q-card-section>
             </q-card>
 
-            <!-- ── Step 5: Tour ─────────────────────────────────────── -->
+            <!-- ── Step: Finish — celebrate + loop recap + flow-cards (C-5.6) ── -->
             <div
-                v-show="currentStep?.id === 'tour'"
-                class="row q-col-gutter-md q-mb-md"
+                v-show="currentStep?.id === 'finish'"
+                class="finish-step q-mb-md"
             >
-                <div
-                    v-for="card in TOUR_CARDS"
-                    :key="card.path"
-                    class="col-12 col-sm-6"
-                >
-                    <q-card flat bordered class="full-height">
-                        <q-card-section>
-                            <q-icon
-                                :name="card.icon"
-                                size="32px"
-                                color="primary"
-                                class="q-mb-sm"
-                            />
-                            <div class="text-subtitle1">{{ card.title }}</div>
-                            <div class="text-body2 dora-text-secondary q-mt-xs">
-                                {{ card.description }}
-                            </div>
-                        </q-card-section>
-                        <q-separator />
-                        <q-card-actions align="right">
-                            <BaseButton
-                                variant="ghost"
-                                class="text-primary"
-                                :label="`Show me ${card.shortTitle}`"
-                                @click="onShowMe(card.path)"
-                            />
-                        </q-card-actions>
-                    </q-card>
+                <OnboardingConfetti v-if="currentStep?.id === 'finish'" />
+                <div class="text-center q-mb-lg">
+                    <div class="text-h5">You're all set! 🎉</div>
+                    <div class="text-body2 dora-text-secondary q-mt-xs">
+                        Here's the loop you just set up — tap any stage to revisit what it does.
+                    </div>
+                </div>
+                <OnboardingLoop
+                    :persona="personaPreview"
+                    :autoplay="false"
+                    class="q-mb-lg"
+                />
+                <div class="text-subtitle1 q-mb-sm">Where to go next</div>
+                <div class="row q-col-gutter-md">
+                    <div
+                        v-for="card in flowCards"
+                        :key="card.path"
+                        class="col-12 col-sm-6"
+                    >
+                        <q-card flat bordered class="full-height">
+                            <q-card-section>
+                                <q-icon
+                                    :name="card.icon"
+                                    size="30px"
+                                    color="primary"
+                                    class="q-mb-sm"
+                                />
+                                <div class="text-subtitle1">{{ card.title }}</div>
+                                <div class="text-body2 dora-text-secondary q-mt-xs">
+                                    {{ card.description }}
+                                </div>
+                            </q-card-section>
+                            <q-separator />
+                            <q-card-actions>
+                                <BaseButton
+                                    variant="ghost"
+                                    class="text-primary"
+                                    :label="`Open ${card.shortTitle}`"
+                                    @click="onShowMe(card.path)"
+                                />
+                                <q-space />
+                                <BaseButton
+                                    v-if="card.help"
+                                    variant="ghost"
+                                    class="dora-text-secondary"
+                                    label="Guide"
+                                    :icon-right="ICONS.open_in_new"
+                                    @click="onShowMe(card.help)"
+                                />
+                            </q-card-actions>
+                        </q-card>
+                    </div>
                 </div>
             </div>
 
@@ -341,10 +610,11 @@
                     variant="primary"
                     :icon-right="isLastStep ? 'check' : 'arrow_forward'"
                     :label="isLastStep ? 'Finish' : 'Next'"
-                    :loading="advancing"
-                    @click="onNext"
+                    :loading="completing"
+                    @click="advance"
                 />
             </div>
+            </template>
         </div>
     </q-page>
 </template>
@@ -352,16 +622,35 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import OnboardingConfetti from 'src/components/onboarding/OnboardingConfetti.vue';
+    import OnboardingLoop from 'src/components/onboarding/OnboardingLoop.vue';
+    import OnboardingStepRail from 'src/components/onboarding/OnboardingStepRail.vue';
+    import OnboardingStory from 'src/pages/onboarding/OnboardingStory.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import type { OnboardingState } from 'src/models/onboarding';
+    import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
+    import type {
+        LocationNode,
+        OnboardingCatalog,
+        OnboardingState,
+        StarterPack,
+        StarterPackItem,
+    } from 'src/models/onboarding';
+    import {
+        DEFAULT_CUSTOM_FLAGS,
+        DEFAULT_PERSONA_PREVIEW,
+        INSTALL_FLAG_META,
+        type InstallFlags,
+        NARRATIVE_SCENES,
+        PERSONA_PRESETS,
+        type PersonaPreviewKey,
+    } from 'src/pages/onboarding/onboardingContent';
     import type { StockGroup } from 'src/models/stockGroup';
+    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
     import { useAuthStore } from 'src/stores/authStore';
-    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
@@ -369,10 +658,9 @@
     const $q = useQuasar();
     const router = useRouter();
     const onboardingApi = new OnboardingApiService();
-    const stockItemApi = new StockItemApiService();
+    const appSettingsApi = new AppSettingsApiService();
     const stockGroupApi = new StockGroupApiService();
     const authStore = useAuthStore();
-    const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
 
     const { currentUser } = storeToRefs(authStore);
@@ -388,10 +676,15 @@
     }
 
     // ── Static option lists ──────────────────────────────────────────
-    const THEME_OPTIONS = [
+    // L28 — onboarding offers only System / Light / Dark. Light maps to the
+    // brand light theme (Pesto) and Dark to Pesto Dark; the rest of the
+    // palette catalogue (lemon-tart, blueberry, …) is pickable later in
+    // Preferences. Values are real ThemePreference keys so we persist the
+    // resolved theme rather than the legacy 'light'/'dark' aliases.
+    const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
         { label: 'System (follow OS)', value: 'system' },
-        { label: 'Light', value: 'light' },
-        { label: 'Dark', value: 'dark' },
+        { label: 'Light', value: 'pesto' },
+        { label: 'Dark', value: 'pesto-dark' },
     ];
     const FONT_OPTIONS = [
         { label: 'Default', value: 'default' },
@@ -401,66 +694,102 @@
         { label: 'Lexend', value: 'lexend' },
         { label: 'Plus Jakarta Sans', value: 'plus_jakarta_sans' },
     ];
-    const TOUR_CARDS = [
-        {
-            path: '/stock',
-            title: 'Stock overview — where you live',
-            shortTitle: 'Stock',
-            description:
-                'Your pantry-at-a-glance. Every item, with level, location, and on-list indicator. The cart button is the single click that drops something on your shopping list.',
-            icon: 'inventory_2',
-        },
-        {
-            path: '/shopping-lists',
-            title: 'Shopping lists — the killer loop',
-            shortTitle: 'Shopping',
-            description:
-                'Auto-generate from low/out, finish a shop and your stock auto-bumps to Well-Stocked. Set a primary list so quick-adds know where to go.',
-            icon: ICONS.shopping_cart,
-        },
-        {
-            path: '/alerts',
-            title: 'Alerts — Dora pings you',
-            shortTitle: 'Alerts',
-            description:
-                'The bell in the header. Expired, expiring soon, low/out, essentials low — with inline actions to push expiry, mark restocked, snooze.',
-            icon: ICONS.notifications_active,
-        },
-        {
-            path: '/help',
-            title: 'Help — Dora is here',
-            shortTitle: 'Help',
-            description:
-                'The floating chat bubble follows you everywhere with context-aware actions for the screen you\'re on. Hit me up any time.',
-            icon: ICONS.help,
-        },
-    ];
-
     // ── Wizard step state ────────────────────────────────────────────
-    type StepId = 'welcome' | 'admin' | 'seed' | 'first_item' | 'tour';
+    type StepId =
+        | 'welcome' | 'admin' | 'persona' | 'explainer'
+        | 'seed' | 'first_item' | 'finish';
     type Step = { id: StepId; title: string };
-
-    const ALL_STEPS: Step[] = [
-        { id: 'welcome', title: 'Welcome' },
-        { id: 'admin', title: 'You\'re the admin' },
-        { id: 'seed', title: 'Seed catalogues' },
-        { id: 'first_item', title: 'First stock item' },
-        { id: 'tour', title: 'Take the tour' },
-    ];
+    type PersonaChoice = PersonaPreviewKey | 'custom';
 
     const state = ref<OnboardingState | null>(null);
     const loadError = ref<string | null>(null);
     const displayNameError = ref<string | null>(null);
     const stepIndex = ref(0);
-    const advancing = ref(false);
     const completing = ref(false);
-    const addingItem = ref(false);
-    const firstItemsAdded = ref(0);
 
-    // Step 2 (admin) is conditionally hidden for non-first-users.
+    // ── Story / Setup view model (C-5.2) ─────────────────────────────
+    // Two sections with instant, non-linear cross-jump via the shared rail.
+    const view = ref<'story' | 'setup'>('story');
+    const storySceneIndex = ref(0);
+    // Persona PREVIEW only — sets no flags. Remembered so the C-5.3 fork can
+    // pre-fill from whatever the user last previewed in the hero loop.
+    const personaPreview = ref<PersonaPreviewKey>(DEFAULT_PERSONA_PREVIEW);
+
+    // ── Persona fork (C-5.3) ─────────────────────────────────────────
+    // Which preset/flags the first user picks. The hero PREVIEW pre-fills it;
+    // "Customise" opens the flat flag list. Applied once on Finish (install
+    // flags + the first user's matching per-user opt-ins). C-5 only sets the
+    // flags — the per-surface Products-off sweep is FU-182.
+    const personaChoice = ref<PersonaChoice>(DEFAULT_PERSONA_PREVIEW);
+    const customFlags = reactive<InstallFlags>({ ...DEFAULT_CUSTOM_FLAGS });
+    const effectiveInstallFlags = computed<InstallFlags>(() => {
+        if (personaChoice.value === 'custom') return { ...customFlags };
+        const preset = PERSONA_PRESETS.find((p) => p.key === personaChoice.value);
+        return preset ? preset.install : DEFAULT_CUSTOM_FLAGS;
+    });
+    const productsEnabledDraft = computed(
+        () => effectiveInstallFlags.value.products_enabled,
+    );
+
+    // Setup steps are built per-state: admin + persona are first-user only;
+    // the stock-vs-product explainer shows only when products are on (L46).
     const visibleSteps = computed<Step[]>(() => {
-        if (state.value?.first_user) return ALL_STEPS;
-        return ALL_STEPS.filter((s) => s.id !== 'admin');
+        const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
+        if (state.value?.first_user) {
+            steps.push({ id: 'admin', title: "You're the admin" });
+            steps.push({ id: 'persona', title: 'Pick your setup' });
+            if (productsEnabledDraft.value) {
+                steps.push({ id: 'explainer', title: 'Stock items vs products' });
+            }
+        }
+        steps.push({ id: 'seed', title: 'Seed catalogues' });
+        steps.push({ id: 'first_item', title: 'First stock item' });
+        steps.push({ id: 'finish', title: "You're all set" });
+        return steps;
+    });
+
+    // ── Finish flow-cards (C-5.6) — persona-relevant key areas, each a
+    // jump-in + a link to the help guides (FU-015: Alerts → /alerts). Copy
+    // kept factual; the sell-copy honesty pass is FU-184.
+    const flowCards = computed(() => {
+        const flags = effectiveInstallFlags.value;
+        const cards: {
+            path: string;
+            title: string;
+            shortTitle: string;
+            description: string;
+            icon: string;
+            help?: string;
+        }[] = [
+            { path: '/stock', shortTitle: 'Stock', title: 'Your pantry',
+              description: 'Everything you keep, with levels, locations and expiry — your home base.',
+              icon: ICONS.inventory_2, help: '/help' },
+            { path: '/cookbook', shortTitle: 'Recipes', title: 'Cookbook & cook mode',
+              description: 'See what you can cook from what’s in, then cook it step by step.',
+              icon: ICONS.menu_book, help: '/help' },
+            { path: '/meal-plans', shortTitle: 'Meals', title: 'Plan the week',
+              description: 'Plan meals and turn the week into a shopping list.',
+              icon: ICONS.event, help: '/help' },
+            { path: '/shopping-lists', shortTitle: 'Shopping', title: 'Shopping lists',
+              description: 'Auto-built from what’s low or out; finish a shop and your stock refills.',
+              icon: ICONS.shopping_cart, help: '/help' },
+            { path: '/alerts', shortTitle: 'Alerts', title: 'Alerts',
+              description: 'The bell flags what’s expiring, low or out — with one-tap actions.',
+              icon: ICONS.notifications_active, help: '/help' },
+        ];
+        if (flags.products_enabled || flags.money_enabled) {
+            cards.push({
+                path: '/price-history', shortTitle: 'Prices', title: 'Price history',
+                description: 'See how your products’ prices have moved over time.',
+                icon: ICONS.savings, help: '/help',
+            });
+        }
+        cards.push({
+            path: '/help', shortTitle: 'guides', title: 'Dora & the guides',
+            description: 'Dora’s help bubble follows you everywhere; the guides explain each area in depth.',
+            icon: ICONS.smart_toy,
+        });
+        return cards;
     });
 
     const currentStep = computed<Step | null>(
@@ -470,14 +799,56 @@
         () => stepIndex.value === visibleSteps.value.length - 1,
     );
 
+    // ── Shared rail model (Story scenes + Setup steps) ───────────────
+    // Nothing is gated — every dot is a jump target across both sections.
+    const railSections = computed(() => [
+        {
+            key: 'story',
+            label: 'Story',
+            dots: NARRATIVE_SCENES.map((s) => ({
+                key: s.id,
+                label: s.kicker ?? s.headline,
+            })),
+        },
+        {
+            key: 'setup',
+            label: 'Setup',
+            dots: visibleSteps.value.map((s) => ({ key: s.id, label: s.title })),
+        },
+    ]);
+    const railActiveIndex = computed(() =>
+        view.value === 'story' ? storySceneIndex.value : stepIndex.value,
+    );
+    function onRailJump(sectionKey: string, index: number) {
+        if (sectionKey === 'story') {
+            view.value = 'story';
+            storySceneIndex.value = index;
+        } else {
+            view.value = 'setup';
+            stepIndex.value = index;
+        }
+    }
+    function enterSetup() {
+        view.value = 'setup';
+    }
+
     // ── Form state (persists to localStorage so refresh resumes) ─────
     type WizardDraft = {
         displayName: string;
-        theme: 'system' | 'light' | 'dark';
-        fontFamily: 'default' | 'urbanist' | 'nunito';
+        theme: ThemePreference;
+        fontFamily: FontFamilyPreference;
+        headcount: number | null;
         seedGroups: boolean;
         seedLocations: boolean;
         stepIndex: number;
+    };
+
+    // A first stock item the user queued — created on Finish (L35), never
+    // on each Add, so a mid-wizard bail leaves nothing behind.
+    type DraftItem = {
+        name: string;
+        group_name: string | null;
+        location_name: string | null;
     };
 
     const DRAFT_KEY = (userId: string) =>
@@ -487,6 +858,7 @@
         displayName: '',
         theme: 'system',
         fontFamily: 'default',
+        headcount: null,
         seedGroups: true,
         seedLocations: true,
         stepIndex: 0,
@@ -494,17 +866,41 @@
 
     const firstItem = reactive({
         name: '',
-        stock_group_id: null as string | null,
-        stock_location_id: null as string | null,
-        stock_level_id: '' as string,
+        group_name: null as string | null,
+        location_name: null as string | null,
     });
+
+    // Queued first items, awaiting creation on Finish.
+    const draftItems = ref<DraftItem[]>([]);
+
+    // C-5.5 — starter catalogue (default groups/locations + packs), fetched on
+    // mount, and the pack items the user has ticked (keyed by item name).
+    const catalog = ref<OnboardingCatalog | null>(null);
+    const packItemSelected = reactive<Record<string, boolean>>({});
+    async function loadCatalog() {
+        try {
+            catalog.value = await onboardingApi.getCatalogAsync();
+        } catch {
+            catalog.value = null;
+        }
+    }
 
     function saveDraft() {
         try {
             const userId = currentUser.value?.user_id ?? '';
             localStorage.setItem(
                 DRAFT_KEY(userId),
-                JSON.stringify({ ...form, stepIndex: stepIndex.value }),
+                JSON.stringify({
+                    ...form,
+                    stepIndex: stepIndex.value,
+                    draftItems: draftItems.value,
+                    view: view.value,
+                    storySceneIndex: storySceneIndex.value,
+                    personaPreview: personaPreview.value,
+                    personaChoice: personaChoice.value,
+                    customFlags: { ...customFlags },
+                    packItemSelected: { ...packItemSelected },
+                }),
             );
         } catch {
             // localStorage may be unavailable.
@@ -515,10 +911,51 @@
             const userId = currentUser.value?.user_id ?? '';
             const raw = localStorage.getItem(DRAFT_KEY(userId));
             if (!raw) return;
-            const parsed = JSON.parse(raw) as Partial<WizardDraft>;
-            Object.assign(form, parsed);
-            if (typeof parsed.stepIndex === 'number') {
-                stepIndex.value = Math.max(0, parsed.stepIndex);
+            const parsed = JSON.parse(raw) as Partial<WizardDraft> & {
+                stepIndex?: number;
+                draftItems?: DraftItem[];
+                view?: 'story' | 'setup';
+                storySceneIndex?: number;
+                personaPreview?: PersonaPreviewKey;
+                personaChoice?: PersonaChoice;
+                customFlags?: Partial<InstallFlags>;
+                packItemSelected?: Record<string, boolean>;
+            };
+            const {
+                stepIndex: savedIndex,
+                draftItems: savedItems,
+                view: savedView,
+                storySceneIndex: savedScene,
+                personaPreview: savedPersona,
+                personaChoice: savedChoice,
+                customFlags: savedCustom,
+                packItemSelected: savedPacks,
+                ...formFields
+            } = parsed;
+            Object.assign(form, formFields);
+            if (typeof savedIndex === 'number') {
+                stepIndex.value = Math.max(0, savedIndex);
+            }
+            if (Array.isArray(savedItems)) {
+                draftItems.value = savedItems;
+            }
+            if (savedView === 'story' || savedView === 'setup') {
+                view.value = savedView;
+            }
+            if (typeof savedScene === 'number') {
+                storySceneIndex.value = Math.max(0, savedScene);
+            }
+            if (savedPersona) {
+                personaPreview.value = savedPersona;
+            }
+            if (savedChoice) {
+                personaChoice.value = savedChoice;
+            }
+            if (savedCustom) {
+                Object.assign(customFlags, savedCustom);
+            }
+            if (savedPacks) {
+                Object.assign(packItemSelected, savedPacks);
             }
         } catch {
             // Bad draft — ignore.
@@ -533,27 +970,89 @@
         }
     }
     // Auto-save the draft on any form change so a refresh resumes.
-    watch([form, stepIndex], saveDraft, { deep: true });
+    watch(
+        [
+            form, stepIndex, draftItems, view, storySceneIndex,
+            personaPreview, personaChoice, customFlags, packItemSelected,
+        ],
+        saveDraft,
+        { deep: true },
+    );
 
-    // ── Option lists for the first-item form ─────────────────────────
-    const groupOptions = computed(() =>
-        stockGroups.value.map((g) => ({
-            label: g.name,
-            value: g.stock_group_id,
-        })),
+    // The hero preview pre-fills the fork: while the user is still in the
+    // story, mirror the previewed persona onto the fork choice. Once they're
+    // in setup, their explicit fork pick stands.
+    watch(personaPreview, (next) => {
+        if (view.value === 'story') personaChoice.value = next;
+    });
+
+    // ── Starter-pack helpers + first-item name options ───────────────
+    function uniqueSorted(values: (string | null | undefined)[]): string[] {
+        const set = new Set<string>();
+        for (const v of values) {
+            const name = (v ?? '').trim();
+            if (name) set.add(name);
+        }
+        return [...set].sort((a, b) => a.localeCompare(b));
+    }
+    function flattenLocationNames(nodes: LocationNode[]): string[] {
+        const names: string[] = [];
+        for (const node of nodes) {
+            names.push(node.name);
+            names.push(...flattenLocationNames(node.children));
+        }
+        return names;
+    }
+
+    // The pack items the user has ticked (catalog packs ∩ packItemSelected),
+    // deduped by name (the server dedupes again on create).
+    const selectedPackItemsList = computed<StarterPackItem[]>(() => {
+        const out: StarterPackItem[] = [];
+        const seen = new Set<string>();
+        for (const pack of catalog.value?.packs ?? []) {
+            for (const item of pack.items) {
+                if (packItemSelected[item.name] && !seen.has(item.name)) {
+                    seen.add(item.name);
+                    out.push(item);
+                }
+            }
+        }
+        return out;
+    });
+
+    // First-item group/location pickers offer NAMES (resolved server-side on
+    // Finish — FU-191): seeded defaults (if chosen) + any pack groups +
+    // whatever already exists.
+    const groupNameOptions = computed(() =>
+        uniqueSorted([
+            ...(form.seedGroups ? (catalog.value?.groups ?? []) : []),
+            ...selectedPackItemsList.value.map((it) => it.group),
+            ...stockGroups.value.map((g) => g.name),
+        ]),
     );
-    const locationOptions = computed(() =>
-        stockLocationStore.stockLocations.map((l) => ({
-            label: l.name,
-            value: l.stock_location_id,
-        })),
+    const locationNameOptions = computed(() =>
+        uniqueSorted([
+            ...(form.seedLocations
+                ? flattenLocationNames(catalog.value?.locations ?? [])
+                : []),
+            ...selectedPackItemsList.value.map((it) => it.location),
+            ...stockLocationStore.stockLocations.map((l) => l.name),
+        ]),
     );
-    const levelOptions = computed(() =>
-        stockLevelStore.stockLevels.map((l) => ({
-            label: l.name,
-            value: l.stock_level_id,
-        })),
-    );
+
+    function packSelectedCount(pack: StarterPack): number {
+        return pack.items.filter((it) => packItemSelected[it.name]).length;
+    }
+    function packState(pack: StarterPack): boolean | null {
+        const n = packSelectedCount(pack);
+        if (n === 0) return false;
+        if (n === pack.items.length) return true;
+        return null; // some selected → indeterminate
+    }
+    function togglePack(pack: StarterPack, value: boolean | null) {
+        const on = value === true;
+        for (const item of pack.items) packItemSelected[item.name] = on;
+    }
 
     // ── Navigation ───────────────────────────────────────────────────
     function onBack() {
@@ -561,56 +1060,70 @@
         stepIndex.value--;
     }
 
-    async function onNext() {
-        advancing.value = true;
-        try {
-            const step = currentStep.value;
-            if (!step) return;
-
-            // Per-step side effects on advance.
-            if (step.id === 'welcome') {
-                await persistPreferences();
-            } else if (step.id === 'seed') {
-                if (form.seedGroups || form.seedLocations) {
-                    await onboardingApi.seedAsync({
-                        groups: form.seedGroups,
-                        locations: form.seedLocations,
-                    });
-                    // Refresh sources so step 4's pickers have something.
-                    await Promise.all([
-                        loadStockGroups(),
-                        stockLocationStore.getStockLocationsAsync(),
-                    ]);
-                }
-            }
-
-            if (isLastStep.value) {
-                await complete();
-                return;
-            }
-            advance();
-        } catch (err) {
-            const extracted = extractFieldErrors(err);
-            // The displayName field maps to the server's `username` validator.
-            if (extracted.fieldErrors.username) {
-                displayNameError.value = extracted.fieldErrors.username;
-                delete extracted.fieldErrors.username;
-            }
-            const remainingFields = Object.values(extracted.fieldErrors).filter(Boolean);
-            loadError.value =
-                [extracted.generalError, ...remainingFields].filter(Boolean).join(' ') ||
-                "Couldn't advance. Please try again.";
-        } finally {
-            advancing.value = false;
-        }
-    }
-
+    // Next / Finish. Advancing a step has NO side effects now — every
+    // choice (prefs, seeds, queued items) is applied once, in complete(),
+    // so a mid-wizard bail leaves the account untouched (L35). The final
+    // step triggers that one-shot apply.
     function advance() {
         if (isLastStep.value) {
-            void complete();
+            void finish('/');
             return;
         }
         stepIndex.value++;
+    }
+
+    // Finish (or "Show me X") = apply the draft, then navigate. On a failed
+    // apply we stay put with the error shown so the user can fix + retry.
+    async function finish(destination: string) {
+        if (await complete()) void router.push(destination);
+    }
+
+    // Apply everything the user chose, once, in dependency order: prefs →
+    // persona → seed catalogues → stock items (pack picks + queued first
+    // items), so the items resolve against the groups/locations just seeded.
+    async function applyDraft() {
+        await persistPreferences();
+        await applyPersona();
+        if (form.seedGroups || form.seedLocations) {
+            await onboardingApi.seedAsync({
+                groups: form.seedGroups,
+                locations: form.seedLocations,
+            });
+        }
+        // Pack picks + first items, created by NAME (server resolves group /
+        // location against the just-seeded catalogues — FU-191 — and dedupes).
+        const items = [
+            ...selectedPackItemsList.value.map((it) => ({
+                name: it.name,
+                group_name: it.group,
+                location_name: it.location,
+            })),
+            ...draftItems.value.map((d) => ({
+                name: d.name,
+                group_name: d.group_name,
+                location_name: d.location_name,
+            })),
+        ];
+        if (items.length > 0) {
+            await onboardingApi.seedItemsAsync({ items });
+        }
+    }
+
+    function handleApplyError(err: unknown) {
+        const extracted = extractFieldErrors(err);
+        // The displayName field maps to the server's `username` validator.
+        // Surface it and jump back to the welcome step — by Finish it may
+        // be off-screen.
+        if (extracted.fieldErrors.username) {
+            displayNameError.value = extracted.fieldErrors.username;
+            delete extracted.fieldErrors.username;
+            const welcomeIdx = visibleSteps.value.findIndex((s) => s.id === 'welcome');
+            if (welcomeIdx >= 0) stepIndex.value = welcomeIdx;
+        }
+        const remainingFields = Object.values(extracted.fieldErrors).filter(Boolean);
+        loadError.value =
+            [extracted.generalError, ...remainingFields].filter(Boolean).join(' ') ||
+            "Couldn't finish setting up. Please try again.";
     }
 
     async function persistPreferences() {
@@ -625,53 +1138,84 @@
         if (form.fontFamily !== currentUser.value?.font_family) {
             updates.font_family = form.fontFamily;
         }
+        if (form.headcount !== (currentUser.value?.household_headcount ?? null)) {
+            updates.household_headcount = form.headcount;
+        }
         if (Object.keys(updates).length === 0) return;
         await authStore.updateMeAsync(updates);
     }
 
-    async function onAddFirstItem() {
-        if (!firstItem.name.trim()) return;
-        addingItem.value = true;
-        try {
-            const wellStocked = stockLevelStore.stockLevels[0];
-            const levelId = firstItem.stock_level_id || wellStocked?.stock_level_id || '';
-            if (!levelId) {
-                loadError.value = "No stock levels configured — skip this step.";
-                return;
-            }
-            await stockItemApi.createAsync({
-                name: firstItem.name.trim(),
-                stock_level_id: levelId,
-                stock_location_id: firstItem.stock_location_id ?? null,
-                stock_group_id: firstItem.stock_group_id ?? null,
-            });
-            firstItemsAdded.value++;
-            firstItem.name = '';
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Added.',
-            });
-        } catch (err) {
-            const extracted = extractFieldErrors(err);
-            const detail =
-                Object.values(extracted.fieldErrors).filter(Boolean).join(' ') ||
-                extracted.generalError;
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: detail || 'Could not add — try again.',
-            });
-        } finally {
-            addingItem.value = false;
+    // Clamp the headcount field on blur: empty/invalid → null (use recipe
+    // servings), otherwise a 1–99 integer (matches the server bounds).
+    function onHeadcountBlur() {
+        const value = form.headcount;
+        if (value === null || value === undefined || !Number.isFinite(value) || value < 1) {
+            form.headcount = null;
+        } else {
+            form.headcount = Math.min(99, Math.floor(value));
         }
     }
 
+    function selectPersona(key: PersonaChoice) {
+        personaChoice.value = key;
+        // Keep the hero preview in sync with an explicit preset pick.
+        if (key !== 'custom') personaPreview.value = key;
+    }
+
+    // First-user only: apply the chosen install flags (admin PATCH) + the
+    // matching per-user opt-ins. C-5 only *sets* these flags — the
+    // per-surface Products-off sweep is FU-182.
+    async function applyPersona() {
+        if (!state.value?.first_user) return;
+        const flags = effectiveInstallFlags.value;
+        await appSettingsApi.updateAsync({
+            products_enabled: flags.products_enabled,
+            money_enabled: flags.money_enabled,
+            meal_planning_enabled: flags.meal_planning_enabled,
+            nutrition_enabled: flags.nutrition_enabled,
+            scanning_enabled: flags.scanning_enabled,
+            companion_ingestion_enabled: flags.companion_ingestion_enabled,
+        });
+        const preset = PERSONA_PRESETS.find((p) => p.key === personaChoice.value);
+        const userPrefs: { money_features_enabled: boolean; nutrition_mode: 'off' | 'simple' } =
+            preset
+                ? preset.user
+                : {
+                      money_features_enabled: flags.money_enabled,
+                      nutrition_mode: flags.nutrition_enabled ? 'simple' : 'off',
+                  };
+        await authStore.updateMeAsync({
+            money_features_enabled: userPrefs.money_features_enabled,
+            nutrition_mode: userPrefs.nutrition_mode,
+        });
+    }
+
+    function onAddFirstItem() {
+        const name = firstItem.name.trim();
+        if (!name) return;
+        // Queue, don't persist — created on Finish so a bail leaves nothing (L35).
+        draftItems.value.push({
+            name,
+            group_name: firstItem.group_name,
+            location_name: firstItem.location_name,
+        });
+        firstItem.name = '';
+        $q.notify({
+            type: 'positive',
+            position: 'bottom-right',
+            message: 'Added — saved when you finish.',
+        });
+    }
+
+    function removeDraftItem(index: number) {
+        draftItems.value.splice(index, 1);
+    }
+
     function onShowMe(path: string) {
-        // Closing the wizard = completing onboarding silently. The user can
-        // always run "Restart onboarding" from Settings → Account if they
-        // want to redo the tour.
-        void complete().then(() => router.push(path));
+        // "Show me X" = finish onboarding (applying the draft), then land on
+        // that screen. The user can always run "Restart onboarding" from
+        // Settings → Account if they want to redo the tour.
+        void finish(path);
     }
 
     async function onSkipEverything() {
@@ -704,9 +1248,15 @@
         }
     }
 
-    async function complete() {
+    // Apply the collected draft + stamp completion. Returns true on success;
+    // the caller navigates (Finish → '/', Show-me → the chosen path) so a
+    // failed apply keeps the user in the wizard with the error shown.
+    async function complete(): Promise<boolean> {
         completing.value = true;
+        loadError.value = null;
+        displayNameError.value = null;
         try {
+            await applyDraft();
             await onboardingApi.completeAsync();
             // Refresh the cached user so the router guard sees the new
             // `onboarding_completed_at`. Without this, Finish / Show-me-X
@@ -722,11 +1272,10 @@
             } catch {
                 // Ignore.
             }
-            void router.push('/');
+            return true;
         } catch (err) {
-            const extracted = extractFieldErrors(err);
-            loadError.value =
-                extracted.generalError ?? "Couldn't finish onboarding. Please try again.";
+            handleApplyError(err);
+            return false;
         } finally {
             completing.value = false;
         }
@@ -744,36 +1293,37 @@
         // the user's prefs, then layer the saved draft on top.
         if (currentUser.value) {
             form.displayName = currentUser.value.username ?? '';
-            form.theme = (currentUser.value.theme ?? 'system') as
-                'system' | 'light' | 'dark';
-            form.fontFamily = (currentUser.value.font_family ?? 'default') as
-                'default' | 'urbanist' | 'nunito';
+            // Pre-fill from the user's saved prefs. If their stored theme
+            // isn't one of the three onboarding options (e.g. they picked a
+            // richer palette in Preferences on a re-run), the select shows
+            // blank and persistPreferences leaves it untouched — we never
+            // clobber a real choice.
+            form.theme = currentUser.value.theme ?? 'system';
+            form.fontFamily = currentUser.value.font_family ?? 'default';
+            form.headcount = currentUser.value.household_headcount ?? null;
         }
         loadDraft();
 
-        // Pre-load the sources the first-item form needs so the pickers
-        // aren't empty when the user reaches step 4.
+        // Pre-load existing groups/locations (so the first-item name pickers
+        // include what's already there) + the starter catalogue (default
+        // names + packs to preview and pick from).
         await Promise.all([
             loadStockGroups(),
-            stockLevelStore.stockLevels.length === 0
-                ? stockLevelStore.getStockLevelsAsync()
-                : Promise.resolve(),
             stockLocationStore.stockLocations.length === 0
                 ? stockLocationStore.getStockLocationsAsync()
                 : Promise.resolve(),
+            loadCatalog(),
         ]);
-
-        // Default the level to the first ("most stocked").
-        if (!firstItem.stock_level_id) {
-            firstItem.stock_level_id =
-                stockLevelStore.stockLevels[0]?.stock_level_id ?? '';
-        }
     });
 </script>
 
 <style scoped>
     .wizard-shell {
         max-width: 720px;
+    }
+    /* Bounds the absolutely-positioned finish confetti to the step. */
+    .finish-step {
+        position: relative;
     }
     .seed-card {
         cursor: pointer;
@@ -792,5 +1342,24 @@
     }
     .full-height {
         height: 100%;
+    }
+    .persona-card {
+        cursor: pointer;
+        height: 100%;
+        outline: 2px solid transparent;
+        outline-offset: -2px;
+        transition: outline-color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
+    }
+    .persona-card:hover {
+        transform: translateY(-2px);
+    }
+    .persona-card--picked {
+        outline-color: var(--q-primary);
+    }
+    .explainer-tip {
+        padding: var(--space-3);
+        border-radius: var(--radius-md);
+        background: var(--brand-accent-soft);
     }
 </style>

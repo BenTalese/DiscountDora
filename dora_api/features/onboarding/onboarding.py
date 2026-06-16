@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.entities.user import User
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
@@ -293,5 +294,201 @@ def seed_onboarding():
         user_id,
         result.groups_created, result.groups_skipped,
         result.locations_created, result.locations_skipped,
+    )
+    return ok(result)
+
+
+# ─── Starter catalogue (C-5.5) ───────────────────────────────────────
+# The default groups/locations + starter packs the wizard previews and lets
+# the user pick from. Served from the bundled JSON (the seed source of truth)
+# so the client never duplicates the catalogue (R-003).
+
+
+@dataclass(frozen=True, slots=True)
+class LocationNodeDto:
+    name: str
+    kind: str
+    children: list["LocationNodeDto"]
+
+
+@dataclass(frozen=True, slots=True)
+class StarterPackItemDto:
+    name: str
+    group: str | None
+    location: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StarterPackDto:
+    key: str
+    label: str
+    blurb: str
+    items: list[StarterPackItemDto]
+
+
+@dataclass(frozen=True, slots=True)
+class OnboardingCatalogDto:
+    groups: list[str]
+    locations: list[LocationNodeDto]
+    packs: list[StarterPackDto]
+
+
+def _location_nodes(raw: list[dict[str, Any]]) -> list[LocationNodeDto]:
+    nodes: list[LocationNodeDto] = []
+    for zone in raw:
+        name = (zone.get("name") or "").strip()
+        if not name:
+            continue
+        nodes.append(LocationNodeDto(
+            name=name,
+            kind=zone.get("kind") or "zone",
+            children=_location_nodes(zone.get("children") or []),
+        ))
+    return nodes
+
+
+def _starter_packs() -> list[StarterPackDto]:
+    packs: list[StarterPackDto] = []
+    for pack in _load_seed("starter_packs.json"):
+        key = (pack.get("key") or "").strip()
+        if not key:
+            continue
+        items = [
+            StarterPackItemDto(
+                name=(it.get("name") or "").strip(),
+                group=(it.get("group") or None),
+                location=(it.get("location") or None),
+            )
+            for it in (pack.get("items") or [])
+            if (it.get("name") or "").strip()
+        ]
+        packs.append(StarterPackDto(
+            key=key,
+            label=pack.get("label") or key,
+            blurb=pack.get("blurb") or "",
+            items=items,
+        ))
+    return packs
+
+
+@ONBOARDING_ROUTER.route("/catalog", methods=["GET"])
+def onboarding_catalog():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    groups = [
+        (g.get("name") or "").strip()
+        for g in _load_seed("default_stock_groups.json")
+        if (g.get("name") or "").strip()
+    ]
+    return ok(OnboardingCatalogDto(
+        groups=groups,
+        locations=_location_nodes(_load_seed("default_locations.json")),
+        packs=_starter_packs(),
+    ))
+
+
+# ─── Seed stock items by name (C-5.5) ────────────────────────────────
+# Used for both the starter-pack picks and the wizard's first stock items.
+# Resolves group / location by NAME (against whatever's been created by the
+# groups/locations seed, which the wizard applies first) — this is what lets
+# items reference seeded groups that don't have ids yet at pick time (FU-191).
+# Idempotent: skips items whose name already exists (same discipline as the
+# groups/locations seed).
+
+
+class SeedItemDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    group_name: str | None = None
+    location_name: str | None = None
+
+
+class SeedItemsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[SeedItemDto] = []
+
+
+@dataclass(frozen=True, slots=True)
+class SeedItemsResultDto:
+    created: int
+    skipped: int
+
+
+class SeedItemsHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self, request: SeedItemsRequest) -> SeedItemsResultDto:
+        if not request.items:
+            return SeedItemsResultDto(0, 0)
+
+        levels = self.repository.get(StockLevel).all()
+        if not levels:
+            # No stock levels configured — can't create items. Migrations seed
+            # these, so this only happens on a pathological DB; fail soft.
+            _LOGGER.warning("Seed-items skipped: no stock levels configured.")
+            return SeedItemsResultDto(0, 0)
+        # Most-stocked level (lowest sequence) is the sensible default.
+        well_stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+
+        existing = {
+            item.name.strip().lower()
+            for item in self.repository.get(StockItem).all()
+        }
+        groups = {
+            g.name.strip().lower(): g
+            for g in self.repository.get(StockGroup).all()
+        }
+        locations = {
+            loc.name.strip().lower(): loc
+            for loc in self.repository.get(StockLocation).all()
+        }
+
+        now = datetime.now(timezone.utc)
+        created = skipped = 0
+        for entry in request.items:
+            name = (entry.name or "").strip()
+            if not name:
+                continue
+            if name.lower() in existing:
+                skipped += 1
+                continue
+            group = (
+                groups.get(entry.group_name.strip().lower())
+                if entry.group_name else None
+            )
+            location = (
+                locations.get(entry.location_name.strip().lower())
+                if entry.location_name else None
+            )
+            self.repository.add(StockItem(
+                days_until_stocktake_alert=0,
+                image=None,
+                name=name,
+                notes=None,
+                stock_group=group,
+                stock_level_last_updated=now,
+                stock_level=well_stocked,
+                stock_location=location,
+                stocktake_alerts_are_enabled=False,
+            ))
+            existing.add(name.lower())
+            created += 1
+        self.repository.save_changes()
+        return SeedItemsResultDto(created=created, skipped=skipped)
+
+
+@ONBOARDING_ROUTER.route("/seed-items", methods=["POST"])
+@has_request_body(SeedItemsRequest)
+def seed_items_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    request: SeedItemsRequest = get_request_body()
+    result = get_container().inject(SeedItemsHandler).handle(request)
+    _LOGGER.info(
+        "Onboarding seed-items (user %s): +%d/-%d",
+        user_id, result.created, result.skipped,
     )
     return ok(result)

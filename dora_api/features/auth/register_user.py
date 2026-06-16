@@ -78,6 +78,8 @@ class AuthenticatedUserDto:
     # Both default True (visual richness on; users opt out).
     show_recipe_images: bool
     show_stock_images: bool
+    # Onboarding C-5.4 — household cooking headcount; None = not set.
+    household_headcount: int | None
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -111,6 +113,10 @@ class AuthenticatedUserDto:
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
             show_stock_images=bool(user.show_stock_images),
+            household_headcount=(
+                int(user.household_headcount)
+                if user.household_headcount is not None else None
+            ),
         )
 
 

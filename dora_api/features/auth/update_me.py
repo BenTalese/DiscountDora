@@ -55,6 +55,8 @@ class UpdateMeRequest(BaseModel):
     # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
     show_recipe_images: bool | None = None
     show_stock_images: bool | None = None
+    # Onboarding C-5.4 — household cooking headcount (1–99; null clears it).
+    household_headcount: int | None = Field(default=None, ge=1, le=99)
 
 
 class UpdateMeHandler:
@@ -163,6 +165,12 @@ class UpdateMeHandler:
             _User.show_recipe_images = request.show_recipe_images
         if "show_stock_images" in _SetFields and request.show_stock_images is not None:
             _User.show_stock_images = request.show_stock_images
+
+        # Onboarding C-5.4 — household headcount. Present-in-body sets it (a
+        # null clears it back to "use each recipe's servings"); the 1–99
+        # bounds are enforced by the request model above.
+        if "household_headcount" in _SetFields:
+            _User.household_headcount = request.household_headcount
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

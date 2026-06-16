@@ -25,6 +25,8 @@ class AppSettingsDto:
     nutrition_enabled: bool
     companion_ingestion_enabled: bool
     deals_email_enabled: bool
+    # Onboarding C-5.3 — products feature flag (default on; Cooking persona off).
+    products_enabled: bool
     # C-cross Chunk 3 — reserved seam for nutrition complex-mode. Empty
     # string ⇒ no source configured ⇒ users can't pick `complex`.
     nutrition_db_source: str
@@ -46,6 +48,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         nutrition_enabled=bool(setting.nutrition_enabled),
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),
         deals_email_enabled=bool(setting.deals_email_enabled),
+        products_enabled=bool(setting.products_enabled),
         nutrition_db_source=setting.nutrition_db_source or "",
         timezone=setting.timezone or "UTC",
         expiring_soon_window_days=int(setting.expiring_soon_window_days),

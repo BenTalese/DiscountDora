@@ -173,7 +173,10 @@ external producer owns acquisition. This is what keeps Dora-core legally clean a
   scrape live**. The in-app product search that calls `merchant_api` to scrape becomes either a
   search over the **already-ingested catalogue** (products your source pushed) or moves entirely
   to the companion. **This reshapes C-1b's "find & link a product"** (it can't live-search) and is
-  a decommissioning sweep — **logged as a follow-up**, not built inside C-10.
+  a decommissioning sweep — **logged as a follow-up (FU-186)**, not built inside C-10. The same
+  follow-up also owns retiring the standalone **`emailer/`** weekly-deals service (scraper-coupled):
+  move it into the private companion and finish it there, then delete it here. Transactional
+  `email_sender.py` stays; the in-app email need is the C-9.7 alerts digest.
 - **C-1b (Stock Item Detail):** consumes the "your prices" layer in its price section.
 - **C-9 (Alerts):** an optional "inflated price" / back-in-stock alert type fed by ingestion
   (the price/back-in-stock subscriptions tier C-9 reserved).

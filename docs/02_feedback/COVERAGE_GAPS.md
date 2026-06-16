@@ -25,36 +25,38 @@ points at this file.
 
 > **Update 2026-06-15:** this cluster now HAS a design home —
 > `04_proposals/PROPOSAL_STOCK_ITEM_DETAIL.md` (C-1b) + `IMPL_PLAN_STOCK_ITEM_DETAIL.md`.
-> The §8 coverage table there maps every L112-140 bullet. Bullets stay listed
-> as gaps below until C-1b builds + the "already fixed" rows are browser-confirmed;
-> flip gap → covered then.
+> The §8 coverage table there maps every L112-140 bullet.
+>
+> **Update 2026-06-16:** the C-1b stack (`.1 → .5`) is **built**; the design home is now
+> the running surface. Cluster flipped to **[COVERED]**; remaining open work is
+> browser-verification, tracked under **FU-202** (extended for each .1–.5 chunk). The
+> per-bullet status table stays below for the audit trail.
 
-Feedback `§STOCK ITEM DETAIL` has ~30 bullets. The bug-shaped ones are
-covered by B-prompts (B3 PATCH, B4 cascade, B8 dead actions). The
-**layout / button-placement / open-design** bullets have no brief:
+Feedback `§STOCK ITEM DETAIL` has ~30 bullets. The bug-shaped ones were covered by
+B-prompts (B3 PATCH, B4 cascade, B8 dead actions); the **layout / button-placement /
+open-design** bullets are now all addressed in the C-1b chunks:
 
-- [OPEN] Clear-expiry button affordance (cross mark next to expiry)
-- [OPEN] No way to set "essential" — see also `INV-7` (added).
-- [OPEN] No way to set stock group — surfaced UI question (entity exists; INV-1 catches the field, this is the UX side).
-- [OPEN] Split-view at 50% default; sensible min/max splitter distance.
-- [OPEN] Tabs hardly visible in some themes — likely A1 ripple but not explicitly scoped there.
-- [OPEN] Stock-level shown twice — remove the duplicate next to name.
-- [OPEN] Move delete button (bottom-left below tabs, or top-right inline).
-- [OPEN] Restock here makes no sense — move to shopping-list finalisation.
-- [OPEN] Move "Opened" button next to opened info; same for expiry.
-- [OPEN] "Find deals" placement — move into Linked Products tab as a contextual CTA when empty.
-- [OPEN] Overview single column tidier.
-- [OPEN] Location updated inline without a separate dropdown.
-- [OPEN] Notes value — `[INV-1]` orphaned-fields catches; the *worth* call separate.
-- [OPEN] Add product-of-choice to shopping list (not just cheapest); per-product list-add buttons.
-- [OPEN] Preferred merchant/product behaviour — `[INV-1]` catches existence; worth call open.
-- [OPEN] Shopping-lists tab — "(primary)" plain text feels unimaginative; arrow icon non-clickable.
-- [OPEN] History tab worth — see `INV-7` (added).
-- [OPEN] Substitute swap-into-list weirdness — see `INV-8` (added).
+- [COVERED] Clear-expiry button affordance (cross mark next to expiry) — **C-1b.1** (× button + ±1/+7/+14).
+- [COVERED] No way to set "essential" — **C-1b.1** (toggle row in the inline-edit overview).
+- [COVERED] No way to set stock group — **C-1b.1** (DTO thread + inline picker row).
+- [COVERED] Split-view at 50% default; sensible min/max splitter distance — **C-1b.2**.
+- [COVERED] Tabs hardly visible in some themes — **C-1b.1** (theme-token routing, R-002).
+- [COVERED] Stock-level shown twice — **C-1b.1** (header chip is the editor; duplicate row gone).
+- [COVERED] Move delete button — **C-1b.1** (top-right, danger-ghost).
+- [COVERED] Restock here makes no sense — **C-1b.1** (button + handler removed; belongs to list finalisation).
+- [COVERED] Move "Opened" button next to opened info; same for expiry — **C-1b.1** (open toggle + "since" on the row; expiry value + × + quick-set on the row).
+- [COVERED] "Find deals" placement — **C-1b.3** (contextual: empty-state CTA + "Link another" in the Products tab; toolbar Find-deals removed in C-1b.1).
+- [COVERED] Overview single column tidier — **C-1b.1**.
+- [COVERED] Location updated inline without a separate dropdown — **C-1b.1** (searchable path picker inline) / focused FU-202 pass earlier.
+- [COVERED] Notes value — **C-1b.1** (kept, de-emphasised at the bottom).
+- [COVERED] Add product-of-choice to shopping list (not just cheapest); per-product list-add buttons — already exists (C-7); **C-1b.3** removed the "Get cheapest" toolbar shortcut and emphasises the cheapest card via style, per §2.4.
+- [COVERED] Preferred merchant/product behaviour — **FU-180** removed it; **C-1b.3** confirms nothing to design.
+- [COVERED] Shopping-lists tab — "(primary)" plain text feels unimaginative; arrow icon non-clickable — **C-1b.4** (styled `q-badge` for Primary; dead arrow removed).
+- [COVERED] History tab worth — **C-1b.5** (rebuilt as a unified lifecycle timeline merging level + waste + list-add provenance + synthesised Opened/Checked rows; INV-7).
+- [COVERED] Substitute swap-into-list weirdness — **C-1b.4** removed the swap from this surface; relocation owned by **INV-8** (Shop Mode).
 
-**Recommended home:** a new Wave-C brief (`C-1 ripple` or a dedicated
-`C-1b STOCK_ITEM_DETAIL` proposal). The C-1 brief currently mentions
-"row click → detail" but doesn't redesign the detail surface itself.
+**Outstanding gates:** FU-202 browser-verification across all five chunks; everything code-level
++ tsc/eslint/e2e is green.
 
 ### A-2 DATA page
 

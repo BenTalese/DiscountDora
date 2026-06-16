@@ -145,9 +145,14 @@ class UpdateStockItemHandler:
             _StockItem.auto_add_when_low = request.auto_add_when_low
 
         # stock_group: nullable FK, so a present-but-None value means
-        # "clear the group". Same shape as stock_location_id above.
+        # "clear the group". The relationship is mapped lazy="noload", so
+        # `_StockItem.stock_group` reads as None even when an FK exists;
+        # assigning the *relationship* to None is then a no-op and the FK
+        # column never changes. Set the FK column (`_stock_group_id`)
+        # directly to force the dirty write.
         if "stock_group_id" in _SetFields:
             if request.stock_group_id is None:
+                _StockItem._stock_group_id = None
                 _StockItem.stock_group = None
             else:
                 from dora_api.domain.entities.stock_group import StockGroup

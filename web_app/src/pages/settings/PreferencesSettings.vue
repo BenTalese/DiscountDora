@@ -203,6 +203,143 @@
             </q-card-section>
         </q-card>
 
+        <!-- C-9.7 — Alerts email digest. SMTP-gated (R-014): the master
+             toggle disables when the backend doesn't have email
+             configured, so a self-hosted install without SMTP doesn't
+             silently swallow opt-ins. -->
+        <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Alerts email digest</div>
+                <div class="text-caption dora-text-muted">
+                    Get your actionable alerts emailed to you on a daily or
+                    weekly cadence. The digest matches what you'd see on the
+                    Alerts page; the same alert won't email again until it
+                    clears and re-fires.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="currentUser.alerts_email_enabled"
+                    label="Email me a digest of my alerts"
+                    :disable="saving || !emailSmtpConfigured"
+                    @update:model-value="onAlertsEmailEnabledChange"
+                />
+                <div
+                    v-if="!emailSmtpConfigured"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    Email isn't set up on this install yet — ask an admin
+                    to configure SMTP and this toggle will unlock.
+                </div>
+            </q-card-section>
+
+            <q-card-section
+                v-if="currentUser.alerts_email_enabled"
+                class="row q-col-gutter-md items-center"
+            >
+                <div class="col-12 col-sm-4 text-subtitle2">Cadence</div>
+                <div class="col-12 col-sm-8">
+                    <q-select
+                        v-model="alertsEmailCadenceDraft"
+                        :options="alertsCadenceOptions"
+                        option-value="value"
+                        option-label="label"
+                        emit-value
+                        map-options
+                        outlined
+                        dense
+                        style="max-width: 260px"
+                        :disable="saving"
+                        @update:model-value="onAlertsEmailCadenceChange"
+                    />
+                </div>
+            </q-card-section>
+
+            <q-card-section
+                v-if="currentUser.alerts_email_enabled && alertsEmailCadenceDraft === 'weekly'"
+                class="row q-col-gutter-md items-center"
+            >
+                <div class="col-12 col-sm-4 text-subtitle2">Send on</div>
+                <div class="col-12 col-sm-8">
+                    <q-select
+                        v-model="alertsEmailDayDraft"
+                        :options="dayOptions"
+                        option-value="value"
+                        option-label="label"
+                        emit-value
+                        map-options
+                        outlined
+                        dense
+                        style="max-width: 260px"
+                        :disable="saving"
+                        @update:model-value="onAlertsEmailDayChange"
+                    />
+                </div>
+            </q-card-section>
+        </q-card>
+
+        <!-- C-9.8 — Push notifications. VAPID-gated (R-014): the toggle
+             disables when the backend isn't configured, mirroring the
+             alerts-email SMTP gate. The four-state lifecycle (loading /
+             unsupported / denied / subscribed) is surfaced via the
+             caption beneath the toggle. -->
+        <q-card flat bordered>
+            <q-card-section>
+                <div class="text-h6">Push notifications</div>
+                <div class="text-caption dora-text-muted">
+                    Get a system notification on this device the moment a new
+                    actionable alert fires. Only actionable alerts are pushed —
+                    FYI items stay in the hub and the email digest. Subscribe
+                    on every device you want to be notified on.
+                </div>
+            </q-card-section>
+            <q-separator />
+
+            <q-card-section>
+                <q-toggle
+                    :model-value="pushSubscribed"
+                    label="Send me push notifications on this device"
+                    :disable="saving || !pushVapidConfigured || !pushSupported || pushLoading"
+                    @update:model-value="onPushToggle"
+                />
+                <div
+                    v-if="!pushVapidConfigured"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    Push isn't set up on this install yet — ask an admin
+                    to generate VAPID keys and this toggle will unlock.
+                </div>
+                <div
+                    v-else-if="!pushSupported"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    This browser doesn't support web push.
+                </div>
+                <div
+                    v-else-if="pushState === 'denied'"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    Notifications are blocked for this site. Re-enable them in
+                    your browser's site settings, then refresh.
+                </div>
+                <div
+                    v-else-if="pushError"
+                    class="text-caption text-negative q-mt-xs"
+                >
+                    {{ pushError }}
+                </div>
+                <div
+                    v-else-if="pushSubscribed"
+                    class="text-caption dora-text-muted q-mt-xs"
+                >
+                    This device is subscribed. Toggle off to stop receiving
+                    pushes here (other devices keep their own subscriptions).
+                </div>
+            </q-card-section>
+        </q-card>
+
         <!-- C-cross Chunk 2 — Money features opt-in.
              Layered with the install-wide `money_enabled` flag (admin
              owns that one in Settings → System → Features). The Grocery
@@ -508,7 +645,9 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { usePushSubscription } from 'src/composables/usePushSubscription';
     import {
         useNutritionMode,
         type NutritionMode,
@@ -539,6 +678,27 @@
         { label: 'Complex', value: 'complex' as NutritionMode, disable: !complexAvailable.value },
     ]);
 
+    // C-9.7 — alerts email digest gating. The backend feature flag
+    // mirrors `email_sender._config().dry_run` so the toggle reflects
+    // whether emails would actually leave the box (R-014).
+    const { emailSmtpConfigured, pushVapidConfigured } = useFeatureFlags();
+    const alertsCadenceOptions = [
+        { label: 'Daily', value: 'daily' as const },
+        { label: 'Weekly', value: 'weekly' as const },
+    ];
+
+    // C-9.8 — push subscription lifecycle for this device. The
+    // composable owns the four-state machine; the card binds against it.
+    const {
+        state: pushState,
+        error: pushError,
+        subscribed: pushSubscribed,
+        supported: pushSupported,
+        subscribe: pushSubscribe,
+        unsubscribe: pushUnsubscribe,
+    } = usePushSubscription();
+    const pushLoading = computed(() => pushState.value === 'loading');
+
     const dayOptions = [
         { value: 0, label: 'Monday' },
         { value: 1, label: 'Tuesday' },
@@ -553,6 +713,13 @@
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
     const sendDealsOnDay = ref<number>(currentUser.value?.send_deals_on_day ?? 0);
+    // C-9.7 — alerts email digest. Cadence and day are draft refs so the
+    // q-select reflects the freshly saved value without flickering through
+    // the watcher; the toggle reads `currentUser` directly (instant-flip).
+    const alertsEmailCadenceDraft = ref<'daily' | 'weekly'>(
+        (currentUser.value?.alerts_email_cadence === 'weekly') ? 'weekly' : 'daily'
+    );
+    const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
     // Theme catalogue surfaced by the picker. `system` is rendered
     // manually (meta-option), then one card per family — each family
     // has paired Light + Dark variant buttons inside.
@@ -601,6 +768,8 @@
         budgetAmountDraft.value = u.budget_amount ?? null;
         budgetPeriodDraft.value = u.budget_period ?? 'weekly';
         budgetEnabledDraft.value = u.budget_amount != null && u.budget_amount > 0;
+        alertsEmailCadenceDraft.value = u.alerts_email_cadence === 'weekly' ? 'weekly' : 'daily';
+        alertsEmailDayDraft.value = u.alerts_email_day ?? 0;
     });
 
     const usernameUnchanged = computed(
@@ -687,6 +856,58 @@
         await update('Deals email format updated.', () =>
             authStore.updateMeAsync({ deals_email_compact: value })
         );
+    }
+
+    // C-9.7 — alerts email digest handlers. Toggling the master switch
+    // sends both `alerts_email_enabled` and the current cadence so a
+    // fresh-opt-in user starts on a sensible default ('daily') without
+    // a second click. Cadence/day changes are saved instantly.
+    async function onAlertsEmailEnabledChange(value: boolean) {
+        const cadence = value ? alertsEmailCadenceDraft.value : 'off';
+        await update(
+            value
+                ? 'Subscribed to the alerts email digest.'
+                : 'Unsubscribed from the alerts email digest.',
+            () => authStore.updateMeAsync({
+                alerts_email_enabled: value,
+                alerts_email_cadence: cadence,
+            })
+        );
+    }
+
+    async function onAlertsEmailCadenceChange(value: 'daily' | 'weekly') {
+        const previous = alertsEmailCadenceDraft.value;
+        alertsEmailCadenceDraft.value = value;
+        const result = await update('Digest cadence updated.', () =>
+            authStore.updateMeAsync({ alerts_email_cadence: value })
+        );
+        if (result === null) alertsEmailCadenceDraft.value = previous;
+    }
+
+    async function onAlertsEmailDayChange(value: number) {
+        const previous = alertsEmailDayDraft.value;
+        alertsEmailDayDraft.value = value;
+        const result = await update('Digest day updated.', () =>
+            authStore.updateMeAsync({ alerts_email_day: value })
+        );
+        if (result === null) alertsEmailDayDraft.value = previous;
+    }
+
+    // C-9.8 — push toggle. The composable handles the permission
+    // prompt + server round-trip; we just translate success/failure
+    // into the standard $q.notify pattern.
+    async function onPushToggle(value: boolean) {
+        try {
+            if (value) {
+                await pushSubscribe();
+                if (pushSubscribed.value) notifySuccess('Subscribed to push notifications on this device.');
+            } else {
+                await pushUnsubscribe();
+                notifySuccess('Unsubscribed from push notifications on this device.');
+            }
+        } catch (err) {
+            notifyError('Push subscription failed.', err);
+        }
     }
 
     // P2-05 — budget handlers.

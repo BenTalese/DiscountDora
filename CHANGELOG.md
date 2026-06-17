@@ -6,6 +6,31 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Push notifications on this device (Alerts C-9.8 — Phase C).** Settings → Preferences
+  has a new **Push notifications** card: turn it on and Dora delivers a system
+  notification the moment a new **actionable** alert fires (FYI nudges stay in the hub +
+  email digest so a quiet device doesn't buzz for low-signal items). One subscription per
+  browser/device — you can subscribe on every device independently. The card surfaces
+  the full lifecycle in its caption: VAPID-not-configured, browser-unsupported,
+  permission-denied, subscribed-here. Same dedup rule as the email channel: each alert
+  pushes once, then again only after it clears and re-fires. Dead subscriptions (revoked
+  / 404'd by the vendor) are pruned automatically. New `PushSubscription` table
+  (migration `e9a4b6c2d8f1`); new `AlertInteraction.last_pushed_at` paired with
+  `last_emailed_at` (migration `d7b3e2a1f4c5`); new endpoints
+  `GET /api/alerts/push/vapid-public-key`, `POST /api/alerts/push/subscribe`,
+  `POST /api/alerts/push/unsubscribe`. Standalone push-only service worker at
+  `/push-sw.js` (independent of Quasar's PWA Workbox chunk). Hourly evaluator at :30.
+- **Email me my alerts (Alerts C-9.7 — Phase B).** Settings → Preferences has a new
+  **Alerts email digest** card: turn it on and Dora emails you the same actionable list
+  you'd see on the Alerts page, **daily** or **weekly** on a day of your choosing. The
+  same alert won't email twice in a row — it only resends after the condition clears and
+  re-fires. The digest mirrors the in-app hub exactly (one canonical source for "what
+  counts"). The card is **shown-disabled until SMTP is configured** on the install
+  (R-014), so a self-hosted box without email surfaces "ask an admin" instead of
+  silently swallowing opt-ins. New `User.alerts_email_enabled` / `alerts_email_cadence`
+  / `alerts_email_day` (migration `b8e5d2f1c9a3`); new `AlertInteraction.last_emailed_at`
+  for delivery dedup (migration `c4f9a8b3e2d6`). Job runs at 07:00 on the existing
+  background scheduler.
 - **A "you're all set" finish (Onboarding C-5.6).** Onboarding now ends on a celebration — a
   **confetti** moment, a **recap of the loop** (the same interactive diagram from the intro), and
   **flow-cards** for the areas that matter to your setup (pantry, recipes, meal plans, shopping,

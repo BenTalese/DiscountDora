@@ -41,6 +41,12 @@ export type UpdateMeCommand = {
      *  survive a toggle (only rendering is suppressed). */
     show_recipe_images?: boolean;
     show_stock_images?: boolean;
+    /** C-9.7 — alerts email digest channel. Cadence is `'off' | 'daily'
+     *  | 'weekly'`; `alerts_email_day` is the weekly send day Mon=0 …
+     *  Sun=6 (ignored on the daily cadence; saved either way). */
+    alerts_email_enabled?: boolean;
+    alerts_email_cadence?: 'off' | 'daily' | 'weekly';
+    alerts_email_day?: number;
 };
 export type ChangePasswordCommand = {
     current_password: string;

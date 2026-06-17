@@ -35,3 +35,8 @@ typing_extensions==4.9.0
 # database, which Windows (incl. the bundled desktop build) doesn't ship —
 # needed for the household-timezone "today" boundary (AppSetting.timezone).
 tzdata==2026.2
+# C-9.8 — Web Push (PWA notifications). pywebpush wraps RFC 8030 + VAPID;
+# it pulls in `cryptography`, `http-ece`, and `py-vapid`. The push job is
+# config-gated (DORA_VAPID_*); without them the sender runs in dry-run
+# mode and the install still boots fine.
+pywebpush==2.0.0

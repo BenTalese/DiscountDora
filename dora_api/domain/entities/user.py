@@ -89,6 +89,19 @@ NUTRITION_MODE_VALUES = (
     NUTRITION_MODE_COMPLEX,
 )
 
+# C-9.7 — per-user alerts-email cadence (PROPOSAL_ALERTS §4.4). `off` is
+# the absent-feature value (paired with `alerts_email_enabled=False` it's
+# the default for a fresh user — quiet until opted in). R-010 carve-out:
+# closed-set string sentinel, single validation point in `update_me.py`.
+ALERTS_EMAIL_CADENCE_OFF = "off"
+ALERTS_EMAIL_CADENCE_DAILY = "daily"
+ALERTS_EMAIL_CADENCE_WEEKLY = "weekly"
+ALERTS_EMAIL_CADENCE_VALUES = (
+    ALERTS_EMAIL_CADENCE_OFF,
+    ALERTS_EMAIL_CADENCE_DAILY,
+    ALERTS_EMAIL_CADENCE_WEEKLY,
+)
+
 
 @dataclass
 class User(BaseEntity):
@@ -163,6 +176,18 @@ class User(BaseEntity):
     # NULL = not set (cook mode falls back to each recipe's own `servings`).
     # Read by RecipeCookMode to seed its per-session serving scaler (L44).
     household_headcount: int | None = None
+    # C-9.7 — alerts email digest (PROPOSAL_ALERTS §3.5 / §4.4). Off by
+    # default (P10 Anti-creep + the proposal §5 "channels: in-app on; email
+    # off (opt-in)"). When `alerts_email_enabled` is True, the scheduled
+    # digest job (`send_alerts_digest`) runs at the user's `alerts_email_
+    # cadence` ('daily' | 'weekly'; 'off' is the no-feature value paired
+    # with the disabled flag). `alerts_email_day` is the weekly send day
+    # (Mon=0 … Sun=6) and is ignored on the daily cadence. Independent of
+    # the deals-email `send_deals_on_day` so the two channels stay
+    # uncoupled (per-channel cleanliness).
+    alerts_email_enabled: bool = False
+    alerts_email_cadence: str = ALERTS_EMAIL_CADENCE_OFF
+    alerts_email_day: int = 0
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -189,3 +214,6 @@ class User(BaseEntity):
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         SHOW_STOCK_IMAGES = "show_stock_images"
         HOUSEHOLD_HEADCOUNT = "household_headcount"
+        ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
+        ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
+        ALERTS_EMAIL_DAY = "alerts_email_day"

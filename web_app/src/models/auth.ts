@@ -79,4 +79,12 @@ export type AuthenticatedUser = {
     // Onboarding C-5.4 — household cooking headcount; null = not set (cook
     // mode falls back to each recipe's own serving size).
     household_headcount: number | null;
+    // C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5). Off by
+    // default; `alerts_email_cadence` is `'off' | 'daily' | 'weekly'` and
+    // `alerts_email_day` is the weekly send day (Mon=0 … Sun=6, ignored on
+    // daily). The toggle is gated on `features.email_smtp_configured` so a
+    // self-hosted install without SMTP shows the control disabled (R-014).
+    alerts_email_enabled: boolean;
+    alerts_email_cadence: 'off' | 'daily' | 'weekly';
+    alerts_email_day: number;
 };

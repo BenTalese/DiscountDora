@@ -52,6 +52,134 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-207 — Document VAPID key generation in install docs
+- **Raised:** 2026-06-17 (C-9.8 impl)
+- **Type:** documentation / deferred job
+- **What:** The push channel needs three env vars (`DORA_VAPID_PUBLIC_KEY`,
+  `DORA_VAPID_PRIVATE_KEY`, `DORA_VAPID_SUBJECT`) — current guidance is only
+  inline in `dora_api/infrastructure/push_sender.py`'s module docstring. Add a
+  short section to README + install docs covering:
+  - Why VAPID is needed (RFC 8292 authentication of the application server to
+    the push service).
+  - How to generate a key pair: `python -m py_vapid --gen --applicationServerKey`
+    (bundled with pywebpush; writes `private_key.pem` + prints the public key in
+    base64url form).
+  - How to set the env vars (incl. that `DORA_VAPID_SUBJECT` should be a contact
+    `mailto:` URL the push service can reach the admin on).
+  - Note that omitting any of them puts the sender in dry-run mode and disables
+    the Push toggle on the frontend (R-014).
+- **Why deferred:** docs land separately from code; the chunk's functionality is
+  fully working without them — only adoption is harder.
+- **Recommended resolution:** opportunistic — fold into the next docs touch-up,
+  or the install/deploy hardening pass for Phase 3 / Phase 4 commercialise.
+
+## [OPEN] FU-206 — Browser-verify C-9.8 web-push channel
+- **Raised:** 2026-06-17 (C-9.8 impl — static-verified only)
+- **Type:** finding / verification
+- **What:** Verify, in order, on a running install with VAPID env vars set
+  (see FU-207 for the generation steps):
+  1. **VAPID gating works (R-014).** Without `DORA_VAPID_*` set, the Push
+     card's toggle is disabled and the caption reads "Push isn't set up on
+     this install yet — ask an admin…". `GET /api/health` shows
+     `features.push_vapid_configured: false`; `GET /api/alerts/push/vapid-
+     public-key` returns 404.
+  2. **Set VAPID env, restart.** Toggle becomes enabled, caption hides;
+     health flag is true; the key endpoint returns the public key.
+  3. **Subscribe flow.** Flip the toggle on → browser permission prompt →
+     allow → success toast → toggle stays on, caption changes to "This device
+     is subscribed…". Check DevTools → Application → Service Workers: a SW at
+     `/push-sw.js` is registered + activated.
+  4. **Receive a push.** Create an expired stock item (any path that
+     produces a new actionable `expired` alert). Trigger the job manually:
+     `python -c "from dora_api.app import app;
+     from dora_api.features.alerts.send_alerts_push import send_alerts_push;
+     send_alerts_push()"`. The OS shows a "Dashy Dora — <name> has expired"
+     notification. Click it → focuses an existing Dora tab on `/alerts` (or
+     opens a new one).
+  5. **Dedup.** Trigger again immediately → no second notification for the
+     same alert. Mark the item not-expired → trigger → no notification + the
+     `AlertInteraction.last_pushed_at` clears. Re-add expired → trigger →
+     fresh notification.
+  6. **Multi-device.** Subscribe a second browser (e.g. mobile Chrome on the
+     same LAN). Trigger an alert → both devices buzz.
+  7. **Permission denied.** In a fresh profile, deny the prompt → caption
+     reads "Notifications are blocked…"; toggle stays off; subscribe button
+     greys appropriately.
+  8. **Dead-subscription pruning.** In DevTools → Application → Push, unregister
+     the SW manually. Trigger an alert → the backend receives a 404/410, the
+     `PushSubscription` row is deleted, no further attempts for that endpoint.
+  9. **Unsubscribe.** Flip the toggle off → success toast → `PushSubscription`
+     row is gone server-side; the browser registration is also gone (DevTools
+     confirms).
+  10. **Schedule fires.** Confirm the `alerts_push` job is registered with
+     `CronTrigger(minute=30)` (APScheduler job list) and that an actionable
+     alert created at e.g. :25 produces a notification within 5 minutes.
+- **Why deferred:** static-only impl + the e2e suite uses a function-call seam
+  rather than real VAPID + a real push service round-trip. The PROPOSAL §3.5
+  acceptance ("a subscribed device receives a push when a new actionable alert
+  fires") can only land in a running install.
+- **Recommended resolution:** now/when next in the app — closes the Phase C
+  push channel acceptance.
+
+## [OPEN] FU-205 — Browser-verify C-9.7 alerts email digest
+- **Raised:** 2026-06-17 (C-9.7 impl — static-verified only)
+- **Type:** finding / verification
+- **What:** Verify, in order, on a running install:
+  1. **Preferences card visible.** Settings → Preferences shows the new "Alerts email
+     digest" card after the existing "Weekly deals email" card. Heading + caption read
+     sensibly across all themes (Pesto Light + Dark, Cherry Cola Dark).
+  2. **SMTP-gating works (R-014).** Without `DORA_SMTP_USERNAME` set, the master toggle
+     is `:disable`d and the caption reads "Email isn't set up on this install yet —
+     ask an admin…". Set `DORA_SMTP_USERNAME=anything@test.com`, restart, refresh —
+     toggle becomes enabled, caption hides. `GET /api/health` shows
+     `features.email_smtp_configured: true`.
+  3. **Opt-in round-trip.** Flip the master toggle on → success toast → cadence
+     select appears defaulted to "Daily". Switch to "Weekly" → day select appears.
+     Pick a day. Reload — every choice survives. Check the network panel: the master
+     toggle sends `{alerts_email_enabled, alerts_email_cadence}` together; subsequent
+     edits send the single changed field.
+  4. **PATCH /auth/me round-trip.** `GET /api/auth/me` returns
+     `alerts_email_enabled`, `alerts_email_cadence`, `alerts_email_day` on the user
+     payload (and after a flip).
+  5. **A real SMTP send.** With real SMTP env set + user opted in + an expired stock
+     item: trigger the job (easiest: `python -c "from dora_api.app import app;
+     from dora_api.features.alerts.send_alerts_digest import send_alerts_digest;
+     send_alerts_digest()"`). Inbox receives a Dashy Dora digest with the actionable
+     item in the "Needs action" section, an "Open Alerts" button linking to
+     `<DORA_PUBLIC_URL>/alerts`, and a plain-text fallback.
+  6. **Dedup works in the wild.** Trigger the job again immediately → no second email
+     for the same alert. Mark the item not-expired (or delete it), trigger → no email
+     and the AlertInteraction's `last_emailed_at` clears. Re-add an expired item with
+     the same name → trigger → fresh email arrives.
+  7. **Weekly day gating.** Set cadence=weekly, day=Monday. On a non-Monday → trigger
+     → no email (even with actionable items). On a Monday → email lands.
+  8. **Schedule fires.** Confirm the 07:00 CronTrigger is actually registered: the
+     app's startup logs should show the `alerts_digest` job in the APScheduler's job
+     list. Optionally inspect via `scheduler.get_jobs()` in a debug shell.
+- **Why deferred:** static-only impl; e2e suite uses a function-call seam rather than
+  the real scheduler + SMTP. The PROPOSAL_ALERTS §3.5 acceptance criteria mention "an
+  opted-in user with SMTP configured receives a daily/weekly digest" — only a running
+  install can confirm that end-to-end.
+- **Recommended resolution:** now/when next in the app — closes the Phase B email
+  channel acceptance. Pairs naturally with FU-183 (Phase A browser pass).
+
+## [OPEN] FU-204 — `UpdateMeCommand` TS type missing `household_headcount` (and now alerts-email shipped right; check for other drift)
+- **Raised:** 2026-06-17 (C-9.7 — surfaced while adding the alerts-email fields)
+- **Type:** finding / cleanup
+- **What:** `web_app/src/services/api/authApiService.ts:16` `UpdateMeCommand` is the TS
+  surface used by `authStore.updateMeAsync(command)`. C-5.4 added `household_headcount`
+  to the backend `UpdateMeRequest` + the `AuthenticatedUserDto` but **forgot the
+  `UpdateMeCommand` type** — so any frontend call site that tries to send
+  `{ household_headcount: N }` typechecks against `Record<string, never>`-ish and
+  errors. (Likely silent today because the headcount writer is sending a different way
+  or hasn't been wired into PATCH yet.) C-9.7 added the alerts-email triplet to all
+  three layers correctly; do a quick audit of every Pydantic field on `UpdateMeRequest`
+  vs every key on `UpdateMeCommand` to flush any other drift.
+- **Why deferred:** out of C-9.7's scope (R-007); fixing C-5.4's residue inline would
+  bury the worklog trail.
+- **Recommended resolution:** opportunistic — quick types diff + add the missing
+  entries; cite this FU + the originating C-5.4 chunk in the commit/worklog.
+
 ## [OPEN] FU-203 — `PATCH stock_location_id: null` likely fails to clear the location (same root cause as the C-1b.1 stock_group fix)
 - **Raised:** 2026-06-16 (C-1b.1 backend pass)
 - **Type:** finding (bug, likely)

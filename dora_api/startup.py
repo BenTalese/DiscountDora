@@ -76,6 +76,31 @@ def startup(is_test_env: bool = False):
             id="audit_retention",
             replace_existing=True,
         )
+        # C-9.7 — alerts email digest. Runs once daily at 07:00; the job
+        # gates per-user cadence + weekly-day internally (PROPOSAL_ALERTS
+        # §3.5). 07:00 sits comfortably between the 03:00 audit sweep and
+        # the typical workday so a "morning digest" lands before the user
+        # opens the app.
+        from dora_api.features.alerts.send_alerts_digest import \
+            send_alerts_digest
+        scheduler.add_job(
+            send_alerts_digest,
+            CronTrigger(hour=7, minute=0),
+            id="alerts_digest",
+            replace_existing=True,
+        )
+        # C-9.8 — alerts web-push. Hourly at :30 so it staggers from the
+        # email digest's 07:00 fire. The job self-gates when VAPID isn't
+        # configured (returns 0 without mutating the ledger) so an
+        # unconfigured install spends nothing.
+        from dora_api.features.alerts.send_alerts_push import \
+            send_alerts_push
+        scheduler.add_job(
+            send_alerts_push,
+            CronTrigger(minute=30),
+            id="alerts_push",
+            replace_existing=True,
+        )
         scheduler.start()
 
     if not is_test_env:  # app.run blocks the thread where tests are ran from

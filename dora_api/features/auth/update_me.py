@@ -4,7 +4,8 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.user import (ALLOWED_BUDGET_PERIODS,
+from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
+                                           ALLOWED_BUDGET_PERIODS,
                                            ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES, ALLOWED_THEMES,
                                            NUTRITION_MODE_COMPLEX,
@@ -57,6 +58,14 @@ class UpdateMeRequest(BaseModel):
     show_stock_images: bool | None = None
     # Onboarding C-5.4 — household cooking headcount (1–99; null clears it).
     household_headcount: int | None = Field(default=None, ge=1, le=99)
+    # C-9.7 — alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
+    # Cadence is a closed-set sentinel validated at this boundary (R-010
+    # carve-out, same shape as `nutrition_mode`). Day is Mon=0 … Sun=6
+    # and only consulted on the weekly cadence; saved either way so a
+    # cadence flip back to weekly remembers the picked day.
+    alerts_email_enabled: bool | None = None
+    alerts_email_cadence: str | None = None
+    alerts_email_day: int | None = Field(default=None, ge=0, le=6)
 
 
 class UpdateMeHandler:
@@ -171,6 +180,21 @@ class UpdateMeHandler:
         # bounds are enforced by the request model above.
         if "household_headcount" in _SetFields:
             _User.household_headcount = request.household_headcount
+
+        # C-9.7 — alerts email digest. Plain bool + closed-set cadence +
+        # 0–6 day. R-014 (shown-disabled when SMTP unset) is enforced on
+        # the *frontend* via the `email_smtp_configured` feature flag;
+        # the backend accepts the prefs regardless so a self-hosted user
+        # who configures SMTP later doesn't have to re-toggle.
+        if "alerts_email_enabled" in _SetFields and request.alerts_email_enabled is not None:
+            _User.alerts_email_enabled = request.alerts_email_enabled
+        if "alerts_email_cadence" in _SetFields and request.alerts_email_cadence is not None:
+            cadence = request.alerts_email_cadence
+            if cadence not in ALERTS_EMAIL_CADENCE_VALUES:
+                return None, f"Invalid alerts email cadence '{cadence}'."
+            _User.alerts_email_cadence = cadence
+        if "alerts_email_day" in _SetFields and request.alerts_email_day is not None:
+            _User.alerts_email_day = request.alerts_email_day
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

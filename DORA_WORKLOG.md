@@ -9,6 +9,260 @@ next.
 
 ---
 
+## 2026-06-17 — C-9.8: Alerts web-push (Phase C) — code-complete
+**Status:** code complete, **321 e2e green** (full suite; +8 push tests on top of the
++6 digest tests from C-9.7), vue-tsc clean, eslint clean on touched files, single
+Alembic head `e9a4b6c2d8f1`. **Browser-unverified + no real VAPID send exercised** (per
+working-style). C-9.8 closes the push channel half of PROPOSAL_ALERTS §3.5; the
+remaining channel work is C-9.9 (system tier) which is unrelated to delivery.
+
+**Design calls resolved this session:**
+- **Push schedule cadence:** user picked **hourly at `:30`** (staggered from the
+  email digest at `:00`). The impl plan suggested "newly-fired"; in practice the job
+  just runs hourly and dedups via `last_pushed_at` so the effective semantics are the
+  same.
+- **Service-worker integration with Quasar PWA Workbox:** standalone push-only SW at
+  `web_app/public/push-sw.js`, registered against `/push-sw.js` independently of
+  the Workbox-generated SW used by the PWA build. Two SWs at different scope/path
+  coexist cleanly; the push SW has only `push` + `notificationclick` handlers (no
+  fetch caching) so it can't shadow Workbox's runtime caching rules. The impl plan
+  flagged this as "isolate so it can't destabilise Phases A/B" — standalone meets that.
+- **Delivery dedup column placement:** consistent with the C-9.7 ADR — pair
+  `last_pushed_at` next to `last_emailed_at` on the existing `AlertInteraction` rather
+  than splitting out an `AlertDelivery` sibling.
+- **DELETE vs POST for unsubscribe:** POST `/alerts/push/unsubscribe` (rather than
+  DELETE `/alerts/push/subscribe` with a body) because the SPA's `AxiosHttpClient`
+  wrapper doesn't expose DELETE-with-body and POST mirrors subscribe's shape.
+
+**What changed (backend):**
+- **New dep:** `pywebpush==2.0.0` (pulls `cryptography`, `http-ece`, `py-vapid`).
+- **`PushSubscription` (NEW entity + table):** `id, user_id, endpoint (UNIQUE),
+  p256dh, auth, user_agent, created_at, last_seen_at`. Endpoint is the natural key —
+  a re-subscribe from the same browser produces the same endpoint, so the upsert
+  handler keys on it. Index on `user_id` for the hot per-user fan-out query.
+  Migration `e9a4b6c2d8f1`.
+- **`AlertInteraction.last_pushed_at`:** sibling to `last_emailed_at`. Independent
+  cleanup pass — both channels clear their own flags. Migration `d7b3e2a1f4c5`.
+- **`infrastructure/push_sender.py` (NEW):** wraps `pywebpush`. Same shape as
+  `email_sender.py` — `_config()` returns a `dry_run` bool when either VAPID half is
+  missing; `send_push(**kwargs)` returns None on success, raises `PushGoneError` on
+  404/410 (subscription is gone — caller deletes the row), raises `WebPushException`
+  on transient failures (caller logs + skips). `is_configured()` + `vapid_public_key()`
+  exposed for the health flag + the GET endpoint.
+- **`features/alerts/push_subscriptions.py` (NEW):**
+  `GET /alerts/push/vapid-public-key` (404 when unconfigured),
+  `POST /alerts/push/subscribe` (upsert by endpoint, mirrors browser
+  `PushSubscription.toJSON()` shape),
+  `POST /alerts/push/unsubscribe` (idempotent — second call against a gone row is a
+  204 no-op).
+- **`features/alerts/send_alerts_push.py` (NEW):** the job. Top-level
+  `is_configured()` short-circuit so an unconfigured install spends nothing.
+  `_subscriptions_by_user` groups, then per-user: cleanup pass on stale
+  `last_pushed_at`, filter to actionable-tier (push is for things that need a response;
+  FYI nudges stay in the hub + email digest), fan out one push per
+  (alert × live subscription), stamp the ledger once per alert (coarse dedup). 404/410
+  failures prune the subscription row mid-fan; transient errors leave the row and
+  retry next tick. Mirrors the `send_alerts_digest.py` shape (R-001 reuse).
+- **`startup.py`:** scheduler registers `alerts_push` at `CronTrigger(minute=30)` so
+  it ticks hourly at :30, staggered from the email digest's 07:00 daily fire.
+- **`health_check.py`:** new `push_vapid_configured` feature flag derived from
+  `DORA_VAPID_PUBLIC_KEY` + `DORA_VAPID_PRIVATE_KEY` both set.
+
+**What changed (frontend):**
+- **`public/push-sw.js` (NEW):** push-only service worker. `push` event reads the
+  JSON payload (shape pinned by `send_alerts_push._payload_for`) and shows a
+  notification with `tag=alert_id` so a second push for the same alert replaces
+  rather than stacks on the system tray. `notificationclick` focuses an existing
+  Dora tab on the right origin and navigates it to `/alerts`, falling back to
+  `openWindow` if no tab is open. `install`/`activate` use `skipWaiting` + `claim`
+  so an updated SW takes over without forcing reloads.
+- **`composables/usePushSubscription.ts` (NEW):** the four-state lifecycle the
+  toggle has to express (`unsupported` / `denied` / `unsubscribed` / `subscribed`)
+  with `loading` as the initial state. `subscribe()` requests permission from the
+  user gesture, fetches the VAPID key, subscribes via `pushManager.subscribe`, and
+  POSTs the result to `/alerts/push/subscribe`. `unsubscribe()` tears down server
+  side first then browser side (so a server-side failure doesn't leak a dead
+  browser registration). `refresh()` reconciles state on mount.
+- **`composables/useFeatureFlags.ts`:** new `pushVapidConfigured` computed.
+- **`services/api/alertApiService.ts`:** three new methods —
+  `getPushPublicKeyAsync`, `subscribePushAsync`, `unsubscribePushAsync`.
+- **`pages/settings/PreferencesSettings.vue`:** new **Push notifications** card
+  after the Alerts email digest card. Toggle is disabled when VAPID isn't
+  configured, the browser doesn't support web push, or the SW is loading. State-
+  aware caption surfaces VAPID-unconfigured / unsupported / permission-denied /
+  subscribed cases distinctly; the generic error path renders below in negative
+  text. `onPushToggle` translates the composable's success/failure into the
+  existing `$q.notify` pattern.
+
+**What changed (tests):**
+- **`tests/e2e/dora_api/test_alerts_push.py` (NEW)** — 8 tests covering: subscribe
+  upsert, unsubscribe + idempotency, VAPID-key 404 when unconfigured, fan-out across
+  multiple devices, FYI-tier filtered out, dedup + clear/refire, gone-subscription
+  pruning, no-op when no subscriptions. Pushes captured via the `_send_push` test
+  seam; the gone-subscription test raises `PushGoneError` from a selective stub. An
+  `autouse=True` fixture wipes `PushSubscription` rows + clears
+  `AlertInteraction.last_pushed_at` after each test so the module is independent
+  even within the long shared session.
+- **Full suite: 321 e2e pass** (was 313 → +8 push tests).
+
+**Engineering-standards close-gate** (`docs/01_charter/ENGINEERING_STANDARDS.md`):
+- **R-001 componentisation / reuse:** the push job reuses `GetAlertsHandler` (R-003
+  canonical set), the `AlertInteraction` ledger (paired column with email channel,
+  same cleanup-on-disappear discipline), and the existing PreferencesSettings card
+  shell. The composable is new (no equivalent), the SW is new (separate concern from
+  Workbox). No duplicated push/email logic.
+- **R-002 theme tokens:** no custom styling beyond Quasar utility classes; error
+  copy uses `text-negative`.
+- **R-003 server owns aggregates:** the push job reads `GetAlertsHandler` — same
+  canonical actionable set the hub + email digest read.
+- **R-005 portability:** new migrations are SQLite + Postgres portable (UniqueConstraint
+  + Index both work the same on both engines).
+- **R-006 clean migrations:** plain reversible, no idempotent guards, single Alembic
+  head re-confirmed.
+- **R-007 scope discipline:** intentionally did NOT change Quasar's PWA config or
+  Workbox SW — the push SW is standalone. Did not add per-device UI (a list of
+  "your subscribed devices" with revoke buttons) — out of scope for the chunk,
+  the basic toggle is sufficient and `user_agent` captured in the row gives a
+  future enhancement a head start.
+- **R-008 no dead code:** every new export has a callsite.
+- **R-014 reveal-disable:** the toggle disables on `!pushVapidConfigured ||
+  !pushSupported || pushLoading`; caption explains each. The backend also returns
+  404 from the VAPID-key endpoint when unconfigured, so even a hand-crafted
+  subscribe call can't bypass the gate.
+- **§7.5 distribution posture:** VAPID-gated, degrades gracefully. The push sender
+  has a dry-run mode (same shape as `email_sender.dry_run`); the job short-circuits
+  entirely when unconfigured so the ledger isn't mutated by a no-op pass.
+- **No new ADR / R-rule** — the channel pattern matches C-9.7's exactly (delivery-
+  dedup ADR already covered both channels at the time it was written).
+
+**Spun-off follow-ups (new):**
+- **FU-206** — browser-verify C-9.8 push (VAPID gating disables toggle, subscribe
+  prompts for permission, real notification arrives when an actionable alert fires,
+  unsubscribe stops further pushes, dead-subscription pruning works after manually
+  revoking permission, hourly schedule fires).
+- **FU-207** — document VAPID key generation (`python -m py_vapid --gen
+  --applicationServerKey`) + the three env vars in README/install docs; current
+  guidance is only inline in `push_sender.py`'s module docstring.
+
+**Next per master plan:** Phase C push channel is done. Per the impl plan, **C-9.9
+— Phase D system tier** is the only Phase work left (offline / reconnect / server
+health, separate from inventory alerts — Low/FYI by default). **C-9.10** is
+dashboard-card-only and gated on the dashboard surface landing first. Otherwise the
+**browser-verify backlog** is now substantial: FU-202 C-1b · FU-192 C-5 frontend ·
+FU-183 Alerts Phase A · FU-205 C-9.7 · FU-206 C-9.8 — recommend clearing some
+before piling more on.
+
+---
+
+## 2026-06-17 — C-9.7: Alerts email digest (Phase B) — code-complete
+**Status:** code complete, **313 e2e green** (full suite), vue-tsc clean, eslint clean on
+touched files, single Alembic head `c4f9a8b3e2d6`. **Browser-unverified** (per
+working-style — the SMTP-gated UI + a real SMTP send weren't exercised in a running app
+this session). C-9.7 closes the email channel half of PROPOSAL_ALERTS §3.5; web-push
+(C-9.8) is the next channel.
+
+**Design calls resolved this session:**
+- **Delivery dedup** (PROPOSAL §7 open-1): chose the single-column option — added
+  `AlertInteraction.last_emailed_at` rather than a sibling `AlertDelivery` table. Matches
+  §4.2's "columns are simpler if dedup stays coarse" guidance; we'll pair `last_pushed_at`
+  on the same row when C-9.8 lands.
+- **Weekly cadence day:** new dedicated `User.alerts_email_day` field rather than reusing
+  the deals-email `send_deals_on_day`. Keeps the two channels independent (per-channel
+  cleanliness; the user wanted to be able to pick them separately).
+
+**What changed (backend):**
+- **`User` (entity + table + DTO):** new `alerts_email_enabled` (default False),
+  `alerts_email_cadence` (`off`/`daily`/`weekly`, default `off`), `alerts_email_day`
+  (Mon=0…Sun=6, default 0). `ALERTS_EMAIL_CADENCE_VALUES` constant tuple is the R-010
+  closed-set sentinel, validated at the `update_me.py` boundary.
+  `AuthenticatedUserDto.from_entity` carries the three new fields.
+- **`AlertInteraction`:** new `last_emailed_at: datetime | None`. Set by the digest job
+  when it emails; cleared by the same job on a later run if the alert key has dropped out
+  of the user's actionable set (so a re-fire sends fresh).
+- **Migrations:** `b8e5d2f1c9a3` adds the three User columns; `c4f9a8b3e2d6` adds the
+  AlertInteraction column. Both are plain reversible `batch_alter_table` add/drop pairs
+  (SQLite + Postgres portable, R-005 / R-006). Head is `c4f9a8b3e2d6`.
+- **`features/alerts/send_alerts_digest.py` (NEW):** the job. Iterates opted-in users
+  with a non-empty email, gates per-user cadence (weekly only on the user's picked
+  weekday), calls `GetAlertsHandler().handle(user_id)` (R-003 — same canonical set the
+  hub reads), runs the stale-flag cleanup pass, builds a send-set of actionable items
+  the user hasn't already been emailed about this cycle, renders the new template and
+  calls `email_sender.send_email`. Top-level + per-user `try/except` so one bad row
+  can't sink the whole tick (mirrors `prune_audit_events`). `_send_email` keyword arg is
+  the test seam.
+- **`email_templates/alerts_digest.html` (NEW):** extends `_layout.html`. Actionable +
+  FYI sections with message + detail per row; "Open Alerts" CTA links to
+  `{public_base_url}/alerts`. Plain-text companion is rendered in the job.
+- **`startup.py`:** scheduler now registers `alerts_digest` at 07:00 (well clear of the
+  03:00 audit sweep). Same `is_test_env` guard — the e2e suite drives the job by direct
+  function call.
+- **`health_check.py`:** new `email_smtp_configured` feature flag derived from
+  `DORA_SMTP_USERNAME` (mirrors `email_sender._config().dry_run`). Distinct from the
+  existing `email` (env-driven coarse install flag) and `deals_email` (AppSetting). Used
+  by the frontend toggle for R-014 gating.
+
+**What changed (frontend):**
+- **`models/auth.ts` + `services/api/authApiService.ts`:** added the three alerts-email
+  fields to both `AuthenticatedUser` and `UpdateMeCommand`. (Noticed
+  `household_headcount` is missing from `UpdateMeCommand` — pre-existing; not in scope,
+  logged as FU-204.)
+- **`composables/useFeatureFlags.ts`:** new `emailSmtpConfigured` computed reading the
+  new health flag.
+- **`pages/settings/PreferencesSettings.vue`:** new **Alerts email digest** card after
+  the existing Weekly deals email card. Mirrors the deals-email card's structure
+  exactly (q-card + master q-toggle + conditional q-select for cadence + conditional
+  q-select for weekly day). Master toggle is `:disable`d when SMTP isn't configured;
+  caption explains why. Master toggle sends the cadence alongside the enabled flag on
+  first opt-in so the user starts on `daily` without a second click.
+
+**What changed (tests):**
+- **`tests/e2e/dora_api/test_alerts_digest.py` (NEW)** — 6 tests covering: opt-in send,
+  dedup until clear+refire, cadence=off skip, weekly-only-on-picked-day gating,
+  no-email skip, invalid-cadence rejection. The `_send_email` test seam captures calls
+  rather than touching SMTP; pytest autouse fixture restores the seed user's email +
+  opt-out state after each test so the existing `test_user_router.py` suite doesn't see
+  the mutated email (caught + fixed during the first full-suite run).
+- **Full suite: 313 e2e pass.**
+
+**Engineering-standards close-gate** (`docs/01_charter/ENGINEERING_STANDARDS.md`):
+- **R-001 componentisation / reuse:** re-used `GetAlertsHandler`, `email_sender.send_email`,
+  `render_template`, existing PreferencesSettings card shell + q-select day options.
+  New module: just the job; no UI components.
+- **R-002 theme tokens:** new card uses Quasar utility classes only — no hardcoded colours.
+- **R-003 server owns aggregates:** the digest reads `GetAlertsHandler` — same canonical
+  actionable set the hub serves. No duplicated kind/severity logic in the job.
+- **R-005 portability:** `batch_alter_table` add/drop pairs that apply identically on
+  SQLite + Postgres. Job uses the repository abstraction, no engine-specific SQL.
+- **R-006 clean migrations:** plain reversible, no idempotent guards, single Alembic
+  head re-confirmed.
+- **R-007 scope discipline:** noticed `household_headcount` missing from
+  `UpdateMeCommand` but did **not** fix inline — FU-204. Did not touch the audit-test
+  pollution pattern globally; fixture-restore is local to the new file.
+- **R-008 no dead code:** every new export has a callsite.
+- **R-010 closed-set sentinels:** `ALERTS_EMAIL_CADENCE_VALUES` validated at the single
+  `update_me.py` boundary, matching the `NUTRITION_MODE_VALUES` pattern.
+- **R-014 reveal-disable:** frontend toggle `:disable`d when
+  `features.email_smtp_configured` is false; caption tells the user why. Backend still
+  accepts opt-in prefs regardless so configuring SMTP later doesn't require re-toggling.
+- **§7.5 distribution posture:** SMTP-gated, degrades gracefully (`email_sender`
+  already runs in dry-run when `DORA_SMTP_USERNAME` is unset; the job still updates the
+  ledger so it doesn't queue up a backlog). No new engine assumptions.
+- **No new ADR / R-rule** — every pattern reuses an existing one.
+
+**Spun-off follow-ups (new):**
+- **FU-205** — browser-verify C-9.7 (Preferences card visible + SMTP-gating disables
+  when unconfigured + cadence persists across reload + a real SMTP send arrives + the
+  schedule fires at 07:00).
+- **FU-204** — `UpdateMeCommand` missing `household_headcount` (pre-existing C-5.4
+  residue; surfaced by this work).
+
+**Next per master plan:** Phase B's email channel is done. Next is **C-9.8 — Phase C web
+push (PWA)** (service worker + VAPID + `PushSubscription` table). High-risk per the impl
+plan. Alternative: **browser-verify the unverified backlog** (FU-202 C-1b · FU-192 C-5
+frontend · FU-183 Alerts Phase A · FU-205 this chunk) before piling more on.
+
+---
+
 ## ⏭️ NEXT SESSION — START HERE (handoff snapshot, 2026-06-15)
 
 > Verbatim pickup note. The 2026-06-15 session was a **design sprint** — four big-rock surfaces

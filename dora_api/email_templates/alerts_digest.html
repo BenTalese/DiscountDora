@@ -1,0 +1,48 @@
+{% extends "_layout.html" %}
+{% block content %}
+  <p>Hi {{ username }},</p>
+  <p>
+    Here's what needs your attention right now
+    {%- if cadence == 'daily' %} (your daily digest){% else %} (your weekly digest){% endif -%}:
+  </p>
+
+  {% if actionable %}
+    <h2 style="font-size:15px;margin:18px 0 6px;color:#333;">
+      Needs action ({{ actionable|length }})
+    </h2>
+    <ul style="padding-left:18px;margin:0 0 12px;line-height:1.55;">
+      {% for alert in actionable %}
+        <li>
+          <strong>{{ alert.message }}</strong>
+          {% if alert.detail %}<br /><span style="color:#666;font-size:13px;">{{ alert.detail }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if fyi %}
+    <h2 style="font-size:15px;margin:18px 0 6px;color:#666;">
+      Heads-up ({{ fyi|length }})
+    </h2>
+    <ul style="padding-left:18px;margin:0 0 12px;line-height:1.55;color:#555;">
+      {% for alert in fyi %}
+        <li>
+          {{ alert.message }}
+          {% if alert.detail %}<br /><span style="color:#888;font-size:13px;">{{ alert.detail }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <p style="text-align:center;margin:24px 0;">
+    <a href="{{ alerts_url }}"
+       style="display:inline-block;background:#f5c462;color:#222;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600;">
+      Open Alerts
+    </a>
+  </p>
+
+  <p style="color:#666;font-size:13px;">
+    You're getting this because you opted into the alerts email digest.
+    Manage your channels in Settings → Preferences.
+  </p>
+{% endblock %}

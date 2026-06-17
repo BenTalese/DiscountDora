@@ -62,6 +62,24 @@ def _feature_flags() -> dict[str, bool]:
         "multi_user": True,     # register + admin role
         "email": os.environ.get("DORA_EMAIL_ENABLED", "false").lower()
                  in {"1", "true", "yes", "on"},
+        # C-9.7 — derived from `DORA_SMTP_USERNAME` (same check
+        # `email_sender._config()` uses for dry-run mode). The SPA reads
+        # this to disable channel toggles (R-014 — shown-disabled until
+        # the channel is wired); it's distinct from `email` (a coarse
+        # install-feature flag) and `deals_email` (the install-wide
+        # deals-email feature). True ⇒ transactional sends actually
+        # leave the box.
+        "email_smtp_configured": bool(
+            os.environ.get("DORA_SMTP_USERNAME", "").strip()
+        ),
+        # C-9.8 — same shape for the web-push channel: True when both
+        # VAPID halves (public + private) are set. The SPA reads this
+        # to disable the Push toggle in Preferences (R-014); the push
+        # sender itself drops to dry-run when either is missing.
+        "push_vapid_configured": bool(
+            os.environ.get("DORA_VAPID_PUBLIC_KEY", "").strip()
+            and os.environ.get("DORA_VAPID_PRIVATE_KEY", "").strip()
+        ),
         "assistant": False,     # resolved below
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         # Each pairs with a per-user opt-in (where one exists) — install

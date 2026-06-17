@@ -38,6 +38,7 @@ from dora_api.domain.entities.dora_suggestion_suppression import \
     DoraSuggestionSuppression
 from dora_api.domain.entities.alert_interaction import AlertInteraction
 from dora_api.domain.entities.alert_preference import AlertPreference
+from dora_api.domain.entities.push_subscription import PushSubscription
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
@@ -321,6 +322,27 @@ def configure_mappings(db: SQLAlchemy):
         Column("read_at", DateTime(timezone=True), nullable=True),
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
         Column("dismissed_at", DateTime(timezone=True), nullable=True),
+        # C-9.7 — email-digest delivery dedup (PROPOSAL_ALERTS §4.2).
+        Column("last_emailed_at", DateTime(timezone=True), nullable=True),
+        # C-9.8 — web-push delivery dedup; sibling to last_emailed_at.
+        Column("last_pushed_at", DateTime(timezone=True), nullable=True),
+    )
+
+    # C-9.8 — one row per browser+device push registration (PROPOSAL_
+    # ALERTS §3.5 / §4.4). `endpoint` is unique — the same browser
+    # re-subscribing produces the same endpoint, so the API does an
+    # upsert keyed on it. Capped string length covers the longest
+    # endpoints in the wild (Mozilla / FCM / Apple are all <500 chars).
+    push_subscription_table = Table(
+        "PushSubscription", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("user_id", UUIDType, nullable=False),
+        Column("endpoint", String(500), nullable=False, unique=True),
+        Column("p256dh", String(255), nullable=False),
+        Column("auth", String(64), nullable=False),
+        Column("user_agent", String(255), nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("last_seen_at", DateTime(timezone=True), nullable=True),
     )
 
     # C-9.2 — per-user, per-kind alert preference (enable/disable + tier
@@ -602,6 +624,12 @@ def configure_mappings(db: SQLAlchemy):
         Column("show_stock_images", Boolean, nullable=False, server_default="1"),
         # Onboarding C-5.4 — household cooking headcount (NULL = not set).
         Column("household_headcount", Integer, nullable=True),
+        # C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
+        # Off by default; cadence values 'off' | 'daily' | 'weekly'; day is
+        # the weekly send day Mon=0…Sun=6 (ignored on the daily cadence).
+        Column("alerts_email_enabled", Boolean, nullable=False, server_default="0"),
+        Column("alerts_email_cadence", String(16), nullable=False, server_default="off"),
+        Column("alerts_email_day", Integer, nullable=False, server_default="0"),
     )
 
     auth_token_table = Table(
@@ -722,6 +750,11 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(AlertPreference, alert_preference_table, properties={
         "_id_col": alert_preference_table.c.id,
         "id": alert_preference_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(PushSubscription, push_subscription_table, properties={
+        "_id_col": push_subscription_table.c.id,
+        "id": push_subscription_table.c.id,
     })
 
     _mapper_registry.map_imperatively(ProductBarcode, product_barcode_table, properties={

@@ -62,4 +62,22 @@ export default class AlertApiService {
     // events (expiries / planned shopping / meal-plan days) over the next N days.
     getUpcomingAsync = async (days = 14): Promise<Upcoming> =>
         await this.httpClient.get<Upcoming>(`/alerts/upcoming?days=${days}`);
+
+    // ── Web Push (C-9.8) ───────────────────────────────────────────────
+    // VAPID public key (404 when the install isn't configured — the
+    // composable treats that as "channel disabled" and renders the
+    // toggle accordingly, matching the SMTP-gated alerts-email card).
+    getPushPublicKeyAsync = async (): Promise<{ public_key: string }> =>
+        await this.httpClient.get<{ public_key: string }>('/alerts/push/vapid-public-key');
+
+    subscribePushAsync = async (
+        body: { endpoint: string; keys: { p256dh: string; auth: string }; user_agent: string | null },
+    ): Promise<void> =>
+        await this.httpClient.post<void, typeof body>('/alerts/push/subscribe', body);
+
+    unsubscribePushAsync = async (endpoint: string): Promise<void> =>
+        await this.httpClient.post<void, { endpoint: string }>(
+            '/alerts/push/unsubscribe',
+            { endpoint },
+        );
 }

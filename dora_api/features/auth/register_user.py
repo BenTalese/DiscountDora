@@ -80,6 +80,12 @@ class AuthenticatedUserDto:
     show_stock_images: bool
     # Onboarding C-5.4 — household cooking headcount; None = not set.
     household_headcount: int | None
+    # C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5).
+    # `alerts_email_cadence` is 'off' | 'daily' | 'weekly'; `alerts_email_
+    # day` is the weekly send day (Mon=0 … Sun=6, ignored on daily).
+    alerts_email_enabled: bool
+    alerts_email_cadence: str
+    alerts_email_day: int
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -117,6 +123,9 @@ class AuthenticatedUserDto:
                 int(user.household_headcount)
                 if user.household_headcount is not None else None
             ),
+            alerts_email_enabled=bool(user.alerts_email_enabled),
+            alerts_email_cadence=user.alerts_email_cadence,
+            alerts_email_day=int(user.alerts_email_day),
         )
 
 

@@ -31,6 +31,20 @@ class AlertInteraction(BaseEntity):
     read_at: datetime | None = None
     snoozed_until: datetime | None = None
     dismissed_at: datetime | None = None
+    # C-9.7 — delivery dedup for the email channel (PROPOSAL_ALERTS §4.2
+    # decision: single column on this ledger, not a sibling AlertDelivery
+    # table — dedup stays coarse, one channel today, push will pair with
+    # `last_pushed_at` when C-9.8 lands). Set when the digest job emails
+    # an alert; cleared by the same job on the next run if the underlying
+    # alert key has dropped out of the user's actionable set (so the same
+    # condition re-firing later sends a fresh email).
+    last_emailed_at: datetime | None = None
+    # C-9.8 — same shape for the web-push channel. Paired with
+    # `last_emailed_at` per the C-9.7 ADR (one row per (user, key); per-
+    # channel timestamp columns rather than a sibling AlertDelivery
+    # table). Independent cleanup pass — emailed and pushed flags clear
+    # independently as the corresponding job runs.
+    last_pushed_at: datetime | None = None
 
     class Fields(BaseEntity.Fields):
         USER_ID = "user_id"
@@ -39,3 +53,5 @@ class AlertInteraction(BaseEntity):
         READ_AT = "read_at"
         SNOOZED_UNTIL = "snoozed_until"
         DISMISSED_AT = "dismissed_at"
+        LAST_EMAILED_AT = "last_emailed_at"
+        LAST_PUSHED_AT = "last_pushed_at"

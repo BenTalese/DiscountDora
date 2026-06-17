@@ -44,6 +44,9 @@ export type UpdateLineCommand = {
     /** P2-02 — merchant the shopper actually bought from. */
     purchased_merchant_id?: string | null;
     clear_purchased_merchant?: boolean;
+    /** FU-215 — optional PreferredBuy hint on the line. */
+    preferred_buy_id?: string | null;
+    clear_preferred_buy?: boolean;
 };
 
 export type CopyShoppingListCommand = {

@@ -89,6 +89,11 @@ class ShoppingListLine(BaseEntity):
     # for totals and for the assistant's price-history queries.
     actual_unit_price: float | None = None
     purchased_merchant_id: UUID | None = None
+    # FU-215 — optional shopping hint: one of the stock item's PreferredBuy
+    # labels (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Reference-only — no DB FK
+    # constraint (see the table mapping / migration re: FU-178); a deleted
+    # PreferredBuy just leaves a dangling id the SPA ignores.
+    preferred_buy_id: UUID | None = None
 
     class Fields(BaseEntity.Fields):
         SHOPPING_LIST_ID = "shopping_list_id"
@@ -104,6 +109,7 @@ class ShoppingListLine(BaseEntity):
         LIST_PRICE_AT_PICK = "list_price_at_pick"
         ACTUAL_UNIT_PRICE = "actual_unit_price"
         PURCHASED_MERCHANT_ID = "purchased_merchant_id"
+        PREFERRED_BUY_ID = "preferred_buy_id"
 
 
 def format_list_date(value: date, today: date | None = None) -> str:

@@ -1,5 +1,15 @@
 # Implementation Plan — Onboarding Redesign (C-5 impl)
 
+> **⚠️ UPDATE (2026-06-17) — personas + `products_enabled` removed; see
+> `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5.** C-5.3's **persona fork is cut** and the
+> `products_enabled` flag it set is **dropped** (products are now gated on data-presence, not a
+> flag). Any persona-driven step here is superseded: onboarding is **one un-personalized "show
+> everything" path** with **no product framing and no stock-vs-product explainer**. The
+> structural chunks (C-5.1/.2/.4/.5/.6 minus persona previews/tailoring) stand;
+> **money/budgeting is a Settings toggle only**, not an onboarding fork. New build tracked as
+> FU-210. Note: the C-5.3 fork and the `products_enabled` flag have **already shipped** in code,
+> so this is a *removal* job, not just a plan edit.
+
 **Status:** Plan for review · **Date:** 2026-06-15 · **No code yet** — phased plan +
 reviewable chunks.
 **Source proposal:** `PROPOSAL_ONBOARDING.md` (co-designed 2026-06-15; decisions resolved §4).

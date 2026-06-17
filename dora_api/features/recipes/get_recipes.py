@@ -13,7 +13,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.recipe_tags import RECIPE_TAG_DISCLAIMER
 from dora_api.domain.recipe_cookability import (missing_count_for,
                                                  missing_stock_item_names_for)
-from dora_api.domain.stock_status import is_low_stock, is_missing
+from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
+from dora_api.domain.stock_status import (get_stock_item_unit_cost_at, is_low_stock,
+                                          is_missing)
 from dora_api.features.recipes.recipe_tag_access import (
     find_recipe_ids_with_all_tags, find_recipe_ids_with_any_tags,
     get_tag_ids_for_recipes,
@@ -446,9 +448,10 @@ class GetRecipesHandler:
         """C-4 Chunk 9 / DEC-5 — server-side cost estimate. For each
         ingredient that has a linked product carrying a current offer,
         sum `quantity * (offer.price_now / product.size_value)` to get
-        an estimate. Ingredients without a linked-product offer aren't
-        priced; the caller surfaces "based on N of M" so the user reads
-        the number as an estimate, not a quote.
+        an estimate. Ingredients without a linked-product offer fall back to
+        the stock item's price observations (FU-216 — the everyday substrate);
+        those with neither aren't priced. The caller surfaces "based on N of M"
+        so the user reads the number as an estimate, not a quote.
 
         Stays server-side (DEC-5 / R-003 — domain math owned by the
         server, never duplicated on the client). Only the detail path
@@ -499,14 +502,35 @@ class GetRecipesHandler:
             if prev is None or unit_price < prev[0]:
                 price_by_stock_item[_key(sid)] = (unit_price, float(size_value or 0) or None)
 
+        # FU-216 — observation fallback: for ingredients whose stock item has
+        # no linked-product price, use the everyday price substrate's unit cost
+        # (PROPOSAL §3.2). Derived via the server helper (R-003).
+        obs_cost_by_item: dict[str, float] = {}
+        _ObsByItem: dict[str, list] = {}
+        for _Obs in self.repository.get(StockItemPriceObservation).all(
+            EntityField(StockItemPriceObservation, "stock_item_id").in_(
+                [i.stock_item_id for i in dto.ingredients]
+            )
+        ):
+            _ObsByItem.setdefault(_key(_Obs.stock_item_id), []).append(_Obs)
+        for _SidKey, _ObsList in _ObsByItem.items():
+            _Cost = get_stock_item_unit_cost_at(_ObsList)
+            if _Cost is not None:
+                obs_cost_by_item[_SidKey] = _Cost
+
         total = 0.0
         priced = 0
         for ing in dto.ingredients:
             sid = str(ing.stock_item_id)
             entry = price_by_stock_item.get(sid)
-            if entry is None:
-                continue
-            unit_price, _size = entry
+            if entry is not None:
+                unit_price = entry[0]
+            else:
+                # FU-216 — fall back to the stock item's price observations
+                # when no linked-product offer prices this ingredient.
+                unit_price = obs_cost_by_item.get(sid)
+                if unit_price is None:
+                    continue
             qty = float(ing.quantity) if ing.quantity is not None else 1.0
             # Ingredient unit vs product unit reconciliation is hand-wavy
             # — pass-through math is the documented rough heuristic from

@@ -47,6 +47,25 @@ export type ListAddEvent = {
     shopping_list_name: string;
 };
 
+// FU-211 — free-text "what I actually buy" reminders on a stock item
+// (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Everyday-user construct, separate from
+// the Product overlay; always present, never gated.
+export type PreferredBuy = {
+    preferred_buy_id: string;
+    label: string;
+    position: number;
+};
+
+// FU-213 — everyday "what this cost me" price points. Money-gated at the UI.
+export type PriceObservation = {
+    observation_id: string;
+    price: number;
+    qty: number;
+    unit: string;
+    observed_at: string; // ISO datetime
+    source: string;
+};
+
 import type { AttentionReasons } from 'src/models/location';
 
 export type StockItemDetail = {
@@ -86,6 +105,13 @@ export type StockItemDetail = {
      *  status), newest first, capped on the server. The History tab
      *  humanises `added_via` ("auto: low stock" / "auto: recipe" / …). */
     recent_list_adds?: ListAddEvent[];
+    /** FU-211 — free-text "what I buy" reminders, ordered by position.
+     *  Always present (not gated by products/money). */
+    preferred_buys?: PreferredBuy[];
+    /** FU-213 — price observations (newest first) + the server-derived
+     *  per-unit cost. Money-gated at the UI. */
+    price_observations?: PriceObservation[];
+    unit_cost?: number | null;
     /** X1 — last "still correct" check; surfaced in the lifecycle
      *  timeline as a synthetic Checked entry when it differs from the
      *  most recent level change. Null = never checked. */

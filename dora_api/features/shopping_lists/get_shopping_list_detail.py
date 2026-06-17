@@ -15,6 +15,7 @@ from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
+from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
@@ -35,6 +36,13 @@ class LineProductOfferDto:
     price_now: float | None
     price_was: float | None
     is_selected: bool
+
+
+# FU-215 — a stock item's PreferredBuy label as a pickable shopping hint.
+@dataclass(frozen=True, slots=True)
+class LinePreferredBuyDto:
+    preferred_buy_id: UUID
+    label: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +73,9 @@ class ShoppingListLineDto:
     purchased_merchant_id: UUID | None
     purchased_merchant_name: str | None
     offers: List[LineProductOfferDto] = field(default_factory=list)
+    # FU-215 — the chosen hint + the item's available labels for the picker.
+    preferred_buy_id: UUID | None = None
+    preferred_buys: List[LinePreferredBuyDto] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +204,15 @@ class GetShoppingListDetailHandler:
             )
             _StockItems = {s.id: s for s in _Loaded}
 
+        # FU-215 — bulk-load PreferredBuy labels for the lines' stock items so
+        # each line can offer them as a hint picker without N round-trips.
+        _PreferredBuysByItem: dict[UUID, List[PreferredBuy]] = {}
+        if _StockItemIds:
+            for pb in self.repository.get(PreferredBuy).all(
+                EntityField(PreferredBuy, "stock_item_id").in_(_StockItemIds)
+            ):
+                _PreferredBuysByItem.setdefault(pb.stock_item_id, []).append(pb)
+
         # C-7 Chunk 3 — bulk-load product names for product-only lines
         # so the DTO can fall back to the product name when there's
         # no anchor stock item to ask. Keep it minimal — just name +
@@ -298,6 +318,14 @@ class GetShoppingListDetailHandler:
                     if line.purchased_merchant_id else None
                 ),
                 offers = offers,
+                preferred_buy_id = line.preferred_buy_id,
+                preferred_buys = sorted(
+                    (
+                        LinePreferredBuyDto(preferred_buy_id = pb.id, label = pb.label)
+                        for pb in _PreferredBuysByItem.get(line.stock_item_id, [])
+                    ),
+                    key=lambda d: d.label.lower(),
+                ),
             ))
 
         return ShoppingListDetailDto(

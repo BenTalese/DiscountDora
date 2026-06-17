@@ -54,7 +54,9 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
-from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
+from dora_api.domain.stock_status import (StockStatus, get_stock_item_unit_cost_at,
+                                          level_for_status)
 from dora_api.features.routers import REPORTS_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok
 from dora_api.infrastructure.utils import get_container
@@ -113,8 +115,9 @@ class StockValueOverTimeHandler:
     Level rank uses StockLevelChange history; price uses ProductOffer +
     ProductHistoricOffer combined and filtered to "most recent ≤ bucket"
     per linked product, then the minimum across the item's linked products.
-    Items with no linked products, or whose linked products have no pricing
-    history ≤ bucket, contribute zero.
+    Items with no linked-product price as-of a bucket fall back to the item's
+    own price observations (FU-216 — the everyday substrate); items with
+    neither a priced linked product nor an observation contribute zero.
 
     Cost: O(buckets × items × linked-products-per-item) in Python after one
     bulk load of changes and offers, which is fine for the pantry sizes this
@@ -182,6 +185,16 @@ class StockValueOverTimeHandler:
             for pid in prices_by_product:
                 prices_by_product[pid].sort(key=lambda r: r[0])
 
+        # FU-216 — price observations per item, for the fallback when an item
+        # has no linked-product price as-of a bucket (PROPOSAL §3.2).
+        observations_by_item: Dict[UUID, list] = {}
+        _ItemIds = [i.id for i in items]
+        if _ItemIds:
+            for _Obs in self.repository.get(StockItemPriceObservation).all(
+                EntityField(StockItemPriceObservation, "stock_item_id").in_(_ItemIds)
+            ):
+                observations_by_item.setdefault(_Obs.stock_item_id, []).append(_Obs)
+
         # Bucket boundaries.
         now = datetime.now(timezone.utc)
         bucket_days = _bucket_size_days(since)
@@ -210,9 +223,14 @@ class StockValueOverTimeHandler:
                 if rank <= 0:
                     continue
                 linked = product_ids_by_item.get(item.id) or []
-                if not linked:
-                    continue
-                price = _cheapest_as_of(linked, cursor, prices_by_product)
+                price = _cheapest_as_of(linked, cursor, prices_by_product) if linked else None
+                if price is None:
+                    # FU-216 — fall back to the item's own price observations
+                    # (everyday substrate; PROPOSAL_PRODUCTS_AS_OVERLAY §3.2)
+                    # when there's no linked-product price as-of this bucket.
+                    price = get_stock_item_unit_cost_at(
+                        observations_by_item.get(item.id, []), when=cursor,
+                    )
                 if price is None:
                     continue
                 total += rank * price

@@ -101,6 +101,9 @@ extractions in `04_proposals/PROPOSAL_CART_BUTTON.md §9`.)
 | `04_proposals/PROPOSAL_CART_BUTTON.md` | C-7 |
 | `04_proposals/PROPOSAL_ALERTS.md` | C-9 |
 | `04_proposals/PROPOSAL_INGESTION_API.md` | C-10 |
+| `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` | Products as a data-presence overlay; Stock Item as the universal first-class entity (supersedes the spine of Simple Mode; retires the onboarding persona fork) |
+| `04_proposals/IMPL_PLAN_PRODUCTS_AS_OVERLAY.md` | Execution order for the products-as-overlay pivot (Stages 0–4; FU-208..214 + 186/189/190) |
+| `04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md` | **⭐ MASTER RUNBOOK** — drive the whole products-as-overlay effort end-to-end from here: agreed order + live status + per-phase steps/acceptance/verify (companion → ingestion → decommission → rename → finish). |
 | `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` | C-cross (config / opt-ins / taxonomy settings) |
 | `04_proposals/PROPOSAL_LOCALE_I18N.md` | C-locale (international readiness; currency/format + de-AU) |
 | `04_proposals/PROPOSAL_HELP_OVERLAY.md` | C-help (opt-in contextual help overlay) |

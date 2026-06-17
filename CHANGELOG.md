@@ -5,7 +5,47 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Stock value & recipe cost now also use the prices you've logged (FU-216).** If a pantry item has
+  no linked product but you've logged what it cost (the FU-213 Prices section), that price now feeds
+  the stock-value report and recipe cost estimates — so the numbers reflect your own price memory,
+  not only linked-product offers.
+- **Onboarding is now one simple "show everything" path — no setup personas (FU-210).** First-run
+  no longer asks you to pick "Cooking / Spend tracking / Everything" (or Customise) up front.
+  Everyone gets the same intro, starter packs, household headcount and finish — and you turn
+  individual features (like spend tracking) on in **Settings** whenever you want. (The hero-loop
+  preview illustrating how Dora shapes for different needs stays for now.)
+- **Products now appear automatically when you have product data — there's no on/off switch
+  (products-as-overlay groundwork, FU-209).** The admin "Products & prices" toggle is gone; the
+  product surfaces (My Products, Price History, the stock-item Products tab, the cart's product
+  behaviour, best-deals) show whenever product data exists in the install and stay hidden
+  otherwise. Onboarding no longer shows the "stock items vs products" explainer, and the setup
+  personas no longer toggle products. (Backend: `AppSetting.products_enabled` dropped — migration
+  `f1a2b3c4d5e6`; `GET /api/health` `features.products` is now derived from whether any `Product`
+  exists. First step of the change designed in
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md`.)
+
+### Fixed
+- **Linking a product to a stock item from My Products now works (FU-208).** The "Link…" dialog
+  previously dropped you on the stock item with nothing actually linked; it now links the product
+  in place and refreshes.
+
 ### Added
+- **Log what things cost you, on the stock item (FU-213).** With spend tracking on, each stock item
+  has a **Prices** section: log the **total you paid** + how much you got (qty + unit) and Dora works
+  out the **per-unit cost** for you — no dividing. It's your own price memory (no merchant or product
+  needed), shown only when spend tracking is enabled. New `StockItemPriceObservation` table
+  (migration `b3d5f7a9c2e4`) + `/api/stock-items/{id}/price-observations`.
+- **Use your "preferred buys" as shopping-list hints (FU-215).** On a shopping list, a line for a
+  stock item that has preferred buys now offers a **hint picker** — tap to mark which one to grab
+  (e.g. "Vitasoy Oat Milky 1L"); it's just a reminder, no price/product attached. New
+  `ShoppingListLine.preferred_buy_id` (migration `c4e6a8b1d3f5`).
+- **Remember what you actually buy — "Preferred buys" on a stock item (FU-211).** Each stock item
+  now has a **Preferred buys** list: type the things you actually buy for it (e.g. "Vitasoy Oat
+  Milky 1L") as free-text reminders — add, rename, reorder and remove them. It's a personal memory
+  aid, not a product/price, and it's always available (no feature flag). New `PreferredBuy` table
+  (migration `a2c4e6f8b1d3`) + endpoints under `/api/stock-items/{id}/preferred-buys`. Surfaced as
+  shopping-list hints via FU-215.
 - **Push notifications on this device (Alerts C-9.8 — Phase C).** Settings → Preferences
   has a new **Push notifications** card: turn it on and Dora delivers a system
   notification the moment a new **actionable** alert fires (FYI nudges stay in the hub +

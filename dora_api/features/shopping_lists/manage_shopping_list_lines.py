@@ -199,6 +199,9 @@ class UpdateLineRequest(BaseModel):
     clear_actual_unit_price: bool = False
     purchased_merchant_id: UUID | None = None
     clear_purchased_merchant: bool = False
+    # FU-215 — optional PreferredBuy hint on the line (clear-vs-unset flag).
+    preferred_buy_id: UUID | None = None
+    clear_preferred_buy: bool = False
 
 
 @dataclass(slots=True)
@@ -280,6 +283,12 @@ class UpdateLineHandler:
             line.purchased_merchant_id = None
         elif "purchased_merchant_id" in set_fields and request.purchased_merchant_id is not None:
             line.purchased_merchant_id = request.purchased_merchant_id
+
+        # FU-215 — preferred-buy hint (a reminder; doesn't flip provenance).
+        if request.clear_preferred_buy:
+            line.preferred_buy_id = None
+        elif "preferred_buy_id" in set_fields and request.preferred_buy_id is not None:
+            line.preferred_buy_id = request.preferred_buy_id
 
         if user_edited and line.added_via != ADDED_VIA_MANUAL:
             line.added_via = ADDED_VIA_MANUAL

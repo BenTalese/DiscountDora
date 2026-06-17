@@ -965,9 +965,10 @@
     }
 
     // ── Link-to-stock-item dialog ───────────────────────────────────
-    // We don't have a "link" endpoint exposed yet, so this is wired up to
-    // delegate to the stock item page where linking happens today. Future
-    // backend work can let this dialog do the link inline.
+    // FU-208: links the product in place via the stock-item m2m endpoint
+    // (`POST /stock-items/{id}/products`). Previously this bounced to the
+    // detail page with a `link_product_id` query hint that nothing consumed
+    // (the picker was removed in C-1b.3) — a silent dead-end.
     const linkOpen = ref(false);
     const linkTarget = ref<Product | null>(null);
     const linkChoiceStockItemId = ref<string | null>(null);
@@ -995,19 +996,28 @@
         linkOpen.value = true;
     }
 
-    function confirmLink() {
+    async function confirmLink() {
         if (!linkTarget.value || !linkChoiceStockItemId.value) return;
         linkBusy.value = true;
         try {
-            // Linking happens on the stock-item side (it owns the m2m
-            // collection). We bounce the user there with a query hint;
-            // the stock item detail page already has the product picker.
-            const stockItemId = linkChoiceStockItemId.value;
-            const productId = linkTarget.value.product_id;
+            // The stock item owns the product m2m — link directly there.
+            await stockItemApi.linkProductAsync(
+                linkChoiceStockItemId.value,
+                linkTarget.value.product_id,
+            );
             linkOpen.value = false;
-            void router.push({
-                path: `/stock/${stockItemId}`,
-                query: { link_product_id: productId, section: 'products' },
+            await loadAll();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Product linked.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not link the product.',
+                caption: describeApiError(err) || '',
             });
         } finally {
             linkBusy.value = false;

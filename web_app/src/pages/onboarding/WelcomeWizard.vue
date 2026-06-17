@@ -166,150 +166,6 @@
                 </q-card-section>
             </q-card>
 
-            <!-- ── Step: Persona fork (first user only) ───────────────── -->
-            <q-card
-                v-show="currentStep?.id === 'persona'"
-                flat
-                bordered
-                class="q-mb-md"
-            >
-                <q-card-section>
-                    <div class="text-h6 q-mb-sm">What do you want Dora to do for you?</div>
-                    <div class="text-body2 dora-text-secondary q-mb-md">
-                        Pick a starting point — you can change any of this later in Settings.
-                    </div>
-                    <div class="row q-col-gutter-md">
-                        <div
-                            v-for="preset in PERSONA_PRESETS"
-                            :key="preset.key"
-                            class="col-12 col-sm-6"
-                        >
-                            <q-card
-                                flat
-                                bordered
-                                class="persona-card"
-                                :class="{ 'persona-card--picked': personaChoice === preset.key }"
-                                @click="selectPersona(preset.key)"
-                            >
-                                <q-card-section>
-                                    <div class="row items-center no-wrap">
-                                        <div class="col text-subtitle1">{{ preset.label }}</div>
-                                        <q-icon
-                                            v-if="personaChoice === preset.key"
-                                            :name="ICONS.check_circle"
-                                            color="primary"
-                                            size="20px"
-                                        />
-                                    </div>
-                                    <div class="text-caption dora-text-muted q-mt-xs">
-                                        {{ preset.promise }}
-                                    </div>
-                                </q-card-section>
-                            </q-card>
-                        </div>
-                        <div class="col-12 col-sm-6">
-                            <q-card
-                                flat
-                                bordered
-                                class="persona-card"
-                                :class="{ 'persona-card--picked': personaChoice === 'custom' }"
-                                @click="selectPersona('custom')"
-                            >
-                                <q-card-section>
-                                    <div class="row items-center no-wrap">
-                                        <div class="col text-subtitle1">Customise</div>
-                                        <q-icon
-                                            v-if="personaChoice === 'custom'"
-                                            :name="ICONS.check_circle"
-                                            color="primary"
-                                            size="20px"
-                                        />
-                                    </div>
-                                    <div class="text-caption dora-text-muted q-mt-xs">
-                                        Turn individual features on or off yourself.
-                                    </div>
-                                </q-card-section>
-                            </q-card>
-                        </div>
-                    </div>
-
-                    <q-list
-                        v-if="personaChoice === 'custom'"
-                        bordered
-                        class="rounded-borders q-mt-md"
-                    >
-                        <q-item
-                            v-for="meta in INSTALL_FLAG_META"
-                            :key="meta.key"
-                            tag="label"
-                        >
-                            <q-item-section>
-                                <q-item-label>{{ meta.label }}</q-item-label>
-                                <q-item-label caption>{{ meta.blurb }}</q-item-label>
-                            </q-item-section>
-                            <q-item-section side>
-                                <q-toggle v-model="customFlags[meta.key]" />
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
-            </q-card>
-
-            <!-- ── Step: Stock-item vs product explainer (products on) ── -->
-            <q-card
-                v-show="currentStep?.id === 'explainer'"
-                flat
-                bordered
-                class="q-mb-md"
-            >
-                <q-card-section>
-                    <div class="text-h6 q-mb-sm">Stock items vs products</div>
-                    <div class="text-body2 dora-text-secondary q-mb-md">
-                        One quick distinction makes the rest click:
-                    </div>
-                    <div class="row q-col-gutter-md">
-                        <div class="col-12 col-sm-6">
-                            <q-card flat bordered class="full-height">
-                                <q-card-section>
-                                    <q-icon :name="ICONS.inventory_2" color="primary" size="28px" />
-                                    <div class="text-subtitle1 q-mt-sm">“Milk” is a stock item</div>
-                                    <div class="text-caption dora-text-muted q-mt-xs">
-                                        A thing you keep on hand — what you track levels
-                                        and expiry for.
-                                    </div>
-                                </q-card-section>
-                            </q-card>
-                        </div>
-                        <div class="col-12 col-sm-6">
-                            <q-card flat bordered class="full-height">
-                                <q-card-section>
-                                    <q-icon :name="ICONS.local_offer" color="primary" size="28px" />
-                                    <div class="text-subtitle1 q-mt-sm">
-                                        “Vitasoy Oat Milky 1L @ Coles” is a product
-                                    </div>
-                                    <div class="text-caption dora-text-muted q-mt-xs">
-                                        A specific thing you can buy — linked to a stock
-                                        item, with its own price.
-                                    </div>
-                                </q-card-section>
-                            </q-card>
-                        </div>
-                    </div>
-                    <div class="explainer-tip q-mt-md row items-center no-wrap">
-                        <q-icon
-                            :name="ICONS.lightbulb"
-                            color="primary"
-                            size="22px"
-                            class="q-mr-sm"
-                        />
-                        <div class="text-body2">
-                            Don’t name your stock items after brands — that’s what
-                            products are for.
-                        </div>
-                    </div>
-                </q-card-section>
-            </q-card>
-
             <!-- ── Step 3: Seed catalogues ──────────────────────────── -->
             <div
                 v-show="currentStep?.id === 'seed'"
@@ -637,16 +493,11 @@
         StarterPackItem,
     } from 'src/models/onboarding';
     import {
-        DEFAULT_CUSTOM_FLAGS,
         DEFAULT_PERSONA_PREVIEW,
-        INSTALL_FLAG_META,
-        type InstallFlags,
         NARRATIVE_SCENES,
-        PERSONA_PRESETS,
         type PersonaPreviewKey,
     } from 'src/pages/onboarding/onboardingContent';
     import type { StockGroup } from 'src/models/stockGroup';
-    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
@@ -658,7 +509,6 @@
     const $q = useQuasar();
     const router = useRouter();
     const onboardingApi = new OnboardingApiService();
-    const appSettingsApi = new AppSettingsApiService();
     const stockGroupApi = new StockGroupApiService();
     const authStore = useAuthStore();
     const stockLocationStore = useStockLocationStore();
@@ -696,10 +546,9 @@
     ];
     // ── Wizard step state ────────────────────────────────────────────
     type StepId =
-        | 'welcome' | 'admin' | 'persona' | 'explainer'
+        | 'welcome' | 'admin' | 'persona'
         | 'seed' | 'first_item' | 'finish';
     type Step = { id: StepId; title: string };
-    type PersonaChoice = PersonaPreviewKey | 'custom';
 
     const state = ref<OnboardingState | null>(null);
     const loadError = ref<string | null>(null);
@@ -715,32 +564,14 @@
     // pre-fill from whatever the user last previewed in the hero loop.
     const personaPreview = ref<PersonaPreviewKey>(DEFAULT_PERSONA_PREVIEW);
 
-    // ── Persona fork (C-5.3) ─────────────────────────────────────────
-    // Which preset/flags the first user picks. The hero PREVIEW pre-fills it;
-    // "Customise" opens the flat flag list. Applied once on Finish (install
-    // flags + the first user's matching per-user opt-ins). C-5 only sets the
-    // flags — the per-surface Products-off sweep is FU-182.
-    const personaChoice = ref<PersonaChoice>(DEFAULT_PERSONA_PREVIEW);
-    const customFlags = reactive<InstallFlags>({ ...DEFAULT_CUSTOM_FLAGS });
-    const effectiveInstallFlags = computed<InstallFlags>(() => {
-        if (personaChoice.value === 'custom') return { ...customFlags };
-        const preset = PERSONA_PRESETS.find((p) => p.key === personaChoice.value);
-        return preset ? preset.install : DEFAULT_CUSTOM_FLAGS;
-    });
-    const productsEnabledDraft = computed(
-        () => effectiveInstallFlags.value.products_enabled,
-    );
-
-    // Setup steps are built per-state: admin + persona are first-user only;
-    // the stock-vs-product explainer shows only when products are on (L46).
+    // Setup steps are built per-state: admin is first-user only. (FU-210: the
+    // persona fork step is removed — onboarding is one "show everything" path;
+    // features are enabled in Settings, not chosen here. FU-209 removed the
+    // stock-vs-product explainer.)
     const visibleSteps = computed<Step[]>(() => {
         const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
         if (state.value?.first_user) {
             steps.push({ id: 'admin', title: "You're the admin" });
-            steps.push({ id: 'persona', title: 'Pick your setup' });
-            if (productsEnabledDraft.value) {
-                steps.push({ id: 'explainer', title: 'Stock items vs products' });
-            }
         }
         steps.push({ id: 'seed', title: 'Seed catalogues' });
         steps.push({ id: 'first_item', title: 'First stock item' });
@@ -752,7 +583,6 @@
     // jump-in + a link to the help guides (FU-015: Alerts → /alerts). Copy
     // kept factual; the sell-copy honesty pass is FU-184.
     const flowCards = computed(() => {
-        const flags = effectiveInstallFlags.value;
         const cards: {
             path: string;
             title: string;
@@ -777,13 +607,13 @@
               description: 'The bell flags what’s expiring, low or out — with one-tap actions.',
               icon: ICONS.notifications_active, help: '/help' },
         ];
-        if (flags.products_enabled || flags.money_enabled) {
-            cards.push({
-                path: '/price-history', shortTitle: 'Prices', title: 'Price history',
-                description: 'See how your products’ prices have moved over time.',
-                icon: ICONS.savings, help: '/help',
-            });
-        }
+        // Show everything — price history is available whenever the user turns
+        // on spend tracking in Settings (FU-210: no onboarding flag gating).
+        cards.push({
+            path: '/price-history', shortTitle: 'Prices', title: 'Price history',
+            description: 'See how your prices have moved over time.',
+            icon: ICONS.savings, help: '/help',
+        });
         cards.push({
             path: '/help', shortTitle: 'guides', title: 'Dora & the guides',
             description: 'Dora’s help bubble follows you everywhere; the guides explain each area in depth.',
@@ -897,8 +727,6 @@
                     view: view.value,
                     storySceneIndex: storySceneIndex.value,
                     personaPreview: personaPreview.value,
-                    personaChoice: personaChoice.value,
-                    customFlags: { ...customFlags },
                     packItemSelected: { ...packItemSelected },
                 }),
             );
@@ -917,8 +745,6 @@
                 view?: 'story' | 'setup';
                 storySceneIndex?: number;
                 personaPreview?: PersonaPreviewKey;
-                personaChoice?: PersonaChoice;
-                customFlags?: Partial<InstallFlags>;
                 packItemSelected?: Record<string, boolean>;
             };
             const {
@@ -927,8 +753,6 @@
                 view: savedView,
                 storySceneIndex: savedScene,
                 personaPreview: savedPersona,
-                personaChoice: savedChoice,
-                customFlags: savedCustom,
                 packItemSelected: savedPacks,
                 ...formFields
             } = parsed;
@@ -947,12 +771,6 @@
             }
             if (savedPersona) {
                 personaPreview.value = savedPersona;
-            }
-            if (savedChoice) {
-                personaChoice.value = savedChoice;
-            }
-            if (savedCustom) {
-                Object.assign(customFlags, savedCustom);
             }
             if (savedPacks) {
                 Object.assign(packItemSelected, savedPacks);
@@ -973,18 +791,11 @@
     watch(
         [
             form, stepIndex, draftItems, view, storySceneIndex,
-            personaPreview, personaChoice, customFlags, packItemSelected,
+            personaPreview, packItemSelected,
         ],
         saveDraft,
         { deep: true },
     );
-
-    // The hero preview pre-fills the fork: while the user is still in the
-    // story, mirror the previewed persona onto the fork choice. Once they're
-    // in setup, their explicit fork pick stands.
-    watch(personaPreview, (next) => {
-        if (view.value === 'story') personaChoice.value = next;
-    });
 
     // ── Starter-pack helpers + first-item name options ───────────────
     function uniqueSorted(values: (string | null | undefined)[]): string[] {
@@ -1083,7 +894,6 @@
     // items), so the items resolve against the groups/locations just seeded.
     async function applyDraft() {
         await persistPreferences();
-        await applyPersona();
         if (form.seedGroups || form.seedLocations) {
             await onboardingApi.seedAsync({
                 groups: form.seedGroups,
@@ -1154,40 +964,6 @@
         } else {
             form.headcount = Math.min(99, Math.floor(value));
         }
-    }
-
-    function selectPersona(key: PersonaChoice) {
-        personaChoice.value = key;
-        // Keep the hero preview in sync with an explicit preset pick.
-        if (key !== 'custom') personaPreview.value = key;
-    }
-
-    // First-user only: apply the chosen install flags (admin PATCH) + the
-    // matching per-user opt-ins. C-5 only *sets* these flags — the
-    // per-surface Products-off sweep is FU-182.
-    async function applyPersona() {
-        if (!state.value?.first_user) return;
-        const flags = effectiveInstallFlags.value;
-        await appSettingsApi.updateAsync({
-            products_enabled: flags.products_enabled,
-            money_enabled: flags.money_enabled,
-            meal_planning_enabled: flags.meal_planning_enabled,
-            nutrition_enabled: flags.nutrition_enabled,
-            scanning_enabled: flags.scanning_enabled,
-            companion_ingestion_enabled: flags.companion_ingestion_enabled,
-        });
-        const preset = PERSONA_PRESETS.find((p) => p.key === personaChoice.value);
-        const userPrefs: { money_features_enabled: boolean; nutrition_mode: 'off' | 'simple' } =
-            preset
-                ? preset.user
-                : {
-                      money_features_enabled: flags.money_enabled,
-                      nutrition_mode: flags.nutrition_enabled ? 'simple' : 'off',
-                  };
-        await authStore.updateMeAsync({
-            money_features_enabled: userPrefs.money_features_enabled,
-            nutrition_mode: userPrefs.nutrition_mode,
-        });
     }
 
     function onAddFirstItem() {
@@ -1342,24 +1118,5 @@
     }
     .full-height {
         height: 100%;
-    }
-    .persona-card {
-        cursor: pointer;
-        height: 100%;
-        outline: 2px solid transparent;
-        outline-offset: -2px;
-        transition: outline-color var(--motion-fast) var(--motion-ease),
-            transform var(--motion-fast) var(--motion-ease);
-    }
-    .persona-card:hover {
-        transform: translateY(-2px);
-    }
-    .persona-card--picked {
-        outline-color: var(--q-primary);
-    }
-    .explainer-tip {
-        padding: var(--space-3);
-        border-radius: var(--radius-md);
-        background: var(--brand-accent-soft);
     }
 </style>

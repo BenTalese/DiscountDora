@@ -60,6 +60,27 @@ def effective_expiring_soon_window(app_setting) -> int:  # noqa: ANN001 — duck
     return EXPIRING_SOON_WINDOW_DAYS
 
 
+def get_stock_item_unit_cost_at(observations, when=None):  # noqa: ANN001 — duck-typed observations
+    """The single server-owned per-unit cost for a stock item (FU-213 /
+    PROPOSAL_PRODUCTS_AS_OVERLAY §3.2): the most-recent direct price
+    observation's ``price / qty`` at or before ``when`` (default: latest).
+    ``None`` when there's nothing to go on.
+
+    R-003: the one place "what a unit costs" is derived — the client never
+    divides price by quantity. Pure: the caller passes the already-fetched
+    observations. (The product-derived branch — cheapest linked offer when
+    Products is on — folds in with the consumer rebase, FU-213b.)
+    """
+    candidates = [
+        o for o in observations
+        if getattr(o, "qty", 0) and (when is None or o.observed_at <= when)
+    ]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda o: o.observed_at)
+    return latest.price / latest.qty if latest.qty else None
+
+
 def _sequence_of(level) -> Optional[int]:
     if level is None:
         return None

@@ -154,8 +154,9 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
 
 // ── Persona-preview affordance (illustrative only in C-5.2) ──────────────
 // The hero lets the user PREVIEW how the loop shapes per persona. It sets no
-// flags — the real persona fork + `products_enabled` is C-5.3, which can
-// pre-fill from the previewed persona remembered in the wizard draft.
+// flags — the real persona fork is C-5.3, which can pre-fill from the previewed
+// persona remembered in the wizard draft. (FU-209 removed the `products_enabled`
+// dimension; the full persona-fork removal is FU-210.)
 // Labels are persona-aligned with §3.2 (Cooking / Spend-tracking / Everything).
 
 export type PersonaPreviewKey = 'cooking' | 'spend' | 'everything';
@@ -193,94 +194,9 @@ export const PERSONA_PREVIEWS: readonly PersonaPreview[] = [
 /** Default preview on first paint — Everything, so the reveal sells the ceiling. */
 export const DEFAULT_PERSONA_PREVIEW: PersonaPreviewKey = 'everything';
 
-// ── Persona fork presets (C-5.3) ─────────────────────────────────────────
-// The fork step writes install flags (admin `PATCH /api/app-settings`) + the
-// first user's matching per-user opt-ins (`PATCH /api/users/me`), applied once
-// on Finish. `products_enabled` is the new C-5.3 flag; per-surface hiding when
-// it's off is FU-182, not C-5. Keys align with the hero preview keys above.
-
-export interface InstallFlags {
-    products_enabled: boolean;
-    money_enabled: boolean;
-    meal_planning_enabled: boolean;
-    nutrition_enabled: boolean;
-    scanning_enabled: boolean;
-    companion_ingestion_enabled: boolean;
-}
-
-export interface PersonaUserPrefs {
-    money_features_enabled: boolean;
-    nutrition_mode: 'off' | 'simple';
-}
-
-export interface PersonaPreset {
-    key: PersonaPreviewKey;
-    label: string;
-    promise: string;
-    install: InstallFlags;
-    user: PersonaUserPrefs;
-}
-
-export const PERSONA_PRESETS: readonly PersonaPreset[] = [
-    {
-        key: 'cooking',
-        label: 'Pantry & cooking',
-        promise: 'Track what you have and cook it before it spoils. No prices, no products.',
-        install: {
-            products_enabled: false,
-            money_enabled: false,
-            meal_planning_enabled: true,
-            nutrition_enabled: false,
-            scanning_enabled: false,
-            companion_ingestion_enabled: false,
-        },
-        user: { money_features_enabled: false, nutrition_mode: 'off' },
-    },
-    {
-        key: 'spend',
-        label: 'Pantry + spend tracking',
-        promise: 'Everything in cooking, plus remembering what you pay so you waste and overspend less.',
-        install: {
-            products_enabled: true,
-            money_enabled: true,
-            meal_planning_enabled: true,
-            nutrition_enabled: false,
-            scanning_enabled: false,
-            companion_ingestion_enabled: false,
-        },
-        user: { money_features_enabled: true, nutrition_mode: 'off' },
-    },
-    {
-        key: 'everything',
-        label: 'Everything',
-        promise: 'The full toolkit — pantry, spend, nutrition, scanning and the companion feed.',
-        install: {
-            products_enabled: true,
-            money_enabled: true,
-            meal_planning_enabled: true,
-            nutrition_enabled: true,
-            scanning_enabled: true,
-            companion_ingestion_enabled: true,
-        },
-        user: { money_features_enabled: true, nutrition_mode: 'simple' },
-    },
-] as const;
-
-/** The flat install-flag list behind the "Customise" card — the §3.2 escape
- *  hatch, and what makes the (products-off + money-on) combo reachable (§3.2.a). */
-export interface InstallFlagMeta {
-    key: keyof InstallFlags;
-    label: string;
-    blurb: string;
-}
-export const INSTALL_FLAG_META: readonly InstallFlagMeta[] = [
-    { key: 'products_enabled', label: 'Products & prices', blurb: 'Link specific products to your items and keep their price history.' },
-    { key: 'money_enabled', label: 'Spend tracking', blurb: 'Budgets and what-you-paid, across the app.' },
-    { key: 'meal_planning_enabled', label: 'Meal planning', blurb: 'Plan a week of meals and generate the shop from it.' },
-    { key: 'nutrition_enabled', label: 'Nutrition', blurb: 'Show simple nutrition info on recipes.' },
-    { key: 'scanning_enabled', label: 'Scanning & QR labels', blurb: 'Scan barcodes to navigate; print item / shelf QR labels.' },
-    { key: 'companion_ingestion_enabled', label: 'Companion feed', blurb: 'Accept a price / products feed pushed from the companion app.' },
-];
-
-/** A balanced starting point for the Customise toggles (the Spend preset). */
-export const DEFAULT_CUSTOM_FLAGS: InstallFlags = { ...PERSONA_PRESETS[1]!.install };
+// ── Persona fork presets — REMOVED (FU-210) ──────────────────────────────
+// Onboarding no longer forks on personas or writes install flags / per-user
+// opt-ins; there is one "show everything" path and features are enabled in
+// Settings (money/spend is its own Settings toggle). The hero-loop persona
+// PREVIEW above stays — it's illustrative only and sets nothing. See
+// docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md §5.

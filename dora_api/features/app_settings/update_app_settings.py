@@ -32,8 +32,6 @@ class UpdateAppSettingsRequest(BaseModel):
     nutrition_enabled: bool | None = None
     companion_ingestion_enabled: bool | None = None
     deals_email_enabled: bool | None = None
-    # Onboarding C-5.3 — products feature flag.
-    products_enabled: bool | None = None
     # C-cross Chunk 3 — reserved seam for nutrition complex-mode. Empty
     # string is allowed (and is the default-seam state); the actual
     # source schema lands when the complex-mode integration ships.
@@ -77,7 +75,6 @@ class UpdateAppSettingsHandler:
             "nutrition_enabled",
             "companion_ingestion_enabled",
             "deals_email_enabled",
-            "products_enabled",
         ):
             if _Attr in set_fields:
                 value = getattr(request, _Attr)

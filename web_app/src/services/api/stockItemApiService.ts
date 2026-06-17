@@ -104,6 +104,41 @@ export default class StockItemApiService {
         await this.httpClient.delete<void>(
             `/stock-items/${stockItemID}/substitutes/${substituteID}`
         );
+
+    // FU-211 — preferred buys (free-text reminders on a stock item).
+    addPreferredBuyAsync = async (stockItemID: string, label: string): Promise<void> =>
+        await this.httpClient.post<void>(`/stock-items/${stockItemID}/preferred-buys`, { label });
+
+    updatePreferredBuyAsync = async (
+        stockItemID: string, preferredBuyID: string, label: string,
+    ): Promise<void> =>
+        await this.httpClient.patch<void>(
+            `/stock-items/${stockItemID}/preferred-buys/${preferredBuyID}`, { label },
+        );
+
+    deletePreferredBuyAsync = async (stockItemID: string, preferredBuyID: string): Promise<void> =>
+        await this.httpClient.delete<void>(
+            `/stock-items/${stockItemID}/preferred-buys/${preferredBuyID}`,
+        );
+
+    reorderPreferredBuysAsync = async (stockItemID: string, orderedIds: string[]): Promise<void> =>
+        await this.httpClient.patch<void>(
+            `/stock-items/${stockItemID}/preferred-buys/reorder`, { ordered_ids: orderedIds },
+        );
+
+    // FU-213 — price observations ("what this cost me"). Money-gated at the UI.
+    addPriceObservationAsync = async (
+        stockItemID: string,
+        observation: { price: number; qty: number; unit: string; observed_at?: string },
+    ): Promise<void> =>
+        await this.httpClient.post<void>(
+            `/stock-items/${stockItemID}/price-observations`, observation,
+        );
+
+    deletePriceObservationAsync = async (stockItemID: string, observationID: string): Promise<void> =>
+        await this.httpClient.delete<void>(
+            `/stock-items/${stockItemID}/price-observations/${observationID}`,
+        );
 }
 
 export type CreateStockItemCommand = {

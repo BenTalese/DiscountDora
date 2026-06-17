@@ -11,6 +11,17 @@ and lets them skip / jump / see-progress at will with keynote-grade motion. A **
 **starter-packs + opt-in demo data**), **household headcount**, and a celebratory finish that
 recaps the loop and points into the help guides. **Preferred-stores dropped** (→ FU-180).
 
+> **⚠️ UPDATE (2026-06-17) — personas removed; see `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5.** The
+> **persona fork (Cooking / Spend-tracking / Everything) and the `products_enabled` flag it set
+> are CUT.** Onboarding becomes **one standard "show everything" path, un-personalized**: no
+> fork, no product framing, and the **stock-item-vs-product explainer is retired** (the everyday
+> user never meets "products"). **Keep** the structural pieces — cinematic intro, hero loop,
+> starter packs, household headcount, finish celebration — but **remove persona previews /
+> persona-relevant tailoring** (C-5.2 preview, C-5.6 flow-card tailoring) and show the full loop /
+> full card set. **Money/budgeting is a Settings toggle only** — onboarding shows the feature
+> exists, it does not fork or force a choice. The rest of this doc stands; treat the persona /
+> products / explainer sections as superseded.
+
 > **Charter tie-break:** Effortless (P1) + Honest (P3) + Anti-creep (P10). The whole point is to
 > get the user to *value* and *belief* fast — Effortless. But **P3 Honest is load-bearing here**:
 > we sell only what the app actually does. Auto deal-scraping is **divorced from the core app**

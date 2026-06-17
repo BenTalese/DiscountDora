@@ -89,6 +89,10 @@ export type ShoppingListLine = {
      *  endpoint. */
     purchased_merchant_name: string | null;
     offers: LineProductOffer[];
+    /** FU-215 — optional PreferredBuy hint on the line + the item's available
+     *  labels for the picker. */
+    preferred_buy_id?: string | null;
+    preferred_buys?: { preferred_buy_id: string; label: string }[];
 };
 
 /** Server-owned list-level money/count aggregates (state-ownership Type B).

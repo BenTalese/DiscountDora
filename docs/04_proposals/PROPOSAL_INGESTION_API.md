@@ -25,6 +25,12 @@ admin runs; **its existence is never referenced anywhere in the app.**
 > full stop. The admin labels their own key (free text); the app never names or assumes the
 > other end. These committed planning docs also stay generic about the producer (referenced only
 > as "an external/admin-owned ingestion source").
+>
+> **Bounded carve-out (2026-06-17 — `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1):** the in-app
+> **Product Search** nav entry may link out to an **install-configured URL** — the search page
+> itself moves to the companion. The companion is still **never named**; it simply appears as
+> "Product Search". This is the *only* outward link, it is user-initiated, and it is unlabelled,
+> so the spirit of the rule holds. Recorded as a conscious decision, not drift.
 
 ---
 
@@ -67,6 +73,11 @@ e.g. "home box"), `key_hash` (SHA-256 of the secret, mirroring `AuthToken.token_
   label, enable/disable, **revoke** keys — plus **observability** per key: `last_used_at` and
   recent **accepted / skipped / failed** counts, so the admin can see a source is working. No
   scraping references anywhere on the page.
+- **This page is always accessible — it is general infra, NOT gated by `features.products`**
+  (`PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.3). It's how a poweruser bootstraps: configure a key and
+  push the first batch *before* any product data exists, after which the product surfaces light
+  up on data-presence. Gating it on products would be a chicken-and-egg (surfaces need data, data
+  needs a surface to arrive through).
 
 ### 2.2 Payloads (batched; each record carries `source`)
 ```
@@ -177,6 +188,13 @@ external producer owns acquisition. This is what keeps Dora-core legally clean a
   follow-up also owns retiring the standalone **`emailer/`** weekly-deals service (scraper-coupled):
   move it into the private companion and finish it there, then delete it here. Transactional
   `email_sender.py` stays; the in-app email need is the C-9.7 alerts digest.
+  - **Refined (2026-06-17 — `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1):** the resolution is now
+    settled. The **Product Search page moves to the companion**, which becomes a *complete app*
+    (`merchant_api` + the moved search page + its own settings page) in its **own repo**. Dora
+    keeps the **Product Search nav entry**, pointing at an install-configured URL (data-gated).
+    The other product pages — **My Products, Price History, the stock-item Products tab — STAY in
+    Dora**, gated on `features.products` (data-presence). So C-1b's "find & link a product" is
+    reshaped (no live search in-app; link pre-existing ingested products only), not deleted.
 - **C-1b (Stock Item Detail):** consumes the "your prices" layer in its price section.
 - **C-9 (Alerts):** an optional "inflated price" / back-in-stock alert type fed by ingestion
   (the price/back-in-stock subscriptions tier C-9 reserved).
@@ -185,8 +203,11 @@ external producer owns acquisition. This is what keeps Dora-core legally clean a
 - **FU-180:** preferred product removed; doesn't affect ingestion. **FU-053:** best-deals card
   fetches all products client-side — a server seam this work can help retire.
 - **FU-045 (Postgres):** keep the new tables/queries portable (SQLite + Postgres, §7.5).
-- **products_enabled (C-5):** the "your prices" surfaces are products-layer — hidden for the
-  Cooking persona (FU-182), shown for Spend-tracking/Everything.
+- **Products gating (data-presence, `PROPOSAL_PRODUCTS_AS_OVERLAY.md`):** the "your prices"
+  surfaces are products-layer — shown iff `features.products` (derived from `Product` rows being
+  present), hidden otherwise. **No `products_enabled` flag and no persona** — the old
+  Cooking/Spend/Everything framing is retired. Ingestion is what *makes* products present, so
+  these surfaces light up once a source pushes data.
 
 ---
 

@@ -52,6 +52,208 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-216 — Rebase cost consumers onto `get_stock_item_unit_cost_at` (FU-213 follow-on)
+- **Raised:** 2026-06-17 (FU-213 split)
+- **Type:** deferred job (build)
+- **What:** Give a stock item's unit cost ONE derivation. Extend the FU-213 helper
+  `get_stock_item_unit_cost_at` with the **product-derived branch** (cheapest linked offer when
+  Products is on, else the latest direct observation), then rebase the two existing consumers onto
+  it: the **stock-value report** (`features/reports/reports.py` `StockValueOverTimeHandler` /
+  `_cheapest_as_of`) and the **recipe cost estimate** (`features/recipes/get_recipes.py`
+  `_compute_estimated_cost`) — both currently derive "cheapest most-recent linked-product price"
+  inline.
+- **Why deferred:** touches existing tested report/recipe logic; safer with a running app + the e2e
+  suite. FU-213 shipped the substrate + helper + the stock-item surface without disturbing them.
+- **Recommended resolution:** when an env is up; pairs with the FU-213 verify. Design:
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.2.
+- **Update 2026-06-17 — code-complete (static-only), done additively.** Did NOT extend the helper
+  with a product branch or rewrite the consumers' product-cost logic. Instead kept each consumer's
+  tested linked-product path and added an **observation fallback** where it previously found nothing
+  (`reports.py` `StockValueOverTimeHandler` bucket loop, `when=cursor`; `get_recipes.py`
+  `_compute_estimated_cost` per-ingredient). Lowest blast radius. **NUMERIC behavior change** (items
+  priced only by observation now contribute) — **verify live + update any tests pinning totals for
+  observation-only items.** Full product-cost unification into the helper is no longer needed for
+  the user goal; close this once verified.
+
+## [OPEN] FU-215 — PreferredBuy shopping-list hint (the FU-211 sub-part)
+- **Raised:** 2026-06-17 (FU-211 split)
+- **Type:** deferred job (build)
+- **What:** Surface a stock item's `PreferredBuy` labels as a **hint on its shopping-list line**
+  (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Add `ShoppingListLine.preferred_buy_id` (nullable FK, ON
+  DELETE SET NULL) + migration; show the chosen label as hint text on the line; let the user pick
+  one of the item's preferred buys for that line. **No pricing/product semantics** — purely a
+  reminder. Split from FU-211 because it touches the shopping-list line model/UI + its own migration.
+- **Why deferred:** keeps FU-211 a clean, completable chunk; needs the shopping-list line surface
+  (interacts with the redesign).
+- **Recommended resolution:** after FU-211 verifies; pairs with shopping-list work. Design:
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.1.
+- **Update 2026-06-17 — code-complete (static-only).** Added `ShoppingListLine.preferred_buy_id`
+  (plain UUID, **no FK** per the FU-178 batch-mode lesson; migration `c4e6a8b1d3f5`); `preferred_buy_id`
+  + `clear_preferred_buy` on the generic line PATCH; the detail serializer bulk-loads each item's
+  PreferredBuy labels onto the line DTO; a per-line hint dropdown in `ShoppingListDetail.vue`
+  (pick/clear, optimistic + rollback). Dangling id after a PreferredBuy delete is tolerated (no hint
+  shown). **Verify:** pytest (set/clear + detail labels) + migration up/down + `vue-tsc`/eslint +
+  browser (pick/clear a hint, persists across reload).
+
+## [OPEN] FU-214 — Browser-verify + close product-feedback gaps (My Products & Price History)
+- **Raised:** 2026-06-17 (product-feedback coverage audit — products-as-overlay pivot)
+- **Type:** finding / verification + small gaps
+- **What:** The product-feedback audit (`PROPOSAL_PRODUCTS_AS_OVERLAY.md` Appendix A) flagged a
+  cluster of reported defects that look fixed on a static read but are unproven, plus two small
+  gaps. **Confirm in the running app** (these surfaces are visible only when product data is
+  present — data-gated):
+  - **My Products:** L193 "mark inactive: Extra inputs not permitted" gone; L195 link-icon
+    grey/green styling (the link *handoff* itself is FU-208); L198 inactive-product styling
+    legible; **L205/L206 GAP** — only a generic "Select on-deal" bulk exists, not the requested
+    "select low-stock-on-deal" / "out-of-stock-on-deal" variants (build them or confirm the
+    generic one suffices); **L197** — only mark-inactive (soft) exists, no hard delete (confirm
+    acceptable under the ingestion model, where a deleted product just re-ingests).
+  - **Price History:** L218 selecting products updates the chart; L219 card not squished + notify
+    placeholder visible; L220 notify-under formats as a price; L221/L222 %off text size + chip
+    colour consistent (componentised); L225 graph reaches the box edge.
+  - **L160** — the product-search bar moves to the companion, but confirm no *other* Dora search
+    bar has the same dark-mode white-on-white contrast bug.
+- **Why deferred:** needs the running app + product data present; a static read can't prove a
+  runtime defect fixed (CLAUDE.md mandatory rule).
+- **Recommended resolution:** when the app is next up with product data — fold the My-Products +
+  Price-History checks into the next browser-verify pass; build the L205/206 variants if wanted.
+  Stock-item-detail product bullets (L119/125/130) are already under FU-202; the My-Products link
+  handoff is FU-208.
+
+## [OPEN] FU-213 — Price substrate: `StockItemPriceObservation` + server cost helper + consumers
+- **Raised:** 2026-06-17 (products-as-overlay pivot — carried from the now-resolved FU-182)
+- **Type:** deferred job (build)
+- **What:** Land `StockItemPriceObservation(stock_item_id, price, qty, unit, observed_at, source)`
+  (per-unit derived server-side — the user enters total + qty) + the server-owned
+  `get_stock_item_unit_cost_at(stock_item, when)` helper (R-003), and rebase the two most-affected
+  consumers (stock-value report fallback, recipe cost estimate) onto it. Gated by the **Money**
+  opt-in (not products). No merchant attribution in the everyday layer. This is
+  PROPOSAL_SIMPLE_MODE §2.1's substrate, carried forward intact.
+- **Why deferred:** doc pass first; depends on the Money opt-in surface.
+- **Recommended resolution:** Phase 1 loop / Phase 3 polish. Design:
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.2 (+ surviving PROPOSAL_SIMPLE_MODE §2.1).
+- **Update 2026-06-17 — CORE code-complete (static-only).** Built the substrate end-to-end:
+  `StockItemPriceObservation` entity + table + map + migration `b3d5f7a9c2e4`; the server-owned
+  `get_stock_item_unit_cost_at` helper (`domain/stock_status.py`, R-003); CRUD
+  (`/stock-items/{id}/price-observations`); `price_observations` + `unit_cost` on the detail DTO; a
+  **money-gated "Prices" section** on the detail Overview (`useMoneyEnabled()`). **Deferred → FU-216:**
+  rebasing the stock-value report + recipe cost estimate onto the helper (+ the product-derived cost
+  branch). **Verify:** pytest (CRUD + unit-cost) + migration up/down + `vue-tsc`/eslint + browser
+  (log/remove a price; section hidden when money off).
+
+## [OPEN] FU-212 — Power-user docs: how to source product data so the overlay lights up
+- **Raised:** 2026-06-17 (products-as-overlay pivot)
+- **Type:** documentation
+- **What:** Products are no longer onboarded/sold to the general user, so the path to *enabling*
+  them must be **documented** (per the user: "documented enough so users know they can do it, they
+  just have to source the data themselves"). Add admin/help docs covering: the always-accessible
+  "API access" keys page, the ingestion contract (`POST /api/ingest`), how data-presence makes the
+  product surfaces appear, the configured Product Search URL, and the no-auto-create-stores mapping
+  step (FU-190). **Not** presented during onboarding; keep the producer **unnamed** (the bounded
+  search-URL carve-out aside).
+- **Why deferred:** depends on the ingestion API + the gate reframe existing.
+- **Recommended resolution:** during/after Phase 2 ingestion; batch with FU-207 (VAPID docs).
+  Design: `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.3.
+
+## [OPEN] FU-211 — `PreferredBuy` — everyday free-text "what I buy" on the stock item
+- **Raised:** 2026-06-17 (products-as-overlay pivot)
+- **Type:** deferred job (build — new feature)
+- **What:** New `PreferredBuy(id, stock_item_id FK cascade, label free-text, position, created_at)`
+  table + migration. **Always-available** everyday construct (NOT gated by products or money) — a
+  short list of free-text labels per stock item (e.g. "Vitasoy Oat Milky 1L") as a memory aid +
+  shopping hint. Surface: a "Preferred buys" section on Stock Item Detail (add/edit/delete/reorder).
+  Shopping-list hint: `ShoppingListLine.preferred_buy_id` (nullable FK, SET NULL), shown as
+  selectable hint text on the line, **no pricing/product semantics**. Strictly separate from
+  `Product` (no upgrade/demote bridge — the "two separate systems" principle).
+- **Why deferred:** doc pass first.
+- **Recommended resolution:** **Phase 0/1** — independent of the gate work; can land alongside
+  FU-209/210. Design: `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.1.
+- **Update 2026-06-17 — CORE code-complete (static-only).** Built the stock-item surface end-to-end:
+  `PreferredBuy` entity + table + map + migration `a2c4e6f8b1d3`; CRUD at
+  `/stock-items/{id}/preferred-buys` (add/rename/delete/reorder); `preferred_buys` on the detail DTO;
+  model + API service methods; the "Preferred buys" editor on the detail Overview (add / inline
+  rename / up-down reorder / remove via `withBusyReload`). Not executed (no env). The **shopping-line
+  hint** (`ShoppingListLine.preferred_buy_id`) is split to **FU-215**. **Verify:** pytest + migration
+  up/down + `vue-tsc`/eslint + browser (add/rename/reorder/remove; CASCADE on item delete).
+
+## [OPEN] FU-210 — Onboarding de-persona: remove persona fork + all product framing
+- **Raised:** 2026-06-17 (products-as-overlay pivot)
+- **Type:** deferred job (build — a *removal*)
+- **What:** Remove the C-5.3 **persona fork** (Cooking/Spend/Everything) and the `products_enabled`
+  dimension it set; remove **all product framing** + the **stock-vs-product explainer** from
+  onboarding (the everyday user never meets products). **Keep** the structural C-5 chunks (cinematic
+  intro, hero loop, starter packs, household headcount, finish celebration) but **un-personalized** —
+  drop the C-5.2 persona preview + C-5.6 persona-relevant tailoring; show the full loop + full card
+  set. **Money/budgeting becomes a Settings toggle only** (decided with the user) — onboarding shows
+  the feature exists, no fork/forced choice. NB: the persona fork + flag have **already shipped**, so
+  this is a removal, not just a plan edit.
+- **Why deferred:** doc pass first; sizeable frontend change.
+- **Recommended resolution:** **with/after FU-209** (the flag drop). Design:
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5; supersedes parts of `PROPOSAL_ONBOARDING.md`
+  / `IMPL_PLAN_ONBOARDING.md`. Re-validate onboarding sell-copy (FU-184) after.
+- **Update 2026-06-17 — persona FORK removed, code-complete (static-only); illustrative PREVIEW
+  deferred.** Removed from `WelcomeWizard.vue` + `onboardingContent.ts`: the persona step,
+  `personaChoice`/`customFlags`/`effectiveInstallFlags`, `selectPersona`/`applyPersona` (no more
+  install-flag / per-user-pref writes at onboarding), the `AppSettingsApiService` use, and
+  `PERSONA_PRESETS`/`INSTALL_FLAG_META`/`InstallFlags`/etc. Flow-cards no longer gate on persona
+  flags. Repo grep confirms **zero dangling refs**. Fresh installs now use `AppSetting` defaults +
+  enable features in Settings (money is its own Settings toggle). **Still OPEN for:** (a) remove the
+  **illustrative hero-loop persona preview** (`OnboardingLoop.vue` + `OnboardingStory.vue` +
+  `personaPreview` + `PERSONA_PREVIEWS`) — do it with a running app so the loop renders well without
+  persona shaping; (b) **browser-verify** (no persona/Customise/products step; defaults applied;
+  spend via Settings; draft resume) + `vue-tsc`/eslint.
+
+## [OPEN] FU-209 — Gate reframe: drop `products_enabled`, derive `features.products` from data-presence
+- **Raised:** 2026-06-17 (products-as-overlay pivot)
+- **Type:** deferred job (build)
+- **What:** Replace the admin/persona `AppSetting.products_enabled` flag with a **server-derived**
+  `features.products = (Product.count() > 0)` in `health_check.py`. Drop the column + its admin PATCH
+  field + `get_app_settings` DTO field + the onboarding persona dimension that set it. **Keep every
+  `v-if="productsEnabled"` gate** (the C-1b.3 per-surface hiding) — only the boolean's source changes.
+  R-003: single server-derived fact; no client counting of Product rows. Clean column-drop migration
+  (pre-release). Open: `Product.count()` alone vs `Product OR ProductOffer` (rec: Product alone —
+  proposal §7-1).
+- **Why deferred:** doc pass first; this is the foundational code chunk.
+- **Recommended resolution:** **now / first code chunk** (Phase 0/1) — unblocks FU-208/210/211.
+  Design: `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §2, §8-1. Candidate for a new R-0NN ADR
+  (data-presence-gated surfaces) when it lands.
+- **Update 2026-06-17 — code-complete (static-only, NOT runtime-verified).** Built this session:
+  dropped `AppSetting.products_enabled` (entity + table mapping + drop migration `f1a2b3c4d5e6`,
+  revises `e9a4b6c2d8f1`); `health_check` derives `features.products` from
+  `repo.get(Product).count() > 0`; removed the field from `get_app_settings` DTO +
+  `update_app_settings` request/loop + `appSettingsApiService.ts`; removed the products dimension
+  from the onboarding personas + `INSTALL_FLAG_META` and **removed the now-mooted stock-vs-product
+  explainer step** from `WelcomeWizard.vue` (the rest of the persona-fork removal stays FU-210);
+  rewrote the two products tests in `test_onboarding_flags.py` to assert data-presence. **This
+  machine has no Python venv and `web_app/node_modules` is absent**, so nothing was executed.
+  **Still to verify on a provisioned machine (keep OPEN until done):** (1) `vue-tsc` + eslint clean
+  (onboarding + app-settings touched); (2) `pytest tests/e2e/dora_api/test_onboarding_flags.py` +
+  health/app-settings regressions; (3) migration `f1a2b3c4d5e6` up **and** down + single Alembic
+  head; (4) browser — with no products `features.products=false` + surfaces hidden; with a product
+  present they appear; the admin System-settings products toggle is gone; onboarding has no
+  explainer step.
+
+## [OPEN] FU-208 — My Products → stock-item "Link…" flow is a silent dead-end
+- **Raised:** 2026-06-17 (products-as-overlay pivot — code investigation)
+- **Type:** finding (bug)
+- **What:** `web_app/src/pages/MyProductsPage.vue` routes its "Link…" action to
+  `/stock/{id}?link_product_id=<pid>&section=products`, but **nothing consumes `link_product_id`** —
+  C-1b.3 removed the saved-products picker dialog from `StockItemDetailPage.vue` (and its
+  `onLink`/`openProductPicker` handlers) per R-008, leaving the My-Products entry point routing to a
+  handler that no longer exists. Result: pick a stock item → Link → land on the Products tab → the
+  product is **not linked**, no error. Static read confirms zero consumers of `link_product_id`. Per
+  CLAUDE.md, logged even though static-confirmed — verify in browser.
+- **Why deferred:** belongs with the products-as-overlay build, not the doc pass.
+- **Recommended resolution:** **with FU-209** — rebuild a working link path (consume
+  `link_product_id` on detail, or link in place via `POST /api/stock-items/{id}/products`). Link
+  pre-existing (ingested) products only — do NOT rebuild manual product creation. Design:
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.2. **Confirm in browser.**
+- **Update 2026-06-17 — code-complete (static-only).** `MyProductsPage.vue` `confirmLink()` now
+  links in place via `stockItemApi.linkProductAsync` (`POST /stock-items/{id}/products`) + `loadAll()`
+  + a toast, instead of the dead `link_product_id` navigation. **Keep OPEN until browser-verified:**
+  from My Products, "Link…" → pick stock item → the product links and shows as linked (no bounce),
+  error toast on failure.
+
 ## [OPEN] FU-207 — Document VAPID key generation in install docs
 - **Raised:** 2026-06-17 (C-9.8 impl)
 - **Type:** documentation / deferred job
@@ -431,6 +633,12 @@ long session summary. Distinct from the other logs:
   (same `effective_expiring_soon_window`) into the 4 sites.
 
 ## [OPEN] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
+> **Re-sequenced 2026-06-17 — now the ACTIVE track, ahead of FU-189.** The Merchant→Store rename
+> (FU-189) is blocked on this because "merchant" = entity AND `merchant_api` companion (a blind
+> rename corrupts the companion wiring). Build order: scaffold companion → ingestion API → companion
+> standalone+wired → **this decommission** → FU-189 rename. **Companion scaffolded 2026-06-17** as a
+> sibling repo at `../dora-companion` (copied `merchant_api/` + `emailer/`; nothing removed from Dora
+> yet — the delete + de-wire happens here, after the ingestion API + a functional companion).
 - **Raised:** 2026-06-15 (C-10 ingestion API design); **emailer scope added 2026-06-16**
 - **Type:** deferred job / decommission
 - **What:** With scraping divorced and `/api/ingest` (C-10) as the **only** inbound product path,
@@ -463,6 +671,14 @@ long session summary. Distinct from the other logs:
   (Products-off) since both reshape the product surfaces, and re-confirm C-1b §2.4's "find & link"
   against it. Keep the **invisibility rule** — no scraper references in whatever replaces search,
   and none of the companion's existence (incl. the emailer it now hosts) surfaces in the app.
+- **Update 2026-06-17 (products-as-overlay pivot — resolution settled):** the search question is
+  now decided (`docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1): **only the Product Search
+  page moves** to the companion, which becomes a *complete app* (`merchant_api` + the moved search
+  page + its own settings page) in its **own repo**. Dora keeps the **Product Search nav entry** →
+  an install-configured URL (data-gated; companion never named — a bounded carve-out to the
+  invisibility rule). My Products / Price History / the stock-item Products tab **stay in Dora**.
+  The old "pair with FU-182" now reads "pair with **FU-209** (gate reframe) + the new proposal".
+  The `emailer/` move/delete is unchanged.
 
 ## [OPEN] FU-184 — Reconcile onboarding sell-copy + loop stages against actual app behaviour
 - **Raised:** 2026-06-15 (Onboarding C-5 v3 design)
@@ -583,8 +799,19 @@ long session summary. Distinct from the other logs:
   + the (c)+(b) sequencing, and add a row to its feedback-coverage table
   citing FU-189. Block ingestion implementation until the proposal is
   updated.
+- **Update 2026-06-17:** still valid + confirmed by the products-as-overlay pivot. Cross-link
+  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3/§4.3 (Stores stay user-curated; the
+  ingestion source is the generic, always-accessible "API access" page; the producer is never
+  named). Stays open.
 
 ## [OPEN] FU-189 — Rename Merchants → Stores, add management page + user-uploaded logos
+> **Resequenced to LAST 2026-06-17 — blocked on FU-186.** A blind Merchant→Store rename is ~550 refs
+> AND entangled: "merchant" = the `Merchant` entity AND the `merchant_api` companion (`ApiBackend
+> 'merchant'`, MerchantApiService/Management, MerchantsSettings, `VITE_MERCHANT_API_*`). Renaming
+> blind corrupts the companion wiring + splits the FE/BE contract → won't boot. **Do this only after
+> FU-186 removes `merchant_api` from the Dora repo** — then "merchant" = entity only and the rename
+> is mechanical. (Companion scaffolded 2026-06-17 at `../dora-companion`; ingestion API is the next
+> in-repo step.) `usual_store_id` + the user-curated Stores management page land with this.
 - **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
 - **Type:** refactor + small feature
 - **What:** Three coupled changes:
@@ -615,69 +842,10 @@ long session summary. Distinct from the other logs:
   FU-182's per-surface sweep, since simple mode's shopping-list grouping
   depends on `usual_store_id` existing. Earlier still if the C-cross §2.6
   feature-flag panel work picks up first.
-
-## [OPEN] FU-182 — Treat the minimal/Products-off user as a first-class workflow
-- **Raised:** 2026-06-14 (talk-time assessment); refined 2026-06-15 (round 2); **promoted to proposal 2026-06-15** — see `docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`. This ledger entry now tracks **co-design + implementation**, not the writing phase.
-- **Type:** open decision / design follow-up
-- **2026-06-16 (C-5.3 delivered the lever):** the **`AppSetting.products_enabled`** flag now exists
-  across the one flag path (entity + Fields, migration `d1f4b8c3e7a9`, table-mapping, DTO + admin
-  PATCH, `/api/health` `features.products`, `useFeatureFlags().products`), and the onboarding
-  **persona fork** sets it (Cooking ⇒ off). This sweep is now **unblocked**: per-surface hiding
-  (nav, stock-item detail, shopping-list checklist mode, product search / cart, etc.) can read
-  `products` and collapse. C-5.3 deliberately did **not** start the sweep (R-007) — still this FU.
-- **What:** Audit every surface for the "Products feature off" path and treat
-  the minimal user (pantry + recipes + meal plan + checklist shopping list,
-  no merchants/offers/price-history/cart) as a first-class workflow — not a
-  fallback that empties out around them. **Principle:** minimal users must
-  be supported as much as power users — same charter-level care, not a
-  degraded fallback.
-
-  Full discussion + model + UX decisions in
-  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` (initial assessment
-  + the 2026-06-15 addendum). Headlines from round-2:
-  - **Pricing model reframe** — `StockItem` + `StockItemPriceObservation` is
-    the universal substrate; `Product` + `ProductOffer` is an optional
-    overlay feeding the same substrate. Unify read paths, never flatten.
-    Mode-flips non-destructive both ways (scratch §1).
-  - **Shopping-list-as-receipt** with stock-item-level price entry, gated by
-    money opt-in (not Products). Log-a-price affordances also outside
-    shopping (stock-item detail, quick-add). (Scratch §2.)
-  - **Observations carry no merchant** in simple mode — "your paid price
-    over time," not cross-merchant comparison. Shopping-list grouping uses
-    `StockItem.usual_store_id` (single nullable field) + per-line override.
-    (Scratch §3 — depends on FU-189.)
-  - **Stock-item-vs-product confusion** is the real UX risk — layered
-    mitigations: onboarding explainer copy (milk example, "don't name stock
-    items after brands"), glossary entry, in-context micro-copy on stock-
-    item-create, empty-state copy on My Products. (Scratch §5; pointer
-    notes added to PROPOSAL_ONBOARDING.md §3.3 + PROPOSAL_HELP_OVERLAY.md
-    §2.3.)
-  - **"Simple mode" as a named identity**, not the absence of Products.
-    UI label decoupled from the `products_enabled` flag. (Scratch §6.)
-  - **Money + Products are independent layers (2×2).** Open thread for
-    onboarding: the C-5 v3 personas bundle products+money; ensure the
-    (Products off + money on) combination is reachable via Customise, or
-    add a fourth preset. (Scratch §1 tail; flagged in
-    PROPOSAL_ONBOARDING.md §3.2.a.)
-
-  **Update 2026-06-15 (C-5 design):** the upstream pieces are now spec'd in
-  `IMPL_PLAN_ONBOARDING.md` — **C-5.3** introduces the **`products_enabled`**
-  install flag + the **3-persona fork** (Cooking / Savings / Everything) that
-  sets it and branches the wizard (Cooking skips the stock-vs-product
-  explainer). FU-182's **remaining** scope therefore narrows to the
-  **per-surface Products-off sweep**: nav/tabs/columns removed not greyed;
-  shopping-list checklist mode; stock-item-detail + recipe-ingredient
-  product affordances hidden; settings sections hidden; stock-value report
-  + recipe cost estimate rebased on the substrate; "Simple mode" chip in
-  settings — i.e. *consume* the flag C-5 ships.
-- **Why deferred:** Talk-time scope. Needs promotion to a proper proposal
-  (or amendment to PROPOSAL_CONFIG_AND_OPTINS.md §2.6) with a per-surface
-  coverage table before any code lands.
-- **Recommended resolution:** later during Phase 3 polish — promote the
-  scratch into a `04_proposals/` amendment to PROPOSAL_CONFIG_AND_OPTINS.md
-  (or a sibling proposal). Sequence after FU-189 (stores rename +
-  `usual_store_id`) since the simple-mode shopping-list grouping depends on
-  it.
+- **Update 2026-06-17:** confirmed by the products-as-overlay pivot — `usual_store_id` is part of
+  the everyday stock-item model (`docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3),
+  always-available (no products/money gating). The stale "before FU-182's sweep" now reads "before
+  the FU-209/210/211 build chunks." Still a prerequisite; stays open.
 
 ## [OPEN] FU-181 — Wire actual plan-emailing + a `meals_per_week` preference
 - **Raised:** 2026-06-14 (C-2.J sequential builder)
@@ -735,6 +903,11 @@ long session summary. Distinct from the other logs:
   do** — revisit alongside the preferred-product question when the cart/companion surfaces
   make a merchant preference earn its keep. (Merchant currently has only `name`; no
   `is_enabled`/`preferred` field exists.)
+- **Update 2026-06-17 (products-as-overlay pivot):** the everyday "remember my favourite products"
+  intent is now met by **`PreferredBuy`** (free-text, on the stock item — FU-211), distinct from
+  the *preferred-merchant* sort/loyalty question this FU still owns. So the product side of this
+  reconsideration is largely addressed by PreferredBuy + `usual_store_id`; what remains open is
+  whether a preferred-*store* affordance (sort / pre-select) earns its keep.
 
 ## [OPEN] FU-179 — Browser-verify the whole Meal Plans surface (C-2 — all chunks)
 - **Raised:** 2026-06-14 (C-2.A…J — full redesign, static-only verified)

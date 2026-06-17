@@ -22,12 +22,15 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import effective_expiring_soon_window
+from dora_api.domain.stock_status import (effective_expiring_soon_window,
+                                          get_stock_item_unit_cost_at)
 from dora_api.features.locations.attention import reasons_for_item
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
@@ -93,6 +96,27 @@ class ListAddEventDto:
     shopping_list_name: str
 
 
+# FU-211 — free-text "what I actually buy" reminders (PROPOSAL_PRODUCTS_AS_OVERLAY
+# §3.1). Everyday-user construct, separate from the Product overlay; always
+# present, never gated by the products/money features.
+@dataclass(frozen=True, slots=True)
+class PreferredBuyDto:
+    preferred_buy_id: UUID
+    label: str
+    position: int
+
+
+# FU-213 — everyday "what this cost me" price points (money-gated at the UI).
+@dataclass(frozen=True, slots=True)
+class PriceObservationDto:
+    observation_id: UUID
+    price: float
+    qty: float
+    unit: str
+    observed_at: datetime
+    source: str
+
+
 @dataclass(frozen=True, slots=True)
 class StockItemDetailDto:
     stock_item_id: UUID
@@ -125,6 +149,12 @@ class StockItemDetailDto:
     # spend reports surfaces instead).
     waste_events: List[WasteEventDto] = field(default_factory=list)
     recent_list_adds: List[ListAddEventDto] = field(default_factory=list)
+    # FU-211 — free-text "what I buy" reminders (always present; not gated).
+    preferred_buys: List[PreferredBuyDto] = field(default_factory=list)
+    # FU-213 — price observations + the server-derived per-unit cost (the
+    # client never divides — R-003). Money-gated at the UI, not here.
+    price_observations: List[PriceObservationDto] = field(default_factory=list)
+    unit_cost: float | None = None
     # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
     # the timeline whenever it differs from the most recent level change.
     last_checked_at: datetime | None = None
@@ -312,6 +342,43 @@ class GetStockItemDetailHandler:
                 for l in _Lines
             ]
 
+        # FU-211 — free-text preferred buys for this item, ordered by position.
+        _PreferredBuys = sorted(
+            (
+                PreferredBuyDto(
+                    preferred_buy_id = pb.id,
+                    label = pb.label,
+                    position = pb.position,
+                )
+                for pb in self.repository.get(PreferredBuy).all(
+                    EntityField(PreferredBuy, PreferredBuy.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+                )
+            ),
+            key=lambda d: d.position,
+        )
+
+        # FU-213 — price observations (newest first) + the single server-owned
+        # per-unit cost derivation (R-003 — the client never divides).
+        _Observations = self.repository.get(StockItemPriceObservation).all(
+            EntityField(
+                StockItemPriceObservation,
+                StockItemPriceObservation.Fields.STOCK_ITEM_ID,
+            ).eq(stock_item_id)
+        )
+        _Observations.sort(key=lambda o: o.observed_at, reverse=True)
+        _PriceObservations = [
+            PriceObservationDto(
+                observation_id = o.id,
+                price = o.price,
+                qty = o.qty,
+                unit = o.unit,
+                observed_at = o.observed_at,
+                source = o.source,
+            )
+            for o in _Observations
+        ]
+        _UnitCost = get_stock_item_unit_cost_at(_Observations)
+
         # C-9.2 — same household-configured expiring-soon window as the alerts
         # list + heatmap (R-003), falling back to the default.
         _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
@@ -344,6 +411,9 @@ class GetStockItemDetailHandler:
             substitutes = _Substitutes,
             waste_events = _WasteEvents,
             recent_list_adds = _ListAdds,
+            preferred_buys = _PreferredBuys,
+            price_observations = _PriceObservations,
+            unit_cost = _UnitCost,
             last_checked_at = _StockItem.last_checked_at,
             level_history = _LevelHistory,
             # C-1 Chunk 6 / FU-033 — own-image OR any linked product image.

@@ -18,6 +18,7 @@ from dora_api.domain.entities.meal_plan_template import (MealPlanTemplate,
 from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.merchant import Merchant
 from dora_api.domain.entities.price_alert import PriceAlert
+from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_barcode import ProductBarcode
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
@@ -32,6 +33,7 @@ from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine,
 )
 from dora_api.domain.entities.stock_group import StockGroup
+from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.entities.tool import Tool
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.dora_suggestion_suppression import \
@@ -77,8 +79,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("nutrition_enabled", Boolean, nullable=False, server_default="0"),
         Column("companion_ingestion_enabled", Boolean, nullable=False, server_default="0"),
         Column("deals_email_enabled", Boolean, nullable=False, server_default="0"),
-        # Onboarding C-5.3 — products feature flag (default on; Cooking persona off).
-        Column("products_enabled", Boolean, nullable=False, server_default="1"),
+        # FU-209: `products_enabled` column dropped (migration f1a2b3c4d5e6) —
+        # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).
         # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
         Column("nutrition_db_source", String(255), nullable=False, server_default=""),
         # Meal Plans C-2.K — household IANA timezone for the "today" boundary.
@@ -249,6 +251,11 @@ def configure_mappings(db: SQLAlchemy):
             ForeignKey("Merchant.id", ondelete="SET NULL"),
             nullable=True,
         ),
+        # FU-215 — optional PreferredBuy hint. Plain UUID, NO ForeignKey:
+        # adding an FK to ShoppingListLine in SQLite batch mode is the exact
+        # FU-178 breakage; SQLite doesn't enforce FKs anyway, and a dangling
+        # id after a PreferredBuy delete is tolerated (the SPA shows no hint).
+        Column("preferred_buy_id", UUIDType, nullable=True),
     )
 
     shopping_list_template_table = Table(
@@ -295,6 +302,33 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_level_id", UUIDType, ForeignKey("StockLevel.id", ondelete="SET NULL"), nullable=True),
         Column("stock_level_name", String(255), nullable=True),
         Column("changed_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # FU-211 — free-text "what I actually buy" reminders on a stock item
+    # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Owned child rows; CASCADE when the
+    # stock item is deleted. Ordered by `position`.
+    preferred_buy_table = Table(
+        "PreferredBuy", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
+        Column("label", String(255), nullable=False),
+        Column("position", Integer, nullable=False, server_default="0"),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # FU-213 — everyday "what this cost me" price substrate on a stock item
+    # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.2). Total price + qty + unit; per-unit
+    # cost derived server-side. No merchant attribution. CASCADE with the item.
+    stock_item_price_observation_table = Table(
+        "StockItemPriceObservation", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
+        Column("price", Float, nullable=False),
+        Column("qty", Float, nullable=False),
+        Column("unit", String(50), nullable=False),
+        Column("observed_at", DateTime(timezone=True), nullable=False),
+        Column("source", String(32), nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
     # P2-04 — user's negative decisions on Dora suggestions. One row per
@@ -730,6 +764,16 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(StockLevelChange, stock_level_change_table, properties={
         "_id_col": stock_level_change_table.c.id,
         "id": stock_level_change_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(PreferredBuy, preferred_buy_table, properties={
+        "_id_col": preferred_buy_table.c.id,
+        "id": preferred_buy_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(StockItemPriceObservation, stock_item_price_observation_table, properties={
+        "_id_col": stock_item_price_observation_table.c.id,
+        "id": stock_item_price_observation_table.c.id,
     })
 
     _mapper_registry.map_imperatively(StockItemWasteEvent, stock_item_waste_event_table, properties={

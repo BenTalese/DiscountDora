@@ -1,5 +1,15 @@
 # Simple Mode — minimal user as a first-class workflow
 
+> **⚠️ SPINE SUPERSEDED (2026-06-17) by `PROPOSAL_PRODUCTS_AS_OVERLAY.md`.** Products is no
+> longer a user-set flag / persona / "mode": it's a **data-presence overlay** (on iff real
+> product data has been ingested), with **no user-facing toggle and no onboarding persona**.
+> What **survives and is carried forward** by the new proposal: the pricing-substrate design
+> (§2.1 → its §3.2), the price-entry surfaces (§2.7 → §3.2), and stores / `usual_store_id`
+> (§2.6 → §3.3, still FU-189). What is **replaced**: the persona/flag/2×2/"Simple mode"-identity
+> framing (§2.2, §2.4, §2.5, and the persona dependencies in §1/§5/§8). Read the new proposal
+> first; treat this file as the surviving substrate design plus historical context for the
+> superseded parts.
+
 **Status:** proposal, ready for co-design.
 **Promotes:** `99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` (the
 talk-time assessment + the 2026-06-15 brainstorm addendum).

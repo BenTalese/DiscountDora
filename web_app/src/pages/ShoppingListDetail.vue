@@ -554,6 +554,48 @@
                                                 </q-tooltip>
                                             </q-chip>
                                         </div>
+                                        <!-- FU-215 — PreferredBuy hint: pick one of
+                                             the item's "what I buy" labels as a
+                                             reminder for this line. -->
+                                        <div
+                                            v-if="line.preferred_buys && line.preferred_buys.length"
+                                            class="row items-center q-mt-xs"
+                                        >
+                                            <q-btn-dropdown
+                                                flat
+                                                dense
+                                                no-caps
+                                                size="sm"
+                                                :icon="ICONS.lightbulb"
+                                                :label="buyHintLabel(line) || 'Add a buy hint'"
+                                                :disable="detail.status === 'done'"
+                                            >
+                                                <q-list dense>
+                                                    <q-item
+                                                        v-for="pb in line.preferred_buys"
+                                                        :key="pb.preferred_buy_id"
+                                                        v-close-popup
+                                                        clickable
+                                                        :active="line.preferred_buy_id === pb.preferred_buy_id"
+                                                        @click="onPickHint(line.line_id, pb.preferred_buy_id)"
+                                                    >
+                                                        <q-item-section>{{ pb.label }}</q-item-section>
+                                                    </q-item>
+                                                    <template v-if="line.preferred_buy_id">
+                                                        <q-separator />
+                                                        <q-item
+                                                            v-close-popup
+                                                            clickable
+                                                            @click="onPickHint(line.line_id, null)"
+                                                        >
+                                                            <q-item-section class="dora-text-muted">
+                                                                Clear hint
+                                                            </q-item-section>
+                                                        </q-item>
+                                                    </template>
+                                                </q-list>
+                                            </q-btn-dropdown>
+                                        </div>
                                     </q-item-section>
 
                                     <q-item-section side style="min-width: 150px">
@@ -2011,6 +2053,37 @@
             // Next tick — assign back so the input re-renders the canonical value.
             void Promise.resolve().then(() => {
                 line.quantity = current;
+            });
+        }
+    }
+
+    // FU-215 — the chosen preferred-buy label for a line's hint chip.
+    function buyHintLabel(line: ShoppingListLine): string | null {
+        if (!line.preferred_buy_id) return null;
+        return (line.preferred_buys ?? []).find(
+            (pb) => pb.preferred_buy_id === line.preferred_buy_id,
+        )?.label ?? null;
+    }
+    async function onPickHint(lineId: string, preferredBuyId: string | null) {
+        const line = detail.value?.lines.find((l) => l.line_id === lineId);
+        if (!line) return;
+        const previous = line.preferred_buy_id ?? null;
+        // Toggle: re-picking the chosen hint clears it.
+        const next = preferredBuyId === previous ? null : preferredBuyId;
+        line.preferred_buy_id = next;
+        try {
+            if (next === null) {
+                await api.updateLineAsync(listId.value, lineId, { clear_preferred_buy: true });
+            } else {
+                await api.updateLineAsync(listId.value, lineId, { preferred_buy_id: next });
+            }
+        } catch (err) {
+            line.preferred_buy_id = previous;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not set the hint.',
+                caption: describeApiError(err) || '',
             });
         }
     }

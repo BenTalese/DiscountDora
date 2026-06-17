@@ -11,8 +11,6 @@ export type AppSettings = {
     nutrition_enabled: boolean;
     companion_ingestion_enabled: boolean;
     deals_email_enabled: boolean;
-    // Onboarding C-5.3 — products feature flag (default on; Cooking persona off).
-    products_enabled: boolean;
     // C-cross Chunk 3 — reserved seam. Empty string ⇒ users can't pick
     // `complex` nutrition mode. Free-form for now; later complex-mode
     // work parses it.

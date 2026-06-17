@@ -33,11 +33,11 @@ class AppSetting(BaseEntity):
     nutrition_enabled: bool = False
     companion_ingestion_enabled: bool = False
     deals_email_enabled: bool = False
-    # Onboarding C-5.3 — products feature flag. Default True so existing
-    # installs keep linked products / price history / ingestion; the
-    # "Cooking" persona turns it off. Per-surface hiding when off is FU-182
-    # (C-5 only introduces + sets the flag — no app-wide sweep here).
-    products_enabled: bool = True
+    # FU-209 (PROPOSAL_PRODUCTS_AS_OVERLAY): `products_enabled` removed —
+    # products is now a *data-presence* overlay. `features.products` is derived
+    # server-side from whether any `Product` row exists (see health_check), not
+    # from an admin/persona flag. The column is dropped in migration
+    # f1a2b3c4d5e6.
     # C-cross Chunk 3 — reserved seam for the nutrition `complex` mode
     # (proposal §2.3). Stores the admin-configured nutrition data source
     # (a free-form string for now — the actual schema lands when the
@@ -71,7 +71,6 @@ class AppSetting(BaseEntity):
         NUTRITION_ENABLED = "nutrition_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
-        PRODUCTS_ENABLED = "products_enabled"
         NUTRITION_DB_SOURCE = "nutrition_db_source"
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"

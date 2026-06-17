@@ -10,6 +10,22 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-182 — Treat the minimal/Products-off user as a first-class workflow
+- **Raised:** 2026-06-14 (talk-time assessment); refined 2026-06-15; promoted to proposal
+  2026-06-15 (`docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`).
+- **Type:** open decision / design follow-up
+- **What:** Treat "Products off" / the minimal user as a first-class workflow via the
+  `products_enabled` flag + a per-surface sweep, with "Simple mode" as a named identity and a
+  Money×Products 2×2 that onboarding personas had to reach all four corners of.
+- **State note:** 2026-06-17 — **SUPERSEDED** by `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md`.
+  The premise changed: Products is no longer a user-set flag / persona / "mode" but a
+  **data-presence overlay** (on iff product data is ingested), with no user toggle and no
+  onboarding persona — so "Simple mode as an identity" and the 2×2 onboarding problem dissolve
+  (the everyday experience *is* the app). Surviving pieces (the price substrate, `usual_store_id`,
+  the price-entry surfaces) are carried into the new proposal; the implementation is re-tracked as
+  its build chunks: **FU-209** (gate reframe), **FU-210** (onboarding de-persona), **FU-211**
+  (PreferredBuy), **FU-213** (price substrate). FU-189/FU-190 remain prerequisites and stay open.
+
 ## [RESOLVED] FU-185 — Stock Item Detail recipe-tab actions are dead (B8 residue)
 - **Raised:** 2026-06-15 (C-1b design — Explore sweep)
 - **Type:** finding / bug

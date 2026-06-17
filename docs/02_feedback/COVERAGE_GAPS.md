@@ -155,7 +155,9 @@ next reviewer can fast-skip them.
 - SPLASH, CANNOT CONNECT, LOGIN/REGISTER/FORGOT — A1, B9.8, INV-4.
 - ONBOARDING — `04_proposals/PROPOSAL_ONBOARDING.md` (C-5, written 2026-06-06;
   maps L24-46); dead-nav was B5; feature-flags → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md`
-  §2.6 (C-cross); headcount → C-3.
+  §2.6 (C-cross); headcount → C-3. **Update 2026-06-17:** personas + the `products_enabled` flag
+  are retired and L46 (stock-vs-product explainer) is dropped — onboarding is one un-personalized
+  "show everything" path. See `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5.
 - DASHBOARD — deferred per master plan.
 - STOCK OVERVIEW — `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (C-1, written
   2026-06-06; maps L63-99). Cart bullets → C-7; planned-meals metric → C-2;
@@ -169,7 +171,11 @@ next reviewer can fast-skip them.
   written 2026-06-06: unified button, decision tree, standalone-product rule).
   Note: My-Products link affordance (L195) + custom products (L192) still its own
   scope; the cart/standalone-product bullets (L83-84,108,130,154,191,196,288,
-  380-382) are now covered.
+  380-382) are now covered. **Update 2026-06-17:** My Products + Price History + the stock-item
+  Products tab **stay in Dora, data-gated**; only Product Search moves to the companion. Custom
+  products (L192) is **by-design refused** (no manual product entry); the everyday substitute is
+  `PreferredBuy`. The My-Products link affordance is repaired (FU-208). See
+  `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.
 - PRODUCT HISTORY — B9.6.
 - RECIPES OVERVIEW / RECIPE DETAIL — `04_proposals/PROPOSAL_COOKBOOK.md` (C-4,
   written 2026-06-06; maps L228-315). Comparison CUT per INV-6; cost/nutrition/
@@ -207,3 +213,4 @@ next reviewer can fast-skip them.
 |---|---|---|
 | 2026-06-06 | Initial pass | Created this file as part of the docs reorg. Buckets A/B/C reflect a full walk of `Feedback _ Fixes - as of [06-Jun-2026].md`. INV-7..10 added to `03_prompts/INV_investigations.md`. |
 | 2026-06-06 | C-cross written | `PROPOSAL_CONFIG_AND_OPTINS.md` (C-cross) lands the cross-cutting config layer. Flipped money/nutrition/tag-taxonomy/location/feature-flag bullets from "→ C-cross (TBD)" to a written home. Completes the Wave-C design briefs (companion C-6/C-8 remain out of Dora-core scope). |
+| 2026-06-17 | Products-as-overlay pivot | Wrote `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` (Products gated on data-presence not a flag; new `PreferredBuy` everyday construct; onboarding personas removed; Product Search → companion behind a configured URL). Superseded the spine of `PROPOSAL_SIMPLE_MODE.md`; reshaped `PROPOSAL_INGESTION_API.md` + onboarding docs + RECONCILED §7. Re-homed L42/L45/L46/L84/L131/L191/L192/L226/L254. |

@@ -342,6 +342,172 @@
                                 class="dora-notes-calm"
                                 @blur="saveNotesIfDirty"
                             />
+
+                            <!-- Preferred buys (FU-211) — free-text "what I
+                                 actually buy" reminders. Always shown; not a
+                                 product/SKU, just a personal memory aid (and a
+                                 future shopping-list hint). -->
+                            <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">
+                                Preferred buys
+                            </div>
+                            <div class="text-caption dora-text-muted q-mb-sm">
+                                What you actually buy for this — e.g. “Vitasoy Oat Milky 1L”.
+                            </div>
+                            <q-list
+                                v-if="preferredBuys.length"
+                                separator
+                                bordered
+                                class="rounded-borders q-mb-sm"
+                            >
+                                <q-item
+                                    v-for="(pb, index) in preferredBuys"
+                                    :key="pb.preferred_buy_id"
+                                >
+                                    <q-item-section>
+                                        <q-input
+                                            v-if="editingBuyId === pb.preferred_buy_id"
+                                            v-model="editingBuyLabel"
+                                            dense
+                                            outlined
+                                            autofocus
+                                            maxlength="255"
+                                            @blur="saveBuyRename(pb)"
+                                            @keydown.enter.prevent="saveBuyRename(pb)"
+                                            @keydown.esc.prevent="editingBuyId = null"
+                                        />
+                                        <q-item-label v-else>{{ pb.label }}</q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <div class="row items-center no-wrap">
+                                            <q-btn
+                                                flat dense round
+                                                :icon="ICONS.arrow_upward"
+                                                :disable="index === 0 || busy"
+                                                @click="moveBuy(index, -1)"
+                                            >
+                                                <q-tooltip>Move up</q-tooltip>
+                                            </q-btn>
+                                            <q-btn
+                                                flat dense round
+                                                :icon="ICONS.arrow_downward"
+                                                :disable="index === preferredBuys.length - 1 || busy"
+                                                @click="moveBuy(index, 1)"
+                                            >
+                                                <q-tooltip>Move down</q-tooltip>
+                                            </q-btn>
+                                            <q-btn
+                                                flat dense round
+                                                :icon="ICONS.edit"
+                                                :disable="busy"
+                                                @click="startBuyRename(pb)"
+                                            >
+                                                <q-tooltip>Rename</q-tooltip>
+                                            </q-btn>
+                                            <q-btn
+                                                flat dense round
+                                                :icon="ICONS.delete_outline"
+                                                :disable="busy"
+                                                @click="deleteBuy(pb)"
+                                            >
+                                                <q-tooltip>Remove</q-tooltip>
+                                            </q-btn>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                            <div class="row items-center no-wrap q-gutter-sm">
+                                <q-input
+                                    v-model="newBuyLabel"
+                                    dense
+                                    outlined
+                                    class="col"
+                                    maxlength="255"
+                                    placeholder="Add a preferred buy"
+                                    @keydown.enter.prevent="addBuy"
+                                />
+                                <q-btn
+                                    unelevated
+                                    color="primary"
+                                    no-caps
+                                    :icon="ICONS.add"
+                                    label="Add"
+                                    :disable="!newBuyLabel.trim() || busy"
+                                    @click="addBuy"
+                                />
+                            </div>
+
+                            <!-- Prices (FU-213) — money-gated. "What this cost
+                                 me": log total + qty + unit; Dora derives the
+                                 per-unit cost. No merchant here (everyday layer). -->
+                            <template v-if="moneyEnabled">
+                                <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">
+                                    Prices
+                                </div>
+                                <div v-if="detail.unit_cost != null" class="text-body2 q-mb-xs">
+                                    About <strong>${{ detail.unit_cost.toFixed(2) }}</strong> per unit
+                                    <span class="text-caption dora-text-muted">(from your latest entry)</span>
+                                </div>
+                                <div class="text-caption dora-text-muted q-mb-sm">
+                                    Log what you paid — the total and how much you got.
+                                </div>
+                                <q-list
+                                    v-if="priceObservations.length"
+                                    separator
+                                    bordered
+                                    class="rounded-borders q-mb-sm"
+                                >
+                                    <q-item
+                                        v-for="obs in priceObservations"
+                                        :key="obs.observation_id"
+                                    >
+                                        <q-item-section>
+                                            <q-item-label>
+                                                ${{ obs.price.toFixed(2) }}
+                                                <span class="dora-text-muted">for {{ obs.qty }} {{ obs.unit }}</span>
+                                            </q-item-label>
+                                            <q-item-label caption>{{ relativeTime(obs.observed_at) }}</q-item-label>
+                                        </q-item-section>
+                                        <q-item-section side>
+                                            <q-btn
+                                                flat dense round
+                                                :icon="ICONS.delete_outline"
+                                                :disable="busy"
+                                                @click="deleteObservation(obs)"
+                                            >
+                                                <q-tooltip>Remove</q-tooltip>
+                                            </q-btn>
+                                        </q-item-section>
+                                    </q-item>
+                                </q-list>
+                                <div class="row items-center no-wrap q-gutter-sm">
+                                    <q-input
+                                        v-model.number="newPricePrice"
+                                        dense outlined type="number"
+                                        prefix="$"
+                                        class="col"
+                                        placeholder="Total paid"
+                                    />
+                                    <q-input
+                                        v-model.number="newPriceQty"
+                                        dense outlined type="number"
+                                        class="col"
+                                        placeholder="Qty"
+                                    />
+                                    <q-input
+                                        v-model="newPriceUnit"
+                                        dense outlined
+                                        class="col"
+                                        maxlength="50"
+                                        placeholder="Unit (e.g. L, kg, ea)"
+                                    />
+                                    <q-btn
+                                        unelevated color="primary" no-caps
+                                        :icon="ICONS.add" label="Log"
+                                        :disable="!canLogPrice || busy"
+                                        @click="addObservation"
+                                    />
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </q-tab-panel>
@@ -663,6 +829,7 @@
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -672,7 +839,7 @@
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import type { Recipe } from 'src/models/recipe';
-    import type { LinkedProduct, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
+    import type { LinkedProduct, PreferredBuy, PriceObservation, StockItemDetail, Substitute } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
     import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
@@ -722,6 +889,7 @@
     // surfaces disappear entirely; FU-182 owns the app-wide sweep, this
     // page just consumes the flag.
     const { products: productsEnabled } = useFeatureFlags();
+    const { moneyEnabled } = useMoneyEnabled();
     const showQrOpen = ref(false);
     const qrSrc = computed(() => {
         const baseUrl = resolveBaseURL('dora');
@@ -946,6 +1114,74 @@
         } finally {
             busy.value = false;
         }
+    }
+
+    // ── Preferred buys (FU-211) — free-text "what I actually buy" reminders.
+    // Separate from the Product overlay; always available. Mutations reuse
+    // withBusyReload so the list reflects the server after each change.
+    const preferredBuys = computed(() => detail.value?.preferred_buys ?? []);
+    const newBuyLabel = ref('');
+    const editingBuyId = ref<string | null>(null);
+    const editingBuyLabel = ref('');
+
+    async function addBuy() {
+        const label = newBuyLabel.value.trim();
+        if (!label) return;
+        await withBusyReload(() => stockItemApi.addPreferredBuyAsync(stockItemId.value, label));
+        newBuyLabel.value = '';
+    }
+    function startBuyRename(pb: PreferredBuy) {
+        editingBuyId.value = pb.preferred_buy_id;
+        editingBuyLabel.value = pb.label;
+    }
+    async function saveBuyRename(pb: PreferredBuy) {
+        if (editingBuyId.value !== pb.preferred_buy_id) return;
+        const label = editingBuyLabel.value.trim();
+        editingBuyId.value = null;
+        if (!label || label === pb.label) return;
+        await withBusyReload(() =>
+            stockItemApi.updatePreferredBuyAsync(stockItemId.value, pb.preferred_buy_id, label),
+        );
+    }
+    async function deleteBuy(pb: PreferredBuy) {
+        await withBusyReload(() =>
+            stockItemApi.deletePreferredBuyAsync(stockItemId.value, pb.preferred_buy_id),
+        );
+    }
+    async function moveBuy(index: number, delta: number) {
+        const ids = preferredBuys.value.map((p) => p.preferred_buy_id);
+        const target = index + delta;
+        if (target < 0 || target >= ids.length) return;
+        [ids[index], ids[target]] = [ids[target]!, ids[index]!];
+        await withBusyReload(() => stockItemApi.reorderPreferredBuysAsync(stockItemId.value, ids));
+    }
+
+    // ── Prices (FU-213) — log "what this cost me"; the server derives the
+    // per-unit cost (R-003). Money-gated in the template via `moneyEnabled`.
+    const priceObservations = computed(() => detail.value?.price_observations ?? []);
+    const newPricePrice = ref<number | null>(null);
+    const newPriceQty = ref<number | null>(null);
+    const newPriceUnit = ref('');
+    const canLogPrice = computed(() =>
+        !!newPricePrice.value && newPricePrice.value > 0
+        && !!newPriceQty.value && newPriceQty.value > 0
+        && newPriceUnit.value.trim().length > 0,
+    );
+    async function addObservation() {
+        if (!canLogPrice.value) return;
+        await withBusyReload(() => stockItemApi.addPriceObservationAsync(stockItemId.value, {
+            price: newPricePrice.value as number,
+            qty: newPriceQty.value as number,
+            unit: newPriceUnit.value.trim(),
+        }));
+        newPricePrice.value = null;
+        newPriceQty.value = null;
+        newPriceUnit.value = '';
+    }
+    async function deleteObservation(obs: PriceObservation) {
+        await withBusyReload(() =>
+            stockItemApi.deletePriceObservationAsync(stockItemId.value, obs.observation_id),
+        );
     }
     async function onToggleOpen() {
         if (!detail.value) return;

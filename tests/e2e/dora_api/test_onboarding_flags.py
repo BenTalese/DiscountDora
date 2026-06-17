@@ -1,7 +1,7 @@
 """FU-193 — backend behavioural coverage for the Onboarding C-5.3/.4/.5 surfaces.
 
-Covers the install/products flag, the per-user household headcount, and the
-starter catalogue + name-resolved item seeding. Migrations themselves are
+Covers products data-presence gating (FU-209), the per-user household headcount,
+and the starter catalogue + name-resolved item seeding. Migrations themselves are
 verified separately (single head + well-formed batch DDL); these tests assert
 the runtime round-trips that the wizard relies on.
 """
@@ -18,29 +18,24 @@ SEED_ITEMS = f"{BASE}/onboarding/seed-items"
 STOCK_ITEMS = f"{BASE}/stock-items"
 
 
-# ── C-5.3 products flag ──────────────────────────────────────────────
+# ── products data-presence gate (FU-209) ────────────────────────────
 
 
-def test__health__products_flag_defaults_true(api):
+def test__health__products_flag_reflects_data_presence(api):
+    # Products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY): the
+    # flag is true iff product rows exist — there is no admin/user toggle.
     flags = requests.get(HEALTH).json()["features"]
-    assert flags["products"] is True
+    body = requests.get(f"{BASE}/products").json()
+    items = body["items"] if isinstance(body, dict) and "items" in body else body
+    assert flags["products"] is (len(items) > 0)
 
 
-def test__app_settings__products_enabled_roundtrips_and_health_reflects(api):
-    original = requests.get(APP_SETTINGS).json()["products_enabled"]
-    assert original is True, "existing installs default products on"
-    try:
-        patched = requests.patch(APP_SETTINGS, json={"products_enabled": False})
-        assert patched.status_code == 200
-        assert patched.json()["products_enabled"] is False
-        assert requests.get(APP_SETTINGS).json()["products_enabled"] is False
-        # The flag is the single source of truth: /health must agree.
-        assert requests.get(HEALTH).json()["features"]["products"] is False
-    finally:
-        assert requests.patch(
-            APP_SETTINGS, json={"products_enabled": original}
-        ).status_code == 200
-    assert requests.get(HEALTH).json()["features"]["products"] is True
+def test__app_settings__no_longer_carries_products_enabled(api):
+    # FU-209 dropped the flag: GET must not expose it, and PATCHing it is
+    # rejected by the request model (extra="forbid").
+    assert "products_enabled" not in requests.get(APP_SETTINGS).json()
+    rejected = requests.patch(APP_SETTINGS, json={"products_enabled": True})
+    assert 400 <= rejected.status_code < 500
 
 
 # ── C-5.4 household headcount ─────────────────────────────────────────

@@ -90,9 +90,10 @@ def _feature_flags() -> dict[str, bool]:
         "nutrition": False,
         "companion_ingestion": False,
         "deals_email": False,
-        # Onboarding C-5.3 — products feature (linked products, price history,
-        # ingestion). Default on; the Cooking persona turns it off.
-        "products": True,
+        # Products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY /
+        # FU-209): true iff product data has been ingested — not an admin/user
+        # flag. Conservative default false; derived from Product rows below.
+        "products": False,
         # C-cross Chunk 3 — derived capability. True when an admin has
         # configured a nutrition source (reserved seam — the integration
         # itself ships later). The per-user Settings page gates the
@@ -106,7 +107,8 @@ def _feature_flags() -> dict[str, bool]:
             get_or_create_app_setting
         from dora_api.persistence.sqlalchemy_repository import \
             SqlAlchemyRepository
-        setting = get_or_create_app_setting(SqlAlchemyRepository())
+        repo = SqlAlchemyRepository()
+        setting = get_or_create_app_setting(repo)
         flags["assistant"] = bool(setting.llm_enabled)
         flags["scanning"] = bool(setting.scanning_enabled)
         flags["meal_planning"] = bool(setting.meal_planning_enabled)
@@ -114,7 +116,10 @@ def _feature_flags() -> dict[str, bool]:
         flags["nutrition"] = bool(setting.nutrition_enabled)
         flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
         flags["deals_email"] = bool(setting.deals_email_enabled)
-        flags["products"] = bool(setting.products_enabled)
+        # FU-209 — products is on iff product data exists (data-presence gate),
+        # not an AppSetting flag. R-003: one server-derived fact via /health.
+        from dora_api.domain.entities.product import Product
+        flags["products"] = repo.get(Product).count() > 0
         # C-cross Chunk 3 — derived from the seam value; never publish the
         # source string itself.
         flags["nutrition_complex_available"] = bool(

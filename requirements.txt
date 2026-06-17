@@ -40,3 +40,4 @@ tzdata==2026.2
 # config-gated (DORA_VAPID_*); without them the sender runs in dry-run
 # mode and the install still boots fine.
 pywebpush==2.0.0
+python-dotenv==1.2.2

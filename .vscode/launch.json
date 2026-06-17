@@ -11,22 +11,6 @@
             "justMyCode": true
         },
         {
-            "name": "MAPI",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "merchant_api.startup",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "Emailer",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "emailer.startup",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
             "type": "chrome",
             "request": "launch",
             "name": "Chrome",
@@ -81,12 +65,12 @@
     ],
     "compounds": [
         {
-            "name": "Launch All (Firefox)",
-            "configurations": ["DAPI", "MAPI", "Firefox"]
+            "name": "Launch (Firefox)",
+            "configurations": ["DAPI", "Firefox"]
         },
         {
-            "name": "Launch All (Chrome)",
-            "configurations": ["DAPI", "MAPI", "Chrome"]
+            "name": "Launch (Chrome)",
+            "configurations": ["DAPI", "Chrome"]
         }
     ]
 }

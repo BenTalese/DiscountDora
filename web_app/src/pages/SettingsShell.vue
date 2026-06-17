@@ -148,6 +148,12 @@
             label: 'Audit log',
             caption: 'Every mutation, login, and client crash',
             icon: ICONS.fact_check
+        },
+        {
+            path: '/settings/admin/api-access',
+            label: 'API access',
+            caption: 'Keys for sources that push data in',
+            icon: ICONS.key
         }
     ];
 

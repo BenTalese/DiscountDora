@@ -46,3 +46,13 @@ BUDGET_ROUTER = Blueprint("BUDGET_ROUTER", __name__, url_prefix="/api/budget")
 WASTE_ROUTER = Blueprint("WASTE_ROUTER", __name__, url_prefix="/api/waste")
 SUGGESTIONS_ROUTER = Blueprint("SUGGESTIONS_ROUTER", __name__, url_prefix="/api/suggestions")
 TTS_ROUTER = Blueprint("TTS_ROUTER", __name__, url_prefix="/api/tts")
+
+# C-10.1 — admin CRUD over IngestionSource (session-cookie, admin-only).
+INGESTION_SOURCE_ROUTER = Blueprint(
+    "INGESTION_SOURCE_ROUTER", __name__, url_prefix="/api/ingestion-sources"
+)
+
+# C-10.2 — the producer-facing endpoint. Session-middleware exempts it
+# (see middleware.PUBLIC_ENDPOINTS) so its handlers can authenticate via
+# `Authorization: Bearer` instead of the dora_session cookie.
+INGEST_ROUTER = Blueprint("INGEST_ROUTER", __name__, url_prefix="/api/ingest")

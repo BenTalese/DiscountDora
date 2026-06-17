@@ -283,33 +283,41 @@ def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):
     }
 
 
-def test__create_product__ProductAlreadyExists__IsBusinessRuleViolation(api):
-    _ProductRequest = CreateProductRequest(
-        brand = "Test",
-        image = None,
-        is_active = True,
-        is_available = True,
-        merchant_name = "WoolWorThS",
-        merchant_stockcode = "50332ba",
-        name = "Banana Mangoes",
-        price_now = 4.5,
-        price_was = 10.5,
-        size = "500g",
-        size_unit = "g",
-        size_value = 5.0,
-        web_url = "www"
-    )
-
-    _Response = requests.post(base_route, json = _ProductRequest.model_dump())
-
-    assert _Response.status_code == 422
-    assert _Response.json() == {
-        'detail': 'See errors property for more details.',
-        'errors': {'': ["Product already exists with name 'Banana Mangoes', merchant 'WoolWorThS', and stockcode '50332ba'."]},
-       'status': 422,
-       'title': 'Business rule violation.',
-       'type': 'https://datatracker.ietf.org/doc/html/rfc4918#section-11.2',
+def test__create_product__ProductAlreadyExists__AppendsHistoricOffer(api):
+    """FU-217 / R-003 — the second POST for the same product no longer
+    422s; it appends a new historic point + moves current_offer (the
+    same offer-append mapping `/api/ingest` uses)."""
+    import uuid
+    unique_stockcode = uuid.uuid4().hex[:8]
+    payload = {
+        "brand": "Test",
+        "image": None,
+        "is_active": True,
+        "is_available": True,
+        "merchant_name": "Woolworths",
+        "merchant_stockcode": unique_stockcode,
+        "name": f"FU217-{uuid.uuid4().hex[:6]}",
+        "price_now": 4.5,
+        "price_was": 10.5,
+        "size": "500g",
+        "size_unit": "g",
+        "size_value": 5.0,
+        "web_url": "www",
     }
+
+    first = requests.post(base_route, json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()["created"] is True
+    product_id = first.json()["id"]
+
+    # Same product, new price → 201, not created, offer appended.
+    payload["price_now"] = 3.0
+    payload["price_was"] = 5.0
+    second = requests.post(base_route, json=payload)
+    assert second.status_code == 201, second.text
+    assert second.json()["created"] is False
+    assert second.json()["offer_appended"] is True
+    assert second.json()["id"] == product_id
 
 
 def test__create_product__ExtraAttributes__IsBadRequest(api):

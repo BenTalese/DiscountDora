@@ -7,10 +7,23 @@ from flask import Flask
 from flask.json.provider import DefaultJSONProvider
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import event
+from sqlalchemy import MetaData, event
 from sqlalchemy.engine import Engine
 
 from dora_api.infrastructure.configuration_manager import DoraConfig
+
+# R-0NN — every constraint gets a deterministic, conventional name. Without
+# this, SQLite + Alembic batch_alter_table can't reproduce unnamed UNIQUE /
+# CHECK / FK constraints when it rebuilds a table (SQLite has no
+# ALTER ... ADD/DROP CONSTRAINT), and the migration chain dies at the first
+# such table. See ENGINEERING_STANDARDS.md.
+NAMING_CONVENTION = {
+    "ix":  "ix_%(table_name)s_%(column_0_name)s",
+    "uq":  "uq_%(table_name)s_%(column_0_name)s",
+    "ck":  "ck_%(table_name)s_%(constraint_name)s",
+    "fk":  "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk":  "pk_%(table_name)s",
+}
 
 config_manager = DoraConfig()
 
@@ -63,7 +76,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # Secure cookies require HTTPS — toggle on for production via env.
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('DORA_SECURE_COOKIES', '').lower() in ('1', 'true', 'yes')
 
-db = SQLAlchemy()
+db = SQLAlchemy(metadata=MetaData(naming_convention=NAMING_CONVENTION))
 config_manager.get_data_dir().mkdir(parents=True, exist_ok=True)
 db.init_app(app)
 

@@ -6,7 +6,7 @@ the power-user Product overlay). Owned child rows, ordered by `position`,
 CASCADE-deleted with their stock item.
 
 Revision ID: a2c4e6f8b1d3
-Revises: f1a2b3c4d5e6
+Revises: f1d5b8a2c4e6
 Create Date: 2026-06-17 00:00:00.000000
 
 """
@@ -15,7 +15,7 @@ import sqlalchemy_utils
 from alembic import op
 
 revision = 'a2c4e6f8b1d3'
-down_revision = 'f1a2b3c4d5e6'
+down_revision = 'f1d5b8a2c4e6'
 branch_labels = None
 depends_on = None
 

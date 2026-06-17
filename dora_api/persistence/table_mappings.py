@@ -4,6 +4,9 @@ from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
 from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.idempotency_key import IdempotencyKey
+from dora_api.domain.entities.ingestion_source import IngestionSource
+from dora_api.domain.entities.ingestion_store_mapping import IngestionStoreMapping
 from dora_api.domain.entities.audit_event import AuditEvent
 from dora_api.domain.entities.auth_token import AuthToken
 from dora_api.domain.entities.category import Category
@@ -106,6 +109,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("price_now", Float),
         Column("price_was", Float),
         Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), nullable=False),
+        # C-10.2 — provenance string. Nullable: historic points minted by
+        # the pre-C-10 `create_product` path predate this column.
+        Column("source", String(64), nullable=True),
     )
 
     product_table = Table(
@@ -666,6 +672,56 @@ def configure_mappings(db: SQLAlchemy):
         Column("alerts_email_day", Integer, nullable=False, server_default="0"),
     )
 
+    # C-10.1 — admin-minted bearer credential for `POST /api/ingest`. The
+    # raw key is only shown once at creation; rest holds the SHA-256 hash
+    # (mirrors AuthToken). Counters + last_used feed the API access page's
+    # observability (C-10.3). `trust` is captured per PROPOSAL_INGESTION_API
+    # §2.6 (enforcement deferred). `label` is admin free-text — the
+    # invisibility rule forbids naming any specific producer.
+    ingestion_source_table = Table(
+        "IngestionSource", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("label", String(255), nullable=False),
+        Column("key_hash", String(64), nullable=False, unique=True),
+        Column("enabled", Boolean, nullable=False, server_default="1"),
+        Column("trust", String(16), nullable=False, server_default="high"),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("last_used_at", DateTime(timezone=True), nullable=True),
+        Column("accepted_count", Integer, nullable=False, server_default="0"),
+        Column("skipped_count", Integer, nullable=False, server_default="0"),
+        Column("failed_count", Integer, nullable=False, server_default="0"),
+    )
+
+    # C-10.2 — consumed `Idempotency-Key`s from `POST /api/ingest`
+    # batches. Re-sending the same key under the same source is a no-op
+    # (PROPOSAL_INGESTION_API §2.3). TTL via `expires_at` lets the table
+    # stay bounded.
+    idempotency_key_table = Table(
+        "IdempotencyKey", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("key", String(255), nullable=False),
+        Column("source_id", String(36), nullable=False),
+        Column("expires_at", DateTime(timezone=True), nullable=False),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+    )
+
+    # C-10.2 / FU-190 — external "merchant" name → Dora Merchant mapping
+    # per IngestionSource. Quarantined when `merchant_id` is NULL; the
+    # admin maps or rejects on the API access page.
+    ingestion_store_mapping_table = Table(
+        "IngestionStoreMapping", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("source_id", UUIDType,
+               ForeignKey("IngestionSource.id", ondelete="CASCADE"),
+               nullable=False),
+        Column("external_name", String(255), nullable=False),
+        Column("merchant_id", UUIDType,
+               ForeignKey("Merchant.id", ondelete="SET NULL"),
+               nullable=True),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("last_seen_at", DateTime(timezone=True), nullable=True),
+    )
+
     auth_token_table = Table(
         "AuthToken", metadata,
         Column("id", UUIDType, primary_key=True),
@@ -814,6 +870,21 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(AuthToken, auth_token_table, properties={
         "_id_col": auth_token_table.c.id,
         "id": auth_token_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(IngestionSource, ingestion_source_table, properties={
+        "_id_col": ingestion_source_table.c.id,
+        "id": ingestion_source_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(IdempotencyKey, idempotency_key_table, properties={
+        "_id_col": idempotency_key_table.c.id,
+        "id": idempotency_key_table.c.id,
+    })
+
+    _mapper_registry.map_imperatively(IngestionStoreMapping, ingestion_store_mapping_table, properties={
+        "_id_col": ingestion_store_mapping_table.c.id,
+        "id": ingestion_store_mapping_table.c.id,
     })
 
     _mapper_registry.map_imperatively(PriceAlert, price_alert_table, properties={

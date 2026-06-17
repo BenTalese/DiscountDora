@@ -5,7 +5,33 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Power-user docs for sourcing product data (FU-212).** New
+  [`docs/INGESTION_GUIDE.md`](docs/INGESTION_GUIDE.md) covers minting an API key, the store-mapping
+  step (no auto-create), and the full `POST /api/ingest` contract — for admins who want to populate
+  the product layer themselves. Not surfaced to end users; producer kept unnamed throughout.
+- **Admin "API access" page — bearer-keyed ingestion seam (C-10, Phase B).** A new admin Settings
+  page mints, lists, relabels, and revokes bearer keys that an external source uses to push data
+  into Dora via `POST /api/ingest`. Each key shows accepted/skipped/failed counters + last-used,
+  plus a per-source "Store mappings" panel where the admin links each pushed store name to one of
+  Dora's existing merchants. **Stores are never auto-created (FU-190):** an unknown name skips the
+  record and surfaces as **pending** for the admin to map. The endpoint is batched and accepts
+  products, offers, and price observations; an `Idempotency-Key` header makes a re-send a no-op;
+  bad records report per-record without failing the batch. The producer/companion is **never
+  named** anywhere in the app (PROPOSAL_INGESTION_API invisibility rule). Migrations
+  `d6f8a3b9c1e2` (IngestionSource), `e7a1c3b8d5f4` (IngestionStoreMapping, IdempotencyKey,
+  `ProductHistoricOffer.source`).
+
 ### Changed
+- **Adding a duplicate product now records the new price instead of erroring (FU-217).**
+  `POST /api/products` used to reject a second submit for the same product with a 422
+  "already exists". It now appends a new historic price point + moves the catalogue's current
+  offer to the new value (the same offer-append path `/api/ingest` uses) and returns 201 with
+  `{id, created: false, offer_appended: true}`. So manual product-add accrues price history just
+  like ingestion does.
+- **Onboarding no longer plays a cinematic loop intro (FU-210 tail).** The wizard now goes
+  straight to the setup steps — no more Story stage with the hero loop, no persona preview,
+  no loop recap on the Finish step. Setup is the whole onboarding.
 - **Stock value & recipe cost now also use the prices you've logged (FU-216).** If a pantry item has
   no linked product but you've logged what it cost (the FU-213 Prices section), that price now feeds
   the stock-value report and recipe cost estimates — so the numbers reflect your own price memory,

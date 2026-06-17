@@ -3,7 +3,31 @@ from logging.config import fileConfig
 
 from flask import current_app
 
-from alembic import context
+from alembic import context, op
+
+
+# R-0NN — wrap op.batch_alter_table so every migration's batch op inherits
+# the metadata's naming convention without each call site having to pass it.
+# Required because SQLite's lack of ALTER ... DROP CONSTRAINT forces Alembic
+# to rebuild the table; rebuilding needs every UNIQUE/CHECK/FK to have a
+# name, and the only way batch's reflection can name pre-existing anonymous
+# constraints is if the convention is supplied at the call. See
+# ENGINEERING_STANDARDS.md.
+_ORIGINAL_BATCH_ALTER_TABLE = op.batch_alter_table
+
+
+def _batch_alter_table_with_convention(*args, **kwargs):
+    if 'naming_convention' not in kwargs:
+        try:
+            metadata = current_app.extensions['migrate'].db.metadata
+            if metadata.naming_convention:
+                kwargs['naming_convention'] = dict(metadata.naming_convention)
+        except (RuntimeError, KeyError, AttributeError):
+            pass
+    return _ORIGINAL_BATCH_ALTER_TABLE(*args, **kwargs)
+
+
+op.batch_alter_table = _batch_alter_table_with_convention
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -65,7 +89,14 @@ def run_migrations_offline():
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url, target_metadata=get_metadata(), literal_binds=True
+        url=url,
+        target_metadata=get_metadata(),
+        literal_binds=True,
+        render_as_batch=True,
+        # R-0NN — every constraint deterministically named; SQLite batch
+        # mode can then rebuild a table without choking on unnamed UNIQUE/
+        # CHECK/FK. See ENGINEERING_STANDARDS.md.
+        naming_convention=get_metadata().naming_convention,
     )
 
     with context.begin_transaction():
@@ -97,6 +128,9 @@ def run_migrations_online():
             connection=connection,
             target_metadata=get_metadata(),
             process_revision_directives=process_revision_directives,
+            # R-0NN — see run_migrations_offline(). render_as_batch is
+            # already in Flask-Migrate's configure_args for SQLite.
+            naming_convention=get_metadata().naming_convention,
             **current_app.extensions['migrate'].configure_args
         )
 

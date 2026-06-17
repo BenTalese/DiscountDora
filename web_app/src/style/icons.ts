@@ -190,6 +190,7 @@ export const ICONS = {
     ios_share: 'mdi-export-variant',
     local_fire_department: 'mdi-fire',
     lock: 'mdi-lock',
+    key: 'mdi-key-variant',
     mark_email_read: 'mdi-email-check',
     mood: 'mdi-emoticon-happy',
     palette: 'mdi-palette',

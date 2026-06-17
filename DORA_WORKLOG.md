@@ -9,6 +9,333 @@ next.
 
 ---
 
+## 2026-06-17 — FU-219 RESOLVED — companion FE landed (Vue 3 + Quasar + Pinia in `../dora-companion/web_app/`)
+**Status:** scaffolded + ported in one chunk. `npm install` (226 packages), `vue-tsc --noEmit` clean,
+`vite build` clean (~82 KB main gzipped). Phase C is now end-to-end complete (.1 + .2 + .3 all done).
+
+**Scaffold:** Vite + Vue 3 + Quasar + Pinia + Vue Router, TS strict, no Quasar CLI (lighter than
+Dora's setup). `vite.config.ts` (port 5175), `tsconfig.json`, `src/style/quasar-variables.scss`
+(distinct blue/amber palette so the two apps don't look identical), `App.vue` shell with a top tab
+bar, three routes via `router/index.ts`.
+
+**Pages (three):**
+- **`/search` — Product search.** Faithful port of Dora's `ProductSearch.vue` core: search input,
+  merchant chips with selection state + health badges, filter bar (sort, in-stock-only,
+  specials-only, half-price-or-better, per-merchant result limit), status banners (searching,
+  search error, unhealthy providers), result grid, empty states, cancel-mid-search via abort
+  token. **Dora-only concerns stripped:** saved-products, link-to-stock-item dialog, quick-add,
+  comparison-vs-Dora-catalogue, MerchantLogo (no assets), TrendSparkline (no history). **Replaced
+  with the companion-specific value:** per-card "Push" button + a header batch-push button (uses
+  current selection, or "all displayed" if nothing selected); result dialog summarises Dora's
+  per-record outcomes with a warning callout when records were `store_not_mapped` (FU-190
+  pending-mapping path surfaced end-to-end).
+- **`/settings/merchants` — Merchants.** Direct port of Dora's `MerchantsSettings.vue`. List,
+  per-merchant enable/disable toggle with optimistic flip + rollback on failure, provider-health
+  chip with substring-matched provider-for-merchant resolution, ad-hoc "Run health check" with a
+  human relative-time label, orphan-providers section.
+- **`/settings/dora-target` — Dora target.** Read-only. Friendly label from `VITE_DORA_LABEL`;
+  real URL + bearer key live in the **BE env**, never echoed to the browser by design. Connectivity
+  probe button issues a tiny no-match push so 503 (env not set) vs 502 (Dora rejected) vs
+  unreachable surface different messages.
+
+**Services:**
+- `MapiHttpClient` — thin axios wrapper, base URL from `VITE_MAPI_BASE_URL` (.env.example
+  defaults to `http://127.0.0.1:5172/api`).
+- `MerchantsApiService` — collapses Dora's split `merchantApiService` + `merchantManagementApiService`
+  into one (companion has one BE, not Dora's two-backend story).
+- `ProductSearchApiService` — `searchAsync` + `pushAsync` (hits the companion's `POST /api/push`
+  which scrapes + forwards to Dora's `POST /api/ingest`).
+- `useMerchantStore` (Pinia) — `merchants`, `providerHealth`, `enabledMerchants`,
+  `healthForMerchant`, `isMerchantHealthy` (ported from Dora's `merchantStore`, dropped the
+  Dora-side `productStore` cross-coupling).
+
+**Companion BE touch:** added `http://localhost:5175` + `http://127.0.0.1:5175` to mapi's DEV +
+TEST CORS allowlists so the FE can hit the BE in dev without extra config. Production sets
+`MAPI_CORS_ORIGINS` to the deployed FE origin.
+
+**Companion .gitignore:** ignored `node_modules/`, `web_app/dist/`, `web_app/.vite/`.
+
+**FU-219 → RESOLVED** in `DORA_FOLLOWUPS_RESOLVED.md`. Companion README updated with a "Frontend"
+section + run instructions.
+
+**Eng-standards close-gate:** R-001 (componentised); R-002 (palette tokens via Quasar SCSS vars,
+no hardcoded colours in templates besides the dynamic discount badge gradient); R-007 (port-only,
+no incidental rebuilds); R-008 (minimal comments — only the non-obvious why). No new R/ADR — this
+is a Vue project, the patterns already exist.
+
+**Next:** **Phase D** in Dora — decommission `merchant_api/` + `emailer/` + the in-app live
+ProductSearch wiring + add the configured "Product search URL" nav. The companion FE just shipped
+gives Phase D's removed surface a real replacement to point at.
+
+---
+
+## 2026-06-17 — Phase C (companion: standalone + wired) — backend GREEN, round-trip to Dora's `/api/ingest` exercised
+**Where this work lives:** sibling repo `../dora-companion` (its own `.git`). Status writeup carried
+back here because the products-as-overlay runbook lives in this repo and owns Phase ordering.
+
+**Phase C.1 — companion stands alone.**
+- Vendored four modules out of `dora_api.infrastructure.*` into a new `companion_common/` package:
+  `logging_setup.py`, `utils.py` (only `get_attributes_ending_with` + `get_classes_ending_with` —
+  dropped the `DependencyContainer` dependency), `profile.py` (trimmed: empty
+  `PRODUCTION_REQUIRED_VARS`, `COMPANION_ENV` w/ `DORA_ENV` fallback), `log_context.py`. All
+  `from dora_api...` imports across `merchant_api/` and `emailer/` rewritten to point at
+  `companion_common/`.
+- Fixed two pre-existing seed bugs surfaced by the import sweep:
+  `merchant_api/domain/entities/dora_product.py` had `.brand: str`-style typos on six fields
+  (SyntaxError on import); `emailer/delivery.py` imported a `mjml_test` function that was never
+  landed (aliased to the existing `generate_html` with a comment — emailer is otherwise
+  half-finished seed code and not Phase C's critical path).
+- Added `requirements.txt` (Flask/CORS/pydantic/requests/bs4/apscheduler/rich/fuzzywuzzy/jinja).
+- Smoke: `build_app()` runs clean; all original routes register (`/api/health`,
+  `/api/products/search`, `/api/merchants/...`).
+
+**Phase C.2 — push to Dora's `/api/ingest`.**
+- New module `companion_common/dora_ingest.py`: `IngestConfig.from_env()` (reads
+  `DORA_INGEST_URL` + `DORA_INGEST_KEY`), `build_payload(offers, source_label, observed_at)`,
+  `push_offers(offers, config, idempotency_key, session)`, `IngestResult` with
+  `has_pending_store_mappings` derived from the per-record `skipped[]`. Auth via
+  `Authorization: Bearer`, `Idempotency-Key` per batch (auto-gen if absent), structural
+  `_OfferLike` protocol so the client doesn't import merchant_api (one-way dependency).
+- New helper `merchant_api/features/scrape_offers.py`: pulled the search-loop out of
+  `search_for_product.py` so `/api/products/search` (returns offers to caller) and the new
+  `POST /api/push` (forwards them to Dora) share one path — R-003 inside the companion.
+- New endpoint `merchant_api/features/push_to_dora.py` (`POST /api/push`): validates a query,
+  scrapes via the shared helper, pushes via `dora_ingest.push_offers`, returns per-record
+  results. Configuration-gated (503 if `DORA_INGEST_URL`/`KEY` not set).
+- **FU-190 honoured deliberately stateless.** The companion passes each scraped record's
+  `merchant_name` verbatim as the payload's `merchant`. Dora's `IngestionStoreMapping` handles
+  the resolution. Unknown names quarantine on Dora's side; the admin maps via Dora's API access
+  page. The companion has no concept of Dora-side identity.
+
+**Acceptance tests (all GREEN):**
+- `tests/test_dora_ingest_client.py` (5/5) — unit tests against a stub `_DoraTestSession`:
+  payload shape, bearer + idem headers, `has_pending_store_mappings`, 401 → `PermissionError`,
+  5xx → `RuntimeError`.
+- `tests/test_integration_dora_roundtrip.py` (4/4) — **end-to-end against a live in-process
+  `dora_api`**: mint a key → map a merchant → push → 200 with `product` + `offer` accepted;
+  unmapped store → `has_pending_store_mappings=True`; bad bearer → `PermissionError`; same
+  `Idempotency-Key` twice → second is `idempotent_replay=True` no-op.
+- Dora's own suite **401/401** still green after the companion changes (no Dora-repo edits).
+
+**Phase C.3 deferred:** the companion FE (ProductSearch.vue + MerchantsSettings.vue port) is the
+only step left. Headless scrape→push works end-to-end; the FE is a port not a build. Flagged as
+**FU-219** to revisit when the companion needs a browsable UI.
+
+**Next:** **Phase D** in Dora — decommission `merchant_api/` + `emailer/` + the in-app live
+ProductSearch wiring + add the configured Product Search URL. This is the first time it's safe to
+do; the companion now stands on its own and a Dora install with the URL configured + a key minted
+can fully replace today's in-app scraping.
+
+---
+
+## 2026-06-17 — Three post-Phase-B follow-ups closed: FU-217 (R-003), FU-210 tail (persona preview), FU-212 (docs)
+**Status:** rolled three follow-ups that were tied to what just landed. Full backend pytest still
+**401/401**; `vue-tsc` + `npm run lint` clean.
+
+**FU-217 — `create_product` shares the offer-append mapping (R-003 closure).**
+- `dora_api/features/products/create_product.py`: when a product already exists, instead of returning
+  422 the handler now calls `apply_offer_to_product` (the C-10.2 shared helper) — appends a new
+  `ProductHistoricOffer` + moves `current_offer`. Idempotent on `(product_id, observed_at, price_now)`.
+  Source string `"manual"` distinguishes these points from ingest-provenance points.
+- Response is now `201 {id, created, offer_appended}` (superset; the legacy successful-create test
+  still passes). The previous 422 dup test was rewritten to assert append.
+- Moved FU-217 → RESOLVED. One offer-append path across `/api/products` and `/api/ingest`.
+
+**FU-210 tail — removed the illustrative hero-loop persona preview.**
+- Deleted `OnboardingLoop.vue`, `OnboardingStory.vue`, `OnboardingScene.vue`, and the entire
+  `onboardingContent.ts` (`PERSONA_PREVIEWS`, `NARRATIVE_SCENES`, `LOOP_STAGES`, `LOOP_CENTRE`,
+  `LOOP_INSIGHT`, `DEFAULT_PERSONA_PREVIEW`, `PersonaPreview`/`PersonaPreviewKey` — all unreferenced
+  after the cleanup). `WelcomeWizard.vue` stripped: `view`/`storySceneIndex`/`personaPreview` refs +
+  draft-persistence keys + rail `'story'` section all gone. Rail now has the single `'setup'` section.
+  No more cinematic intro; no more Finish-step loop recap. The wizard goes straight to setup.
+- FU-210 stays **OPEN** only for the **browser-verify** part — the static FE change is in.
+
+**FU-212 — power-user ingestion docs (`docs/INGESTION_GUIDE.md`).**
+- New top-level doc covering: data-presence gate (what lights up), API access page (mint / disable /
+  revoke), store-mapping pre-map vs auto-quarantine (FU-190), `POST /api/ingest` contract (auth,
+  Idempotency-Key, payload schemas, dedupe keys, stable `reason` codes, result DTO), Product Search
+  URL carve-out, trust tiers. Producer deliberately **never named** — phrased "any external source
+  you run". Index entry added to `docs/00_DOCS_INDEX.md`. Moved FU-212 → RESOLVED.
+
+**Eng-standards close-gate:** R-003 (FU-217 collapses the two offer-append paths); R-007 (scope —
+no adjacent refactors beyond what each FU asked for); R-008 (minimal comments; no gratuitous docs —
+the new guide is requested by FU-212). No new R/ADR.
+
+**Next:** runbook **Phase C** lives in `../dora-companion` (sibling repo). Pending browser passes
+still gate the Phase 0 + Phase B + FU-210 closures.
+
+---
+
+## 2026-06-17 — Phase B (ingestion API) — landed end-to-end, backend GREEN, FU-190 honoured
+**Status:** Phase B of the products-as-overlay runbook is **code-complete** with full backend
+coverage on the local env. Phase 0 is also fully verified now: full test suite **401/401**, `vue-tsc`
+clean, `npm run lint` clean. Single Alembic head: **`e7a1c3b8d5f4`**.
+
+**What landed (per `IMPL_PLAN_INGESTION_API.md` chunks C-10.1–C-10.3):**
+
+- **C-10.1 — `IngestionSource` + bearer auth lane + admin "API access" page.**
+  - Entity (`ingestion_source.py`) + table + migration `d6f8a3b9c1e2`.
+  - Bearer-auth helpers in `dora_api/infrastructure/ingestion_auth.py` (`hash_ingestion_key` mirrors
+    `auth_helpers._hash_token` — one hashing path, R-003).
+  - Two new routers: `INGESTION_SOURCE_ROUTER` (admin CRUD, session-cookie + admin-gated) and
+    `INGEST_ROUTER` (producer-facing, **exempted** from the session middleware via
+    `PUBLIC_ENDPOINTS` so it can authenticate via Bearer).
+  - Admin endpoints: list / create (one-time raw-key reveal) / patch (label, enabled) / delete.
+  - Frontend `IngestionSourcesApiService.ts` + `ApiAccessSettings.vue` (sidebar entry; the page is
+    NOT gated by `features.products` — proposal §4.3 chicken-and-egg).
+  - **Invisibility rule preserved** — no companion/scraper/producer references anywhere in UI copy,
+    DTOs, or errors. The page reads "bearer keys for authenticated sources".
+
+- **C-10.2 — `POST /api/ingest` (batched, idempotent, append-only).**
+  - Entities: `IdempotencyKey`, `IngestionStoreMapping`. `ProductHistoricOffer.source` column
+    added (provenance, nullable — legacy points predate). Migration `e7a1c3b8d5f4`.
+  - Shared offer-append mapping in `features/ingestion/offer_mapping.py`
+    (`apply_offer_to_product`) — single source for "given a product and a price, what changes".
+    Dedupe at the DB on `(product_id, observed_at, price_now)` so resends and tz-roundtrip don't
+    matter. `create_product` keeps its 409-on-dup behaviour for now — a follow-up to retire that
+    in favour of append (left as a finding rather than touched mid-chunk).
+  - Handler `submit_ingestion_batch.py`: bearer-auth → optional `Idempotency-Key` short-circuit →
+    products upsert (shared-catalogue dedupe on `(merchant, stockcode | name)`; source is
+    provenance, **not identity**) → offers append + move `current_offer` → observations
+    (stock-item path → `StockItemPriceObservation`; product path → single-point historic offer).
+    Per-record DTO `{accepted[], skipped[], failed[]}` — bad records never fail the batch.
+  - Counters (accepted/skipped/failed) + `last_used_at` updated atomically on the source row.
+
+- **C-10.2 / FU-190 — no auto-create stores.**
+  - Producer's `merchant` field is resolved through `IngestionStoreMapping` per source. First
+    sighting auto-creates a **quarantined** mapping (`merchant_id IS NULL`); the record is skipped
+    with reason `store_not_mapped`. Admin maps later. Stores themselves are never created.
+  - Admin CRUD on the mappings: `GET/PUT/DELETE /api/ingestion-sources/<id>/store-mappings`
+    (`store_mappings.py`).
+
+- **C-10.3 — observability surface.**
+  - `ApiAccessSettings.vue` now collapses each source into an expansion item showing
+    `Accepted/Skipped/Failed` and last-used; expanded body shows the per-source mappings with a
+    merchant picker + pending badge. Pending count surfaces in the header.
+
+**Tests added (backend, all GREEN on first/second pass):**
+- `test_ingestion_sources.py` (5/5) — admin CRUD + one-time-key contract.
+- `test_ingest_batch.py` (9/9) — auth (good/missing/bad/disabled), unknown-store quarantines,
+  product dedupe, offer append + duplicate, idempotency replay = no-op, bad record doesn't fail
+  the batch.
+- `test_ingestion_store_mappings.py` (6/6) — list/upsert/quarantine/delete + invalid merchant +
+  unknown source.
+
+**Eng-standards close-gate:** R-003 (shared offer-append mapping; one hashing helper); R-005/R-006
+(portable batch-mode migration, naming convention from R-015 inherits in `env.py`); R-007 (no
+adjacent cleanup — `create_product` 409-on-dup left intact as a flagged follow-up); R-008 (minimal
+comments). No new R/ADR — the patterns reuse existing ones.
+
+**Deliberately deferred (logged as follow-ups, see FU update):**
+- `create_product` refactor to use `apply_offer_to_product` so manual product-add ALSO accrues
+  history. Currently it 409s on dup. The shared helper is ready; switching the legacy path is a
+  behaviour change worth a dedicated chunk + test update.
+- Per-source rate limiting and trust-tier enforcement (proposal §2.6 carries trust but defers
+  enforcement).
+- "Your prices" intelligence layer (C-10.4 / Phase F) — the user-facing payoff is Phase F per the
+  runbook.
+- Browser pass on the new admin page (sidebar entry visible, key minting + reveal-once flow,
+  mapping picker, pending badge).
+
+**Verified:**
+- Full pytest **401/401** (was 386 pre-Phase-B; +20 new ingestion tests).
+- Migration chain clean base→head `e7a1c3b8d5f4` on a fresh SQLite — the R-015 wrapper carries
+  the chain transparently.
+- `vue-tsc` + `npm run lint` clean.
+
+**Next:** runbook Phase C (companion: standalone + wired to `/api/ingest`) — that work lives in the
+`../dora-companion` sibling repo, user-driven + me. After that: Phase D (decommission
+`merchant_api`/`emailer` from Dora). Phase E (Merchant→Store rename) still LAST. Per-FU **browser
+passes** for Phase 0 + the new C-10 page remain pending.
+
+---
+
+## 2026-06-17 — FU-178 RESOLVED — fresh-SQLite `flask db upgrade` chain works base→head; R-015 + ADR-010 added
+**Status:** done. The two-year-pending boot blocker is fixed via the **hard cutover** the user
+approved (pre-release; no DBs to preserve). Full pytest still 381/381.
+
+**Root cause (now in R-015 / ADR-010):** SQLite has no `ALTER TABLE ADD/DROP CONSTRAINT`, so Alembic
+batch mode rebuilds the table — and to re-emit constraints it needs them all to have **names**.
+Several historical tables had anonymous UNIQUE/CHECK/FK constraints, so any later `batch_alter_table`
+against them tripped `ValueError: Constraint must have a name` (first death: `d7c9e4a8c2b1`).
+
+**Fix (three small edits, one wrapper, one rule):**
+- `dora_api/app.py` — added `NAMING_CONVENTION` (`ix_/uq_/ck_/fk_/pk_` + table + column0) and
+  attached it to the SQLAlchemy `MetaData` (`SQLAlchemy(metadata=MetaData(naming_convention=…))`).
+- `dora_api/persistence/migrations/env.py` — threaded the convention into both `context.configure(…)`
+  callsites (offline + online), **and wrapped `op.batch_alter_table`** so every migration's batch op
+  inherits the convention without each of the ~96 call sites having to pass it. Removed
+  Flask-Migrate's auto-supplied `render_as_batch` from the online configure call (it was duplicate).
+- `docs/01_charter/ENGINEERING_STANDARDS.md` — new **R-015** ("every DB constraint has a
+  deterministic name") + **ADR-010** ("hard cutover to a project-wide naming convention").
+- `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md` — FU-178 moved with a state note pointing at the
+  R/ADR.
+
+**Verified:** `rm test.db && flask db upgrade` from base runs every revision clean to head
+`c4e6a8b1d3f5`. Re-ran the full suite: **381/381 still green** (the convention doesn't change any
+table-mapping semantics tests rely on). `vue-tsc` + lint unaffected.
+
+**Accepted limitation (documented in ADR-010):** `flask db downgrade base` from head still trips on a
+handful of legacy migrations that hard-coded `ck_*`-prefixed literal names (the convention
+double-prefixes them, so `drop_constraint('ck_shopping_list_line_anchor')` fails to find
+`ck_<table>_ck_shopping_list_line_anchor`). **Not a product flow** — dev resets go through
+`drop_all`/`DORA_ALLOW_DESTRUCTIVE` and prod hasn't shipped. R-015 mandates **bare-suffix literals**
+going forward (`'shopping_list_line_anchor'`, not `'ck_shopping_list_line_anchor'`).
+
+**Eng-standards close-gate:** R-006 (clean migrations) + new R-015 honoured; ADR-010 added per the
+ADR evaluation step (recurring decision → new rule).
+
+**Next:** **Phase B — Ingestion API** (in `dora_api`) per the runbook §B + FU-190. Browser
+checklist remains pending whenever the user works through the running app.
+
+---
+
+## 2026-06-17 — Phase A env-verify of the Phase-0 stack — GREEN (backend); migration-id collision found + fixed
+**Status:** ran the runbook's Phase A on the local env (`.venv` Py3.11, `web_app/node_modules` present).
+Result: full test suite **381/381 passed** (incl. the 3 new FU-211/213/215 files at 11/11), `vue-tsc`
+clean, `npm run lint` clean. **Two material findings surfaced — one fixed, one acknowledged.**
+
+**Finding 1 (BLOCKER, fixed) — duplicate Alembic revision id `f1a2b3c4d5e6`.** Two migrations declared
+the same `revision`: the 2026-05-20 `app_settings.py` and the 2026-06-17 `drop_appsetting_products_enabled.py`
+(FU-209). Alembic raised `CycleDetected` on **every** revision (the heads list was unreachable). Two
+children pointed at the duplicate id (`a1b2c3d4e5f6_20260521_substitutes_preferred_history` ← real
+parent = 0520 app_settings; `a2c4e6f8b1d3_20260617_preferred_buys` ← real parent = 0617 drop). Fix:
+**re-issued the FU-209 migration as `f1d5b8a2c4e6`** (file renamed, `revision`/`down_revision` updated)
+and **repointed `a2c4e6f8b1d3.down_revision`** to it. New chain (single head, matches runbook):
+`e9a4b6c2d8f1 → f1d5b8a2c4e6 (FU-209) → a2c4e6f8b1d3 (FU-211) → b3d5f7a9c2e4 (FU-213) →
+c4e6a8b1d3f5 (FU-215, head)`. The 0520 app_settings chain (`e9c2b748f015 → f1a2b3c4d5e6 →
+a1b2c3d4e5f6 → …`) is untouched. **Update the runbook's "Verification debt" callout** — its claimed
+chain (`e9a4b6c2d8f1 → f1a2b3c4d5e6 → …`) is now `e9a4b6c2d8f1 → f1d5b8a2c4e6 → …`.
+
+**Finding 2 (NOT in scope, untouched) — FU-178 is still a real fresh-SQLite boot blocker.** `flask db
+upgrade` on a clean DB dies at `d7c9e4a8c2b1` with `ValueError: Constraint must have a name` (batch-mode
+on unnamed constraints). Tests don't hit this because `is_test_env=True` uses `db.drop_all() +
+db.create_all()` instead of replaying the chain. FU-178 stays open; out of scope for this Phase A unit.
+
+**Phase-0 FU verify results — backend GREEN, browser still pending:**
+- FU-209 (gate reframe, data-presence): migration applies clean (after id rename); pytest exercises
+  `features.products` derivation. Browser sanity still on the FU.
+- FU-211 (PreferredBuy): `test_preferred_buys.py` 5/5 + `test_shopping_line_preferred_buy.py` 2/2.
+- FU-213 (price observations): `test_price_observations.py` 4/4 (incl. derived `unit_cost=3` on 6/2).
+- FU-215 (shopping-line hint): covered by `test_shopping_line_preferred_buy.py`.
+- **FU-216 (cost-consumer rebase — the numeric-change one):** full suite (incl. report + recipe-cost
+  tests) green; **no existing test pinned old totals broke** — the additive fallback (observation only
+  contributes where no linked-product price exists) doesn't change numbers for any test fixture.
+  Backend numeric verify GREEN. Browser pass on the stock-value report + recipe-cost surfaces still
+  pending.
+- FU-208/210-core: no backend tests touch the dead-end / persona removal directly; browser pass
+  still pending (unchanged).
+
+**Eng-standards close-gate:** R-006 (clean migrations) — the duplicate id was a silent drift; fixed
+in place. No new ADR (it's a one-off slip rather than a recurring decision yet — if it recurs, the
+right rule is an R-0NN "unique-revision-id guard / CI check").
+
+**Next:** the per-FU **browser passes** (FU-202/208/211/213/214/215 + the FU-216 stock-value/recipe
+surfaces) — needs the running app. Or, if pushing forward, **Phase B — Ingestion API** (additive,
+in-repo) per runbook §B + FU-190.
+
+---
+
 ## 2026-06-17 — ⭐ CANONICAL DRIVER for the products-as-overlay effort → read the runbook
 **To complete the whole products effort end-to-end** (everyday layer → ingestion API → companion app
 running → decommission `merchant_api` → `Merchant→Store` rename → finish the overlay vision), drive

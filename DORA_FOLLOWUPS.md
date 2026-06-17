@@ -74,6 +74,10 @@ long session summary. Distinct from the other logs:
   priced only by observation now contribute) — **verify live + update any tests pinning totals for
   observation-only items.** Full product-cost unification into the helper is no longer needed for
   the user goal; close this once verified.
+- **Update 2026-06-17 — backend numeric verify GREEN.** Phase A env-verify ran the full suite
+  (381/381 incl. all report + recipe-cost tests); **no test pinned old totals broke** (the additive
+  fallback only contributes when no linked-product price exists, which the existing fixtures don't
+  trigger). Browser pass on the stock-value report + recipe estimate surfaces still pending.
 
 ## [OPEN] FU-215 — PreferredBuy shopping-list hint (the FU-211 sub-part)
 - **Raised:** 2026-06-17 (FU-211 split)
@@ -94,6 +98,10 @@ long session summary. Distinct from the other logs:
   (pick/clear, optimistic + rollback). Dangling id after a PreferredBuy delete is tolerated (no hint
   shown). **Verify:** pytest (set/clear + detail labels) + migration up/down + `vue-tsc`/eslint +
   browser (pick/clear a hint, persists across reload).
+- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
+  `tests/e2e/dora_api/test_shopping_line_preferred_buy.py` 2/2 (set + clear + DTO labels). Migration
+  `c4e6a8b1d3f5` applies clean on top of the (now-renamed) FU-209 head. `vue-tsc` + `eslint` clean.
+  **Browser pass still pending.**
 
 ## [OPEN] FU-214 — Browser-verify + close product-feedback gaps (My Products & Price History)
 - **Raised:** 2026-06-17 (product-feedback coverage audit — products-as-overlay pivot)
@@ -140,20 +148,10 @@ long session summary. Distinct from the other logs:
   rebasing the stock-value report + recipe cost estimate onto the helper (+ the product-derived cost
   branch). **Verify:** pytest (CRUD + unit-cost) + migration up/down + `vue-tsc`/eslint + browser
   (log/remove a price; section hidden when money off).
-
-## [OPEN] FU-212 — Power-user docs: how to source product data so the overlay lights up
-- **Raised:** 2026-06-17 (products-as-overlay pivot)
-- **Type:** documentation
-- **What:** Products are no longer onboarded/sold to the general user, so the path to *enabling*
-  them must be **documented** (per the user: "documented enough so users know they can do it, they
-  just have to source the data themselves"). Add admin/help docs covering: the always-accessible
-  "API access" keys page, the ingestion contract (`POST /api/ingest`), how data-presence makes the
-  product surfaces appear, the configured Product Search URL, and the no-auto-create-stores mapping
-  step (FU-190). **Not** presented during onboarding; keep the producer **unnamed** (the bounded
-  search-URL carve-out aside).
-- **Why deferred:** depends on the ingestion API + the gate reframe existing.
-- **Recommended resolution:** during/after Phase 2 ingestion; batch with FU-207 (VAPID docs).
-  Design: `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.3.
+- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
+  `tests/e2e/dora_api/test_price_observations.py` 4/4 (add → derived unit_cost=3 on 6/2, latest-wins,
+  delete clears, non-positive rejected). Migration `b3d5f7a9c2e4` applies clean. `vue-tsc` + `eslint`
+  clean. **Browser pass still pending** (log/remove + money-gate visibility).
 
 ## [OPEN] FU-211 — `PreferredBuy` — everyday free-text "what I buy" on the stock item
 - **Raised:** 2026-06-17 (products-as-overlay pivot)
@@ -175,6 +173,10 @@ long session summary. Distinct from the other logs:
   rename / up-down reorder / remove via `withBusyReload`). Not executed (no env). The **shopping-line
   hint** (`ShoppingListLine.preferred_buy_id`) is split to **FU-215**. **Verify:** pytest + migration
   up/down + `vue-tsc`/eslint + browser (add/rename/reorder/remove; CASCADE on item delete).
+- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
+  `tests/e2e/dora_api/test_preferred_buys.py` 5/5 (add→detail, rename, delete, reorder, blank
+  rejected, cross-item scope). Migration `a2c4e6f8b1d3` applies clean. `vue-tsc` + `eslint` clean.
+  **Browser pass still pending.**
 
 ## [OPEN] FU-210 — Onboarding de-persona: remove persona fork + all product framing
 - **Raised:** 2026-06-17 (products-as-overlay pivot)
@@ -202,6 +204,15 @@ long session summary. Distinct from the other logs:
   `personaPreview` + `PERSONA_PREVIEWS`) — do it with a running app so the loop renders well without
   persona shaping; (b) **browser-verify** (no persona/Customise/products step; defaults applied;
   spend via Settings; draft resume) + `vue-tsc`/eslint.
+- **Update 2026-06-17 — TAIL DONE (static).** Removed the cinematic Story/Loop intro and the Finish
+  step's loop recap. Deleted `OnboardingLoop.vue`, `OnboardingStory.vue`, `OnboardingScene.vue`, and
+  `onboardingContent.ts` (`PERSONA_PREVIEWS`, `PersonaPreview`, `DEFAULT_PERSONA_PREVIEW`,
+  `PersonaPreviewKey`, `NARRATIVE_SCENES`, `LOOP_STAGES`, `LOOP_CENTRE`, `LOOP_INSIGHT` — all
+  unreferenced after the removal). `WelcomeWizard.vue` stripped: `view`/`storySceneIndex`/
+  `personaPreview` refs gone, draft persistence simplified, rail collapses to the single Setup
+  section. `vue-tsc` + `eslint` clean; full backend pytest **401/401** still green. **Still OPEN
+  for browser-verify only** — the wizard's behaviour change is FE-only and needs a running app to
+  confirm the flow reads sensibly + draft resume works.
 
 ## [OPEN] FU-209 — Gate reframe: drop `products_enabled`, derive `features.products` from data-presence
 - **Raised:** 2026-06-17 (products-as-overlay pivot)
@@ -232,6 +243,13 @@ long session summary. Distinct from the other logs:
   head; (4) browser — with no products `features.products=false` + surfaces hidden; with a product
   present they appear; the admin System-settings products toggle is gone; onboarding has no
   explainer step.
+- **Update 2026-06-17 — backend GREEN; migration id COLLISION fixed.** Phase A env-verify: `vue-tsc`
+  + `eslint` clean; full suite 381/381 (incl. `test_onboarding_flags.py`). **Migration blocker:** the
+  drop migration shipped with `revision = 'f1a2b3c4d5e6'`, which collides with the 2026-05-20
+  `app_settings` migration's id; `flask db heads` raised `CycleDetected` until renamed.
+  **Re-issued as `f1d5b8a2c4e6`** (file renamed; `a2c4e6f8b1d3.down_revision` repointed). New head
+  `c4e6a8b1d3f5`. Single-headed; up applies clean. Browser pass still pending (data-presence on/off
+  flips the surfaces; admin toggle gone).
 
 ## [OPEN] FU-208 — My Products → stock-item "Link…" flow is a silent dead-end
 - **Raised:** 2026-06-17 (products-as-overlay pivot — code investigation)
@@ -778,31 +796,31 @@ long session summary. Distinct from the other logs:
   smoke remains. (Sub-finding (a) — assistant `get_alerts` ignores the user overlay — and the
   new expiring-soon override gap are split out as **FU-187**.)
 
-## [OPEN] FU-190 — Ingestion API must honour "no auto-create stores"
-- **Raised:** 2026-06-15 (simple-mode brainstorm round 2)
-- **Type:** design constraint / proposal amendment
-- **What:** The companion scraper (Phase 2 ingestion API) pushes products +
-  offers + price-observations, each referencing a merchant/store. The
-  no-auto-create rule for stores (FU-189) must propagate into the ingestion
-  API design — it cannot silently materialise stores the user hasn't
-  approved. Three viable shapes: (a) hard-reject unknown-store offers; (b)
-  quarantine queue ("pending review" until user maps/creates); (c) setup
-  mapping step where user maps each companion-side merchant to a Dora store
-  once before ingestion goes live. Recommendation in the scratch:
-  **(c) happy path + (b) safety net** for never-seen-before stores
-  appearing post-setup. Scratch §7 in
-  `docs/99_scratch/MINIMAL_USER_PRODUCTS_OFF_FRICTION.md` has the rationale.
-- **Why deferred:** PROPOSAL_INGESTION_API.md predates this rule. Fold the
-  constraint into the proposal before any ingestion-API code starts.
-- **Recommended resolution:** during Phase 2 ingestion-API design — amend
-  PROPOSAL_INGESTION_API.md §2 with the "no auto-create stores" constraint
-  + the (c)+(b) sequencing, and add a row to its feedback-coverage table
-  citing FU-189. Block ingestion implementation until the proposal is
-  updated.
-- **Update 2026-06-17:** still valid + confirmed by the products-as-overlay pivot. Cross-link
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3/§4.3 (Stores stay user-curated; the
-  ingestion source is the generic, always-accessible "API access" page; the producer is never
-  named). Stays open.
+## [OPEN] FU-218 — Browser-verify the new admin "API access" page (C-10 / Phase B)
+- **Raised:** 2026-06-17 (Phase B build)
+- **Type:** verification
+- **What:** New Settings page lives at `/settings/admin/api-access`. Confirm in the browser:
+  (a) sidebar entry appears under Admin · global (admin only); (b) `New key` opens dialog → reveals
+  raw key once → copy works → list shows the new row with `Never used` + `Accepted 0 / Skipped 0
+  / Failed 0`; (c) expanding the row shows "Store mappings" panel; (d) push a record from any
+  bearer client against an unknown store → reload → the source row shows a pending badge + the
+  mapping appears in the panel marked "pending"; (e) merchant picker assigns it → the badge
+  clears; (f) disable / enable / rename / revoke all round-trip; (g) revoked key is rejected by
+  `/api/ingest` immediately.
+- **Recommended resolution:** opportunistic — bundle with the other Phase 0 browser passes.
+
+## [RESOLVED?] FU-190 — Ingestion API must honour "no auto-create stores"  *(move to RESOLVED on confirm)*
+- **Update 2026-06-17 (Phase B build):** implemented as **(b) quarantine queue** end-to-end (the
+  proposal's chosen safety net; the "(c) setup mapping step" is naturally produced by the same
+  surface — admins map *before* pushing if they want, but unknown names on first sight quarantine
+  instead of being rejected, which is friendlier). On every ingest record the producer's
+  `merchant` string is resolved via `IngestionStoreMapping`: known → use the linked Merchant;
+  unknown → create a quarantined mapping (`merchant_id IS NULL`), skip the record with reason
+  `store_not_mapped`, surface as **pending** on the API access page. Stores themselves are
+  **never** created by the endpoint. Admin assigns or clears the merchant via
+  `PUT /api/ingestion-sources/<id>/store-mappings`. Covered by `test_ingest_batch.py` (quarantine
+  + post-mapping roundtrip) + `test_ingestion_store_mappings.py` (CRUD + invalid merchant rejected).
+  **Move to RESOLVED once the FU-218 browser pass confirms the pending → assign flow in the UI.**
 
 ## [OPEN] FU-189 — Rename Merchants → Stores, add management page + user-uploaded logos
 > **Resequenced to LAST 2026-06-17 — blocked on FU-186.** A blind Merchant→Store rename is ~550 refs
@@ -974,32 +992,6 @@ long session summary. Distinct from the other logs:
      dropdown focuses the chosen week; "Clear this week" empties it.
 - **Recommended resolution:** end-of-build browser pass (bundle with FU-032 /
   FU-135 / the timezone verify).
-
-## [OPEN] FU-178 — Full-chain SQLite `flask db upgrade` is broken (batch-mode constraint naming) — prod-SQLite boot blocker
-- **Raised:** 2026-06-14 (surfaced by C-2.K's scratch-DB migration check)
-- **Type:** finding (pre-existing defect; **blocks fresh SQLite prod boot**)
-- **What:** Running the migration chain base→head on a fresh SQLite DB fails at
-  **`d7c9e4a8c2b1_20260612_shopping_list_line_product_anchor.py:29`** —
-  `with op.batch_alter_table('ShoppingListLine')` raises
-  **`ValueError: Constraint must have a name`**. Alembic batch mode on SQLite
-  recreates the table and re-adds its constraints; with no `naming_convention`
-  configured, an unnamed constraint on `ShoppingListLine` can't be reproduced.
-  Likely **several** later batch migrations share the issue (e.g. the
-  `recipe_ingredient_optional` b9e5c2a78f31 batch `add_column` on
-  `RecipeIngredient`, the FU-163 `drop_finish_snapshot` batch op on
-  `ShoppingList`) — the chain just dies at the first one.
-- **Why it went unnoticed:** dev + tests use `db.create_all()` (table_mappings),
-  never the migrations. Only the **prod, non-debug** path runs `upgrade()`
-  (`startup.py:107`). So a fresh **self-host SQLite prod** install fails to boot.
-  **Postgres is unaffected** (batch mode is a passthrough there — real ALTER, no
-  table recreation), so the standard target (R-005) still boots.
-- **Recommended resolution:** **before any SQLite prod release.** Systemic fix:
-  add a SQLAlchemy `MetaData(naming_convention=...)` (in `app.py` /
-  `configure_mappings`) and pass `render_as_batch=True` + that convention in
-  `migrations/env.py`'s `context.configure(...)`, then run a full base→head
-  `upgrade` + `downgrade` on a scratch SQLite to confirm every batch migration
-  reproduces its constraints. Cross-ref R-005/R-006. (C-2.K's own migration was
-  switched to a plain `op.add_column` so it does **not** depend on this fix.)
 
 ## [OPEN] FU-177 — Pre-existing ESLint errors block `npm run build`
 - **Raised:** 2026-06-14 (surfaced by C-2.A adversarial review)

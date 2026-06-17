@@ -25,13 +25,23 @@ in the Status table below, append a `DORA_WORKLOG.md` entry, and move/resolve th
 
 ## ⚠️ Verification debt — READ BEFORE TRUSTING ANY OF PHASE 0
 
-Everything built **2026-06-17** (FU-208, 209, 210-core, 211, 213, 215, 216) is **code-complete but
-STATIC-ONLY** — built with **no Python venv and no `web_app/node_modules`**, so **nothing was
-executed**: no pytest, no `vue-tsc`/eslint, no migration up/down, no browser pass. Per-feature verify
-checklists are on each FU in `DORA_FOLLOWUPS.md`. Most changes are purely additive (low risk), but
-**two are NOT and must be env-verified before shipping:** **FU-216** (changes stock-value & recipe-cost
-NUMBERS) and the future **FU-189** (app-wide rename). Single Alembic head after Phase 0:
-`c4e6a8b1d3f5` (chain: `e9a4b6c2d8f1 → f1a2b3c4d5e6 → a2c4e6f8b1d3 → b3d5f7a9c2e4 → c4e6a8b1d3f5`).
+**Update 2026-06-17 — Phase A env-verify ran on the local Linux env: backend GREEN.** Full pytest
+suite **381/381 passed** (incl. the 3 new FU-211/213/215 files — 11/11), `vue-tsc` clean, `npm run
+lint` clean. **One blocker was found and fixed:** the FU-209 migration shipped with a duplicate
+Alembic `revision = 'f1a2b3c4d5e6'` (collision with the 2026-05-20 `app_settings` migration), which
+made `flask db heads` raise `CycleDetected`; the FU-209 migration was re-issued as
+**`f1d5b8a2c4e6`** and `a2c4e6f8b1d3.down_revision` was repointed.
+
+Everything built **2026-06-17** (FU-208, 209, 210-core, 211, 213, 215, 216) was originally
+code-complete but static-only. Per-feature verify checklists remain on each FU in
+`DORA_FOLLOWUPS.md`. **FU-216** numeric verify is GREEN (no existing test pinned old totals broke).
+**Still pending:** per-FU **browser passes** (FU-202/208/211/213/214/215 + the FU-216 stock-value /
+recipe surfaces) — they need the running app. **FU-189** (rename) remains deferred. **FU-178** is
+still a real fresh-SQLite boot blocker (chain dies at `d7c9e4a8c2b1`, batch-mode unnamed
+constraints); tests bypass it via `drop_all + create_all`.
+
+Single Alembic head after Phase 0: **`c4e6a8b1d3f5`** (chain:
+`e9a4b6c2d8f1 → f1d5b8a2c4e6 (FU-209) → a2c4e6f8b1d3 (FU-211) → b3d5f7a9c2e4 (FU-213) → c4e6a8b1d3f5 (FU-215)`).
 New test files: `tests/e2e/dora_api/test_preferred_buys.py`, `test_price_observations.py`,
 `test_shopping_line_preferred_buy.py`.
 
@@ -41,12 +51,12 @@ New test files: `tests/e2e/dora_api/test_preferred_buys.py`, `test_price_observa
 
 | Phase | What | Status | Repo |
 |---|---|---|---|
-| **0** | Everyday layer + gate (FU-208/209/210-core/211/213/215/216) | **code-complete, STATIC-ONLY** | dora_api + web_app |
+| **0** | Everyday layer + gate (FU-208/209/210-core/211/213/215/216) | **code-complete; backend env-verify GREEN; browser still pending** | dora_api + web_app |
 | **—** | Companion scaffold | **DONE** | `../dora-companion` |
-| **A** | Verify the Phase-0 stack on a real env | not started | both |
-| **B** | Ingestion API | not started | dora_api |
-| **C** | Companion: standalone + wired to `/api/ingest` | not started | `../dora-companion` |
-| **D** | Decommission `merchant_api`/`emailer` from Dora + search-URL nav (FU-186) | not started | dora_api + web_app |
+| **A** | Verify the Phase-0 stack on a real env | **backend GREEN** (pytest 381/381, tsc, lint; FU-209 mig-id collision fixed); **browser pending** | both |
+| **B** | Ingestion API | **backend GREEN** (pytest 401/401, tsc, lint; FU-190 honoured via quarantining store mappings); **browser pending** | dora_api + web_app |
+| **C** | Companion: standalone + wired to `/api/ingest` | **DONE** — backend GREEN (5 unit + 4 round-trip integration tests against live in-process `dora_api`); FE shipped (FU-219 resolved — Vue 3 + Quasar + Pinia in `../dora-companion/web_app/`) | `../dora-companion` |
+| **D** | Decommission `merchant_api`/`emailer` from Dora + search-URL nav (FU-186) | **unblocked** — companion now stands alone | dora_api + web_app |
 | **E** | `Merchant → Store` rename + `usual_store_id` + Stores page (FU-189) | **blocked on D** | dora_api + web_app |
 | **F** | Finish overlay: "your prices" intelligence, FU-210 tail, FU-214, FU-212 docs, FU-180 | not started | various |
 

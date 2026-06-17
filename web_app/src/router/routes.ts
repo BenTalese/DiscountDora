@@ -236,6 +236,11 @@ const routes: RouteRecordRaw[] = [
                         path: 'admin/audit-log',
                         component: () => import('pages/settings/AuditLogSettings.vue'),
                         meta: { title: 'Audit log' }
+                    },
+                    {
+                        path: 'admin/api-access',
+                        component: () => import('pages/settings/ApiAccessSettings.vue'),
+                        meta: { title: 'API access' }
                     }
                 ]
             }

@@ -10,6 +10,86 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-219 — Companion FE — port `ProductSearch.vue` + `MerchantsSettings.vue` into `../dora-companion`
+- **Raised:** 2026-06-17 (Phase C build)
+- **Type:** deferred job (port — sibling repo)
+- **What:** The companion's headless scrape → `POST /api/push` → Dora's `/api/ingest`
+  round-trip landed in Phase C.2; the browsable UI was deferred. FE was needed to host the
+  scraper provider toggles + a product-search UI that pushes per-card or in batches.
+- **State note:** 2026-06-17 — **RESOLVED.** Scaffolded a Vue 3 + Quasar + Pinia SPA in
+  `../dora-companion/web_app/`: Vite + TS (no Quasar CLI — lighter than Dora's tooling). Three
+  pages: **Product search** (full port of Dora's `ProductSearch.vue` — search input, merchant
+  chips, filters, sort, comparison-style selection — with the Dora-only branches **stripped**
+  (saved-product, link-to-stock-item, quick-add) and **per-card + batch "Push to Dora"**
+  added); **Merchants** (port of `MerchantsSettings.vue` — list, enable/disable, provider
+  health, health-check); **Dora target** (read-only — friendly label only; the real URL +
+  bearer live in the BE env). Two services: `MerchantsApiService` (collapses Dora's two
+  split clients) and `ProductSearchApiService` (search + push). Push results dialog surfaces
+  Dora's per-record `accepted / skipped / failed`; pending store-mapping nudges the user back
+  to Dora's API access page (FU-190 honoured end-to-end). New `MerchantsApiService.pushAsync`
+  hits the companion's `POST /api/push` which then scrapes + forwards to Dora's
+  `POST /api/ingest`. Mapi CORS now allowlists `http://localhost:5175` in dev. Build green:
+  `npm install` (226 packages), `vue-tsc --noEmit` clean, `vite build` clean (~82 KB main
+  gzipped). README updated. Phase C now fully done (.1 + .2 + .3).
+
+## [RESOLVED] FU-212 — Power-user docs: how to source product data so the overlay lights up
+- **Raised:** 2026-06-17 (products-as-overlay pivot)
+- **Type:** documentation
+- **What:** Document the path to *enabling* products for power-users (the end-user flow never
+  meets this): the always-accessible API access page, the `POST /api/ingest` contract, the
+  no-auto-create-stores mapping (FU-190), the data-presence gate, the Product Search URL.
+- **State note:** 2026-06-17 — **RESOLVED.** Added `docs/INGESTION_GUIDE.md` covering: (1) what
+  lights up when product data is present (My Products / Price History / per-stock-item Products
+  tab); (2) minting a key on Settings → API access (one-time reveal, label, disable/revoke);
+  (3) the store-mapping pre-map vs auto-quarantine flow; (4) the full `POST /api/ingest`
+  contract (auth, Idempotency-Key, products/offers/price_observations schemas, dedupe keys,
+  result DTO with stable `reason` codes); (5) the Product Search URL carve-out (data-gated,
+  producer unnamed); (6) trust tiers. Index entry added to `docs/00_DOCS_INDEX.md`.
+  Producer/companion deliberately **never named** anywhere in the doc — phrasing is
+  "any external source you run". Power-user oriented (admin/help), not onboarding-facing.
+
+## [RESOLVED] FU-217 — Refactor `create_product` to share the offer-append mapping (C-10 follow-on)
+- **Raised:** 2026-06-17 (Phase B build; PROPOSAL_INGESTION_API §6.2)
+- **Type:** deferred job (refactor)
+- **What:** `POST /api/products` (`create_product.py`) used to 409 on a duplicate without
+  appending a historic point, so manual product-add didn't accrue price history. R-003 violation
+  by way of `/api/ingest` having its own append path.
+- **State note:** 2026-06-17 — **RESOLVED.** `create_product` now calls
+  `apply_offer_to_product` (the C-10.2 shared helper) when the product already exists: appends a
+  new `ProductHistoricOffer` + moves `current_offer` instead of returning 422. Idempotent — the
+  same (product, observed_at, price_now) tuple still dedupes. Response now returns 201 with
+  `{id, created, offer_appended}` (was `id` only); the existing successful-create test still
+  passes (the body is a superset), and the dup-409 test was rewritten to assert append (FU-217
+  test in `test_product_router.py`). Source string `"manual"` distinguishes these points from
+  ingest-provenance points. Full pytest 401/401, `vue-tsc` + lint clean.
+
+## [RESOLVED] FU-178 — Full-chain SQLite `flask db upgrade` is broken (batch-mode constraint naming) — prod-SQLite boot blocker
+- **Raised:** 2026-06-14 (surfaced by C-2.K's scratch-DB migration check)
+- **Type:** finding (pre-existing defect; **blocked fresh SQLite prod boot**)
+- **What:** Running the migration chain base→head on a fresh SQLite DB failed at
+  **`d7c9e4a8c2b1_20260612_shopping_list_line_product_anchor.py:29`** —
+  `with op.batch_alter_table('ShoppingListLine')` raised
+  **`ValueError: Constraint must have a name`**. Alembic batch mode on SQLite
+  recreates the table and re-adds its constraints; with no `naming_convention`
+  configured, anonymous constraints couldn't be reproduced. Suspected several
+  later batch migrations shared the issue (`b9e5c2a78f31`, the FU-163
+  `drop_finish_snapshot` batch op, …); the chain just died at the first.
+- **State note:** 2026-06-17 — **RESOLVED via hard cutover (pre-release, no
+  prod data to preserve).** Added `NAMING_CONVENTION` to `dora_api/app.py` and
+  attached it to the SQLAlchemy `MetaData`; threaded it into Alembic's
+  context in `dora_api/persistence/migrations/env.py`; **wrapped
+  `op.batch_alter_table` in `env.py`** so every batch op inherits the
+  convention without each call site having to pass `naming_convention=`.
+  Promoted to standing rule **R-015** + **ADR-010** in
+  `docs/01_charter/ENGINEERING_STANDARDS.md`. **Verified:** fresh SQLite
+  `flask db upgrade base→head` now runs the entire chain clean to head
+  `c4e6a8b1d3f5`; full pytest 381/381 still green. Downgrade-from-head to
+  base still trips on a handful of legacy migrations that hard-coded
+  `ck_*`-prefixed literal names (double-prefix under the convention) —
+  **accepted**; downgrade-from-head is not a product flow (dev resets go
+  through `drop_all`/`DORA_ALLOW_DESTRUCTIVE`, prod hasn't shipped). Future
+  migrations follow R-015 (bare-suffix literals only).
+
 ## [RESOLVED] FU-182 — Treat the minimal/Products-off user as a first-class workflow
 - **Raised:** 2026-06-14 (talk-time assessment); refined 2026-06-15; promoted to proposal
   2026-06-15 (`docs/04_proposals/PROPOSAL_SIMPLE_MODE.md`).

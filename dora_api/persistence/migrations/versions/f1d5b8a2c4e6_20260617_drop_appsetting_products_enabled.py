@@ -10,7 +10,7 @@ Pre-release — no data preservation needed (clean, non-preserving migration is
 allowed). Reversible, batch-mode for SQLite portability (R-005/R-006), no
 idempotent guards.
 
-Revision ID: f1a2b3c4d5e6
+Revision ID: f1d5b8a2c4e6
 Revises: e9a4b6c2d8f1
 Create Date: 2026-06-17 00:00:00.000000
 
@@ -18,7 +18,7 @@ Create Date: 2026-06-17 00:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-revision = 'f1a2b3c4d5e6'
+revision = 'f1d5b8a2c4e6'
 down_revision = 'e9a4b6c2d8f1'
 branch_labels = None
 depends_on = None

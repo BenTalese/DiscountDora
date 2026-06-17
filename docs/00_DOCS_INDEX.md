@@ -31,7 +31,9 @@ docs/
 ├── 04_proposals/               OUTPUTS of Wave-C briefs (no-code design)
 ├── 05_investigations/          OUTPUTS of INV prompts + ad-hoc audits
 ├── 06_legacy_prompt_plans/     historical PROMPT_PLAN_PART_*
-└── 99_scratch/                 raw notes awaiting triage
+├── 99_scratch/                 raw notes awaiting triage
+└── INGESTION_GUIDE.md          power-user guide — how to source product data
+                                (FU-212; targets admins, not the end-user flow)
 ```
 
 Lifecycle: **charter → feedback → prompt → proposal/investigation →

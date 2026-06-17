@@ -323,6 +323,40 @@ exceptions, which still must be commented) · **Source** (where it was establish
   tests do not.
 - **Source:** ADR-008; FU-166 (legacy e2e suite triage).
 
+### R-015 — Every DB constraint has a deterministic name (SQLite batch-mode compatibility)
+- **Rule:** Every `UNIQUE`, `CHECK`, `FOREIGN KEY`, `PRIMARY KEY`, and `INDEX`
+  in the schema **must end up with a deterministic name**. We get this by
+  attaching the project `NAMING_CONVENTION` (defined in `dora_api/app.py`) to
+  the SQLAlchemy `MetaData`, threading it into the Alembic context in
+  `migrations/env.py`, and wrapping `op.batch_alter_table` there so every
+  batch operation inherits the convention without each call having to pass it.
+  When a migration writes a constraint with an explicit `name=`/literal, give
+  it the **bare suffix** (e.g. `'shopping_list_line_anchor'`) and let the
+  convention add the type prefix — never hard-code `ck_*`/`uq_*`/`fk_*`
+  yourself (that double-prefixes under the convention).
+- **Why:** SQLite has no `ALTER TABLE ADD/DROP CONSTRAINT`, so Alembic's
+  batch mode rebuilds the table by copying rows into a fresh one — and to do
+  that it has to re-emit every constraint. An **unnamed** constraint can't be
+  reproduced, and the chain dies (`ValueError: Constraint must have a name`).
+  Bit us twice already (FU-178: full-chain `flask db upgrade` died at
+  `d7c9e4a8c2b1`; two-machine sessions where the second machine couldn't
+  bootstrap a SQLite DB).
+- **Apply:** All new constraints (on models and in migrations) inherit the
+  convention automatically; you just need to **stop hand-writing `ck_*`-style
+  literal names** in migrations — write the suffix only. New batch migrations
+  need no per-call boilerplate; the `env.py` wrapper injects the convention.
+  Postgres deploys benefit too — deterministic names make ops grep-able.
+- **Violation signal:** a model `UniqueConstraint(...)` / `CheckConstraint(...)`
+  with no `name=` **and no MetaData convention**; a migration adding an
+  unnamed constraint inline (e.g. `db.UniqueConstraint('x','y')` with no
+  name); a migration literal that re-prefixes its type
+  (`'ck_<table>_<suffix>'`) and so double-prefixes under the convention;
+  `flask db upgrade` from base failing with `ValueError: Constraint must
+  have a name` or `ValueError: No such constraint: 'ck_<table>_ck_<suffix>'`.
+- **Carve-outs (must be commented):** none — the convention covers all
+  practical cases.
+- **Source:** ADR-010; FU-178 (resolved 2026-06-17).
+
 ### R-014 — Reveal-and-disable: show a feature exists even when it isn't set up
 - **Rule:** Prefer to **surface a feature's entry point even when the feature
   is not yet configured/enabled**, rendered in an obvious **disabled / "not set
@@ -576,6 +610,34 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 - **Promotes rule:** R-013.
 
 ---
+
+### ADR-010 — Deterministic constraint names everywhere (SQLite batch-mode)
+- **Date / task:** 2026-06-17 (resolving FU-178)
+- **Status:** accepted
+- **Context:** Fresh-SQLite `flask db upgrade base→head` was broken: chain
+  died at `d7c9e4a8c2b1_20260612_shopping_list_line_product_anchor` with
+  `ValueError: Constraint must have a name`. SQLite has no
+  `ALTER TABLE ADD/DROP CONSTRAINT`; Alembic batch mode therefore rebuilds
+  the table, and an unnamed constraint can't be re-emitted on the rebuild.
+  Several historical tables were defined with anonymous UNIQUE/CHECK/FK
+  constraints, so any later `batch_alter_table` against them tripped. Tests
+  bypass this (they use `drop_all + create_all`), but a real prod boot from
+  base would not.
+- **Decision:** Adopt a project-wide naming convention on the SQLAlchemy
+  `MetaData` (`fk_/uq_/ck_/ix_/pk_` + table + column0); thread it into
+  Alembic's context in `migrations/env.py`; wrap `op.batch_alter_table` in
+  `env.py` so every batch operation inherits it without each call site
+  having to pass `naming_convention=`. Hard cutover: no compat shims, the
+  project is pre-release. Constraint *literals* in migrations use the bare
+  suffix (`'shopping_list_line_anchor'`); the convention adds the type prefix.
+- **Consequences:** Base→head `flask db upgrade` is clean. Downgrade-from-head
+  to base trips on a small number of legacy migrations that hard-coded
+  `ck_*`-style literals (double-prefix under the convention); accepted —
+  downgrade-from-head is not a product flow, dev resets go through
+  `drop_all`/`DORA_ALLOW_DESTRUCTIVE`. Anyone hand-writing future migrations
+  must follow the bare-suffix rule (R-015). Postgres path also benefits:
+  constraint names become deterministic and grep-able.
+- **Promotes rule:** R-015.
 
 ### ADR-009 — Reveal-and-disable unconfigured features instead of hiding them
 - **Date / task:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS review, user directive)

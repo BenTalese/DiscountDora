@@ -5,15 +5,23 @@
             <div class="wizard-rail q-mb-lg">
                 <OnboardingStepRail
                     :sections="railSections"
-                    active-section="setup"
+                    :active-section="view"
                     :active-index="railActiveIndex"
                     @jump="onRailJump"
                 />
             </div>
 
+            <!-- ══ STORY — cinematic intro + the hero loop ══════════════ -->
+            <OnboardingStory
+                v-if="view === 'story'"
+                v-model:scene-index="storySceneIndex"
+                v-model:persona="personaPreview"
+                @enter-setup="enterSetup"
+                @skip="onSkipEverything"
+            />
+
             <!-- ══ SETUP — the steps (draft-until-finish; applied on Finish) ══ -->
-            <!-- FU-210 — the cinematic Story/Loop intro is gone; setup is the
-                 whole onboarding (one "show everything" path). -->
+            <template v-else>
             <!-- ── Header: progress + skip-everything ─────────────────── -->
             <div class="row items-center q-mb-md">
                 <div class="col">
@@ -384,7 +392,11 @@
                 </q-card-section>
             </q-card>
 
-            <!-- ── Step: Finish — celebrate + loop recap + flow-cards (C-5.6) ── -->
+            <!-- ── Step: Finish — celebrate + flow-cards (C-5.6) ── -->
+            <!-- FU-210 revisit (2026-06-17): the loop recap was removed from
+                 Finish — the hero already plays in Story, replaying it here
+                 was repetitive. The loop survives in Story; a help-section
+                 home is tracked separately. -->
             <div
                 v-show="currentStep?.id === 'finish'"
                 class="finish-step q-mb-md"
@@ -457,6 +469,7 @@
                     @click="advance"
                 />
             </div>
+            </template>
         </div>
     </q-page>
 </template>
@@ -466,6 +479,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import OnboardingConfetti from 'src/components/onboarding/OnboardingConfetti.vue';
     import OnboardingStepRail from 'src/components/onboarding/OnboardingStepRail.vue';
+    import OnboardingStory from 'src/pages/onboarding/OnboardingStory.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
@@ -476,6 +490,11 @@
         StarterPack,
         StarterPackItem,
     } from 'src/models/onboarding';
+    import {
+        DEFAULT_PERSONA_PREVIEW,
+        NARRATIVE_SCENES,
+        type PersonaPreviewKey,
+    } from 'src/pages/onboarding/onboardingContent';
     import type { StockGroup } from 'src/models/stockGroup';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
@@ -535,10 +554,18 @@
     const stepIndex = ref(0);
     const completing = ref(false);
 
+    // ── Story / Setup view model (C-5.2) ─────────────────────────────
+    // Two sections with instant, non-linear cross-jump via the shared rail.
+    const view = ref<'story' | 'setup'>('story');
+    const storySceneIndex = ref(0);
+    // Persona PREVIEW only — sets no flags. Remembered so the C-5.3 fork can
+    // pre-fill from whatever the user last previewed in the hero loop.
+    const personaPreview = ref<PersonaPreviewKey>(DEFAULT_PERSONA_PREVIEW);
+
     // Setup steps are built per-state: admin is first-user only. (FU-210: the
-    // persona fork step + the hero-loop preview are removed — onboarding is
-    // one "show everything" path; features are enabled in Settings, not
-    // chosen here. FU-209 removed the stock-vs-product explainer.)
+    // persona fork step is removed — onboarding is one "show everything" path;
+    // features are enabled in Settings, not chosen here. FU-209 removed the
+    // stock-vs-product explainer.)
     const visibleSteps = computed<Step[]>(() => {
         const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
         if (state.value?.first_user) {
@@ -600,17 +627,37 @@
         () => stepIndex.value === visibleSteps.value.length - 1,
     );
 
-    // ── Rail model — only Setup left after FU-210 removed Story. ─────
+    // ── Shared rail model (Story scenes + Setup steps) ───────────────
+    // Nothing is gated — every dot is a jump target across both sections.
     const railSections = computed(() => [
+        {
+            key: 'story',
+            label: 'Story',
+            dots: NARRATIVE_SCENES.map((s) => ({
+                key: s.id,
+                label: s.kicker ?? s.headline,
+            })),
+        },
         {
             key: 'setup',
             label: 'Setup',
             dots: visibleSteps.value.map((s) => ({ key: s.id, label: s.title })),
         },
     ]);
-    const railActiveIndex = computed(() => stepIndex.value);
-    function onRailJump(_sectionKey: string, index: number) {
-        stepIndex.value = index;
+    const railActiveIndex = computed(() =>
+        view.value === 'story' ? storySceneIndex.value : stepIndex.value,
+    );
+    function onRailJump(sectionKey: string, index: number) {
+        if (sectionKey === 'story') {
+            view.value = 'story';
+            storySceneIndex.value = index;
+        } else {
+            view.value = 'setup';
+            stepIndex.value = index;
+        }
+    }
+    function enterSetup() {
+        view.value = 'setup';
     }
 
     // ── Form state (persists to localStorage so refresh resumes) ─────
@@ -675,6 +722,9 @@
                     ...form,
                     stepIndex: stepIndex.value,
                     draftItems: draftItems.value,
+                    view: view.value,
+                    storySceneIndex: storySceneIndex.value,
+                    personaPreview: personaPreview.value,
                     packItemSelected: { ...packItemSelected },
                 }),
             );
@@ -690,11 +740,17 @@
             const parsed = JSON.parse(raw) as Partial<WizardDraft> & {
                 stepIndex?: number;
                 draftItems?: DraftItem[];
+                view?: 'story' | 'setup';
+                storySceneIndex?: number;
+                personaPreview?: PersonaPreviewKey;
                 packItemSelected?: Record<string, boolean>;
             };
             const {
                 stepIndex: savedIndex,
                 draftItems: savedItems,
+                view: savedView,
+                storySceneIndex: savedScene,
+                personaPreview: savedPersona,
                 packItemSelected: savedPacks,
                 ...formFields
             } = parsed;
@@ -704,6 +760,15 @@
             }
             if (Array.isArray(savedItems)) {
                 draftItems.value = savedItems;
+            }
+            if (savedView === 'story' || savedView === 'setup') {
+                view.value = savedView;
+            }
+            if (typeof savedScene === 'number') {
+                storySceneIndex.value = Math.max(0, savedScene);
+            }
+            if (savedPersona) {
+                personaPreview.value = savedPersona;
             }
             if (savedPacks) {
                 Object.assign(packItemSelected, savedPacks);
@@ -722,7 +787,10 @@
     }
     // Auto-save the draft on any form change so a refresh resumes.
     watch(
-        [form, stepIndex, draftItems, packItemSelected],
+        [
+            form, stepIndex, draftItems, view, storySceneIndex,
+            personaPreview, packItemSelected,
+        ],
         saveDraft,
         { deep: true },
     );

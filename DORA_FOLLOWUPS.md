@@ -52,6 +52,26 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-220 — Repurpose `OnboardingLoop` in Help + consider menu re-ordering
+- **Raised:** 2026-06-17 (FU-210 revisit — user direction)
+- **Type:** follow-up (UX + IA)
+- **What:** With the cinematic Story still alive (FU-210 revisit kept the hero loop there) and
+  the Finish-step recap dropped, the loop is "a nice reminder of how to use the app." Find a
+  durable home for it in **Help** so first-run users can revisit it after onboarding without
+  rerunning the wizard. Two open IA questions to chew on at the same time:
+  (a) **Help section order.** Should the Help sections be ordered in the loop's flow
+      (Stock → Plan → List → Shop → Restock → Cook), so newcomers can read the help in the same
+      order they'll actually use the app?
+  (b) **Main menu order.** Same question for the left-nav: do the buttons map cleanly to the
+      loop today? If not, is reordering worth doing — or is the loop's order aspirational
+      and the menu's pragmatic (cookbook + recipes are nouns, not steps)?
+- **Why deferred:** out of scope for the FU-210 revisit; needs a small Help-IA design pass
+  (touches `HelpPage.vue` / `helpSections.ts` / nav). Not blocking.
+- **Recommended resolution:** opportunistic / before commercialise (Phase 4). Keep the loop
+  component (`OnboardingLoop.vue`) usable in non-onboarding contexts when you tackle this —
+  it currently lives under `components/onboarding/`; consider promoting it to a more general
+  location if Help also uses it (e.g. `components/dora/AppLoopDiagram.vue`).
+
 ## [OPEN] FU-216 — Rebase cost consumers onto `get_stock_item_unit_cost_at` (FU-213 follow-on)
 - **Raised:** 2026-06-17 (FU-213 split)
 - **Type:** deferred job (build)
@@ -213,6 +233,29 @@ long session summary. Distinct from the other logs:
   section. `vue-tsc` + `eslint` clean; full backend pytest **401/401** still green. **Still OPEN
   for browser-verify only** — the wizard's behaviour change is FE-only and needs a running app to
   confirm the flow reads sensibly + draft resume works.
+- **Update 2026-06-17 — TAIL was MIS-INTERPRETED. Partially reverted via direction from the user.**
+  The above "TAIL DONE" pass deleted too much. Restored from `git checkout 941d478^ --`:
+  `OnboardingLoop.vue`, `OnboardingStory.vue`, `OnboardingScene.vue`, `onboardingContent.ts`,
+  and the pre-removal shape of `WelcomeWizard.vue` (Story stage + Setup view + persona-preview
+  state + draft persistence). Then made the **actually-intended** edits:
+  - `onboardingContent.ts` — stripped `LOOP_INSIGHT` (dimmed "Spend smarter / coming soon"
+    satellite, P3-Honest violation since it advertised an unbuilt feature); re-framed
+    `PERSONA_PREVIEWS` labels from persona identities ("Cooking" / "Spend" / "Everything") to
+    outcome chips ("Mostly cooking" / "Watching spend" / "All of it"). Keys unchanged so any
+    draft state survives. Dropped the now-unused `insight: boolean` field on `PersonaPreview`.
+  - `OnboardingLoop.vue` — removed the LOOP_INSIGHT satellite button + its `focusedKey === 'insight'`
+    branches + the `lightbulb` mood swap + the dead `.loop-insight*` CSS. Re-worded the persona
+    preview's aria-label + chip header from "Preview for / persona" to "What you're here for".
+  - `WelcomeWizard.vue` Finish step — removed the OnboardingLoop recap ("Here's the loop you just
+    set up — tap any stage…"); the cinematic Story still plays the hero loop earlier so the recap
+    was repetitive. Confetti + flow-cards kept.
+  - The cinematic Story stage stays **as-is** (un-persona scene visuals were already the case —
+    `NARRATIVE_SCENES` doesn't fork by persona).
+  - The persona FORK in setup (removed in the earlier pass) **stays removed** per user direction.
+  - Loop-in-Help + main-menu/help-section reordering → **FU-220**.
+  - **Verified:** `vue-tsc --noEmit` clean; `npm run lint` clean; full pytest **401/401** green.
+  - **Still OPEN for browser-verify** — confirm Story plays without LOOP_INSIGHT, the renamed
+    chips read sensibly, Finish step is clean, draft resume still works.
 
 ## [OPEN] FU-209 — Gate reframe: drop `products_enabled`, derive `features.products` from data-presence
 - **Raised:** 2026-06-17 (products-as-overlay pivot)

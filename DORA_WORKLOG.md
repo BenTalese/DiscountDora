@@ -9,6 +9,48 @@ next.
 
 ---
 
+## 2026-06-17 — FU-210 revisit — restored the axed onboarding code; smaller, intentional trim instead
+**What happened:** earlier today I interpreted "remove the illustrative hero-loop persona preview"
+(FU-210 tail) as "delete the cinematic Story stage + the loop component + the Finish recap + the
+persona-preview state". That was wrong. The user flagged it — Story + loop are wanted, just trimmed.
+
+**Restore:** `git checkout 941d478^ --` of the four deleted files (`OnboardingLoop.vue`,
+`OnboardingStory.vue`, `OnboardingScene.vue`, `onboardingContent.ts`) + `WelcomeWizard.vue`
+reverted to its pre-removal shape (Story stage + Setup view + persona-preview state + draft
+persistence).
+
+**Then the actually-intended edits, after asking the user to clarify:**
+- `onboardingContent.ts` — **stripped `LOOP_INSIGHT`** (dimmed "Spend smarter / coming soon"
+  satellite — P3-Honest violation: it advertised an unbuilt feature). Re-framed
+  `PERSONA_PREVIEWS` labels from persona identities ("Cooking" / "Spend" / "Everything") to
+  outcome chips ("Mostly cooking" / "Watching spend" / "All of it"). Keys unchanged so any
+  persisted draft state still resolves. Dropped the now-dead `insight: boolean` field on
+  `PersonaPreview`.
+- `OnboardingLoop.vue` — removed the LOOP_INSIGHT satellite button, its `focusedKey === 'insight'`
+  branches, the `lightbulb` mood swap, and the dead `.loop-insight*` CSS. Re-worded persona
+  preview aria-label + chip header.
+- `WelcomeWizard.vue` Finish step — dropped the OnboardingLoop recap ("Here's the loop you just
+  set up — tap any stage to revisit…"). Story already plays it; replaying on Finish was
+  repetitive. Confetti + flow-cards kept. `OnboardingLoop` import removed.
+
+**Not touched:**
+- Cinematic Story stage — kept as-is. `NARRATIVE_SCENES` was already not persona-forked.
+- Persona FORK in setup — stays removed (the earlier pass's removal was correct; only the
+  TAIL deletions overshot).
+
+**New follow-up:** **FU-220** — repurpose `OnboardingLoop` in Help (the user wants it as a
+durable "how to use the app" reference somewhere); plus the question of reordering Help sections
+and main-menu buttons to match the Stock → Plan → List → Shop → Restock → Cook flow.
+
+**Verified:** `vue-tsc --noEmit` clean; `npm run lint` clean; full pytest **401/401** green.
+**Still pending:** browser pass — confirm Story plays without LOOP_INSIGHT, the renamed
+"What you're here for" chips read sensibly, Finish step is clean, draft resume works.
+
+**Eng-standards close-gate:** R-007 (scope) honoured — the over-deletion was the violation; the
+revisit reverts that. No new R/ADR.
+
+---
+
 ## 2026-06-17 — FU-219 RESOLVED — companion FE landed (Vue 3 + Quasar + Pinia in `../dora-companion/web_app/`)
 **Status:** scaffolded + ported in one chunk. `npm install` (226 packages), `vue-tsc --noEmit` clean,
 `vite build` clean (~82 KB main gzipped). Phase C is now end-to-end complete (.1 + .2 + .3 all done).

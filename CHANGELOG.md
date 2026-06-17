@@ -29,9 +29,13 @@ semver — major bumps signal schema or breaking-config changes.
   offer to the new value (the same offer-append path `/api/ingest` uses) and returns 201 with
   `{id, created: false, offer_appended: true}`. So manual product-add accrues price history just
   like ingestion does.
-- **Onboarding no longer plays a cinematic loop intro (FU-210 tail).** The wizard now goes
-  straight to the setup steps — no more Story stage with the hero loop, no persona preview,
-  no loop recap on the Finish step. Setup is the whole onboarding.
+- **Onboarding's hero loop is honest now (FU-210 revisit).** The cinematic Story stage
+  with the hero loop stays; the dimmed "Spend smarter — coming soon" satellite node
+  (LOOP_INSIGHT) is gone — it advertised an unbuilt feature. The Finish step's loop recap
+  is also dropped (Story already plays it). The persona-preview chips inside the loop are
+  re-framed from persona identities ("Cooking" / "Spend" / "Everything") into outcome chips
+  ("Mostly cooking" / "Watching spend" / "All of it") — they're illustrative only, set
+  nothing, and exist to show how Dora emphasises different reasons for using it.
 - **Stock value & recipe cost now also use the prices you've logged (FU-216).** If a pantry item has
   no linked product but you've logged what it cost (the FU-213 Prices section), that price now feeds
   the stock-value report and recipe cost estimates — so the numbers reflect your own price memory,

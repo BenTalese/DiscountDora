@@ -10,7 +10,7 @@
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 
 export function useShoppingListExport() {
-    const baseUrl = resolveBaseURL('dora');
+    const baseUrl = resolveBaseURL();
 
     /** Open the server-rendered print view in a new tab and fire the
      *  browser's print dialog. User can hit "Save as PDF" from there. */

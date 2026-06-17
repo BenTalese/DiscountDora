@@ -6,7 +6,7 @@
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 
 export function useMealPlanExport() {
-    const baseUrl = resolveBaseURL('dora');
+    const baseUrl = resolveBaseURL();
 
     function openPrintView(planId: string): void {
         const url = `${baseUrl}/meal-plans/${encodeURIComponent(planId)}/print-view`;

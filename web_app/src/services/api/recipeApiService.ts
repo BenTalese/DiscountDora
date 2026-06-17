@@ -6,7 +6,7 @@ import { type Page } from './queryStringBuilder';
 /** C-4 Chunk 5 — URL for a recipe's image (served as raw bytes). Pass a
  *  `version` (e.g. a counter bumped after upload) to bust the browser cache. */
 export function recipeImageUrl(recipeId: string, version?: number | string): string {
-    const base = resolveBaseURL('dora');
+    const base = resolveBaseURL();
     const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
     return `${base}/recipes/${recipeId}/image${suffix}`;
 }
@@ -142,7 +142,7 @@ export default class RecipeApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient('dora');
+        this.httpClient = new AxiosHttpClient();
     }
 
     createAsync = async (recipeToCreate: CreateRecipeCommand): Promise<CreatedResponse> =>

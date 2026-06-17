@@ -1882,7 +1882,7 @@
             const result = await tryWithQueue(
                 () => api.updateLineAsync(listId.value, lineId, { is_ticked: value }),
                 {
-                    url: `${resolveBaseURL('dora')}/shopping-lists/${listId.value}/lines/${lineId}`,
+                    url: `${resolveBaseURL()}/shopping-lists/${listId.value}/lines/${lineId}`,
                     method: 'PATCH',
                     body: { is_ticked: value },
                     kind: 'shopping_list_line_tick',

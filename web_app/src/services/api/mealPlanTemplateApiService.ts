@@ -34,7 +34,7 @@ export type ApplyRecurringCommand = {
 };
 
 export default class MealPlanTemplateApiService {
-    private httpClient = new AxiosHttpClient('dora');
+    private httpClient = new AxiosHttpClient();
 
     getAllAsync = async (): Promise<MealPlanTemplateSummary[]> =>
         await this.httpClient.get<MealPlanTemplateSummary[]>('/meal-plan-templates');

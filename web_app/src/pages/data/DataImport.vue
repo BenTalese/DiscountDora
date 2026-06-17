@@ -409,7 +409,7 @@
 
         inspecting.value = true;
         try {
-            const baseUrl = resolveBaseURL('dora');
+            const baseUrl = resolveBaseURL();
             const response = await fetch(`${baseUrl}/data/import/spreadsheet/inspect`, {
                 method: 'POST',
                 credentials: 'include',
@@ -482,7 +482,7 @@
 
         committing.value = true;
         try {
-            const baseUrl = resolveBaseURL('dora');
+            const baseUrl = resolveBaseURL();
             const response = await fetch(`${baseUrl}/data/import/spreadsheet/commit`, {
                 method: 'POST',
                 credentials: 'include',

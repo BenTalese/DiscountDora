@@ -892,13 +892,13 @@
     const { moneyEnabled } = useMoneyEnabled();
     const showQrOpen = ref(false);
     const qrSrc = computed(() => {
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
         // size 512 looks crisp on retina; the dialog box clamps to 256.
         return `${baseUrl}/stock-items/${stockItemId.value}/qr?size=512`;
     });
 
     function openSingleQrSheet() {
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
         window.open(
             `${baseUrl}/stock-items/qr/sheet?ids=${stockItemId.value}`,
             '_blank', 'noopener',

@@ -7,7 +7,7 @@ import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useRecipeExport() {
-    const baseUrl = resolveBaseURL('dora');
+    const baseUrl = resolveBaseURL();
 
     async function downloadCsv(recipeId: string): Promise<void> {
         try {

@@ -20,7 +20,7 @@ export type UpdateMealPlanTemplateSetCommand = {
 };
 
 export default class MealPlanTemplateSetApiService {
-    private httpClient = new AxiosHttpClient('dora');
+    private httpClient = new AxiosHttpClient();
 
     getAllAsync = async (): Promise<MealPlanTemplateSetSummary[]> =>
         await this.httpClient.get<MealPlanTemplateSetSummary[]>('/meal-plan-template-sets');

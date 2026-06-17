@@ -10,7 +10,7 @@ export default class RecipeCollectionApiService {
     private httpClient: AxiosHttpClient;
 
     constructor() {
-        this.httpClient = new AxiosHttpClient('dora');
+        this.httpClient = new AxiosHttpClient();
     }
 
     createAsync = async (command: CreateRecipeCollectionCommand): Promise<CreatedResponse> =>

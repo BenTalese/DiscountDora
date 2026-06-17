@@ -300,7 +300,7 @@
     }
 
     function openSheet(args: { allItems: boolean }) {
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
         const ids = args.allItems ? '' : selectedItemIds.value.join(',');
         const url =
             `${baseUrl}/stock-items/qr/sheet` +

@@ -569,7 +569,7 @@
     async function onDownload() {
         downloading.value = true;
         try {
-            const baseUrl = resolveBaseURL('dora');
+            const baseUrl = resolveBaseURL();
             const query = selectedBackupKeys.value.length
                 ? `?sections=${encodeURIComponent(selectedBackupKeys.value.join(','))}`
                 : '';
@@ -642,7 +642,7 @@
         }
 
         inspecting.value = true;
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
 
         try {
             // ── Upload via the shared chunked-upload composable ──────
@@ -758,7 +758,7 @@
                     selection[section].push(id);
                 }
             }
-            const baseUrl = resolveBaseURL('dora');
+            const baseUrl = resolveBaseURL();
             const response = await fetch(`${baseUrl}/data/backup/restore`, {
                 method: 'POST',
                 credentials: 'include',

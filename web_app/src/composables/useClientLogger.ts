@@ -44,7 +44,7 @@ async function ship(level: Level, message: string, context?: Record<string, unkn
     if (level !== 'warn' && level !== 'error') return;
     if (!allowSend()) return;
     try {
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
         // Plain fetch (not the shared http client) to avoid re-entering
         // the axios interceptor if the failure originated there.
         await fetch(`${baseUrl}/client-logs`, {

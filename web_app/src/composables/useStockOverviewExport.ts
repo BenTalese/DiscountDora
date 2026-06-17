@@ -8,7 +8,7 @@ import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useStockOverviewExport() {
-    const baseUrl = resolveBaseURL('dora');
+    const baseUrl = resolveBaseURL();
 
     /** C-1 Chunk 1 / L67 — when `ids` is provided, the server filters the
      *  export to that set so CSV mirrors the on-screen filtered list. An

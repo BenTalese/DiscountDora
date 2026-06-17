@@ -27,7 +27,7 @@ export function useChunkedUpload() {
     const lastUploadId = ref<string | null>(null);
 
     async function upload(file: File, options: ChunkedUploadOptions = {}): Promise<string> {
-        const baseUrl = resolveBaseURL('dora');
+        const baseUrl = resolveBaseURL();
         const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_BYTES;
         const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
@@ -81,7 +81,7 @@ export function useChunkedUpload() {
     async function abort(uploadId: string | null): Promise<void> {
         if (!uploadId) return;
         try {
-            const baseUrl = resolveBaseURL('dora');
+            const baseUrl = resolveBaseURL();
             await fetch(
                 `${baseUrl}/data/uploads/${encodeURIComponent(uploadId)}`,
                 { method: 'DELETE', credentials: 'include' },

@@ -115,7 +115,7 @@ async function speak() {
     error.value = null;
     loading.value = true;
     try {
-        const res = await fetch(`${resolveBaseURL('dora')}/tts`, {
+        const res = await fetch(`${resolveBaseURL()}/tts`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },

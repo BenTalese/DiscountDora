@@ -9,7 +9,7 @@ import { createQueryString, FilterOperator, type Page } from './queryStringBuild
  *  `version` (e.g. a counter bumped after upload) to bust the
  *  browser cache after a re-upload. */
 export function stockItemImageUrl(stockItemId: string, version?: number | string): string {
-    const base = resolveBaseURL('dora');
+    const base = resolveBaseURL();
     const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
     return `${base}/stock-items/${stockItemId}/image${suffix}`;
 }

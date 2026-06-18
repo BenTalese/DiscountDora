@@ -245,7 +245,7 @@ export const ICONS = {
     cartRemove: 'mdi-cart-remove',
     expiry: 'mdi-clock-alert-outline',
     essential: 'mdi-flag',
-    merchant: 'mdi-store',
+    store: 'mdi-store',
     recipe: 'mdi-book-open-page-variant',
     meal: 'mdi-silverware-fork-knife',
     chef_hat: 'mdi-chef-hat',

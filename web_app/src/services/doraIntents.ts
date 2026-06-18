@@ -157,7 +157,7 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
     {
         match: (p) => p.startsWith('/stock/'),
         summary:
-            "Stock item detail. Adjust the level, link merchant products, peek at the recipes that use it, check expiry. Basically everything that item-shaped.",
+            "Stock item detail. Adjust the level, link products, peek at the recipes that use it, check expiry. Basically everything that item-shaped.",
         mood: 'searching',
     },
     {
@@ -193,7 +193,7 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
     {
         match: (p) => p.startsWith('/settings'),
         summary:
-            "Settings. Your section covers preferences, account, locations, and version info. Admins also see Merchants (scrapers) and Users (accounts).",
+            "Settings. Your section covers preferences, account, locations, and version info. Admins also see Stores (user-curated retailer list) and Users (accounts).",
         mood: 'happy',
     },
     {

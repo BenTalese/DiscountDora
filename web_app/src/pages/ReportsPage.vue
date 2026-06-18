@@ -5,7 +5,7 @@
                 <h1 class="reports-title">Reports</h1>
                 <p class="reports-sub">
                     Estimates pulled from your archived shopping lists, stock
-                    history, and tracked merchant prices.
+                    history, and tracked store prices.
                 </p>
             </div>
             <q-btn-toggle
@@ -52,33 +52,33 @@
                 </div>
             </article>
 
-            <!-- Spend by merchant (donut) -->
+            <!-- Spend by store (donut) -->
             <article class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.donut_large" size="22px" class="report-card-icon" />
-                    <h3 class="report-card-title">Spend by merchant</h3>
+                    <h3 class="report-card-title">Spend by store</h3>
                 </header>
-                <div v-if="loading.merchantSpend" class="report-card-loading">
+                <div v-if="loading.storeSpend" class="report-card-loading">
                     <q-spinner size="32px" color="primary" />
                 </div>
-                <div v-else-if="(merchantSpend?.rows.length ?? 0) > 0" class="merchant-row">
+                <div v-else-if="(storeSpend?.rows.length ?? 0) > 0" class="store-row">
                     <v-chart
                         class="report-donut"
-                        :option="merchantSpendOption"
+                        :option="storeSpendOption"
                         autoresize
                     />
-                    <ul class="merchant-legend">
-                        <li v-for="row in merchantSpend!.rows" :key="row.merchant">
-                            <span class="merchant-dot" :style="{ background: colourFor(row.merchant) }" />
-                            <span class="merchant-name">{{ row.merchant }}</span>
-                            <span class="merchant-spend">${{ row.spend.toFixed(2) }}</span>
-                            <span class="merchant-count">{{ row.list_count }} list{{ row.list_count === 1 ? '' : 's' }}</span>
+                    <ul class="store-legend">
+                        <li v-for="row in storeSpend!.rows" :key="row.store">
+                            <span class="store-dot" :style="{ background: colourFor(row.store) }" />
+                            <span class="store-name">{{ row.store }}</span>
+                            <span class="store-spend">${{ row.spend.toFixed(2) }}</span>
+                            <span class="store-count">{{ row.list_count }} list{{ row.list_count === 1 ? '' : 's' }}</span>
                         </li>
                     </ul>
                 </div>
                 <div v-else class="report-empty">
                     No completed shopping lists in this range — finish a list to see
-                    your spend break down by merchant.
+                    your spend break down by store.
                 </div>
             </article>
 
@@ -161,7 +161,7 @@
                     />
                 </div>
                 <div v-else class="report-empty">
-                    Finish a shopping list with picked merchant offers to start
+                    Finish a shopping list with picked store offers to start
                     tracking savings.
                 </div>
             </article>
@@ -225,7 +225,7 @@
     import ProductApiService from 'src/services/api/productApiService';
     import ReportsApiService, {
         type KeepsRunningOutResponse,
-        type MerchantSpendResponse,
+        type StoreSpendResponse,
         type MostBoughtResponse,
         type PriceTrendsResponse,
         type ReportRange,
@@ -264,7 +264,7 @@
 
     const loading = ref({
         stockValue: false,
-        merchantSpend: false,
+        storeSpend: false,
         mostBought: false,
         keepsOut: false,
         savings: false,
@@ -272,7 +272,7 @@
     });
 
     const stockValue = ref<StockValueResponse | null>(null);
-    const merchantSpend = ref<MerchantSpendResponse | null>(null);
+    const storeSpend = ref<StoreSpendResponse | null>(null);
     const mostBought = ref<MostBoughtResponse | null>(null);
     const keepsOut = ref<KeepsRunningOutResponse | null>(null);
     const savings = ref<SavingsCapturedResponse | null>(null);
@@ -289,10 +289,10 @@
                 ? allProducts.value
                 : allProducts.value.filter((p) =>
                     p.name.toLowerCase().includes(needle)
-                    || (p.merchant_name ?? '').toLowerCase().includes(needle),
+                    || (p.store_name ?? '').toLowerCase().includes(needle),
                 );
             productOptions.value = matches.slice(0, 50).map((p) => ({
-                label: `${p.name} · ${p.merchant_name}`,
+                label: `${p.name} · ${p.store_name}`,
                 value: p.product_id,
             }));
         });
@@ -365,17 +365,17 @@
         }],
     }));
 
-    const merchantSpendOption = computed(() => ({
+    const storeSpendOption = computed(() => ({
         tooltip: { trigger: 'item', valueFormatter: (v: number) => `$${v.toFixed(2)}` },
         series: [{
             type: 'pie',
             radius: ['55%', '80%'],
             avoidLabelOverlap: true,
             label: { show: false },
-            data: (merchantSpend.value?.rows ?? []).map((row) => ({
-                name: row.merchant,
+            data: (storeSpend.value?.rows ?? []).map((row) => ({
+                name: row.store,
                 value: row.spend,
-                itemStyle: { color: colourFor(row.merchant) },
+                itemStyle: { color: colourFor(row.store) },
             })),
         }],
     }));
@@ -432,10 +432,10 @@
         try { stockValue.value = await reportsApi.getStockValueAsync(range.value); }
         finally { loading.value.stockValue = false; }
     }
-    async function loadMerchantSpend() {
-        loading.value.merchantSpend = true;
-        try { merchantSpend.value = await reportsApi.getSpendByMerchantAsync(range.value); }
-        finally { loading.value.merchantSpend = false; }
+    async function loadStoreSpend() {
+        loading.value.storeSpend = true;
+        try { storeSpend.value = await reportsApi.getSpendByStoreAsync(range.value); }
+        finally { loading.value.storeSpend = false; }
     }
     async function loadMostBought() {
         loading.value.mostBought = true;
@@ -470,7 +470,7 @@
             const page = await productApi.getAllAsync();
             allProducts.value = page.items;
             productOptions.value = page.items.slice(0, 50).map((p) => ({
-                label: `${p.name} · ${p.merchant_name}`,
+                label: `${p.name} · ${p.store_name}`,
                 value: p.product_id,
             }));
         } catch {
@@ -483,7 +483,7 @@
         try {
             await Promise.all([
                 loadStockValue(),
-                loadMerchantSpend(),
+                loadStoreSpend(),
                 loadMostBought(),
                 loadKeepsOut(),
                 loadSavings(),
@@ -605,20 +605,20 @@
         height: 180px;
         flex-shrink: 0;
     }
-    .merchant-row {
+    .store-row {
         display: flex;
         gap: 16px;
         align-items: center;
         flex-wrap: wrap;
     }
-    .merchant-legend {
+    .store-legend {
         list-style: none;
         margin: 0;
         padding: 0;
         flex: 1;
         min-width: 200px;
     }
-    .merchant-legend li {
+    .store-legend li {
         display: grid;
         grid-template-columns: 12px minmax(0, 1fr) auto auto;
         gap: 8px;
@@ -626,18 +626,18 @@
         padding: 4px 0;
         font-size: 0.88rem;
     }
-    .merchant-dot {
+    .store-dot {
         width: 10px;
         height: 10px;
         border-radius: 999px;
     }
-    .merchant-name {
+    .store-name {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .merchant-spend { font-weight: 600; }
-    .merchant-count { color: var(--text-secondary); font-size: 0.78rem; }
+    .store-spend { font-weight: 600; }
+    .store-count { color: var(--text-secondary); font-size: 0.78rem; }
     .report-list {
         list-style: none;
         margin: 0;

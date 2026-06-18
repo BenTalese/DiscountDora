@@ -1,7 +1,7 @@
 // Mirrors OnboardingStateDto / SeedResultDto from
 // dora_api/features/onboarding/onboarding.py.
 
-export type MerchantStatus = {
+export type StoreStatus = {
     total: number;
     enabled: number;
 };
@@ -13,7 +13,7 @@ export type OnboardingState = {
     has_locations: boolean;
     has_groups: boolean;
     has_stock_items: boolean;
-    merchant_status: MerchantStatus;
+    store_status: StoreStatus;
 };
 
 export type SeedRequest = {

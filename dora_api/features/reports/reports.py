@@ -10,8 +10,8 @@ Endpoints:
   GET /api/reports/stock-value-over-time?range=30d|90d|1y
       Per-day stock value estimate.
 
-  GET /api/reports/spend-by-merchant?range=...
-      Per-merchant spend on archived lists.
+  GET /api/reports/spend-by-store?range=...
+      Per-store spend on archived lists.
 
   GET /api/reports/most-bought-items?range=...&limit=10
       Top stock items by archived-list appearances.
@@ -43,7 +43,7 @@ from uuid import UUID
 from flask import request
 from sqlalchemy import func, select
 
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
@@ -321,21 +321,21 @@ def stock_value_over_time():
     })
 
 
-# ───── 2. Spend by merchant ───────────────────────────────────────────────
+# ───── 2. Spend by store ──────────────────────────────────────────────────
 
 @dataclass(slots=True)
-class MerchantSpendRow:
-    merchant_id: UUID | None
-    merchant: str
+class StoreSpendRow:
+    store_id: UUID | None
+    store: str
     spend: float
     list_count: int
 
 
-class SpendByMerchantHandler:
+class SpendByStoreHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
-    def handle(self, since: datetime | None) -> List[MerchantSpendRow]:
+    def handle(self, since: datetime | None) -> List[StoreSpendRow]:
         session = self.repository.session
 
         # Only archived (completed) lists within the window contribute.
@@ -368,43 +368,43 @@ class SpendByMerchantHandler:
             return []
 
         product_ids = {row[1] for row in line_rows if row[1]}
-        products = self.repository.get(Product).include(Product.Fields.MERCHANT).all(
+        products = self.repository.get(Product).include(Product.Fields.STORE).all(
             EntityField(Product, "id").in_(list(product_ids))
         )
-        merchant_by_product: Dict[UUID, Merchant] = {
-            p.id: p.merchant for p in products if p.merchant
+        store_by_product: Dict[UUID, Store] = {
+            p.id: p.store for p in products if p.store
         }
 
-        spend_by_merchant: Dict[UUID | None, float] = {}
-        lists_by_merchant: Dict[UUID | None, set] = {}
+        spend_by_store: Dict[UUID | None, float] = {}
+        lists_by_store: Dict[UUID | None, set] = {}
         names: Dict[UUID | None, str] = {}
         for list_id, product_id, quantity, picked in line_rows:
-            merchant = merchant_by_product.get(product_id)
-            merchant_id = merchant.id if merchant else None
-            spend_by_merchant[merchant_id] = (
-                spend_by_merchant.get(merchant_id, 0.0)
+            store = store_by_product.get(product_id)
+            store_id = store.id if store else None
+            spend_by_store[store_id] = (
+                spend_by_store.get(store_id, 0.0)
                 + float(picked) * float(quantity or 1)
             )
-            lists_by_merchant.setdefault(merchant_id, set()).add(list_id)
-            names[merchant_id] = merchant.name if merchant else "Unknown"
+            lists_by_store.setdefault(store_id, set()).add(list_id)
+            names[store_id] = store.name if store else "Unknown"
 
-        out: List[MerchantSpendRow] = [
-            MerchantSpendRow(
-                merchant_id=merchant_id,
-                merchant=names[merchant_id],
+        out: List[StoreSpendRow] = [
+            StoreSpendRow(
+                store_id=store_id,
+                store=names[store_id],
                 spend=round(spend, 2),
-                list_count=len(lists_by_merchant.get(merchant_id, set())),
+                list_count=len(lists_by_store.get(store_id, set())),
             )
-            for merchant_id, spend in spend_by_merchant.items()
+            for store_id, spend in spend_by_store.items()
         ]
-        out.sort(key=lambda r: (-r.spend, r.merchant.lower()))
+        out.sort(key=lambda r: (-r.spend, r.store.lower()))
         return out
 
 
-@REPORTS_ROUTER.route("/spend-by-merchant", methods=["GET"])
-def spend_by_merchant():
+@REPORTS_ROUTER.route("/spend-by-store", methods=["GET"])
+def spend_by_store():
     _Since = _parse_range(request.args.get("range"))
-    _Rows = get_container().inject(SpendByMerchantHandler).handle(_Since)
+    _Rows = get_container().inject(SpendByStoreHandler).handle(_Since)
     return ok({
         "range": request.args.get("range", "30d"),
         "rows": [asdict(r) for r in _Rows],
@@ -611,7 +611,7 @@ class PricePoint:
 class PriceTrendSeries:
     product_id: UUID
     name: str
-    merchant: str
+    store: str
     points: List[PricePoint] = field(default_factory=list)
 
 
@@ -631,7 +631,7 @@ class PriceTrendsHandler:
         product_ids = product_ids[: self.MAX_PRODUCTS]
         session = self.repository.session
 
-        products = self.repository.get(Product).include(Product.Fields.MERCHANT).all(
+        products = self.repository.get(Product).include(Product.Fields.STORE).all(
             EntityField(Product, "id").in_(product_ids)
         )
         products_by_id = {p.id: p for p in products}
@@ -671,7 +671,7 @@ class PriceTrendsHandler:
             out.append(PriceTrendSeries(
                 product_id=pid,
                 name=product.name,
-                merchant=product.merchant.name if product.merchant else "Unknown",
+                store=product.store.name if product.store else "Unknown",
                 points=points,
             ))
         return out
@@ -701,7 +701,7 @@ def price_trends():
             {
                 "product_id": s.product_id,
                 "name": s.name,
-                "merchant": s.merchant,
+                "store": s.store,
                 "points": [asdict(p) for p in s.points],
             }
             for s in _Series
@@ -725,7 +725,7 @@ class SavingsCapturedHandler:
     """Aggregate savings = list_price_at_pick − picked_offer_price, per
     archived list with snapshot data. Lines without the RRP snapshot
     contribute zero to savings but still count toward picked_total
-    (so the "total spent" matches spend-by-merchant)."""
+    (so the "total spent" matches spend-by-store)."""
 
     def __init__(self):
         self.repository = SqlAlchemyRepository()

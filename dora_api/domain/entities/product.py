@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List
 
 from dora_api.domain.entities.base_entity import BaseEntity
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
@@ -16,7 +16,10 @@ class Product(BaseEntity):
     image: bytes | None
     is_active: bool
     is_available: bool
-    merchant: Merchant
+    store: Store
+    # FU-189: `merchant_stockcode` retained — it's the producer's SKU code,
+    # not a reference to the renamed entity. Renaming this column was
+    # deliberately deferred (PRODUCTS_OVERLAY_RUNBOOK Phase E).
     merchant_stockcode: str | None
     name: str
     size: str
@@ -31,7 +34,7 @@ class Product(BaseEntity):
         IMAGE = "image"
         IS_ACTIVE = "is_active"
         IS_AVAILABLE = "is_available"
-        MERCHANT = "merchant"
+        STORE = "store"
         MERCHANT_STOCKCODE = "merchant_stockcode"
         NAME = "name"
         SIZE = "size"

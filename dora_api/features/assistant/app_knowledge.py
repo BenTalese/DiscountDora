@@ -7,19 +7,18 @@ features land so the assistant's advice stays accurate.
 """
 
 APP_OVERVIEW = """\
-Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
+Dora is a grocery, pantry, recipe, and shopping app for Australian stores
 (Coles, Woolworths, IGA, Aldi). Main areas (left-hand navigation):
 
 - Dashboard (home): pantry health at a glance, upcoming planned meals, quick
   stats, items needing attention.
 - Stock: every item the user tracks. Search and filter by stock level, location,
   group, essentials/flagged, or whether it's already on a shopping list; sort
-  the list; click an item for its detail page (adjust stock level, link merchant
+  the list; click an item for its detail page (adjust stock level, link
   products, see which recipes use it, set expiry, mark as opened, push expiry).
   Each row has a cart button to add the item to the primary shopping list.
-- Product Search: search for products across configured merchants (Coles,
-  Woolworths, IGA, Aldi). Filter to specials only, narrow by merchant. Link a
-  product to a stock item so its deal price tracks alongside the pantry.
+- Product Search: an admin-configured external search surface (Phase D);
+  opens in a new tab when set. Pushes data into Dora via the ingestion seam.
 - Recipes: the user's recipes, with ingredients (and where each lives),
   instructions, cook time, difficulty, cuisine, category, and a step-by-step
   Cook mode. Each recipe also tracks "available meals" — portions of that
@@ -33,7 +32,7 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
   the pool, the planner surfaces a "needs cooking" shortfall.
 - Shopping Lists: multiple lists with one marked PRIMARY (the default target
   for new additions). Archive completed lists, copy lists, use templates,
-  group items by merchant, and a "finish shopping" flow that bumps ticked
+  group items by store, and a "finish shopping" flow that bumps ticked
   items back to a well-stocked level. Lists can be marked in-progress while
   shopping.
 - Alerts: the bell icon (top bar) opens a panel of things needing attention —
@@ -42,7 +41,7 @@ Dora is a grocery, pantry, recipe, and shopping app for Australian merchants
 - Settings: preferences (theme, font, density), account (change password /
   username), stock locations (zone/area/section tree editor — items reference
   these locations from Stock), stock groups, and version info. Admins
-  also get Merchants (toggle scrapers per merchant), Users (manage accounts),
+  also get Stores (user-curated retail stores; upload logos), Users (manage accounts),
   and System (configure the AI assistant — that's the BYO-LLM panel).
 - Help: guides by area, the changelog, the assistant.
 

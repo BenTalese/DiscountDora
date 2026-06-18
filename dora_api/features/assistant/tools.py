@@ -19,7 +19,7 @@ from typing import Any, Callable
 from uuid import UUID
 
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
@@ -108,7 +108,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "properties": {
                     "keywords": {"type": "string", "description": "Product name to search for."},
                     "on_special_only": {"type": "boolean", "description": "Only products currently on special."},
-                    "merchant_name": {"type": "string", "description": "Restrict to a merchant, e.g. 'coles'."},
+                    "store_name": {"type": "string", "description": "Restrict to a merchant, e.g. 'coles'."},
                 },
                 "required": [],
             },
@@ -263,7 +263,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "type": "object",
                 "properties": {
                     "keywords": {"type": "string"},
-                    "merchant_name": {"type": "string"},
+                    "store_name": {"type": "string"},
                 },
                 "required": [],
             },
@@ -934,7 +934,7 @@ def search_products(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
     query = (
         repo.get(Product)
-        .include(Product.Fields.MERCHANT)
+        .include(Product.Fields.STORE)
         .include(Product.Fields.CURRENT_OFFER)
     )
 
@@ -945,8 +945,8 @@ def search_products(args: dict) -> list[dict]:
     keyword_condition = _keyword_condition(Product, Product.Fields.NAME, args.get("keywords", ""))
     if keyword_condition is not None:
         conditions.append(keyword_condition)
-    if args.get("merchant_name"):
-        conditions.append(EntityField(Merchant, Merchant.Fields.NAME).contains(str(args["merchant_name"])))
+    if args.get("store_name"):
+        conditions.append(EntityField(Store, Store.Fields.NAME).contains(str(args["store_name"])))
     if _truthy(args.get("on_special_only")):
         conditions.append(
             EntityField(ProductOffer, ProductOffer.Fields.PRICE_NOW).lt(
@@ -959,7 +959,7 @@ def search_products(args: dict) -> list[dict]:
         {
             "name": product.name,
             "brand": product.brand,
-            "merchant": product.merchant.name if product.merchant else None,
+            "store": product.store.name if product.store else None,
             "size": product.size,
             "price_now": product.current_offer.price_now if product.current_offer else None,
             "price_was": product.current_offer.price_was if product.current_offer else None,
@@ -1520,7 +1520,7 @@ def find_deals(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
     query = (
         repo.get(Product)
-        .include(Product.Fields.MERCHANT)
+        .include(Product.Fields.STORE)
         .include(Product.Fields.CURRENT_OFFER)
     )
     conditions: list[BoolOperation] = [
@@ -1534,8 +1534,8 @@ def find_deals(args: dict) -> list[dict]:
     keyword_condition = _keyword_condition(Product, Product.Fields.NAME, args.get("keywords", ""))
     if keyword_condition is not None:
         conditions.append(keyword_condition)
-    if args.get("merchant_name"):
-        conditions.append(EntityField(Merchant, Merchant.Fields.NAME).contains(str(args["merchant_name"])))
+    if args.get("store_name"):
+        conditions.append(EntityField(Store, Store.Fields.NAME).contains(str(args["store_name"])))
 
     products: list[Product] = query.all(_combine_and(conditions))
     rows = []
@@ -1547,7 +1547,7 @@ def find_deals(args: dict) -> list[dict]:
         rows.append({
             "name": product.name,
             "brand": product.brand,
-            "merchant": product.merchant.name if product.merchant else None,
+            "store": product.store.name if product.store else None,
             "size": product.size,
             "price_now": offer.price_now,
             "price_was": offer.price_was,
@@ -2387,8 +2387,8 @@ def purchase_price_stats(args: dict) -> list[dict]:
             completed_lookup[l.id] = l.completed_at
 
     # Selected-product → merchant lookup, for lines that didn't override
-    # `purchased_merchant_id` but did pick an offer.
-    product_merchant_lookup: dict[UUID, tuple[UUID, str]] = {}
+    # `purchased_store_id` but did pick an offer.
+    product_store_lookup: dict[UUID, tuple[UUID, str]] = {}
     product_ids = list({
         l.selected_product_id for l in lines
         if l.shopping_list_id in archived_ids and l.selected_product_id
@@ -2396,25 +2396,25 @@ def purchase_price_stats(args: dict) -> list[dict]:
     if product_ids:
         products = (
             repo.get(Product)
-            .include(Product.Fields.MERCHANT)
+            .include(Product.Fields.STORE)
             .all(EntityField(Product, "id").in_(product_ids))
         )
         for p in products:
-            if p.merchant:
-                product_merchant_lookup[p.id] = (p.merchant.id, p.merchant.name)
+            if p.store:
+                product_store_lookup[p.id] = (p.store.id, p.store.name)
 
-    # Merchant-name lookup for any purchased_merchant_id overrides on the
+    # Merchant-name lookup for any purchased_store_id overrides on the
     # lines we're about to summarise.
-    purchased_merchant_ids = list({
-        l.purchased_merchant_id for l in lines
-        if l.shopping_list_id in archived_ids and l.purchased_merchant_id
+    purchased_store_ids = list({
+        l.purchased_store_id for l in lines
+        if l.shopping_list_id in archived_ids and l.purchased_store_id
     })
-    merchant_name_lookup: dict[UUID, str] = {}
-    if purchased_merchant_ids:
-        for m in repo.get(Merchant).all(
-            EntityField(Merchant, "id").in_(purchased_merchant_ids)
+    store_name_lookup: dict[UUID, str] = {}
+    if purchased_store_ids:
+        for m in repo.get(Store).all(
+            EntityField(Store, "id").in_(purchased_store_ids)
         ):
-            merchant_name_lookup[m.id] = m.name
+            store_name_lookup[m.id] = m.name
 
     samples: list[
         tuple[float, UUID | None, str | None, datetime | None, str, int | None]
@@ -2430,15 +2430,15 @@ def purchase_price_stats(args: dict) -> list[dict]:
             source = "offer_snapshot"
         else:
             continue
-        merchant_id: UUID | None = None
-        merchant_name: str | None = None
-        if line.purchased_merchant_id:
-            merchant_id = line.purchased_merchant_id
-            merchant_name = merchant_name_lookup.get(merchant_id)
-        elif line.selected_product_id and line.selected_product_id in product_merchant_lookup:
-            merchant_id, merchant_name = product_merchant_lookup[line.selected_product_id]
+        store_id: UUID | None = None
+        store_name: str | None = None
+        if line.purchased_store_id:
+            store_id = line.purchased_store_id
+            store_name = store_name_lookup.get(store_id)
+        elif line.selected_product_id and line.selected_product_id in product_store_lookup:
+            store_id, store_name = product_store_lookup[line.selected_product_id]
         samples.append((
-            price, merchant_id, merchant_name,
+            price, store_id, store_name,
             completed_lookup.get(line.shopping_list_id), source,
             line.quantity,
         ))
@@ -2455,17 +2455,17 @@ def purchase_price_stats(args: dict) -> list[dict]:
     samples_sorted_by_date = sorted(
         samples, key=lambda s: (s[3] or datetime.min), reverse=True,
     )
-    last_price, _, last_merchant_name, last_completed_at, last_source, _ = (
+    last_price, _, last_store_name, last_completed_at, last_source, _ = (
         samples_sorted_by_date[0]
     )
 
-    # Per-merchant breakdown — only emit a row when we know the merchant.
-    by_merchant: dict[UUID, dict[str, Any]] = {}
-    for price, merchant_id, merchant_name, _, _, _ in samples:
-        if not merchant_id:
+    # Per-store breakdown — only emit a row when we know the store.
+    by_store: dict[UUID, dict[str, Any]] = {}
+    for price, store_id, store_name, _, _, _ in samples:
+        if not store_id:
             continue
-        bucket = by_merchant.setdefault(merchant_id, {
-            "merchant": merchant_name,
+        bucket = by_store.setdefault(store_id, {
+            "store": store_name,
             "samples": 0,
             "_sum": 0.0,
             "min": price,
@@ -2475,18 +2475,18 @@ def purchase_price_stats(args: dict) -> list[dict]:
         bucket["_sum"] += price
         bucket["min"] = min(bucket["min"], price)
         bucket["max"] = max(bucket["max"], price)
-    merchant_rows = []
-    for bucket in by_merchant.values():
-        merchant_rows.append({
-            "merchant": bucket["merchant"],
+    store_rows = []
+    for bucket in by_store.values():
+        store_rows.append({
+            "store": bucket["store"],
             "samples": bucket["samples"],
             "average_price": round(bucket["_sum"] / bucket["samples"], 2),
             "min_price": round(bucket["min"], 2),
             "max_price": round(bucket["max"], 2),
         })
-    merchant_rows.sort(key=lambda r: r["average_price"])
+    store_rows.sort(key=lambda r: r["average_price"])
 
-    unknown_merchant_samples = sum(1 for s in samples if s[1] is None)
+    unknown_store_samples = sum(1 for s in samples if s[1] is None)
 
     # ── Cadence stats ────────────────────────────────────────────────
     # Same archived-list walk as the price stats; we just look at the
@@ -2516,20 +2516,20 @@ def purchase_price_stats(args: dict) -> list[dict]:
     if quantities:
         average_quantity = round(sum(quantities) / len(quantities), 2)
 
-    # Usual merchant = the one the user has bought from the most. Tie-
+    # Usual store = the one the user has bought from the most. Tie-
     # broken implicitly by Counter's first-seen order (≈ scan order); on a
     # genuine tie we leave the field as "no clear pattern" via low
     # confidence.
-    merchant_counter: Counter[tuple[UUID, str | None]] = Counter()
-    for _, mid, mname, _, _, _ in samples:
-        if mid is not None:
-            merchant_counter[(mid, mname)] += 1
-    usual_merchant: str | None = None
-    usual_merchant_share: float | None = None
-    if merchant_counter:
-        (_top_id, top_name), top_count = merchant_counter.most_common(1)[0]
-        usual_merchant = top_name
-        usual_merchant_share = round(top_count / len(samples), 2)
+    store_counter: Counter[tuple[UUID, str | None]] = Counter()
+    for _, sid, sname, _, _, _ in samples:
+        if sid is not None:
+            store_counter[(sid, sname)] += 1
+    usual_store: str | None = None
+    usual_store_share: float | None = None
+    if store_counter:
+        (_top_id, top_name), top_count = store_counter.most_common(1)[0]
+        usual_store = top_name
+        usual_store_share = round(top_count / len(samples), 2)
 
     # Price volatility — stdev when we have ≥2 samples, otherwise None.
     # Spread is a quick sanity-check; stdev is the honest statistic.
@@ -2551,15 +2551,15 @@ def purchase_price_stats(args: dict) -> list[dict]:
         "last_paid_at": (
             last_completed_at.isoformat() if last_completed_at else None
         ),
-        "last_paid_merchant": last_merchant_name,
+        "last_paid_store": last_store_name,
         "last_paid_source": last_source,
         "days_since_last_purchase": days_since_last_purchase,
         "average_days_between_purchase": average_days_between_purchase,
         "average_quantity": average_quantity,
-        "usual_merchant": usual_merchant,
-        "usual_merchant_share": usual_merchant_share,
-        "by_merchant": merchant_rows,
-        "unknown_merchant_samples": unknown_merchant_samples,
+        "usual_store": usual_store,
+        "usual_store_share": usual_store_share,
+        "by_store": store_rows,
+        "unknown_store_samples": unknown_store_samples,
     }]
 
 
@@ -2574,7 +2574,7 @@ def compare_prices(args: dict) -> list[dict]:
         return (
             repo.get(StockItem)
             .include(StockItem.Fields.PRODUCTS)
-                .then_include("merchant")
+                .then_include("store")
             .include(StockItem.Fields.PRODUCTS)
                 .then_include("current_offer")
         )
@@ -2610,7 +2610,7 @@ def compare_prices(args: dict) -> list[dict]:
         rows.append({
             "product_name": p.name,
             "brand": p.brand,
-            "merchant": p.merchant.name if p.merchant else None,
+            "store": p.store.name if p.store else None,
             "size": p.size,
             "price_now": offer.price_now,
             "price_was": offer.price_was,
@@ -2622,7 +2622,7 @@ def compare_prices(args: dict) -> list[dict]:
     return [{
         "stock_item_name": item.name,
         "status": "ok",
-        "cheapest_merchant": rows[0]["merchant"] if rows else None,
+        "cheapest_store": rows[0]["store"] if rows else None,
         "cheapest_price": rows[0]["price_now"] if rows else None,
         "rows": rows[:_MAX_ROWS],
     }]

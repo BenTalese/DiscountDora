@@ -272,13 +272,13 @@
     type AiTool = { name: string; description: string; examples: string[]; icon: string };
     const aiTools: AiTool[] = [
         { name: 'search_stock', description: 'Free-form pantry lookup with filters (low only, expiring soon, by location).', examples: ['do I have any milk', "what's in the fridge", 'flagged items'], icon: 'inventory_2' },
-        { name: 'search_products', description: 'Search merchant products across configured stores.', examples: ['cheese at woolies', 'pasta on special'], icon: ICONS.storefront },
+        { name: 'search_products', description: 'Search products across the configured stores.', examples: ['cheese at woolies', 'pasta on special'], icon: ICONS.storefront },
         { name: 'search_recipes', description: 'Direct recipe lookup by name, cuisine, difficulty, or cook time.', examples: ['easy italian dinners under 30 minutes', 'favourite curries'], icon: ICONS.menu_book },
         { name: 'suggest_recipes', description: 'Recommendations — translates moods ("something spicy", "something light") into searches.', examples: ['something cosy for tonight', 'what can I make with what I have'], icon: ICONS.lightbulb },
         { name: 'convert_measurement', description: 'Volume / mass / temperature. Density-aware for flour, sugar, butter, rice, etc.', examples: ['how many grams in a cup of flour', '180c to f'], icon: ICONS.straighten },
         { name: 'suggest_substitution', description: 'Curated ingredient swaps for ~25 common pantry items.', examples: ['what can I use instead of buttermilk', 'no eggs'], icon: ICONS.swap_horiz },
         { name: 'whats_expiring', description: 'Stock items inside a horizon (default 7 days).', examples: ["what's about to go off", 'use by today', 'expiring this week'], icon: ICONS.event },
-        { name: 'find_deals', description: 'On-special merchant products, sorted by % discount.', examples: ['any specials right now', 'cheap meat this week'], icon: ICONS.local_offer },
+        { name: 'find_deals', description: 'On-special products, sorted by % discount.', examples: ['any specials right now', 'cheap meat this week'], icon: ICONS.local_offer },
         { name: 'pantry_health', description: 'High-level pantry snapshot in one line.', examples: ["how's my pantry", 'pantry status'], icon: ICONS.monitor_heart },
         { name: 'meal_plan_for_date', description: 'What\'s scheduled for a date or range.', examples: ["what's for dinner tomorrow", "what's the plan for friday"], icon: ICONS.calendar_month },
         { name: 'recipes_using_item', description: 'Reverse lookup — recipes that use a stock item.', examples: ['what can I make with these strawberries', 'recipes using mince'], icon: ICONS.restaurant_menu },
@@ -298,7 +298,7 @@
         { name: 'plan_meal_for_date', description: "Add a meal to the meal plan for a date + slot (default Dinner, 1 serving). Confirm card before commit.", examples: ['plan carbonara for friday dinner', 'put taco night on tuesday'], icon: ICONS.event_available },
         { name: 'add_recipe_to_list', description: "Add a recipe's missing ingredients to the primary shopping list (or all ingredients via missing_only=false). Confirm card before commit.", examples: ["add what I need for carbonara to my list", 'add the missing ingredients for pad thai'], icon: ICONS.playlist_add },
         { name: 'seasonal_picks', description: 'Curated Australian seasonal produce by month — fruit + veg lists. Defaults to the current month.', examples: ["what's in season right now", "what should I buy in march", 'seasonal produce'], icon: ICONS.eco },
-        { name: 'compare_prices', description: 'Sort the merchant products linked to a stock item by current price. Requires linked products on the item.', examples: ["where's milk cheapest right now", 'best price on cheese'], icon: ICONS.compare_arrows },
+        { name: 'compare_prices', description: 'Sort the products linked to a stock item by current price. Requires linked products on the item.', examples: ["where's milk cheapest right now", 'best price on cheese'], icon: ICONS.compare_arrows },
         { name: 'recipe_for_occasion', description: 'Translates a vibe ("kid-friendly", "date night", "comfort", "fancy", "weeknight"…) into recipe filters and ranks by stock coverage.', examples: ['something kid-friendly tonight', 'date night ideas', 'comfort food', 'fancy dessert'], icon: ICONS.celebration },
     ];
 

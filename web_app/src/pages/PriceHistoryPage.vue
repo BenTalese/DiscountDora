@@ -66,7 +66,7 @@
                             <q-item-section>
                                 <q-item-label>{{ p.name }}</q-item-label>
                                 <q-item-label caption>
-                                    {{ p.merchant_name ?? '' }}
+                                    {{ p.store_name ?? '' }}
                                 </q-item-label>
                             </q-item-section>
                         </q-item>
@@ -127,7 +127,7 @@
                                 <div class="col">
                                     <div class="text-subtitle2">{{ s.name }}</div>
                                     <div class="text-caption dora-text-muted-7">
-                                        {{ s.merchant }}
+                                        {{ s.store }}
                                     </div>
                                 </div>
                             </div>
@@ -194,7 +194,7 @@
                         <q-item-section>
                             <q-item-label>{{ a.product_name }}</q-item-label>
                             <q-item-label caption>
-                                {{ a.merchant_name }} ·
+                                {{ a.store_name }} ·
                                 notify below
                                 <strong>${{ a.threshold_unit_price.toFixed(2) }}</strong>
                             </q-item-label>
@@ -273,7 +273,7 @@
         return all
             .filter((p) =>
                 p.name.toLowerCase().includes(needle)
-                || (p.merchant_name ?? '').toLowerCase().includes(needle),
+                || (p.store_name ?? '').toLowerCase().includes(needle),
             )
             .slice(0, 100);
     });

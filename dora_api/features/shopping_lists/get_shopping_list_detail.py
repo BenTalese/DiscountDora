@@ -11,7 +11,7 @@ from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
@@ -30,8 +30,8 @@ class LineProductOfferDto:
     product_id: UUID
     name: str
     brand: str | None
-    merchant_id: UUID
-    merchant_name: str
+    store_id: UUID
+    store_name: str
     size: str | None
     price_now: float | None
     price_was: float | None
@@ -70,8 +70,8 @@ class ShoppingListLineDto:
     # P2-02 purchase memory — what the shopper actually paid / where they
     # actually bought it. Both NULL until the user overrides on the line.
     actual_unit_price: float | None
-    purchased_merchant_id: UUID | None
-    purchased_merchant_name: str | None
+    purchased_store_id: UUID | None
+    purchased_store_name: str | None
     offers: List[LineProductOfferDto] = field(default_factory=list)
     # FU-215 — the chosen hint + the item's available labels for the picker.
     preferred_buy_id: UUID | None = None
@@ -197,7 +197,7 @@ class GetShoppingListDetailHandler:
                 .include("stock_level")
                 .include("stock_location")
                 .include("products")
-                    .then_include("merchant")
+                    .then_include("store")
                 .include("products")
                     .then_include("current_offer")
                 .all(EntityField(StockItem, "id").in_(_StockItemIds))
@@ -221,7 +221,6 @@ class GetShoppingListDetailHandler:
         _ProductIds = list({l.product_id for l in _Lines if l.product_id})
         _ProductNames: dict[UUID, str] = {}
         if _ProductIds:
-            from dora_api.domain.entities.product import Product
             _LoadedProducts = (
                 self.repository.get(Product)
                 .all(EntityField(Product, "id").in_(_ProductIds))
@@ -237,17 +236,17 @@ class GetShoppingListDetailHandler:
                 loc.id: loc for loc in self.repository.get(StockLocation).all()
             }
 
-        # Resolve merchant names for any `purchased_merchant_id` overrides
+        # Resolve store names for any `purchased_store_id` overrides
         # so the line DTO can render the chip without a second round-trip.
-        _MerchantNameLookup: dict[UUID, str] = {}
-        _PurchasedMerchantIds = {
-            l.purchased_merchant_id for l in _Lines if l.purchased_merchant_id
+        _StoreNameLookup: dict[UUID, str] = {}
+        _PurchasedStoreIds = {
+            l.purchased_store_id for l in _Lines if l.purchased_store_id
         }
-        if _PurchasedMerchantIds:
-            merchants = self.repository.get(Merchant).all(
-                EntityField(Merchant, "id").in_(list(_PurchasedMerchantIds))
+        if _PurchasedStoreIds:
+            stores = self.repository.get(Store).all(
+                EntityField(Store, "id").in_(list(_PurchasedStoreIds))
             )
-            _MerchantNameLookup = {m.id: m.name for m in merchants}
+            _StoreNameLookup = {s.id: s.name for s in stores}
 
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
             if item is None or item.stock_location is None:
@@ -274,17 +273,17 @@ class GetShoppingListDetailHandler:
                         product_id = product.id,
                         name = product.name,
                         brand = product.brand,
-                        merchant_id = product.merchant.id,
-                        merchant_name = product.merchant.name,
+                        store_id = product.store.id,
+                        store_name = product.store.name,
                         size = product.size,
                         price_now = product.current_offer.price_now if product.current_offer else None,
                         price_was = product.current_offer.price_was if product.current_offer else None,
                         is_selected = line.selected_product_id == product.id,
                     ))
-                # Sort offers: cheapest first, then alphabetical by merchant.
+                # Sort offers: cheapest first, then alphabetical by store.
                 offers.sort(key=lambda o: (
                     o.price_now if o.price_now is not None else float("inf"),
-                    o.merchant_name.lower(),
+                    o.store_name.lower(),
                 ))
             # C-7 Chunk 3 — fall back to the product name for
             # product-only lines (no anchor stock item to ask).
@@ -312,10 +311,10 @@ class GetShoppingListDetailHandler:
                 added_via = line.added_via,
                 added_at = line.added_at,
                 actual_unit_price = line.actual_unit_price,
-                purchased_merchant_id = line.purchased_merchant_id,
-                purchased_merchant_name = (
-                    _MerchantNameLookup.get(line.purchased_merchant_id)
-                    if line.purchased_merchant_id else None
+                purchased_store_id = line.purchased_store_id,
+                purchased_store_name = (
+                    _StoreNameLookup.get(line.purchased_store_id)
+                    if line.purchased_store_id else None
                 ),
                 offers = offers,
                 preferred_buy_id = line.preferred_buy_id,

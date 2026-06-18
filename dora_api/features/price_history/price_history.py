@@ -87,7 +87,7 @@ def get_price_history():
     cutoff = _range_cutoff(request.args.get("range"))
 
     product_table = db.metadata.tables["Product"]
-    merchant_table = db.metadata.tables["Merchant"]
+    store_table = db.metadata.tables["Store"]
     offer_table = db.metadata.tables["ProductOffer"]
     historic_table = db.metadata.tables["ProductHistoricOffer"]
 
@@ -95,9 +95,9 @@ def get_price_history():
         select(
             product_table.c.id, product_table.c.name,
             product_table.c.size_value, product_table.c.size_unit,
-            merchant_table.c.name.label("merchant_name"),
+            store_table.c.name.label("store_name"),
         ).select_from(
-            product_table.join(merchant_table, product_table.c.merchant_id == merchant_table.c.id)
+            product_table.join(store_table, product_table.c.store_id == store_table.c.id)
         ).where(product_table.c.id.in_(ids))
     ).mappings().all()
     products_by_id = {row["id"]: dict(row) for row in products}
@@ -159,7 +159,7 @@ def get_price_history():
             # The caller asked for a product that doesn't exist —
             # surface a placeholder so the SPA can render "no data".
             series.append({
-                "product_id": str(pid), "name": "(unknown)", "merchant": "",
+                "product_id": str(pid), "name": "(unknown)", "store": "",
                 "points": [], "current": None, "all_time_low": None,
             })
             continue
@@ -174,7 +174,7 @@ def get_price_history():
         series.append({
             "product_id": str(pid),
             "name": product["name"],
-            "merchant": product["merchant_name"] or "",
+            "store": product["store_name"] or "",
             "points": points_by_product.get(pid, []),
             "current": (
                 {
@@ -239,18 +239,18 @@ def list_price_alerts():
         return bad_request("Not signed in.")
     alert_table = db.metadata.tables["PriceAlert"]
     product_table = db.metadata.tables["Product"]
-    merchant_table = db.metadata.tables["Merchant"]
+    store_table = db.metadata.tables["Store"]
     rows = db.session.execute(
         select(
             alert_table.c.id, alert_table.c.product_id,
             alert_table.c.threshold_unit_price, alert_table.c.created_at,
             alert_table.c.last_fired_at,
             product_table.c.name.label("product_name"),
-            merchant_table.c.name.label("merchant_name"),
+            store_table.c.name.label("store_name"),
         )
         .select_from(
             alert_table.join(product_table, alert_table.c.product_id == product_table.c.id)
-            .join(merchant_table, product_table.c.merchant_id == merchant_table.c.id)
+            .join(store_table, product_table.c.store_id == store_table.c.id)
         )
         .where(alert_table.c.user_id == user_id)
         .order_by(alert_table.c.created_at.desc())
@@ -261,7 +261,7 @@ def list_price_alerts():
                 "price_alert_id": str(r["id"]),
                 "product_id": str(r["product_id"]),
                 "product_name": r["product_name"],
-                "merchant_name": r["merchant_name"],
+                "store_name": r["store_name"],
                 "threshold_unit_price": float(r["threshold_unit_price"]),
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "last_fired_at": r["last_fired_at"].isoformat() if r["last_fired_at"] else None,

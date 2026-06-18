@@ -5,6 +5,33 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Stores (admin) replaces the legacy Merchants page (FU-189 / Phase E).**
+  New `Settings → Stores` admin page lets you curate the retail stores Dora knows
+  about (CRUD + per-store logo upload). Dora ships **zero pre-seeded stores** and
+  never auto-creates one from the ingestion path (FU-190); when no logo is
+  uploaded, a deterministic hash-swatch + initial pill fills in.
+  Stock items now carry a **"Usual store"** picker on the detail page
+  (`usual_store_id`). Plus all surfaces that previously talked about "merchants"
+  now read as "stores" — `Spend by store` report, `Group by store` on shopping
+  lists, `purchased_store_id` on shopping-list lines, etc. The producer's SKU
+  code field (`merchant_stockcode` on `Product`) is intentionally retained
+  verbatim — that's a producer code, not a reference to the renamed entity.
+
+### Changed
+- **Stores hydrate lazily; `boot/stores.ts` deleted (R-016 / ADR-011).**
+  `web_app/src/boot/stores.ts` previously `await`ed an API health check + three collection
+  fetches (`productStore`, `stockItemStore`, `stockLevelStore`) at module scope, blocking the
+  router/app shell until everything resolved. The file is now **gone** — and removed from
+  `quasar.config.ts`'s `boot:` array. The API-reachability surface it covered is already owned
+  by `authStore.bootstrapAsync()` in `App.vue` (the splash screen surfaces the error visually
+  with a Retry button — a better UX than a toast). Pages own their own data hydration via a new
+  `ensureLoadedAsync()` method on each store, which no-ops if data is cached and dedupes
+  concurrent first-time loads; bare `getXAsync()` remains the explicit force-refetch for
+  post-mutation refresh and pull-to-refresh. User-visible impact: faster perceived startup on
+  cold/slow API, no wasted bandwidth re-fetching the post-Phase-D product catalogue no surface
+  reads.
+
 ### Removed
 - **In-app live product search is gone (Phase D / FU-186).** Dora no longer scrapes retailer
   sites or runs the standalone `merchant_api` backend; the "Product Search" page and the admin

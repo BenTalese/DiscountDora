@@ -32,7 +32,7 @@
                     <q-item-section>
                         <q-item-label>{{ alert.product_name }}</q-item-label>
                         <q-item-label caption>
-                            {{ alert.merchant_name }} · notify below
+                            {{ alert.store_name }} · notify below
                             <strong>${{ alert.threshold_unit_price.toFixed(2) }}</strong>
                             <span v-if="alert.last_fired_at">
                                 · last alerted {{ formatDate(alert.last_fired_at) }}

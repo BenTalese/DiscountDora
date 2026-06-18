@@ -13,11 +13,21 @@ const productApiService = new ProductApiService();
  */
 export const useProductStore = defineStore('product', () => {
     const products = ref<Product[]>();
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
 
     const getProductsAsync = (): Promise<void> =>
         productApiService.getAllAsync().then((page) => {
             products.value = page.items;
+            hydrated = true;
         });
+
+    /** R-016 — lazy hydration. See sibling stores. */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= getProductsAsync().finally(() => { inflight = null; });
+        return inflight;
+    };
 
     const createProductAsync = (command: CreateProductCommand): Promise<void> =>
         productApiService.createAsync(command).then(() => getProductsAsync());
@@ -29,6 +39,7 @@ export const useProductStore = defineStore('product', () => {
         products: readonly(products),
         createProductAsync,
         getProductsAsync,
+        ensureLoadedAsync,
         updateProductAsync
     };
 });

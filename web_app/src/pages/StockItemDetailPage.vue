@@ -215,6 +215,23 @@
                                 </q-item>
 
                                 <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Usual store</q-item-section>
+                                    <q-item-section>
+                                        <q-select
+                                            v-model="form.usual_store_id"
+                                            :options="storeOptions"
+                                            emit-value
+                                            map-options
+                                            clearable
+                                            dense
+                                            borderless
+                                            placeholder="Not set"
+                                            @update:model-value="onChangeUsualStore"
+                                        />
+                                    </q-item-section>
+                                </q-item>
+
+                                <q-item>
                                     <q-item-section class="dora-text-secondary" style="max-width:160px">Expiry</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-xs">
@@ -563,11 +580,18 @@
                                 :class="{ 'dora-product-card--cheapest': isCheapest(prod) }"
                             >
                                 <q-card-section class="row items-center no-wrap q-pb-xs">
-                                    <MerchantLogo :name="prod.merchant_name" :height="20" :width="34" class="q-mr-sm" />
+                                    <StoreLogo
+                                        :name="prod.store_name"
+                                        :store-id="prod.store_id"
+                                        :has-image="false"
+                                        :height="20"
+                                        :width="34"
+                                        class="q-mr-sm"
+                                    />
                                     <div class="col">
                                         <div class="ellipsis text-weight-medium">{{ prod.name }}</div>
                                         <div class="text-caption dora-text-muted">
-                                            {{ prod.merchant_name }}
+                                            {{ prod.store_name }}
                                             <span v-if="prod.size"> · {{ prod.size }}</span>
                                         </div>
                                     </div>
@@ -627,7 +651,7 @@
                                         target="_blank"
                                         rel="noopener"
                                     >
-                                        <q-tooltip>Open on {{ prod.merchant_name }}</q-tooltip>
+                                        <q-tooltip>Open on {{ prod.store_name }}</q-tooltip>
                                     </q-btn>
                                     <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onUnlink(prod.product_id)">
                                         <q-tooltip>Unlink</q-tooltip>
@@ -823,7 +847,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import MerchantLogo from 'src/components/MerchantLogo.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import RecipeCard from 'src/components/RecipeCard.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
@@ -849,6 +873,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useLocationStore } from 'src/stores/locationStore';
+    import { useStoresStore } from 'src/stores/storesStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -959,9 +984,11 @@
         notes: string;
         stock_location_id: string | null;
         stock_group_id: string | null;
+        usual_store_id: string | null;
     };
     const emptyBasics = (): BasicsForm => ({
         name: '', notes: '', stock_location_id: null, stock_group_id: null,
+        usual_store_id: null,
     });
     const form = reactive<BasicsForm>(emptyBasics());
 
@@ -970,6 +997,7 @@
         form.notes = d.notes ?? '';
         form.stock_location_id = d.stock_location_id;
         form.stock_group_id = d.stock_group_id;
+        form.usual_store_id = d.usual_store_id;
     }
     // The unsaved-changes guard now only covers text rows — selects/toggles/
     // dates persist on change, so they can never be "dirty but not saved."
@@ -988,6 +1016,15 @@
     const stockGroups = ref<StockGroup[]>([]);
     const groupOptions = computed(() =>
         stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
+    );
+
+    // FU-189 — Stores picker. Hydrate lazily via R-016 ensureLoadedAsync; the
+    // store dropdown shows whatever the user has curated under Settings →
+    // Stores. Empty list ⇒ the picker reads "no stores set up yet" and the
+    // user is invited to add some.
+    const storesStore = useStoresStore();
+    const storeOptions = computed(() =>
+        storesStore.stores.map((s) => ({ label: s.name, value: s.store_id })),
     );
     // ── Image (C-1 Chunk 6 / FU-033) ────────────────────────────────────
     // Saves immediately — uploading a photo isn't coupled to the basics
@@ -1050,6 +1087,8 @@
         is_flagged?: boolean;
         auto_add_when_low?: boolean;
         expiry_date?: string | null;
+        usual_store_id?: string | null;
+        clear_usual_store?: boolean;
     };
     async function saveField(patch: FieldPatch) {
         if (!detail.value) return;
@@ -1085,6 +1124,14 @@
     async function onChangeGroup(value: string | null) {
         if (!detail.value || value === detail.value.stock_group_id) return;
         await saveField({ stock_group_id: value });
+    }
+    async function onChangeUsualStore(value: string | null) {
+        if (!detail.value || value === detail.value.usual_store_id) return;
+        if (value === null) {
+            await saveField({ clear_usual_store: true });
+        } else {
+            await saveField({ usual_store_id: value });
+        }
     }
     async function onToggleFlagged(value: boolean) {
         await saveField({ is_flagged: value });
@@ -1642,6 +1689,8 @@
         // Stock groups are page-local (only consumer); load alongside the
         // other dropdowns so the inline picker has options on first paint.
         void stockGroupApi.getAllAsync().then((g) => { stockGroups.value = g; });
+        // FU-189 — populate the usual-store picker. R-016 ensureLoaded.
+        void storesStore.ensureLoadedAsync();
         await Promise.all([
             stockLevelStore.getStockLevelsAsync(),
             locationStore.refreshAsync(),

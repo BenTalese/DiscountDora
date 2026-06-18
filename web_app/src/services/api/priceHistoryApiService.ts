@@ -12,7 +12,7 @@ export interface PriceHistoryPoint {
 export interface PriceHistorySeries {
     product_id: string;
     name: string;
-    merchant: string;
+    store: string;
     points: PriceHistoryPoint[];
     current: {
         unit_price: number | null;
@@ -26,7 +26,7 @@ export interface PriceAlert {
     price_alert_id: string;
     product_id: string;
     product_name: string;
-    merchant_name: string;
+    store_name: string;
     threshold_unit_price: number;
     created_at: string | null;
     last_fired_at: string | null;

@@ -3,7 +3,7 @@ from flask import Blueprint
 AUTH_ROUTER = Blueprint("AUTH_ROUTER", __name__, url_prefix="/api/auth")
 DASHBOARD_ROUTER = Blueprint("DASHBOARD_ROUTER", __name__, url_prefix="/api/dashboard")
 HEALTH_ROUTER = Blueprint("HEALTH_ROUTER", __name__, url_prefix="/api/health")
-MERCHANT_ROUTER = Blueprint("MERCHANT_ROUTER", __name__, url_prefix="/api/merchants")
+STORE_ROUTER = Blueprint("STORE_ROUTER", __name__, url_prefix="/api/stores")
 PRODUCT_ROUTER = Blueprint("PRODUCT_ROUTER", __name__, url_prefix="/api/products")
 MEAL_PLAN_ROUTER = Blueprint("MEAL_PLAN_ROUTER", __name__, url_prefix="/api/meal-plans")
 MEAL_PLAN_TEMPLATE_ROUTER = Blueprint("MEAL_PLAN_TEMPLATE_ROUTER", __name__, url_prefix="/api/meal-plan-templates")

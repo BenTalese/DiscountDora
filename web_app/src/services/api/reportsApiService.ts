@@ -13,16 +13,16 @@ export interface StockValueResponse {
     points: StockValuePoint[];
 }
 
-export interface MerchantSpendRow {
-    merchant_id: string | null;
-    merchant: string;
+export interface StoreSpendRow {
+    store_id: string | null;
+    store: string;
     spend: number;
     list_count: number;
 }
 
-export interface MerchantSpendResponse {
+export interface StoreSpendResponse {
     range: ReportRange;
-    rows: MerchantSpendRow[];
+    rows: StoreSpendRow[];
 }
 
 export interface MostBoughtRow {
@@ -54,7 +54,7 @@ export interface PricePoint {
 export interface PriceTrendSeries {
     product_id: string;
     name: string;
-    merchant: string;
+    store: string;
     points: PricePoint[];
 }
 
@@ -85,8 +85,8 @@ export default class ReportsApiService {
     getStockValueAsync = (range: ReportRange) =>
         this.httpClient.get<StockValueResponse>(`/reports/stock-value-over-time?range=${range}`);
 
-    getSpendByMerchantAsync = (range: ReportRange) =>
-        this.httpClient.get<MerchantSpendResponse>(`/reports/spend-by-merchant?range=${range}`);
+    getSpendByStoreAsync = (range: ReportRange) =>
+        this.httpClient.get<StoreSpendResponse>(`/reports/spend-by-store?range=${range}`);
 
     getMostBoughtAsync = (range: ReportRange, limit = 10) =>
         this.httpClient.get<MostBoughtResponse>(`/reports/most-bought-items?range=${range}&limit=${limit}`);

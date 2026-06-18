@@ -27,7 +27,7 @@ class EntityField:
                 Field(Product, "score").between(1.0, 5.0),
             ),
             And(
-                Field(Product, "merchant_id").in_([id1, id2]),
+                Field(Product, "store_id").in_([id1, id2]),
                 Field(Product, "is_active").eq(True),
                 ~Field(Product, "web_url").is_null(),
             ),

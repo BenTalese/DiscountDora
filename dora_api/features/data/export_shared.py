@@ -52,7 +52,7 @@ PRINT_CSS = """
     border: 1.5px solid #444; border-radius: 3px;
   }
   .item-name { font-weight: 600; }
-  .item-merchant, .item-notes { color: #666; font-size: 12px; }
+  .item-store, .item-notes { color: #666; font-size: 12px; }
   .ingredient { padding: 6px 0; border-bottom: 1px dashed #ddd; }
   .ingredient:last-child { border-bottom: none; }
   .instructions { white-space: pre-wrap; margin-top: 8px; }

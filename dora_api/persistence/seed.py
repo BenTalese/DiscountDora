@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash
 from dora_api.app import db
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
@@ -36,7 +36,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 def seed_dev_data():
     """Populate a rich dev dataset that exercises every screen.
 
-    Covers: multiple merchants and products (with current + historic offers
+    Covers: multiple stores and products (with current + historic offers
     for sparklines), product↔stock-item links, a deep
     location hierarchy, stock items across all levels / expiry states / flags /
     open markers, substitutes, level-change history, recipes (cookable and
@@ -53,16 +53,18 @@ def seed_dev_data():
     # every relationship resolved. Restored before the final commit.
     db.session.autoflush = False
 
-    # ---------------- MERCHANTS ---------------- #
-    woolworths = Merchant(name="Woolworths")
-    coles = Merchant(name="Coles")
-    aldi = Merchant(name="Aldi")
-    iga = Merchant(name="IGA")
-    for m in (woolworths, coles, aldi, iga):
-        repo.add(m)
+    # ---------------- STORES (dev fixtures only) ---------------- #
+    # FU-189 — production ships zero pre-seeded stores; these exist only
+    # so the dev seed dataset has products to render.
+    woolworths = Store(name="Woolworths")
+    coles = Store(name="Coles")
+    aldi = Store(name="Aldi")
+    iga = Store(name="IGA")
+    for s in (woolworths, coles, aldi, iga):
+        repo.add(s)
 
     # ---------------- PRODUCTS ---------------- #
-    def make_product(*, merchant, name, brand, size, size_unit, size_value,
+    def make_product(*, store, name, brand, size, size_unit, size_value,
                      stockcode, price_now, price_was, history):
         """history: list of (days_ago, price_now, price_was)."""
         current = ProductOffer(offered_on=now, price_now=price_now, price_was=price_was)
@@ -83,7 +85,7 @@ def seed_dev_data():
             image=None,
             is_active=True,
             is_available=True,
-            merchant=merchant,
+            store=store,
             merchant_stockcode=stockcode,
             name=name,
             size=size,
@@ -95,53 +97,53 @@ def seed_dev_data():
         return product
 
     milk_woolies = make_product(
-        merchant=woolworths, name="Woolworths Full Cream Milk 2L", brand="Woolworths",
+        store=woolworths, name="Woolworths Full Cream Milk 2L", brand="Woolworths",
         size="2L", size_unit="L", size_value=2.0, stockcode="W-MILK-2L",
         price_now=3.10, price_was=3.10,
         history=[(28, 3.30, 3.30), (21, 3.30, 3.30), (14, 3.10, 3.30), (7, 3.10, 3.10)],
     )
     milk_coles = make_product(
-        merchant=coles, name="Coles Full Cream Milk 2L", brand="Coles",
+        store=coles, name="Coles Full Cream Milk 2L", brand="Coles",
         size="2L", size_unit="L", size_value=2.0, stockcode="C-MILK-2L",
         price_now=2.90, price_was=3.30,
         history=[(28, 3.30, 3.30), (14, 3.30, 3.30), (7, 2.90, 3.30)],
     )
     eggs_woolies = make_product(
-        merchant=woolworths, name="Woolworths Free Range Eggs 12pk", brand="Woolworths",
+        store=woolworths, name="Woolworths Free Range Eggs 12pk", brand="Woolworths",
         size="700g", size_unit="g", size_value=700.0, stockcode="W-EGG-12",
         price_now=5.50, price_was=6.20,
         history=[(30, 6.20, 6.20), (15, 5.90, 6.20), (5, 5.50, 6.20)],
     )
     pasta_barilla = make_product(
-        merchant=coles, name="Barilla Spaghetti No.5 500g", brand="Barilla",
+        store=coles, name="Barilla Spaghetti No.5 500g", brand="Barilla",
         size="500g", size_unit="g", size_value=500.0, stockcode="C-PASTA-500",
         price_now=1.50, price_was=3.00,
         history=[(30, 3.00, 3.00), (20, 2.50, 3.00), (10, 1.50, 3.00), (2, 1.50, 3.00)],
     )
     oil_aldi = make_product(
-        merchant=aldi, name="Aldi Extra Virgin Olive Oil 1L", brand="Vialli",
+        store=aldi, name="Aldi Extra Virgin Olive Oil 1L", brand="Vialli",
         size="1L", size_unit="L", size_value=1.0, stockcode="A-OIL-1L",
         price_now=7.99, price_was=9.99,
         history=[(25, 9.99, 9.99), (12, 8.99, 9.99), (3, 7.99, 9.99)],
     )
     parmesan_coles = make_product(
-        merchant=coles, name="Coles Parmesan Wedge 200g", brand="Coles",
+        store=coles, name="Coles Parmesan Wedge 200g", brand="Coles",
         size="200g", size_unit="g", size_value=200.0, stockcode="C-PARM-200",
         price_now=6.00, price_was=6.00, history=[(20, 6.50, 6.50), (8, 6.00, 6.50)],
     )
     coffee_iga = make_product(
-        merchant=iga, name="Vittoria Coffee Beans 1kg", brand="Vittoria",
+        store=iga, name="Vittoria Coffee Beans 1kg", brand="Vittoria",
         size="1kg", size_unit="kg", size_value=1.0, stockcode="I-COFFEE-1KG",
         price_now=28.00, price_was=40.00,
         history=[(40, 40.00, 40.00), (20, 34.00, 40.00), (5, 28.00, 40.00)],
     )
     freddo = make_product(
-        merchant=woolworths, name="Cadbury Freddo Cake", brand="Cadbury",
+        store=woolworths, name="Cadbury Freddo Cake", brand="Cadbury",
         size="1.5L", size_unit="L", size_value=1.0, stockcode="51741",
         price_now=2.82, price_was=3.52, history=[(15, 3.52, 3.52), (4, 2.82, 3.52)],
     )
     cupcake = make_product(
-        merchant=coles, name="Betty Crocker Gluten Free Vanilla Cupcake Mix", brand="Betty Crocker",
+        store=coles, name="Betty Crocker Gluten Free Vanilla Cupcake Mix", brand="Betty Crocker",
         size="460g", size_unit="g", size_value=460.0, stockcode="3056737",
         price_now=22.15, price_was=32.16, history=[(18, 32.16, 32.16), (6, 22.15, 32.16)],
     )

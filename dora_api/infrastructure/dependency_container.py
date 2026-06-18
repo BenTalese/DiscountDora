@@ -16,7 +16,7 @@ class DependencyContainer:
     - dependency_injector's container is the sole source of truth for providers.
     - Providers are wired to other providers, never to resolved instances.
     - This class manages only the type → provider_name mapping.
-    - Generic aliases (e.g. IRepository[Merchant]) are fully supported and
+    - Generic aliases (e.g. IRepository[Store]) are fully supported and
       produce unique, collision-free provider names.
     """
 
@@ -47,10 +47,10 @@ class DependencyContainer:
             providers.Factory, etc. Defines the service lifetime.
         concrete_type:
             The concrete class to instantiate. May be a generic alias
-            (e.g. SqlAlchemyRepository[Merchant]).
+            (e.g. SqlAlchemyRepository[Store]).
         interface_type:
             Optional. If supplied, the service is resolved under this type.
-            Supports generic aliases (e.g. IRepository[Merchant]).
+            Supports generic aliases (e.g. IRepository[Store]).
         **explicit_kwargs:
             Constructor arguments that are not registered services and cannot
             be auto-wired — config values, primitives, model classes, etc.
@@ -71,7 +71,7 @@ class DependencyContainer:
         provider_name = self._build_provider_name(registration_type)
 
         # Resolve the raw class from a generic alias for instantiation.
-        # providers.Factory(SqlAlchemyRepository[Merchant]) won't work —
+        # providers.Factory(SqlAlchemyRepository[Store]) won't work —
         # dependency_injector needs the unparameterised class. The generic
         # type argument is captured separately via explicit_kwargs if needed.
         instantiation_class = get_origin(concrete_type) or concrete_type
@@ -170,18 +170,18 @@ class DependencyContainer:
     def _build_provider_name(self, service_type: Any) -> str:
         """
         Derive a unique, stable attribute name for a type, including full
-        support for generic aliases such as IRepository[Merchant].
+        support for generic aliases such as IRepository[Store].
 
         For plain types:
             dora_api.domain.foo.IFooService
             → dora_api_domain_foo_IFooService
 
         For generic aliases:
-            dora_api.domain.IRepository[dora_api.domain.Merchant]
-            → dora_api_domain_IRepository__dora_api_domain_Merchant_
+            dora_api.domain.IRepository[dora_api.domain.Store]
+            → dora_api_domain_IRepository__dora_api_domain_Store_
 
         The recursive approach means arbitrarily nested generics
-        (e.g. Dict[str, List[Merchant]]) also produce unique names,
+        (e.g. Dict[str, List[Store]]) also produce unique names,
         though such cases are unlikely in a DI context.
         """
         origin = get_origin(service_type)

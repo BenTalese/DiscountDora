@@ -1276,8 +1276,8 @@
     async function ensureRecipeData() {
         const loads: Promise<unknown>[] = [];
         if (recipes.value.length === 0) loads.push(recipeStore.getRecipesAsync());
-        if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
-        if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        loads.push(stockItemStore.ensureLoadedAsync());
+        loads.push(stockLevelStore.ensureLoadedAsync());
         // FU-150 — make sure dietary tags + cuisines are loaded so the
         // chat handler can resolve ids → names for substring matching.
         if ((recipeVocabStore.dietaryTags ?? []).length === 0) {

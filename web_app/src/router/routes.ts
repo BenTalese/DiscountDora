@@ -222,6 +222,13 @@ const routes: RouteRecordRaw[] = [
                     // Phase D / FU-186 — the admin Merchants page targeted the
                     // standalone merchant_api scraper backend (provider toggles +
                     // health). That backend left this repo, so the page goes too.
+                    // FU-189 / Phase E — replaced by /settings/admin/stores below
+                    // (user-curated, no scraper toggles; logos uploaded by user).
+                    {
+                        path: 'admin/stores',
+                        component: () => import('pages/settings/StoresSettings.vue'),
+                        meta: { title: 'Stores' }
+                    },
                     {
                         path: 'admin/users',
                         component: () => import('pages/settings/UsersAdminSettings.vue'),

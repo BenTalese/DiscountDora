@@ -46,6 +46,11 @@ class UpdateStockItemRequest(BaseModel):
     # C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
     # clear, omit to leave untouched. Mirrors the recipe-update contract.
     image: str | None = Field(default = None, max_length = 6_000_000)
+    # FU-189 — usual store hint. Send a UUID to bind, omit to leave alone;
+    # send `clear_usual_store=true` to blank an existing value (the same
+    # clear-vs-unset pattern as ShoppingListLine fields).
+    usual_store_id: UUID | None = None
+    clear_usual_store: bool = False
 
 
 @dataclass(slots=True)
@@ -143,6 +148,15 @@ class UpdateStockItemHandler:
 
         if "auto_add_when_low" in _SetFields and request.auto_add_when_low is not None:
             _StockItem.auto_add_when_low = request.auto_add_when_low
+
+        # FU-189 — usual store hint. Clear flag wins over a present-but-None.
+        # We don't validate the target Store exists here: the FK has SET NULL
+        # ondelete, so a stale id silently degrades; the SPA picker only
+        # surfaces actual rows so the bad-write path requires hand-crafting.
+        if request.clear_usual_store:
+            _StockItem.usual_store_id = None
+        elif "usual_store_id" in _SetFields and request.usual_store_id is not None:
+            _StockItem.usual_store_id = request.usual_store_id
 
         # stock_group: nullable FK, so a present-but-None value means
         # "clear the group". The relationship is mapped lazy="noload", so

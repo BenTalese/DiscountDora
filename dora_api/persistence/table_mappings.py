@@ -19,7 +19,7 @@ from dora_api.domain.entities.meal_plan_template import (MealPlanTemplate,
                                                          MealPlanTemplateSet,
                                                          MealPlanTemplateSetItem)
 from dora_api.domain.entities.meal_slot import MealSlot
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.price_alert import PriceAlert
 from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.product import Product
@@ -63,10 +63,16 @@ def configure_mappings(db: SQLAlchemy):
 
     # ── Tables ────────────────────────────────────────────────────────────────
 
-    merchant_table = Table(
-        "Merchant", metadata,
+    # FU-189 — user-curated stores (was `Merchant`). `image` mirrors the
+    # StockItem/Product/Recipe pattern: a large blob, deferred at the mapper
+    # so list endpoints don't drag bytes; a dedicated `/stores/<id>/image`
+    # route hydrates on demand. Zero logos ship — Dora has no prefilled
+    # rows here (no-auto-create, FU-190).
+    store_table = Table(
+        "Store", metadata,
         Column("id", UUIDType, primary_key=True),
-        Column("name", String(255)),
+        Column("name", String(255), nullable=False),
+        Column("image", LargeBinary, nullable=True),
     )
 
     app_setting_table = Table(
@@ -124,7 +130,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("image", LargeBinary, nullable=True),
         Column("is_active", Boolean, nullable=False),
         Column("is_available", Boolean, nullable=False),
-        Column("merchant_id", UUIDType, ForeignKey("Merchant.id", ondelete="RESTRICT"), nullable=False),
+        Column("store_id", UUIDType, ForeignKey("Store.id", ondelete="RESTRICT"), nullable=False),
+        # FU-189 carve-out: `merchant_stockcode` retained verbatim — it's the
+        # producer's SKU code on the offer, not a reference to the renamed
+        # entity. The runbook explicitly excludes it from the rename.
         Column("merchant_stockcode", String(255), nullable=True),
         Column("name", String(255), nullable=False),
         Column("size", String(255)),
@@ -173,6 +182,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_location_id", UUIDType, ForeignKey("StockLocation.id", ondelete="SET NULL"), nullable=True),
         Column("stocktake_alerts_are_enabled", Boolean),
         Column("last_checked_at", DateTime(timezone=True), nullable=True),
+        # FU-189 — usual store hint. SET NULL on store delete so the item
+        # survives the store going away (R-005 referential safety).
+        Column("usual_store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
     )
 
     product_barcode_table = Table(
@@ -256,8 +268,8 @@ def configure_mappings(db: SQLAlchemy):
         # offer; reports & the assistant fall back to picked_offer_price.
         Column("actual_unit_price", Float, nullable=True),
         Column(
-            "purchased_merchant_id", UUIDType,
-            ForeignKey("Merchant.id", ondelete="SET NULL"),
+            "purchased_store_id", UUIDType,
+            ForeignKey("Store.id", ondelete="SET NULL"),
             nullable=True,
         ),
         # FU-215 — optional PreferredBuy hint. Plain UUID, NO ForeignKey:
@@ -708,8 +720,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # C-10.2 / FU-190 — external "merchant" name → Dora Merchant mapping
-    # per IngestionSource. Quarantined when `merchant_id` is NULL; the
+    # C-10.2 / FU-190 — external store name → Dora Store mapping
+    # per IngestionSource. Quarantined when `store_id` is NULL; the
     # admin maps or rejects on the API access page.
     ingestion_store_mapping_table = Table(
         "IngestionStoreMapping", metadata,
@@ -718,8 +730,8 @@ def configure_mappings(db: SQLAlchemy):
                ForeignKey("IngestionSource.id", ondelete="CASCADE"),
                nullable=False),
         Column("external_name", String(255), nullable=False),
-        Column("merchant_id", UUIDType,
-               ForeignKey("Merchant.id", ondelete="SET NULL"),
+        Column("store_id", UUIDType,
+               ForeignKey("Store.id", ondelete="SET NULL"),
                nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("last_seen_at", DateTime(timezone=True), nullable=True),
@@ -739,9 +751,15 @@ def configure_mappings(db: SQLAlchemy):
 
     # ── Mappings ──────────────────────────────────────────────────────────────
 
-    _mapper_registry.map_imperatively(Merchant, merchant_table, properties={
-        "_id_col": merchant_table.c.id,
-        "id": merchant_table.c.id,
+    _mapper_registry.map_imperatively(Store, store_table, properties={
+        "_id_col": store_table.c.id,
+        "id": store_table.c.id,
+        # FU-189 — defer the logo blob so list endpoints don't drag bytes
+        # per row just to render the Stores grid. The dedicated
+        # `/stores/<id>/image` route triggers the load on attribute access;
+        # `has_image: bool` on StoreDto is hydrated from a separate
+        # `IS NOT NULL` check (mirrors the StockItem / Product pattern).
+        "image": deferred(store_table.c.image),
     })
 
     _mapper_registry.map_imperatively(StockGroup, stock_group_table, properties={
@@ -786,7 +804,7 @@ def configure_mappings(db: SQLAlchemy):
 
     _mapper_registry.map_imperatively(Product, product_table, properties={
         "_id_col": product_table.c.id,
-        "_merchant_id": product_table.c.merchant_id,
+        "_store_id": product_table.c.store_id,
         "id": product_table.c.id,
         # FU-014 — defer the image blob so list endpoints (get_products,
         # best-deals) never pull megabytes per row. The dedicated
@@ -794,7 +812,7 @@ def configure_mappings(db: SQLAlchemy):
         # access; `has_image` on ProductDto is derived from a separate
         # `IS NOT NULL` check. Mirrors the stock-item / recipe pattern.
         "image": deferred(product_table.c.image),
-        "merchant": relationship(Merchant, lazy="noload"),
+        "store": relationship(Store, lazy="noload"),
         "current_offer": relationship(ProductOffer, lazy="noload", uselist=False),
         "historic_offers": relationship(ProductHistoricOffer, lazy="noload"),
     })
@@ -805,6 +823,9 @@ def configure_mappings(db: SQLAlchemy):
         "_stock_level_id": stock_item_table.c.stock_level_id,
         "_stock_location_id": stock_item_table.c.stock_location_id,
         "id": stock_item_table.c.id,
+        # FU-189 — usual_store_id is a real domain attribute on the entity,
+        # mapped publicly so it round-trips through generic CRUD.
+        "usual_store_id": stock_item_table.c.usual_store_id,
         # C-1 Chunk 6 / FU-033 — defer the image blob so the list endpoint
         # never pulls megabytes per row just to set `has_image`. The
         # dedicated `/stock-items/<id>/image` route triggers the load on

@@ -59,16 +59,30 @@ export const useStockItemStore = defineStore('stockItem', () => {
         };
     }
 
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
+
     /** C-1 Stock Overview Chunk 1 — page until exhausted so a pantry of
      *  >50 items doesn't silently get truncated to the first page
      *  (FU-035). Callers that only need a quick prefix (autocomplete-
      *  style) should hit `getAllAsync` on the service directly. */
-    const getStockItemsAsync = () =>
+    const getStockItemsAsync = (): Promise<void> =>
         stockItemApiService.getAllPagesAsync().then((items) => {
             stockItems.value = [...items].sort((si1, si2) =>
                 collator.compare(si1.name, si2.name)
             );
+            hydrated = true;
         });
+
+    /** R-016 — lazy hydration. Use this in `onMounted` / `beforeRouteEnter`
+     *  when you need the collection populated but don't care about a forced
+     *  refresh. Call `getStockItemsAsync` directly for an explicit refetch
+     *  (post-mutation, pull-to-refresh). */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= getStockItemsAsync().finally(() => { inflight = null; });
+        return inflight;
+    };
 
     const createStockItemAsync = async (stockItemToCreate: CreateStockItemCommand) => {
         const created = await stockItemApiService.createAsync(stockItemToCreate);
@@ -158,6 +172,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
     return {
         stockItems: readonly(stockItems),
         getStockItemsAsync,
+        ensureLoadedAsync,
         createStockItemAsync,
         updateStockLevelAsync,
         updateStockItemAsync,

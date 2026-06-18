@@ -73,7 +73,7 @@
                     </div>
                 </template>
 
-                <!-- Step 2: pick quantity + merchant offer -->
+                <!-- Step 2: pick quantity + store offer -->
                 <template v-else>
                     <div class="row items-center q-mb-sm">
                         <q-btn flat dense round :icon="ICONS.arrow_back" @click="clearSelection" />
@@ -91,7 +91,7 @@
                         style="max-width: 140px"
                     />
 
-                    <div class="text-subtitle2 q-mb-xs">Merchant offer</div>
+                    <div class="text-subtitle2 q-mb-xs">Store offer</div>
                     <AppSpinner v-if="offersLoading" />
                     <template v-else>
                         <q-option-group
@@ -235,9 +235,9 @@
 
     function offerLabel(o: LinkedProduct): string {
         const price = o.price_now != null ? `$${o.price_now.toFixed(2)}` : 'n/a';
-        const merchant = o.merchant_name ? ` · ${o.merchant_name}` : '';
+        const store = o.store_name ? ` · ${o.store_name}` : '';
         const size = o.size ? ` · ${o.size}` : '';
-        return `${o.name} — ${price}${merchant}${size}`;
+        return `${o.name} — ${price}${store}${size}`;
     }
 
     async function selectItem(item: StockItem) {
@@ -295,8 +295,8 @@
     watch(isOpen, async (nowOpen) => {
         if (!nowOpen) return;
         const loads: Promise<unknown>[] = [];
-        if (stockItems.value.length === 0) loads.push(stockItemStore.getStockItemsAsync());
-        if (stockLevels.value.length === 0) loads.push(stockLevelStore.getStockLevelsAsync());
+        loads.push(stockItemStore.ensureLoadedAsync());
+        loads.push(stockLevelStore.ensureLoadedAsync());
         loads.push(shoppingListStore.refreshAsync());
         // Frequently-added is best-effort; failure shouldn't block the
         // sheet, so swallow errors and fall back to low/out ordering.

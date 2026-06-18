@@ -125,8 +125,14 @@
     ];
 
     const adminSections: Section[] = [
-        // Phase D / FU-186 — the "Merchants" admin page targeted the standalone
-        // merchant_api scraper backend; that backend left this repo.
+        // FU-189 / Phase E — replaced the legacy "Merchants" admin page that
+        // controlled the deleted merchant_api scraper backend (Phase D / FU-186).
+        {
+            path: '/settings/admin/stores',
+            label: 'Stores',
+            caption: 'Retail stores you shop at (logos upload here)',
+            icon: ICONS.store
+        },
         {
             path: '/settings/admin/users',
             label: 'Users',

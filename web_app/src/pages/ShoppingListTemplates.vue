@@ -506,9 +506,7 @@
 
     onMounted(async () => {
         await load();
-        if (stockItemStore.stockItems.length === 0) {
-            await stockItemStore.getStockItemsAsync();
-        }
+        await stockItemStore.ensureLoadedAsync();
     });
 </script>
 

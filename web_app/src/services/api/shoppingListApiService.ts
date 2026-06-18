@@ -41,9 +41,9 @@ export type UpdateLineCommand = {
      *  here is treated as "leave alone" by the backend). */
     actual_unit_price?: number | null;
     clear_actual_unit_price?: boolean;
-    /** P2-02 — merchant the shopper actually bought from. */
-    purchased_merchant_id?: string | null;
-    clear_purchased_merchant?: boolean;
+    /** P2-02 — store the shopper actually bought from. */
+    purchased_store_id?: string | null;
+    clear_purchased_store?: boolean;
     /** FU-215 — optional PreferredBuy hint on the line. */
     preferred_buy_id?: string | null;
     clear_preferred_buy?: boolean;

@@ -13,12 +13,12 @@ Contract (PROPOSAL_INGESTION_API §2.2-§2.4):
 - Payload: `{ products[], offers[], price_observations[] }`. Each record
   carries a `source` provenance string (defaults to the IngestionSource
   id if absent).
-- Products dedupe on (merchant_id + stockcode) when stockcode is
-  present, else (merchant_id + name) — same product across sources
-  collapses into one row (shared catalogue, proposal §1/§5).
+- Products dedupe on (store_id + stockcode) when stockcode is present,
+  else (store_id + name) — same product across sources collapses into
+  one row (shared catalogue, proposal §1/§5).
 - Offers/observations are append-only, deduped on
   (product_id, observed_at, price_now).
-- FU-190: the producer's `merchant` string is resolved through
+- FU-190: the producer's `store` string is resolved through
   `IngestionStoreMapping`. Unknown names quarantine (record skipped
   with `store_not_mapped`); admin maps later via the API access page.
   Stores are **never auto-created**.
@@ -41,7 +41,7 @@ from dora_api.domain.entities.idempotency_key import IdempotencyKey
 from dora_api.domain.entities.ingestion_source import IngestionSource
 from dora_api.domain.entities.ingestion_store_mapping import \
     IngestionStoreMapping
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
@@ -73,11 +73,16 @@ class _ProductIn(BaseModel):
 
     ref: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
-    merchant: str = Field(min_length=1, max_length=255)
+    # FU-189 — producer pushes the store's external name as `store`. Was
+    # `merchant` pre-Phase-E; the rename also flows through to the SPA
+    # quarantine surface.
+    store: str = Field(min_length=1, max_length=255)
     brand: str | None = Field(default=None, max_length=255)
     size: str | None = Field(default=None, max_length=255)
     size_unit: str | None = Field(default=None, max_length=255)
     size_value: float | None = Field(default=None, gt=0)
+    # `merchant_stockcode` carve-out: the producer's SKU code, kept
+    # verbatim across the rename per the runbook.
     merchant_stockcode: str | None = Field(default=None, max_length=255)
     web_url: str | None = Field(default=None, max_length=500)
     source: str | None = Field(default=None, max_length=64)
@@ -156,7 +161,7 @@ class IngestBatchResult:
 # ── Handler ────────────────────────────────────────────────────────────
 
 class _IngestionContext:
-    """Per-batch scratchpad: caches Merchant lookups, the products
+    """Per-batch scratchpad: caches Store lookups, the products
     touched this batch (by ref), and the running result. Keeps the
     handler body tidy without piling on parameters."""
 
@@ -167,7 +172,7 @@ class _IngestionContext:
         # ref → Product, populated as products are upserted; offers in
         # the same batch can target newly-created products.
         self.products_by_ref: dict[str, Product] = {}
-        # external store name → mapping row (resolved Merchant or None)
+        # external store name → mapping row (resolved Store or None)
         self.store_cache: dict[str, IngestionStoreMapping] = {}
 
 
@@ -241,11 +246,11 @@ class SubmitIngestionBatchHandler:
 
     # — store mapping (FU-190) —
 
-    def _resolve_merchant(
+    def _resolve_store(
         self, ctx: _IngestionContext, external_name: str
-    ) -> tuple[Merchant | None, IngestionStoreMapping]:
+    ) -> tuple[Store | None, IngestionStoreMapping]:
         """Look up (or create-as-quarantined) the per-source store
-        mapping; return the Dora Merchant if mapped, else None."""
+        mapping; return the Dora Store if mapped, else None."""
         cached = ctx.store_cache.get(external_name)
         if cached is not None:
             mapping = cached
@@ -266,7 +271,7 @@ class SubmitIngestionBatchHandler:
                 mapping = IngestionStoreMapping(
                     source_id=ctx.source.id,
                     external_name=external_name,
-                    merchant_id=None,
+                    store_id=None,
                     created_at=datetime.now(timezone.utc),
                     last_seen_at=datetime.now(timezone.utc),
                 )
@@ -274,16 +279,16 @@ class SubmitIngestionBatchHandler:
             ctx.store_cache[external_name] = mapping
 
         mapping.last_seen_at = datetime.now(timezone.utc)
-        if mapping.merchant_id is None:
+        if mapping.store_id is None:
             return None, mapping
-        merchant = self.repository.get(Merchant).by_id(mapping.merchant_id)
-        return merchant, mapping
+        store = self.repository.get(Store).by_id(mapping.store_id)
+        return store, mapping
 
     # — record applicators —
 
     def _apply_product(self, ctx: _IngestionContext, raw: _ProductIn) -> None:
-        merchant, _mapping = self._resolve_merchant(ctx, raw.merchant)
-        if merchant is None:
+        store, _mapping = self._resolve_store(ctx, raw.store)
+        if store is None:
             ctx.result.skipped.append(_SkippedRecord(
                 kind="product", ref=raw.ref, reason="store_not_mapped",
             ))
@@ -292,28 +297,27 @@ class SubmitIngestionBatchHandler:
         # Dedupe: stockcode-first, name fallback. Source is provenance
         # only, NOT identity — same product pushed by two sources
         # collapses into one Product row (shared catalogue).
-        field_merchant = EntityField(Product, Product.Fields.MERCHANT)
         field_name = EntityField(Product, Product.Fields.NAME)
         field_stockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
-        field_merchant_id = EntityField(Merchant, Merchant.Fields.ID)
+        field_store_id = EntityField(Store, Store.Fields.ID)
 
         existing: Product | None = None
         if raw.merchant_stockcode:
             existing = (
                 self.repository.get(Product)
-                .include(Product.Fields.MERCHANT)
+                .include(Product.Fields.STORE)
                 .include(Product.Fields.CURRENT_OFFER)
                 .one(
                     field_stockcode.eq(raw.merchant_stockcode)
-                    & field_merchant_id.eq(merchant.id)
+                    & field_store_id.eq(store.id)
                 )
             )
         if existing is None:
             existing = (
                 self.repository.get(Product)
-                .include(Product.Fields.MERCHANT)
+                .include(Product.Fields.STORE)
                 .include(Product.Fields.CURRENT_OFFER)
-                .one(field_name.eq(raw.name) & field_merchant_id.eq(merchant.id))
+                .one(field_name.eq(raw.name) & field_store_id.eq(store.id))
             )
 
         record_source = raw.source or str(ctx.source.id)
@@ -348,7 +352,7 @@ class SubmitIngestionBatchHandler:
             image=None,
             is_active=True,
             is_available=True,
-            merchant=merchant,
+            store=store,
             merchant_stockcode=raw.merchant_stockcode,
             name=raw.name,
             size=raw.size or "",

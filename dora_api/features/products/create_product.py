@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.types import EMPTY_UUID
@@ -32,7 +32,9 @@ class CreateProductRequest(BaseModel):
     image: str | None = Field(default = None, max_length = 6_000_000)
     is_active: bool
     is_available: bool
-    merchant_name: str = Field(min_length = 1)
+    store_name: str = Field(min_length = 1)
+    # FU-189 carve-out: `merchant_stockcode` is the producer's SKU on the
+    # offer, retained verbatim per the rename runbook.
     merchant_stockcode: str | None = Field(default = None, min_length = 1)
     name: str = Field(min_length = 1)
     price_now: float = Field(gt = 0)
@@ -63,17 +65,17 @@ class CreateProductHandler:
         self.repository = SqlAlchemyRepository()
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        _MerchantName = EntityField(Merchant, Merchant.Fields.NAME)
+        _StoreName = EntityField(Store, Store.Fields.NAME)
         _ProductName = EntityField(Product, Product.Fields.NAME)
         _ProductStockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
 
         _ExistingProduct: Product | None = (
             self.repository
             .get(Product)
-            .include(Product.Fields.MERCHANT)
+            .include(Product.Fields.STORE)
             .include(Product.Fields.CURRENT_OFFER)
             .one(_ProductStockcode.eq(request.merchant_stockcode)
-                 & _MerchantName.eq(request.merchant_name)
+                 & _StoreName.eq(request.store_name)
                  & _ProductName.eq(request.name))
         )
 
@@ -95,10 +97,15 @@ class CreateProductHandler:
                 offer_appended=outcome.outcome == OfferOutcome.APPENDED,
             )
 
-        _Merchant = self.repository.get(Merchant).one(_MerchantName.eq(request.merchant_name))
-        if not _Merchant:
-            _Merchant = Merchant(request.merchant_name)
-            self.repository.add(_Merchant)
+        # FU-189 finding: the manual product-add path still auto-creates a
+        # Store row when none matches the name. The runbook ties strict
+        # no-auto-create to FU-190 (ingestion); keeping the manual creator's
+        # current behaviour here pending that follow-up. Logged as FU-189a
+        # in DORA_FOLLOWUPS.md.
+        _Store = self.repository.get(Store).one(_StoreName.eq(request.store_name))
+        if not _Store:
+            _Store = Store(name=request.store_name)
+            self.repository.add(_Store)
 
         _Offer = ProductOffer(
             offered_on=observed_at,
@@ -112,7 +119,7 @@ class CreateProductHandler:
             image=request.image.encode("utf-8") if request.image else None,
             is_active=request.is_active,
             is_available=request.is_available,
-            merchant=_Merchant,
+            store=_Store,
             merchant_stockcode=request.merchant_stockcode,
             name=request.name,
             size=request.size,

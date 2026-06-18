@@ -45,12 +45,12 @@ def _line_unit_price(line: ShoppingListLineDto) -> float | None:
     return None
 
 
-def _line_merchant(line: ShoppingListLineDto) -> str:
+def _line_store(line: ShoppingListLineDto) -> str:
     if line.selected_product_id is None:
         return ""
     for offer in line.offers:
         if offer.product_id == line.selected_product_id:
-            return offer.merchant_name
+            return offer.store_name
     return ""
 
 
@@ -114,8 +114,8 @@ _PRINT_TEMPLATE = """<!doctype html>
                 <td class="box"><span class="checkbox"></span></td>
                 <td>
                   <span class="item-name">{{ line.stock_item_name }}</span>
-                  {% if line_extras[line.line_id].merchant %}
-                    <div class="item-merchant">{{ line_extras[line.line_id].merchant }}</div>
+                  {% if line_extras[line.line_id].store %}
+                    <div class="item-store">{{ line_extras[line.line_id].store }}</div>
                   {% endif %}
                 </td>
                 <td class="qty">{{ line.quantity if line.quantity is not none else '' }}</td>
@@ -145,8 +145,8 @@ def _render_print_view(detail: ShoppingListDetailDto) -> str:
     totals: list[float] = []
     for line in detail.lines:
         unit = _line_unit_price(line)
-        merchant = _line_merchant(line)
-        line_extras[line.line_id] = {"unit_price": unit, "merchant": merchant}
+        store = _line_store(line)
+        line_extras[line.line_id] = {"unit_price": unit, "store": store}
         if unit is not None:
             totals.append(unit * (line.quantity if line.quantity is not None else 1))
 

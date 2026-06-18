@@ -23,6 +23,13 @@ class StockItem(BaseEntity):
     stocktake_alerts_are_enabled: bool
     expiry_date: date | None = None
     is_flagged: bool = False
+    # FU-189 — the user-curated Store this item is usually bought from. Plain
+    # UUID (no relationship object), nullable. Drives shopping-list grouping
+    # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) and a "favourite store" hint on the
+    # stock-item detail; users can override at trip-build time. SET NULL on
+    # store delete so removing a store doesn't break the items that referenced
+    # it — they fall back to "no usual store".
+    usual_store_id: UUID | None = None
     # When True, transitioning this item to Low or Out of stock auto-adds it
     # to the primary shopping list. Independent of `is_flagged` — that one
     # drives auto-generate and severity weighting on alerts, this one is
@@ -66,3 +73,4 @@ class StockItem(BaseEntity):
         STOCK_LOCATION = "stock_location"
         STOCKTAKE_ALERTS_ARE_ENABLED = "stocktake_alerts_are_enabled"
         LAST_CHECKED_AT = "last_checked_at"
+        USUAL_STORE_ID = "usual_store_id"

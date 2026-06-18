@@ -33,7 +33,7 @@ export type CreateProductCommand = {
     image: string | null;
     is_active: boolean;
     is_available: boolean;
-    merchant_name: string;
+    store_name: string;
     merchant_stockcode: string;
     name: string;
     price_now: number;

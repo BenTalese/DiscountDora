@@ -17,9 +17,11 @@
             </span>
         </div>
 
-        <MerchantLogo
-            v-if="product.merchant_name"
-            :name="product.merchant_name"
+        <StoreLogo
+            v-if="product.store_name"
+            :name="product.store_name"
+            :store-id="product.store_id"
+            :has-image="false"
             :height="16"
             :width="28"
             class="q-ml-xs"
@@ -56,7 +58,7 @@
                 <q-list dense style="min-width: 180px">
                     <q-item v-if="product.web_url" clickable @click="openLink">
                         <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
-                        <q-item-section>Open at merchant</q-item-section>
+                        <q-item-section>Open at store</q-item-section>
                     </q-item>
                     <q-item clickable @click="emit('add-to-list', product.product_id)">
                         <q-item-section avatar><q-icon :name="ICONS.add_shopping_cart" /></q-item-section>
@@ -74,7 +76,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import MerchantLogo from 'src/components/MerchantLogo.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import { computed } from 'vue';
 
     // Structural type covering both Product and LinkedProduct so the chip works
@@ -84,7 +86,8 @@
         name: string;
         brand?: string | null;
         image?: string | null;
-        merchant_name?: string | null;
+        store_id?: string | null;
+        store_name?: string | null;
         web_url?: string | null;
         price_now?: number | null;
         price_was?: number | null;

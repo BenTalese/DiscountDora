@@ -132,7 +132,7 @@
                     <div class="text-h6 q-mb-sm">You're the admin</div>
                     <div class="text-body2 dora-text-secondary q-mb-md">
                         First user on a fresh install gets the admin role
-                        automatically — so all the global settings (merchants,
+                        automatically — so all the global settings (stores,
                         stock levels, user management) are unlocked for you
                         out of the gate. There's nothing to change here, but
                         a couple of pointers:
@@ -143,10 +143,10 @@
                                 <q-icon :name="ICONS.storefront" color="primary" />
                             </q-item-section>
                             <q-item-section>
-                                <q-item-label>Pick which merchants to scrape</q-item-label>
+                                <q-item-label>Curate the stores you shop at</q-item-label>
                                 <q-item-label caption>
-                                    Settings → Merchants. Off by default;
-                                    enable only the chains you actually shop at.
+                                    Settings → Stores. Add the stores you actually
+                                    use; upload a logo so they're recognisable.
                                 </q-item-label>
                             </q-item-section>
                         </q-item>

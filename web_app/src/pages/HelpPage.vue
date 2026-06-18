@@ -240,10 +240,10 @@
                     path: '/stock',
                 },
                 {
-                    title: 'Link a merchant product to a stock item',
+                    title: 'Link a product to a stock item',
                     summary:
-                        'On the detail page, search for a product. Linking lets the live deal price ride alongside your pantry record.',
-                    path: '/product-search',
+                        'On the detail page, link a product to your stock item so its offers + price history ride alongside your pantry record.',
+                    path: '/stock',
                 },
             ],
         },
@@ -272,8 +272,8 @@
                 {
                     title: 'Search for products',
                     summary:
-                        'Product Search hits the configured merchants live (Coles, Woolworths, IGA, Aldi). Disabled merchants are skipped. Use the admin Merchants page to toggle them.',
-                    path: '/product-search',
+                        'Product Search opens an admin-configured external search surface in a new tab. The destination pushes data back into Dora via the ingestion seam.',
+                    path: '/',
                 },
             ],
         },
@@ -294,10 +294,10 @@
                     path: '/settings/admin/users',
                 },
                 {
-                    title: 'Toggle merchants (admin)',
+                    title: 'Manage stores (admin)',
                     summary:
-                        'Disable a scraper if it keeps breaking. Use the health check button to confirm each is reachable.',
-                    path: '/settings/admin/merchants',
+                        'Curate the list of retail stores Dora knows about. Add a store, upload a logo, or remove ones you no longer track. No stores ship by default.',
+                    path: '/settings/admin/stores',
                 },
             ],
         },

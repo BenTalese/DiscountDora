@@ -387,6 +387,54 @@ exceptions, which still must be commented) · **Source** (where it was establish
   disabled-not-hidden; "we want to SHOW features exist … but obvious it's not
   set up"; scanning button should now show disabled instead of hidden).
 
+### R-016 — Lazy store hydration; boot files don't block app mount
+- **Rule:** Pinia stores hydrate **lazily, on demand**, via an
+  `ensureLoadedAsync()` method that no-ops if the collection is already
+  populated and dedupes concurrent first-time loads. **Pages own their own
+  data hydration** — call `ensureLoadedAsync()` in `onMounted` /
+  `beforeRouteEnter` for what the page actually needs. The Quasar `boot/`
+  layer must **never** `await` collection fetches at the top level — in
+  practice this means no `boot/` file should be doing data hydration at all
+  (Dora's `boot/stores.ts` was deleted, not just rewritten). Use the bare
+  `getXAsync()` only as a **force refetch** (after a mutation,
+  pull-to-refresh, manual reload button).
+- **Why:** A top-level `await` in a boot file blocks the entire shell from
+  rendering until every queued fetch resolves — on a cold backend that is a
+  blank-screen second or two, the opposite of "smooth navigation". And as
+  stores accrete, the boot list drifts: ours preloaded `productStore` long
+  after Phase D moved products to an overlay, paying for a fetch nothing on
+  the cold path needed. Lazy hydration means each page only pays for what
+  it reads, while the boot warmup still primes the most-used collections in
+  the background so navigation feels instant.
+- **Apply:** New stores expose `getXAsync` (refetch) **and**
+  `ensureLoadedAsync` (load-if-missing). The two-flag pattern is:
+  ```ts
+  let hydrated = false;
+  let inflight: Promise<void> | null = null;
+  const ensureLoadedAsync = (): Promise<void> => {
+      if (hydrated) return Promise.resolve();
+      inflight ??= getXAsync().finally(() => { inflight = null; });
+      return inflight;
+  };
+  ```
+  Pages: call `ensureLoadedAsync()` in `onMounted`. Don't gate on
+  `length === 0` at the call site — that's what the store guard is for.
+  Don't add new top-level `await`s in `boot/`.
+- **Violation signal:** a `boot/` file with `await use…Store().getX…()`
+  at module scope; a page that branches on `store.items.length === 0`
+  around a `getXAsync()` call (the guard belongs in the store); a new
+  store exposing only `getXAsync()` with no `ensureLoadedAsync`.
+- **Carve-outs (must be commented):** post-mutation refresh after a
+  save/move/delete (force the refetch via `getXAsync` and explain it's
+  picking up server-derived fields); pull-to-refresh; explicit "reload"
+  affordances. Stores whose state is purely client-local (no fetch) don't
+  need the helper.
+- **Source:** ADR-011; user query 2026-06-18 about boot-time preloading
+  vs best practice (this work unit). Earlier inlined `length === 0`
+  checks across DoraChat / QuickAddSheet / RecipeCookMode /
+  ShoppingListDetail / MyProductsPage / BarcodesQR / ShoppingListTemplates
+  were the recurring shape that prompted the rule.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -658,6 +706,38 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   App-wide application (the scanning button, any other hidden gated surfaces)
   is a follow-up sweep, not a blanket immediate change.
 - **Promotes rule:** R-014.
+
+### ADR-011 — Lazy store hydration; boot doesn't block app mount
+- **Date / task:** 2026-06-18 (user query: boot-time preloading vs best practice)
+- **Status:** accepted
+- **Context:** `web_app/src/boot/stores.ts` had been a top-level `await` of an
+  API health check + three collection fetches (`productStore`,
+  `stockItemStore`, `stockLevelStore`). That blocked the router/app mount
+  until everything resolved — exactly the wrong shape for perceived speed —
+  and the file had drifted: `productStore` was still being preloaded long
+  after Phase D moved products to an overlay, so every cold start paid for a
+  fetch that almost no surface read. Several pages had also grown a private
+  inline guard (`if (store.items.length === 0) await getXAsync()`) that
+  duplicated the same intent across files.
+- **Decision:** Adopt R-016. Stores hydrate lazily via `ensureLoadedAsync()`
+  (cached + in-flight dedupe). Pages own their data hydration on mount.
+  `boot/stores.ts` was **deleted outright** (and removed from
+  `quasar.config.ts`); the API-reachability surface that the old boot
+  health-check covered is already owned by `authStore.bootstrapAsync()` in
+  `App.vue`, which sets `bootstrapError` and is rendered by `SplashScreen`
+  with a Retry button — that is the canonical "backend is down" affordance.
+  `getXAsync()` remains the explicit force-refetch for mutations /
+  pull-to-refresh / reload affordances.
+- **Consequences:** App shell mounts instantly; pages opt into the data
+  they need; there is no longer a drift-prone "what to preload" list in a
+  boot file. The cold-path landing page (typically the dashboard) pays a
+  small first-fetch cost on first visit instead of paying it for every cold
+  start regardless of where the user lands. Stores grow one extra method
+  each. Remaining pages still calling `getXAsync()` unconditionally in
+  `onMounted` (MealPlans / RecipeDetail / RecipesOverview / StockItemDetail
+  / StockOverview) are an opportunistic follow-up — they work today, but
+  each re-fetches on every visit instead of trusting the cache.
+- **Promotes rule:** R-016.
 
 ---
 

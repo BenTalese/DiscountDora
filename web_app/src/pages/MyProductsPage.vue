@@ -113,14 +113,14 @@
             <q-toggle v-model="onDealOnly" label="On deal now" dense />
             <q-toggle v-model="includeInactive" label="Show inactive" dense />
             <q-select
-                v-model="merchantFilter"
+                v-model="storeFilter"
                 outlined
                 dense
                 emit-value
                 map-options
                 clearable
-                :options="merchantOptions"
-                label="Merchant"
+                :options="storeOptions"
+                label="Store"
                 style="min-width: 180px"
             />
             <q-select
@@ -250,14 +250,16 @@
                             </span>
                         </div>
                         <div class="text-caption dora-text-muted">
-                            <MerchantLogo
-                                v-if="product.merchant_name"
-                                :name="product.merchant_name"
+                            <StoreLogo
+                                v-if="product.store_name"
+                                :name="product.store_name"
+                                :store-id="product.store_id"
+                                :has-image="false"
                                 :height="14"
                                 :width="24"
                                 class="q-mr-xs"
                             />
-                            {{ product.merchant_name || '—' }}
+                            {{ product.store_name || '—' }}
                         </div>
                     </q-card-section>
 
@@ -318,7 +320,7 @@
                             rel="noopener"
                             @click.stop
                         >
-                            <q-tooltip>Open at merchant</q-tooltip>
+                            <q-tooltip>Open at store</q-tooltip>
                         </q-btn>
                         <!-- FU-128 — adopted AddToListButton row variant with
                              `selected-product-id` so this carries the same
@@ -552,7 +554,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import MerchantLogo from 'src/components/MerchantLogo.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
@@ -588,12 +590,8 @@
         try {
             const [page] = await Promise.all([
                 productApi.getAllAsync(),
-                stockItems.value.length === 0
-                    ? stockItemStore.getStockItemsAsync()
-                    : Promise.resolve(),
-                stockLevels.value.length === 0
-                    ? stockLevelStore.getStockLevelsAsync()
-                    : Promise.resolve(),
+                stockItemStore.ensureLoadedAsync(),
+                stockLevelStore.ensureLoadedAsync(),
                 shoppingListStore.refreshAsync(),
             ]);
             products.value = page.items;
@@ -608,7 +606,7 @@
     const searchText = ref('');
     const onDealOnly = ref(false);
     const includeInactive = ref(false);
-    const merchantFilter = ref<string | null>(null);
+    const storeFilter = ref<string | null>(null);
     const linkedStockItemFilter = ref<string | null>(null);
     const linkedStockItemPickerText = ref('');
 
@@ -627,8 +625,8 @@
         return discountPct(product) !== null;
     }
 
-    const merchantOptions = computed(() => {
-        const names = [...new Set(products.value.map((p) => p.merchant_name).filter(Boolean))];
+    const storeOptions = computed(() => {
+        const names = [...new Set(products.value.map((p) => p.store_name).filter(Boolean))];
         return names.sort().map((n) => ({ label: n, value: n }));
     });
 
@@ -652,7 +650,7 @@
             if (!includeInactive.value && !p.is_active) return false;
             if (onDealOnly.value && !onSpecial(p)) return false;
             // A4: explicit "empty = off" — a null selection skips the predicate.
-            if (merchantFilter.value !== null && p.merchant_name !== merchantFilter.value)
+            if (storeFilter.value !== null && p.store_name !== storeFilter.value)
                 return false;
             if (
                 linkedStockItemFilter.value !== null
@@ -664,7 +662,7 @@
                 const haystack = [
                     p.name,
                     p.brand,
-                    p.merchant_name,
+                    p.store_name,
                     p.linked_stock_item_name ?? '',
                     p.size,
                 ]
@@ -697,7 +695,7 @@
             searchText.value !== ''
             || onDealOnly.value
             || includeInactive.value
-            || merchantFilter.value !== null
+            || storeFilter.value !== null
             || linkedStockItemFilter.value !== null,
     );
     // Active-filter count for the FilterBar badge (excludes the search box).
@@ -705,7 +703,7 @@
         let n = 0;
         if (onDealOnly.value) n++;
         if (includeInactive.value) n++;
-        if (merchantFilter.value !== null) n++;
+        if (storeFilter.value !== null) n++;
         if (linkedStockItemFilter.value !== null) n++;
         return n;
     });
@@ -713,7 +711,7 @@
         searchText.value = '';
         onDealOnly.value = false;
         includeInactive.value = false;
-        merchantFilter.value = null;
+        storeFilter.value = null;
         linkedStockItemFilter.value = null;
     }
 

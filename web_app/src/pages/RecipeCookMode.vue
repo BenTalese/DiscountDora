@@ -1272,8 +1272,8 @@
         // membership/primary feed the "add ran-out items" step; tools vocab
         // (Chunk 5) feeds the per-step tools panel.
         await Promise.all([
-            stockItems.value.length === 0 ? stockItemStore.getStockItemsAsync() : Promise.resolve(),
-            stockLevels.value.length === 0 ? stockLevelStore.getStockLevelsAsync() : Promise.resolve(),
+            stockItemStore.ensureLoadedAsync(),
+            stockLevelStore.ensureLoadedAsync(),
             shoppingListStore.refreshAsync(),
             recipeVocabStore.tools.length === 0 ? recipeVocabStore.getToolsAsync() : Promise.resolve(),
         ]);

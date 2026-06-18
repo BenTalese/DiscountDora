@@ -492,7 +492,7 @@
                             <div class="dora-deal-text">
                                 <div class="dora-deal-name">{{ p.name }}</div>
                                 <div class="dora-deal-meta">
-                                    {{ p.merchant_name }}
+                                    {{ p.store_name }}
                                     <span v-if="p.linked_stock_item_id">
                                         ·
                                         <a

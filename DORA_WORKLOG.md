@@ -9,6 +9,199 @@ next.
 
 ---
 
+## 2026-06-18 — Phase E landed — Merchant → Store rename + usual_store_id + Stores CRUD + image upload
+**Trigger:** Phase E of `PRODUCTS_OVERLAY_RUNBOOK.md` was the next major beat. User chose "One
+pass, all chunks" — full rename + new feature work in a single session.
+
+**Scope (one migration head; `a3e9f6c2d8b4_20260618_rename_merchant_to_store.py`):**
+- Rename `Merchant` table → `Store`, add `Store.image LargeBinary` (deferred).
+- Rename `Product.merchant_id` → `Product.store_id` (FK now refs `Store`).
+- Rename `ShoppingListLine.purchased_merchant_id` → `purchased_store_id`.
+- Rename `IngestionStoreMapping.merchant_id` → `store_id`.
+- Add `StockItem.usual_store_id` (nullable, SET NULL on store delete).
+- `Product.merchant_stockcode` deliberately **retained verbatim** — it's the producer's SKU
+  code on the offer, not a reference to the renamed entity (runbook carve-out).
+
+**Backend (rename + new feature, ~30 files touched):**
+- New `Store` entity (with `image`) replacing `Merchant`. Old `merchant.py` deleted.
+- `Product`, `ShoppingListLine`, `IngestionStoreMapping`, `StockItem` entities rebased.
+- `table_mappings.py`: new `store_table`, FK rewrites everywhere, deferred image, mapper
+  publishes `usual_store_id` on `StockItem`.
+- `dora_api/features/merchants/` directory deleted; new `dora_api/features/stores/` houses
+  full CRUD + image upload (`manage_stores.py` — list / create / update / delete /
+  `GET /stores/<id>/image`). Referential safety: `Store` delete is rejected when products
+  still link to it (FK is RESTRICT); `usual_store_id` / `purchased_store_id` degrade via
+  `ON DELETE SET NULL`.
+- `routers.py`: `MERCHANT_ROUTER` → `STORE_ROUTER` (`/api/merchants` → `/api/stores`).
+- Updated every consumer: `get_products`, `create_product`, `get_shopping_list_detail`,
+  `manage_shopping_list_lines`, `submit_ingestion_batch`, `ingestion_sources/store_mappings`,
+  `reports/reports` (`spend-by-merchant` → `spend-by-store`), `price_history/price_history`,
+  `data/export_shopping_list`, `data/restore_shared`, `data/export_shared`,
+  `search/global_search`, `assistant/tools` + `assistant/app_knowledge` (incl. the
+  `merchant_name` JSON-RPC arg → `store_name`, all per-store breakdown DTOs),
+  `onboarding/onboarding` (`merchant_status` → `store_status`),
+  `stock_items/get_stock_item_detail` (incl. `usual_store_name` resolution on the DTO),
+  `stock_items/update_stock_item` (now accepts `usual_store_id` / `clear_usual_store`).
+- `persistence/seed.py`: dev fixture renames `merchant=` → `store=` (still seeds Woolies /
+  Coles / Aldi / IGA — dev-only data; production ships nothing).
+- Doc strings updated in `sqlalchemy_repository.py`, `dependency_container.py`,
+  `field.py`.
+
+**Frontend (rename + new page + new picker, ~25 files touched):**
+- New `models/store.ts`, new `services/api/storesApiService.ts`, new
+  `stores/storesStore.ts` (Pinia, with R-016 `ensureLoadedAsync`).
+- Old `MerchantLogo.vue` + four hardcoded brand logo components + `merchantLogoOptions.ts`
+  + `assets/woolworths-logo.webp` all **deleted**. Replaced by
+  `components/StoreLogo.vue` — shows an uploaded image when present, otherwise renders a
+  deterministic hash-swatch + initial pill (6-entry palette; R-002 carve-out comment cites
+  the rule). Zero logos ship in the repo.
+- New `pages/settings/StoresSettings.vue` — CRUD + image upload, with a confirm dialog on
+  delete that names the SET NULL fallout to the user.
+- `models/onboarding.ts`: `MerchantStatus` → `StoreStatus`.
+- `models/product.ts`, `models/shoppingList.ts`, `models/stockItemDetail.ts` rebased
+  (`merchant_id`/`merchant_name` → `store_id`/`store_name`; `purchased_merchant_*` →
+  `purchased_store_*`; new `usual_store_id` / `usual_store_name` on `StockItemDetail`).
+- API services rebased (`reportsApiService.ts`: `spend-by-merchant` →
+  `spend-by-store`; `priceHistoryApiService.ts`: alert/series DTOs; `shoppingListApiService.ts`:
+  line update accepts `purchased_store_id` + `clear_purchased_store`; `ingestionSourcesApiService.ts`:
+  `DoraMerchant` → `DoraStore`, `listMerchantsAsync` → `listStoresAsync`).
+- Pages rebased: `ProductChip.vue`, `MyProductsPage.vue`, `ShoppingListDetail.vue`,
+  `StockItemDetailPage.vue` (now has a **"Usual store" picker** on the basics card),
+  `DashboardPage.vue`, `PriceHistoryPage.vue`, `ReportsPage.vue` (Spend by store widget),
+  `QuickAddSheet.vue`, `SubscriptionsPanel.vue`, `ApiAccessSettings.vue` (store-mapping
+  picker now reads from `/stores`), `HelpPage.vue` (replaced the stale "Toggle merchants
+  admin" Help entry with a "Manage stores admin" entry), `WelcomeWizard.vue`,
+  `DoraHelpPage.vue` + `doraIntents.ts` (assistant tool descriptions).
+- `style/icons.ts`: `merchant` semantic alias renamed to `store`.
+- Router + `SettingsShell.vue` nav updated to surface `/settings/admin/stores`.
+
+**Verification**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- Grep sweep — only remaining `merchant` text references are intentional comments noting
+  the rename history. `Product.merchant_stockcode` is the only `merchant_*` field left in
+  code, and it's the carve-out (producer SKU).
+- **Pytest NOT run this session.** This dev box has only the MS Store Python stub; no real
+  interpreter. Logged as **FU-189c** (recommended resolution: run on a Python-equipped env
+  before relying on the rename).
+
+**Engineering-standards close-gate**
+- R-005 / R-006 / R-015: migration is Postgres-portable, single head, all batch-mode
+  operations, deterministic constraint name `fk_StockItem_usual_store_id_Store`.
+- R-002: `StoreLogo`'s hash-swatch palette uses hex per the "deterministic hash swatches"
+  carve-out, with an inline comment naming the rule.
+- R-003: `usual_store_id` is owned by the server (mapped publicly so it round-trips through
+  generic CRUD); the SPA never derives or duplicates it.
+- R-007: scope held to the runbook — `create_product` still auto-creates a Store when the
+  name is unknown (logged as **FU-189a** to be fixed alongside FU-190's ingestion
+  no-auto-create rule). Coverage table on `PROPOSAL_PRODUCTS_AS_OVERLAY.md` for the new
+  Stores admin surface is **FU-189b** (deferred).
+- R-016: the new `storesStore` exposes both `listAsync` (force refetch) and
+  `ensureLoadedAsync` (lazy hydrate); pages call the lazy variant in `onMounted`.
+
+**Logs**
+- This entry; [CHANGELOG.md](CHANGELOG.md) Unreleased "Added" bullet covers the user-visible
+  change (Stores admin page + usual-store picker + Spend-by-store report rename).
+- FU-189c (pytest pending), FU-189a (manual product-add still auto-creates Stores),
+  FU-189b (coverage-table doc gap) added to `DORA_FOLLOWUPS.md`.
+- Runbook Status: **Phase E = DONE (pending pytest verify)**. Phase F unblocked.
+
+**Next:** **Phase F** per the runbook — "Your prices" intelligence, FU-214 product-surface
+verify + bulk-select variants, FU-180 (preferred-store revisit now that `usual_store_id` +
+`PreferredBuy` both exist), FU-212 (ingestion docs). Before Phase F, FU-189c must be
+resolved on a Python-equipped env.
+
+---
+
+## 2026-06-18 — R-016 follow-on: `boot/stores.ts` deleted outright
+**Trigger:** After the first pass made `boot/stores.ts` non-blocking, the user asked for the
+stronger option I'd flagged in the assessment: "remove the file entirely and move the warning
+into a small composable."
+
+**Finding:** the composable wasn't needed — `authStore.bootstrapAsync()` in `App.vue` already
+probes the backend via `/auth/me`, sets `authStore.bootstrapError`, and `SplashScreen` renders
+the error with a Retry button. So the old boot file's only remaining job (the API-down notify)
+was strictly duplicative of a better existing surface.
+
+**What changed**
+- Deleted `web_app/src/boot/stores.ts`.
+- Removed `'stores'` from the `boot:` array in `web_app/quasar.config.ts`.
+- Updated **R-016** + **ADR-011** in `docs/01_charter/ENGINEERING_STANDARDS.md`: rule now says
+  no `boot/` file should be doing data hydration at all; ADR records that the auth bootstrap
+  probe is the canonical "backend down" surface.
+- Updated [CHANGELOG.md](CHANGELOG.md) Unreleased entry to reflect the deletion.
+
+**Verified**
+- `npx vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+
+**Logs**
+- This entry; CHANGELOG already updated.
+- No new follow-ups (FU-221 still tracks the opportunistic page-side sweep).
+
+**Engineering-standards close-gate**
+- The deletion *tightens* R-016 rather than violating any rule. R-007 honoured — we removed
+  a redundant surface rather than building a new composable for the sake of symmetry.
+
+**Next:** still Phase E (FU-189, `Merchant → Store` rename).
+
+---
+
+## 2026-06-18 — R-016 / ADR-011 — Pinia store hydration moved off the boot blocker
+**Trigger:** User asked to assess `web_app/src/boot/stores.ts` (a long-unmaintained file that
+front-loaded data at app start). After assessment they asked for the recommended best-practice
+fixes + a new standing rule.
+
+**What was wrong**
+- `boot/stores.ts` did `await waitForApiStartupAsync()` + `await Promise.all([...])` at module
+  scope — every cold start blocked the router/app shell on the API health check plus three
+  collection fetches.
+- `useProductStore().getProductsAsync()` was still in that preload, even though Phase D moved
+  products to an overlay and almost nothing on the cold path reads them — wasted bandwidth on
+  every start.
+- Seven page-side consumers had grown a private inline guard
+  (`if (store.items.length === 0) await getXAsync()`) — the same intent re-coded across files.
+
+**What changed**
+- **`stockItemStore`, `stockLevelStore`, `productStore`** each grew an `ensureLoadedAsync()`
+  method: `hydrated` flag + in-flight promise dedupe + cached resolve. Raw `getXAsync()` remains
+  the force-refetch path.
+- **`boot/stores.ts` rewritten** non-blocking: top-level `void` IIFE runs the health check and
+  then fires `ensureLoadedAsync()` for stock items + stock levels in the background. The notify on
+  health-check failure still surfaces. `productStore` preload dropped (post-Phase-D dead weight).
+- **Inline `length === 0` guards migrated** to `ensureLoadedAsync()` across:
+  `components/dora/DoraChat.vue`, `components/QuickAddSheet.vue`,
+  `pages/RecipeCookMode.vue`, `pages/ShoppingListDetail.vue`, `pages/MyProductsPage.vue`,
+  `pages/ShoppingListTemplates.vue`, `pages/data/BarcodesQR.vue`,
+  `pages/StocktakeRunner.vue`, `pages/WastePage.vue` (the pre-mutation `getStockLevelsAsync()`
+  call). Post-mutation refresh calls in `WastePage` / `StockOverview` / `ShoppingListDetail`
+  left as-is — R-016 carve-out.
+- **New rule:** `docs/01_charter/ENGINEERING_STANDARDS.md` → **R-016** + **ADR-011** record the
+  pattern: lazy `ensureLoadedAsync` in stores, no top-level `await` of data fetches in `boot/`.
+
+**Verified**
+- `npx vue-tsc -p tsconfig.json --noEmit` — clean. (`node_modules` was missing on this machine;
+  ran `npm install` first to generate `.quasar/tsconfig.json`.)
+- `npm run lint` — clean.
+- No backend changes; pytest not re-run.
+
+**Logs**
+- This entry; [CHANGELOG.md](CHANGELOG.md) Unreleased → new "Changed" bullet.
+- New follow-up **FU-221** logged for the remaining `getXAsync()`-in-`onMounted` cohort
+  (MealPlansOverview, RecipeDetailPage, RecipesOverview, StockItemDetailPage, StockOverview) —
+  opportunistic sweep, deliberately out-of-scope for this unit (R-007).
+
+**Engineering-standards close-gate**
+- Change *introduces* a new rule (R-016) rather than violating any existing ones. R-007 (scope)
+  honoured by deferring the rest-of-app sweep to FU-221. R-008 (style minimalism) honoured —
+  the helper is six lines per store with one short JSDoc citing the rule.
+
+**Next:** unchanged from prior entry — Phase E (`Merchant → Store` rename, FU-189) is still the
+next major beat. FU-186 still wants a browser-verify pass; the boot changes here should be
+included in that pass since first-paint timing on the dashboard is now meaningfully different.
+
+---
+
 ## 2026-06-18 — FU-219 redone — companion FE now visually identical to Dora
 **Why redone:** the original FU-219 (2026-06-17) scaffolded the companion's FE with its own
 palette and used vanilla Quasar primitives. User asked for the look/feel to match Dora as

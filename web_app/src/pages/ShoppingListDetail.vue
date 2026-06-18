@@ -29,7 +29,7 @@
                             :options="[
                                 { label: 'No grouping', value: 'none' },
                                 { label: 'Location', value: 'location' },
-                                { label: 'Merchant', value: 'merchant' },
+                                { label: 'Store', value: 'store' },
                             ]"
                         />
                         <BaseButton
@@ -496,7 +496,7 @@
                                                 </q-tooltip>
                                             </span>
                                             <span v-if="line.offers.length > 0">
-                                                {{ line.offers.length }} merchant offer{{
+                                                {{ line.offers.length }} store offer{{
                                                     line.offers.length === 1 ? '' : 's'
                                                 }}
                                             </span>
@@ -532,7 +532,7 @@
                                                     size="14px"
                                                     class="q-mr-xs"
                                                 />
-                                                {{ offer.merchant_name }} ·
+                                                {{ offer.store_name }} ·
                                                 {{ offer.price_now != null ? `$${offer.price_now.toFixed(2)}` : '—' }}
                                                 <span
                                                     v-if="offerSavings(offer) > 0"
@@ -654,7 +654,7 @@
                                             <q-tooltip v-if="detail.status !== 'done'">
                                                 {{
                                                     line.actual_unit_price != null
-                                                        ? `You paid $${line.actual_unit_price.toFixed(2)} per unit${line.purchased_merchant_name ? ` at ${line.purchased_merchant_name}` : ''}`
+                                                        ? `You paid $${line.actual_unit_price.toFixed(2)} per unit${line.purchased_store_name ? ` at ${line.purchased_store_name}` : ''}`
                                                         : 'Enter the price you actually paid'
                                                 }}
                                             </q-tooltip>
@@ -689,9 +689,9 @@
                                                             @keydown.enter.prevent="savePriceEditor(line)"
                                                         />
                                                         <q-select
-                                                            v-if="merchantOptionsFor(line).length > 0"
-                                                            v-model="priceEditorDraft.merchant_id"
-                                                            :options="merchantOptionsFor(line)"
+                                                            v-if="storeOptionsFor(line).length > 0"
+                                                            v-model="priceEditorDraft.store_id"
+                                                            :options="storeOptionsFor(line)"
                                                             dense
                                                             outlined
                                                             emit-value
@@ -729,10 +729,10 @@
                                             </q-popup-proxy>
                                         </q-btn>
                                         <div
-                                            v-if="line.purchased_merchant_name"
+                                            v-if="line.purchased_store_name"
                                             class="text-caption dora-text-muted text-right"
                                         >
-                                            {{ line.purchased_merchant_name }}
+                                            {{ line.purchased_store_name }}
                                         </div>
                                     </q-item-section>
 
@@ -1045,7 +1045,7 @@
     // UX-v2 M2 revision: grouping is a *manual* view preference only —
     // shopping does NOT default to location (stock location is where the
     // item lives at home, not where it sits on a shelf).
-    type GroupByMode = 'none' | 'location' | 'merchant';
+    type GroupByMode = 'none' | 'location' | 'store';
     const groupBy = ref<GroupByMode>('none');
 
     // ── Lifecycle: start / finish ────────────────────────────────────
@@ -1330,10 +1330,10 @@
         for (const line of lines) {
             let key: string;
             let label: string;
-            if (groupBy.value === 'merchant') {
+            if (groupBy.value === 'store') {
                 const chosen = chosenOfferFor(line);
-                key = chosen?.merchant_name ?? '__no_merchant__';
-                label = chosen?.merchant_name ?? 'No merchant linked';
+                key = chosen?.store_name ?? '__no_store__';
+                label = chosen?.store_name ?? 'No store linked';
             } else {
                 key = locationKeyFor(line);
                 label = key === '__no_location__' ? 'No location set' : key;
@@ -1912,8 +1912,8 @@
     const priceEditorDraft = reactive<{
         line_id: string | null;
         price: number | null;
-        merchant_id: string | null;
-    }>({ line_id: null, price: null, merchant_id: null });
+        store_id: string | null;
+    }>({ line_id: null, price: null, store_id: null });
 
     function onOpenPriceEditor(line: ShoppingListLine) {
         priceEditorDraft.line_id = line.line_id;
@@ -1926,19 +1926,19 @@
             const offer = chosenOfferFor(line);
             priceEditorDraft.price = offer?.price_now ?? null;
         }
-        if (line.purchased_merchant_id) {
-            priceEditorDraft.merchant_id = line.purchased_merchant_id;
+        if (line.purchased_store_id) {
+            priceEditorDraft.store_id = line.purchased_store_id;
         } else {
             const offer = chosenOfferFor(line);
-            priceEditorDraft.merchant_id = offer?.merchant_id ?? null;
+            priceEditorDraft.store_id = offer?.store_id ?? null;
         }
     }
 
-    function merchantOptionsFor(line: ShoppingListLine) {
+    function storeOptionsFor(line: ShoppingListLine) {
         const seen = new Map<string, string>();
         for (const offer of line.offers) {
-            if (!seen.has(offer.merchant_id)) {
-                seen.set(offer.merchant_id, offer.merchant_name);
+            if (!seen.has(offer.store_id)) {
+                seen.set(offer.store_id, offer.store_name);
             }
         }
         return Array.from(seen, ([value, label]) => ({ value, label }));
@@ -1947,7 +1947,7 @@
     async function savePriceEditor(line: ShoppingListLine) {
         if (priceEditorDraft.line_id !== line.line_id) return;
         const nextPrice = priceEditorDraft.price;
-        const nextMerchant = priceEditorDraft.merchant_id;
+        const nextStore = priceEditorDraft.store_id;
         // Empty/zero/negative input clears the override rather than storing
         // a meaningless number. The backend rejects negatives anyway; this
         // saves the round-trip.
@@ -1956,23 +1956,23 @@
             return;
         }
         const previousPrice = line.actual_unit_price;
-        const previousMerchant = line.purchased_merchant_id;
-        const previousMerchantName = line.purchased_merchant_name;
+        const previousStore = line.purchased_store_id;
+        const previousStoreName = line.purchased_store_name;
         line.actual_unit_price = nextPrice;
-        line.purchased_merchant_id = nextMerchant ?? null;
-        line.purchased_merchant_name =
-            merchantOptionsFor(line).find((o) => o.value === nextMerchant)?.label ?? null;
+        line.purchased_store_id = nextStore ?? null;
+        line.purchased_store_name =
+            storeOptionsFor(line).find((o) => o.value === nextStore)?.label ?? null;
         try {
             await api.updateLineAsync(listId.value, line.line_id, {
                 actual_unit_price: nextPrice,
-                ...(nextMerchant
-                    ? { purchased_merchant_id: nextMerchant }
-                    : { clear_purchased_merchant: true }),
+                ...(nextStore
+                    ? { purchased_store_id: nextStore }
+                    : { clear_purchased_store: true }),
             });
         } catch (err) {
             line.actual_unit_price = previousPrice;
-            line.purchased_merchant_id = previousMerchant;
-            line.purchased_merchant_name = previousMerchantName;
+            line.purchased_store_id = previousStore;
+            line.purchased_store_name = previousStoreName;
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
@@ -1984,21 +1984,21 @@
 
     async function clearPriceOverride(line: ShoppingListLine) {
         const previousPrice = line.actual_unit_price;
-        const previousMerchant = line.purchased_merchant_id;
-        const previousMerchantName = line.purchased_merchant_name;
-        if (previousPrice == null && previousMerchant == null) return;
+        const previousStore = line.purchased_store_id;
+        const previousStoreName = line.purchased_store_name;
+        if (previousPrice == null && previousStore == null) return;
         line.actual_unit_price = null;
-        line.purchased_merchant_id = null;
-        line.purchased_merchant_name = null;
+        line.purchased_store_id = null;
+        line.purchased_store_name = null;
         try {
             await api.updateLineAsync(listId.value, line.line_id, {
                 clear_actual_unit_price: true,
-                clear_purchased_merchant: true,
+                clear_purchased_store: true,
             });
         } catch (err) {
             line.actual_unit_price = previousPrice;
-            line.purchased_merchant_id = previousMerchant;
-            line.purchased_merchant_name = previousMerchantName;
+            line.purchased_store_id = previousStore;
+            line.purchased_store_name = previousStoreName;
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
@@ -2419,19 +2419,13 @@
     }
 
     onMounted(async () => {
-        if (stockItemStore.stockItems.length === 0) {
-            await stockItemStore.getStockItemsAsync();
-        }
+        await stockItemStore.ensureLoadedAsync();
         // Levels power the StockLevelDot and the restock-review modal.
-        if (stockLevelStore.stockLevels.length === 0) {
-            await stockLevelStore.getStockLevelsAsync();
-        }
+        await stockLevelStore.ensureLoadedAsync();
         // C-7 Chunk 3 — needed to resolve a product-only line's
         // linked stock item for the rule-4 modal and for nested-display
         // grouping.
-        if (!productStore.products || productStore.products.length === 0) {
-            await productStore.getProductsAsync();
-        }
+        await productStore.ensureLoadedAsync();
         if (store.summaries.length === 0) {
             await store.refreshAsync();
         }

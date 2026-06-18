@@ -137,10 +137,10 @@
                         </div>
                         <div class="text-caption dora-text-muted q-mb-md">
                             Each store name the source pushes must be
-                            mapped to one of your Dora merchants. Pushes
+                            mapped to one of your Dora stores. Pushes
                             against an unmapped name are skipped and
                             surface here as pending — they never
-                            auto-create a merchant.
+                            auto-create a store.
                         </div>
 
                         <q-list dense>
@@ -152,7 +152,7 @@
                                     <q-item-label>
                                         {{ m.external_name }}
                                         <q-badge
-                                            v-if="!m.merchant_id"
+                                            v-if="!m.store_id"
                                             color="warning"
                                             text-color="white"
                                             class="q-ml-sm"
@@ -161,8 +161,8 @@
                                         </q-badge>
                                     </q-item-label>
                                     <q-item-label caption>
-                                        <span v-if="m.merchant_name">
-                                            → {{ m.merchant_name }}
+                                        <span v-if="m.store_name">
+                                            → {{ m.store_name }}
                                         </span>
                                         <span v-else class="dora-text-muted">
                                             Awaiting mapping
@@ -175,8 +175,8 @@
                                 <q-item-section side>
                                     <div class="row q-gutter-xs items-center">
                                         <q-select
-                                            :model-value="m.merchant_id"
-                                            :options="merchantOptions"
+                                            :model-value="m.store_id"
+                                            :options="storeOptions"
                                             option-value="value"
                                             option-label="label"
                                             emit-value
@@ -184,7 +184,7 @@
                                             dense
                                             outlined
                                             clearable
-                                            label="Merchant"
+                                            label="Store"
                                             style="min-width: 200px"
                                             @update:model-value="(value: string | null) => onAssign(src.id, m, value)"
                                         />
@@ -338,7 +338,7 @@
     import { ICONS } from 'src/style/icons';
     import { copyToClipboard, useQuasar } from 'quasar';
     import IngestionSourcesApiService, {
-        type DoraMerchant,
+        type DoraStore,
         type IngestionSource,
         type IngestionStoreMapping
     } from 'src/services/api/ingestionSourcesApiService';
@@ -367,14 +367,14 @@
     const renaming = ref(false);
 
     const mappingsBySource = ref<Record<string, IngestionStoreMapping[]>>({});
-    const merchants = ref<DoraMerchant[]>([]);
+    const stores = ref<DoraStore[]>([]);
 
-    const merchantOptions = computed(() =>
-        merchants.value.map(m => ({ value: m.merchant_id, label: m.name }))
+    const storeOptions = computed(() =>
+        stores.value.map(s => ({ value: s.store_id, label: s.name }))
     );
 
     function pendingCountFor(sourceId: string): number {
-        return (mappingsBySource.value[sourceId] ?? []).filter(m => !m.merchant_id).length;
+        return (mappingsBySource.value[sourceId] ?? []).filter(m => !m.store_id).length;
     }
 
     function captionFor(_src: IngestionSource): string {
@@ -393,12 +393,12 @@
     async function onAssign(
         sourceId: string,
         mapping: IngestionStoreMapping,
-        merchantId: string | null
+        storeId: string | null
     ) {
         try {
             const updated = await api.upsertMappingAsync(sourceId, {
                 external_name: mapping.external_name,
-                merchant_id: merchantId
+                store_id: storeId
             });
             mappingsBySource.value = {
                 ...mappingsBySource.value,
@@ -435,9 +435,9 @@
         });
     }
 
-    async function loadMerchants() {
+    async function loadStores() {
         try {
-            merchants.value = await api.listMerchantsAsync();
+            stores.value = await api.listStoresAsync();
         } catch (e) {
             $q.notify({ type: 'negative', message: describeApiError(e) });
         }
@@ -546,7 +546,7 @@
 
     onMounted(() => {
         void loadSources();
-        void loadMerchants();
+        void loadStores();
     });
 </script>
 

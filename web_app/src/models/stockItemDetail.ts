@@ -2,8 +2,9 @@ export type LinkedProduct = {
     product_id: string;
     name: string;
     brand: string | null;
-    merchant_id: string;
-    merchant_name: string;
+    store_id: string;
+    store_name: string;
+    /** FU-189 carve-out: producer's SKU code, retained verbatim. */
     merchant_stockcode: string | null;
     size: string | null;
     web_url: string | null;
@@ -87,6 +88,10 @@ export type StockItemDetail = {
     opened_on: string | null;
     is_flagged: boolean;
     auto_add_when_low: boolean;
+    /** FU-189 — usual store hint (nullable). Drives the shopping-list
+     *  grouping + a small picker on the stock-item detail. */
+    usual_store_id: string | null;
+    usual_store_name: string | null;
     /** FU-125 — true only when the user has uploaded their own image (no
      *  product-fallback). Drives whether the image field reads "Add" /
      *  "Change + Remove" — a fallback preview shouldn't show Remove. */

@@ -25,7 +25,6 @@ export default defineConfig((ctx): any => {
             'i18n',
             'notifyTypeRegistration',
             'pwaLifecycle',
-            'stores',
             'theme'
         ],
 

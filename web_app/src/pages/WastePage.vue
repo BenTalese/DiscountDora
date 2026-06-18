@@ -398,7 +398,7 @@
         busyItemId.value = item.stock_item_id;
         busyAction.value = 'used';
         try {
-            await stockLevelStore.getStockLevelsAsync();
+            await stockLevelStore.ensureLoadedAsync();
             const outLevel = findLevelBySequence(
                 stockLevelStore.stockLevels,
                 OUT_OF_STOCK_SEQUENCE,

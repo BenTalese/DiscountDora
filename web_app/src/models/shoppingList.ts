@@ -43,8 +43,8 @@ export type LineProductOffer = {
     product_id: string;
     name: string;
     brand: string | null;
-    merchant_id: string;
-    merchant_name: string;
+    store_id: string;
+    store_name: string;
     size: string | null;
     price_now: number | null;
     price_was: number | null;
@@ -82,12 +82,12 @@ export type ShoppingListLine = {
     /** P2-02 — actual unit price the shopper typed in (override of the
      *  picked offer's price). `null` = no override; use the offer instead. */
     actual_unit_price: number | null;
-    /** P2-02 — merchant the shopper actually bought from. `null` = use the
-     *  selected_product's merchant (if any). */
-    purchased_merchant_id: string | null;
-    /** Resolved name for `purchased_merchant_id`, populated by the detail
+    /** P2-02 — store the shopper actually bought from. `null` = use the
+     *  selected_product's store (if any). */
+    purchased_store_id: string | null;
+    /** Resolved name for `purchased_store_id`, populated by the detail
      *  endpoint. */
-    purchased_merchant_name: string | null;
+    purchased_store_name: string | null;
     offers: LineProductOffer[];
     /** FU-215 — optional PreferredBuy hint on the line + the item's available
      *  labels for the picker. */
@@ -168,7 +168,7 @@ export function chosenOfferFor(line: ShoppingListLine): LineProductOffer | null 
 
 export function priceOfLine(line: ShoppingListLine): number {
     const qty = line.quantity ?? 1;
-    // P2-02 — a user-entered actual price overrides any merchant offer.
+    // P2-02 — a user-entered actual price overrides any store offer.
     if (line.actual_unit_price != null) {
         return line.actual_unit_price * qty;
     }

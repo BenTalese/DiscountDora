@@ -52,6 +52,70 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-189c — Phase E: pytest run pending (no Python on dev box)
+- **Raised:** 2026-06-18 (Phase E rename close-out)
+- **Type:** finding — verification gap
+- **What:** The Phase E `Merchant → Store` rename + `usual_store_id` + Stores
+  CRUD page + image upload landed under `vue-tsc` clean + `npm run lint` clean,
+  but the backend test suite couldn't be exercised in-session because this
+  machine has no Python runtime installed (only the MS Store stub
+  `python.exe`). Pytest had been 405/405 going into the work.
+- **Recommended resolution:** **now** — run `pytest` on a Python-equipped env
+  before relying on the rename. Migration head is `a3e9f6c2d8b4`; if any test
+  failure traces back to a stale `Merchant` reference, grep the failing module
+  and patch it; if a fixture seeded the old `Merchant` shape, regenerate the
+  fixture or rebase against the new `Store` constructor signature.
+
+## [OPEN] FU-189a — `create_product` still auto-creates a Store when the name is unknown
+- **Raised:** 2026-06-18 (Phase E rename)
+- **Type:** finding — known carve-out
+- **What:** `dora_api/features/products/create_product.py` retains the
+  legacy auto-create-when-missing behaviour for `Store` (the manual product-add
+  path's existing posture). The runbook's strict "no auto-create" rule was
+  tagged for FU-190 (the ingestion path enforces it; ingestion correctly
+  quarantines unknown store names). For consistency the manual path should
+  eventually require an existing `Store` too.
+- **Recommended resolution:** later — pair with FU-190 (ingestion store-mapping)
+  so the whole "stores are user-curated, never auto-created" rule lands in one
+  pass and the SPA's product-create UI gets a store picker at the same time.
+
+## [OPEN] FU-189b — Charter coverage table for Stores CRUD + image upload page
+- **Raised:** 2026-06-18 (Phase E rename)
+- **Type:** doc gap
+- **What:** Per CLAUDE.md's cross-check rule, every per-surface proposal /
+  implementation plan that targets a specific app surface ends with a flat
+  feedback-coverage table (`F1..F49` shape, see `PROPOSAL_MEAL_PLANS.md`).
+  Phase E landed without one because the work was a rename-plus-replace of a
+  surface that already exists (the old "Merchants" admin page). Add a coverage
+  row to `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3's feedback table (or its
+  successor) recording that L158 / L184 (the "merchant vs data-provider" and
+  "merchant logo" feedback bullets) are now ADDRESSED by the Stores admin
+  page + per-store image upload (zero shipped logos, hash-swatch fallback).
+- **Recommended resolution:** opportunistic — fold into the next pass that
+  touches `PROPOSAL_PRODUCTS_AS_OVERLAY.md`.
+
+## [OPEN] FU-221 — Migrate remaining unconditional `getXAsync()` onMounted calls to `ensureLoadedAsync()`
+- **Raised:** 2026-06-18 (R-016 introduction)
+- **Type:** follow-up (R-016 sweep)
+- **What:** After R-016 / ADR-011 landed, the obvious `if (length === 0) await getXAsync()`
+  cohort across DoraChat / QuickAddSheet / RecipeCookMode / ShoppingListDetail /
+  MyProductsPage / BarcodesQR / ShoppingListTemplates / StocktakeRunner / WastePage was
+  migrated. **Still calling the raw `getXAsync()` unconditionally in `onMounted`** (so they
+  refetch on every visit instead of trusting the boot warmup + cache):
+  `web_app/src/pages/MealPlansOverview.vue:1144-1145`,
+  `web_app/src/pages/RecipeDetailPage.vue:2081-2082`,
+  `web_app/src/pages/RecipesOverview.vue:1271`,
+  `web_app/src/pages/StockItemDetailPage.vue:1646-1648`,
+  `web_app/src/pages/StockOverview.vue:773-774`.
+  Each is bundled with other `refreshAsync()` / `getRecipesAsync()` calls whose semantics
+  weren't audited in this pass, so they were left alone.
+- **Why deferred:** R-007 scope discipline — the rule + the boot fix were the user's ask;
+  case-by-case audit of the rest belongs in its own sweep.
+- **Recommended resolution:** opportunistic — when next touching each page, swap
+  `stockItemStore.getStockItemsAsync()` → `ensureLoadedAsync()` (and same for stockLevel,
+  recipeStore, etc. once they grow the helper). Pull-to-refresh / post-mutation refresh
+  paths stay on the raw `getXAsync()` — see R-016 carve-outs.
+
 ## [OPEN] FU-220 — Repurpose `OnboardingLoop` in Help + consider menu re-ordering
 - **Raised:** 2026-06-17 (FU-210 revisit — user direction)
 - **Type:** follow-up (UX + IA)

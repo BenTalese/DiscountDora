@@ -222,7 +222,7 @@
     }
 
     onMounted(async () => {
-        await stockLevelStore.getStockLevelsAsync?.();
+        await stockLevelStore.ensureLoadedAsync();
         const result = await api.queueAsync(100);
         session.value = result.items;
         if (typeof window !== 'undefined') window.addEventListener('keydown', onKey);

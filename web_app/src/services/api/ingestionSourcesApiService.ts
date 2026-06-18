@@ -34,19 +34,19 @@ export type IngestionStoreMapping = {
     id: string;
     source_id: string;
     external_name: string;
-    merchant_id: string | null;
-    merchant_name: string | null;
+    store_id: string | null;
+    store_name: string | null;
     created_at: string;
     last_seen_at: string | null;
 };
 
 export type UpsertStoreMappingCommand = {
     external_name: string;
-    merchant_id: string | null;
+    store_id: string | null;
 };
 
-export type DoraMerchant = {
-    merchant_id: string;
+export type DoraStore = {
+    store_id: string;
     name: string;
 };
 
@@ -101,10 +101,10 @@ export default class IngestionSourcesApiService {
             `/ingestion-sources/${sourceId}/store-mappings/${mappingId}`
         );
 
-    /** Lists Dora-side Merchants for the picker. Server returns the
+    /** Lists Dora-side Stores for the picker. Server returns the
      * dora_api paginated envelope; we only need name + id here. */
-    listMerchantsAsync = async (): Promise<DoraMerchant[]> => {
-        const resp = await this.httpClient.get<{ items: DoraMerchant[] }>('/merchants');
+    listStoresAsync = async (): Promise<DoraStore[]> => {
+        const resp = await this.httpClient.get<{ items: DoraStore[] }>('/stores');
         return resp.items;
     };
 }

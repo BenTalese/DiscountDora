@@ -85,14 +85,14 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
     results = (
         self.repository
         .get(Product)
-        .include("merchant")
+        .include("store")
         .include("current_offer")
         .where(
             Field(Product, "is_active").eq(True)
             & Field(Product, "is_available").eq(True)
             & (
-                Field(Merchant, "name").eq("woolworths") |
-                Field(Merchant, "name").eq("coles")
+                Field(Store, "name").eq("woolworths") |
+                Field(Store, "name").eq("coles")
             )
             & (
                 Field(ProductOffer, "price_now").between(1.0, 50.0) |
@@ -163,7 +163,7 @@ class SqlAlchemyQueryBuilder(Generic[TEntity]):
         '''
         Full entity, project in Python
         repo.get(Product).project(lambda p: p.name)
-        repo.get(Merchant).project(to_dto)
+        repo.get(Store).project(to_dto)
 
         Column-level, project from dict-like row
         repo.get(Product)\

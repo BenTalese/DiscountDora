@@ -311,8 +311,6 @@
 
     onMounted(async () => {
         // Hydrate the store on first visit so the print tab has items.
-        if ((stockItemStore.stockItems ?? []).length === 0) {
-            await stockItemStore.getStockItemsAsync?.();
-        }
+        await stockItemStore.ensureLoadedAsync();
     });
 </script>

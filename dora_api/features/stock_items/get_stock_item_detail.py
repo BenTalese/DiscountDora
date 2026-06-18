@@ -5,8 +5,8 @@ for the overview grid. This one is used by the detail page and includes:
   * everything on the list DTO
   * notes, days_until_stocktake_alert, stocktake_alerts_are_enabled
   * the location name and stock-level name (so the page doesn't need to
-    cross-reference stores)
-  * linked merchant products with their current offer info
+    cross-reference lookups)
+  * linked products with their store + current offer info
   * linked recipes (just id + name) — derived via the RecipeIngredient join
 """
 import logging
@@ -44,8 +44,9 @@ class LinkedProductDto:
     product_id: UUID
     name: str
     brand: str | None
-    merchant_id: UUID
-    merchant_name: str
+    store_id: UUID
+    store_name: str
+    # FU-189 carve-out: producer's SKU code, retained verbatim.
     merchant_stockcode: str | None
     size: str | None
     web_url: str | None
@@ -137,6 +138,11 @@ class StockItemDetailDto:
     opened_on: date | None
     is_flagged: bool
     auto_add_when_low: bool
+    # FU-189 — usual store hint (nullable). Surfaced as a small picker on the
+    # stock-item detail; drives the shopping-list grouping
+    # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.3) when set.
+    usual_store_id: UUID | None
+    usual_store_name: str | None
     attention_score: int
     attention_reasons: dict
     products: List[LinkedProductDto]
@@ -180,11 +186,11 @@ class GetStockItemDetailHandler:
             .include(StockItem.Fields.STOCK_LEVEL)
             .include(StockItem.Fields.STOCK_LOCATION)
             .include(StockItem.Fields.STOCK_GROUP)
-            # merchant and current_offer are siblings on Product, so each needs
+            # store and current_offer are siblings on Product, so each needs
             # its own include("products") branch — chaining then_include would
-            # try to resolve current_offer on Merchant.
+            # try to resolve current_offer on Store.
             .include(StockItem.Fields.PRODUCTS)
-                .then_include("merchant")
+                .then_include("store")
             .include(StockItem.Fields.PRODUCTS)
                 .then_include("current_offer")
             .one(EntityField(StockItem, "id").eq(stock_item_id))
@@ -221,8 +227,8 @@ class GetStockItemDetailHandler:
                     product_id = p.id,
                     name = p.name,
                     brand = p.brand,
-                    merchant_id = p.merchant.id,
-                    merchant_name = p.merchant.name,
+                    store_id = p.store.id,
+                    store_name = p.store.name,
                     merchant_stockcode = p.merchant_stockcode,
                     size = p.size,
                     web_url = p.web_url,
@@ -231,7 +237,7 @@ class GetStockItemDetailHandler:
                 )
                 for p in (_StockItem.products or [])
             ),
-            key=lambda d: (d.merchant_name.lower(), d.name.lower()),
+            key=lambda d: (d.store_name.lower(), d.name.lower()),
         )
 
         # Walk the location's parent chain so the detail page can show
@@ -379,6 +385,16 @@ class GetStockItemDetailHandler:
         ]
         _UnitCost = get_stock_item_unit_cost_at(_Observations)
 
+        # FU-189 — resolve the usual-store name for the detail DTO. Falls
+        # back to None when the user hasn't picked one or the referenced
+        # store has been deleted (the FK is SET NULL).
+        _UsualStoreName: str | None = None
+        if _StockItem.usual_store_id is not None:
+            from dora_api.domain.entities.store import Store
+            _UsualStore = self.repository.get(Store).by_id(_StockItem.usual_store_id)
+            if _UsualStore is not None:
+                _UsualStoreName = _UsualStore.name
+
         # C-9.2 — same household-configured expiring-soon window as the alerts
         # list + heatmap (R-003), falling back to the default.
         _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
@@ -404,6 +420,8 @@ class GetStockItemDetailHandler:
             opened_on = _StockItem.opened_on,
             is_flagged = bool(_StockItem.is_flagged),
             auto_add_when_low = bool(_StockItem.auto_add_when_low),
+            usual_store_id = _StockItem.usual_store_id,
+            usual_store_name = _UsualStoreName,
             attention_score = _Reasons.score(),
             attention_reasons = asdict(_Reasons),
             products = _LinkedProducts,

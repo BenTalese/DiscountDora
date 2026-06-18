@@ -194,13 +194,13 @@ class GlobalSearchHandler:
         if "product" in wanted:
             products = (
                 self.repository.get(Product)
-                .include(Product.Fields.MERCHANT)
+                .include(Product.Fields.STORE)
                 .all()
             )
             def product_sub(p: Product) -> str | None:
                 parts = []
-                if p.merchant:
-                    parts.append(p.merchant.name)
+                if p.store:
+                    parts.append(p.store.name)
                 if p.size:
                     parts.append(p.size)
                 return " · ".join(parts) if parts else None

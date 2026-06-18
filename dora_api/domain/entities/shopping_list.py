@@ -70,8 +70,8 @@ class ShoppingListLine(BaseEntity):
     added_at: datetime | None = None
     # Snapshot pair captured at the *commit-to-offer* moment: when the line
     # is added with a `selected_product_id`, or when the user later sets /
-    # changes the selection. Freezes the merchant offer at that planning
-    # moment so historic reporting (savings, spend-by-merchant) stays honest
+    # changes the selection. Freezes the store offer at that planning
+    # moment so historic reporting (savings, spend-by-store) stays honest
     # if prices move before purchase. Both stay None for lines that never
     # had a selected product (e.g. a generic stock-item line the shopper
     # picks at the shelf). Untick / re-tick does NOT change them — ticking
@@ -81,14 +81,14 @@ class ShoppingListLine(BaseEntity):
     picked_offer_price: float | None = None
     list_price_at_pick: float | None = None
     # P2-02 purchase memory: what the shopper *actually* paid (per unit) and
-    # who they actually bought it from, when those differ from the planned
-    # offer. Either may be set independently — a user might confirm the
-    # merchant on the chip but type a different till-receipt price, or vice
+    # which store they actually bought it from, when those differ from the
+    # planned offer. Either may be set independently — a user might confirm
+    # the store on the chip but type a different till-receipt price, or vice
     # versa. Both NULL = use the picked_offer_price snapshot as the historic
     # paid price (the previous behaviour). When set, actual_unit_price wins
     # for totals and for the assistant's price-history queries.
     actual_unit_price: float | None = None
-    purchased_merchant_id: UUID | None = None
+    purchased_store_id: UUID | None = None
     # FU-215 — optional shopping hint: one of the stock item's PreferredBuy
     # labels (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Reference-only — no DB FK
     # constraint (see the table mapping / migration re: FU-178); a deleted
@@ -108,7 +108,7 @@ class ShoppingListLine(BaseEntity):
         PICKED_OFFER_PRICE = "picked_offer_price"
         LIST_PRICE_AT_PICK = "list_price_at_pick"
         ACTUAL_UNIT_PRICE = "actual_unit_price"
-        PURCHASED_MERCHANT_ID = "purchased_merchant_id"
+        PURCHASED_STORE_ID = "purchased_store_id"
         PREFERRED_BUY_ID = "preferred_buy_id"
 
 

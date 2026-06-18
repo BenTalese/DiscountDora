@@ -30,8 +30,10 @@ class ProductDto:
     has_image: bool
     is_active: bool
     is_available: bool
-    merchant_id: UUID
-    merchant_name: str
+    store_id: UUID
+    store_name: str
+    # FU-189 carve-out: `merchant_stockcode` is the producer's SKU, kept
+    # verbatim per the rename runbook.
     merchant_stockcode: str | None
     name: str
     price_now: float
@@ -57,8 +59,8 @@ class ProductDto:
             has_image = False,
             is_active = product.is_active,
             is_available = product.is_available,
-            merchant_id = product.merchant.id,
-            merchant_name = product.merchant.name,
+            store_id = product.store.id,
+            store_name = product.store.name,
             merchant_stockcode = product.merchant_stockcode,
             name = product.name,
             price_now = product.current_offer.price_now,
@@ -73,7 +75,7 @@ class ProductDto:
 
 _FIELD_MAP: dict[str, EntityField] = {
     "product_id": EntityField(Product, "id"),
-    "merchant_id": EntityField(Product, "_merchant_id"),
+    "store_id": EntityField(Product, "_store_id"),
 }
 
 
@@ -136,7 +138,7 @@ class GetProductsHandler:
             self.repository
             .get(Product)
             .include(Product.Fields.CURRENT_OFFER)
-            .include(Product.Fields.MERCHANT)
+            .include(Product.Fields.STORE)
             .paginate(options, ProductDto.from_entity, field_map=_FIELD_MAP)
         )
         stamp_has_image(self.repository, page.items)
@@ -159,7 +161,7 @@ class GetBestDealsHandler:
             self.repository
             .get(Product)
             .include(Product.Fields.CURRENT_OFFER)
-            .include(Product.Fields.MERCHANT)
+            .include(Product.Fields.STORE)
             .all()
         )
         scored: list[tuple[int, Product]] = []

@@ -10,17 +10,32 @@ export const useStockLevelStore = defineStore('stockLevel', () => {
     //#region Stock Levels
 
     const stockLevels: Ref<StockLevel[]> = ref([]);
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
 
-    const getStockLevelsAsync = () =>
+    const getStockLevelsAsync = (): Promise<void> =>
         stockLevelApiService
             .getAllAsync()
-            .then((page) => (stockLevels.value = [...page.items].sort((sl1, sl2) => sl1.sequence - sl2.sequence)));
+            .then((page) => {
+                stockLevels.value = [...page.items].sort((sl1, sl2) => sl1.sequence - sl2.sequence);
+                hydrated = true;
+            });
+
+    /** R-016 — lazy hydration. Returns the cached collection if it's already
+     *  populated, dedupes concurrent first-time loads. Force a refetch by
+     *  calling `getStockLevelsAsync` directly. */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= getStockLevelsAsync().finally(() => { inflight = null; });
+        return inflight;
+    };
 
     //#endregion Stock Levels
 
     return {
         stockLevels: readonly(stockLevels),
-        getStockLevelsAsync
+        getStockLevelsAsync,
+        ensureLoadedAsync
     };
 });
 

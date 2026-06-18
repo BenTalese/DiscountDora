@@ -24,7 +24,7 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict
 
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
@@ -72,7 +72,12 @@ def _current_user_id() -> UUID | None:
 
 
 @dataclass(frozen=True, slots=True)
-class MerchantStatusDto:
+class StoreStatusDto:
+    """FU-189 — used to surface "you haven't set up any stores yet" hints during
+    onboarding. Post-Phase-D the `enabled` field no longer reflects a scraper
+    toggle (Merchant.is_enabled went away with merchant_api); it now mirrors
+    `total` since every user-curated store is implicitly enabled. Kept for
+    payload compatibility with the SPA's onboarding state shape."""
     total: int
     enabled: int
 
@@ -85,7 +90,7 @@ class OnboardingStateDto:
     has_locations: bool
     has_groups: bool
     has_stock_items: bool
-    merchant_status: MerchantStatusDto
+    store_status: StoreStatusDto
 
 
 class GetOnboardingStateHandler:
@@ -97,13 +102,7 @@ class GetOnboardingStateHandler:
         groups_count = self.repository.get(StockGroup).count()
         locations_count = self.repository.get(StockLocation).count()
         items_count = self.repository.get(StockItem).count()
-        merchant_total = self.repository.get(Merchant).count()
-        # `is_enabled` lives on Merchant; not all installs have any merchants
-        # configured (it's an opt-in scrape target). We just surface counts.
-        merchants = self.repository.get(Merchant).all()
-        enabled_count = sum(
-            1 for m in merchants if getattr(m, "is_enabled", False)
-        )
+        store_total = self.repository.get(Store).count()
         return OnboardingStateDto(
             completed = user.onboarding_completed_at is not None,
             completed_at = user.onboarding_completed_at,
@@ -111,9 +110,9 @@ class GetOnboardingStateHandler:
             has_locations = locations_count > 0,
             has_groups = groups_count > 0,
             has_stock_items = items_count > 0,
-            merchant_status = MerchantStatusDto(
-                total = merchant_total,
-                enabled = enabled_count,
+            store_status = StoreStatusDto(
+                total = store_total,
+                enabled = store_total,
             ),
         )
 

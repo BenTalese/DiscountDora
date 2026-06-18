@@ -1,9 +1,9 @@
 """Admin CRUD over `IngestionStoreMapping` (C-10.2 / FU-190).
 
-The API access page lists pending (`merchant_id IS NULL`) and resolved
-mappings per source. The admin assigns or clears the Dora `Merchant`
+The API access page lists pending (`store_id IS NULL`) and resolved
+mappings per source. The admin assigns or clears the Dora `Store`
 each external name resolves to. Stores are **never auto-created** here
-either — the admin picks one of the existing Merchants.
+either — the admin picks one of the existing Stores.
 
 Endpoints (all admin-only, session-cookie):
 
@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.ingestion_source import IngestionSource
 from dora_api.domain.entities.ingestion_store_mapping import \
     IngestionStoreMapping
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.features.ingestion_sources.ingestion_source_admin import \
     _require_admin
 from dora_api.features.routers import INGESTION_SOURCE_ROUTER
@@ -40,21 +40,21 @@ class StoreMappingDto:
     id: UUID
     source_id: UUID
     external_name: str
-    merchant_id: UUID | None
-    merchant_name: str | None
+    store_id: UUID | None
+    store_name: str | None
     created_at: datetime
     last_seen_at: datetime | None
 
     @classmethod
     def from_entity(
-        cls, mapping: IngestionStoreMapping, merchant: Merchant | None
+        cls, mapping: IngestionStoreMapping, store: Store | None
     ) -> "StoreMappingDto":
         return cls(
             id=mapping.id,
             source_id=mapping.source_id,
             external_name=mapping.external_name,
-            merchant_id=mapping.merchant_id,
-            merchant_name=merchant.name if merchant else None,
+            store_id=mapping.store_id,
+            store_name=store.name if store else None,
             created_at=mapping.created_at,
             last_seen_at=mapping.last_seen_at,
         )
@@ -65,7 +65,7 @@ class UpsertStoreMappingRequest(BaseModel):
 
     external_name: str = Field(min_length=1, max_length=255)
     # `null` to quarantine (clears the link); a UUID to bind.
-    merchant_id: UUID | None = None
+    store_id: UUID | None = None
 
 
 class ListStoreMappingsHandler:
@@ -82,16 +82,16 @@ class ListStoreMappingsHandler:
             self.repository.get(IngestionStoreMapping)
             .all(field_src.eq(source_id))
         )
-        rows.sort(key=lambda r: (r.merchant_id is not None, r.external_name))
-        merchant_ids = {r.merchant_id for r in rows if r.merchant_id is not None}
-        merchants_by_id: dict[UUID, Merchant] = {}
-        for mid in merchant_ids:
-            m = self.repository.get(Merchant).by_id(mid)
-            if m is not None:
-                merchants_by_id[mid] = m
+        rows.sort(key=lambda r: (r.store_id is not None, r.external_name))
+        store_ids = {r.store_id for r in rows if r.store_id is not None}
+        stores_by_id: dict[UUID, Store] = {}
+        for sid in store_ids:
+            s = self.repository.get(Store).by_id(sid)
+            if s is not None:
+                stores_by_id[sid] = s
         return [
             StoreMappingDto.from_entity(
-                r, merchants_by_id.get(r.merchant_id) if r.merchant_id else None
+                r, stores_by_id.get(r.store_id) if r.store_id else None
             )
             for r in rows
         ]
@@ -107,11 +107,11 @@ class UpsertStoreMappingHandler:
         if self.repository.get(IngestionSource).by_id(source_id) is None:
             return None, "source_not_found"
 
-        merchant: Merchant | None = None
-        if req.merchant_id is not None:
-            merchant = self.repository.get(Merchant).by_id(req.merchant_id)
-            if merchant is None:
-                return None, "merchant_not_found"
+        store: Store | None = None
+        if req.store_id is not None:
+            store = self.repository.get(Store).by_id(req.store_id)
+            if store is None:
+                return None, "store_not_found"
 
         field_src = EntityField(
             IngestionStoreMapping, IngestionStoreMapping.Fields.SOURCE_ID
@@ -127,16 +127,16 @@ class UpsertStoreMappingHandler:
             mapping = IngestionStoreMapping(
                 source_id=source_id,
                 external_name=req.external_name,
-                merchant_id=req.merchant_id,
+                store_id=req.store_id,
                 created_at=datetime.now(timezone.utc),
                 last_seen_at=None,
             )
             self.repository.add(mapping)
         else:
-            existing.merchant_id = req.merchant_id
+            existing.store_id = req.store_id
             mapping = existing
         self.repository.save_changes()
-        return StoreMappingDto.from_entity(mapping, merchant), None
+        return StoreMappingDto.from_entity(mapping, store), None
 
 
 class DeleteStoreMappingHandler:
@@ -183,11 +183,11 @@ def upsert_store_mapping(source_id: UUID):
     result, error = get_container().inject(UpsertStoreMappingHandler).handle(source_id, req)
     if error == "source_not_found":
         return not_found("IngestionSource", source_id)
-    if error == "merchant_not_found":
-        return bad_request("merchant_id does not match any existing Merchant.")
+    if error == "store_not_found":
+        return bad_request("store_id does not match any existing Store.")
     logging.getLogger(__name__).info(
-        "Upserted store mapping %s for source %s (external=%s, merchant=%s)",
-        result.id, source_id, result.external_name, result.merchant_id,
+        "Upserted store mapping %s for source %s (external=%s, store=%s)",
+        result.id, source_id, result.external_name, result.store_id,
     )
     return asdict(result)
 

@@ -31,13 +31,14 @@ def _location_key(row: dict[str, Any]) -> Any:
 
 
 def _product_key(row: dict[str, Any]) -> Any:
-    # Real-world products have a stockcode-per-merchant; treat that pair as
+    # Real-world products have a stockcode-per-store; treat that pair as
     # the natural key. Fall back to name for rows missing stockcode (manually
-    # entered products).
+    # entered products). FU-189 carve-out: `merchant_stockcode` is the
+    # producer's SKU code, retained verbatim.
     stockcode = row.get("merchant_stockcode")
-    merchant = row.get("merchant_id")
-    if stockcode and merchant:
-        return ("sku", str(merchant), str(stockcode).strip().lower())
+    store = row.get("store_id")
+    if stockcode and store:
+        return ("sku", str(store), str(stockcode).strip().lower())
     return ("name", _name_key(row))
 
 
@@ -118,7 +119,7 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "product_historic_offers", "ProductHistoricOffer", "Historic product offers", "Optional", False,
     ),
-    # Barcodes attached to merchant products (N5). On by default — small
+    # Barcodes attached to store-curated products (N5). On by default — small
     # table, useful to round-trip alongside saved_products so a restored
     # install can still resolve scanned codes.
     Section(
@@ -163,7 +164,7 @@ SOFT_FK_NULLABLE: set[tuple[str, str]] = {
 # Required FKs: target must exist (in DB or restored alongside) or the row is
 # skipped with a warning.
 REQUIRED_FKS: set[tuple[str, str]] = {
-    ("saved_products", "merchant_id"),
+    ("saved_products", "store_id"),
     ("shopping_list_items", "shopping_list_id"),
     ("shopping_list_items", "stock_item_id"),
     ("shopping_list_template_lines", "template_id"),

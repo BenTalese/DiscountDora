@@ -6,6 +6,79 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **API: naive datetimes serialize as UTC (2026-06-18).** `DoraJSONProvider`
+  now tags timezone-naive `datetime` values with a trailing `Z` on the way
+  out. SQLite strips tzinfo from `DateTime(timezone=True)` columns on
+  read, so values stored as `datetime.now(UTC)` came back naive and the
+  SPA's `new Date(iso)` parsed them as local time — every "X ago"
+  display was shifted by the user's UTC offset (a Sydney user saw
+  "10 hours ago" no matter how recently the value was written). Every
+  relative-time display across the app reads honestly now.
+
+### Changed
+- **Stock pages — feedback round 3 (2026-06-18).** Design polish round
+  on top of the UTC fix:
+  - **Image-toggle button reads as active** when images are shown
+    (`color="primary"`).
+  - **Splitter divider is a clean coloured vertical bar.** The
+    gripper-dot motif is gone; the bar is muted text-tinted while
+    peeking and brightens to accent on hover. Cursor change carries
+    the draggability signal.
+  - **`RowActionButton`** — new shared component that pins the row
+    cluster's `flat dense round size="md"` style. Adopters: stock-row
+    expiry / essential / open + `AddToListButton` row variant. Stops
+    the size/shape drift the previous round flagged.
+  - **Export button now rides BaseButton** (`variant="secondary"`)
+    instead of `q-btn-dropdown`, so it sits flush with the other
+    toolbar buttons.
+  - **Rows slightly shorter** — `min-height: 64 → 56`, image tile
+    `56 → 48`, body padding tightened — without losing the breathing
+    room from round 1.
+  - **Notes** gets a real outlined autogrow input (placeholder reads as
+    "Anything you want to remember about this item") instead of a
+    bare dash.
+  - **Preferred buys alphabetised**; the manual reorder buttons are
+    gone (these are reminders, not a ranking). Backend `position` +
+    reorder endpoint stay so historical data isn't disturbed
+    (deprecation backlog).
+
+### Changed
+- **Stock pages — feedback round 2 (2026-06-18).** Fixes and finer polish
+  on the round-1 pass:
+  - **Level updated really updates now.** Backend `update_stock_item.py`
+    was hitting the same `lazy="noload"` trap on `stock_level` as the
+    location/group fix — the FK column never went dirty on the
+    boundary case, and the timestamp bump silently didn't land. The
+    FK column is now written directly. SPA picks up the change via the
+    next refetch.
+  - **`useReactiveNow` composable.** A shared 30s-ticking `nowMs` ref so
+    `relativeTime("…")` drifts forward as time passes ("just now" →
+    "1m ago" → …) without needing the source DTO to re-fetch.
+  - **Splitter gripper sticky.** The triple-dot handle now uses
+    `position: sticky; top: 50vh` inside the separator so it stays
+    reachable when the list overflows the viewport.
+  - **Padding on the q-tab-panel.** Overview tab's inner content
+    (image, editors) now has consistent `q-pa-md` breathing on every
+    side.
+  - **Peek panel grows naturally.** Dropped the `max-height: 80vh`
+    independent scroll on `.stock-peek`; the page handles overflow
+    instead, so the embedded header stops being hidden under a
+    competing scroll.
+  - **DoraTabs hover** matches the main menu — text colour transitions
+    to accent on hover, no surface tint.
+  - **Footer counts** use the picker palette exactly (Well-stocked
+    green, Sufficient yellow, Low red, Out grey). "Auto-add" is
+    neutral (matches "Shown"). "Flagged" renamed to **"Essential"** in
+    the footer and on the FilterChip — same wording as the field on
+    detail / the row tooltip / the row button. New optional `group`
+    on `PageCount` drives a three-cluster `justify-evenly` layout:
+    [Shown] · [stock levels] · [other counts].
+  - **Row buttons consistent.** Every right-cluster button (expiry /
+    essential / open / cart) is `flat dense round size="md"`. The
+    essential flag is now an **interactive toggle** (active state in
+    the warning tone). The cart button picks up `round` + `md` to
+    match.
+
 - **Stock pages — feedback pass (2026-06-18).** A focused polish round on
   Stock Item Detail and Stock Overview based on user feedback:
   - **DoraTabs** — a new shared tab strip with the same sliding accent

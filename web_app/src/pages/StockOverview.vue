@@ -5,26 +5,32 @@
              Stocktake. Search stays separate on the right (L99). -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
-            <q-btn-dropdown flat no-caps :icon="ICONS.more_horiz" label="Export">
-                <q-list dense style="min-width: 200px">
-                    <!-- C-1 Chunk 1 / L67 — both exports respect the
-                         currently filtered set. `filteredIds` is undefined
-                         when no filters are active so the server-side
-                         fast-path stays "export everything". -->
-                    <q-item clickable v-close-popup @click="overviewExport.downloadCsv(filteredIds)">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.file_download" />
-                        </q-item-section>
-                        <q-item-section>Export as CSV</q-item-section>
-                    </q-item>
-                    <q-item clickable v-close-popup @click="overviewExport.openPrintView(filteredIds)">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.print" />
-                        </q-item-section>
-                        <q-item-section>Print / Save as PDF</q-item-section>
-                    </q-item>
-                </q-list>
-            </q-btn-dropdown>
+            <!-- Feedback 2026-06-18 (round 3): Export now rides BaseButton
+                 (secondary) so it sits flush with the other toolbar
+                 buttons. The dropdown menu hangs off the BaseButton via
+                 q-menu — same UX, consistent chrome. -->
+            <BaseButton variant="secondary" :icon="ICONS.more_horiz" label="Export">
+                <q-menu auto-close>
+                    <q-list dense style="min-width: 200px">
+                        <!-- C-1 Chunk 1 / L67 — both exports respect the
+                             currently filtered set. `filteredIds` is undefined
+                             when no filters are active so the server-side
+                             fast-path stays "export everything". -->
+                        <q-item clickable @click="overviewExport.downloadCsv(filteredIds)">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.file_download" />
+                            </q-item-section>
+                            <q-item-section>Export as CSV</q-item-section>
+                        </q-item>
+                        <q-item clickable @click="overviewExport.openPrintView(filteredIds)">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.print" />
+                            </q-item-section>
+                            <q-item-section>Print / Save as PDF</q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-menu>
+            </BaseButton>
             <BaseButton
                 v-if="!bulkMode"
                 variant="secondary"
@@ -73,6 +79,7 @@
                 dense
                 round
                 :icon="showStockImages ? ICONS.image : ICONS.image_not_supported"
+                :color="showStockImages ? 'primary' : undefined"
                 :aria-label="showStockImages ? 'Hide row images' : 'Show row images'"
                 :loading="imageToggleBusy"
                 @click="onToggleStockImages"
@@ -131,7 +138,7 @@
             <q-separator vertical class="q-mx-sm" />
 
             <FilterChip v-model="filters.essentialsOnly.value" :icon="ICONS.flag" active-color="warning">
-                Flagged for auto
+                Essential
             </FilterChip>
 
             <FilterChip v-model="filters.autoAddOnly.value" :icon="ICONS.bolt" active-color="primary">
@@ -206,59 +213,77 @@
             </template>
         </FilterBar>
 
-        <!-- Bulk action bar ───────────────────────────────────────────── -->
-        <q-banner v-if="bulkMode" class="bg-primary dora-text-on-primary q-mb-md" dense rounded>
-            <template #avatar>
-                <q-icon :name="ICONS.checklist" />
-            </template>
-            {{ bulkSelection.size }} selected
-            <template #action>
-                <q-btn flat no-caps label="Select visible" color="white" @click="selectVisible" />
-                <!-- C-7 Chunk 1 — unified bulk add: resolves the target
-                     once + emits one summary toast (decision 6). -->
-                <AddToListButton
-                    variant="bulk"
-                    class="text-white"
-                    :items="[...bulkSelection]"
-                    @bulk-done="cancelBulk"
-                />
-                <q-btn
-                    flat
-                    no-caps
-                    label="Move location"
-                    color="white"
-                    :disable="bulkSelection.size === 0"
-                    @click="openMoveDialog"
-                />
-                <q-btn
-                    flat
-                    no-caps
-                    label="Mark restocked"
-                    color="white"
-                    :loading="bulkBusy"
-                    :disable="bulkSelection.size === 0"
-                    @click="bulkRestock"
-                />
-                <q-btn
-                    flat
-                    no-caps
-                    label="Set substitute"
-                    color="white"
-                    :disable="bulkSelection.size === 0"
-                    @click="bulkSetSubstitute"
-                />
-                <q-btn
-                    v-if="scanningEnabled"
-                    flat
-                    no-caps
-                    icon="qr_code_2"
-                    label="Print QRs"
-                    color="white"
-                    :disable="bulkSelection.size === 0"
-                    @click="bulkPrintQrs"
-                />
-            </template>
-        </q-banner>
+        <!-- Bulk action bar ─────────────────────────────────────────────
+             Round-16: outer wrapper has `q-py-xs` (4px) — just enough
+             buffer for q-slide-transition's height measurement to
+             settle smoothly, without creating cavernous empty space
+             when the bar is closed. Unlike FilterBar, this wrapper
+             has no always-visible content (no toolbar row inside it),
+             so q-py-md left ~32px of dead height even when collapsed. -->
+        <div class="bulk-bar q-py-xs">
+        <q-slide-transition>
+            <div v-if="bulkMode" class="dora-subbar">
+                <div class="dora-subbar__inner">
+                    <div class="row items-center q-gutter-sm">
+                    <q-icon :name="ICONS.checklist" />
+                    <span class="text-weight-medium">{{ bulkSelection.size }} selected</span>
+                    <q-space />
+                    <q-btn flat dense no-caps label="Select visible" @click="selectVisible" />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        label="Deselect all"
+                        :disable="bulkSelection.size === 0"
+                        @click="deselectAll"
+                    />
+                    <!-- C-7 Chunk 1 — unified bulk add: resolves the target
+                         once + emits one summary toast (decision 6). -->
+                    <AddToListButton
+                        variant="bulk"
+                        :items="[...bulkSelection]"
+                        @bulk-done="cancelBulk"
+                    />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        label="Move location"
+                        :disable="bulkSelection.size === 0"
+                        @click="openMoveDialog"
+                    />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        label="Restock"
+                        :loading="bulkBusy"
+                        :disable="bulkSelection.size === 0"
+                        @click="bulkRestock"
+                    />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        label="Set substitute"
+                        :disable="bulkSelection.size === 0"
+                        @click="bulkSetSubstitute"
+                    />
+                    <q-btn
+                        v-if="scanningEnabled"
+                        flat
+                        dense
+                        no-caps
+                        icon="qr_code_2"
+                        label="Print QRs"
+                        :disable="bulkSelection.size === 0"
+                        @click="bulkPrintQrs"
+                    />
+                    </div>
+                </div>
+            </div>
+        </q-slide-transition>
+        </div>
 
         <!-- Splitter: item list on the left, in-page detail peek on the right.
              C-1b.2 (L117, L118): peek opens at 50% (not 58%), and while a peek
@@ -274,15 +299,12 @@
             class="stock-splitter"
             :class="{ 'stock-splitter--peeking': !!peekId }"
         >
-            <!-- Feedback 2026-06-18: gripper-dot handle. The triple-dot
-                 motif sits in the middle of the separator and only paints
-                 while a peek is open (the handle is draggable then).
-                 Accent colour brightens on hover so draggability reads. -->
-            <template #separator>
-                <div v-if="peekId" class="dora-splitter__gripper" aria-hidden="true">
-                    <span /><span /><span />
-                </div>
-            </template>
+            <!-- Feedback 2026-06-18 (round 3): the user picked a clean
+                 vertical bar over the gripper dots. The separator now
+                 paints a coloured vertical line that brightens to accent
+                 on hover; the cursor change + colour cue carry the
+                 draggability signal. No #separator template content
+                 needed — the bar IS the separator. -->
             <template #before>
                 <div class="q-pr-md q-pt-xs">
                     <!-- C-1 Chunk 1 — small lists keep the glide-in
@@ -374,6 +396,7 @@
                         :id-override="peekId"
                         embedded
                         @close="peekId = null"
+                        @open-detail="peekId = $event"
                     />
                 </div>
             </template>
@@ -631,6 +654,9 @@
         bulkMode.value = false;
         bulkSelection.value = new Set();
     }
+    function deselectAll() {
+        bulkSelection.value = new Set();
+    }
 
     async function bulkAddToPrimary() {
         if (bulkSelection.value.size === 0) return;
@@ -817,61 +843,75 @@
 </script>
 
 <style scoped>
-    .stock-summary-banner {
-        padding: 12px 16px;
-        background: var(--overlay-hover);
+    /* Round-15: shared "sub-toolbar" treatment used by the bulk-select
+       banner and (via :deep) the FilterBar's filter panel. Soft
+       surface-elevated card with a tint border so both areas read as a
+       distinct sub-zone of the page.
+
+       Two subtle traps `q-slide-transition` lays:
+       1. A real `border` on the transition host renders even at height 0
+          (1px top + 1px bottom → 2px sliver). We use `inset box-shadow`
+          instead — it paints inside the box without contributing to its
+          size and disappears cleanly when the box has 0 height.
+       2. Putting `border-radius` on an inner wrapper clips it against
+          the host's straight edges during the height animation, so the
+          rounded corners pop in only when the transition releases. We
+          keep the radius on the OUTER host so the card grows rounded
+          from the start.
+       Result: smooth open/close, no snap, rounded from frame one. */
+    /* Both sub-bars share an identical 3-level structure that we got
+       wrong twice; the values below match the FilterBar panel verbatim.
+       Outer (.dora-subbar / .filter-bar__panel) — q-slide-transition host,
+       carries chrome (background + inset shadow border + border-radius).
+       Inner (__inner) — padding box (12px 16px).
+       Content row inside the inner — flex layout (q-gutter-sm, etc). */
+    .dora-subbar,
+    :deep(.filter-bar__panel) {
+        background: var(--surface-elevated);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 10%, transparent);
         border-radius: 8px;
     }
-    .stock-summary-stat {
-        text-align: center;
-        min-width: 84px;
+    :deep(.filter-bar__panel) { margin-top: 4px; }
+    /* Round-16: FilterBar's default q-py-md (16px top + 16px bottom)
+       stacked with the bulk wrapper's padding adds up to ~32px of empty
+       space between them. Override here so the filter section's own
+       outer padding shrinks to 4px (matching bulk-bar's q-py-xs). The
+       slide's smoothness comes from the inner buffer, not the magnitude
+       of the outer padding — small is enough. */
+    :deep(.filter-bar) {
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+    .dora-subbar__inner,
+    :deep(.filter-bar__panel-inner) {
+        padding: 12px 16px;
     }
     .stock-splitter {
         min-height: 50vh;
     }
-    /* Feedback 2026-06-18: distinguish the splitter divider while peeking.
-       Quasar's default separator is a 1px line — we give it width + a
-       gripper-dot motif so it both reads as a divider AND signals it's
-       draggable. When no peek is open the separator collapses (no handle
-       paints) so the empty list view stays uncluttered. */
+    /* Feedback 2026-06-18 (round 3): the divider is a clean coloured
+       vertical bar. When no peek is open it collapses to transparent so
+       the full-width list reads cleanly. While peeking the bar paints in
+       a muted text-tinted colour and brightens to accent on hover, with
+       a wider hit area so it's easy to grab. */
     .stock-splitter :deep(.dora-splitter__separator) {
         background: transparent;
-        position: relative;
-    }
-    .stock-splitter--peeking :deep(.dora-splitter__separator) {
-        width: 14px;
-        background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-        border-left: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
-        border-right: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
         transition: background-color 0.25s ease;
     }
+    .stock-splitter--peeking :deep(.dora-splitter__separator) {
+        width: 6px;
+        background: color-mix(in srgb, var(--text-primary) 18%, transparent);
+    }
     .stock-splitter--peeking :deep(.dora-splitter__separator):hover {
-        background: color-mix(in srgb, var(--q-accent) 14%, transparent);
-    }
-    .dora-splitter__gripper {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        pointer-events: none;
-    }
-    .dora-splitter__gripper span {
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background: color-mix(in srgb, var(--text-primary) 40%, transparent);
-        transition: background-color 0.25s ease, transform 0.25s ease;
-    }
-    .stock-splitter--peeking :deep(.dora-splitter__separator):hover .dora-splitter__gripper span {
         background: var(--q-accent);
-        transform: scale(1.15);
     }
+    /* Feedback 2026-06-18 (round 2): drop the panel's max-height +
+       internal overflow. The competing scroll hid the embedded header
+       (name + delete) once the user scrolled inside the panel. Letting
+       the panel grow naturally means the page scroll handles overflow
+       and the header stays in the layout. */
     .stock-peek {
-        max-height: 80vh;
-        overflow-y: auto;
+        min-height: 0;
     }
     /* C-1 Chunk 1 — virtualised list needs a sized scroll container.
        The viewport-relative height keeps the footer + top toolbar

@@ -91,7 +91,12 @@
                      is what L127 called "messy"). Level dedupe (L121): the
                      header chip is the only level editor.
                 -->
-                <q-tab-panel name="overview" class="q-pa-none q-pt-md">
+                <!-- Feedback 2026-06-18 (round 2): q-pa-md on every
+                     q-tab-panel so the inner content (image, list of
+                     editors, all per-tab content) has consistent
+                     breathing room on every side. The outer wrapper
+                     keeps q-pa-md too for the header/toolbar row. -->
+                <q-tab-panel name="overview" class="q-pa-md">
                     <div class="row q-col-gutter-md items-start">
                         <div class="col-12 col-sm-5 col-md-4">
                             <ImageUploadField
@@ -106,7 +111,7 @@
                         <div class="col-12 col-sm-7 col-md-8">
                             <q-list separator class="dora-inline-edit">
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Name</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Name</q-item-section>
                                     <q-item-section>
                                         <q-input
                                             v-model="form.name"
@@ -127,16 +132,38 @@
                                      to its right. The picker uses the same
                                      stock-level palette as the row buttons. -->
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Level</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Level</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
+                                            <!-- Round 9: render the level
+                                                 colour as a coloured swatch
+                                                 INSIDE the button (matching
+                                                 the menu items' avatars)
+                                                 rather than as the button's
+                                                 own `color=` prop. The
+                                                 outline + filled swatch
+                                                 patterns rendered the same
+                                                 Quasar palette name very
+                                                 differently — looked like
+                                                 a colour mismatch. With the
+                                                 swatch approach both the
+                                                 trigger and the menu rows
+                                                 render the colour the same
+                                                 way. -->
                                             <q-btn-dropdown
-                                                outline
+                                                flat
                                                 dense
                                                 no-caps
-                                                :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
-                                                :label="detail.stock_level_name ?? '—'"
+                                                class="dora-level-picker"
                                             >
+                                                <template #label>
+                                                    <q-avatar
+                                                        :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
+                                                        size="16px"
+                                                        class="q-mr-sm"
+                                                    />
+                                                    {{ detail.stock_level_name ?? '—' }}
+                                                </template>
                                                 <q-list dense>
                                                     <q-item
                                                         v-for="level in stockLevelStore.stockLevels"
@@ -161,7 +188,7 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Location</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Location</q-item-section>
                                     <q-item-section>
                                         <q-select
                                             v-model="form.stock_location_id"
@@ -183,8 +210,15 @@
                                     </q-item-section>
                                 </q-item>
 
+                                <!-- Empty-state dash via `display-value`:
+                                     q-select's `placeholder` only renders
+                                     under `use-input`, which these don't
+                                     need. `display-value=undefined` lets
+                                     q-select pick the normal label when a
+                                     value is set; a string forces that
+                                     string into the field. -->
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Stock group</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Stock group</q-item-section>
                                     <q-item-section>
                                         <q-select
                                             v-model="form.stock_group_id"
@@ -194,7 +228,7 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="—"
+                                            :display-value="form.stock_group_id ? undefined : '—'"
                                             @clear="onClearGroup"
                                             @update:model-value="onChangeGroup"
                                         />
@@ -202,7 +236,7 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Usual store</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Usual store</q-item-section>
                                     <q-item-section>
                                         <q-select
                                             v-model="form.usual_store_id"
@@ -212,14 +246,14 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="—"
+                                            :display-value="form.usual_store_id ? undefined : '—'"
                                             @update:model-value="onChangeUsualStore"
                                         />
                                     </q-item-section>
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Expiry</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Expiry</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-xs">
                                             <span class="dora-text-primary">
@@ -253,7 +287,7 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Open / in-use</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Open / in-use</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
@@ -279,7 +313,7 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Essential</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Essential</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
@@ -304,7 +338,7 @@
                                 </q-item>
 
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Auto-add when low</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Auto-add when low</q-item-section>
                                     <q-item-section>
                                         <div class="row items-center q-gutter-sm">
                                             <q-toggle
@@ -327,22 +361,22 @@
                                     </q-item-section>
                                 </q-item>
 
-                                <!-- Feedback 2026-06-18: Notes now reads as
-                                     just another field row, not a special
-                                     calm-textarea block. Autogrow lets the
-                                     row expand vertically as the user types
-                                     while staying horizontally constrained
-                                     to the editor column. -->
+                                <!-- Feedback 2026-06-18 (round 3): notes
+                                     gets a real outlined input so the
+                                     empty state reads as "type here"
+                                     rather than a dash. Autogrow lets the
+                                     row expand vertically as the user
+                                     types. -->
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Notes</q-item-section>
+                                    <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Notes</q-item-section>
                                     <q-item-section>
                                         <q-input
                                             v-model="form.notes"
                                             dense
-                                            borderless
+                                            outlined
                                             type="textarea"
                                             autogrow
-                                            placeholder="—"
+                                            placeholder="Things to remember..."
                                             @blur="saveNotesIfDirty"
                                         />
                                     </q-item-section>
@@ -353,12 +387,27 @@
                                  actually buy" reminders. Always shown; not a
                                  product/SKU, just a personal memory aid (and a
                                  future shopping-list hint). -->
-                            <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">
-                                Preferred buys
+                            <!-- Feedback 2026-06-18 (round 4): the explainer
+                                 ("What you actually buy for this — e.g.
+                                 Vitasoy Oat Milky 1L") moves to an info-hover
+                                 next to the heading. Same pattern as the
+                                 toggle rows in the basics list. -->
+                            <div class="q-mt-md dora-text-secondary text-caption q-mb-sm row items-center q-gutter-xs">
+                                <span>Preferred buys</span>
+                                <q-icon :name="ICONS.info_outline" size="14px" class="dora-text-muted">
+                                    <q-tooltip max-width="320px">
+                                        What you actually buy for this — e.g.
+                                        “Vitasoy Oat Milky 1L”.
+                                    </q-tooltip>
+                                </q-icon>
                             </div>
-                            <div class="text-caption dora-text-muted q-mb-sm">
-                                What you actually buy for this — e.g. “Vitasoy Oat Milky 1L”.
-                            </div>
+                            <!-- Feedback 2026-06-18 (round 3): the manual
+                                 reorder buttons are gone — these reminders
+                                 are scanned alphabetically more often than
+                                 they're ranked. Backend still stores a
+                                 position (kept so historical data isn't
+                                 disturbed), but the UI sorts the list
+                                 A-Z client-side. -->
                             <q-list
                                 v-if="preferredBuys.length"
                                 separator
@@ -366,7 +415,7 @@
                                 class="rounded-borders q-mb-sm"
                             >
                                 <q-item
-                                    v-for="(pb, index) in preferredBuys"
+                                    v-for="pb in preferredBuys"
                                     :key="pb.preferred_buy_id"
                                 >
                                     <q-item-section>
@@ -385,22 +434,6 @@
                                     </q-item-section>
                                     <q-item-section side>
                                         <div class="row items-center no-wrap">
-                                            <q-btn
-                                                flat dense round
-                                                :icon="ICONS.arrow_upward"
-                                                :disable="index === 0 || busy"
-                                                @click="moveBuy(index, -1)"
-                                            >
-                                                <q-tooltip>Move up</q-tooltip>
-                                            </q-btn>
-                                            <q-btn
-                                                flat dense round
-                                                :icon="ICONS.arrow_downward"
-                                                :disable="index === preferredBuys.length - 1 || busy"
-                                                @click="moveBuy(index, 1)"
-                                            >
-                                                <q-tooltip>Move down</q-tooltip>
-                                            </q-btn>
                                             <q-btn
                                                 flat dense round
                                                 :icon="ICONS.edit"
@@ -682,7 +715,16 @@
                     </div>
                 </q-tab-panel>
 
-                <!-- ── Substitutes ────────────────────────────────────── -->
+                <!-- ── Substitutes ──────────────────────────────────────
+                     Round-17: row redesign per feedback —
+                     • dot-only level indicator on the LEFT (no "OK/Mid"
+                       short labels);
+                     • name in default text colour, not text-primary;
+                     • whole row is clickable; opens in the same peek
+                       panel (when embedded) or navigates full-page
+                       (`open-detail` event from the page lets
+                       StockOverview redirect the peek's id without
+                       losing the splitter context). -->
                 <q-tab-panel name="substitutes">
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Substitutes</div>
@@ -695,30 +737,29 @@
                     </div>
 
                     <q-list v-else separator>
-                        <q-item v-for="sub in detail.substitutes" :key="sub.stock_item_id">
-                            <q-item-section>
-                                <!-- UX-v2: StockItemChip retired — plain
-                                     name-link + level dot; the substitute's
-                                     own page has everything else. -->
-                                <div class="row items-center q-gutter-x-sm no-wrap">
-                                    <a
-                                        class="text-primary cursor-pointer text-body2"
-                                        @click="actions.openDetail(sub.stock_item_id)"
-                                    >
-                                        {{ stockItemFor(sub).name }}
-                                    </a>
-                                    <StockLevelDot :stock-item="stockItemFor(sub)" />
-                                </div>
+                        <q-item
+                            v-for="sub in detail.substitutes"
+                            :key="sub.stock_item_id"
+                            clickable
+                            @click="onOpenSubstitute(sub.stock_item_id)"
+                        >
+                            <q-item-section avatar style="min-width: 28px">
+                                <q-icon
+                                    name="circle"
+                                    size="12px"
+                                    :color="colourForSequence(stockItemFor(sub).stock_level_sequence ?? null)"
+                                />
                             </q-item-section>
-                            <!-- C-1b.4 (L136): the "Swap into list" affordance
-                                 moves to Shop Mode (INV-8) — the moment a
-                                 substitute swap actually makes sense is when
-                                 you're at the shelf and the original is out,
-                                 not when browsing the substitute roster.
-                                 Removed from this surface; the per-item
-                                 substitutes list itself stays (L137). -->
+                            <q-item-section>
+                                {{ stockItemFor(sub).name }}
+                            </q-item-section>
                             <q-item-section side>
-                                <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onRemoveSubstitute(sub.stock_item_id)">
+                                <BaseButton
+                                    variant="icon"
+                                    :icon="ICONS.link_off"
+                                    class="text-negative"
+                                    @click.stop="onRemoveSubstitute(sub.stock_item_id)"
+                                >
                                     <q-tooltip>Remove substitute</q-tooltip>
                                 </BaseButton>
                             </q-item-section>
@@ -726,18 +767,24 @@
                     </q-list>
                 </q-tab-panel>
 
-                <!-- ── On shopping lists ──────────────────────────────── -->
+                <!-- ── On shopping lists ──────────────────────────────────
+                     Round-17: dropped the bright primary-coloured
+                     "Primary" pill; the quick-add target now reads as a
+                     small warning-toned star icon (same idiom as
+                     favourites elsewhere). Rows use the cart icon in the
+                     avatar slot, default text colour everywhere. -->
                 <q-tab-panel name="lists">
-                    <div v-if="onLists.length === 0" class="dora-text-muted text-caption q-pa-md">
-                        Not on any active shopping list.
-                        <q-btn flat dense no-caps color="primary" label="Add to primary" @click="onAddToList" />
+                    <div v-if="onLists.length === 0" class="column items-start q-gutter-sm q-pa-md">
+                        <div class="dora-text-muted text-caption">
+                            Not on any active shopping list.
+                        </div>
+                        <BaseButton
+                            variant="ghost"
+                            :icon="ICONS.add_shopping_cart"
+                            label="Add to a list"
+                            @click="onAddToList"
+                        />
                     </div>
-                    <!-- C-1b.4 (L138): rows already navigate to the list,
-                         so the inert open_in_new arrow on the right was
-                         decoration only — gone. "(primary)" is now a real
-                         styled badge instead of plain text, surfacing the
-                         inferred primary draft from the shopping-list
-                         membership (R-003 — server decides primary). -->
                     <q-list v-else separator>
                         <q-item
                             v-for="l in onLists"
@@ -745,17 +792,17 @@
                             clickable
                             @click="goToList(l.shopping_list_id)"
                         >
-                            <q-item-section avatar><q-icon :name="ICONS.shopping_cart" /></q-item-section>
-                            <q-item-section>
-                                <div class="row items-center q-gutter-sm">
-                                    <span>{{ l.name }}</span>
-                                    <q-badge
-                                        v-if="l.shopping_list_id === primaryListId"
-                                        color="primary"
-                                        text-color="white"
-                                        label="Primary"
-                                    />
-                                </div>
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.shopping_cart" />
+                            </q-item-section>
+                            <q-item-section>{{ l.name }}</q-item-section>
+                            <q-item-section
+                                v-if="l.shopping_list_id === primaryListId"
+                                side
+                            >
+                                <q-icon :name="ICONS.star" color="warning" size="18px">
+                                    <q-tooltip>Quick-add target list</q-tooltip>
+                                </q-icon>
                             </q-item-section>
                         </q-item>
                     </q-list>
@@ -767,7 +814,9 @@
                      events, list-add provenance, and synthesises Opened /
                      Checked rows from current state. Date-sorted, newest
                      first; entries colour-keyed by event kind. -->
-                <q-tab-panel name="history">
+                <!-- Round-17: q-pl-md so the q-timeline's left-positioned
+                     icons aren't flush against the inner panel edge. -->
+                <q-tab-panel name="history" class="q-pl-md">
                     <div v-if="lifecycleEvents.length === 0" class="dora-text-muted text-caption q-pa-md">
                         Nothing logged for this item yet — once you change
                         its stock level, add it to a list, mark it open or
@@ -840,14 +889,13 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
-    import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence, getStockLevelColour } from 'src/helpers/stockLevelLogic';
     import type { LocationNode } from 'src/models/location';
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
@@ -868,7 +916,15 @@
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{ idOverride?: string; embedded?: boolean }>();
-    const emit = defineEmits<{ (e: 'close'): void }>();
+    const emit = defineEmits<{
+        (e: 'close'): void;
+        /** Round-17: emitted when the user clicks a substitute inside the
+         *  embedded peek panel. The parent (StockOverview) listens and
+         *  switches the peek's id rather than letting the row routerlink
+         *  the user out to a full-page view, which breaks the splitter
+         *  context. In full-page mode the handler falls back to router. */
+        (e: 'open-detail', stockItemId: string): void;
+    }>();
 
     const route = useRoute();
     const router = useRouter();
@@ -1179,7 +1235,14 @@
     // ── Preferred buys (FU-211) — free-text "what I actually buy" reminders.
     // Separate from the Product overlay; always available. Mutations reuse
     // withBusyReload so the list reflects the server after each change.
-    const preferredBuys = computed(() => detail.value?.preferred_buys ?? []);
+    // Round-3 feedback: sort alphabetically client-side. The server still
+    // stores a `position` for historical compatibility, but the UI never
+    // surfaces it — manual reorder buttons are gone.
+    const preferredBuys = computed(() => {
+        const list = [...(detail.value?.preferred_buys ?? [])];
+        list.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+        return list;
+    });
     const newBuyLabel = ref('');
     const editingBuyId = ref<string | null>(null);
     const editingBuyLabel = ref('');
@@ -1207,13 +1270,6 @@
         await withBusyReload(() =>
             stockItemApi.deletePreferredBuyAsync(stockItemId.value, pb.preferred_buy_id),
         );
-    }
-    async function moveBuy(index: number, delta: number) {
-        const ids = preferredBuys.value.map((p) => p.preferred_buy_id);
-        const target = index + delta;
-        if (target < 0 || target >= ids.length) return;
-        [ids[index], ids[target]] = [ids[target]!, ids[index]!];
-        await withBusyReload(() => stockItemApi.reorderPreferredBuysAsync(stockItemId.value, ids));
     }
 
     // ── Prices (FU-213) — log "what this cost me"; the server derives the
@@ -1444,6 +1500,17 @@
     }
     async function onRemoveSubstitute(substituteId: string) {
         await withBusyReload(() => stockItemApi.removeSubstituteAsync(stockItemId.value, substituteId));
+    }
+    /** Click on a substitute row. When the detail page is hosted inside
+     *  the splitter peek (embedded mode), emit up so the parent can flip
+     *  the peek id in-place — preserves the splitter context. In
+     *  full-page mode, fall back to a normal router navigation. */
+    function onOpenSubstitute(substituteId: string) {
+        if (props.embedded) {
+            emit('open-detail', substituteId);
+        } else {
+            actions.openDetail(substituteId);
+        }
     }
 
     // ── On shopping lists ────────────────────────────────────────────────
@@ -1740,5 +1807,22 @@
     .dora-product-card--cheapest {
         border-color: var(--brand-primary) !important;
         background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
+    }
+
+    /* Round-13: the level picker's `outline` prop drew the border in
+       `currentColor` (full-strength text) which read as a glaring
+       bright-white box against the other softer outlined inputs on the
+       page. Switched to `flat` + this custom border that mirrors the
+       q-field--outlined treatment (muted text-tint, primary on
+       focus-within) so the picker sits visually alongside the other
+       fields. */
+    .dora-level-picker {
+        border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+        border-radius: 4px;
+        transition: border-color 0.2s ease;
+    }
+    .dora-level-picker:hover,
+    .dora-level-picker:focus-within {
+        border-color: var(--brand-primary);
     }
 </style>

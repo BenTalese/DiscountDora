@@ -9,6 +9,200 @@ next.
 
 ---
 
+## 2026-06-18 — Feedback pass round 3 — UTC fix + design polish
+**Trigger:** Round 2 went out; the user found the real root cause of the
+"Updated X ago" bug + flagged 7 more polish items.
+
+**Fixes & polish:**
+1. **UTC serialization — the real fix for "10 hours ago" no matter what.**
+   `dora_api/app.py` `DoraJSONProvider.default` was calling
+   `datetime.isoformat()` on values that came back from SQLite as
+   timezone-naive (SQLite stores `DateTime(timezone=True)` columns as plain
+   text — the tzinfo round-trips as None even though the column flag is
+   set). Without a Z marker, the SPA's `new Date(iso)` parses the string
+   as *local time*; a Sydney user saw every relative time shifted by
+   their UTC offset ("10 hours ago" no matter how recently they updated).
+   Naive datetimes now serialize with a trailing `Z`. Every datetime the
+   API writes is constructed with `datetime.now(UTC)`, so tagging naive
+   values as UTC is correct.
+   - **Revert:** `useReactiveNow` ticker (round 2) deleted. The real fix
+     is the TZ tag; the ticker was treating a symptom.
+2. **Image-toggle on Stock Overview reads as active.** The button picks
+   up `color="primary"` when images are shown, matches the other coloured
+   action buttons.
+3. **Splitter redesign — clean coloured vertical bar.** Gripper-dot
+   experiment retired (round-2 sticky positioning never sat on the bar
+   correctly). The divider is now a 6px coloured bar; muted text-tint
+   while peeking, brightens to accent on hover. Cursor + colour cue
+   carry the draggability signal.
+4. **`RowActionButton` extracted.** The row-cluster q-btn pattern (`flat
+   dense round size="md"` + icon + optional color/loading + tooltip
+   slot) lived inline in `StockItemRow` and `AddToListButton` row
+   variant — four near-duplicates that had already drifted (mismatched
+   shapes/sizes were the round-2 complaint). One shared component now
+   pins the visual style. Adopters: stock-row cluster (expiry, essential,
+   open) + `AddToListButton` row variant (cart).
+5. **Export uses BaseButton.** `q-btn-dropdown` replaced with a
+   `BaseButton variant="secondary"` hosting a `q-menu` for the
+   CSV/Print items — matches the rest of the toolbar.
+6. **Rows slightly shorter.** `min-height: 64 → 56`, body padding
+   `10px → 6px` vertical; image tile `56 → 48`. Still has the breathing
+   room the round-1 spacing bump gave.
+7. **Notes gets a real outlined input.** Empty state reads as "type
+   here" with the original placeholder ("Anything you want to remember
+   about this item"), not just a dash. Autogrow textarea inside the
+   field row.
+8. **Preferred buys alphabetised; reorder dropped.** Manual up/down
+   buttons gone — these are reminders, not a ranked list. SPA sorts
+   case-insensitively client-side; the backend `position` column +
+   reorder endpoint stay so historical data isn't disturbed (deprecation
+   logged as **FU-225**).
+
+**Files touched:**
+- New: `web_app/src/components/RowActionButton.vue`.
+- Deleted: `web_app/src/composables/useReactiveNow.ts` (round-2 ticker
+  revert).
+- Backend: `dora_api/app.py` (UTC tagging on naive datetimes).
+- SPA: `web_app/src/pages/StockItemDetailPage.vue`,
+  `web_app/src/pages/StockOverview.vue`,
+  `web_app/src/components/stock/StockItemRow.vue`,
+  `web_app/src/components/AddToListButton.vue`.
+
+**Verification**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- **Browser pass NOT run** (standing posture). FU-222's round-3 verify
+  list appended.
+- **FU-223 (pytest)** still pending. The `app.py` UTC tagging change is
+  user-visible — the API now emits `Z` on every previously-naive
+  datetime, so any e2e test that string-compared against a naive ISO
+  will need to allow the `Z`.
+
+**Engineering-standards close-gate**
+- R-001 (componentisation): `RowActionButton` consolidates the row-cluster
+  q-btn pattern. The drift round-2 was complaining about
+  (square/round/sm/md mix) had two root causes — the inline pattern
+  AND the cart button using its own size — both now flow through the
+  shared component.
+- R-002 (theme tokens): all changes route through semantic Quasar tones
+  or theme tokens. The splitter bar uses `var(--text-primary)` (muted)
+  and `var(--q-accent)` (hover). No raw values introduced.
+- R-003 (single source of truth): the UTC tagging is a single fix at
+  the JSON-provider seam — every endpoint inherits it.
+- R-007 (scope): held tight; deleted the unused round-2 ticker rather
+  than leaving it sitting.
+
+**Logs**
+- This entry; CHANGELOG round-3 bullet appended.
+- New: **FU-225** (deprecate the preferred_buys position column + reorder
+  endpoint — backend still exposes them but nothing calls them).
+
+**Next:** user walks the surface again. UTC fix should make every "X ago"
+read honestly across the app.
+
+---
+
+## 2026-06-18 — Feedback pass round 2 — fixes on round 1 + finer polish
+**Trigger:** User walked the round-1 changes and gave a second batch of feedback.
+Eight new items; bundled in one pass.
+
+**Fixes & polish:**
+1. **"Level updated X ago" really updates now.**
+   - **Backend:** `update_stock_item.py` was hitting the same `lazy="noload"`
+     trap on `stock_level` as the location/group fix — the relationship-side
+     assignment didn't always dirty the FK column, and on the boundary case
+     (loaded relationship state of None, new assignment) the level itself
+     could silently no-op and the timestamp bump never landed. Mirrored the
+     fix: `_StockItem._stock_level_id = _StockLevel.id` writes the FK column
+     directly before the relationship assignment.
+   - **Frontend:** new `useReactiveNow()` composable — a single shared
+     `nowMs` ref ticking every 30s drives `relativeTime(...)` so the
+     displayed string drifts forward as time passes ("just now" → "1m ago"
+     → "2m ago") without needing the source DTO to change. The detail
+     page's `relativeTime` now reads `nowMs.value` instead of
+     `Date.now()`.
+2. **Splitter gripper sticks to viewport center.** The gripper used to be
+   absolutely positioned at the middle of the divider; on long lists that
+   put it below the viewport. Reworked to `position: sticky; top: 50vh;
+   transform: translateY(-50%)` inside the separator (which is now a flex
+   column), so the dots stay reachable regardless of scroll position.
+3. **Padding lives on the q-tab-panel.** Outer wrapper keeps `q-pa-md` for
+   the header; the Overview `q-tab-panel` is now `q-pa-md` too (was
+   `q-pa-none q-pt-md`). Inner content (image, list of editors) has even
+   breathing room on every side now.
+4. **Peek panel no longer scrolls independently.** Dropped
+   `max-height: 80vh; overflow-y: auto` on `.stock-peek` — the panel grows
+   naturally and the page scroll handles overflow. The embedded header
+   (name + Delete) is no longer hidden by a competing scroll.
+5. **DoraTabs hover matches main menu.** Stripped the surface tint; hover
+   simply transitions the text colour to `var(--q-accent)` with the same
+   easing as the indicator slide, exactly like `MainMenuButton`.
+6. **Footer count tones use the picker palette.** The tone mapping now
+   mirrors `colourForSequence` exactly: Well-stocked = positive (green),
+   Sufficient = warning (yellow), Low = negative (red), Out = muted (grey).
+   "Auto-add" reverts to neutral (matches "Shown" — it's an info count,
+   not a status). "Flagged" → **"Essential"** in the footer + the
+   `FilterChip` label, matching the field on the detail page + the row's
+   tooltip + the new row button. Ordering swap: Essential → Auto-add →
+   Needs attention.
+7. **Footer 3-cluster layout.** New optional `group` field on `PageCount`
+   (`'shown' | 'levels' | 'other'`). `PageCountsFooter` buckets counts by
+   group and renders three flex clusters across a `justify-evenly` parent
+   so the three zones read distinctly. Pages that don't set `group` fall
+   back to the original single-cluster layout (back-compat for
+   MyProducts / RecipesOverview).
+8. **Row buttons are one consistent cluster.** Every action — expiry /
+   essential / open / cart — is `flat dense round size="md"`. The
+   essential flag is now an **interactive q-btn** that toggles
+   `is_flagged` (active state mirrors the left-edge stripe colour), not a
+   passive icon. The `AddToListButton` row variant bumped from `sm` + not
+   round to `md` + round to match. The open button picked up `round`.
+   The mismatched shapes & sizes the user called out (calendar circle vs
+   lock square vs tiny cart) are gone.
+
+**Files touched:**
+- New: `web_app/src/composables/useReactiveNow.ts`.
+- Backend: `dora_api/features/stock_items/update_stock_item.py` (FK-write
+  defence on level change).
+- SPA detail / overview: `web_app/src/pages/StockItemDetailPage.vue`,
+  `web_app/src/pages/StockOverview.vue`,
+  `web_app/src/components/stock/StockItemRow.vue`,
+  `web_app/src/components/AddToListButton.vue`,
+  `web_app/src/components/DoraTabs.vue`,
+  `web_app/src/components/PageCountsFooter.vue`,
+  `web_app/src/composables/useStockFilters.ts`.
+
+**Verification**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- **Browser pass NOT run** (same standing posture — user runs/tests).
+  FU-222's check-list expands to cover the new behaviours; FU-223 (pytest)
+  also still applies — the new FK-write on level change is part of what
+  needs the test pass on a Python-equipped env.
+
+**Engineering-standards close-gate**
+- R-001 (componentisation): `useReactiveNow` is the new shared substrate
+  for any "X ago" display that wants to drift with time, not just the
+  detail page. Likely consumers later: list rows, history timelines.
+- R-002 (theme tokens): all changes route through `var(--q-accent)`,
+  `var(--text-primary)`, `--q-warning`, semantic Quasar tone props.
+- R-003 (server owns derived facts): the level-updated timestamp is
+  server-owned; the SPA only renders. Adding `useReactiveNow` is a pure
+  presentation concern (drift "just now" → "Nm ago"); no domain logic
+  duplicated.
+- R-007 (scope): held to the feedback list. Did NOT touch the rest of the
+  "actions" import / orphaned recipe-count code paths beyond what the
+  round-2 changes required.
+
+**Logs**
+- This entry; CHANGELOG round-2 bullet appended.
+- FU-222 (browser verify) extended in scope — covers the round-2 items.
+
+**Next:** user re-walks the surface. If anything in round 2 doesn't read
+as intended, that's round 3.
+
+---
+
 ## 2026-06-18 — Feedback pass: Stock Detail + Stock Overview polish
 **Trigger:** User shifted from the product-vision pathway to a bundled batch of
 UX feedback covering Stock Item Detail and Stock Overview. Per the user's choice

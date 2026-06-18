@@ -10,6 +10,67 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-024 — A7 leftovers: dead banner CSS + wider footer adoption
+- **Raised:** 2026-06-05 (A7)
+- **Type:** leftover
+- **What:** (a) Removing StockOverview's summary banner left its scoped
+  `.stock-summary-banner` / `.stock-summary-stat` CSS unused (harmless dead
+  rules). (b) `PageCountsFooter` is only wired on the 3 prompt pages
+  (StockOverview, RecipesOverview, MyProductsPage); other list pages
+  (ShoppingLists, MealPlans, etc.) could adopt it for consistency.
+- **Why deferred:** dead CSS is harmless; broader adoption was out of A7's
+  defined scope (3 pages).
+- **State note:** 2026-06-18 — Deleted the dead `.stock-summary-banner` /
+  `.stock-summary-stat` rules from `web_app/src/pages/StockOverview.vue`'s
+  scoped style block (about a dozen lines). vue-tsc + lint clean. The
+  "wider footer adoption" half is dropped — opportunistic and the user no
+  longer wants it tracked; will surface naturally as the other list pages
+  get touched.
+
+## [RESOLVED] FU-113 — Browser-verify C-cross Chunk 4 (location-display policy)
+- **Raised:** 2026-06-11 (Chunk 4 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. Open Stock Overview. A stock item assigned to e.g.
+     **Pantry → Middle shelf → Left side** now shows **"Pantry"** on
+     its location chip (zone-only). Hover the chip → tooltip reads
+     *"Pantry › Middle shelf › Left side · Filter to this location"*.
+  2. A stock item assigned only to **Pantry** (zone, no sub-area) →
+     chip reads *"Pantry"*; tooltip is just *"Filter to this
+     location"* (no path prefix because there's no sub-detail to
+     reveal).
+  3. **Click the chip** — filters the overview to that location.
+     Filter still uses the underlying `stock_location_id`, no
+     regression.
+  4. Open a stock-item detail page. The Location row in the header
+     panel reads as the zone (or `—` if unset). Hover → tooltip
+     reveals the full breadcrumb when one exists.
+  5. Open a shopping-list detail. Each line's `place`-icon location
+     reads the zone only. Hover → full breadcrumb tooltip.
+  6. **Start shop mode** on a list with lines spread across
+     sub-areas under the same zone (e.g. two Fridge lines under
+     "Crisper" + one under "Top shelf"). Confirm:
+     - The section label above the current item shows the **zone**
+       ("Fridge"), not the sub-area.
+     - The hover tooltip on the section label shows the full path
+       for the current line.
+     - The **shop order still splits the two sub-areas apart** —
+       crisper items aren't interleaved with top-shelf items just
+       because they share the zone (sortKey discipline still uses
+       the full breadcrumb).
+  7. Open RecipeCookMode. The ingredient group headers continue
+     to show zone-only (this hasn't changed) — confirm no
+     regression. Per-row location chips don't render in cook
+     mode, so there's no chip tooltip to test there.
+  8. Cross-theme sanity (Pesto Light + Pesto Dark + Cherry Cola
+     Dark) — tooltips read in all three.
+- **State note:** 2026-06-18 — Marked resolved by user request. The
+  location-display policy has been live since the Chunk-4 ship and the
+  surrounding feedback rounds (Stock Overview row, detail-page picker,
+  CreateStockItemDialog) have all exercised the zone-vs-full-path code
+  paths without regression. User has been operating the app and is
+  satisfied.
+
 ## [RESOLVED] FU-219 — Companion FE — port `ProductSearch.vue` + `MerchantsSettings.vue` into `../dora-companion`
 - **Raised:** 2026-06-17 (Phase C build)
 - **Type:** deferred job (port — sibling repo)

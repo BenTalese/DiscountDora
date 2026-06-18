@@ -120,6 +120,9 @@
                                     <q-item-section side v-if="entry.path">
                                         <q-icon :name="ICONS.arrow_forward" />
                                     </q-item-section>
+                                    <q-item-section side v-else-if="entry.dialog">
+                                        <q-icon :name="ICONS.info_outline" />
+                                    </q-item-section>
                                 </q-item>
                             </q-list>
                         </q-card>
@@ -198,12 +201,15 @@
                 </q-card>
             </q-tab-panel>
         </q-tab-panels>
+
+        <AttentionRulesDialog v-model="attentionRulesOpen" />
     </q-page>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
+    import AttentionRulesDialog from 'src/components/help/AttentionRulesDialog.vue';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import DoraTabs from 'src/components/DoraTabs.vue';
     import HelpApiService, {
@@ -214,7 +220,14 @@
     import { useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
 
-    type GuideEntry = { title: string; summary: string; path?: string };
+    type GuideEntry = {
+        title: string;
+        summary: string;
+        path?: string;
+        /** Opens an inline explainer dialog instead of navigating away.
+         *  Used for visual-cue topics that benefit from swatches + tables. */
+        dialog?: 'attention-rules';
+    };
     type GuideGroup = { title: string; icon: string; entries: GuideEntry[] };
 
     const GUIDES: GuideGroup[] = [
@@ -233,6 +246,12 @@
                     summary:
                         'In a stock item detail page, set an expiry date — Dora surfaces upcoming expiries on the Locations heatmap. Flag essentials so they always show up first.',
                     path: '/stock',
+                },
+                {
+                    title: 'What the colours and outlines mean',
+                    summary:
+                        'When a row outlines amber or red, when an item is dimmed, and what "Needs attention" actually counts — one page of the rules with swatches and a cheat sheet.',
+                    dialog: 'attention-rules',
                 },
                 {
                     title: 'Link a product to a stock item',
@@ -350,8 +369,14 @@
     });
 
     function onGuideClick(entry: GuideEntry) {
+        if (entry.dialog === 'attention-rules') {
+            attentionRulesOpen.value = true;
+            return;
+        }
         if (entry.path) void router.push(entry.path);
     }
+
+    const attentionRulesOpen = ref(false);
 
     async function loadChangelog() {
         changelogLoading.value = true;

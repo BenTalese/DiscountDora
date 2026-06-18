@@ -52,6 +52,21 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-225 — Deprecate `PreferredBuy.position` + reorder endpoint
+- **Raised:** 2026-06-18 (Stock-pages feedback round 3)
+- **Type:** deferred job
+- **What:** Round-3 dropped the manual reorder UI on preferred buys (SPA now
+  sorts alphabetically client-side). The backend still carries the `position`
+  column on the table and exposes `PATCH /stock-items/{id}/preferred-buys/reorder`
+  + `stockItemApi.reorderPreferredBuysAsync` on the SPA's API service. Nothing
+  calls them anymore. When the schema cleanup is convenient, drop the column +
+  endpoint + SPA method, and update the model. Until then the column gets
+  written on add (legacy default) — harmless.
+- **Why deferred:** scope discipline (R-007). Schema removal warrants its own
+  migration + tests; not on the critical path for this feedback round.
+- **Recommended resolution:** opportunistic — fold into the next preferred-buys
+  / stock-item-detail backend pass.
+
 ## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
 - **Raised:** 2026-06-18 (Stock-pages feedback pass)
 - **Type:** deferred job
@@ -85,8 +100,34 @@ long session summary. Distinct from the other logs:
   the clear-flag fix.
 
 ## [OPEN] FU-222 — Browser-verify Stock Item Detail + Stock Overview feedback pass
-- **Raised:** 2026-06-18 (Stock-pages feedback pass)
+- **Raised:** 2026-06-18 (Stock-pages feedback pass) — **extended 2026-06-18 (round 2)**
 - **Type:** follow-up (verification)
+- **Round-2 additions to verify (in addition to the round-1 list below):**
+  - **Level updated really updates.** Change the level via the detail-page
+    picker. "Updated X ago" should flip to "just now" immediately, then
+    drift forward to "1m ago", "2m ago" etc. without needing a page refresh.
+    Do the same on the Stock Overview row (which doesn't display the
+    timestamp but does drive the backend write) — open the detail panel
+    and confirm the time matches.
+  - **Splitter gripper reachable on long lists.** With more items than fit
+    the viewport, open the peek and scroll the page. The dots should stay
+    centred on the viewport (sticky), not scroll out of view.
+  - **Padding on the q-tab-panel.** Overview tab's image / inputs all have
+    even breathing room — no longer touching the edges.
+  - **Peek panel scroll.** Open a peek and scroll the page. The whole
+    detail panel scrolls with the page; nothing scrolls inside the panel
+    independently; the name + Delete row never gets hidden.
+  - **DoraTabs hover.** Hover an inactive tab — text colour transitions
+    to accent, no surface-tint background.
+  - **Footer counts.** Well-stocked (positive), Sufficient (warning), Low
+    (negative), Out (muted/grey) — match the picker palette. "Auto-add"
+    is the default text colour like "Shown". The label is **"Essential"**
+    (not Flagged) and sits between the level stats and Auto-add. Footer
+    reads as three distinct clusters with even spacing across the bar.
+  - **Row buttons cluster.** Every right-cluster button (expiry, flag,
+    open, cart) is the same round shape + size. Click the flag — it
+    toggles essential (left-edge stripe appears/disappears immediately;
+    icon switches to the warning tint when active).
 - **What:** Code-complete, browser-unverified. Walk these in the running app:
   - **Stock Item Detail header.** Back/close · name · spacer · (Show QR if scanning is on)
     · Delete. The secondary toolbar row (Mark open / Set expiry / Add to list) should be
@@ -2260,47 +2301,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** now/when env available — closes the
   C-cross pre-consumer foundations.
 
-## [OPEN] FU-113 — Browser-verify C-cross Chunk 4 (location-display policy)
-- **Raised:** 2026-06-11 (Chunk 4 impl; static-only, no env)
-- **Type:** finding / verification
-- **What:** Verify, in order:
-  1. Open Stock Overview. A stock item assigned to e.g.
-     **Pantry → Middle shelf → Left side** now shows **"Pantry"** on
-     its location chip (zone-only). Hover the chip → tooltip reads
-     *"Pantry › Middle shelf › Left side · Filter to this location"*.
-  2. A stock item assigned only to **Pantry** (zone, no sub-area) →
-     chip reads *"Pantry"*; tooltip is just *"Filter to this
-     location"* (no path prefix because there's no sub-detail to
-     reveal).
-  3. **Click the chip** — filters the overview to that location.
-     Filter still uses the underlying `stock_location_id`, no
-     regression.
-  4. Open a stock-item detail page. The Location row in the header
-     panel reads as the zone (or `—` if unset). Hover → tooltip
-     reveals the full breadcrumb when one exists.
-  5. Open a shopping-list detail. Each line's `place`-icon location
-     reads the zone only. Hover → full breadcrumb tooltip.
-  6. **Start shop mode** on a list with lines spread across
-     sub-areas under the same zone (e.g. two Fridge lines under
-     "Crisper" + one under "Top shelf"). Confirm:
-     - The section label above the current item shows the **zone**
-       ("Fridge"), not the sub-area.
-     - The hover tooltip on the section label shows the full path
-       for the current line.
-     - The **shop order still splits the two sub-areas apart** —
-       crisper items aren't interleaved with top-shelf items just
-       because they share the zone (sortKey discipline still uses
-       the full breadcrumb).
-  7. Open RecipeCookMode. The ingredient group headers continue
-     to show zone-only (this hasn't changed) — confirm no
-     regression. Per-row location chips don't render in cook
-     mode, so there's no chip tooltip to test there.
-  8. Cross-theme sanity (Pesto Light + Pesto Dark + Cherry Cola
-     Dark) — tooltips read in all three.
-- **Recommended resolution:** opportunistic — the policy change is
-  small enough that the next time a verifier opens the app, this
-  audit takes ~3 minutes.
-
 ## [OPEN] FU-112 — Browser-verify C-cross Chunk 3 (per-user nutrition mode + reserved seam)
 - **Raised:** 2026-06-11 (Chunk 3 impl; static-only, no env)
 - **Type:** finding / verification
@@ -3588,20 +3588,6 @@ long session summary. Distinct from the other logs:
   surface that doesn't visibly change and convert its `px` to the same
   text-scale var. Deliberately-fixed-px carve-outs (ScanOverlay camera UI,
   PriceHistoryChart SVG labels, Dashboard 3px/7.5px micro-gauge) stay.
-
-## [OPEN] FU-024 — A7 leftovers: dead banner CSS + wider footer adoption
-- **Raised:** 2026-06-05 (A7)
-- **Type:** leftover
-- **What:** (a) Removing StockOverview's summary banner left its scoped
-  `.stock-summary-banner` / `.stock-summary-stat` CSS unused (harmless dead
-  rules). (b) `PageCountsFooter` is only wired on the 3 prompt pages
-  (StockOverview, RecipesOverview, MyProductsPage); other list pages
-  (ShoppingLists, MealPlans, etc.) could adopt it for consistency.
-- **Why deferred:** dead CSS is harmless; broader adoption was out of A7's
-  defined scope (3 pages).
-- **Recommended resolution:** opportunistic — delete the dead CSS next time
-  StockOverview is touched (or during the Wave-C Stock Overview top-area
-  teardown); adopt the footer on other list pages if/when they get polish.
 
 ## [OPEN] FU-023 — A5 leftover: spinners not yet migrated on deferred surfaces
 - **Raised:** 2026-06-05 (A5)

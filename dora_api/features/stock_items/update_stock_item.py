@@ -97,6 +97,14 @@ class UpdateStockItemHandler:
             _StockLevel = self.repository.get(StockLevel).by_id(request.stock_level_id)
             if not _StockLevel:
                 return UpdateStockItemResponse(stock_level_not_found=True)
+            # Same lazy="noload" trap as the location/group relationships —
+            # the relationship-side assignment doesn't always dirty the FK
+            # column when the loaded relationship state is None, so set
+            # `_stock_level_id` directly. Without this the level appears to
+            # change in the SPA (optimistic) but the next refresh comes
+            # back with the OLD id + old `stock_level_last_updated`, which
+            # is what was driving the "Updated X ago doesn't update" bug.
+            _StockItem._stock_level_id = _StockLevel.id
             _StockItem.stock_level = _StockLevel
             # Stock-level changes always touch the last-updated timestamp so
             # the overview can show "updated X ago" honestly. X1: also bump

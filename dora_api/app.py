@@ -36,12 +36,25 @@ class DoraJSONProvider(DefaultJSONProvider):
     "today's list" landing pick could not work (found during shopping-list
     UX v2; the Chunk-7 e2e tests always expected ISO). ISO also sorts
     correctly as a plain string, which RFC does not.
+
+    Naive datetimes are written as UTC (with a trailing `Z`). Backstory:
+    SQLite stores `DateTime(timezone=True)` columns as plain strings —
+    the tzinfo is silently stripped on read despite the column flag, so
+    a value written as `datetime.now(UTC)` comes back naive. Without
+    explicit tagging here, `o.isoformat()` produces a timezone-less ISO
+    string that the SPA's `new Date(iso)` parses as *local time*, shifting
+    every relative-time display by the user's UTC offset (the
+    "10 hours ago" bug for Sydney users). Tagging naive timestamps as UTC
+    is correct because every datetime the API writes is created with
+    `datetime.now(UTC)` — there is no naive non-UTC source in the code.
     """
 
     @staticmethod
     def default(o: object):
         # datetime first — it's a subclass of date.
         if isinstance(o, datetime):
+            if o.tzinfo is None:
+                return o.isoformat() + "Z"
             return o.isoformat()
         if isinstance(o, date):
             return o.isoformat()

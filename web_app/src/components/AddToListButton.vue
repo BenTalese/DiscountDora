@@ -91,12 +91,11 @@
     </BaseButton>
 
     <!-- ── Row variant (default) ────────────────────────────────────────
-         Flat round icon — fits in a dense list row. -->
-    <q-btn
+         Routed through the shared `RowActionButton` (round 3 feedback) so
+         the cart button picks up the same flat/dense/round/md style as
+         every other row-cluster button without copy-paste drift. -->
+    <RowActionButton
         v-else
-        flat
-        dense
-        size="sm"
         :icon="iconFor"
         :color="iconColour ?? undefined"
         :loading="busy"
@@ -112,7 +111,7 @@
         >
             <component :is="MultiListPopover" />
         </q-popup-proxy>
-    </q-btn>
+    </RowActionButton>
 </template>
 
 <script setup lang="ts">
@@ -121,6 +120,7 @@
     import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator, useQuasar } from 'quasar';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import BaseButton from 'src/components/BaseButton.vue';
+    import RowActionButton from 'src/components/RowActionButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useQuickAddTargetPick } from 'src/composables/useQuickAddTargetPick';

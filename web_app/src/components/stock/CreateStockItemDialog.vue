@@ -47,18 +47,27 @@
                             </q-item>
                         </template>
                     </q-select>
+                    <!-- Round-10: location picker mirrors the filter +
+                         detail-page picker — path-labelled options walked
+                         from the location tree, searchable on type,
+                         clearable. The dialog hydrates the tree on open
+                         so the picker is populated even if the parent
+                         page hasn't loaded it yet. -->
                     <q-select
                         v-model="form.stock_location_id"
-                        :options="stockLocations"
-                        option-label="name"
-                        option-value="stock_location_id"
+                        :options="locationOptions"
                         emit-value
                         map-options
+                        use-input
+                        fill-input
+                        hide-selected
+                        input-debounce="200"
                         clearable
                         outlined
                         label="Location (optional)"
                         :error="!!fieldErrors.stock_location_id"
                         :error-message="fieldErrors.stock_location_id"
+                        @filter="filterLocations"
                         @update:model-value="clearField('stock_location_id')"
                     />
 
@@ -77,13 +86,14 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { useLocationStore } from 'src/stores/locationStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { useStockLocationStore } from 'src/stores/stockLocationStore';
-    import { reactive, ref, watch } from 'vue';
+    import { computed, reactive, ref, watch } from 'vue';
 
     const props = defineProps<{ modelValue: boolean }>();
     const emit = defineEmits<{
@@ -93,9 +103,35 @@
 
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
-    const stockLocationStore = useStockLocationStore();
+    const locationStore = useLocationStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { stockLocations } = storeToRefs(stockLocationStore);
+
+    // Walk the location tree into path-labelled options — same shape as
+    // the Stock Overview filter and the detail-page picker so the user
+    // gets a single, consistent location-pick experience.
+    type LocationOption = { label: string; value: string };
+    const allLocationOptions = computed<LocationOption[]>(() => {
+        const out: LocationOption[] = [];
+        const walk = (nodes: LocationNode[], prefix: string) => {
+            for (const n of nodes) {
+                const path = prefix ? `${prefix} › ${n.name}` : n.name;
+                out.push({ label: path, value: n.location_id });
+                walk(n.children, path);
+            }
+        };
+        walk(locationStore.tree, '');
+        return out.sort((a, b) => a.label.localeCompare(b.label));
+    });
+    const locationOptions = ref<LocationOption[]>([]);
+    watch(allLocationOptions, (v) => { locationOptions.value = v; }, { immediate: true });
+    function filterLocations(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            locationOptions.value = needle
+                ? allLocationOptions.value.filter((o) => o.label.toLowerCase().includes(needle))
+                : allLocationOptions.value;
+        });
+    }
 
     const defaultForm = (): CreateStockItemCommand => ({
         name: '',
@@ -123,11 +159,19 @@
     }
 
     // Seed the form whenever the dialog opens — picks up newly-added stock
-    // levels since last close.
+    // levels since last close. Also ensure the location tree is loaded so
+    // the picker is populated even if the parent page hasn't hydrated it
+    // yet (round-10 fix: the dialog used to read from `stockLocations`
+    // which a parent might never have loaded).
     watch(
         () => props.modelValue,
         (open) => {
-            if (open) resetForm();
+            if (open) {
+                resetForm();
+                if (locationStore.tree.length === 0) {
+                    void locationStore.refreshAsync();
+                }
+            }
         },
     );
 

@@ -7,14 +7,23 @@
         @update:model-value="onDialogUpdate"
     >
             <q-card-section>
+                <!-- Round-14: same path-labelled, searchable picker as
+                     Stock Overview filter + detail page + create dialog
+                     so location selection is identical wherever it shows
+                     up. -->
                 <q-select
                     v-model="targetLocationId"
-                    :options="locationOptions"
+                    :options="filteredOptions"
                     emit-value
                     map-options
+                    use-input
+                    fill-input
+                    hide-selected
+                    input-debounce="200"
                     clearable
                     outlined
                     label="Destination location"
+                    @filter="onFilter"
                 />
             </q-card-section>
             <template #actions>
@@ -34,6 +43,10 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
 
+    // Local narrowing ref backing the searchable picker — mirrors the
+    // same pattern as the Stock Overview filter / detail-page / create
+    // dialog so locations look + behave the same wherever they appear.
+
     type LocationOption = { label: string; value: string };
 
     const props = defineProps<{
@@ -49,13 +62,31 @@
     }>();
 
     const targetLocationId = ref<string | null>(null);
+    const filteredOptions = ref<readonly LocationOption[]>(props.locationOptions);
+    watch(
+        () => props.locationOptions,
+        (next) => { filteredOptions.value = next; },
+        { immediate: true },
+    );
+
+    function onFilter(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            filteredOptions.value = needle
+                ? props.locationOptions.filter((o) => o.label.toLowerCase().includes(needle))
+                : props.locationOptions;
+        });
+    }
 
     // Reset selection each time the dialog opens so a previous pick doesn't
     // sneak into the next move.
     watch(
         () => props.modelValue,
         (open) => {
-            if (open) targetLocationId.value = null;
+            if (open) {
+                targetLocationId.value = null;
+                filteredOptions.value = props.locationOptions;
+            }
         },
     );
 

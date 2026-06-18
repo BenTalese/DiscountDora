@@ -1,8 +1,12 @@
 import {
     isLowStockSequence,
     isOutOfStockSequence,
-    needsRestockSequence,
+    OUT_OF_STOCK_SEQUENCE,
+    SUFFICIENT_STOCK_SEQUENCE,
+    LOW_STOCK_SEQUENCE,
+    WELL_STOCKED_SEQUENCE,
 } from 'src/helpers/stockStatus';
+import type { PageCount } from 'src/components/PageCountsFooter.vue';
 import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
 import type { Recipe } from 'src/models/recipe';
 import type { StockGroup } from 'src/models/stockGroup';
@@ -84,16 +88,30 @@ export function useStockFilters(sources: {
         return map;
     });
 
-    // ── Per-item attention check (low/out/expiring/flagged) ─────────────
+    // ── Per-item attention check ────────────────────────────────────────
+    // Model C (2026-06-18 round 8): the "Needs attention" count and the
+    // row outline share ONE rule so the user can trust the highlighting
+    // matches the count. Two tiers with unified meaning:
+    //   • WARN (amber): essential AND Low, OR expiring within 7 days.
+    //   • ALERT (red):  essential AND Out, OR already expired.
+    // Anything that hits either tier is "needing attention". Non-essential
+    // Low/Out is intentionally silent — Dora caring about everything is
+    // worse than caring loudly about the things you flagged.
     function isExpiringSoon(item: StockItem): boolean {
         if (!item.expiry_date) return false;
         const days = (new Date(item.expiry_date).getTime() - Date.now()) / 86_400_000;
-        return days <= 7;
+        return days > 0 && days <= 7;
+    }
+    function isExpired(item: StockItem): boolean {
+        if (!item.expiry_date) return false;
+        return new Date(item.expiry_date).getTime() < Date.now();
     }
     function hasAlert(item: StockItem): boolean {
-        const restock =
-            item.needs_restock ?? needsRestockSequence(levelSequence(item.stock_level_id));
-        return restock || isExpiringSoon(item) || item.is_flagged === true;
+        const seq = levelSequence(item.stock_level_id);
+        const isLow = item.is_low_stock ?? isLowStockSequence(seq);
+        const isOut = item.is_out_of_stock ?? isOutOfStockSequence(seq);
+        const isEssential = item.is_flagged === true;
+        return (isEssential && (isLow || isOut)) || isExpired(item) || isExpiringSoon(item);
     }
 
     // ── Dropdown option lists ───────────────────────────────────────────
@@ -250,23 +268,38 @@ export function useStockFilters(sources: {
     });
 
     // ── Sticky-footer counts (A7) — reflect the FILTERED view ───────────
-    function toneForLevelSequence(seq: number): 'positive' | 'warning' | 'negative' {
-        if (isOutOfStockSequence(seq)) return 'negative';
-        if (needsRestockSequence(seq)) return 'warning';
-        return 'positive';
+    // Feedback 2026-06-18 (round 2): the footer level palette now mirrors
+    // the picker palette in `stockLevelLogic.colourForSequence` exactly:
+    // Well-stocked = positive (green), Sufficient = warning (yellow),
+    // Low = negative (red), Out = muted (grey). Anything else maps to
+    // muted so a renamed/custom level reads consistently with the picker.
+    function toneForLevelSequence(seq: number): NonNullable<PageCount['tone']> {
+        switch (seq) {
+            case WELL_STOCKED_SEQUENCE: return 'positive';
+            case SUFFICIENT_STOCK_SEQUENCE: return 'warning';
+            case LOW_STOCK_SEQUENCE: return 'negative';
+            case OUT_OF_STOCK_SEQUENCE: return 'muted';
+            default: return 'muted';
+        }
     }
-    const footerCounts = computed(() => {
+    const footerCounts = computed<PageCount[]>(() => {
         const items = filteredStockItems.value;
         const byLevel = new Map<string, number>();
+        const cartMap = cartStateById.value;
         let flagged = 0;
         let autoAdd = 0;
         let attention = 0;
+        let onAnyList = 0;
         for (const it of items) {
             if (it.stock_level_id)
                 byLevel.set(it.stock_level_id, (byLevel.get(it.stock_level_id) ?? 0) + 1);
             if (it.is_flagged) flagged++;
             if (it.auto_add_when_low) autoAdd++;
             if (hasAlert(it)) attention++;
+            // Round-10: count items present on at least one active shopping
+            // list — once per item, not per line/list. Anything other than
+            // `none` qualifies (on_target / on_other / on_multiple).
+            if ((cartMap.get(it.stock_item_id) ?? 'none') !== 'none') onAnyList++;
         }
         // C-1 Chunk 2 / L93 — minified labels; matches the plan's order
         // Shown · Well-stocked · Sufficient · Low · Out · Flagged ·
@@ -280,21 +313,36 @@ export function useStockFilters(sources: {
                 .replace(/\bSufficient Stock\b/i, 'Sufficient')
                 .replace(/\bLow Stock\b/i, 'Low')
                 .replace(/\bOut of Stock\b/i, 'Out');
-        const levelStats = sources.stockLevels().map((l) => ({
+        // `hideOnMobile: true` on the level + essential + auto-add stats:
+        // narrow viewports get only Shown + Needs attention so the
+        // sticky footer doesn't eat vertical space (round-6 feedback).
+        const levelStats: PageCount[] = sources.stockLevels().map((l) => ({
             label: shortLabel(l.name),
             value: byLevel.get(l.stock_level_id) ?? 0,
             tone: toneForLevelSequence(l.sequence),
+            group: 'levels' as const,
+            hideOnMobile: true,
         }));
-        // Feedback 2026-06-18: "Shown" is a neutral cardinal — keep it in
-        // the default text colour so coloured counts (level + flagged +
-        // attention) carry meaning on their own. The level stats already
-        // ride the stock-level palette via `toneForLevelSequence`.
+        // Feedback 2026-06-18 (round 2):
+        //   • "Shown" stays neutral (default text colour).
+        //   • Essential keeps the warning tone (same colour as the row
+        //     stripe + flag icon).
+        //   • Auto-add now reads neutral — it's an *info* count, not a
+        //     status. Matches the "Shown" tone the user asked for.
+        //   • Order is Essential → Auto-add → Needs attention (Essential
+        //     above Auto-add per the feedback).
+        //   • Label is "Essential" (not "Flagged") so the wording stays
+        //     consistent with the field on the detail page + the row's
+        //     tooltip + the filter chip.
+        // `group` drives PageCountsFooter's three-cluster justify-evenly
+        // layout: [Shown] · [stock levels] · [other counts].
         return [
-            { label: 'Shown', value: items.length },
+            { label: 'Shown', value: items.length, group: 'shown' as const },
             ...levelStats,
-            { label: 'Flagged', value: flagged, tone: 'warning' as const },
-            { label: 'Auto-add', value: autoAdd, tone: 'info' as const },
-            { label: 'Needs attention', value: attention, tone: 'negative' as const },
+            { label: 'Essential', value: flagged, tone: 'warning' as const, group: 'other' as const, hideOnMobile: true },
+            { label: 'Auto-add', value: autoAdd, group: 'other' as const, hideOnMobile: true },
+            { label: 'On a list', value: onAnyList, group: 'other' as const, hideOnMobile: true },
+            { label: 'Needs attention', value: attention, tone: 'negative' as const, group: 'other' as const },
         ];
     });
 

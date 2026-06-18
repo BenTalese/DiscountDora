@@ -72,7 +72,7 @@
             <q-btn
                 flat
                 dense
-                class="stock-row__level-btn"
+                :class="['stock-row__level-btn', levelButtonClass]"
                 :style="levelButtonStyle"
                 :aria-label="`Stock level: ${levelName || 'unset'}`"
                 @click.stop
@@ -130,20 +130,18 @@
             <q-space />
 
             <!-- ──────────────────────────────────────────────────────
-                 Right cluster — expiry / essential? / open / cart.
-                 Feedback 2026-06-18: recipe-count chip removed (visible on
-                 the detail page's Recipes tab). Buttons bumped from
-                 size="sm" to "md" for easier tap targets + more presence.
-                 Open uses primary tone so the active state pops.
-                 Essential flag echoes the left-edge stripe.
+                 Right cluster — expiry / essential / open / cart.
+                 Feedback 2026-06-18 (round 2): every button is `flat dense
+                 round size="md"` so they read as a uniform cluster
+                 (previously expiry was round, open was a square, cart was
+                 sm — three different visual languages). The essential
+                 flag is now interactive (toggles `is_flagged`) and
+                 rendered alongside the others.
             ────────────────────────────────────────────────────────── -->
-            <q-btn
-                flat
-                dense
-                round
-                size="md"
+            <RowActionButton
                 :icon="expiry.icon"
                 :color="expiry.colour"
+                :aria-label="expiry.tooltip"
                 @click.stop
             >
                 <q-tooltip>{{ expiry.tooltip }}</q-tooltip>
@@ -191,28 +189,25 @@
                         </q-item>
                     </q-list>
                 </q-menu>
-            </q-btn>
+            </RowActionButton>
 
-            <!-- Essential flag — non-interactive, mirrors the left-edge
-                 stripe so the marker is visible from either side of the
-                 row. Tooltip explains why it stands out. -->
-            <q-icon
-                v-if="item.is_flagged"
-                :name="ICONS.flag"
-                size="20px"
-                color="warning"
-                class="stock-row__essential-icon"
+            <!-- Essential flag — interactive toggle (round 2 feedback).
+                 Active state mirrors the left-edge stripe colour. -->
+            <RowActionButton
+                :icon="ICONS.flag"
+                :color="item.is_flagged ? 'warning' : undefined"
+                :loading="flagBusy"
+                @click.stop="onToggleFlagged"
             >
-                <q-tooltip>Essential — always shows in auto-generate</q-tooltip>
-            </q-icon>
+                <q-tooltip>
+                    {{ item.is_flagged
+                        ? 'Essential — click to unmark'
+                        : 'Mark as essential' }}
+                </q-tooltip>
+            </RowActionButton>
 
-            <!-- Open / in-use toggle. Feedback 2026-06-18: secondary tone
-                 was nearly invisible in Pesto dark — promote to primary
-                 when open so the state pops. -->
-            <q-btn
-                flat
-                dense
-                size="md"
+            <!-- Open / in-use toggle. Primary when open so the state pops. -->
+            <RowActionButton
                 :icon="item.is_open ? ICONS.lock_open : ICONS.lock"
                 :color="item.is_open ? 'primary' : undefined"
                 :loading="openBusy"
@@ -221,7 +216,7 @@
                 <q-tooltip>
                     {{ item.is_open ? 'Mark as sealed' : 'Mark as open / in-use' }}
                 </q-tooltip>
-            </q-btn>
+            </RowActionButton>
 
             <!-- Cart button — unified AddToListButton (C-7 Chunk 1).
                  Owns the state-aware render + already-on-list toggle
@@ -240,11 +235,12 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import RowActionButton from 'src/components/RowActionButton.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
-    import { isOutOfStockSequence } from 'src/helpers/stockStatus';
+    import { isLowStockSequence, isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -307,23 +303,32 @@
         const id = props.item.stock_level_id;
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? null;
     });
-    // The level button is text-less but coloured by the stock level. The
-    // colour is sourced from `colourForSequence` so light/dark themes
-    // (Pesto, Cherry Cola) both inherit the palette correctly, and renaming
-    // a level doesn't change its colour.
-    const levelButtonStyle = computed(() => {
+    // The level button is text-less but coloured by the stock level.
+    // Round-12: switched from `:style="background: var(--q-${colour})"` to
+    // a `bg-*` UTILITY CLASS — Quasar only exposes brand semantics
+    // (`--q-primary`, `--q-positive`, etc.) as CSS variables. Numbered
+    // palette shades like `grey-4` exist only as utility classes; the
+    // CSS-variable lookup silently failed and the button fell through to
+    // its underlying near-black q-btn background. The class approach
+    // works for both the brand semantics AND the palette shades because
+    // Quasar generates `bg-positive`, `bg-warning`, `bg-negative`,
+    // `bg-grey-4` … as utility classes from the same palette the
+    // dropdown swatches use.
+    const levelButtonClass = computed<string>(() => {
         const seq = levelSequence.value;
         const colour = seq !== null ? colourForSequence(seq) : null;
-        // `getStockLevelColour` returns Quasar palette names ("positive",
-        // "warning"…); we map those to the CSS variables Quasar exposes
-        // so a single style binding covers all themes.
-        if (!colour) {
+        return colour ? `bg-${colour}` : '';
+    });
+    const levelButtonStyle = computed(() => {
+        // Empty-level fallback — dashed outline + page surface so the
+        // button reads as "unset" without competing with a colour.
+        if (levelSequence.value === null) {
             return {
                 background: 'var(--surface-component)',
                 border: '1px dashed color-mix(in srgb, var(--text-primary) 24%, transparent)',
             };
         }
-        return { background: `var(--q-${colour})` };
+        return {};
     });
 
     // C-cross Chunk 4 — show the *zone* (top-level breadcrumb node), not
@@ -372,24 +377,47 @@
         }
     });
 
-    // ── Whole-row outline + dim rules (decision 6 + L91) ────────────────
+    // ── Whole-row outline + dim rules (Model C, round 8) ────────────────
+    // Unified rule with `hasAlert` in useStockFilters so the row outline
+    // and the "Needs attention" footer count + filter chip describe the
+    // SAME set of items:
+    //   • WARN (amber): essential AND Low, OR expiring within 7 days.
+    //   • ALERT (red):  essential AND Out, OR already expired.
+    // Dimming: non-essential Out items only. Essential Out items stay
+    // full opacity so the loudest "go restock" signal isn't quieted by
+    // the fade.
     const isOutOfStock = computed(
         () =>
             props.item.is_out_of_stock ?? isOutOfStockSequence(levelSequence.value),
     );
+    const isLowStock = computed(
+        () =>
+            props.item.is_low_stock ?? isLowStockSequence(levelSequence.value),
+    );
+    const isEssential = computed(() => props.item.is_flagged === true);
+
+    const isAlertRow = computed(
+        () =>
+            (isEssential.value && isOutOfStock.value) ||
+            expiryTone.value === 'expired',
+    );
+    const isWarnRow = computed(
+        () =>
+            !isAlertRow.value &&
+            ((isEssential.value && isLowStock.value) ||
+                expiryTone.value === 'soon'),
+    );
+
     const rowClasses = computed(() => ({
-        'stock-row--dim': isOutOfStock.value,
+        'stock-row--dim': isOutOfStock.value && !isEssential.value,
         'stock-row--peeking': props.peeking,
         'stock-row--focused': props.focused,
         // Selection (bulk-mode tick) fills the row — L91. "peeking"
         // (splitter detail) keeps its own treatment so the two states
         // don't collide.
         'stock-row--selected': !!props.selected,
-        // Outline-by-status: amber expiring-soon / red out-or-expired.
-        // "Out" takes the same tone as "expired" because both demand
-        // the same action (restock / discard).
-        'stock-row--alert': isOutOfStock.value || expiryTone.value === 'expired',
-        'stock-row--warn': !isOutOfStock.value && expiryTone.value === 'soon',
+        'stock-row--alert': isAlertRow.value,
+        'stock-row--warn': isWarnRow.value,
     }));
 
     // C-1 Chunk 4 / L87 — restrict the date picker to today + future.
@@ -448,6 +476,35 @@
     // C-7 Chunk 1 — cart button is now `AddToListButton`; the dead
     // `cart` computed + `onCartClick` + `cartStateFor` import retired.
 
+    // ── Essential toggle ────────────────────────────────────────────────
+    const flagBusy = ref(false);
+    async function onToggleFlagged() {
+        const next = !props.item.is_flagged;
+        flagBusy.value = true;
+        try {
+            await stockItemStore.updateStockItemAsync({
+                stock_item_id: props.item.stock_item_id,
+                is_flagged: next,
+            });
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: next
+                    ? `Marked "${props.item.name}" as essential.`
+                    : `"${props.item.name}" is no longer essential.`,
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not update.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            flagBusy.value = false;
+        }
+    }
+
     // ── Open / in-use toggle ────────────────────────────────────────────
     const openBusy = ref(false);
     async function onToggleOpen() {
@@ -494,8 +551,10 @@
 
 <style scoped lang="scss">
     .stock-row {
-        /* L78: rows get taller. ~64px target with comfortable padding. */
-        min-height: 64px;
+        /* Feedback 2026-06-18 (round 3): rows felt too tall after the
+           round-1 spacing bump. Bring the min-height down a notch while
+           keeping the gap+padding that gave it breathing room. */
+        min-height: 56px;
         position: relative;
         overflow: hidden; /* clip the essential stripe to the rounded border */
         transition:
@@ -515,8 +574,8 @@
         box-shadow: 0 1px 6px color-mix(in srgb, var(--text-primary) 8%, transparent);
     }
     .stock-row__body {
-        padding: 10px 12px;
-        gap: 14px; /* more breathing room between image / level / name / cluster */
+        padding: 6px 12px;
+        gap: 14px; /* breathing room between image / level / name / cluster */
     }
     /* Feedback 2026-06-18: essentials get a quiet warning stripe on the
        left edge. Paired with the right-cluster flag icon — the stripe is
@@ -529,10 +588,6 @@
         width: 3px;
         background: var(--q-warning);
         pointer-events: none;
-    }
-    .stock-row__essential-icon {
-        margin-left: 2px;
-        margin-right: 2px;
     }
 
     /* Status outline-by-status (decision 6). Colours via theme tokens. */
@@ -611,9 +666,9 @@
        row's status outline. Pulled partway toward the card's left
        edge by a small negative margin-left for visual weight. */
     .stock-row__image {
-        flex: 0 0 56px;
-        width: 56px;
-        height: 56px;
+        flex: 0 0 48px;
+        width: 48px;
+        height: 48px;
         margin-left: 8px;
         display: flex;
         align-items: center;

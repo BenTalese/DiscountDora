@@ -5,6 +5,12 @@
         shrunk to the per-tab underline scale. Inactive tabs use the default
         text colour; the indicator does the colour work, so we deliberately
         do NOT use Quasar's per-tab `active-color` saturation.
+
+        Round-7 feedback: the strip now scrolls *inside its own box* on
+        narrow containers (mobile, splitter peek) so it never blows out
+        the parent's width / pushes a horizontal page scroll. Active tab
+        auto-scrolls into view after selection so the user always sees
+        where they are.
     -->
     <div
         ref="stripEl"
@@ -58,6 +64,11 @@
         width: `${indicator.width}px`,
     }));
 
+    // Use `offsetLeft` / `offsetWidth` (relative to the offsetParent — the
+    // strip, since it's `position: relative`) instead of viewport-relative
+    // `getBoundingClientRect()`. That way the indicator's `translate`
+    // tracks the active tab's *scroll-space* position; horizontally
+    // scrolling the strip moves both together correctly.
     function measure() {
         const strip = stripEl.value;
         if (!strip) return;
@@ -67,11 +78,19 @@
             indicator.ready = false;
             return;
         }
-        const stripRect = strip.getBoundingClientRect();
-        const activeRect = active.getBoundingClientRect();
-        indicator.left = activeRect.left - stripRect.left;
-        indicator.width = activeRect.width;
+        indicator.left = active.offsetLeft;
+        indicator.width = active.offsetWidth;
         indicator.ready = true;
+    }
+
+    // Bring the active tab into view after a switch — when the strip
+    // overflows (mobile / narrow splitter peek) the user otherwise can't
+    // see where they just landed.
+    function scrollActiveIntoView() {
+        const strip = stripEl.value;
+        if (!strip) return;
+        const active = strip.querySelector<HTMLElement>('.dora-tabs__tab--active');
+        active?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
     }
 
     function onSelect(name: string) {
@@ -99,7 +118,10 @@
         () => props.modelValue,
         () => {
             indicator.sliding = true;
-            void nextTick(measure);
+            void nextTick(() => {
+                measure();
+                scrollActiveIntoView();
+            });
         },
     );
 
@@ -120,6 +142,21 @@
         gap: 4px;
         padding: 0 4px;
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        /* Round-7 feedback: contain horizontal overflow INSIDE the strip
+           so a tab row wider than its parent (mobile, splitter peek) no
+           longer pushes a page-level horizontal scroll. The strip
+           scrolls itself; the scrollbar is hidden visually but kbd /
+           swipe scroll still work. */
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-width: 0;
+        max-width: 100%;
+        scrollbar-width: none;             // Firefox
+        -ms-overflow-style: none;          // legacy Edge
+        scroll-behavior: smooth;
+    }
+    .dora-tabs::-webkit-scrollbar {
+        display: none;                     // Chromium / Safari
     }
 
     .dora-tabs__tab {
@@ -137,13 +174,16 @@
         line-height: 1;
         position: relative;
         border-radius: 6px 6px 0 0;
-        transition: color 0.42s cubic-bezier(0.65, 0, 0.2, 1),
-                    background-color 0.25s ease;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        /* Match the main menu's posture (`MainMenuButton`) — colour
+           transitions to accent on hover, no surface tint, same easing
+           as the indicator slide so text + bar move together. */
+        transition: color 0.42s cubic-bezier(0.65, 0, 0.2, 1);
     }
 
-    .dora-tabs__tab:hover {
-        background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-        color: var(--text-primary);
+    .dora-tabs__tab:not(.dora-tabs__tab--active):hover {
+        color: var(--q-accent);
     }
 
     .dora-tabs__tab--active {
@@ -156,6 +196,18 @@
 
     .dora-tabs__label {
         white-space: nowrap;
+    }
+
+    /* Tighter chrome at narrow widths so more tabs fit before scroll
+       kicks in. */
+    @media (max-width: 599px) {
+        .dora-tabs__tab {
+            padding: 8px 10px;
+            font-size: 0.8125rem;
+        }
+        .dora-tabs__icon {
+            font-size: 16px;
+        }
     }
 
     .dora-tabs__indicator {

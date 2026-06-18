@@ -45,9 +45,16 @@
             <slot name="actions" />
         </div>
 
+        <!-- Round-14: the v-if'd element is the q-slide-transition host —
+             keep it bare (no padding/border/margin) so the height animates
+             cleanly. Any visual chrome (card background, border, padding)
+             lives on the inner `__panel-inner` wrapper instead. Mixing the
+             two on a single element snaps the open/close transition. -->
         <q-slide-transition>
             <div v-if="expanded && $slots.filters" class="filter-bar__panel">
-                <slot name="filters" />
+                <div class="filter-bar__panel-inner">
+                    <slot name="filters" />
+                </div>
             </div>
         </q-slide-transition>
     </div>

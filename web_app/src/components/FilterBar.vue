@@ -3,16 +3,20 @@
         A4 — standard filter bar. One skin for every data-list page:
           • a persistent search box (#search slot) that stays OUTSIDE the
             collapsible panel — clearing/searching is always reachable;
-          • a collapsible filter panel (#filters slot) that defaults to
-            shown on desktop, hidden on mobile;
+          • a collapsible filter panel (#filters slot);
           • an active-filter count badge on the toggle;
           • a single standard "Clear filters" button that only appears when
             ≥1 filter is active.
-        The page owns its actual filter fields + predicates; this component
-        only standardises the mechanics/skin around them.
+
+        Feedback 2026-06-18: when a page already owns its main toolbar
+        row (search, page actions), the toggle + clear buttons live in
+        that toolbar via the `<FilterToggleButton>` companion instead of
+        a second row here. Pass `:toolbar="false"` so the bar collapses
+        to just the slide-out panel; the page wires the same `expanded`
+        + `activeCount` to the companion button.
     -->
     <div class="filter-bar q-py-md">
-        <div class="filter-bar__top row items-center q-gutter-sm no-wrap">
+        <div v-if="toolbar" class="filter-bar__top row items-center q-gutter-sm no-wrap">
             <div v-if="$slots.search" class="filter-bar__search col">
                 <slot name="search" />
             </div>
@@ -59,8 +63,11 @@
             /** Number of active filters (drives the badge + Clear visibility). */
             activeCount?: number;
             toggleLabel?: string;
+            /** When false, the in-bar toolbar row is suppressed so the page's
+             *  own toolbar can host the `<FilterToggleButton>`. */
+            toolbar?: boolean;
         }>(),
-        { activeCount: 0, toggleLabel: 'Filters' },
+        { activeCount: 0, toggleLabel: 'Filters', toolbar: true },
     );
 
     defineEmits<{ (e: 'clear'): void }>();

@@ -24,19 +24,13 @@
                 requires HTTPS in production.
             </q-banner>
 
-            <q-tabs
+            <DoraTabs
                 v-model="tab"
-                dense
-                align="left"
-                inline-label
-                no-caps
-                indicator-color="primary"
-                active-color="primary"
-            >
-                <q-tab name="scan" :icon="ICONS.qr_code_scanner" label="Scan" />
-                <q-tab name="sheets" :icon="ICONS.print" label="Print labels" />
-            </q-tabs>
-            <q-separator />
+                :tabs="[
+                    { name: 'scan', label: 'Scan', icon: ICONS.qr_code_scanner },
+                    { name: 'sheets', label: 'Print labels', icon: ICONS.print },
+                ]"
+            />
 
             <!-- ── Scan tab ──────────────────────────────────────────────── -->
             <div v-if="tab === 'scan'">
@@ -211,6 +205,7 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import DoraTabs from 'src/components/DoraTabs.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';

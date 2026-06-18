@@ -1,8 +1,11 @@
 <template>
-    <div :class="embedded ? 'q-pa-sm' : 'q-pa-md'">
-        <!-- Header — back/close · name · level (chip = editor) · Delete top-right.
-             C-1b.1 (L121): level lives once, in the header. C-1b.1 (L122):
-             Delete moves out of the toolbar to a destructive top-right slot. -->
+    <div class="q-pa-md">
+        <!-- Header — back/close · name · spacer · (Show QR) · Delete top-right.
+             Feedback 2026-06-18: the level chip moves down to the overview
+             (under the name field, combined with "Level updated"); the top
+             Mark-open / Set-expiry / Add-to-list trio is gone because all
+             three actions live inline on the page already. Show QR stays
+             since it's not reachable elsewhere. -->
         <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
@@ -12,30 +15,21 @@
                 <AppSkeleton v-if="loading && !detail" type="line" width="180px" height="1.6rem" />
                 <template v-else>{{ detail?.name || 'Stock item' }}</template>
             </div>
-            <q-btn-dropdown
-                v-if="detail"
-                outline
-                dense
-                no-caps
-                :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
-                :label="detail.stock_level_name ?? 'Set level'"
-            >
-                <q-list dense>
-                    <q-item
-                        v-for="level in stockLevelStore.stockLevels"
-                        :key="level.stock_level_id"
-                        clickable
-                        v-close-popup
-                        @click="onChangeStockLevel(level.stock_level_id)"
-                    >
-                        <q-item-section avatar>
-                            <q-avatar :color="getStockLevelColour(level.name)" size="16px" />
-                        </q-item-section>
-                        <q-item-section>{{ level.name }}</q-item-section>
-                    </q-item>
-                </q-list>
-            </q-btn-dropdown>
             <q-space />
+            <BaseButton
+                v-if="detail && scanningEnabled"
+                variant="secondary"
+                icon="qr_code_2"
+                label="Show QR"
+                @click="showQrOpen = true"
+            >
+                <q-tooltip max-width="280px">
+                    Prints Dora's own label for this item — a scannable QR
+                    that opens this page. It's *not* the product's real
+                    EAN/UPC barcode (that's managed on Data → Barcodes and
+                    links a barcode to a Product, not a stock item).
+                </q-tooltip>
+            </BaseButton>
             <BaseButton
                 v-if="detail"
                 variant="danger-ghost"
@@ -62,40 +56,6 @@
         </div>
 
         <div v-else-if="detail" key="sid-content">
-            <!-- Toolbar — C-1b.1 (L123, L125): pared to Mark open · Set expiry ·
-                 Add-to-list · (Show QR). Restock belongs to list-finalisation,
-                 not here. Find-deals moves to the Products tab in C-1b.3. -->
-            <div class="row q-gutter-sm q-mb-md items-center">
-                <BaseButton
-                    variant="secondary"
-                    :icon="detail.is_open ? 'lock_open' : 'lock'"
-                    :label="detail.is_open ? 'Opened' : 'Mark open'"
-                    :loading="busy"
-                    @click="onToggleOpen"
-                />
-                <BaseButton variant="secondary" :icon="ICONS.event" label="Set expiry" @click="expiryDialogOpen = true" />
-                <AddToListButton
-                    v-if="detail"
-                    variant="toolbar"
-                    :stock-item-id="detail.stock_item_id"
-                />
-                <q-space />
-                <BaseButton
-                    v-if="scanningEnabled"
-                    variant="secondary"
-                    icon="qr_code_2"
-                    label="Show QR"
-                    @click="showQrOpen = true"
-                >
-                    <q-tooltip max-width="280px">
-                        Prints Dora's own label for this item — a scannable QR
-                        that opens this page. It's *not* the product's real
-                        EAN/UPC barcode (that's managed on Data → Barcodes and
-                        links a barcode to a Product, not a stock item).
-                    </q-tooltip>
-                </BaseButton>
-            </div>
-
             <!-- ── QR dialog ────────────────────────────────────────── -->
             <BaseDialog v-model="showQrOpen" :title="detail.name" closable card-style="min-width: 280px; max-width: 400px">
                     <q-card-section class="text-center">
@@ -116,25 +76,11 @@
                     </template>
             </BaseDialog>
 
-            <!-- L120 / R-002: route tab colours through theme tokens so the
-                 active tab + indicator stay legible in every theme. -->
-            <q-tabs
-                v-model="tab"
-                dense
-                align="left"
-                class="text-primary q-mb-sm"
-                active-color="primary"
-                indicator-color="primary"
-                no-caps
-            >
-                <q-tab name="overview" :icon="ICONS.info" label="Overview" />
-                <q-tab v-if="productsEnabled" name="products" :icon="ICONS.local_offer" :label="`Products (${detail.products.length})`" />
-                <q-tab name="recipes" :icon="ICONS.menu_book" :label="`Recipes (${detail.recipes.length})`" />
-                <q-tab name="substitutes" :icon="ICONS.swap_horiz" :label="`Substitutes (${detail.substitutes.length})`" />
-                <q-tab name="lists" :icon="ICONS.shopping_cart" :label="`Lists (${onLists.length})`" />
-                <q-tab name="history" :icon="ICONS.history" label="History" />
-            </q-tabs>
-            <q-separator />
+            <!-- Feedback 2026-06-18: replaced q-tabs with DoraTabs so the
+                 active-tab underline uses the same sliding accent indicator
+                 as the main menu (shrunk to tab-row scale). The per-tab
+                 colour saturation is gone — the indicator carries the colour. -->
+            <DoraTabs v-model="tab" :tabs="tabDefinitions" class="q-mb-sm" />
 
             <q-tab-panels v-model="tab" animated>
                 <!-- ── Overview ───────────────────────────────────────────
@@ -175,6 +121,45 @@
                                     </q-item-section>
                                 </q-item>
 
+                                <!-- Feedback 2026-06-18: level picker moved out
+                                     of the header into the second overview row,
+                                     combined with the level-updated timestamp
+                                     to its right. The picker uses the same
+                                     stock-level palette as the row buttons. -->
+                                <q-item>
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Level</q-item-section>
+                                    <q-item-section>
+                                        <div class="row items-center q-gutter-sm">
+                                            <q-btn-dropdown
+                                                outline
+                                                dense
+                                                no-caps
+                                                :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
+                                                :label="detail.stock_level_name ?? '—'"
+                                            >
+                                                <q-list dense>
+                                                    <q-item
+                                                        v-for="level in stockLevelStore.stockLevels"
+                                                        :key="level.stock_level_id"
+                                                        clickable
+                                                        v-close-popup
+                                                        @click="onChangeStockLevel(level.stock_level_id)"
+                                                    >
+                                                        <q-item-section avatar>
+                                                            <q-avatar :color="getStockLevelColour(level.name)" size="16px" />
+                                                        </q-item-section>
+                                                        <q-item-section>{{ level.name }}</q-item-section>
+                                                    </q-item>
+                                                </q-list>
+                                            </q-btn-dropdown>
+                                            <q-space />
+                                            <span class="dora-text-secondary text-caption">
+                                                Updated {{ relativeTime(detail.stock_level_last_updated) }}
+                                            </span>
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+
                                 <q-item>
                                     <q-item-section class="dora-text-secondary" style="max-width:160px">Location</q-item-section>
                                     <q-item-section>
@@ -190,8 +175,9 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="Not set"
+                                            placeholder="—"
                                             @filter="filterLocations"
+                                            @clear="onClearLocation"
                                             @update:model-value="onChangeLocation"
                                         />
                                     </q-item-section>
@@ -208,7 +194,8 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="Not set"
+                                            placeholder="—"
+                                            @clear="onClearGroup"
                                             @update:model-value="onChangeGroup"
                                         />
                                     </q-item-section>
@@ -225,7 +212,7 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="Not set"
+                                            placeholder="—"
                                             @update:model-value="onChangeUsualStore"
                                         />
                                     </q-item-section>
@@ -236,13 +223,16 @@
                                     <q-item-section>
                                         <div class="row items-center q-gutter-xs">
                                             <span class="dora-text-primary">
-                                                {{ detail.expiry_date || 'Not set' }}
+                                                {{ detail.expiry_date || '—' }}
                                             </span>
                                             <q-space />
                                             <q-btn flat dense no-caps size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
                                             <q-btn flat dense no-caps size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
                                             <q-btn flat dense no-caps size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
-                                            <q-btn flat dense no-caps size="sm" :icon="ICONS.event" @click="expiryDialogOpen = true">
+                                            <!-- Feedback 2026-06-18: the calendar-only icon
+                                                 button picks up the "Set" label that used to
+                                                 live in the top toolbar. -->
+                                            <q-btn flat dense no-caps size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
                                                 <q-tooltip>Pick a date</q-tooltip>
                                             </q-btn>
                                             <q-btn
@@ -337,28 +327,27 @@
                                     </q-item-section>
                                 </q-item>
 
+                                <!-- Feedback 2026-06-18: Notes now reads as
+                                     just another field row, not a special
+                                     calm-textarea block. Autogrow lets the
+                                     row expand vertically as the user types
+                                     while staying horizontally constrained
+                                     to the editor column. -->
                                 <q-item>
-                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Level updated</q-item-section>
-                                    <q-item-section class="dora-text-primary">
-                                        {{ relativeTime(detail.stock_level_last_updated) }}
+                                    <q-item-section class="dora-text-secondary" style="max-width:160px">Notes</q-item-section>
+                                    <q-item-section>
+                                        <q-input
+                                            v-model="form.notes"
+                                            dense
+                                            borderless
+                                            type="textarea"
+                                            autogrow
+                                            placeholder="—"
+                                            @blur="saveNotesIfDirty"
+                                        />
                                     </q-item-section>
                                 </q-item>
                             </q-list>
-
-                            <!-- Notes — calm/secondary (L129). Kept because
-                                 it's cheap and occasionally useful; not a
-                                 headline. Save on blur. -->
-                            <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">Notes</div>
-                            <q-input
-                                v-model="form.notes"
-                                outlined
-                                dense
-                                type="textarea"
-                                autogrow
-                                placeholder="Anything you want to remember about this item"
-                                class="dora-notes-calm"
-                                @blur="saveNotesIfDirty"
-                            />
 
                             <!-- Preferred buys (FU-211) — free-text "what I
                                  actually buy" reminders. Always shown; not a
@@ -840,10 +829,10 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import AddToListButton from 'src/components/AddToListButton.vue';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -1089,6 +1078,10 @@
         expiry_date?: string | null;
         usual_store_id?: string | null;
         clear_usual_store?: boolean;
+        // Explicit clear flags — see `update_stock_item.py` for why the
+        // relationship-only null assignment doesn't dirty the FK column.
+        clear_stock_location?: boolean;
+        clear_stock_group?: boolean;
     };
     async function saveField(patch: FieldPatch) {
         if (!detail.value) return;
@@ -1119,11 +1112,31 @@
     }
     async function onChangeLocation(value: string | null) {
         if (!detail.value || value === detail.value.stock_location_id) return;
-        await saveField({ stock_location_id: value });
+        // Route null through the explicit clear flag — the relationship is
+        // mapped `lazy="noload"` so a present-but-null FK can silently
+        // no-op server-side, leaving the picker rebounding to its prior
+        // value after refresh.
+        if (value === null) {
+            await saveField({ clear_stock_location: true });
+        } else {
+            await saveField({ stock_location_id: value });
+        }
+    }
+    async function onClearLocation() {
+        if (!detail.value || detail.value.stock_location_id === null) return;
+        await saveField({ clear_stock_location: true });
     }
     async function onChangeGroup(value: string | null) {
         if (!detail.value || value === detail.value.stock_group_id) return;
-        await saveField({ stock_group_id: value });
+        if (value === null) {
+            await saveField({ clear_stock_group: true });
+        } else {
+            await saveField({ stock_group_id: value });
+        }
+    }
+    async function onClearGroup() {
+        if (!detail.value || detail.value.stock_group_id === null) return;
+        await saveField({ clear_stock_group: true });
     }
     async function onChangeUsualStore(value: string | null) {
         if (!detail.value || value === detail.value.usual_store_id) return;
@@ -1447,6 +1460,21 @@
     // Lists tab decorates that row with a styled "Primary" badge instead
     // of plain text.
     const primaryListId = computed(() => shoppingListStore.quickAddTargetListId ?? null);
+
+    // Tab definitions for DoraTabs — counts re-evaluate as detail loads /
+    // mutates. Products tab is gated by the install-wide feature flag.
+    const tabDefinitions = computed<DoraTab[]>(() => {
+        const d = detail.value;
+        const out: DoraTab[] = [{ name: 'overview', label: 'Overview', icon: ICONS.info }];
+        if (productsEnabled.value) {
+            out.push({ name: 'products', label: `Products (${d?.products.length ?? 0})`, icon: ICONS.local_offer });
+        }
+        out.push({ name: 'recipes', label: `Recipes (${d?.recipes.length ?? 0})`, icon: ICONS.menu_book });
+        out.push({ name: 'substitutes', label: `Substitutes (${d?.substitutes.length ?? 0})`, icon: ICONS.swap_horiz });
+        out.push({ name: 'lists', label: `Lists (${onLists.value.length})`, icon: ICONS.shopping_cart });
+        out.push({ name: 'history', label: 'History', icon: ICONS.history });
+        return out;
+    });
     function goToList(listId: string) {
         void router.push(`/shopping-lists/${listId}`);
     }

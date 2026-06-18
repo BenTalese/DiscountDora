@@ -1,0 +1,197 @@
+<template>
+    <!--
+        DoraTabs — themed tab strip with a sliding underline indicator that
+        mirrors the main menu's accent slide. Same wobble + flash on switch,
+        shrunk to the per-tab underline scale. Inactive tabs use the default
+        text colour; the indicator does the colour work, so we deliberately
+        do NOT use Quasar's per-tab `active-color` saturation.
+    -->
+    <div
+        ref="stripEl"
+        class="dora-tabs row no-wrap items-end"
+        role="tablist"
+    >
+        <button
+            v-for="t in tabs"
+            :key="t.name"
+            ref="tabEls"
+            type="button"
+            role="tab"
+            class="dora-tabs__tab"
+            :class="{ 'dora-tabs__tab--active': modelValue === t.name }"
+            :aria-selected="modelValue === t.name"
+            @click="onSelect(t.name)"
+        >
+            <q-icon v-if="t.icon" :name="t.icon" size="18px" class="dora-tabs__icon" />
+            <span class="dora-tabs__label">{{ t.label }}</span>
+        </button>
+        <div
+            class="dora-tabs__indicator"
+            :class="{ 'is-ready': indicator.ready, 'is-sliding': indicator.sliding }"
+            :style="indicatorStyle"
+            @transitionend="onIndicatorTransitionEnd"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+    import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+
+    export interface DoraTab {
+        name: string;
+        label: string;
+        icon?: string;
+    }
+
+    const props = defineProps<{
+        modelValue: string;
+        tabs: DoraTab[];
+    }>();
+    const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>();
+
+    const stripEl = ref<HTMLElement | null>(null);
+    const tabEls = ref<HTMLElement[]>([]);
+    const indicator = reactive({ left: 0, width: 0, ready: false, sliding: false });
+
+    const indicatorStyle = computed(() => ({
+        translate: `${indicator.left}px 0`,
+        width: `${indicator.width}px`,
+    }));
+
+    function measure() {
+        const strip = stripEl.value;
+        if (!strip) return;
+        const active = strip.querySelector<HTMLElement>('.dora-tabs__tab--active');
+        if (!active) {
+            indicator.width = 0;
+            indicator.ready = false;
+            return;
+        }
+        const stripRect = strip.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        indicator.left = activeRect.left - stripRect.left;
+        indicator.width = activeRect.width;
+        indicator.ready = true;
+    }
+
+    function onSelect(name: string) {
+        if (name === props.modelValue) return;
+        emit('update:modelValue', name);
+    }
+
+    let resizeObserver: ResizeObserver | null = null;
+
+    onMounted(() => {
+        void nextTick(measure);
+        if (typeof ResizeObserver !== 'undefined' && stripEl.value) {
+            resizeObserver = new ResizeObserver(() => measure());
+            resizeObserver.observe(stripEl.value);
+        }
+        window.addEventListener('resize', measure);
+    });
+
+    onBeforeUnmount(() => {
+        resizeObserver?.disconnect();
+        window.removeEventListener('resize', measure);
+    });
+
+    watch(
+        () => props.modelValue,
+        () => {
+            indicator.sliding = true;
+            void nextTick(measure);
+        },
+    );
+
+    watch(
+        () => props.tabs,
+        () => void nextTick(measure),
+        { deep: true },
+    );
+
+    function onIndicatorTransitionEnd(e: TransitionEvent) {
+        if (e.propertyName === 'translate') indicator.sliding = false;
+    }
+</script>
+
+<style scoped lang="scss">
+    .dora-tabs {
+        position: relative;
+        gap: 4px;
+        padding: 0 4px;
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+
+    .dora-tabs__tab {
+        all: unset;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 14px;
+        min-height: 40px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: 0.1px;
+        line-height: 1;
+        position: relative;
+        border-radius: 6px 6px 0 0;
+        transition: color 0.42s cubic-bezier(0.65, 0, 0.2, 1),
+                    background-color 0.25s ease;
+    }
+
+    .dora-tabs__tab:hover {
+        background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+        color: var(--text-primary);
+    }
+
+    .dora-tabs__tab--active {
+        color: var(--q-accent);
+    }
+
+    .dora-tabs__icon {
+        flex: 0 0 auto;
+    }
+
+    .dora-tabs__label {
+        white-space: nowrap;
+    }
+
+    .dora-tabs__indicator {
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--q-accent);
+        box-shadow: 0 0 6px color-mix(in srgb, var(--brand-accent) 50%, transparent);
+        opacity: 0;
+        transition:
+            translate 0.55s cubic-bezier(0.65, 0, 0.2, 1),
+            width 0.55s cubic-bezier(0.65, 0, 0.2, 1),
+            opacity 0.25s ease,
+            background-color 0.3s ease,
+            box-shadow 0.3s ease;
+        pointer-events: none;
+        will-change: translate, width, scale;
+    }
+
+    .dora-tabs__indicator.is-ready {
+        opacity: 1;
+    }
+
+    .dora-tabs__indicator.is-sliding {
+        background: var(--nav-slide-flash);
+        box-shadow: 0 0 6px color-mix(in srgb, var(--nav-slide-flash) 55%, transparent);
+        animation: dora-tabs-wobble 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes dora-tabs-wobble {
+        0%   { scale: 1 1; }
+        25%  { scale: 1.18 1.4; }
+        55%  { scale: 1.32 1.6; }
+        80%  { scale: 1.0 1.1; }
+        100% { scale: 1 1; }
+    }
+</style>

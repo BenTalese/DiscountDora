@@ -172,4 +172,12 @@ export type UpdateStockItemCommand = {
     /** C-1 Chunk 6 / FU-033 — data-URL string to set the image, null to
      *  clear, omit to leave untouched. */
     image?: string | null;
+    /** FU-189 — usual store hint. UUID to bind; use `clear_usual_store` to clear. */
+    usual_store_id?: string | null;
+    clear_usual_store?: boolean;
+    /** Explicit clear flags for nullable lazy-noload FKs — see
+     *  `update_stock_item.py` for why the relationship-only null assignment
+     *  doesn't actually persist. The SPA sends these from the picker's X. */
+    clear_stock_location?: boolean;
+    clear_stock_group?: boolean;
 };

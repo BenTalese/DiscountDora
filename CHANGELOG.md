@@ -5,6 +5,58 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Stock pages — feedback pass (2026-06-18).** A focused polish round on
+  Stock Item Detail and Stock Overview based on user feedback:
+  - **DoraTabs** — a new shared tab strip with the same sliding accent
+    indicator (wobble + flash on switch) used by the main menu, shrunk
+    to tab-row scale. Replaces `q-tabs` on Stock Item Detail, Data →
+    Barcodes & QR, and Help. Inactive tabs use default text colour;
+    the indicator carries the colour work (less per-tab saturation).
+  - **Stock Item Detail header pared back.** Removed the secondary
+    toolbar row (Mark open / Set expiry / Add to list) — all three
+    actions live inline on the page already. Header keeps back/name,
+    Show QR (when scanning is enabled), and Delete.
+  - **Level picker moved under Name** on the Overview tab, with
+    "Updated X ago" beside it (combining the old chip + the bottom
+    "Level updated" row into one obvious spot).
+  - **"Set" label on the expiry row's calendar button** so the inline
+    +1d / +7d / +14d / Set / × cluster picks up the responsibility of
+    the deleted top-toolbar Set-expiry button.
+  - **Notes** now reads as a regular field row (autogrow inline input)
+    rather than a separate calm-textarea block.
+  - **Placeholders use a dash** (`—`) instead of `Not set` across
+    Location / Stock group / Usual store / Expiry / Level.
+  - **Location & stock-group clear actually persists.** The
+    relationships are mapped `lazy="noload"` so a relationship-only
+    `None` assignment was a silent no-op and the picker rebounded to
+    its previous value. New explicit `clear_stock_location` /
+    `clear_stock_group` flags drive the FK column directly; the SPA
+    routes the picker's X through them. Same mechanism that already
+    backed `clear_usual_store`.
+  - **Splitter** — opens at 58% (was 50%, per user preference) and the
+    handle is now a styled gripper-dot motif that paints only while a
+    peek is open, with an accent hover treatment that reads as
+    draggable.
+  - **Filter toggle lives in the page toolbar.** New
+    `FilterToggleButton` companion to `FilterBar` lets pages embed the
+    toggle (with badge + Clear) in their main toolbar; `FilterBar`
+    takes `:toolbar="false"` and collapses to just the slide-out
+    panel. Applied to Stock Overview, My Products, Cookbook overview.
+  - **Stock Overview row polish** — more spacing between image /
+    level / name; right-cluster buttons bumped to `size="md"`; recipe
+    count chip removed (visible on the Recipes tab of the detail
+    page); hover treatment swapped from a translateY lift (which
+    clipped the first row's outline under the page chrome) to a
+    surface + border accent tone; essential items now carry a
+    warning-toned left-edge stripe AND a flag icon in the right
+    cluster; the open / in-use button uses primary tone when open so
+    its state pops in dark themes (was secondary, low contrast).
+  - **Footer counts** — "Shown" reverts to the default text colour
+    (a neutral cardinal shouldn't compete with the colour-coded level
+    / flagged / attention counts). Applied to all PageCountsFooter
+    consumers.
+
 ### Added
 - **Stores (admin) replaces the legacy Merchants page (FU-189 / Phase E).**
   New `Settings → Stores` admin page lets you curate the retail stores Dora knows

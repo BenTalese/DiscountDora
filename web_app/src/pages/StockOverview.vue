@@ -54,6 +54,15 @@
                 to="/stocktake"
             />
             <q-space />
+            <!-- Feedback 2026-06-18: Filter toggle moved into the main
+                 toolbar so the FilterBar doesn't get its own row of chrome
+                 just for the toggle button. Same v-model + count drives
+                 the panel below. -->
+            <FilterToggleButton
+                v-model="filtersExpanded"
+                :active-count="filters.activeFilterCount.value"
+                @clear="filters.clearFilters"
+            />
             <!-- C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the
                  per-user `show_stock_images` flag; the row's image
                  slot collapses out of the layout when off. Sits next
@@ -92,9 +101,14 @@
         <!-- Summary counts moved to the sticky PageCountsFooter (A7). -->
 
         <!-- Quick filters ─ standardised via FilterBar (A4) ────────────── -->
-        <!-- C-1 Chunk 2 / L94: Bulk-select moved up to the top button
-             group; the filter bar no longer hosts page actions. -->
-        <FilterBar :active-count="filters.activeFilterCount.value" @clear="filters.clearFilters">
+        <!-- Feedback 2026-06-18: panel-only mode (`:toolbar="false"`); the
+             toggle button lives in the page toolbar above. -->
+        <FilterBar
+            v-model="filtersExpanded"
+            :toolbar="false"
+            :active-count="filters.activeFilterCount.value"
+            @clear="filters.clearFilters"
+        >
             <template #filters>
             <div class="row q-gutter-sm items-center">
             <!-- C-1 Chunk 2 / L97 — single dropdown defaults to "Any level".
@@ -256,10 +270,21 @@
             :limits="splitterLimits"
             :disable="!peekId"
             unit="%"
+            separator-class="dora-splitter__separator"
             class="stock-splitter"
+            :class="{ 'stock-splitter--peeking': !!peekId }"
         >
+            <!-- Feedback 2026-06-18: gripper-dot handle. The triple-dot
+                 motif sits in the middle of the separator and only paints
+                 while a peek is open (the handle is draggable then).
+                 Accent colour brightens on hover so draggability reads. -->
+            <template #separator>
+                <div v-if="peekId" class="dora-splitter__gripper" aria-hidden="true">
+                    <span /><span /><span />
+                </div>
+            </template>
             <template #before>
-                <div class="q-pr-md">
+                <div class="q-pr-md q-pt-xs">
                     <!-- C-1 Chunk 1 — small lists keep the glide-in
                          ListTransition (DS4 perceived-perf masking, see
                          STOCK_OVERVIEW_PERF.md); large lists swap to
@@ -383,6 +408,7 @@
     import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import ScanOverlay from 'src/components/ScanOverlay.vue';
@@ -485,6 +511,10 @@
         membership: () => shoppingListStore.membership as Membership | null,
     });
 
+    // Filter panel expanded state — shared between the toolbar's
+    // FilterToggleButton and the FilterBar's collapsible panel.
+    const filtersExpanded = ref(false);
+
     // C-1 Chunk 2 / L97 — options for the level dropdown. Built off the
     // stockLevelStore so order matches the rest of the app.
     const levelFilterOptions = computed(() =>
@@ -507,14 +537,15 @@
     });
 
     // ── Splitter peek ────────────────────────────────────────────────────
-    // C-1b.2: opens at 50% (was 58%); drag-range clamped to [40, 65] while
-    // peeking, [40, 100] when closed (so the list can take the full width).
+    // Feedback 2026-06-18: open at 58% (the C-1b.2 50% felt too narrow on
+    // the list side). Drag-range clamped to [40, 70] while peeking,
+    // [40, 100] when closed (so the list can take the full width).
     const peekId = ref<string | null>(null);
     const splitPct = ref(100);
     const splitterLimits = computed<[number, number]>(() =>
-        peekId.value ? [40, 65] : [40, 100],
+        peekId.value ? [40, 70] : [40, 100],
     );
-    watch(peekId, (v) => (splitPct.value = v ? 50 : 100));
+    watch(peekId, (v) => (splitPct.value = v ? 58 : 100));
 
     // C-1 Chunk 5 / L68 / L71 — two-frame detail nav:
     //   Desktop  → splitter peek (the embedded drawer).
@@ -797,6 +828,46 @@
     }
     .stock-splitter {
         min-height: 50vh;
+    }
+    /* Feedback 2026-06-18: distinguish the splitter divider while peeking.
+       Quasar's default separator is a 1px line — we give it width + a
+       gripper-dot motif so it both reads as a divider AND signals it's
+       draggable. When no peek is open the separator collapses (no handle
+       paints) so the empty list view stays uncluttered. */
+    .stock-splitter :deep(.dora-splitter__separator) {
+        background: transparent;
+        position: relative;
+    }
+    .stock-splitter--peeking :deep(.dora-splitter__separator) {
+        width: 14px;
+        background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+        border-left: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+        border-right: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
+        transition: background-color 0.25s ease;
+    }
+    .stock-splitter--peeking :deep(.dora-splitter__separator):hover {
+        background: color-mix(in srgb, var(--q-accent) 14%, transparent);
+    }
+    .dora-splitter__gripper {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        pointer-events: none;
+    }
+    .dora-splitter__gripper span {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--text-primary) 40%, transparent);
+        transition: background-color 0.25s ease, transform 0.25s ease;
+    }
+    .stock-splitter--peeking :deep(.dora-splitter__separator):hover .dora-splitter__gripper span {
+        background: var(--q-accent);
+        transform: scale(1.15);
     }
     .stock-peek {
         max-height: 80vh;

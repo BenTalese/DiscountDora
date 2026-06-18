@@ -51,6 +51,13 @@ class UpdateStockItemRequest(BaseModel):
     # clear-vs-unset pattern as ShoppingListLine fields).
     usual_store_id: UUID | None = None
     clear_usual_store: bool = False
+    # Explicit clear flags for location and group — the relationships are
+    # mapped `lazy="noload"`, so assigning the relationship-side to None
+    # is a silent no-op (the FK column never goes dirty). The clear-flag
+    # path drives the FK column directly, sidestepping the SQLAlchemy
+    # quirk so the picker's X button actually persists.
+    clear_stock_location: bool = False
+    clear_stock_group: bool = False
 
 
 @dataclass(slots=True)
@@ -107,8 +114,15 @@ class UpdateStockItemHandler:
                     changed_at = datetime.now(UTC),
                 ))
 
-        if "stock_location_id" in _SetFields:
+        # stock_location: same lazy="noload" trap as stock_group below — a
+        # relationship-only None assignment doesn't dirty the FK column, so
+        # set `_stock_location_id` directly when clearing.
+        if request.clear_stock_location:
+            _StockItem._stock_location_id = None
+            _StockItem.stock_location = None
+        elif "stock_location_id" in _SetFields:
             if request.stock_location_id is None:
+                _StockItem._stock_location_id = None
                 _StockItem.stock_location = None
             else:
                 _StockLocation = self.repository.get(StockLocation).by_id(request.stock_location_id)
@@ -158,13 +172,14 @@ class UpdateStockItemHandler:
         elif "usual_store_id" in _SetFields and request.usual_store_id is not None:
             _StockItem.usual_store_id = request.usual_store_id
 
-        # stock_group: nullable FK, so a present-but-None value means
-        # "clear the group". The relationship is mapped lazy="noload", so
-        # `_StockItem.stock_group` reads as None even when an FK exists;
-        # assigning the *relationship* to None is then a no-op and the FK
-        # column never changes. Set the FK column (`_stock_group_id`)
-        # directly to force the dirty write.
-        if "stock_group_id" in _SetFields:
+        # stock_group: nullable FK with the same lazy="noload" trap — see
+        # the comment on stock_location above. Explicit `clear_stock_group`
+        # is the SPA's canonical clear path; the present-but-None branch
+        # also writes the FK column so a stray null still works.
+        if request.clear_stock_group:
+            _StockItem._stock_group_id = None
+            _StockItem.stock_group = None
+        elif "stock_group_id" in _SetFields:
             if request.stock_group_id is None:
                 _StockItem._stock_group_id = None
                 _StockItem.stock_group = None

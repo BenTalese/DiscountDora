@@ -285,8 +285,12 @@ export function useStockFilters(sources: {
             value: byLevel.get(l.stock_level_id) ?? 0,
             tone: toneForLevelSequence(l.sequence),
         }));
+        // Feedback 2026-06-18: "Shown" is a neutral cardinal — keep it in
+        // the default text colour so coloured counts (level + flagged +
+        // attention) carry meaning on their own. The level stats already
+        // ride the stock-level palette via `toneForLevelSequence`.
         return [
-            { label: 'Shown', value: items.length, tone: 'primary' as const },
+            { label: 'Shown', value: items.length },
             ...levelStats,
             { label: 'Flagged', value: flagged, tone: 'warning' as const },
             { label: 'Auto-add', value: autoAdd, tone: 'info' as const },

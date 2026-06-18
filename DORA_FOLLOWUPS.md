@@ -52,6 +52,82 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
+- **Raised:** 2026-06-18 (Stock-pages feedback pass)
+- **Type:** deferred job
+- **What:** During the feedback pass the user noted that the open / in-use button on the
+  Stock Overview row was using `secondary` and was hard to see in Pesto dark — that fix
+  landed by promoting to `primary`, but the user flagged that the broader pattern
+  ("majority primary usage; not sure where secondary actually pulls weight") may need a
+  separate audit. Walk the app, list every place `color="secondary"` (and other lower-used
+  semantics like `info`, `accent`) appears, decide which deserve to stay vs. which should
+  consolidate to `primary` or theme tokens for visual hierarchy reasons. Likely outputs:
+  a short proposal under `docs/04_proposals/` + targeted fixes.
+- **Why deferred:** intentionally out of scope for the feedback pass (R-007). The user
+  explicitly called it out as a separate task to think about.
+- **Recommended resolution:** opportunistic — fold in next time a theming/styling pass
+  comes around, or after FU-046 (theme-token compliance) gets another round.
+
+## [OPEN] FU-223 — pytest verify on stock-location / stock-group clear-flag changes
+- **Raised:** 2026-06-18 (Stock-pages feedback pass)
+- **Type:** finding — verification gap
+- **What:** Same root cause as FU-189c — the dev box has only the MS Store Python stub, so
+  pytest couldn't be exercised in-session. The change in
+  `dora_api/features/stock_items/update_stock_item.py` added
+  `clear_stock_location` / `clear_stock_group` flags to `UpdateStockItemRequest` and writes
+  the FK columns (`_stock_location_id` / `_stock_group_id`) directly when clearing — the
+  prior relationship-only None assignment was a silent no-op because both relationships are
+  mapped `lazy="noload"`. The present-but-null branch now also writes the FK column. Run
+  pytest on a Python-equipped env; if any test covered the old (broken) clear path, update
+  the assertions to match the now-correctly-persisted clear.
+- **Why deferred:** can't run pytest here.
+- **Recommended resolution:** **now** — run on a Python-equipped env before relying on
+  the clear-flag fix.
+
+## [OPEN] FU-222 — Browser-verify Stock Item Detail + Stock Overview feedback pass
+- **Raised:** 2026-06-18 (Stock-pages feedback pass)
+- **Type:** follow-up (verification)
+- **What:** Code-complete, browser-unverified. Walk these in the running app:
+  - **Stock Item Detail header.** Back/close · name · spacer · (Show QR if scanning is on)
+    · Delete. The secondary toolbar row (Mark open / Set expiry / Add to list) should be
+    GONE. The level chip is no longer in the header — it lives under "Name" on the
+    Overview tab.
+  - **Level row.** The new "Level" row sits between Name and Location. The dropdown opens,
+    picks a level, and "Updated X ago" to the right of the button refreshes to "just now"
+    on save. Backend bumps `stock_level_last_updated` on every save — if "Updated …" still
+    reads stale after a level pick, capture the network trace (PATCH body + response).
+  - **Location / Stock group clear.** With a location set, click the picker's X (and try
+    `Tab`-blur after deleting the text too). The picker should stay empty after refresh.
+    Same for stock group. Both should now hit the new `clear_stock_location` /
+    `clear_stock_group` paths (network tab will show `{"clear_stock_location": true}` etc).
+  - **"—" placeholders** on Location / Stock group / Usual store / Expiry / (new) Level
+    when unset.
+  - **Notes** reads as a row in the basics list (auto-grows on type, blur saves).
+  - **Padding** — both full-page and embedded peek mode breathe (q-pa-md). Nothing touches
+    the page edge.
+  - **DoraTabs sliding underline.** Switch tabs — the accent bar slides + wobbles, then
+    settles to accent colour. Same on `pages/data/BarcodesQR.vue` and `HelpPage.vue`.
+  - **Splitter peek.** Opens at 58%. The gripper dots only appear while peeking; on hover
+    the divider tints with accent and the dots brighten/scale.
+  - **Stock Overview row.** Image / level / name now have visible breathing room. Right
+    cluster (expiry, open, cart) buttons are larger. Recipe-count chip is gone. Hover no
+    longer "lifts" the row — instead the surface tints + border picks up accent. Walk the
+    list from top to bottom — the first row's outline should NOT clip under the page
+    chrome anymore.
+  - **Essential indicator.** Flag a stock item — the row picks up a 3px warning stripe on
+    the left edge AND a flag icon in the right cluster.
+  - **Open icon.** Open an item — the button colour pops in Pesto dark (primary, not the
+    barely-visible secondary).
+  - **Footer counts.** "Shown" reads in the default text colour (not primary). Per-level
+    counts use the stock-level palette. Flagged / Auto-add / Needs attention keep their
+    semantic tones.
+  - **Filter toggle.** On Stock Overview, My Products, and Cookbook overview, the
+    "Filters" button + badge + "Clear" all sit in the page's main toolbar row. No
+    awkward second toolbar row above the filter panel.
+- **Why deferred:** standing working-style — the user runs/tests all code; static read +
+  vue-tsc/lint is not browser proof.
+- **Recommended resolution:** **now / confirm in browser** (next session at the app).
+
 ## [OPEN] FU-189c — Phase E: pytest run pending (no Python on dev box)
 - **Raised:** 2026-06-18 (Phase E rename close-out)
 - **Type:** finding — verification gap

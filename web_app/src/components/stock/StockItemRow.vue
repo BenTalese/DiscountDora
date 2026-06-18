@@ -24,7 +24,12 @@
         :class="rowClasses"
         @click="emit('click', item.stock_item_id)"
     >
-        <q-card-section class="row items-center no-wrap q-py-sm q-gutter-x-sm">
+        <!-- Feedback 2026-06-18: essential items get a warning-toned left-edge
+             stripe so flagged rows scan from the page edge. Paired with the
+             flag icon in the right cluster — the stripe is ambient, the icon
+             is the tappable affordance (filter / open). -->
+        <div v-if="item.is_flagged" class="stock-row__essential-stripe" aria-hidden="true" />
+        <q-card-section class="row items-center no-wrap stock-row__body">
             <!-- ──────────────────────────────────────────────────────
                  Leading image slot (FU-125). First child so its left
                  edge sits at the section's natural left padding —
@@ -125,19 +130,18 @@
             <q-space />
 
             <!-- ──────────────────────────────────────────────────────
-                 Right cluster — expiry / #recipes / open / cart.
-                 C-1 Chunk 4 / L86–L88: expiry button in the right
-                 cluster. Two behaviours by state:
-                   - **No expiry set** → q-date picker (L87) so the
-                     user can pin a real date in one tap.
-                   - **Expiry set** → +1 / +7 / +14 / Clear menu
-                     (L88), replacing the old +7/+30/Clear.
+                 Right cluster — expiry / essential? / open / cart.
+                 Feedback 2026-06-18: recipe-count chip removed (visible on
+                 the detail page's Recipes tab). Buttons bumped from
+                 size="sm" to "md" for easier tap targets + more presence.
+                 Open uses primary tone so the active state pops.
+                 Essential flag echoes the left-edge stripe.
             ────────────────────────────────────────────────────────── -->
             <q-btn
                 flat
                 dense
                 round
-                size="sm"
+                size="md"
                 :icon="expiry.icon"
                 :color="expiry.colour"
                 @click.stop
@@ -189,39 +193,28 @@
                 </q-menu>
             </q-btn>
 
-            <!-- # recipes (decision 5 — kept; relabel later in C-2). -->
-            <q-btn
-                v-if="recipesUsingItem.length > 0"
-                flat
-                dense
-                round
-                size="sm"
-                :icon="ICONS.restaurant"
-                color="primary"
-                :aria-label="`Used in ${recipesUsingItem.length} recipe(s)`"
-                @click.stop="actions.seeRecipesUsing(item.stock_item_id)"
+            <!-- Essential flag — non-interactive, mirrors the left-edge
+                 stripe so the marker is visible from either side of the
+                 row. Tooltip explains why it stands out. -->
+            <q-icon
+                v-if="item.is_flagged"
+                :name="ICONS.flag"
+                size="20px"
+                color="warning"
+                class="stock-row__essential-icon"
             >
-                <q-badge floating color="primary">
-                    {{ recipesUsingItem.length }}
-                </q-badge>
-                <q-tooltip>
-                    <div class="text-weight-bold q-mb-xs">Used in recipes</div>
-                    <div
-                        v-for="r in recipesUsingItem"
-                        :key="r.recipe_id"
-                    >
-                        {{ r.name }}
-                    </div>
-                </q-tooltip>
-            </q-btn>
+                <q-tooltip>Essential — always shows in auto-generate</q-tooltip>
+            </q-icon>
 
-            <!-- Open / in-use toggle (decision 3 — kept in-row). -->
+            <!-- Open / in-use toggle. Feedback 2026-06-18: secondary tone
+                 was nearly invisible in Pesto dark — promote to primary
+                 when open so the state pops. -->
             <q-btn
                 flat
                 dense
-                size="sm"
+                size="md"
                 :icon="item.is_open ? ICONS.lock_open : ICONS.lock"
-                :color="item.is_open ? 'secondary' : undefined"
+                :color="item.is_open ? 'primary' : undefined"
                 :loading="openBusy"
                 @click.stop="onToggleOpen"
             >
@@ -254,7 +247,6 @@
     import { isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
-    import { useRecipeStore } from 'src/stores/recipeStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
@@ -298,12 +290,10 @@
     const stockLevelStore = useStockLevelStore();
     const stockLocationStore = useStockLocationStore();
     const locationStore = useLocationStore();
-    const recipeStore = useRecipeStore();
     const { showStockImages } = useImagePrefs();
 
     const { stockLevels } = storeToRefs(stockLevelStore);
     const { stockLocations } = storeToRefs(stockLocationStore);
-    const { recipes } = storeToRefs(recipeStore);
 
     // ── Level / location names ──────────────────────────────────────────
     const levelName = computed(() => {
@@ -350,18 +340,6 @@
     const locationName = computed(() => formatLocation(locationBreadcrumb.value, 'zone'));
     const locationFull = computed(() => formatLocation(locationBreadcrumb.value, 'full'));
     const locationHasFullDetail = computed(() => locationHasDetail(locationBreadcrumb.value));
-
-    // ── Recipes referencing this item ───────────────────────────────────
-    const recipesUsingItem = computed(() => {
-        const id = props.item.stock_item_id;
-        const out: { recipe_id: string; name: string }[] = [];
-        for (const r of recipes.value) {
-            if (r.ingredients.some((ing) => ing.stock_item_id === id)) {
-                out.push({ recipe_id: r.recipe_id, name: r.name });
-            }
-        }
-        return out;
-    });
 
     // ── Expiry derived state ────────────────────────────────────────────
     // Drives both the right-cluster button and the row-outline tone
@@ -518,16 +496,43 @@
     .stock-row {
         /* L78: rows get taller. ~64px target with comfortable padding. */
         min-height: 64px;
+        position: relative;
+        overflow: hidden; /* clip the essential stripe to the rounded border */
         transition:
             box-shadow var(--motion-fast) var(--motion-ease),
-            transform var(--motion-fast) var(--motion-ease),
             background-color var(--motion-fast) var(--motion-ease),
             border-color var(--motion-fast) var(--motion-ease);
         border: 1px solid var(--border-default, color-mix(in srgb, var(--text-primary) 12%, transparent));
     }
+    /* Feedback 2026-06-18: the prior `translateY(-1px)` lift clipped the
+       first row's outline under the page's sticky chrome and looked janky
+       at the edges. Swap for a no-translation hover treatment: surface
+       brightens + accent-tinted shadow + 1px border accent. Reads as a
+       polished card hover without the layout jitter. */
     .stock-row:hover {
-        box-shadow: var(--elevation-card-hover);
-        transform: translateY(-1px);
+        background: color-mix(in srgb, var(--q-accent) 4%, var(--surface-component));
+        border-color: color-mix(in srgb, var(--q-accent) 38%, transparent);
+        box-shadow: 0 1px 6px color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .stock-row__body {
+        padding: 10px 12px;
+        gap: 14px; /* more breathing room between image / level / name / cluster */
+    }
+    /* Feedback 2026-06-18: essentials get a quiet warning stripe on the
+       left edge. Paired with the right-cluster flag icon — the stripe is
+       passive (ambient marker), the icon explains why on hover. */
+    .stock-row__essential-stripe {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 3px;
+        background: var(--q-warning);
+        pointer-events: none;
+    }
+    .stock-row__essential-icon {
+        margin-left: 2px;
+        margin-right: 2px;
     }
 
     /* Status outline-by-status (decision 6). Colours via theme tokens. */

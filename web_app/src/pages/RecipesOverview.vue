@@ -44,6 +44,13 @@
                 label="New recipe"
                 @click="onCreateClick"
             />
+            <!-- Feedback 2026-06-18: filter toggle in the main toolbar so
+                 the FilterBar doesn't carry its own row of chrome. -->
+            <FilterToggleButton
+                v-model="filtersExpanded"
+                :active-count="activeFilterCount"
+                @clear="clearFilters"
+            />
         </div>
 
         <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe surface. -->
@@ -83,7 +90,12 @@
         </BaseDialog>
 
         <!-- ── Filter bar ─ standardised via FilterBar (A4) ───────── -->
-        <FilterBar :active-count="activeFilterCount" @clear="clearFilters">
+        <FilterBar
+            v-model="filtersExpanded"
+            :toolbar="false"
+            :active-count="activeFilterCount"
+            @clear="clearFilters"
+        >
             <template #filters>
             <div class="row q-gutter-sm items-center">
             <FilterChip v-model="favouritesOnly" :icon="ICONS.favorite" active-color="negative">
@@ -378,6 +390,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -464,6 +477,7 @@
     const loading = ref(false);
 
     // ── Filter state ────────────────────────────────────────────────
+    const filtersExpanded = ref(false);
     const searchText = ref('');
     const favouritesOnly = ref(false);
     const cookableNowOnly = ref(false);
@@ -629,7 +643,7 @@
 
     // A7 — sticky footer counts over the FILTERED view.
     const footerCounts = computed(() => [
-        { label: 'Shown', value: filteredRecipes.value.length, tone: 'primary' as const },
+        { label: 'Shown', value: filteredRecipes.value.length },
         {
             label: 'Cookable now',
             value: filteredRecipes.value.filter((r) => r.cookable).length,

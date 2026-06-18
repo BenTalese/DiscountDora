@@ -1,14 +1,13 @@
 <template>
     <q-page padding>
         <!-- ── Header ─────────────────────────────────────────────── -->
-        <div class="row items-center q-mb-md">
-            <!-- Counts moved to the sticky PageCountsFooter (A7). -->
-            <q-space />
+        <!-- Feedback 2026-06-18: search + filter toggle merged into the
+             header row so the FilterBar doesn't sit on its own line. -->
+        <div class="row items-center q-mb-md q-gutter-sm">
             <BaseButton
                 variant="secondary"
                 :icon="ICONS.link_off"
                 :label="`Stock items without products (${stockItemsMissingProducts.length})`"
-                class="q-mr-sm"
                 :disable="stockItemsMissingProducts.length === 0"
                 @click="orphansOpen = true"
             />
@@ -19,6 +18,23 @@
                 :loading="loading"
                 @click="loadAll"
             />
+            <q-space />
+            <FilterToggleButton
+                v-model="filtersExpanded"
+                :active-count="activeFilterCount"
+                @clear="clearFilters"
+            />
+            <q-input
+                v-model="searchText"
+                dense
+                outlined
+                clearable
+                debounce="200"
+                placeholder="Search products"
+                style="min-width: 240px"
+            >
+                <template #prepend><q-icon :name="ICONS.search" /></template>
+            </q-input>
         </div>
 
         <!-- ── Bulk-select banner ─────────────────────────────────── -->
@@ -95,19 +111,12 @@
         </q-banner>
 
         <!-- ── Filters ─ standardised via FilterBar (A4) ──────────── -->
-        <FilterBar :active-count="activeFilterCount" @clear="clearFilters">
-            <template #search>
-                <q-input
-                    v-model="searchText"
-                    dense
-                    outlined
-                    clearable
-                    debounce="200"
-                    placeholder="Search products"
-                >
-                    <template #append><q-icon :name="ICONS.search" /></template>
-                </q-input>
-            </template>
+        <FilterBar
+            v-model="filtersExpanded"
+            :toolbar="false"
+            :active-count="activeFilterCount"
+            @clear="clearFilters"
+        >
             <template #filters>
             <div class="row q-gutter-sm items-center">
             <q-toggle v-model="onDealOnly" label="On deal now" dense />
@@ -550,6 +559,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
@@ -603,6 +613,7 @@
     }
 
     // ── Filters ─────────────────────────────────────────────────────
+    const filtersExpanded = ref(false);
     const searchText = ref('');
     const onDealOnly = ref(false);
     const includeInactive = ref(false);
@@ -677,7 +688,7 @@
 
     // A7 — sticky footer counts over the FILTERED view.
     const footerCounts = computed(() => [
-        { label: 'Shown', value: filteredProducts.value.length, tone: 'primary' as const },
+        { label: 'Shown', value: filteredProducts.value.length },
         {
             label: 'On deal',
             value: filteredProducts.value.filter(onSpecial).length,

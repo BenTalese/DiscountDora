@@ -69,20 +69,14 @@
             </q-card-section>
         </q-card>
 
-        <q-tabs
+        <DoraTabs
             v-model="tab"
-            dense
-            class="text-primary"
-            active-color="primary"
-            indicator-color="primary"
-            align="left"
-        >
-            <q-tab name="guides" :icon="ICONS.menu_book" label="Guides" no-caps />
-            <q-tab name="changelog" :icon="ICONS.new_releases" label="What's new" no-caps />
-            <q-tab name="about" :icon="ICONS.info" label="About" no-caps />
-        </q-tabs>
-
-        <q-separator />
+            :tabs="[
+                { name: 'guides', label: 'Guides', icon: ICONS.menu_book },
+                { name: 'changelog', label: `What's new`, icon: ICONS.new_releases },
+                { name: 'about', label: 'About', icon: ICONS.info },
+            ]"
+        />
 
         <q-tab-panels v-model="tab" animated class="bg-transparent">
             <!-- Guides ──────────────────────────────────────────── -->
@@ -211,6 +205,7 @@
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
+    import DoraTabs from 'src/components/DoraTabs.vue';
     import HelpApiService, {
         type ChangelogEntry,
         type VersionInfo

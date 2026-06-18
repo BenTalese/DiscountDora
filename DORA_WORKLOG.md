@@ -9,6 +9,131 @@ next.
 
 ---
 
+## 2026-06-18 — Feedback pass: Stock Detail + Stock Overview polish
+**Trigger:** User shifted from the product-vision pathway to a bundled batch of
+UX feedback covering Stock Item Detail and Stock Overview. Per the user's choice
+("all in one pass"), everything landed in a single session.
+
+**Scope (20 task units; all completed):**
+1. **DoraTabs** — new shared sliding-underline tabs (mirrors
+   `MainMenuButtonStrip` indicator: accent colour, glow, wobble), shrunk to
+   tab-row scale. Replaces `q-tabs` on `StockItemDetailPage`,
+   `pages/data/BarcodesQR.vue`, and `HelpPage.vue`. Inactive tabs use default
+   text; only the indicator carries the accent (less per-tab colour, matching
+   the main menu's posture).
+2. **Stock Item Detail — header & toolbar trim.** Removed the
+   Mark-open / Set-expiry / Add-to-list trio (all live inline already); the
+   level chip moved out of the header into a new "Level" row under "Name" on
+   the Overview tab, with "Updated X ago" to its right. Show QR + Delete still
+   in the top row.
+3. **Level updated visibility.** The backend already bumps
+   `stock_level_last_updated` on every level save (`update_stock_item.py`);
+   the timestamp was just tucked into the bottom row of the q-list and didn't
+   read as "fresh." Pairing it with the level picker makes the freshness
+   obvious. (`relativeTime` re-evaluates as `detail` rehydrates.)
+4. **Set-expiry inline button** picks up the "Set" label that used to live on
+   the top toolbar; +1d / +7d / +14d / Set / × cluster intact.
+5. **Placeholders use `—`** instead of "Not set" across Location / Stock group
+   / Usual store / Expiry / (new) Level.
+6. **Location & stock-group clear bug fix.** Root cause: both relationships
+   are mapped `lazy="noload"`, so the existing
+   `_StockItem.stock_location = None` (and the no-flag stock_group path) was a
+   silent no-op — the FK column never went dirty, the save returned 204, and
+   the next detail fetch came back with the old value, looking like the
+   picker "flipped back." Mirrored the `clear_usual_store` pattern: new
+   `clear_stock_location` / `clear_stock_group` flags drive the FK column
+   directly; the SPA routes the picker's X (both `@clear` and the null branch
+   of `@update:model-value`) through them. The present-but-null fallback path
+   also writes the FK now, so a stray null still works.
+7. **Padding** — embedded peek mode used to ride `q-pa-sm`; both modes now
+   use `q-pa-md` so image / inputs / controls don't touch the edge.
+8. **Notes** is now a regular field row in the q-list (autogrow inline input)
+   rather than a special calm-textarea block below the list.
+9. **Stock Overview splitter** — opens at 58% (the C-1b.2 50% felt too narrow
+   to the user). Drag-range clamped to `[40, 70]` while peeking.
+10. **Splitter gripper handle.** A triple-dot motif painted only while a peek
+    is open. Accent hover lifts the dots + tints the divider background so
+    draggability reads at a glance. When no peek is open the handle vanishes
+    so the empty list keeps clean edges.
+11. **Footer "Shown" tone** — back to default text colour; coloured counts
+    (level palette / flagged / attention) carry the meaning. Applied to all
+    `PageCountsFooter` consumers (Stock Overview, My Products, Cookbook
+    overview).
+12. **Stock item row spacing** — gap between image / level / name bumped
+    from `q-gutter-x-sm` to a 14px gap.
+13. **Right-cluster buttons** bumped from `size="sm"` to `size="md"` for
+    easier tap targets + more presence.
+14. **Hover treatment** swapped — the prior `translateY(-1px)` clipped the
+    first row's outline under the page chrome. New treatment: surface
+    brightens, border picks up an accent tint, soft shadow — no layout jitter.
+15. **Recipe-count chip on the row removed** — visible on the detail page's
+    Recipes tab; was just noise on the overview.
+16. **Filter toggle relocates to the page toolbar.** New `FilterToggleButton`
+    companion to `FilterBar`. Pages now embed the toggle (with badge + Clear)
+    in their main toolbar; `FilterBar` takes `:toolbar="false"` and collapses
+    to just the slide-out panel. Wired into Stock Overview, My Products,
+    Cookbook overview.
+17. **Essential indicator** — warning-toned 3px stripe down the row's left
+    edge AND a flag icon in the right cluster (icon-only, has tooltip;
+    non-interactive, intentional). Per the user's choice both run together.
+18. **Open icon promoted** from `secondary` to `primary` when open — the old
+    treatment was nearly invisible in Pesto dark.
+
+**Files touched:**
+- New: `web_app/src/components/DoraTabs.vue`,
+  `web_app/src/components/FilterToggleButton.vue`.
+- Stock surfaces: `web_app/src/pages/StockItemDetailPage.vue`,
+  `web_app/src/pages/StockOverview.vue`,
+  `web_app/src/components/stock/StockItemRow.vue`,
+  `web_app/src/composables/useStockFilters.ts`.
+- Other tab consumers: `web_app/src/pages/data/BarcodesQR.vue`,
+  `web_app/src/pages/HelpPage.vue`.
+- FilterBar refactor consumers: `web_app/src/components/FilterBar.vue`,
+  `web_app/src/pages/MyProductsPage.vue`,
+  `web_app/src/pages/RecipesOverview.vue`.
+- Backend clear-flag wiring: `dora_api/features/stock_items/update_stock_item.py`,
+  `web_app/src/services/api/stockItemApiService.ts`.
+
+**Verification**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- **Browser pass NOT run.** Standing working-style — the user runs/tests in
+  the browser. Logged as **FU-222** with a focused list of things to confirm.
+- **Pytest NOT run** (same Python-stub limitation as FU-189c). New
+  follow-up **FU-223** to verify the location + group clear-flag paths in the
+  backend test suite next time pytest can be exercised.
+
+**Engineering-standards close-gate**
+- R-001 (componentisation): two new shared components — `DoraTabs`
+  consolidates three previously hand-rolled `q-tabs` instances;
+  `FilterToggleButton` consolidates the filter-toggle pattern that used to be
+  bundled inside `FilterBar` and produced an awkward second toolbar row.
+- R-002 (theme tokens only): all new styles route through `var(--q-accent)`,
+  `var(--q-warning)`, `var(--surface-component)`, `var(--text-primary)` etc.
+  No hex/`rgba()` introduced. The DoraTabs indicator picks up
+  `--nav-slide-flash` (the same token the main menu uses).
+- R-003 (single source of truth): the level-updated timestamp continues to be
+  server-owned (`stock_level_last_updated`), bumped server-side on each
+  level save. The SPA only renders it.
+- R-007 (scope discipline): held to the feedback list. Did NOT do the
+  cross-app "assessment of colour usage" the user flagged as a possible
+  separate task — logged as **FU-224**.
+- R-011 (framework-idiomatic): Vue 3.4 `defineModel` + `defineModel`-paired
+  v-model used to share `expanded` state between the new
+  `FilterToggleButton` and `FilterBar`.
+
+**Logs**
+- This entry; `CHANGELOG.md` Unreleased "Changed" bullet covers the
+  user-visible surface changes.
+- New: **FU-222** (browser verify the feedback pass), **FU-223** (pytest on the
+  clear-flag changes), **FU-224** (colour-usage assessment).
+
+**Next:** The user runs the app and walks the surface. If anything in the
+feedback list doesn't read as intended, that's the next pass. Otherwise back
+to the product-vision pathway.
+
+---
+
 ## 2026-06-18 — Phase E landed — Merchant → Store rename + usual_store_id + Stores CRUD + image upload
 **Trigger:** Phase E of `PRODUCTS_OVERLAY_RUNBOOK.md` was the next major beat. User chose "One
 pass, all chunks" — full rename + new feature work in a single session.

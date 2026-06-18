@@ -9,6 +9,145 @@ next.
 
 ---
 
+## 2026-06-18 — FU-219 redone — companion FE now visually identical to Dora
+**Why redone:** the original FU-219 (2026-06-17) scaffolded the companion's FE with its own
+palette and used vanilla Quasar primitives. User asked for the look/feel to match Dora as
+closely as possible (push affordances aside) and surfaced concern about whether files had been
+"obliterated". Did both: re-ported faithfully against Dora's pre-Phase-D state AND explained
+every deletion.
+
+**Inventory of deletions (Phase D) re-confirmed accurate** — checked Dora's `web_app/src/` and
+confirmed nothing was accidentally removed:
+- All four supermarket logos (Aldi/Coles/IGA/Woolworths) + `MerchantLogo.vue` still present
+  in Dora and used by My Products / Stock Item Detail / ProductChip.
+- The Dora-side `Merchant` entity + `/api/merchants` endpoint untouched (Phase E rename
+  territory).
+- `scrapedProductOffer.ts` / `offerSortByOptions.ts` only existed to support the in-app
+  live search; they were unused after `ProductSearch.vue` / `productStore` search state
+  was removed. **Restored in the companion** (the only place they're still needed).
+- `scrapedProductOfferLogic.ts` was rewritten to keep `discountPercent` only (consumed by
+  Dora's DashboardPage best-deals card); the rich version is now in the companion.
+- `ImageService` default class had no consumers after `ProductSearchCard.vue` was removed;
+  `wrapAsDataUrl` (the actual encoder) is still there in `imageService.ts`.
+
+**Re-port (in `../dora-companion/web_app/`):**
+- Vendored the whole Dora design system: `css/{colours,tokens,themes,motion,app,quasar.variables}.scss`,
+  `style/icons.ts`, `boot/fonts.ts` (Nunito + Urbanist + Inter + Lexend + Plus Jakarta Sans
+  fontsource packages added to package.json), the `Cute Dino` font asset, the Pesto palette
+  applied at runtime by a small `boot/theme.ts` (Dora's themeService trimmed to one theme
+  since the companion has no user-driven theme switching).
+- Vendored the components: `BaseButton`, `BaseDialog`, `FilterBar`, `AppSpinner`,
+  `TrendSparkline`, `MerchantLogo`, `AldiLogo`, `ColesLogo`, `IgaLogo`, `WoolworthsLogo`
+  (+ the WW logo asset), plus the menu chrome (`HamburgerButton`, `ApplicationLogo` —
+  re-titled "Dashy Dora · Companion", `MainMenuButtonStrip` + `MainMenuButton`,
+  `SideMenuButton`, `PageTitle`, `menuButtonProps`, `useMenuLinkActive`),
+  `components/settings/ProviderHealthChip`.
+- Restored `models/scrapedProductOffer.ts` + `helpers/scrapedProductOfferLogic.ts` (rich
+  version: `isOfferOnSpecial`, `unitPrice`, `unitPriceLabel`, six sort functions, etc.; the
+  Dora-only `findSavedProduct` dropped — companion has no saved-product concept) +
+  `helpers/offerSortByOptions.ts`.
+- **`ProductSearch.vue`** ported verbatim from git `941d478^` then adapted: dropped Save / Link
+  to stock item / Quick-add (Dora-only); dropped `useProductStore` and the five Dora-side
+  stores it pulled in; replaced with the companion's `ProductSearchApiService` + local
+  reactive state; added per-card and batch **Push to Dora** with a result dialog that
+  surfaces `accepted/skipped/failed` and nudges to Dora's API access page when
+  `store_not_mapped` quarantines surface. **The comparison tray + dialog are kept** —
+  same selection state now drives both compare and batch-push. Every filter, status banner,
+  empty state, search-cancel token, and the `Cute Dino` brand wave is byte-for-byte Dora.
+- **`MerchantsSettings.vue`** ported verbatim from git `941d478^` then adapted: collapsed the
+  two split clients (`MerchantApiService` + `MerchantManagementApiService`) into the
+  companion's single `MerchantsApiService` (method names remapped — `getMerchantsAsync` →
+  `listAsync`, `toggleMerchantAsync` → `toggleAsync`, `getDataProvidersHealthAsync` →
+  `providerHealthAsync`, `runDataProviderHealthCheckAsync` → `runProviderHealthCheckAsync`,
+  `getApiHealthAsync` → `isHealthyAsync`). `ProviderHealthChip` re-typed against
+  `models/merchant`. Wrapped in `q-page` (it was a `q-card` inside Dora's SettingsShell).
+- **Chrome** — `App.vue` now mirrors Dora's `MainLayout`: bordered header with reveal on
+  small screens, `dora-toolbar-surface` + `dora-titlebar` classes, `ApplicationLogo`,
+  `PageTitle` on small screens, `MainMenuButtonStrip` for desktop, `SideMenuButton` drawer
+  for mobile, three nav entries (Product search / Merchants / Dora target).
+
+**Verified:**
+- Companion `npm install` (added five `@fontsource-variable/*` packages), `vue-tsc --noEmit`
+  clean, `vite build` clean (~93 KB main JS gzipped, ~46 KB CSS gzipped — typical for a
+  Quasar SPA with all the brand assets).
+- Dora-side **untouched**: pytest still **405/405**, `vue-tsc` + `npm run lint` clean.
+
+**Logs:**
+- Companion README has the Frontend section from the earlier FU-219; the look-and-feel
+  upgrade is invisible in docs (the README already said "Vue 3 + Quasar + Pinia").
+
+---
+
+## 2026-06-17 — Phase D landed — `merchant_api/` + `emailer/` decommissioned from Dora; Product Search nav re-pointed at the admin URL
+**Status:** Phase D of the products-as-overlay runbook is **code-complete and verified backend-side**.
+The Dora repo no longer knows the companion exists. Browser pass still pending.
+
+**What happened**
+- **Setting:** new `AppSetting.product_search_url` (entity + table + migration `f8b2d4a6c1e3`
+  + admin DTO + admin PATCH with `http(s)://` validation + System Settings input). Open question
+  about validation is documented inline: any other scheme is rejected so a typo can't render a
+  hostile link.
+- **Nav:** `useProductSearchUrl()` composable. `MenuButtonProps` now supports `href` (external,
+  opens in new tab) + `disabled` + `disabledTooltip`. `SideMenuButton` + `MainMenuButton` render
+  three variants. `MainLayout.linksList` is computed: Product Search entry **hidden** when
+  `features.products` is false, **disabled with hint** when products on but URL unset,
+  **external link** when both are good. The destination is **never named**.
+
+**Strip — frontend (delete + simplify)**
+- Deleted: `merchantApiService.ts`, `merchantManagementApiService.ts`, `MerchantsSettings.vue`,
+  `ProductSearch.vue`, `ProductSearchCard.vue`, `components/settings/ProviderHealthChip.vue`,
+  `stores/merchantStore.ts`, `models/scrapedProductOffer.ts`, `helpers/offerSortByOptions.ts`,
+  `/settings/admin/merchants` + `/product-search` routes, the "Merchants" admin sidebar entry.
+- Simplified: `axiosHttpClient.ts` no longer carries an `ApiBackend` arg — sole base URL,
+  `withCredentials: true`, fewer lines; `healthApiService.ts` only probes dora_api; `productApiService.ts`
+  loses the `searchByTermAsync` mapi path; `productStore.ts` loses the in-app search /
+  filter / sort / offer state; `helpers/scrapedProductOfferLogic.ts` reduced to the one
+  function (`discountPercent`) that DashboardPage still uses; `boot/stores.ts` drops
+  the `useMerchantStore` boot prime; `env.d.ts` drops `VITE_MERCHANT_API_BASE_URL`.
+- Soften: `MerchantLogo.vue` doc-comment (still rendered on My Products / Stock Item Detail);
+  `imageService.ts` doc-comments + dead `decodeBase64Image` removed.
+
+**Strip — backend**
+- `audit_event.py`: `SOURCE_MAPI` → `SOURCE_MAPI_LEGACY`, `SOURCE_EMAILER` → `SOURCE_EMAILER_LEGACY`
+  (read-only, for historical audit rows; nothing in `dora_api` writes them now).
+- Cleaned doc-strings in `email_sender.py`, `logging_setup.py`, `profile.py`, `utils.py`,
+  `price_history.py`, `list_actions.py`, `get_audit_events.py`.
+
+**Strip — infra**
+- `desktop_app.py`: spawn only dora_api; drop the random-port merchant Flask + the SPA
+  `?desktop_mapi=` query-string injection.
+- `compose.yml` + `startup.sh` + `Dockerfile`: drop merchant_api + emailer; drop the 5172 port;
+  drop the `DORA_EMAIL_ENABLED` block (the transactional `DORA_SMTP_*` vars stay).
+- `nginx.conf`: drop the 5172 proxy comment.
+- `dora.spec`: drop the `merchant_api` submodule collection + the merchant-data-provider seed
+  JSON + the `emailer/templates` data line.
+- `.env` / `.env.example`: drop `MAPI_*` + deals-email config; transactional SMTP stays.
+- `.github/workflows/ci.yml`: drop the `compileall` smoke job.
+
+**Deleted** (`rm -rf`)
+- `merchant_api/` (the standalone scraper Flask app).
+- `emailer/` (the half-finished weekly-deals email service).
+
+Both already live in `../dora-companion` — the **same source tree** the user can run, with
+its own venv, its own CI, and a FE that talks to the companion BE (FU-219).
+
+**Verified**
+- Full pytest **405/405** (was 401/401 — +4 new `test_product_search_url_setting.py` cases).
+- `flask db upgrade` clean base→head `f8b2d4a6c1e3` on a fresh SQLite.
+- `vue-tsc --noEmit` clean, `npm run lint` clean.
+
+**Logs**
+- This entry; [CHANGELOG.md](CHANGELOG.md) — Unreleased with the user-visible bits.
+- FU-186 flagged `[RESOLVED?]`: moves to RESOLVED once a browser pass confirms the re-pointed
+  nav + the admin URL input.
+- Runbook Status: Phase D = **DONE**, Phase E unblocked.
+
+**Next:** Phase E — `Merchant → Store` rename (FU-189). With `merchant_api/` gone, "merchant" =
+the entity only and the rename is mechanical. Phase F (Your prices intelligence, FU-214 product
+surfaces, FU-180 preferred store) waits behind that or runs in parallel as the user prefers.
+
+---
+
 ## 2026-06-17 — FU-210 revisit — restored the axed onboarding code; smaller, intentional trim instead
 **What happened:** earlier today I interpreted "remove the illustrative hero-loop persona preview"
 (FU-210 tail) as "delete the cinematic Story stage + the loop component + the Finish recap + the

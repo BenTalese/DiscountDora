@@ -1,52 +1,35 @@
 import type { Product } from 'src/models/product';
-import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
 import type { PriceHistory } from 'src/models/stockItemDetail';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
 import type { Page } from './queryStringBuilder';
 
 export default class ProductApiService {
-    private dapiHttpClient: AxiosHttpClient;
-    private mapiHttpClient: AxiosHttpClient;
-
-    constructor() {
-        this.dapiHttpClient = new AxiosHttpClient('dora');
-        this.mapiHttpClient = new AxiosHttpClient('merchant');
-    }
+    private httpClient = new AxiosHttpClient();
 
     createAsync = async (productToCreate: CreateProductCommand): Promise<CreatedResponse> =>
-        await this.dapiHttpClient.post<CreatedResponse>('/products', productToCreate);
+        await this.httpClient.post<CreatedResponse>('/products', productToCreate);
 
     getAllAsync = async (): Promise<Page<Product>> =>
-        await this.dapiHttpClient.get<Page<Product>>('/products');
+        await this.httpClient.get<Page<Product>>('/products');
 
     /** Top-N on-special products by discount %, ranked + sliced server-side
      *  (state-ownership §8.2) so the dashboard needn't download every product. */
     getBestDealsAsync = async (limit = 3): Promise<Product[]> =>
-        await this.dapiHttpClient.get<Product[]>(`/products/best-deals?limit=${limit}`);
+        await this.httpClient.get<Product[]>(`/products/best-deals?limit=${limit}`);
 
     getPriceHistoryAsync = async (productId: string): Promise<PriceHistory> =>
-        await this.dapiHttpClient.get<PriceHistory>(`/products/${productId}/price-history`);
-
-    searchByTermAsync = async (searchQuery: SearchByTermQuery): Promise<ScrapedProductOffer[]> =>
-        await this.mapiHttpClient.post<ScrapedProductOffer[]>('/products/search', searchQuery);
+        await this.httpClient.get<PriceHistory>(`/products/${productId}/price-history`);
 
     updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> => {
         const { product_id, ...payload } = productToUpdate;
-        return await this.dapiHttpClient.patch<Product>(`/products/${product_id}`, payload);
+        return await this.httpClient.patch<Product>(`/products/${product_id}`, payload);
     };
 }
 
-export type SearchByTermQuery = {
-    merchants_to_search: Array<string>;
-    result_limit: number;
-    search_term: string;
-};
-
 export type CreateProductCommand = {
     brand: string | null;
-    // FU-014 — `data:image/...;base64,...` string. `merchant_api` ships
-    // raw base64; wrap via `wrapAsDataUrl` (imageService) before calling.
+    // FU-014 — `data:image/...;base64,...` string.
     image: string | null;
     is_active: boolean;
     is_available: boolean;

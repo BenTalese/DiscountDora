@@ -20,6 +20,9 @@ export type AppSettings = {
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
     default_days_until_stocktake_alert: number;
+    // Phase D / FU-186 — admin-set URL the Product Search nav opens.
+    // Empty string ⇒ unset; the nav entry renders disabled with a hint.
+    product_search_url: string;
 };
 
 export type UpdateAppSettingsCommand = Partial<AppSettings>;

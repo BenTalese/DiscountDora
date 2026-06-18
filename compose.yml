@@ -1,8 +1,9 @@
 # DiscountDora — monolithic-container compose file.
 #
-# All three Python services (dora_api, merchant_api, emailer) run
-# inside one container alongside nginx serving the built SPA. See
-# Dockerfile + startup.sh for the runtime story.
+# Phase D / FU-186: dora_api runs alongside nginx serving the built SPA.
+# The retailer-scraping `merchant_api` + the deals `emailer` live in the
+# sibling **dora-companion** repo now — Dora never calls out; sources
+# call in via `POST /api/ingest`. See Dockerfile + startup.sh.
 #
 # ── Overrides (host customisations without editing this file) ─────────
 # Drop a `compose.override.yml` next to this file. Compose merges it
@@ -11,11 +12,6 @@
 #   - swap the image tag
 #   - widen exposed ports
 #   - bump healthcheck intervals
-#
-# ── Email service (off by default) ────────────────────────────────────
-# Set DORA_EMAIL_ENABLED=true in your .env to have startup.sh spin up
-# the emailer process alongside the APIs. Configure SMTP via the
-# DORA_SMTP_* vars in .env.example.
 
 services:
   discount_dora:
@@ -56,11 +52,9 @@ services:
       - DORA_API_PORT=${DORA_API_PORT:-5170}
       - DORA_LOG_LEVEL=${DORA_LOG_LEVEL:-ERROR}
       - DORA_DEBUG=${DORA_DEBUG:-}
-      - MAPI_API_PORT=${MAPI_API_PORT:-5172}
-      - MAPI_LOG_LEVEL=${MAPI_LOG_LEVEL:-ERROR}
 
-      # ── Email (opt-in) ─────────────────────────────────────────────
-      - DORA_EMAIL_ENABLED=${DORA_EMAIL_ENABLED:-false}
+      # ── Transactional email (auth flows). Sender runs in dry-run
+      #    mode when DORA_SMTP_USERNAME is unset.
       - DORA_SMTP_HOST=${DORA_SMTP_HOST:-}
       - DORA_SMTP_PORT=${DORA_SMTP_PORT:-587}
       - DORA_SMTP_USER=${DORA_SMTP_USER:-}
@@ -72,7 +66,6 @@ services:
 
     ports:
       - "5170:5170"   # dora_api
-      - "5172:5172"   # merchant_api
       - "5174:5174"   # nginx (SPA)
 
     # Named volumes per data type so backups / migrations can target

@@ -78,10 +78,9 @@ def validate_production_requirements(extra: Sequence[str] = ()) -> None:
     missing. Prints a friendly multi-line error listing every missing
     var, then exits.
 
-    `extra` lets each service add service-specific requirements without
-    touching the shared list (e.g. merchant_api could demand an
-    IGA_STORE_ID, or a future SMTP fan-in could require SMTP_HOST when
-    DORA_EMAIL_ENABLED=true).
+    `extra` lets a caller add service-specific requirements without
+    touching the shared list (e.g. a future SMTP fan-in could require
+    SMTP_HOST when DORA_EMAIL_ENABLED=true).
 
     Bypassed when DORA_SKIP_PROD_VALIDATION=true — the desktop bundle
     sets this because its required-vars story is different (no public

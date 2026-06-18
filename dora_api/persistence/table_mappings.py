@@ -91,6 +91,9 @@ def configure_mappings(db: SQLAlchemy):
         # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
         Column("expiring_soon_window_days", Integer, nullable=False, server_default="7"),
         Column("default_days_until_stocktake_alert", Integer, nullable=False, server_default="0"),
+        # Phase D / FU-186 — admin-set URL the Product Search nav opens.
+        # Empty string ⇒ unset; see entity comment.
+        Column("product_search_url", String(500), nullable=False, server_default=""),
     )
 
     product_offer_table = Table(

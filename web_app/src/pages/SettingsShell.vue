@@ -125,12 +125,8 @@
     ];
 
     const adminSections: Section[] = [
-        {
-            path: '/settings/admin/merchants',
-            label: 'Merchants',
-            caption: 'Enable/disable scrapers, health',
-            icon: ICONS.storefront
-        },
+        // Phase D / FU-186 — the "Merchants" admin page targeted the standalone
+        // merchant_api scraper backend; that backend left this repo.
         {
             path: '/settings/admin/users',
             label: 'Users',

@@ -56,8 +56,7 @@ def configure_logging(
     request-context filter. Safe to call more than once.
 
     Args:
-        service_name: Short identifier ("dapi", "mapi", "emailer"). Used
-            for the log file name.
+        service_name: Short identifier ("dapi"). Used for the log file name.
         log_dir: Directory the rotating log file goes in. Created if
             missing.
         debug: Pull root + module loggers up to DEBUG. Off in production.

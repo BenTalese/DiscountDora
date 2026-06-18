@@ -28,7 +28,7 @@
 
     const props = withDefaults(
         defineProps<{
-            /** Merchant name as it appears in the merchant_api config. */
+            /** Merchant display name as it appears on `Product.merchant_name`. */
             name: string;
             height?: number;
             width?: number;

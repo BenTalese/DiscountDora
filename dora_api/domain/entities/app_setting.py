@@ -60,6 +60,14 @@ class AppSetting(BaseEntity):
     # cadence (0 = off, matching the previous hardcoded create default).
     expiring_soon_window_days: int = 7
     default_days_until_stocktake_alert: int = 0
+    # Phase D / FU-186 — install-wide URL the Product Search nav entry opens
+    # in a new tab when product data is present. Set by the install operator
+    # to point at whatever search surface they run themselves (a sibling
+    # companion, a static page, etc — Dora doesn't know or care).
+    # Empty string ⇒ no URL configured; the nav entry renders disabled with a
+    # "Set up in Settings" hint (R-014 reveal-and-disable). See
+    # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
+    product_search_url: str = ""
 
     class Fields(BaseEntity.Fields):
         LLM_ENABLED = "llm_enabled"
@@ -75,3 +83,4 @@ class AppSetting(BaseEntity):
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         DEFAULT_DAYS_UNTIL_STOCKTAKE_ALERT = "default_days_until_stocktake_alert"
+        PRODUCT_SEARCH_URL = "product_search_url"

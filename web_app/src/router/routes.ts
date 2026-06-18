@@ -66,7 +66,9 @@ const routes: RouteRecordRaw[] = [
             { path: 'stocktake', component: () => import('pages/StocktakePage.vue'), meta: { title: 'Stocktake' } },
             { path: 'stocktake/run', component: () => import('pages/StocktakeRunner.vue'), meta: { title: 'Stocktake · running' } },
             { path: 'stock/:id', component: () => import('pages/StockItemDetailPage.vue'), meta: { title: 'Stock item' } },
-            { path: 'product-search', component: () => import('pages/ProductSearch.vue'), meta: { title: 'Product search' } },
+            // Phase D / FU-186 — the in-app `/product-search` route is gone.
+            // The Product Search nav entry now opens `AppSetting.product_search_url`
+            // in a new tab when product data is present. No route remains here.
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price history' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
@@ -217,11 +219,9 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AboutSettings.vue'),
                         meta: { title: 'About' }
                     },
-                    {
-                        path: 'admin/merchants',
-                        component: () => import('pages/settings/MerchantsSettings.vue'),
-                        meta: { title: 'Merchants' }
-                    },
+                    // Phase D / FU-186 — the admin Merchants page targeted the
+                    // standalone merchant_api scraper backend (provider toggles +
+                    // health). That backend left this repo, so the page goes too.
                     {
                         path: 'admin/users',
                         component: () => import('pages/settings/UsersAdminSettings.vue'),

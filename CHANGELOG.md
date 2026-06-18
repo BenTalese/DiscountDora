@@ -5,7 +5,21 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Removed
+- **In-app live product search is gone (Phase D / FU-186).** Dora no longer scrapes retailer
+  sites or runs the standalone `merchant_api` backend; the "Product Search" page and the admin
+  "Merchants" scraper-provider settings page are retired. The retailer-scraping side lives in a
+  sibling project the operator runs themselves; it pushes data into Dora through
+  `POST /api/ingest` (the C-10 ingestion seam). The standalone `emailer/` weekly-deals service
+  retired alongside it.
+
 ### Added
+- **Product Search nav opens an admin-configured URL (Phase D / FU-186).** A new install-wide
+  setting under **Settings → System → Product search** (admin only) lets the operator point the
+  in-app "Product Search" nav entry at whatever search surface they run themselves. The entry is
+  hidden when no product data is present, disabled with a "set up in Settings" hint when products
+  is on but no URL is configured, and opens the configured URL in a new tab otherwise. The
+  destination is never named in the app.
 - **Power-user docs for sourcing product data (FU-212).** New
   [`docs/INGESTION_GUIDE.md`](docs/INGESTION_GUIDE.md) covers minting an API key, the store-mapping
   step (no auto-create), and the full `POST /api/ingest` contract — for admins who want to populate

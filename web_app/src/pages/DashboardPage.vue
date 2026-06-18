@@ -1369,8 +1369,7 @@
         background: var(--c-accent-soft);
         padding: 4px;
         flex-shrink: 0;
-        // B9.8: centre the mascot in its padded square (see same comment
-        // in ProductSearch.vue .dora-empty-mascot).
+        // B9.8: centre the mascot in its padded square.
         :deep(img) {
             width: 100%;
             height: 100%;

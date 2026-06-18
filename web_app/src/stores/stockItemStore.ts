@@ -17,7 +17,7 @@ import { readonly, ref } from 'vue';
 const stockItemApiService = new StockItemApiService();
 
 function stockItemUrl(stockItemId: string): string {
-    return `${resolveBaseURL('dora')}/stock-items/${stockItemId}`;
+    return `${resolveBaseURL()}/stock-items/${stockItemId}`;
 }
 
 // Pick the queue kind that best describes a PATCH payload, so the queued

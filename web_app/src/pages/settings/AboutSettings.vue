@@ -56,12 +56,10 @@
                     </q-item-section>
                 </q-item>
 
-                <q-item>
-                    <q-item-section>
-                        <q-item-label>Merchant API endpoint</q-item-label>
-                        <q-item-label caption class="text-mono">{{ merchantApiUrl }}</q-item-label>
-                    </q-item-section>
-                </q-item>
+                <!-- Phase D / FU-186: the standalone merchant_api backend
+                     was retired from this repo; the SPA only talks to dora_api
+                     now. The retailer-scraping side runs in the sibling
+                     dora-companion repo + pushes via POST /api/ingest. -->
 
                 <!-- Repo is private — public-repo + public issue
                      links removed. Bug reports go through whatever
@@ -92,16 +90,6 @@
             return `${protocol}//${hostname}:5170/api`;
         }
         return 'http://localhost:5170/api';
-    });
-
-    const merchantApiUrl = computed(() => {
-        const env = import.meta.env.VITE_MERCHANT_API_BASE_URL;
-        if (env) return env;
-        if (typeof window !== 'undefined') {
-            const { protocol, hostname } = window.location;
-            return `${protocol}//${hostname}:5172/api`;
-        }
-        return 'http://localhost:5172/api';
     });
 
     const buildLabel = computed(() => (import.meta.env.PROD ? 'production' : 'dev'));

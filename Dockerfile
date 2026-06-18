@@ -1,7 +1,8 @@
-# Monolithic dev/prod image. All three Python services (dora_api,
-# merchant_api, emailer) run inside one container alongside nginx
-# serving the built SPA. See compose.yml for the runtime story +
-# nginx.conf for the SPA host config.
+# Monolithic dev/prod image. Phase D / FU-186: dora_api runs alongside
+# nginx serving the built SPA. The retailer-scraping `merchant_api` +
+# the deals `emailer` live in the sibling **dora-companion** repo now.
+# See compose.yml for the runtime story + nginx.conf for the SPA host
+# config.
 FROM python:3.11-slim AS develop-stage
 
 # System packages:
@@ -46,7 +47,7 @@ COPY nginx.conf /etc/nginx/conf.d/dora.conf
 
 # ── Runtime ────────────────────────────────────────────────────────────────
 WORKDIR /app
-EXPOSE 5170 5172 5174
+EXPOSE 5170 5174
 
 # D1: container-level healthcheck. Hits nginx's lightweight /healthz
 # (doesn't exercise the Python APIs, so a wedged API doesn't fail the

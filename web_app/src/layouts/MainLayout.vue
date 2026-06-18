@@ -127,9 +127,11 @@
     import PageTitle from 'src/components/menu/PageTitle.vue';
     import SideMenuButton from 'src/components/menu/SideMenuButton.vue';
     import type { MenuButtonProps } from 'src/components/menu/menuButtonProps';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import { useShortcut, useShortcutRegistry } from 'src/composables/useShortcut';
     import { useAuthStore } from 'src/stores/authStore';
-    import { ref } from 'vue';
+    import { computed, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
 
     const $q = useQuasar();
@@ -168,20 +170,57 @@
     // `useShortcut` / `useShortcutRegistry` (keyboard shortcuts) stay;
     // they were always orthogonal to the palette.
 
-    const linksList: MenuButtonProps[] = [
-        { label: 'Stock', icon: 'inventory_2', link: '/stock' },
-        { label: 'Product Search', icon: ICONS.search, link: '/product-search' },
-        { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
-        { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
-        { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
-        { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
-        { label: 'Data', icon: ICONS.storage, link: '/data' },
-        { label: 'Reports', icon: ICONS.insights, link: '/reports' },
-        { label: 'Waste', icon: ICONS.expiry, link: '/waste' },
-        // B9.3: Settings used to live here too; it's already in the user
-        // dropdown (header avatar). Duplicating it in the main menu was
-        // confusing — removed.
-    ];
+    // Phase D / FU-186 — the "Product Search" entry:
+    //   - hidden when products is off (no product data ⇒ no search surface)
+    //   - visible-but-disabled with a "Set up in Settings" hint when products
+    //     is on but no `product_search_url` is configured (R-014)
+    //   - external link (new tab) when both flags are good. The destination
+    //     (a sibling companion / a static page / whatever the operator runs)
+    //     is **never named** here — it's just "Product Search".
+    const features = useFeatureFlags();
+    const productSearch = useProductSearchUrl();
+
+    const productSearchEntry = computed<MenuButtonProps | null>(() => {
+        if (!features.products.value) return null;
+        const url = productSearch.url.value.trim();
+        if (!url) {
+            return {
+                label: 'Product Search',
+                icon: ICONS.search,
+                link: '',
+                disabled: true,
+                disabledTooltip: 'Set the Product search URL in admin System settings.'
+            };
+        }
+        return {
+            label: 'Product Search',
+            icon: ICONS.search,
+            link: '',
+            href: url
+        };
+    });
+
+    const linksList = computed<MenuButtonProps[]>(() => {
+        const base: MenuButtonProps[] = [
+            { label: 'Stock', icon: 'inventory_2', link: '/stock' }
+        ];
+        if (productSearchEntry.value) {
+            base.push(productSearchEntry.value);
+        }
+        base.push(
+            { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
+            { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
+            { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
+            { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
+            { label: 'Data', icon: ICONS.storage, link: '/data' },
+            { label: 'Reports', icon: ICONS.insights, link: '/reports' },
+            { label: 'Waste', icon: ICONS.expiry, link: '/waste' }
+            // B9.3: Settings used to live here too; it's already in the user
+            // dropdown (header avatar). Duplicating it in the main menu was
+            // confusing — removed.
+        );
+        return base;
+    });
 
     const leftDrawerOpen = ref(false);
 

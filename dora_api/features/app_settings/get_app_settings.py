@@ -33,6 +33,8 @@ class AppSettingsDto:
     # Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: int
     default_days_until_stocktake_alert: int
+    # Phase D / FU-186 — admin-set URL the Product Search nav opens.
+    product_search_url: str
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -50,6 +52,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         timezone=setting.timezone or "UTC",
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
         default_days_until_stocktake_alert=int(setting.default_days_until_stocktake_alert),
+        product_search_url=setting.product_search_url or "",
     )
 
 

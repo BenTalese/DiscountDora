@@ -1,8 +1,7 @@
 """Transactional email sender used by A1's auth flows.
 
 Wraps stdlib smtplib so dora_api can fire one-off transactional emails
-(verification, password reset, change confirmation) without depending
-on the scheduled `emailer/` service.
+(verification, password reset, change confirmation) self-contained.
 
 SMTP config from env:
   DORA_SMTP_HOST       (default: smtp.gmail.com)

@@ -5,14 +5,14 @@
   GET    /api/price-history/alerts          — list current user's alerts
   DELETE /api/price-history/alerts/<id>     — remove
 
-Price points are pulled from `ProductHistoricOffer` (the existing
-scrape-time append-only log). The current point comes from the live
+Price points are pulled from `ProductHistoricOffer` (the append-only
+log fed by `POST /api/ingest`). The current point comes from the live
 `ProductOffer` row. All-time low is computed across the historic rows.
 
 Alerts are per-user; the trigger-side logic (firing a notification on
-the next scrape that beats the threshold) lives in merchant_api and is
-out of scope here — this round just creates / lists / removes the
-subscription rows.
+the next push that beats the threshold) is owned by whatever ingestion
+producer the install runs — this round just creates / lists / removes
+the subscription rows.
 """
 import logging
 from dataclasses import dataclass

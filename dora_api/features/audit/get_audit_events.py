@@ -2,7 +2,9 @@
    GET /api/audit/events/<id> — single event detail; admin-only.
 
 Filters (all optional, AND'd):
-    source        — dapi|mapi|emailer|web|system
+    source        — dapi|web|system (and the legacy mapi|emailer values
+                    for pre-Phase-D rows; nothing new is written under
+                    those sources)
     severity      — debug|info|warn|error|audit (comma-separated)
     actor_user_id — UUID
     action        — exact match (autocomplete-driven on the frontend)

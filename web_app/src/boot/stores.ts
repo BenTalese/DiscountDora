@@ -1,6 +1,5 @@
 import { Notify } from 'quasar';
 import HealthApiService from 'src/services/api/healthApiService';
-import { useMerchantStore } from '../stores/merchantStore';
 import { useProductStore } from '../stores/productStore';
 import { useStockItemStore } from '../stores/stockItemStore';
 import { useStockLevelStore } from '../stores/stockLevelStore';
@@ -23,7 +22,6 @@ async function waitForApiStartupAsync() {
 
 await waitForApiStartupAsync();
 await Promise.all([
-    useMerchantStore().getMerchantsAsync(),
     useProductStore().getProductsAsync(),
     useStockItemStore().getStockItemsAsync(),
     useStockLevelStore().getStockLevelsAsync()

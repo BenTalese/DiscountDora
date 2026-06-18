@@ -56,8 +56,8 @@ New test files: `tests/e2e/dora_api/test_preferred_buys.py`, `test_price_observa
 | **A** | Verify the Phase-0 stack on a real env | **backend GREEN** (pytest 381/381, tsc, lint; FU-209 mig-id collision fixed); **browser pending** | both |
 | **B** | Ingestion API | **backend GREEN** (pytest 401/401, tsc, lint; FU-190 honoured via quarantining store mappings); **browser pending** | dora_api + web_app |
 | **C** | Companion: standalone + wired to `/api/ingest` | **DONE** — backend GREEN (5 unit + 4 round-trip integration tests against live in-process `dora_api`); FE shipped (FU-219 resolved — Vue 3 + Quasar + Pinia in `../dora-companion/web_app/`) | `../dora-companion` |
-| **D** | Decommission `merchant_api`/`emailer` from Dora + search-URL nav (FU-186) | **unblocked** — companion now stands alone | dora_api + web_app |
-| **E** | `Merchant → Store` rename + `usual_store_id` + Stores page (FU-189) | **blocked on D** | dora_api + web_app |
+| **D** | Decommission `merchant_api`/`emailer` from Dora + search-URL nav (FU-186) | **DONE** — directories deleted; FE + BE + infra wiring stripped; new `AppSetting.product_search_url` powers the re-pointed nav (data-gated + R-014 disabled-with-hint); pytest 405/405, tsc + lint clean | dora_api + web_app |
+| **E** | `Merchant → Store` rename + `usual_store_id` + Stores page (FU-189) | **unblocked** — "merchant" = entity only now | dora_api + web_app |
 | **F** | Finish overlay: "your prices" intelligence, FU-210 tail, FU-214, FU-212 docs, FU-180 | not started | various |
 
 ---

@@ -24,29 +24,18 @@ export interface HealthInfo {
 }
 
 export default class HealthApiService {
-    private dapiHttpClient: AxiosHttpClient;
-    private mapiHttpClient: AxiosHttpClient;
+    private httpClient = new AxiosHttpClient();
 
-    constructor() {
-        this.dapiHttpClient = new AxiosHttpClient('dora');
-        this.mapiHttpClient = new AxiosHttpClient('merchant');
-    }
-
-    /** Used by the boot path. Returns true when *both* APIs answer.
-     *  Doesn't care about the JSON shape — any 2xx is "alive". */
+    /** Boot probe. Any 2xx from dora_api is "alive". */
     healthCheckAsync = async (): Promise<boolean> => {
-        const dapiOkay = await this.dapiHttpClient
-            .get<HealthInfo | boolean>('/health').then(() => true).catch(() => false);
-        const mapiOkay = await this.mapiHttpClient
-            .get<boolean>('/health').then(() => true).catch(() => false);
-        return dapiOkay && mapiOkay;
+        return await this.httpClient
+            .get<HealthInfo | boolean>('/health')
+            .then(() => true)
+            .catch(() => false);
     };
 
-    /** Fetch the full dora_api health payload for compatibility +
-     *  feature-gating decisions. Throws on network error so callers
-     *  can decide how to surface it (mobile onboarding shows a
-     *  clearer "couldn't reach server" rather than silent false). */
+    /** Fetch the full health payload for compatibility + feature gating. */
     getInfoAsync = async (): Promise<HealthInfo> => {
-        return await this.dapiHttpClient.get<HealthInfo>('/health');
+        return await this.httpClient.get<HealthInfo>('/health');
     };
 }

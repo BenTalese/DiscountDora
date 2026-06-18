@@ -1,5 +1,42 @@
 <template>
     <q-item
+        v-if="disabled"
+        class="dora-sideMenuButton-disabled"
+        clickable
+        :disable="true"
+        tag="div"
+    >
+        <q-item-section avatar>
+            <q-icon :name="icon" />
+        </q-item-section>
+        <q-item-section>
+            <q-item-label>{{ label }}</q-item-label>
+            <q-item-label caption v-if="disabledTooltip">{{ disabledTooltip }}</q-item-label>
+            <q-item-label caption v-else-if="caption">{{ caption }}</q-item-label>
+        </q-item-section>
+        <q-tooltip v-if="disabledTooltip">{{ disabledTooltip }}</q-tooltip>
+    </q-item>
+    <q-item
+        v-else-if="href"
+        :href="href"
+        target="_blank"
+        rel="noopener"
+        clickable
+        tag="a"
+    >
+        <q-item-section avatar>
+            <q-icon :name="icon" />
+        </q-item-section>
+        <q-item-section>
+            <q-item-label>
+                {{ label }}
+                <q-icon name="open_in_new" size="14px" class="q-ml-xs" />
+            </q-item-label>
+            <q-item-label caption v-if="caption">{{ caption }}</q-item-label>
+        </q-item-section>
+    </q-item>
+    <q-item
+        v-else
         :to="link"
         :class="{ 'dora-sideMenuButton-active': isActive }"
         clickable
@@ -29,5 +66,8 @@
         background: var(--q-accent);
         color: var(--text-on-accent);
         font-weight: 600;
+    }
+    .dora-sideMenuButton-disabled {
+        opacity: 0.55;
     }
 </style>

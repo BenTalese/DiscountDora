@@ -106,6 +106,38 @@
             </q-card-section>
             <q-separator />
 
+            <!-- Product search URL (Phase D / FU-186) ──────────────────── -->
+            <q-card-section>
+                <div class="text-subtitle1 text-weight-medium">
+                    <q-icon :name="ICONS.search" size="20px" class="q-mr-xs" />
+                    Product search
+                </div>
+                <div class="text-caption dora-text-muted">
+                    A URL the "Product Search" nav entry opens in a new tab
+                    when product data is present. Point this at whatever
+                    search surface you run yourself; Dora doesn't know or
+                    care what it is. Leave blank to show the entry as
+                    "not set up".
+                </div>
+            </q-card-section>
+            <q-card-section v-if="!loading" class="row q-col-gutter-md items-start">
+                <q-input
+                    v-model="productSearchUrlDraft"
+                    label="Product search URL"
+                    placeholder="https://your-search.example/"
+                    outlined
+                    dense
+                    class="col-12"
+                    :disable="savingProductSearchUrl"
+                    :loading="savingProductSearchUrl"
+                    :error="!!productSearchUrlError"
+                    :error-message="productSearchUrlError ?? undefined"
+                    hint="Must start with http:// or https://. Leave blank to clear."
+                    @blur="onSaveProductSearchUrl"
+                />
+            </q-card-section>
+            <q-separator />
+
             <!-- AI assistant ─────────────────────────────────────────── -->
             <q-card-section>
                 <div class="text-subtitle1 text-weight-medium">
@@ -456,6 +488,7 @@
         timezone?: string;
         expiring_soon_window_days?: number;
         default_days_until_stocktake_alert?: number;
+        product_search_url?: string;
     };
     function applyLoaded(s: LoadedSettings) {
         enabledDraft.value = s.llm_enabled;
@@ -471,6 +504,10 @@
             savedThresholds.default_days_until_stocktake_alert = s.default_days_until_stocktake_alert;
             stocktakeDefaultDraft.value = s.default_days_until_stocktake_alert;
         }
+        if (s.product_search_url !== undefined) {
+            savedProductSearchUrl.value = s.product_search_url;
+            productSearchUrlDraft.value = s.product_search_url;
+        }
         saved.value = { enabled: s.llm_enabled, baseUrl: s.llm_base_url, model: s.llm_model };
         // The new feature-flag fields might be absent on older /api/app-settings
         // responses (server-side default in the dataclass means they always
@@ -481,6 +518,35 @@
         if (s.nutrition_enabled !== undefined) featureFlags.nutrition_enabled = s.nutrition_enabled;
         if (s.companion_ingestion_enabled !== undefined) featureFlags.companion_ingestion_enabled = s.companion_ingestion_enabled;
         if (s.deals_email_enabled !== undefined) featureFlags.deals_email_enabled = s.deals_email_enabled;
+    }
+
+    // Product search URL (Phase D / FU-186) ───────────────────────────────
+    const productSearchUrlDraft = ref('');
+    const savedProductSearchUrl = ref('');
+    const savingProductSearchUrl = ref(false);
+    const productSearchUrlError = ref<string | null>(null);
+
+    async function onSaveProductSearchUrl() {
+        const trimmed = productSearchUrlDraft.value.trim();
+        productSearchUrlError.value = null;
+        if (trimmed === savedProductSearchUrl.value) return;
+        if (trimmed && !(trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
+            productSearchUrlError.value = 'Must start with http:// or https://.';
+            return;
+        }
+        savingProductSearchUrl.value = true;
+        try {
+            const updated = await api.updateAsync({
+                product_search_url: trimmed,
+            });
+            savedProductSearchUrl.value = updated.product_search_url;
+            productSearchUrlDraft.value = updated.product_search_url;
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Product search URL saved.' });
+        } catch (e) {
+            productSearchUrlError.value = e instanceof Error ? e.message : 'Save failed.';
+        } finally {
+            savingProductSearchUrl.value = false;
+        }
     }
 
     const featureFlagItems = computed(() => [

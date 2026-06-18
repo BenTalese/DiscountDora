@@ -24,9 +24,9 @@ infer them statically:
    know they're data, not Python source.
 
 3. **Dynamic feature discovery** — `dora_api/startup.py` walks
-   `dora_api/features/` and `merchant_api/features/` with
-   `importlib.import_module`. Static analysis misses these, so we
-   `collect_submodules()` both packages explicitly.
+   `dora_api/features/` with `importlib.import_module`. Static
+   analysis misses these, so we `collect_submodules()` the package
+   explicitly.
 
 4. **Hidden imports** for runtime-discovered plugins/drivers:
    sqlite dialect, alembic runtime, apscheduler trigger types, the
@@ -67,12 +67,6 @@ hiddenimports = [
     "dependency_injector.providers",
 ]
 hiddenimports += collect_submodules("dora_api.features")
-# Include the merchant_api.features package itself — collect_submodules
-# returns only sub-modules, and an empty __init__.py wouldn't otherwise
-# get bundled.
-hiddenimports += ["merchant_api.features"]
-hiddenimports += collect_submodules("merchant_api.features")
-hiddenimports += collect_submodules("merchant_api.infrastructure.merchant_data_providers")
 # dependency_injector is a Cython package — PyInstaller's static
 # analysis can't see its internal modules (`errors`, `containers`,
 # `providers` subtypes etc.). Pull them all in explicitly.
@@ -89,10 +83,6 @@ datas = [
     # Alembic uses Path-based discovery; the migrations folder must
     # be present at the expected relative path.
     ("dora_api/persistence/migrations", "dora_api/persistence/migrations"),
-    # Bundled seed JSON (path_migration seeds these into cache dir
-    # on first boot).
-    ("merchant_api/infrastructure/merchant_data_providers/aldi_products_by_category.json",
-     "merchant_api/infrastructure/merchant_data_providers"),
     # Onboarding seed data the API reads from disk.
     ("dora_api/features/onboarding/default_stock_groups.json",
      "dora_api/features/onboarding"),
@@ -100,7 +90,6 @@ datas = [
      "dora_api/features/onboarding"),
     # Email templates — Jinja templates rendered at send time.
     ("dora_api/email_templates", "dora_api/email_templates"),
-    ("emailer/templates", "emailer/templates"),
 ]
 datas += collect_data_files("alembic", subdir="templates")
 

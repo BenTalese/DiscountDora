@@ -38,9 +38,9 @@ def apply_exclusion_filter(collection: List[str], exclusion_patterns: List[str])
 
 
 def _to_package_name(path_to_search: Path | str) -> str:
-    """Accept either a package dotted name ("merchant_api.features")
-    or a path-like value (legacy callers pass `Path() / 'merchant_api'
-    / 'features'`). Returns the dotted package name either way."""
+    """Accept either a package dotted name ("dora_api.features") or a
+    path-like value (legacy callers pass `Path() / 'dora_api' /
+    'features'`). Returns the dotted package name either way."""
     s = str(path_to_search).strip()
     s = s.replace("\\", "/").strip("/")
     return s.replace("/", ".")

@@ -144,57 +144,29 @@ def main() -> int:
     # time any `from dora_api...` module runs.
     from dora_api.app import app as dora_app
     from dora_api.startup import init_db, register_routers
-    from merchant_api.startup import build_app as build_merchant_app
 
     init_db(is_test_env=False)
     register_routers()
 
-    # Build the merchant Flask app too — same process, separate
-    # Flask instance + separate port. Process isolation isn't perfect
-    # but we get logical separation, distinct logs, and the option
-    # to bounce one without the other in a future revision.
-    merchant_app = build_merchant_app()
-
     from werkzeug.serving import make_server
 
     dora_port = _pick_free_port()
-    merchant_port = _pick_free_port()
-    while merchant_port == dora_port:
-        merchant_port = _pick_free_port()
     dora_url = f"http://127.0.0.1:{dora_port}/"
-    merchant_url = f"http://127.0.0.1:{merchant_port}/api"
     log.info("dora_api binding to %s", dora_url)
-    log.info("merchant_api binding to %s", merchant_url)
 
     dora_server = make_server("127.0.0.1", dora_port, dora_app, threaded=True)
-    merchant_server = make_server("127.0.0.1", merchant_port, merchant_app, threaded=True)
 
     dora_thread = threading.Thread(
         target=dora_server.serve_forever, name="dora-flask", daemon=True,
     )
-    merchant_thread = threading.Thread(
-        target=merchant_server.serve_forever, name="merchant-flask", daemon=True,
-    )
     dora_thread.start()
-    merchant_thread.start()
 
     if not _wait_for_health(f"{dora_url}api/health"):
         log.error("dora_api didn't answer /api/health within 5s; aborting")
         dora_server.shutdown()
-        merchant_server.shutdown()
-        return 2
-    if not _wait_for_health(f"{merchant_url}/health"):
-        log.error("merchant_api didn't answer /api/health within 5s; aborting")
-        dora_server.shutdown()
-        merchant_server.shutdown()
         return 2
 
-    # Stash the merchant URL on the SPA's URL so axiosHttpClient can
-    # pick it up at boot. The SPA reads `?desktop_mapi=...` from
-    # window.location.search and uses it as the merchant base URL.
-    # Web + Docker builds set VITE_MERCHANT_API_BASE_URL instead.
-    from urllib.parse import quote
-    spa_url = f"{dora_url}?desktop_mapi={quote(merchant_url, safe='')}"
+    spa_url = dora_url
     log.info("Flask ready; launching window at %s", spa_url)
 
     # pywebview/GTK turned out to be a deeper packaging fight than
@@ -223,11 +195,9 @@ def main() -> int:
     try:
         stop.wait()
     finally:
-        log.info("Shutting Flask servers down")
+        log.info("Shutting Flask server down")
         dora_server.shutdown()
-        merchant_server.shutdown()
         dora_thread.join(timeout=5)
-        merchant_thread.join(timeout=5)
 
     return 0
 

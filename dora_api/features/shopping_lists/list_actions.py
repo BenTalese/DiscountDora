@@ -144,8 +144,8 @@ class RefreshDealsHandler:
       - Otherwise: clear the selection so the line falls back to "cheapest
         currently linked".
 
-    A future iteration could trigger a fresh scrape per product, but that
-    crosses into merchant_api territory and is out of scope right now.
+    A future iteration could trigger a fresh push per product, but that
+    crosses into ingestion-producer territory and is out of scope here.
     """
 
     def __init__(self):

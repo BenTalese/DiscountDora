@@ -86,48 +86,14 @@ export interface HttpClient {
     delete<TResponse = unknown>(path: string): Promise<HttpClientResponse<TResponse>>;
 }
 
-/** Which backend the client targets. Lets callers pick the right env var +
- *  dev port fallback without knowing URLs. */
-export type ApiBackend = 'dora' | 'merchant';
-
-// Desktop bundle (`desktop_app.py`) runs both Flask APIs on random
-// localhost ports and passes the merchant URL via the SPA's URL
-// query string (`?desktop_mapi=...`). We cache it once at module
-// load so every axios client reuses the same value — re-reading
-// `window.location.search` would be free, but caching guards against
-// later code that mutates the URL.
-const _desktopMerchantBaseURL: string | null = (() => {
-    if (typeof window === 'undefined' || !window.location?.search) return null;
-    try {
-        const params = new URLSearchParams(window.location.search);
-        const raw = params.get('desktop_mapi');
-        if (!raw) return null;
-        return raw.replace(/\/+$/, '');
-    } catch {
-        return null;
-    }
-})();
-
-export function resolveBaseURL(backend: ApiBackend): string {
-    // Desktop bundle: query-string-driven merchant URL wins. Only
-    // applies to the merchant backend; the dora backend lives on the
-    // same origin as the SPA (Flask serving both).
-    if (backend === 'merchant' && _desktopMerchantBaseURL) {
-        return _desktopMerchantBaseURL;
-    }
-
-    const envValue =
-        backend === 'merchant'
-            ? import.meta.env.VITE_MERCHANT_API_BASE_URL
-            : import.meta.env.VITE_API_BASE_URL;
+export function resolveBaseURL(): string {
+    const envValue = import.meta.env.VITE_API_BASE_URL;
     if (envValue && envValue.length > 0) return envValue.replace(/\/+$/, '');
-
-    const port = backend === 'merchant' ? 5172 : 5170;
     if (typeof window !== 'undefined' && window.location) {
         const { protocol, hostname } = window.location;
-        return `${protocol}//${hostname}:${port}/api`;
+        return `${protocol}//${hostname}:5170/api`;
     }
-    return `http://localhost:${port}/api`;
+    return 'http://localhost:5170/api';
 }
 
 // ─── Correlation id ──────────────────────────────────────────────────
@@ -181,19 +147,12 @@ type DoraRequestConfig = InternalAxiosRequestConfig & {
 export default class AxiosHttpClient implements HttpClient {
     private axios: Axios;
 
-    /**
-     * @param backend Which API to hit; defaults to the main Dora API.
-     *   Pass `'merchant'` for the standalone merchant_api on port 5172.
-     */
-    constructor(backend: ApiBackend = 'dora') {
+    constructor() {
         this.axios = axios.create({
-            baseURL: resolveBaseURL(backend),
+            baseURL: resolveBaseURL(),
             headers: { 'Content-Type': 'application/json' },
             // withCredentials lets the browser send/receive the dora_session
-            // cookie on cross-origin requests (dev: 5174 → 5170). The merchant
-            // API doesn't currently use cookies, but enabling this on its
-            // client is harmless — the browser only sends a cookie that
-            // originated at that origin.
+            // cookie on cross-origin requests (dev: 5174 → 5170).
             withCredentials: true
         });
 

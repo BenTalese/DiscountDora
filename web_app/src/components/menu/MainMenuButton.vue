@@ -1,5 +1,35 @@
 <template>
     <q-item
+        v-if="disabled"
+        class="dora-mainMenuButton dora-mainMenuButton-disabled"
+        :class="{ 'is-expanded': isExpanded }"
+        :disable="true"
+        no-caps
+        tag="div"
+    >
+        <div class="dora-mainMenuButton-inner column items-center justify-center">
+            <q-icon :name="icon" class="dora-mainMenuButton-icon" />
+            <div class="dora-mainMenuButton-label">{{ label }}</div>
+        </div>
+        <q-tooltip v-if="disabledTooltip">{{ disabledTooltip }}</q-tooltip>
+    </q-item>
+    <q-item
+        v-else-if="href"
+        :href="href"
+        target="_blank"
+        rel="noopener"
+        :class="{ 'is-expanded': isExpanded }"
+        class="dora-mainMenuButton"
+        no-caps
+        tag="a"
+    >
+        <div class="dora-mainMenuButton-inner column items-center justify-center">
+            <q-icon :name="icon" class="dora-mainMenuButton-icon" />
+            <div class="dora-mainMenuButton-label">{{ label }}</div>
+        </div>
+    </q-item>
+    <q-item
+        v-else
         :to="link"
         :class="{ 'is-expanded': isExpanded, 'dora-mainMenuButton-active': isActive }"
         class="dora-mainMenuButton"
@@ -109,6 +139,12 @@
 
     .dora-mainMenuButton-active {
         color: var(--q-accent);
+    }
+
+    .dora-mainMenuButton-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
     }
 
     // Hover tint on inactive buttons — previews the active accent colour,

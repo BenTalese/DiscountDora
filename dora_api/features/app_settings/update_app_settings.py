@@ -42,6 +42,12 @@ class UpdateAppSettingsRequest(BaseModel):
     # validation: the window is 1–365 days; the stocktake default 0–3650).
     expiring_soon_window_days: int | None = Field(default=None, ge=1, le=365)
     default_days_until_stocktake_alert: int | None = Field(default=None, ge=0, le=3650)
+    # Phase D / FU-186 — admin-set URL the Product Search nav opens.
+    # Empty string ⇒ unset; the nav entry renders disabled with a hint.
+    # We allow any http(s) URL or empty; deeper validation is the operator's
+    # problem (the field never echoes back as a clickable link to other
+    # users — it ALWAYS opens via target="_blank" rel="noopener").
+    product_search_url: str | None = Field(default=None, max_length=500)
 
 
 @dataclass(slots=True)
@@ -105,6 +111,17 @@ class UpdateAppSettingsHandler:
             and request.default_days_until_stocktake_alert is not None
         ):
             setting.default_days_until_stocktake_alert = request.default_days_until_stocktake_alert
+
+        # Phase D / FU-186 — product_search_url. Strip; reject obviously
+        # non-http schemes so a typo doesn't render a hostile link, but
+        # otherwise leave validation to the operator.
+        if "product_search_url" in set_fields:
+            _Url = (request.product_search_url or "").strip()
+            if _Url and not (_Url.startswith("http://") or _Url.startswith("https://")):
+                return UpdateAppSettingsResponse(
+                    invalid_reason="Product search URL must start with http:// or https://."
+                )
+            setting.product_search_url = _Url
 
         # Enabling without a connection is a misconfiguration — the assistant
         # would just silently fall back. Reject it so the admin gets told.

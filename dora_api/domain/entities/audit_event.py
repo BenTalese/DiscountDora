@@ -7,12 +7,19 @@ from dora_api.domain.entities.base_entity import BaseEntity
 
 # String constants rather than Python enums — Alembic column types and
 # the existing repository builder both prefer plain str/int comparisons.
+# Phase D / FU-186: `mapi` + `emailer` sources are retained for HISTORICAL
+# audit rows (data preservation) — both backends left this repo, so nothing
+# inside `dora_api` writes those values any more.
 SOURCE_DAPI = "dapi"
-SOURCE_MAPI = "mapi"
-SOURCE_EMAILER = "emailer"
 SOURCE_WEB = "web"
 SOURCE_SYSTEM = "system"
-ALLOWED_SOURCES = (SOURCE_DAPI, SOURCE_MAPI, SOURCE_EMAILER, SOURCE_WEB, SOURCE_SYSTEM)
+# Read-only historical values; not written by dora_api after Phase D.
+SOURCE_MAPI_LEGACY = "mapi"
+SOURCE_EMAILER_LEGACY = "emailer"
+ALLOWED_SOURCES = (
+    SOURCE_DAPI, SOURCE_WEB, SOURCE_SYSTEM,
+    SOURCE_MAPI_LEGACY, SOURCE_EMAILER_LEGACY,
+)
 
 SEVERITY_DEBUG = "debug"
 SEVERITY_INFO = "info"

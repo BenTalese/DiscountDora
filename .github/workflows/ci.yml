@@ -84,31 +84,6 @@ jobs:
             - name: Run pytest
               run: pytest tests/e2e/dora_api -v
 
-    # ─────────────────────────────────────────────────────────────────
-    # Merchant API + Emailer — syntax/import smoke check until they
-    # grow proper test suites. Better than nothing; catches typos and
-    # broken imports without pretending there's coverage.
-    # ─────────────────────────────────────────────────────────────────
-    smoke:
-        name: Merchant + emailer (compileall)
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Set up Python 3.11
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.11"
-                  cache: pip
-                  cache-dependency-path: requirements.txt
-
-            - name: Install deps
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install -r requirements.txt
-
-            - name: Byte-compile merchant_api
-              run: python -m compileall -q merchant_api
-
-            - name: Byte-compile emailer
-              run: python -m compileall -q emailer
+    # Phase D / FU-186: the `merchant_api` + `emailer` byte-compile
+    # smoke job retired with the directories — the companion lives in
+    # the sibling `dora-companion` repo and runs its own CI.

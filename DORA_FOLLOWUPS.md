@@ -693,7 +693,27 @@ long session summary. Distinct from the other logs:
   touched, or fold into the FU-174 app-wide date/threshold sweep. Pass the resolved window
   (same `effective_expiring_soon_window`) into the 4 sites.
 
-## [OPEN] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
+## [RESOLVED?] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
+> **Update 2026-06-17 — Phase D landed.** `merchant_api/` + `emailer/` directories deleted from this
+> repo (they live in `../dora-companion`). Backend wiring stripped (audit `SOURCE_MAPI` + `SOURCE_EMAILER`
+> retained read-only as `*_LEGACY` for historical rows; nothing in `dora_api` writes those values
+> any more). FE wiring stripped: `merchantApiService` / `merchantManagementApiService` /
+> `MerchantsSettings.vue` / `ProductSearch.vue` / `ProductSearchCard.vue` / `ProviderHealthChip.vue` /
+> `merchantStore` / `scrapedProductOffer*` / `offerSortByOptions` all gone; `axiosHttpClient` no
+> longer carries the `'merchant'` `ApiBackend` arm. `useProductSearchUrl()` composable added;
+> `useFeatureFlags().products` + the new `AppSetting.product_search_url` drive a re-pointed
+> **Product Search** nav entry that opens the admin-configured URL in a new tab (data-gated;
+> R-014 disabled-with-hint when URL unset). Infra cleaned: `desktop_app.py` only spawns dora_api,
+> `compose.yml` drops the 5172 port + emailer block, `Dockerfile` + `startup.sh` no longer spawn
+> the companion processes, `nginx.conf` drops the 5172 proxy comment, `dora.spec` drops the
+> merchant_api submodules + emailer templates, `.env` / `.env.example` drop `MAPI_*` + the
+> `DORA_EMAIL_ENABLED` deals-emailer block (the `DORA_SMTP_*` vars stay for the transactional
+> sender), CI drops the `compileall` smoke job. Migration `f8b2d4a6c1e3` adds
+> `AppSetting.product_search_url`. **Verified:** pytest **405/405** (+4 new), `vue-tsc` clean,
+> `npm run lint` clean, fresh-SQLite `flask db upgrade` clean. **Move to RESOLVED once the
+> browser-pass on the re-pointed nav + the System Settings input is confirmed** (FU-186-verify).
+
+
 > **Re-sequenced 2026-06-17 — now the ACTIVE track, ahead of FU-189.** The Merchant→Store rename
 > (FU-189) is blocked on this because "merchant" = entity AND `merchant_api` companion (a blind
 > rename corrupts the companion wiring). Build order: scaffold companion → ingestion API → companion

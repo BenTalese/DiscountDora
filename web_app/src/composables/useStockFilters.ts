@@ -336,13 +336,18 @@ export function useStockFilters(sources: {
         //     tooltip + the filter chip.
         // `group` drives PageCountsFooter's three-cluster justify-evenly
         // layout: [Shown] · [stock levels] · [other counts].
+        // Round-18: "Needs attention" moved into the `shown` cluster
+        // (right of Shown) so the two summary numbers — total visible +
+        // total acting-required — read as one pair. The middle cluster
+        // is the level breakdown; the right cluster is Essential /
+        // Auto-add / On a list.
         return [
             { label: 'Shown', value: items.length, group: 'shown' as const },
+            { label: 'Needs attention', value: attention, tone: 'negative' as const, group: 'shown' as const },
             ...levelStats,
             { label: 'Essential', value: flagged, tone: 'warning' as const, group: 'other' as const, hideOnMobile: true },
             { label: 'Auto-add', value: autoAdd, group: 'other' as const, hideOnMobile: true },
             { label: 'On a list', value: onAnyList, group: 'other' as const, hideOnMobile: true },
-            { label: 'Needs attention', value: attention, tone: 'negative' as const, group: 'other' as const },
         ];
     });
 

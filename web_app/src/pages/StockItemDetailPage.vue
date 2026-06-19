@@ -1514,14 +1514,18 @@
     }
 
     // ── On shopping lists ────────────────────────────────────────────────
+    // Round-18: defensively drop any 'done' lists. `unticked_list_ids`
+    // shouldn't include finished lists in the first place (items there
+    // are ticked off), but the client-side guard means a stray
+    // historical id never shows up in the Lists tab as a phantom row.
     const onLists = computed(() => {
         const m = shoppingListStore.membership;
         const entry = m?.items.find((i) => i.stock_item_id === stockItemId.value);
         const ids = entry?.unticked_list_ids ?? [];
         const lookup = new Map((m?.active_lists ?? []).map((l) => [l.shopping_list_id, l]));
-        return ids.map(
-            (lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const },
-        );
+        return ids
+            .map((lid) => lookup.get(lid) ?? { shopping_list_id: lid, name: lid, status: 'draft' as const })
+            .filter((l) => l.status !== 'done');
     });
     // C-1b.4 (L138): the server-inferred primary draft list (R-003) — the
     // Lists tab decorates that row with a styled "Primary" badge instead

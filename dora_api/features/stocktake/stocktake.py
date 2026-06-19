@@ -18,6 +18,24 @@ Per-item `days_until_stocktake_alert` is the per-item check cadence; an
 item with `stocktake_alerts_are_enabled=False` is excluded from the
 queue entirely (the user has opted it out — typically items they manage
 manually).
+
+Round-18 (2026-06-19) — engagement filter: an item must show signs the
+user actually manages it before it enters the queue. Items the user
+created and never touched ("nachos I don't keep in stock") would
+previously surface immediately as "never-checked = maximally overdue";
+now they're filtered out unless one of these signals fires:
+
+  • Essential / Auto-add — explicit "this matters" flags.
+  • Currently in stock (level sequence < OUT) — if it's actually
+    present in the pantry, it's managed.
+  • Ever opened — `opened_on` is non-null.
+  • Level has been moved off the default — at least one
+    `StockLevelChange` row exists (created on every level change).
+  • On a shopping list now, or ever was — any `ShoppingListLine`
+    row references this stock_item_id.
+
+The existing overdue-days logic still applies on top; the engagement
+filter just decides "is this worth surfacing at all".
 """
 import logging
 from dataclasses import dataclass
@@ -26,12 +44,15 @@ from typing import List
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from dora_api.app import db
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.domain.stock_status import (OUT_OF_STOCK_SEQUENCE, StockStatus,
+                                          level_for_status)
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
@@ -65,6 +86,59 @@ def _compute_overdue(item: StockItem, now: datetime) -> int:
     return max(0, elapsed - window)
 
 
+def _engaged_item_ids(item_ids: list[UUID]) -> tuple[set[UUID], set[UUID]]:
+    """Pre-compute the engagement signals that require a DB lookup, in
+    bulk — doing it per-item would explode into N+M queries on a big
+    pantry. Returns (items_with_level_history, items_on_any_list).
+
+    The remaining engagement signals (essential / auto-add / in-stock /
+    opened) are plain attributes on `StockItem` and are read directly in
+    the filter below.
+    """
+    if not item_ids:
+        return set(), set()
+    slc_table = db.metadata.tables["StockLevelChange"]
+    line_table = db.metadata.tables["ShoppingListLine"]
+    items_with_changes = {
+        row[0] for row in db.session.execute(
+            select(slc_table.c.stock_item_id)
+            .where(slc_table.c.stock_item_id.in_(item_ids))
+            .distinct()
+        ).all()
+    }
+    items_on_lists = {
+        row[0] for row in db.session.execute(
+            select(line_table.c.stock_item_id)
+            .where(line_table.c.stock_item_id.in_(item_ids))
+            .distinct()
+        ).all()
+    }
+    return items_with_changes, items_on_lists
+
+
+def _is_engaged(
+    item: StockItem,
+    items_with_changes: set[UUID],
+    items_on_lists: set[UUID],
+) -> bool:
+    """True when the item shows ANY sign the user actively manages it.
+    Round-18 — see module docstring for the rationale."""
+    if item.is_flagged or item.auto_add_when_low:
+        return True
+    if (
+        item.stock_level is not None
+        and item.stock_level.sequence < OUT_OF_STOCK_SEQUENCE
+    ):
+        return True
+    if item.opened_on is not None:
+        return True
+    if item.id in items_with_changes:
+        return True
+    if item.id in items_on_lists:
+        return True
+    return False
+
+
 @STOCKTAKE_ROUTER.route("/queue", methods=["GET"])
 def get_stocktake_queue():
     from flask import request
@@ -84,9 +158,17 @@ def get_stocktake_queue():
     )
     now = datetime.now(UTC)
 
+    # Bulk-fetch the engagement signals so the per-item filter below stays
+    # O(1) per item.
+    items_with_changes, items_on_lists = _engaged_item_ids(
+        [item.id for item in items]
+    )
+
     overdue: list[tuple[int, StockItem]] = []
     for item in items:
         if not item.stocktake_alerts_are_enabled:
+            continue
+        if not _is_engaged(item, items_with_changes, items_on_lists):
             continue
         days = _compute_overdue(item, now)
         if days <= 0:

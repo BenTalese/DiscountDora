@@ -52,6 +52,98 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
+- **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)
+- **Type:** finding (UX policy — needs user judgement)
+- **What:** Round-18 swapped the stocktake queue's filter from "anything overdue
+  surfaces" to a stricter engagement-based rule. The user wants this written down
+  so they can sit with it and decide whether it's right, looser, or stricter
+  before any more code lands.
+
+### What it WAS (pre-round-18)
+
+  In `dora_api/features/stocktake/stocktake.py::get_stocktake_queue`:
+
+  An item entered the queue when **both** were true:
+  1. `stocktake_alerts_are_enabled == True` (per-item manual opt-out).
+  2. `_compute_overdue(item) > 0`, where overdue is:
+     - **`9999`** if `last_checked_at is None` (never-checked sentinel — items
+       always surfaced as "maximally overdue").
+     - Otherwise: `max(0, days_since_last_check − days_until_stocktake_alert)`.
+       The per-item cadence is `days_until_stocktake_alert` (default 14, set on
+       create).
+
+  Ordering: most-overdue first → oldest `last_checked_at` → name.
+
+  Pain point the user reported: a freshly-created stub item ("nachos I don't
+  really keep in stock") immediately landed at the top of the queue because
+  it'd never been checked → 9999 overdue. Dora pestered the user about every
+  item they'd ever typed into the system, including items they'd long ago
+  decided not to manage.
+
+### What it IS NOW (round-18, 2026-06-19)
+
+  Same two existing gates (per-item opt-out + `overdue > 0`), PLUS a new
+  **engagement gate** that runs before either. An item must show ≥1 sign the
+  user actually manages it:
+
+  1. `is_flagged` (Essential) **or** `auto_add_when_low` — explicit "this
+     matters" flags.
+  2. Currently in stock — `stock_level.sequence < OUT_OF_STOCK_SEQUENCE`.
+  3. Ever opened — `opened_on is not None`.
+  4. Level was changed at least once — any `StockLevelChange` row exists for
+     this stock_item_id. (The history table only grows when a level actually
+     moves, so this distinguishes "never touched" from "touched once and back
+     to default".)
+  5. On any shopping list, ever — any `ShoppingListLine` row references this
+     stock_item_id, regardless of list status (active or done).
+
+  Signals 4 + 5 are bulk-fetched in one DISTINCT query each, so the queue
+  endpoint stays cheap on big pantries.
+
+  The `9999` never-checked sentinel is **kept**. The intent: engaged-but-
+  never-checked items (essential / on a list / in-stock / etc.) still surface
+  first; the engagement gate just stops the queue from drowning in unengaged
+  stubs.
+
+### Things to weigh when assessing
+
+  - **False negatives** — items the user DOES care about but that fail every
+    engagement signal. Likeliest case: an item that's normally well-stocked
+    but is genuinely depleted right now, and the user never opened it (not a
+    sealed product they "open"), never flagged it essential, never put it on
+    a list, never moved the level. Possibly: a recurring seasonal item the
+    user wants to be reminded to restock but hasn't engaged with recently.
+  - **False positives** — items that pass engagement but shouldn't really
+    nag. Likeliest case: items that were on ONE shopping list once five
+    months ago and have been ignored since. Signal 5 ("ever on a list") is
+    intentionally permissive — should it be "on a recent list" instead?
+    (e.g. last 60 days.) Trade-off: DB needs a join on list lifecycle
+    timestamps; not free.
+  - **Tuning knobs to consider**:
+    - Time-bound the "on a list" signal (last N days).
+    - Time-bound "level was changed" similarly (only count level changes in
+      the last N days as engagement).
+    - Add a "snooze for N days" affordance on the queue row so the user can
+      mute individual items without flipping the binary `stocktake_alerts_
+      are_enabled` flag.
+    - Replace the global cadence with a smarter default (e.g. shorter for
+      essentials, longer for "in-stock but lots of headroom" items).
+    - Promote `stocktake_alerts_are_enabled` from "manual opt-out only" to
+      "auto-set false when engagement decays past N days" so the data
+      self-cleans.
+  - **No-change cost**: if the round-18 rule turns out to be roughly right,
+    the only required follow-on is the browser-verify pass (FU-222 covers
+    the SPA side; this rule lives in the backend and wants its own dataset
+    walk-through).
+
+- **Why deferred:** the user explicitly wants to sit with this and decide
+  later. No code change pending here yet — this entry is the substrate for
+  that decision.
+- **Recommended resolution:** opportunistic — re-open when the user has
+  walked their pantry through the new queue and decided whether the
+  engagement rule is too tight, too loose, or right.
+
 ## [OPEN] FU-225 — Deprecate `PreferredBuy.position` + reorder endpoint
 - **Raised:** 2026-06-18 (Stock-pages feedback round 3)
 - **Type:** deferred job

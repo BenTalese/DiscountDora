@@ -237,12 +237,25 @@
                         :disable="bulkSelection.size === 0"
                         @click="deselectAll"
                     />
-                    <!-- C-7 Chunk 1 — unified bulk add: resolves the target
-                         once + emits one summary toast (decision 6). -->
-                    <AddToListButton
-                        variant="bulk"
-                        :items="[...bulkSelection]"
-                        @bulk-done="cancelBulk"
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        :icon="ICONS.add_shopping_cart"
+                        label="Add to list…"
+                        :loading="bulkBusy"
+                        :disable="bulkSelection.size === 0"
+                        @click="bulkAddToListPrompt"
+                    />
+                    <q-btn
+                        flat
+                        dense
+                        no-caps
+                        :icon="ICONS.remove_shopping_cart"
+                        label="Remove from list…"
+                        :loading="bulkBusy"
+                        :disable="bulkSelection.size === 0"
+                        @click="bulkRemoveFromListPrompt"
                     />
                     <q-btn
                         flat
@@ -260,14 +273,6 @@
                         :loading="bulkBusy"
                         :disable="bulkSelection.size === 0"
                         @click="bulkRestock"
-                    />
-                    <q-btn
-                        flat
-                        dense
-                        no-caps
-                        label="Set substitute"
-                        :disable="bulkSelection.size === 0"
-                        @click="bulkSetSubstitute"
                     />
                     <q-btn
                         v-if="scanningEnabled"
@@ -428,7 +433,6 @@
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';
     import { useQuasar } from 'quasar';
-    import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import FilterBar from 'src/components/FilterBar.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
@@ -454,6 +458,8 @@
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useLocationStore } from 'src/stores/locationStore';
@@ -487,6 +493,8 @@
     const stockLevelStore = useStockLevelStore();
     const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
+    const slActions = useShoppingListActions();
+    const shoppingListApi = new ShoppingListApiService();
     const recipeStore = useRecipeStore();
 
     const { stockItems } = storeToRefs(stockItemStore);
@@ -680,13 +688,101 @@
         }
     }
 
-    function bulkSetSubstitute() {
-        // Substitutes are managed on each item's detail page (StockItemDetail, P2).
-        $q.notify({
-            type: 'info',
-            position: 'bottom-right',
-            message: 'Setting substitutes arrives with the item detail revamp.',
+    // ── Bulk add to list ────────────────────────────────────────────────
+    // Round-18: always prompt for the target list, then add every
+    // selected item to it. The server's addLineAsync already de-dupes
+    // ("already on list"); items already on a DIFFERENT list still get
+    // added (multi-list membership is fine).
+    async function pickActiveListId(title: string, source: 'all' | 'present-only'): Promise<string | null> {
+        const m = shoppingListStore.membership;
+        const all = (m?.active_lists ?? []).filter((l) => l.status !== 'done');
+        let candidates = all;
+        if (source === 'present-only') {
+            const ids = new Set<string>();
+            for (const sid of bulkSelection.value) {
+                const entry = m?.items.find((i) => i.stock_item_id === sid);
+                entry?.unticked_list_ids.forEach((lid) => ids.add(lid));
+            }
+            candidates = all.filter((l) => ids.has(l.shopping_list_id));
+        }
+        if (candidates.length === 0) {
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: source === 'present-only'
+                    ? 'None of the selected items are on a list.'
+                    : 'No active lists. Create one first.',
+            });
+            return null;
+        }
+        return await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title,
+                options: {
+                    type: 'radio',
+                    model: candidates[0]!.shopping_list_id,
+                    items: candidates.map((l) => ({ label: l.name, value: l.shopping_list_id })),
+                },
+                cancel: true,
+                persistent: false,
+            })
+                .onOk((val: string) => resolve(val))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
         });
+    }
+
+    async function bulkAddToListPrompt() {
+        if (bulkSelection.value.size === 0) return;
+        const listId = await pickActiveListId('Add to which list?', 'all');
+        if (!listId) return;
+        bulkBusy.value = true;
+        try {
+            const ids = [...bulkSelection.value];
+            await slActions.addItems(listId, ids.map((id) => ({ stock_item_id: id })));
+            cancelBulk();
+        } finally {
+            bulkBusy.value = false;
+        }
+    }
+
+    async function bulkRemoveFromListPrompt() {
+        if (bulkSelection.value.size === 0) return;
+        const listId = await pickActiveListId('Remove from which list?', 'present-only');
+        if (!listId) return;
+        bulkBusy.value = true;
+        try {
+            const list = await stockOverviewExportRemoveHelper(listId);
+            const selected = bulkSelection.value;
+            const linesToDelete = list.lines.filter(
+                (l) => l.stock_item_id && selected.has(l.stock_item_id),
+            );
+            for (const line of linesToDelete) {
+                await shoppingListApi.deleteLineAsync(listId, line.line_id);
+            }
+            await shoppingListStore.refreshAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Removed ${linesToDelete.length} from "${list.display_name ?? list.name ?? 'list'}".`,
+            });
+            cancelBulk();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not remove from list.',
+                caption: describeApiError(err) || '',
+            });
+        } finally {
+            bulkBusy.value = false;
+        }
+    }
+
+    // Thin wrapper so the remove handler can fetch the list lines without
+    // pulling another API instance into the file scope.
+    async function stockOverviewExportRemoveHelper(listId: string) {
+        return await shoppingListApi.getDetailAsync(listId);
     }
 
     // ── Bulk move location ───────────────────────────────────────────────

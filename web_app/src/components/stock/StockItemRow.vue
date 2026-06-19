@@ -38,6 +38,17 @@
                  content height minus a small margin so it stays
                  inside the row's status outline.
             ────────────────────────────────────────────────────────── -->
+            <!-- Round-18: in bulk mode the checkbox sits to the LEFT of
+                 the image — tap target is closer to the row's natural
+                 entry point, and the image still anchors the row's
+                 visual identity. -->
+            <q-checkbox
+                v-if="bulkMode"
+                :model-value="selected"
+                @click.stop
+                @update:model-value="emit('bulk-toggle', item.stock_item_id)"
+            />
+
             <div
                 v-if="showStockImages"
                 class="stock-row__image"
@@ -56,13 +67,6 @@
                     class="dora-text-muted"
                 />
             </div>
-
-            <q-checkbox
-                v-if="bulkMode"
-                :model-value="selected"
-                @click.stop
-                @update:model-value="emit('bulk-toggle', item.stock_item_id)"
-            />
 
             <!-- ──────────────────────────────────────────────────────
                  Stock-level button (L70): big, coloured, text-less.

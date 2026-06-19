@@ -19,90 +19,64 @@
             <q-separator />
 
             <q-card-section class="q-pb-none">
+                <div class="text-subtitle2">Mode</div>
+                <div class="text-caption dora-text-muted q-mb-md">
+                    <strong>System</strong> follows your browser's
+                    <code>prefers-color-scheme</code> for whichever theme
+                    you pick below. <strong>Light</strong> and <strong>Dark</strong>
+                    lock the mode regardless of the OS.
+                </div>
+                <q-btn-toggle
+                    v-model="modeDraft"
+                    no-caps
+                    spread
+                    toggle-color="primary"
+                    :options="[
+                        { label: 'System', value: 'system', icon: ICONS.brightness_auto },
+                        { label: 'Light', value: 'light', icon: ICONS.light_mode },
+                        { label: 'Dark', value: 'dark', icon: ICONS.dark_mode },
+                    ]"
+                    @update:model-value="onModeChange"
+                />
+            </q-card-section>
+
+            <q-card-section class="q-pb-none">
                 <div class="text-subtitle2">Theme</div>
                 <div class="text-caption dora-text-muted q-mb-md">
-                    Pick a palette for the app. <strong>System</strong>
-                    follows your browser's <code>prefers-color-scheme</code>
-                    and flips between Pesto and Pesto Dark. Every other
-                    family ships a Light and Dark variant — pick whichever
-                    you prefer.
+                    Pick a palette. The swatch on each card shows the
+                    {{ modeDraft === 'system'
+                        ? `variant your OS is currently set to (${osCurrentlyDark ? 'dark' : 'light'})`
+                        : modeDraft + ' variant' }}.
                 </div>
                 <div class="theme-grid">
-                    <!-- System card stays separate — it's a meta-option. -->
+                    <!-- Round-19: one card per family, single-swatch
+                         (no light/dark buttons inside). Mode lives in the
+                         toggle above; clicking a card just selects the
+                         family. The swatch reflects whichever variant the
+                         current mode resolves to right now. -->
                     <button
-                        type="button"
-                        class="theme-card theme-card--system"
-                        :class="{ 'theme-card--active': themeDraft === 'system' }"
-                        @click="onThemeChange('system')"
-                    >
-                        <div class="theme-swatch theme-swatch--system">
-                            <q-icon :name="ICONS.brightness_auto" size="28px" />
-                        </div>
-                        <div class="theme-card-body">
-                            <div class="theme-card-label">System</div>
-                            <div class="theme-card-blurb">
-                                Follows your OS — Pesto by day, Pesto
-                                Dark at night.
-                            </div>
-                        </div>
-                    </button>
-
-                    <!-- One card per family, with Light + Dark toggle inside. -->
-                    <div
                         v-for="family in themeFamilies"
                         :key="family.key"
+                        type="button"
                         class="theme-card theme-card--family"
                         :class="{
-                            'theme-card--active': themeDraft === family.light || themeDraft === family.dark,
+                            'theme-card--active': familyDraft === family.key,
                         }"
+                        @click="onFamilyChange(family)"
                     >
-                        <div class="theme-swatch-pair">
-                            <div class="theme-swatch theme-swatch--half">
-                                <span
-                                    v-for="(hex, i) in lightSwatch(family)"
-                                    :key="`l-${i}`"
-                                    class="theme-swatch-strip"
-                                    :style="{ background: hex }"
-                                />
-                            </div>
-                            <div class="theme-swatch theme-swatch--half theme-swatch--half-dark">
-                                <span
-                                    v-for="(hex, i) in darkSwatch(family)"
-                                    :key="`d-${i}`"
-                                    class="theme-swatch-strip"
-                                    :style="{ background: hex }"
-                                />
-                            </div>
+                        <div class="theme-swatch theme-swatch--single">
+                            <span
+                                v-for="(hex, i) in swatchFor(family)"
+                                :key="`s-${i}`"
+                                class="theme-swatch-strip"
+                                :style="{ background: hex }"
+                            />
                         </div>
                         <div class="theme-card-body">
                             <div class="theme-card-label">{{ family.label }}</div>
                             <div class="theme-card-blurb">{{ family.blurb }}</div>
-                            <div class="theme-variant-toggle">
-                                <q-btn
-                                    no-caps
-                                    dense
-                                    flat
-                                    size="sm"
-                                    :icon="ICONS.light_mode"
-                                    label="Light"
-                                    class="theme-variant-btn"
-                                    :class="{ 'theme-variant-btn--active': themeDraft === family.light }"
-                                    @click="onThemeChange(family.light as ThemePreference)"
-                                />
-                                <q-btn
-                                    no-caps
-                                    dense
-                                    flat
-                                    size="sm"
-                                    :icon="ICONS.dark_mode"
-                                    label="Dark"
-                                    class="theme-variant-btn"
-                                    :class="{ 'theme-variant-btn--active': themeDraft === family.dark }"
-                                    @click="onThemeChange(family.dark as ThemePreference)"
-                                />
-                            </div>
                         </div>
-                    </div>
+                    </button>
                 </div>
             </q-card-section>
 
@@ -641,7 +615,14 @@
         FontSizePreference,
         ThemePreference
     } from 'src/models/auth';
-    import { THEMES, THEME_FAMILIES, type ThemeFamily } from 'src/services/themeService';
+    import {
+        THEMES,
+        THEME_FAMILIES,
+        familyAndModeOf,
+        themeKeyFor,
+        osPrefersDark,
+        type ThemeFamily,
+    } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
@@ -720,15 +701,48 @@
         (currentUser.value?.alerts_email_cadence === 'weekly') ? 'weekly' : 'daily'
     );
     const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
-    // Theme catalogue surfaced by the picker. `system` is rendered
-    // manually (meta-option), then one card per family — each family
-    // has paired Light + Dark variant buttons inside.
+    // Theme catalogue surfaced by the picker. Round-19: mode (System /
+    // Light / Dark) and family (Pesto / Lemon Tart / …) are two
+    // independent draft refs, derived from the persisted single-key
+    // ThemePreference at load time and resolved back to one key on save.
     const themeFamilies = computed(() => THEME_FAMILIES);
-    function lightSwatch(family: ThemeFamily): string[] {
-        return THEMES[family.light]?.swatch ?? [];
+    type ThemeMode = 'system' | 'light' | 'dark';
+
+    function modeAndFamilyForKey(key: string): { mode: ThemeMode; familyKey: string } {
+        const decoded = familyAndModeOf(key);
+        if (decoded) return { mode: decoded.mode, familyKey: decoded.family.key };
+        // Unknown / legacy fallback — default to System + Pesto.
+        return { mode: 'system', familyKey: THEME_FAMILIES[0]!.key };
     }
-    function darkSwatch(family: ThemeFamily): string[] {
-        return THEMES[family.dark]?.swatch ?? [];
+
+    const initialThemeKey: string = currentUser.value?.theme ?? 'system';
+    const initial = modeAndFamilyForKey(initialThemeKey);
+    const modeDraft = ref<ThemeMode>(initial.mode);
+    const familyDraft = ref<string>(initial.familyKey);
+
+    // Track the OS's current preference so the "swatch shows X" caption
+    // and per-card single swatch reflect it under mode=system. matchMedia
+    // change events let the cards update if the OS flips while the user
+    // is on this page.
+    const osCurrentlyDark = ref<boolean>(osPrefersDark());
+    let mql: MediaQueryList | null = null;
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        mql = window.matchMedia('(prefers-color-scheme: dark)');
+        const onChange = (e: MediaQueryListEvent) => { osCurrentlyDark.value = e.matches; };
+        if ('addEventListener' in mql) {
+            mql.addEventListener('change', onChange);
+        }
+    }
+
+    /** Show whichever variant's swatch the current mode resolves to. For
+     *  `system`, that's whichever side the OS is on right now. */
+    function swatchFor(family: ThemeFamily): string[] {
+        const key = modeDraft.value === 'dark'
+            ? family.dark
+            : modeDraft.value === 'light'
+                ? family.light
+                : osCurrentlyDark.value ? family.dark : family.light;
+        return THEMES[key]?.swatch ?? [];
     }
 
     const themeDraft = ref<ThemePreference>(currentUser.value?.theme ?? 'system');
@@ -763,6 +777,9 @@
         emailDraft.value = u.email ?? '';
         sendDealsOnDay.value = u.send_deals_on_day ?? 0;
         themeDraft.value = u.theme;
+        const decoded = modeAndFamilyForKey(u.theme);
+        modeDraft.value = decoded.mode;
+        familyDraft.value = decoded.familyKey;
         fontFamilyDraft.value = u.font_family;
         fontSizeDraft.value = u.font_size;
         budgetAmountDraft.value = u.budget_amount ?? null;
@@ -816,7 +833,28 @@
         const result = await update('Theme updated.', () =>
             authStore.updateMeAsync({ theme: value })
         );
-        if (result === null) themeDraft.value = previous;
+        if (result === null) {
+            themeDraft.value = previous;
+            const decoded = modeAndFamilyForKey(previous);
+            modeDraft.value = decoded.mode;
+            familyDraft.value = decoded.familyKey;
+        }
+    }
+
+    /** Mode pill changed (System / Light / Dark). Persist by recombining
+     *  with the current family. */
+    async function onModeChange(value: ThemeMode) {
+        const family = THEME_FAMILIES.find((f) => f.key === familyDraft.value)
+            ?? THEME_FAMILIES[0]!;
+        const next = themeKeyFor(value, family);
+        await onThemeChange(next);
+    }
+
+    /** Family card clicked. Persist by recombining with the current mode. */
+    async function onFamilyChange(family: ThemeFamily) {
+        familyDraft.value = family.key;
+        const next = themeKeyFor(modeDraft.value, family);
+        await onThemeChange(next);
     }
 
     async function onFontFamilyChange(value: FontFamilyPreference) {
@@ -1066,11 +1104,12 @@
 </script>
 
 <style scoped>
-    /* Theme picker — one card per family, each with paired Light/Dark
-       buttons inside. System (a meta-option) renders as its own card. */
+    /* Theme picker — round 19. Mode (System / Light / Dark) is a
+       separate q-btn-toggle above; the cards are one-per-family and
+       carry only the single swatch the current mode resolves to. */
     .theme-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
         gap: 16px;
     }
     .theme-card {
@@ -1084,11 +1123,7 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
-    }
-    .theme-card--system {
         cursor: pointer;
-        flex-direction: row;
-        align-items: center;
     }
     .theme-card:hover {
         border-color: var(--border-strong);
@@ -1108,26 +1143,8 @@
         justify-content: center;
         background: var(--surface-sunken);
     }
-    .theme-swatch--system {
-        width: 56px;
-        height: 56px;
-        flex: 0 0 56px;
-        background: var(--brand-primary-soft);
-        color: var(--brand-primary);
-    }
-    .theme-swatch-pair {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
+    .theme-swatch--single {
         height: 44px;
-    }
-    .theme-swatch--half {
-        height: 100%;
-        margin-bottom: 0;
-    }
-    .theme-swatch--half-dark {
-        outline: 1px solid var(--border-default);
-        outline-offset: -1px;
     }
     .theme-swatch-strip {
         flex: 1 1 0;
@@ -1147,26 +1164,5 @@
         /* A6 — scale token (was fixed 12px). */
         font-size: calc(var(--font-size-xs) * 1rem);
         line-height: 1.35;
-    }
-    .theme-variant-toggle {
-        display: flex;
-        gap: 6px;
-        margin-top: 6px;
-    }
-    .theme-variant-btn {
-        flex: 1 1 0;
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md, 6px);
-        color: var(--text-secondary);
-        transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-    }
-    .theme-variant-btn:hover {
-        border-color: var(--border-strong);
-        color: var(--text-primary);
-    }
-    .theme-variant-btn--active {
-        background: var(--brand-primary);
-        color: var(--text-on-primary);
-        border-color: var(--brand-primary);
     }
 </style>

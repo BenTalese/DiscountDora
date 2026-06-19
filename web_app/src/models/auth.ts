@@ -5,6 +5,17 @@
 // `pesto` (a fresher green) took over as the brand default.
 export type ThemePreference =
     | 'system'
+    // Round-19: per-family system-mode keys so the picker can split mode
+    // (System / Light / Dark) and family (Pesto / Lemon Tart / …)
+    // independently — picking System + Cherry Cola now actually follows
+    // the OS using Cherry Cola variants, not the old hardcoded pesto
+    // fallback. The bare `system` legacy key still resolves to the
+    // pesto family for back-compat.
+    | 'system-pesto'
+    | 'system-lemon-tart'
+    | 'system-blueberry'
+    | 'system-cherry-cola'
+    | 'system-sourdough'
     | 'pesto'
     | 'pesto-dark'
     | 'lemon-tart'

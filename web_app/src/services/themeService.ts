@@ -217,6 +217,7 @@ export interface ThemeFamily {
     blurb: string;          // 1-line description
     light: string;          // theme key for the light variant
     dark: string;           // theme key for the dark variant
+    system: string;         // theme key for the system-follows-OS variant
 }
 
 export const THEME_FAMILIES: readonly ThemeFamily[] = [
@@ -224,61 +225,84 @@ export const THEME_FAMILIES: readonly ThemeFamily[] = [
         key: 'pesto',
         label: 'Pesto',
         blurb: "Fresh garden green + teal with a golden accent. Dora's default.",
-        light: 'pesto', dark: 'pesto-dark',
+        light: 'pesto', dark: 'pesto-dark', system: 'system-pesto',
     },
     {
         key: 'lemon-tart',
         label: 'Lemon Tart',
         blurb: 'Warm yellow on cream by day, charcoal + sunset by night.',
-        light: 'lemon-tart', dark: 'lemon-tart-dark',
+        light: 'lemon-tart', dark: 'lemon-tart-dark', system: 'system-lemon-tart',
     },
     {
         key: 'blueberry',
         label: 'Blueberry',
         blurb: 'Cool cobalt + navy — focused, easy on long-session eyes.',
-        light: 'blueberry', dark: 'blueberry-dark',
+        light: 'blueberry', dark: 'blueberry-dark', system: 'system-blueberry',
     },
     {
         key: 'cherry-cola',
         label: 'Cherry Cola',
         blurb: 'Bold cherry red + cocoa, with a caramel pop.',
-        light: 'cherry-cola', dark: 'cherry-cola-dark',
+        light: 'cherry-cola', dark: 'cherry-cola-dark', system: 'system-cherry-cola',
     },
     {
         key: 'sourdough',
         label: 'Sourdough',
         blurb: 'Toasty amber + brown crust. Rustic any time of day.',
-        light: 'sourdough', dark: 'sourdough-dark',
+        light: 'sourdough', dark: 'sourdough-dark', system: 'system-sourdough',
     },
 ];
 
-/** Reverse index: given a theme key (e.g. 'pesto-dark') return its
- *  family + which variant it is. Used by the picker to render the
- *  active state. */
-export function familyAndVariantOf(themeKey: string): { family: ThemeFamily; variant: 'light' | 'dark' } | null {
+/** Reverse index: given a theme key (e.g. 'pesto-dark' / 'system-cherry-cola')
+ *  return its family + which mode the picker should show as active. */
+export function familyAndModeOf(themeKey: string): { family: ThemeFamily; mode: 'system' | 'light' | 'dark' } | null {
     for (const fam of THEME_FAMILIES) {
-        if (fam.light === themeKey) return { family: fam, variant: 'light' };
-        if (fam.dark === themeKey) return { family: fam, variant: 'dark' };
+        if (fam.system === themeKey) return { family: fam, mode: 'system' };
+        if (fam.light === themeKey) return { family: fam, mode: 'light' };
+        if (fam.dark === themeKey) return { family: fam, mode: 'dark' };
+    }
+    // Legacy bare `system` maps to the Pesto family in system mode.
+    if (themeKey === 'system') {
+        return { family: THEME_FAMILIES[0]!, mode: 'system' };
     }
     return null;
 }
 
-/** Map any persisted value (including legacy keys) to a current theme
- *  key. `system` follows OS preference — Pesto in light mode,
- *  Pesto Dark in dark mode (the brand stays consistent across both). */
+/** Resolve (mode, family) back into the persistable theme key. The
+ *  picker reads `themeKeyFor('dark', 'cherry-cola')` etc. to figure out
+ *  what to save when the user clicks a card. */
+export function themeKeyFor(
+    mode: 'system' | 'light' | 'dark',
+    family: ThemeFamily,
+): ThemePreference {
+    if (mode === 'system') return family.system as ThemePreference;
+    if (mode === 'dark') return family.dark as ThemePreference;
+    return family.light as ThemePreference;
+}
+
+/** What does the OS currently prefer? Returns 'dark' or 'light', with
+ *  'light' as the fallback when matchMedia isn't available. */
+export function osPrefersDark(): boolean {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+/** Map any persisted value (including legacy keys) to a current concrete
+ *  theme key in `THEMES`. `system-<family>` and the legacy bare `system`
+ *  flip between the family's light + dark variant based on the OS's
+ *  `prefers-color-scheme`. */
 function resolveThemeKey(pref: ThemePreference): string {
     // Legacy migrations
     if (pref === 'light' || pref === 'avocado') return 'pesto';
     if (pref === 'pesto-noir') return 'pesto-dark';
     if (pref === 'midnight-snack') return 'lemon-tart-dark';
     if (pref === 'dark') return 'pesto-dark';
-    if (pref === 'system') {
-        if (typeof window !== 'undefined' && window.matchMedia) {
-            return window.matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'pesto-dark'
-                : 'pesto';
-        }
-        return 'pesto';
+    if (pref === 'system') return osPrefersDark() ? 'pesto-dark' : 'pesto';
+    // Round-19: per-family system keys. Lookup the family + flip on OS pref.
+    if (typeof pref === 'string' && pref.startsWith('system-')) {
+        const family = THEME_FAMILIES.find((f) => f.system === pref);
+        if (family) return osPrefersDark() ? family.dark : family.light;
+        return osPrefersDark() ? 'pesto-dark' : 'pesto';
     }
     return THEMES[pref] ? pref : 'pesto';
 }

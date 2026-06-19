@@ -9,8 +9,9 @@ from dora_api.domain.entities.base_entity import BaseEntity
 THEME_SYSTEM = "system"
 # Named themes — five families with paired light + dark variants. See
 # web_app/src/services/themeService.ts THEME_FAMILIES for the source-
-# of-truth palette + label metadata. `system` resolves on the client to
-# `pesto` (OS light) / `pesto-dark` (OS dark).
+# of-truth palette + label metadata. `system` (and the per-family
+# `system-*` variants below) resolves on the client based on
+# `prefers-color-scheme`.
 THEME_PESTO = "pesto"
 THEME_PESTO_DARK = "pesto-dark"
 THEME_LEMON_TART = "lemon-tart"
@@ -21,6 +22,14 @@ THEME_CHERRY_COLA = "cherry-cola"
 THEME_CHERRY_COLA_DARK = "cherry-cola-dark"
 THEME_SOURDOUGH = "sourdough"
 THEME_SOURDOUGH_DARK = "sourdough-dark"
+# Round-19 — per-family system mode. Splits the Preferences picker into
+# Mode (System / Light / Dark) + Theme (Pesto / Lemon Tart / …) so a
+# user can follow the OS using any family's variants, not just Pesto.
+THEME_SYSTEM_PESTO = "system-pesto"
+THEME_SYSTEM_LEMON_TART = "system-lemon-tart"
+THEME_SYSTEM_BLUEBERRY = "system-blueberry"
+THEME_SYSTEM_CHERRY_COLA = "system-cherry-cola"
+THEME_SYSTEM_SOURDOUGH = "system-sourdough"
 # Legacy values accepted on the wire so existing rows don't fail
 # validation; the SPA's themeService maps each to a current key at
 # apply time:
@@ -40,6 +49,12 @@ ALLOWED_THEMES = (
     THEME_BLUEBERRY, THEME_BLUEBERRY_DARK,
     THEME_CHERRY_COLA, THEME_CHERRY_COLA_DARK,
     THEME_SOURDOUGH, THEME_SOURDOUGH_DARK,
+    # Per-family system keys (round-19).
+    THEME_SYSTEM_PESTO,
+    THEME_SYSTEM_LEMON_TART,
+    THEME_SYSTEM_BLUEBERRY,
+    THEME_SYSTEM_CHERRY_COLA,
+    THEME_SYSTEM_SOURDOUGH,
     # Legacy
     THEME_PESTO_NOIR,
     THEME_MIDNIGHT_SNACK,

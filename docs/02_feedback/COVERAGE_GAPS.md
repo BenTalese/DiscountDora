@@ -111,7 +111,11 @@ Deferred area per master plan, but the bullets are actionable.
 - [OPEN] Theme **type** (system / light / dark) separated from theme
   **identity** (pesto, lemon, …) — two dropdowns, not coloured
   light/dark buttons on each theme card.
-- [OPEN] Profile picture — set/update; surface on the menu-bar avatar.
+- [ADDRESSED] Profile picture — set/update; surface on the menu-bar
+  avatar. Folded into `IMPL_PLAN_SETTINGS_REBUILD.md` §2.9 + Phase 4
+  (raised 2026-06-21). Phase 4 ships the backend column + endpoints +
+  the SPA `UserAvatar` component for the menu bar. Flip this entry to
+  RESOLVED once Phase 4 lands.
 
 **Recommended home:** small additions to a deferred-Settings polish
 prompt (or fold into Wave A theme work).

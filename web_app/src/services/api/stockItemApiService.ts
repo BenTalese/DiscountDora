@@ -1,5 +1,6 @@
 import type { StockItem } from 'src/models/stockItem';
 import type { StockItemDetail } from 'src/models/stockItemDetail';
+import type { StockItemPriceHistory } from './priceHistoryApiService';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
 import { createQueryString, FilterOperator, type Page } from './queryStringBuilder';
@@ -145,6 +146,14 @@ export default class StockItemApiService {
     deletePriceObservationAsync = async (stockItemID: string, observationID: string): Promise<void> =>
         await this.httpClient.delete<void>(
             `/stock-items/${stockItemID}/price-observations/${observationID}`,
+        );
+
+    // FU-227 chunk 6 — unioned price-history series (observations ∪ linked
+    // offers, normalised per-unit server-side) for the "Full history"
+    // bottom-sheet. Money-gated at the UI surface that opens the sheet.
+    getPriceHistoryAsync = async (stockItemID: string): Promise<StockItemPriceHistory> =>
+        await this.httpClient.get<StockItemPriceHistory>(
+            `/stock-items/${stockItemID}/price-history`,
         );
 }
 

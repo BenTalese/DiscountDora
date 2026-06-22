@@ -9,17 +9,66 @@ export interface PriceHistoryPoint {
     on_deal: boolean;
 }
 
+// FU-227 chunk 6 — the user's own observation points (per-unit, "your data").
+// `on_deal`/`list_price` don't apply (an observation isn't an offer), so this
+// is a lighter shape than PriceHistoryPoint.
+export interface PriceObservationPoint {
+    date: string | null;
+    unit_price: number | null;
+    store_name?: string | null;
+}
+
+// FU-227 chunk 6 — per-series baseline block (F-3). Server-derived (R-003);
+// the chart renders the reference line + above-usual chip, never recomputes.
+export interface SeriesYourPrices {
+    baseline: number | null;
+    baseline_unit: string | null;
+    current: number | null;
+    above_baseline: boolean;
+    sample_count: number;
+}
+
 export interface PriceHistorySeries {
     product_id: string;
     name: string;
     store: string;
     points: PriceHistoryPoint[];
+    /** FU-227 chunk 6 (H2) — the user's own price observations for this
+     *  product, normalised per-unit. The chart renders them only when the
+     *  product has no offer points (H2 fallback) on the per-product page, or
+     *  always when `offersAsContext` (the bottom-sheet union view). */
+    observation_points?: PriceObservationPoint[];
+    /** FU-227 chunk 6 (F-3) — baseline + above-usual signal for the chart's
+     *  reference line. Null when below MIN_SAMPLES / no observations. */
+    your_prices?: SeriesYourPrices | null;
     current: {
         unit_price: number | null;
         list_price: number | null;
         deal_pct: number | null;
     } | null;
     all_time_low: { unit_price: number; date: string | null } | null;
+}
+
+// FU-227 chunk 6 — per-stock-item unioned series for the "Full history"
+// bottom-sheet. Points are tagged by `source` and already normalised to
+// `canonical_unit` server-side.
+export interface StockItemPriceHistoryPoint {
+    observed_at: string;
+    unit_price: number;
+    source: 'observation' | 'offer';
+    store_name: string | null;
+}
+
+export interface StockItemPriceHistory {
+    stock_item_id: string;
+    name: string;
+    canonical_unit: string | null;
+    baseline: number | null;
+    baseline_unit: string | null;
+    current: number | null;
+    above_baseline: boolean;
+    sample_count: number;
+    points: StockItemPriceHistoryPoint[];
 }
 
 export interface PriceAlert {

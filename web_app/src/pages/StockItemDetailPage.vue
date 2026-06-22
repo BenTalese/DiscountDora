@@ -487,6 +487,8 @@
                                     :prefill="detail.price_entry_prefill ?? null"
                                     :stores="storesList"
                                     :busy="busy"
+                                    :stock-item-id="stockItemId"
+                                    :item-name="detail.name"
                                     @submit="addObservation"
                                 />
                                 <q-list

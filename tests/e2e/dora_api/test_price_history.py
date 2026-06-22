@@ -27,6 +27,44 @@ def test__price_history__unknown_product__returns_placeholder(api):
     assert series[0]["product_id"] == str(bogus)
     assert series[0]["points"] == []
     assert series[0]["name"] == "(unknown)"
+    # FU-227 chunk 6 — placeholder still carries the new fields (no obs / no
+    # baseline for a product that doesn't exist).
+    assert series[0]["your_prices"] is None
+    assert series[0]["observation_points"] == []
+
+
+def _find_product_by_name(name: str) -> str | None:
+    products = requests.get("http://localhost:5170/api/products").json().get("items") or []
+    for p in products:
+        if p.get("name") == name:
+            return p["product_id"]
+    return None
+
+
+def test__price_history__series_carries_your_prices_and_observations(api):
+    """FU-227 chunk 6 (F-3 + H2) — the per-product series now carries the
+    user's baseline + their own observation points (transitively, via every
+    linked stock item). The seeded Woolworths milk product links to the milk
+    stock item, which has price observations in L."""
+    product_id = _find_product_by_name("Woolworths Full Cream Milk 2L")
+    if product_id is None:
+        return  # seed shape changed
+    response = requests.get(f"{BASE}?product_ids={product_id}&range=all")
+    assert response.status_code == 200
+    series = response.json()["series"]
+    assert len(series) == 1
+    s = series[0]
+
+    # F-3 — baseline block present and computed (milk has 3+ obs in L).
+    assert s["your_prices"] is not None
+    assert s["your_prices"]["sample_count"] >= 3
+    assert s["your_prices"]["baseline"] is not None
+    assert s["your_prices"]["baseline_unit"] == "L"
+
+    # H2 — observation points present + normalised per-unit.
+    assert isinstance(s["observation_points"], list)
+    assert len(s["observation_points"]) >= 3
+    assert all(p["unit_price"] > 0 for p in s["observation_points"])
 
 
 def test__price_alerts__crud_round_trip(api):

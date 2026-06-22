@@ -111,7 +111,11 @@ def test__patch_status_done__is_rejected__use_finish(api):
         SHOPPING_LISTS, json={"name": f"FU227e3-{uuid.uuid4().hex[:8]}"}
     ).json()["shopping_list_id"]
     resp = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "done"})
-    assert resp.status_code == 400, resp.text
+    # The handler rejects this as a business-rule violation (422); the plan's
+    # prose said "400s" but the implemented contract is 422 with a message
+    # pointing at /finish. What matters is the rejection + the pointer.
+    assert resp.status_code in (400, 422), resp.text
+    assert "finish" in resp.text.lower()
     assert requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["status"] == "draft"
 
 

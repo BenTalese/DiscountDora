@@ -27,6 +27,8 @@ from sqlalchemy import and_, select
 from dora_api.app import db
 from dora_api.domain.entities.price_alert import PriceAlert
 from dora_api.features.routers import PRICE_HISTORY_ROUTER
+from dora_api.features.stock_items.your_prices import (
+    build_product_observation_series, build_your_prices_for_product)
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
@@ -153,6 +155,14 @@ def get_price_history():
             ),
         })
 
+    # FU-227 chunk 6 (H2 + F-3) — the user's own observation overlay + the
+    # baseline reference line. Observations are normalised per-unit and the
+    # baseline rides the chunk-4 chokepoint (R-003). The SPA renders the
+    # observation series only when a product has no offers (the H2 fallback)
+    # so the per-unit observation scale never clashes with the raw offer scale
+    # on a product that has offers (decision: H2-fallback-only).
+    _Repo = SqlAlchemyRepository()
+
     for pid in ids:
         product = products_by_id.get(pid)
         if product is None:
@@ -161,6 +171,7 @@ def get_price_history():
             series.append({
                 "product_id": str(pid), "name": "(unknown)", "store": "",
                 "points": [], "current": None, "all_time_low": None,
+                "your_prices": None, "observation_points": [],
             })
             continue
         current = current_by_product.get(pid)
@@ -171,6 +182,10 @@ def get_price_history():
                 deal_pct = max(0, int(round(pct)))
             except (TypeError, ZeroDivisionError):
                 deal_pct = None
+
+        _Yp = build_your_prices_for_product(_Repo, pid)
+        _ObsUnit, _ObsPoints = build_product_observation_series(_Repo, pid)
+
         series.append({
             "product_id": str(pid),
             "name": product["name"],
@@ -185,6 +200,24 @@ def get_price_history():
                 if current else None
             ),
             "all_time_low": atl_by_product.get(pid),
+            # F-3 — baseline + above-usual signal for this product's own prices.
+            "your_prices": {
+                "baseline": _Yp.baseline,
+                "baseline_unit": _Yp.baseline_unit,
+                "current": _Yp.current,
+                "above_baseline": _Yp.above_baseline,
+                "sample_count": _Yp.sample_count,
+            },
+            # H2 — per-unit observation series ("date" matches the offer
+            # points' key so the chart treats them uniformly).
+            "observation_points": [
+                {
+                    "date": p.observed_at.isoformat() if p.observed_at else None,
+                    "unit_price": p.unit_price,
+                    "store_name": p.store_name,
+                }
+                for p in _ObsPoints
+            ],
         })
 
     _Logger.debug(

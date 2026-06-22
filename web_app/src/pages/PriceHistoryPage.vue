@@ -153,6 +153,31 @@
                                     · currently {{ aboveLowPct(s) }}% above
                                 </span>
                             </div>
+                            <!-- FU-227 chunk 6 (F-3) — the user's own usual
+                                 price for this product + above-usual signal. A
+                                 caption (not on the chart axis) so the per-unit
+                                 baseline never clashes with the raw offer scale. -->
+                            <div
+                                v-if="s.your_prices?.baseline != null"
+                                class="text-caption dora-text-muted-7 q-mt-xs"
+                            >
+                                Your usual:
+                                <strong>
+                                    ${{ s.your_prices.baseline.toFixed(2)
+                                    }}{{ s.your_prices.baseline_unit ? `/${s.your_prices.baseline_unit}` : '' }}
+                                </strong>
+                                <q-chip
+                                    v-if="s.your_prices.above_baseline"
+                                    dense
+                                    size="sm"
+                                    color="warning"
+                                    text-color="white"
+                                    class="q-ml-xs"
+                                    :icon="ICONS.trending_up"
+                                >
+                                    above usual
+                                </q-chip>
+                            </div>
                         </q-card-section>
                         <q-card-section v-else class="text-caption dora-text-muted-5">
                             No data yet.

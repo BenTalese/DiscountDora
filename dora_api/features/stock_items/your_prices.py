@@ -329,16 +329,90 @@ def build_your_prices_for_product(
     )
 
 
-def _build_offers_sidecar(
-    repo, stock_item_id: UUID, *, canonical_unit: str,
-) -> list[OfferSidecarEntry]:
-    """LC-2 — "Current shelf prices: $X at Y · $Z at W" for products users.
+# ── Price-history series (FU-227 chunk 6) ─────────────────────────────────
+#
+# The bottom-sheet "Full history" chart (C5b) and the per-product Price-History
+# page's H2 observation overlay both render a *per-unit* series. These helpers
+# normalise every point to the active dimension's canonical unit (the same
+# basis as the baseline median) so "your data" (observations) and "context"
+# (linked-product offers) sit on one comparable y-axis. R-003: all the
+# normalisation lives here, never on the client.
 
-    Reads the current offers of every linked product, normalised to the
-    same canonical unit as the baseline so they're directly comparable
-    visually. Never returns offers in a different dimension than the
-    baseline (a sized product in ml can't sit next to a count baseline).
-    """
+
+@dataclass(frozen=True, slots=True)
+class PriceSeriesPoint:
+    """One point on the unioned price-history chart, already normalised to the
+    series' canonical unit. ``source`` drives the chart's D2 styling
+    (observations = solid + dots / "your data"; offers = dashed + faint /
+    "context")."""
+    observed_at: datetime
+    unit_price: float           # per canonical unit (L / kg / ea)
+    source: str                 # "observation" | "offer"
+    store_name: str | None
+
+
+def _resolve_store_names(repo, store_ids: Iterable[UUID | None]) -> dict[UUID, str]:
+    """Batch-resolve store names for a set of (possibly-None) store ids."""
+    ids = {sid for sid in store_ids if sid is not None}
+    if not ids:
+        return {}
+    out: dict[UUID, str] = {}
+    for s in repo.get(Store).all(EntityField(Store, "id").in_(list(ids))):
+        out[s.id] = s.name
+    return out
+
+
+def _active_dim_from_latest(
+    observations: list[StockItemPriceObservation],
+) -> str | None:
+    """Active price dimension = dimension of the most-recent observation (B4).
+    None when there are no observations or the latest unit is non-price."""
+    if not observations:
+        return None
+    latest = max(observations, key=lambda o: o.observed_at)
+    latest_def = units.find_unit(latest.unit)
+    if latest_def is None or latest_def.dimension not in units.PRICE_DIMENSIONS:
+        return None
+    return latest_def.dimension
+
+
+def _observation_points(
+    observations: list[StockItemPriceObservation],
+    *,
+    active_dim: str,
+    store_names: dict[UUID, str],
+) -> list[PriceSeriesPoint]:
+    """Normalise the in-dimension observations to per-canonical-unit points."""
+    points: list[PriceSeriesPoint] = []
+    for obs in observations:
+        obs_def = units.find_unit(obs.unit)
+        if obs_def is None or obs_def.dimension != active_dim:
+            continue
+        pu = _per_unit_in_canonical(
+            total_price=obs.total_price,
+            total_measure=obs.total_measure,
+            unit=obs.unit,
+        )
+        if pu is None:
+            continue
+        points.append(PriceSeriesPoint(
+            observed_at=obs.observed_at,
+            unit_price=pu[0],
+            source="observation",
+            store_name=store_names.get(obs.store_id) if obs.store_id is not None else None,
+        ))
+    return points
+
+
+def _linked_products(repo, stock_item_id: UUID) -> list[Product]:
+    """Linked products for a stock item, via the unmapped StockItemProduct
+    join table, with their store + offers eager-loaded.
+
+    The offer/store relationships are ``lazy="noload"`` (table_mappings), so a
+    bare ``repo.get(Product).all(...)`` leaves ``current_offer``/
+    ``historic_offers``/``store`` empty — the includes are required to populate
+    them. (This is the single linked-product loader for the file; the offers
+    sidecar routes through it too.)"""
     from sqlalchemy import select
     from dora_api.app import db
 
@@ -353,10 +427,163 @@ def _build_offers_sidecar(
     ]
     if not product_ids:
         return []
-
-    products: Iterable[Product] = repo.get(Product).all(
-        EntityField(Product, "id").in_(product_ids)
+    return list(
+        repo.get(Product)
+        .include("store")
+        .include("current_offer")
+        .include("historic_offers")
+        .all(EntityField(Product, "id").in_(product_ids))
     )
+
+
+def _first_product_price_dim(products: Iterable[Product]) -> str | None:
+    """Fallback active dimension (no observations yet) — the dimension of the
+    first linked product whose size unit is a price dimension, so the
+    bottom-sheet can still show offer context."""
+    for prod in products:
+        if not prod.size_unit:
+            continue
+        unit_def = units.find_unit(prod.size_unit)
+        if unit_def is not None and unit_def.dimension in units.PRICE_DIMENSIONS:
+            return unit_def.dimension
+    return None
+
+
+def _offer_points_from_products(
+    products: Iterable[Product], *, active_dim: str, canonical_unit: str,
+) -> list[PriceSeriesPoint]:
+    """Linked-product offer history normalised to per-canonical-unit. Each
+    point is one historic offer (plus the current live offer when it's not
+    already represented). Offers in a different dimension to the active one are
+    dropped — a per-ea pack price can't share an axis with a per-L baseline."""
+    points: list[PriceSeriesPoint] = []
+    for prod in products:
+        if not prod.is_active or not prod.is_available:
+            continue
+        if not prod.size_unit or not prod.size_value or prod.size_value <= 0:
+            continue
+        offer_unit = units.find_unit(prod.size_unit)
+        if offer_unit is None or offer_unit.dimension != active_dim:
+            continue
+        size_in_canonical = units.convert(prod.size_value, prod.size_unit, canonical_unit)
+        if size_in_canonical is None or size_in_canonical <= 0:
+            continue
+        store_name = prod.store.name if prod.store else None
+        seen_dates: set = set()
+        for ho in (prod.historic_offers or []):
+            if ho.price_now is None or ho.price_now <= 0:
+                continue
+            points.append(PriceSeriesPoint(
+                observed_at=ho.offered_on,
+                unit_price=float(ho.price_now) / size_in_canonical,
+                source="offer",
+                store_name=store_name,
+            ))
+            seen_dates.add(ho.offered_on)
+        current = prod.current_offer
+        if (current is not None and current.price_now is not None
+                and current.price_now > 0 and current.offered_on not in seen_dates):
+            points.append(PriceSeriesPoint(
+                observed_at=current.offered_on,
+                unit_price=float(current.price_now) / size_in_canonical,
+                source="offer",
+                store_name=store_name,
+            ))
+    return points
+
+
+def build_stock_item_price_series(
+    repo, stock_item_id: UUID,
+) -> tuple[str | None, list[PriceSeriesPoint]]:
+    """Unioned per-unit price series for one stock item (C5b bottom-sheet).
+
+    Returns ``(canonical_unit, points)`` sorted oldest→newest, with every
+    ``unit_price`` expressed in ``canonical_unit`` so observations ("your
+    data") and linked-product offers ("context") share the chart's y-axis.
+    Active dimension follows the most-recent observation (B4); with no
+    observations we fall back to a linked product's dimension so offer context
+    still renders. Returns ``(None, [])`` when neither exists.
+    """
+    observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
+        EntityField(
+            StockItemPriceObservation,
+            StockItemPriceObservation.Fields.STOCK_ITEM_ID,
+        ).eq(stock_item_id)
+    )
+    products = _linked_products(repo, stock_item_id)
+
+    active_dim = _active_dim_from_latest(observations) or _first_product_price_dim(products)
+    if active_dim is None:
+        return None, []
+    canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
+
+    store_names = _resolve_store_names(repo, (o.store_id for o in observations))
+    points = _observation_points(observations, active_dim=active_dim, store_names=store_names)
+    points += _offer_points_from_products(products, active_dim=active_dim, canonical_unit=canonical_unit)
+    points.sort(key=lambda p: p.observed_at)
+    return canonical_unit, points
+
+
+def build_product_observation_series(
+    repo, product_id: UUID,
+) -> tuple[str | None, list[PriceSeriesPoint]]:
+    """Per-unit observation series for a product (H2 overlay on the
+    per-product Price-History page).
+
+    Unions observations across every stock item linked to ``product_id`` and
+    normalises to the active dimension's canonical unit. Offers are NOT
+    included here — the page renders its own offer rows from
+    ``ProductHistoricOffer``; this is the observation series the chart layers
+    in when the product has no offers (the H2 fallback). Returns
+    ``(None, [])`` when there are no observations.
+    """
+    from sqlalchemy import select
+    from dora_api.app import db
+
+    join_table = db.metadata.tables["StockItemProduct"]
+    stock_item_ids: list[UUID] = [
+        row[0]
+        for row in db.session.execute(
+            select(join_table.c.stock_item_id).where(
+                join_table.c.product_id == product_id
+            )
+        ).all()
+    ]
+    if not stock_item_ids:
+        return None, []
+
+    observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
+        EntityField(
+            StockItemPriceObservation,
+            StockItemPriceObservation.Fields.STOCK_ITEM_ID,
+        ).in_(stock_item_ids)
+    )
+    active_dim = _active_dim_from_latest(observations)
+    if active_dim is None:
+        return None, []
+    canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
+    store_names = _resolve_store_names(repo, (o.store_id for o in observations))
+    points = _observation_points(observations, active_dim=active_dim, store_names=store_names)
+    points.sort(key=lambda p: p.observed_at)
+    return canonical_unit, points
+
+
+def _build_offers_sidecar(
+    repo, stock_item_id: UUID, *, canonical_unit: str,
+) -> list[OfferSidecarEntry]:
+    """LC-2 — "Current shelf prices: $X at Y · $Z at W" for products users.
+
+    Reads the current offers of every linked product, normalised to the
+    same canonical unit as the baseline so they're directly comparable
+    visually. Never returns offers in a different dimension than the
+    baseline (a sized product in ml can't sit next to a count baseline).
+    """
+    # Shared loader (eager-loads current_offer/store — the relationships are
+    # noload, so a bare repo fetch would leave current_offer None and the
+    # sidecar silently empty).
+    products: Iterable[Product] = _linked_products(repo, stock_item_id)
+    if not products:
+        return []
 
     target_dim_unit = units.find_unit(canonical_unit)
     target_dim = target_dim_unit.dimension if target_dim_unit else None

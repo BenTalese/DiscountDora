@@ -37,16 +37,16 @@ def levels_by_sequence():
 
 @pytest.fixture
 def fresh_state(api):
-    # Archive every existing active list so each test starts with a known
-    # draft-count. The seed leaves several active lists around; rather than
-    # deleting them we move them to status=done (they don't affect resolver).
+    # Clear every existing active list so each test starts with a known
+    # draft-count. The seed leaves several active lists around. (FU-227 chunk 5
+    # removed the PATCH status=done back-door this used to ride — done is now
+    # /finish-only — so we DELETE the active lists instead, which is all the
+    # resolver cares about.)
     summaries = requests.get(SHOPPING_LISTS).json()
     for s in summaries:
         if s["status"] != "done":
-            r = requests.patch(
-                f"{SHOPPING_LISTS}/{s['shopping_list_id']}", json={"status": "done"}
-            )
-            assert r.status_code == 204, r.text
+            r = requests.delete(f"{SHOPPING_LISTS}/{s['shopping_list_id']}")
+            assert r.status_code in (200, 204), r.text
     yield
 
 
@@ -143,11 +143,13 @@ def test__quick_add__hint_invalid_for_non_draft(
     fresh_state, levels_by_sequence
 ):
     # If the client sends a hint that no longer points to a draft (e.g. the
-    # remembered sessionStorage pick after the user finished that list), the
+    # remembered sessionStorage pick after the user moved that list on), the
     # server rejects with a business-rule violation so the client can clear
-    # the pick and re-prompt.
-    list_id = _create_list(f"finished-{uuid4()}")
-    r = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "done"})
+    # the pick and re-prompt. (FU-227 chunk 5 made `done` /finish-only, so we
+    # move the list to the non-draft `shopping` status here — the resolver
+    # only cares that the hint no longer points at a draft.)
+    list_id = _create_list(f"non-draft-{uuid4()}")
+    r = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "shopping"})
     assert r.status_code == 204, r.text
 
     item_id = _create_stock_item(

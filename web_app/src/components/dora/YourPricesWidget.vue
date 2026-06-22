@@ -102,8 +102,8 @@
                 variant="ghost"
                 :icon="ICONS.history"
                 label="Full history"
-                :disable="true"
-                aria-label="Full history (coming in chunk 6)"
+                :disable="!stockItemId"
+                @click="historyOpen = true"
             />
             <BaseButton
                 variant="primary"
@@ -130,6 +130,15 @@
                 />
             </q-card-section>
         </BaseDialog>
+
+        <!-- FU-227 chunk 6 — "Full history" bottom-sheet (C5b). Lazy-fetches
+             its own unioned series when opened. -->
+        <PriceHistoryBottomSheet
+            v-if="stockItemId"
+            v-model="historyOpen"
+            :stock-item-id="stockItemId"
+            :item-name="itemName ?? ''"
+        />
     </q-card>
 </template>
 
@@ -138,6 +147,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceEntry from 'src/components/dora/PriceEntry.vue';
+    import PriceHistoryBottomSheet from 'src/components/dora/PriceHistoryBottomSheet.vue';
     import { ICONS } from 'src/style/icons';
     import { relativeTime } from 'src/helpers/relativeTime';
     import type {
@@ -152,8 +162,15 @@
             prefill?: PriceEntryPrefill | null | undefined;
             stores?: ReadonlyArray<Store> | undefined;
             busy?: boolean | undefined;
+            /** FU-227 chunk 6 — drives the "Full history" bottom-sheet. When
+             *  absent the button is disabled (the sheet needs an item to fetch). */
+            stockItemId?: string | undefined;
+            itemName?: string | undefined;
         }>(),
-        { yourPrices: null, prefill: null, stores: () => [], busy: false },
+        {
+            yourPrices: null, prefill: null, stores: () => [], busy: false,
+            stockItemId: undefined, itemName: '',
+        },
     );
 
     const emit = defineEmits<{
@@ -166,6 +183,7 @@
     }>();
 
     const dialogOpen = ref(false);
+    const historyOpen = ref(false);
 
     // The widget handles the user-facing copy variants; the dialog only
     // emits up to the parent (which knows how to call the API service).

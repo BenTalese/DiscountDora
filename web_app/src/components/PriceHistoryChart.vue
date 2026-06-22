@@ -46,14 +46,20 @@
                 </text>
             </g>
 
-            <!-- One polyline per series -->
+            <!-- One group per series: offers (context) + observations (your
+                 data) + baseline reference line (FU-227 chunk 6 / D2 + F-3). -->
             <g v-for="(s, i) in renderableSeries" :key="s.product_id">
+                <!-- Offers polyline. In the union view (offersAsContext) offers
+                     are subordinate: dashed + faint. On the per-product page
+                     they're the primary data: solid + full strength. -->
                 <polyline
                     v-if="s.path.length"
                     :points="s.path"
                     fill="none"
                     :stroke="seriesColour(i)"
-                    stroke-width="1.8"
+                    :stroke-width="offersAsContext ? 1.4 : 1.8"
+                    :stroke-dasharray="offersAsContext ? '5,3' : undefined"
+                    :opacity="offersAsContext ? 0.5 : 1"
                 />
                 <!-- Deal markers (only when on_deal) -->
                 <g v-for="(point, j) in s.dealMarkers" :key="`d-${i}-${j}`">
@@ -62,9 +68,47 @@
                         :cy="point.y"
                         r="3"
                         :fill="seriesColour(i)"
-                        opacity="0.9"
+                        :opacity="offersAsContext ? 0.5 : 0.9"
                     />
                 </g>
+
+                <!-- Observations ("your data") — solid line + dots. -->
+                <polyline
+                    v-if="s.observationPath.length"
+                    :points="s.observationPath"
+                    fill="none"
+                    :stroke="seriesColour(i)"
+                    stroke-width="2"
+                />
+                <circle
+                    v-for="(point, j) in s.observationDots"
+                    :key="`o-${i}-${j}`"
+                    :cx="point.x"
+                    :cy="point.y"
+                    r="2.6"
+                    :fill="seriesColour(i)"
+                />
+
+                <!-- Baseline reference line (F-3) — "usually $X". -->
+                <template v-if="s.baselineY !== null">
+                    <line
+                        :x1="padding.left"
+                        :x2="width - padding.right"
+                        :y1="s.baselineY"
+                        :y2="s.baselineY"
+                        class="chart-baseline"
+                        stroke-dasharray="4,3"
+                    />
+                    <text
+                        :x="width - padding.right"
+                        :y="s.baselineY - 4"
+                        font-size="10"
+                        class="chart-baseline-label"
+                        text-anchor="end"
+                    >
+                        {{ s.baselineLabel }}
+                    </text>
+                </template>
             </g>
 
             <!-- Hover crosshair -->
@@ -106,6 +150,15 @@
                     color="positive"
                     class="q-ml-xs"
                 />
+                <q-icon
+                    v-if="hover.byProduct[s.product_id]?.is_observation"
+                    name="mdi-circle"
+                    size="8px"
+                    color="primary"
+                    class="q-ml-xs"
+                >
+                    <q-tooltip>Your logged price</q-tooltip>
+                </q-icon>
             </div>
         </div>
 
@@ -124,10 +177,17 @@
         series: PriceHistorySeries[];
         width?: number;
         height?: number;
+        /** FU-227 chunk 6 — the union view (bottom-sheet) renders offers as
+         *  subordinate "context" (dashed + faint) under the user's own
+         *  observation line. The per-product page leaves it false, so offers
+         *  stay the primary solid series and observations only appear as the
+         *  H2 fallback when a product has no offer points. */
+        offersAsContext?: boolean;
     }>();
 
     const width = computed(() => props.width ?? 720);
     const height = computed(() => props.height ?? 320);
+    const offersAsContext = computed(() => props.offersAsContext ?? false);
     const padding = { top: 12, right: 16, bottom: 22, left: 48 };
 
     interface RenderableSeries {
@@ -135,6 +195,26 @@
         name: string;
         path: string;
         dealMarkers: Array<{ x: number; y: number }>;
+        observationPath: string;
+        observationDots: Array<{ x: number; y: number }>;
+        baselineY: number | null;
+        baselineLabel: string | null;
+    }
+
+    // Whether a series has any plottable offer point. Drives the H2 fallback:
+    // on the per-product page (offersAsContext=false) observations + baseline
+    // only render when a product has no offers, so the per-unit observation
+    // scale never clashes with the raw offer scale on the same series.
+    function hasOffers(s: PriceHistorySeries): boolean {
+        return s.points.some((p) => p.unit_price !== null && p.date !== null);
+    }
+    function showObservationsFor(s: PriceHistorySeries): boolean {
+        if ((s.observation_points?.length ?? 0) === 0) return false;
+        return offersAsContext.value || !hasOffers(s);
+    }
+    function showBaselineFor(s: PriceHistorySeries): boolean {
+        if (s.your_prices?.baseline == null) return false;
+        return offersAsContext.value || !hasOffers(s);
     }
 
     // Compute the chart-space bounds across all series. A series with no
@@ -145,6 +225,17 @@
         for (const s of props.series) {
             for (const p of s.points) {
                 if (p.unit_price !== null) all.push(p.unit_price);
+            }
+            // Include observation points + baseline only when they're drawn,
+            // so a hidden per-unit observation series can't skew a raw-offer
+            // axis (H2-fallback-only).
+            if (showObservationsFor(s)) {
+                for (const p of s.observation_points ?? []) {
+                    if (p.unit_price !== null) all.push(p.unit_price);
+                }
+            }
+            if (showBaselineFor(s) && s.your_prices?.baseline != null) {
+                all.push(s.your_prices.baseline);
             }
         }
         if (all.length === 0) return null;
@@ -164,12 +255,15 @@
 
     const timeBounds = computed(() => {
         const all: number[] = [];
+        const pushDate = (date: string | null) => {
+            if (!date) return;
+            const t = new Date(date).getTime();
+            if (!Number.isNaN(t)) all.push(t);
+        };
         for (const s of props.series) {
-            for (const p of s.points) {
-                if (p.date) {
-                    const t = new Date(p.date).getTime();
-                    if (!Number.isNaN(t)) all.push(t);
-                }
+            for (const p of s.points) pushDate(p.date);
+            if (showObservationsFor(s)) {
+                for (const p of s.observation_points ?? []) pushDate(p.date);
             }
         }
         if (all.length === 0) return null;
@@ -204,6 +298,27 @@
                     on_deal: p.on_deal,
                 });
             }
+
+            // Observations ("your data") — only when this series should show
+            // them (offersAsContext, or the H2 no-offer fallback).
+            const obsPoints: Array<{ x: number; y: number }> = [];
+            if (showObservationsFor(s)) {
+                for (const p of s.observation_points ?? []) {
+                    if (p.date === null || p.unit_price === null) continue;
+                    const t = new Date(p.date).getTime();
+                    if (Number.isNaN(t)) continue;
+                    obsPoints.push({ x: projectX(t), y: projectY(p.unit_price) });
+                }
+            }
+
+            let baselineY: number | null = null;
+            let baselineLabel: string | null = null;
+            if (showBaselineFor(s) && s.your_prices?.baseline != null) {
+                baselineY = projectY(s.your_prices.baseline);
+                const unit = s.your_prices.baseline_unit;
+                baselineLabel = `usually $${s.your_prices.baseline.toFixed(2)}${unit ? `/${unit}` : ''}`;
+            }
+
             return {
                 product_id: s.product_id,
                 name: s.name,
@@ -211,6 +326,10 @@
                 dealMarkers: points.filter((p) => p.on_deal).map(
                     (p) => ({ x: p.x, y: p.y }),
                 ),
+                observationPath: obsPoints.map((p) => `${p.x},${p.y}`).join(' '),
+                observationDots: obsPoints,
+                baselineY,
+                baselineLabel,
             };
         }),
     );
@@ -245,7 +364,7 @@
     interface HoverState {
         x: number;
         dateLabel: string;
-        byProduct: Record<string, { price: number | null; on_deal: boolean }>;
+        byProduct: Record<string, { price: number | null; on_deal: boolean; is_observation: boolean }>;
     }
     const hostRef = ref<HTMLElement | null>(null);
     const hover = ref<HoverState | null>(null);
@@ -262,20 +381,40 @@
 
         const byProduct: HoverState['byProduct'] = {};
         for (const s of props.series) {
-            // Nearest-point lookup per series.
-            let best: { dt: number; price: number | null; on_deal: boolean } | null = null;
+            // Nearest-point lookup per series, across offers + (when shown)
+            // the user's own observations. Build the candidate list first, then
+            // reduce — keeping the `best` assignment in this scope so TS narrows
+            // it (a closure would widen it back to never).
+            const candidates: Array<{
+                dt: number; price: number | null; on_deal: boolean; is_observation: boolean;
+            }> = [];
             for (const p of s.points) {
                 if (!p.date) continue;
                 const t = new Date(p.date).getTime();
                 if (Number.isNaN(t)) continue;
-                const dt = Math.abs(t - targetTime);
-                if (best === null || dt < best.dt) {
-                    best = { dt, price: p.unit_price, on_deal: p.on_deal };
+                candidates.push({
+                    dt: Math.abs(t - targetTime), price: p.unit_price,
+                    on_deal: p.on_deal, is_observation: false,
+                });
+            }
+            if (showObservationsFor(s)) {
+                for (const p of s.observation_points ?? []) {
+                    if (!p.date) continue;
+                    const t = new Date(p.date).getTime();
+                    if (Number.isNaN(t)) continue;
+                    candidates.push({
+                        dt: Math.abs(t - targetTime), price: p.unit_price,
+                        on_deal: false, is_observation: true,
+                    });
                 }
             }
+            let best: (typeof candidates)[number] | null = null;
+            for (const c of candidates) {
+                if (best === null || c.dt < best.dt) best = c;
+            }
             byProduct[s.product_id] = best
-                ? { price: best.price, on_deal: best.on_deal }
-                : { price: null, on_deal: false };
+                ? { price: best.price, on_deal: best.on_deal, is_observation: best.is_observation }
+                : { price: null, on_deal: false, is_observation: false };
         }
         hover.value = {
             x: projectX(targetTime),
@@ -305,6 +444,10 @@
     .chart-gridline { stroke: var(--divider); }
     .chart-axis-label { fill: var(--text-muted); }
     .chart-crosshair { stroke: var(--border-strong); }
+    /* FU-227 chunk 6 — baseline reference line ("usually $X"). Muted so it
+       reads as a guide behind the data lines, not another series. */
+    .chart-baseline { stroke: var(--text-muted); stroke-width: 1; opacity: 0.7; }
+    .chart-baseline-label { fill: var(--text-muted); font-variant-numeric: tabular-nums; }
     .chart-tooltip {
         position: absolute;
         background: var(--surface-component);

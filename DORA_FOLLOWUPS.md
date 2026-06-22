@@ -52,6 +52,25 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-230 — confirm the offers sidecar now renders in the browser
+- **Raised:** 2026-06-22 (FU-227 chunk 6).
+- **Type:** finding (latent bug fixed — needs browser confirmation).
+- **What:** `your_prices._build_offers_sidecar` read `Product.current_offer` /
+  `store`, which are `lazy="noload"` in `table_mappings.py`, via a bare
+  `repo.get(Product).all(...)` — so the relationships came back empty and the
+  LC-2 "Current shelf prices: $X at Y" sidecar on the YourPrices widget **never**
+  rendered (the only test covered an item with no products, so it passed
+  trivially). Fixed in chunk 6 by routing through a single `_linked_products`
+  loader that `.include("store"/"current_offer"/"historic_offers")`. The fix is
+  verified indirectly by the new milk price-history test (offers now load), but
+  the sidecar **rendering in the widget** hasn't been eyeballed.
+- **Why deferred:** static + test verification isn't proof a UI region renders;
+  per the CLAUDE.md browser-confirm rule.
+- **Recommended resolution:** **confirm in browser** during the chunk-8 C5 state-
+  matrix walk — open a stock item linked to a product with a current offer
+  (e.g. seeded **Milk** or **Olive Oil**) with money on; the widget should show
+  "Current shelf prices: …".
+
 ## [OPEN] FU-229 — reports.py spend-by-store ignores `actual_unit_price` (ladder divergence)
 - **Raised:** 2026-06-22 (FU-227 chunk 5 — K2 ladder extract).
 - **Type:** finding (behaviour inconsistency).
@@ -99,8 +118,18 @@ long session summary. Distinct from the other logs:
   s/`merchant=`/`store=`/g, s/`'merchant': /'store': /g) — but should be verified test-by-test
   in case any case depends on the surrounding context. A single PR titled "Phase E rename:
   finish the test-suite update" would be clean.
+- **2026-06-22 (chunk 6) update — full pytest now runs (real Python 3.11.9 on this box).**
+  Confirmed baseline 55 failed / 7 errors at pristine HEAD; current 54 failed / 0 errors.
+  The 54 remaining are all this rename rot, in: `test_merchant_router` (16),
+  `test_product_router` (18), `test_shopping_list_totals` (8), `test_ingest_batch` (6),
+  `test_ingestion_store_mappings` (4), `test_preferred_buys` (2). **Separately**, the
+  7 errors + 1 failure at baseline were *chunk-5* fallout (NOT rename rot): the
+  `PATCH status=done` removal broke `test_finish_harvest::test__patch_status_done`
+  (asserted 400, handler returns 422) and `test_primary_target_inference`'s `fresh_state`
+  fixture + hint-invalid test (archived lists via `status=done`). Those are **fixed** in
+  chunk 6 (test-only). So this FU-228 backlog is now purely the rename rot above.
 
-## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunks 1–5 of 8 DONE)
+## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunks 1–6 of 8 DONE)
 - **Raised:** 2026-06-19 (pricing reassessment handoff).
 - **Ratified:** 2026-06-22 — the §6 question list A–K is fully walked with the user; all answers,
   revisions, and clarifications are LOCKED. **Ready for plan execution.** No more Q&A needed.
@@ -152,13 +181,20 @@ long session summary. Distinct from the other logs:
   - chunk 3 (shared `PriceEntry` + row button + `YourPricesWidget`) — DONE.
   - chunk 4 (baseline math `build_your_prices_for_item`) — DONE.
   - chunk 5 (shopping-line prefill + `/finish` harvest + Receipt relabel + E3
-    dead-branch removal + K2 ladder extract) — **DONE 2026-06-22**. Backend
-    pytest pending a Python-equipped env (FU-189c).
-- **Next action:** chunk 6 — bottom-sheet "Full history" (C5) + per-product
-  Price-History observation series + baseline line (D2 + H2). Then chunk 7
-  (remove ingestion→observation path, J1) and chunk 8 (verify + seed refresh +
-  promote the seed-data rule to `R-017`; fill the feedback coverage table in the
-  plan §5; browser-walk the full C5 state matrix incl. chunk-5 surfaces).
+    dead-branch removal + K2 ladder extract) — **DONE 2026-06-22**.
+  - chunk 6 (bottom-sheet "Full history" C5b + per-product observation overlay
+    H2 + baseline reference line F-3 + D2 colour-coding) — **DONE 2026-06-22**.
+    Decision: **H2-fallback-only** on the per-product page (offers keep raw
+    scale; observations + baseline only render there when a product has no
+    offers). Backend pytest **run** (real Python 3.11.9 found on this box — see
+    worklog: mine 54 failed / 0 errors vs baseline 55 / 7 errors → 0 new
+    regressions). Fixed a latent chunk-4 noload bug (offers sidecar never loaded)
+    → FU-230. Repaired chunk-5 status=done test fallout (see FU-228 note).
+- **Next action:** chunk 7 — remove the `stock_item_ref → observation` ingestion
+  branch (J1); observations become in-app-only. Then chunk 8 (verify + seed
+  refresh + promote the seed-data rule to `R-017`; fill the feedback coverage
+  table in the plan §5; browser-walk the full C5 state matrix incl. the
+  chunk-6 bottom-sheet + dark theme).
 - **Recommended resolution:** **now / next session** — active build, Phase F.
 
 ## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)

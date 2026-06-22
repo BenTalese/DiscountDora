@@ -9,6 +9,112 @@ next.
 
 ---
 
+## 2026-06-22 — FU-227 chunk 6: "Full history" bottom-sheet + per-product observation overlay (D2 + H2 + F-3)
+
+**Session goal:** light up `[Full history]` on the YourPrices widget (C5b) and
+make the per-product Price-History page observation-capable, per the H2-fallback
+decision the user picked at the start of the session.
+
+**User decision (AskUserQuestion):** per-product page = **H2 fallback only**.
+Full obs+offers+baseline overlay lives in the new per-stock-item bottom-sheet
+(everything normalised per-unit); the existing `/price-history` page keeps offer
+points at their raw scale and only renders observations + baseline when a product
+has **no** offers. Avoids changing the numbers the existing N8 comparison cards show.
+
+**Backend:**
+- `your_prices.py` — new `PriceSeriesPoint` + `build_stock_item_price_series()`
+  (observations ∪ linked-product offers, every point normalised to the active
+  dimension's canonical unit so they share one axis; active dim = latest obs's
+  dim (B4), falling back to a linked product's dim when there are no obs) +
+  `build_product_observation_series()` (per-unit obs unioned across a product's
+  linked stock items, for the page's H2 overlay). Shared `_observation_points` /
+  `_offer_points_from_products` / `_linked_products` helpers; R-003 — all
+  normalisation server-side.
+- **New endpoint `GET /api/stock-items/<id>/price-history`**
+  (`stock_item_price_history.py`) → `{canonical_unit, baseline, baseline_unit,
+  above_baseline, sample_count, points:[{observed_at, unit_price, source, store_name}]}`.
+  Reuses `build_your_prices_for_item` for the baseline block (one definition).
+- `price_history.py` (per-product) — each series now carries `your_prices`
+  (baseline/above-usual via `build_your_prices_for_product`) + `observation_points`
+  (per-unit). Offers untouched (raw scale preserved).
+
+**Bug fixed in passing (latent, chunk 4):** `_build_offers_sidecar` (and my new
+series builder) read `Product.current_offer` / `historic_offers` / `store`, which
+are `lazy="noload"` — a bare `repo.get(Product).all(...)` left them empty, so the
+LC-2 "Current shelf prices" sidecar **never** rendered. Fixed by making
+`_linked_products` the single loader with `.include("store"/"current_offer"/
+"historic_offers")` and routing the sidecar through it. Logged + changelog'd.
+
+**SPA:**
+- `PriceHistoryChart.vue` — renders an observation series (solid + dots, "your
+  data") alongside offers; new `offersAsContext` prop makes offers dashed + faint
+  in the union view (bottom-sheet) while leaving the per-product page's offers
+  solid/primary; baseline reference line + "usually $X" label (F-3). Bounds +
+  hover extended to include observations (with H2-fallback gating so a hidden
+  per-unit obs series can't skew a raw-offer axis). All colours via tokens (R-002).
+- **`PriceHistoryBottomSheet.vue` (new)** — `BaseDialog position="bottom"` (R-001
+  primitive, same as QuickAddSheet), lazy-fetches the unioned series on open,
+  legend (Your prices / Store offers / Usually $X), `offers-as-context` chart.
+- `YourPricesWidget.vue` — `[Full history]` now opens the sheet (no longer
+  disabled); new `stockItemId` + `itemName` props.
+- `StockItemDetailPage.vue` — passes `stock-item-id` + `item-name`.
+- `PriceHistoryPage.vue` — "Your usual: $X" + above-usual chip on each card (F-3,
+  a caption so no axis-scale clash).
+
+**Tests:**
+- `tests/e2e/dora_api/test_stock_item_price_history.py` (NEW, 6 cases) — 404;
+  empty item; observations-only sorted + source-tagged; ml→L normalisation;
+  seeded **milk** unions obs + offers on one per-L axis.
+- `tests/e2e/dora_api/test_price_history.py` — extended: placeholder carries the
+  new fields; seeded Woolworths-milk product series carries `your_prices`
+  (baseline in L, ≥3 samples) + `observation_points`.
+
+**Verification (real Python 3.11.9 + pytest present on this box — FU-189c no
+longer blocks):**
+- SPA: `vue-tsc --noEmit` clean, `npm run lint` clean, `npm run build` succeeded.
+- Backend pytest: **full suite run.** Mine = **54 failed / 440 passed / 0 errors**;
+  pristine HEAD baseline = **55 failed / 426 passed / 7 errors**. → **zero new
+  regressions; net −8 broken** (I repaired chunk-5 fallout — see below). The
+  remaining 54 are all FU-228 `merchant→store` rename rot
+  (`merchant_router`/`ingest_batch`/`ingestion_store_mappings`/`product_router`/
+  `preferred_buys`/`shopping_list_totals`), none touched by this chunk.
+- Missing local deps installed to run pytest: `pywebpush`, `qrcode[pil]`,
+  `dependency_injector`, `fuzzywuzzy`, `ijson`, `openpyxl`, `requests_cache`,
+  `SQLAlchemy_Utils`, `beautifulsoup4`, `rich`, `python-dotenv`, `tzdata`,
+  `Flask_Cors`, `Flask_Migrate` (all from `requirements.txt`; skipped the heavy
+  desktop/build ones pywebview/pyinstaller, not needed for the in-process client).
+
+**Chunk-5 fallout repaired (surfaced once pytest could finally run):** chunk 5's
+`PATCH status=done` removal broke two tests that were never run then —
+`test_finish_harvest::test__patch_status_done__is_rejected` asserted `400` but the
+handler returns `422` ("Business rule violation"); and
+`test_primary_target_inference`'s `fresh_state` fixture + one test archived lists
+via `status=done`. Fixed: assertion accepts `(400, 422)` + checks the message;
+fixture now `DELETE`s active lists; the hint-invalid test moves a list to
+`shopping` (still non-draft). Test-only; no product behaviour changed.
+
+**Engineering-standards close-gate:**
+- R-001 — `BaseDialog`/`PriceHistoryChart`/`BaseButton` reused; no hand-rolled
+  dialog or chart. R-002 — chart/legend/baseline ride tokens; zero hex in the diff.
+- R-003 — all per-unit normalisation + baseline math server-side; the SPA renders
+  numbers/booleans. Single linked-product loader (`_linked_products`).
+- R-005/006/015 — no migration this chunk (read-only over existing tables).
+- R-007 — offer scale on the per-product page left unchanged per the user's
+  H2-fallback decision; FU-228 rename rot left alone (out of scope).
+- R-017 (seed discipline) — no new seed needed; chunk-2/5 seed already exercises
+  the matrix (milk = obs+offers in L; eggs = obs-only via dim mismatch; butter/
+  coffee = below MIN_SAMPLES). Verified, not assumed.
+
+**Ledger:** updated FU-227 → "chunk 6 of 8 DONE". Added FU-230 (offers-sidecar
+noload fix — confirm in browser). Noted the chunk-5 fallout fixes under FU-228.
+
+**Next:** FU-227 chunk 7 — remove the `stock_item_ref → observation` ingestion
+branch (J1); observations become in-app-only. Then chunk 8 (verify + promote
+seed-discipline to R-017 + fill the plan §5 feedback coverage table + full
+browser walk of the C5 state matrix). User checkpoint per preference.
+
+---
+
 ## 2026-06-22 — FU-227 chunk 5: shopping-line prefill + harvest + Receipt relabel + ladder extract
 
 **Session goal:** close the loop — prefilled price on a draft/shopping line →

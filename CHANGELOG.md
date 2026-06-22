@@ -6,6 +6,16 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **"Full history" price chart for a stock item (FU-227 chunk 6, 2026-06-22).**
+  The "Your prices" widget's **Full history** button now opens a bottom-sheet
+  chart that overlays the prices you've logged ("your data", solid line + dots)
+  with the shelf offers from any linked products ("context", a faint dashed
+  line), plus a dashed "usually $X" baseline line — all on one comparable
+  per-unit axis (e.g. $/L), so a 2 L offer and a 1 L log line up correctly.
+- **Price History page now shows your own prices, not just store offers
+  (FU-227 chunk 6).** Each product's card shows "Your usual: $X" with an
+  *above usual* chip when the latest is high, and — for products with no offer
+  history — the chart now plots your logged prices instead of rendering empty.
 - **Prices you enter while shopping become "Your prices" (FU-227 chunk 5, 2026-06-22).**
   The closed loop is wired end-to-end: confirm what you paid on a shopping line
   at the till, then **Finish & restock**, and Dora harvests one price record per
@@ -18,6 +28,13 @@ semver — major bumps signal schema or breaking-config changes.
   the item before, otherwise *"from <store> offer"* — so the common case at the
   till is confirming one number. The suggestion is resolved server-side; it's a
   starting point and persists when you edit it.
+
+### Fixed
+- **"Current shelf prices" sidecar now actually appears (FU-227 chunk 6).** The
+  offers sidecar on the "Your prices" widget read the linked products' offers
+  through a `noload` relationship, so it was always empty. Linked-product offers
+  are now eager-loaded, so an item linked to products with current offers shows
+  the "Current shelf prices: $X at Y" line as designed (LC-2).
 
 ### Changed
 - **A finished list is a "Receipt" when money is on (FU-227 chunk 5).** The

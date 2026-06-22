@@ -39,6 +39,7 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
 from dora_api.domain.entities.user import (BUDGET_PERIOD_MONTHLY,
                                            BUDGET_PERIOD_WEEKLY, User)
 from dora_api.features.routers import BUDGET_ROUTER
+from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import ok, unauthorized
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
@@ -73,15 +74,9 @@ def _as_utc_datetime(d: date) -> datetime:
 
 
 # ── Line-price ladder ────────────────────────────────────────────────────
-
-def _price_paid_for(line: ShoppingListLine) -> float | None:
-    """Captured price for an archived line. None when neither override
-    nor snapshot is present (won't contribute to spend)."""
-    if line.actual_unit_price is not None:
-        return float(line.actual_unit_price)
-    if line.picked_offer_price is not None:
-        return float(line.picked_offer_price)
-    return None
+# The actual→picked ladder lives in `shopping_lists._line_price`
+# (`line_paid_unit_price`, K2 extract). Budget's projection adds one more
+# rung (the selected product's *current* offer) on top of it.
 
 
 def _projected_price_for(
@@ -91,7 +86,7 @@ def _projected_price_for(
     """Price for a line on an active list, used only for the projected
     figure on the dashboard. Tries actual → snapshot → current offer of
     the selected product. Lines without any of those don't contribute."""
-    direct = _price_paid_for(line)
+    direct = line_paid_unit_price(line)
     if direct is not None:
         return direct
     if line.selected_product_id and line.selected_product_id in current_offer_lookup:
@@ -188,7 +183,7 @@ class GetBudgetStatusHandler:
             if qty <= 0:
                 continue
             if line.shopping_list_id in archived_set:
-                price = _price_paid_for(line)
+                price = line_paid_unit_price(line)
                 if price is not None:
                     spent += price * qty
             elif line.shopping_list_id in active_set:
@@ -318,7 +313,7 @@ class GetBudgetHistoryHandler:
                 qty = line.quantity if line.quantity is not None else 1
                 if qty <= 0:
                     continue
-                price = _price_paid_for(line)
+                price = line_paid_unit_price(line)
                 if price is not None:
                     window_total += price * qty
             rows.append(BudgetHistoryRowDto(

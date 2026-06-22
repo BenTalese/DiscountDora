@@ -15,10 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.shopping_list import (
     SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
     SHOPPING_LIST_STATUS_VALUES, ShoppingList, ShoppingListLine)
+from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_price_observation import \
+    StockItemPriceObservation
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._line_price import (
+    harvest_observation_fields, line_paid_unit_price)
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
@@ -101,6 +106,7 @@ class UpdateShoppingListRequest(BaseModel):
 class UpdateShoppingListResponse:
     not_found: bool = False
     invalid_status: bool = False
+    done_via_finish: bool = False
 
 
 class UpdateShoppingListHandler:
@@ -120,11 +126,15 @@ class UpdateShoppingListHandler:
         if "status" in set_fields and request.status is not None:
             if request.status not in SHOPPING_LIST_STATUS_VALUES:
                 return UpdateShoppingListResponse(invalid_status=True)
+            # E3 (FU-227 chunk 5): /finish is the ONLY path to `done` — it's
+            # what snapshots prices, harvests observations and bumps stock
+            # levels. The SPA never PATCHes `status=done`; this guard makes
+            # that contract enforceable (no half-baked done list that skipped
+            # the restock review). draft⇄shopping still flow through here.
+            if request.status == SHOPPING_LIST_STATUS_DONE:
+                return UpdateShoppingListResponse(done_via_finish=True)
             lst.status = request.status
-            if request.status == SHOPPING_LIST_STATUS_DONE and lst.completed_at is None:
-                lst.completed_at = datetime.now(timezone.utc)
-            elif request.status != SHOPPING_LIST_STATUS_DONE:
-                lst.completed_at = None
+            lst.completed_at = None
         # Chunk 7: explicit `null` clears the date; field absent = no change.
         if "planned_shop_date" in set_fields:
             lst.planned_shop_date = request.planned_shop_date
@@ -143,7 +153,12 @@ def update_shopping_list(shopping_list_id: UUID):
         return not_found("ShoppingList", shopping_list_id)
     if _Response.invalid_status:
         return business_rule_violation(
-            "`status` must be one of: draft, shopping, done."
+            "`status` must be one of: draft, shopping."
+        )
+    if _Response.done_via_finish:
+        return business_rule_violation(
+            "A list becomes done by finishing it — POST /finish (which "
+            "snapshots prices and restocks), not PATCH status=done."
         )
     _Logger.info(f"Updated shopping list {shopping_list_id}")
     return no_content()
@@ -264,11 +279,85 @@ class FinishShoppingListHandler:
                 item.stock_level_last_updated = now
                 updated += 1
 
+        # FU-227 chunk 5 — harvest a price observation per priced ticked line
+        # (the closed loop: confirm what you paid at the till → it feeds "Your
+        # prices"). After the snapshot loop above so the picked-offer fallback
+        # is populated; before the status flip so the harvest shares the single
+        # save_changes transaction below.
+        self._harvest_observations(ticked_lines)
+
         lst.status = SHOPPING_LIST_STATUS_DONE
         lst.completed_at = datetime.now(timezone.utc)
 
         self.repository.save_changes()
         return FinishShoppingListResponse(ticked_lines=updated)
+
+    def _harvest_observations(self, ticked_lines: list[ShoppingListLine]) -> None:
+        """Turn each priced, item-anchored ticked line into one
+        ``StockItemPriceObservation`` (A1 folded shape; E4 measure-vs-count).
+
+        Idempotent under finish-button double-taps: a partial UNIQUE on
+        ``shopping_list_line_id`` (LC-1) backs the pre-check here, so a second
+        ``/finish`` writes nothing new. The FK is provenance only, not a sync
+        link (LC-4) — later edits to the observation don't touch the line.
+        """
+        harvestable = [
+            l for l in ticked_lines
+            if l.stock_item_id is not None and line_paid_unit_price(l) is not None
+        ]
+        if not harvestable:
+            return
+
+        # Idempotency: skip any line that already produced an observation.
+        line_ids = [l.id for l in harvestable]
+        already_harvested = {
+            o.shopping_list_line_id
+            for o in self.repository.get(StockItemPriceObservation).all(
+                EntityField(
+                    StockItemPriceObservation,
+                    StockItemPriceObservation.Fields.SHOPPING_LIST_LINE_ID,
+                ).in_(line_ids)
+            )
+        }
+
+        # Bulk-load selected products for their pack size (E4 — a sized product
+        # yields a measure observation; a sizeless line a count observation).
+        product_ids = [l.selected_product_id for l in harvestable if l.selected_product_id]
+        products_by_id: dict[UUID, Product] = {}
+        if product_ids:
+            products_by_id = {
+                p.id: p for p in self.repository.get(Product).all(
+                    EntityField(Product, "id").in_(product_ids)
+                )
+            }
+
+        now = datetime.now(timezone.utc)
+        for line in harvestable:
+            if line.id in already_harvested:
+                continue
+            unit_price = line_paid_unit_price(line)
+            if unit_price is None:    # narrowed above; keep readers honest
+                continue
+            product = (
+                products_by_id.get(line.selected_product_id)
+                if line.selected_product_id else None
+            )
+            total_price, total_measure, unit = harvest_observation_fields(
+                unit_price=unit_price,
+                quantity=line.quantity,
+                size_value=product.size_value if product else None,
+                size_unit=product.size_unit if product else None,
+            )
+            self.repository.add(StockItemPriceObservation(
+                stock_item_id=line.stock_item_id,
+                total_price=total_price,
+                total_measure=total_measure,
+                unit=unit,
+                observed_at=now,
+                store_id=line.purchased_store_id,   # A2 — where you bought it
+                shopping_list_line_id=line.id,      # A4 — provenance via FK
+                created_at=now,
+            ))
 
 
 @SHOPPING_LIST_ROUTER.route("/<shopping_list_id>/finish", methods=["POST"])

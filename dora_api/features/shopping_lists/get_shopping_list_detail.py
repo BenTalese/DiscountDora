@@ -19,6 +19,7 @@ from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.utils import get_container
 from dora_api.persistence.field import EntityField
@@ -72,6 +73,13 @@ class ShoppingListLineDto:
     actual_unit_price: float | None
     purchased_store_id: UUID | None
     purchased_store_name: str | None
+    # FU-227 chunk 5 (D3) — server-resolved per-item price suggestion for the
+    # till-entry editor, with a human source label. `None` when there's no
+    # prior purchase and no offer to suggest. Display-only; the SPA seeds the
+    # editor from it and persists on first edit (R-003 — the label is resolved
+    # here, the client just renders the string).
+    prefill_unit_price: float | None = None
+    prefill_source_label: str | None = None
     offers: List[LineProductOfferDto] = field(default_factory=list)
     # FU-215 — the chosen hint + the item's available labels for the picker.
     preferred_buy_id: UUID | None = None
@@ -248,6 +256,42 @@ class GetShoppingListDetailHandler:
             )
             _StoreNameLookup = {s.id: s.name for s in stores}
 
+        # FU-227 chunk 5 (D3) — per-item prefill source: the most-recent
+        # *actual purchase* of each stock item on a prior finished list, priced
+        # via the shared actual→picked ladder. This is the honest per-item
+        # number for the till editor; manual price observations are per-measure
+        # (per-L/kg) and feed the "Your prices" widget, not this per-item field.
+        _PriorPurchaseByItem: dict[UUID, tuple[datetime, float]] = {}
+        if _StockItemIds:
+            _PriorLines = self.repository.get(ShoppingListLine).all(
+                EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).in_(_StockItemIds)
+                & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
+            )
+            # Exclude the list being viewed (compare as str — the path param
+            # may arrive as a string while the FK is a UUID).
+            _CurrentId = str(shopping_list_id)
+            _PriorListIds = {
+                l.shopping_list_id for l in _PriorLines
+                if str(l.shopping_list_id) != _CurrentId
+            }
+            _DoneCompletedAt: dict[UUID, datetime] = {}
+            if _PriorListIds:
+                for sl in self.repository.get(ShoppingList).all(
+                    EntityField(ShoppingList, "id").in_(list(_PriorListIds))
+                ):
+                    if sl.is_done:
+                        _DoneCompletedAt[sl.id] = sl.completed_at or sl.created_at
+            for l in _PriorLines:
+                completed = _DoneCompletedAt.get(l.shopping_list_id)
+                if completed is None:
+                    continue
+                paid = line_paid_unit_price(l)
+                if paid is None:
+                    continue
+                prev = _PriorPurchaseByItem.get(l.stock_item_id)
+                if prev is None or completed > prev[0]:
+                    _PriorPurchaseByItem[l.stock_item_id] = (completed, paid)
+
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
             if item is None or item.stock_location is None:
                 return []
@@ -292,6 +336,25 @@ class GetShoppingListDetailHandler:
                 else (_ProductNames.get(line.product_id, "(missing item)")
                       if line.product_id else "(missing item)")
             )
+            # D3 prefill: prior actual purchase (per-item) wins; else the
+            # line's chosen offer (selected, else cheapest). Source-labelled.
+            _prefill_price: float | None = None
+            _prefill_label: str | None = None
+            _prior = (
+                _PriorPurchaseByItem.get(line.stock_item_id)
+                if line.stock_item_id else None
+            )
+            if _prior is not None:
+                _prefill_price = _prior[1]
+                _prefill_label = "from your last receipt"
+            else:
+                _chosen = next(
+                    (o for o in offers if o.is_selected),
+                    offers[0] if offers else None,
+                )
+                if _chosen is not None and _chosen.price_now is not None:
+                    _prefill_price = _chosen.price_now
+                    _prefill_label = f"from {_chosen.store_name} offer"
             _LineDtos.append(ShoppingListLineDto(
                 line_id = line.id,
                 stock_item_id = line.stock_item_id,
@@ -316,6 +379,8 @@ class GetShoppingListDetailHandler:
                     _StoreNameLookup.get(line.purchased_store_id)
                     if line.purchased_store_id else None
                 ),
+                prefill_unit_price = _prefill_price,
+                prefill_source_label = _prefill_label,
                 offers = offers,
                 preferred_buy_id = line.preferred_buy_id,
                 preferred_buys = sorted(

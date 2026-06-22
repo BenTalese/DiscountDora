@@ -5,6 +5,30 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Prices you enter while shopping become "Your prices" (FU-227 chunk 5, 2026-06-22).**
+  The closed loop is wired end-to-end: confirm what you paid on a shopping line
+  at the till, then **Finish & restock**, and Dora harvests one price record per
+  priced line onto the matching stock item — no separate logging step. A sized
+  product (e.g. 2 × 2 L milk) is recorded as a measure (per-L) observation; a
+  sizeless line as a count (per-item) one. Finishing twice is safe — the harvest
+  is idempotent and never double-counts.
+- **Shopping lines suggest a price (FU-227 chunk 5).** Each line now shows where
+  its price would prefill from — *"from your last receipt"* when you've bought
+  the item before, otherwise *"from <store> offer"* — so the common case at the
+  till is confirming one number. The suggestion is resolved server-side; it's a
+  starting point and persists when you edit it.
+
+### Changed
+- **A finished list is a "Receipt" when money is on (FU-227 chunk 5).** The
+  status badge on a done list reads "Receipt" instead of "Done" once money
+  surfaces are enabled — a label swap only; nothing about the list changes.
+- **Finishing is the only way to complete a list (FU-227 chunk 5).** A list now
+  becomes *done* exclusively via **Finish & restock** (which snapshots prices,
+  harvests observations and restocks). The old generic `PATCH status=done`
+  back-door is gone — it returns a clear error pointing to finish. draft⇄shopping
+  edits are unaffected.
+
 ### Changed
 - **Preferred buys are alphabetical, no manual order (FU-225, 2026-06-18).** The round-3
   stock-item-detail polish dropped the manual reorder UI; the backend now matches. The

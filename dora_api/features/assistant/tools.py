@@ -39,6 +39,7 @@ from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
                                           LOW_STOCK_SEQUENCE, is_out_of_stock,
                                           needs_restock)
 from dora_api.features.alerts.get_alerts import GetAlertsHandler
+from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -2259,14 +2260,12 @@ def purchase_price_stats(args: dict) -> list[dict]:
     for line in lines:
         if line.shopping_list_id not in archived_ids:
             continue
-        if line.actual_unit_price is not None:
-            price = float(line.actual_unit_price)
-            source = "actual"
-        elif line.picked_offer_price is not None:
-            price = float(line.picked_offer_price)
-            source = "offer_snapshot"
-        else:
+        # actual→picked ladder (K2 shared helper); the source label is still
+        # ours since this tool distinguishes user-entered from snapshot.
+        price = line_paid_unit_price(line)
+        if price is None:
             continue
+        source = "actual" if line.actual_unit_price is not None else "offer_snapshot"
         store_id: UUID | None = None
         store_name: str | None = None
         if line.purchased_store_id:

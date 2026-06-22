@@ -9,6 +9,124 @@ next.
 
 ---
 
+## 2026-06-22 — FU-227 chunk 5: shopping-line prefill + harvest + Receipt relabel + ladder extract
+
+**Session goal:** close the loop — prefilled price on a draft/shopping line →
+user confirms at the till → `/finish` harvests one observation per priced line
+→ the YourPrices widget updates without further input. Plus the K2 ladder
+extract, the I1 Receipt relabel, and the E3 dead-branch removal.
+
+**New shared module — `dora_api/features/shopping_lists/_line_price.py`:**
+- `line_paid_unit_price(line)` — the **actual→picked ladder** (K2). One
+  definition; was copy-pasted in `budget.py`, `waste.py`, `assistant/tools.py`.
+- `harvest_observation_fields(*, unit_price, quantity, size_value, size_unit)`
+  — the E4 fold to `(total_price, total_measure, unit)` (A1). Sized product in a
+  price dimension → measure obs (`size_value × qty` in the product's canonical
+  unit); sizeless / unsupported unit → count obs (`qty` × `ea`). **`total_price`
+  is always `unit_price × qty`** — the plan's pseudocode had a bug
+  (`unit_price × total_measure`, which double-counts pack size); implemented
+  correctly here.
+
+**K2 ladder extract — 4 consumers now share the helper:**
+- `budget.py` — removed the local `_price_paid_for`; `_projected_price_for` and
+  the two spend loops call `line_paid_unit_price`.
+- `waste.py` — value-at-risk lookup.
+- `assistant/tools.py` — purchase-price stats (keeps its own `source` label).
+- `suggestions/generators.py` — the "was this actually bought" presence check
+  (cohesion; same ladder).
+- **NOT** `reports.py` — its spend-by-store / savings handlers use SQL column
+  projection of `picked_offer_price` only and never applied the Python
+  actual→picked ladder (the plan's K2 list was mistaken about this). Savings is
+  correctly snapshot-based (RRP − picked). Spend-by-store ignoring
+  `actual_unit_price` is a genuine pre-existing divergence → logged as **FU-229**
+  (behaviour change, out of chunk-5 scope per R-007).
+
+**Harvest — `manage_shopping_list.py::FinishShoppingListHandler`:**
+- New `_harvest_observations(ticked_lines)`: filters to item-anchored priced
+  lines, **pre-checks existing observations by line FK for idempotency** (LC-1
+  partial UNIQUE is the backstop), bulk-loads selected products for pack size,
+  and writes one `StockItemPriceObservation` per line — `store_id =
+  line.purchased_store_id` (A2; `ShoppingList` has no store), FK = `line.id`
+  (A4 provenance). Runs inside the existing single `save_changes` transaction.
+
+**E3 dead-branch removal — `manage_shopping_list.py::UpdateShoppingListHandler`:**
+- `PATCH status=done` now 400s with a message pointing to `/finish` (new
+  `done_via_finish` response flag). draft⇄shopping still flow through PATCH.
+  SPA trace re-confirmed: no caller ever sent `status:'done'` (the only
+  `updateAsync` calls pass `name`/`planned_shop_date`). SPA command type
+  narrowed to `Exclude<ShoppingListStatus, 'done'>`.
+
+**Prefill (D3) — `get_shopping_list_detail.py`:**
+- `ShoppingListLineDto` gains `prefill_unit_price` + `prefill_source_label`
+  (server-resolved). Priority: most-recent **prior actual purchase** of the
+  item (per-item, via the ladder over prior *done* lists) → "from your last
+  receipt"; else the line's chosen offer → "from <store> offer"; else None.
+- **Deliberate deviation from the plan's literal "most-recent observation":**
+  observations are now *per-measure* (per-L/kg) while a shopping line's price is
+  *per-item*. Prefilling a per-item field from a per-measure obs would yield a
+  nonsense number, so the per-item prefill comes from prior per-item purchases.
+  Manual observations still power the per-measure YourPrices widget. Documented
+  inline.
+
+**SPA — `ShoppingListDetail.vue`:**
+- `onOpenPriceEditor` seeds the till editor from `line.prefill_unit_price`
+  (fallback chosen offer). Source label shown in the popover ("Prefilled from
+  …") and as a muted caption on the line (money-on, no price yet — E2).
+- `statusBadgeLabel` returns "Receipt" when done + `moneyEnabled` (I1).
+
+**Seed (R-017) — `seed.py`:**
+- `line()` helper extended with `actual_unit_price` + `purchased_store`, returns
+  the line, and queues finished priced lines for harvest.
+- `archived` list lines now priced (pasta sized → g measure obs; pizza/chips
+  sizeless → ea count obs). New finished **"Weekend shop"** (3d ago) with priced
+  milk (sized → L measure obs, FK-provenance alongside milk's manual obs) +
+  bread (sizeless). milk + bread overlap the draft `primary`, so those draft
+  lines prefill "from your last receipt"; parmesan (no prior purchase, has a
+  selected offer) exercises the "from <store> offer" fallback.
+- Harvest uses the same `harvest_observation_fields` helper as `/finish` (faithful).
+
+**Tests:**
+- `tests/test_line_price_harvest.py` (NEW, 11 pure-function cases) — ladder 3
+  branches; harvest sized-volume / sized-mass-canonical / sizeless / count-dim /
+  unsupported-unit fallback / zero-size fallback / None-qty.
+- `tests/e2e/dora_api/test_finish_harvest.py` (NEW, 7 cases) — harvest one obs
+  per priced line (count obs, FK + list name resolved); double-tap idempotent;
+  unpriced ticked line not harvested; draft prefill "from your last receipt";
+  PATCH done → 400; PATCH shopping → 204.
+
+**Verification:**
+- SPA: `vue-tsc -p tsconfig.json --noEmit` clean; `npm run lint` clean;
+  `npm run build` (quasar SPA) **succeeded** (`npm install` was needed first —
+  node_modules absent on this box).
+- **Backend pytest NOT run here** — this box has only the MS Store Python stub
+  (FU-189c / FU-223). The new pure-function + e2e tests must be run on a
+  Python-equipped env. Logged below.
+
+**Engineering-standards close-gate:**
+- R-001 — no new components; reused the existing price-editor popover +
+  `useMoneyEnabled`.
+- R-002 — new SPA markup uses `dora-text-muted` + `ICONS.info`; no hex.
+- R-003 — ladder + harvest math each in ONE shared helper (server-owned);
+  prefill + source label resolved server-side, client renders the string;
+  median/baseline untouched. The reports.py snapshot divergence is flagged
+  (FU-229), not silently absorbed.
+- R-005/006/015 — no migration (chunk-2 created the partial UNIQUE; harvest
+  reuses existing columns).
+- R-007 — did not touch reports.py behaviour, money-gating (FU-182), or
+  FU-214/216. `generators.py` ladder swap is in the K2 spirit (same ladder).
+- R-017 (pending formal promotion at chunk 8) — seed updated in the same unit.
+- No new ADR this chunk (R-017 promotion reserved for chunk 8).
+
+**Ledger:** added FU-229 (reports.py spend-by-store ignores `actual_unit_price`).
+Updated FU-227 to "chunk 5 of 8 DONE".
+
+**Next:** FU-227 chunk 6 — bottom-sheet (C5 "Full history") + per-product
+Price-History observation series + baseline line (D2 + H2). Builds on the chart
+already used by `/price-history`; needs the unioned series from chunk 4.
+User checkpoint per preference.
+
+---
+
 ## 2026-06-22 — FU-227 chunk 4: baseline math (build_your_prices_for_item)
 
 **Session goal:** light up the YourPricesWidget with real numbers — server-derived

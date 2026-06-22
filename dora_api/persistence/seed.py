@@ -307,7 +307,9 @@ def seed_dev_data():
     # render: ≥3 items with 3+ observations (baseline-ready), ≥1 below
     # MIN_SAMPLES (the empty-state copy), ≥1 with current > 1.15× median
     # (above-usual chip), ≥1 with store_id set + ≥1 without (store chip).
-    # `shopping_list_line_id` provenance lands in chunk 5's harvest seed.
+    # These are all *manual* observations (no FK); the chunk-5 harvest below
+    # adds FK-provenance ones from finished lists (milk, pasta, pizza, chips,
+    # bread).
     from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 
     def price_obs(item, *, total_price, total_measure, unit, days_ago, store=None):
@@ -569,19 +571,38 @@ def seed_dev_data():
         name="Last week", created_at=now - timedelta(days=7),
         completed_at=now - timedelta(days=5), status=SHOPPING_LIST_STATUS_DONE,
     )
-    for sl in (primary, in_progress, archived):
+    # FU-227 chunk 5 — a second finished list whose priced ticked lines get
+    # harvested into observations (provenance via FK). Its items overlap the
+    # draft `primary` list, so those draft lines surface a "from your last
+    # receipt" prefill; the rest fall back to the chosen-offer prefill.
+    weekend = ShoppingList(
+        name="Weekend shop", created_at=now - timedelta(days=4),
+        completed_at=now - timedelta(days=3), status=SHOPPING_LIST_STATUS_DONE,
+    )
+    for sl in (primary, in_progress, archived, weekend):
         repo.add(sl)
     repo.save_changes()  # lines need persisted list ids
 
-    def line(list_id, item, seq, qty=1, ticked=False, selected_product=None):
-        repo.add(ShoppingListLine(
+    # (line, selected_product, store) for finished priced lines, harvested into
+    # observations below exactly as POST /finish would (chunk 5 closed loop).
+    _harvest_jobs: list[tuple] = []
+
+    def line(list_id, item, seq, qty=1, ticked=False, selected_product=None,
+             actual_unit_price=None, purchased_store=None):
+        sl_line = ShoppingListLine(
             shopping_list_id=list_id,
             stock_item_id=item.id,
             quantity=qty,
             is_ticked=ticked,
             sequence=seq,
             selected_product_id=selected_product.id if selected_product else None,
-        ))
+            actual_unit_price=actual_unit_price,
+            purchased_store_id=purchased_store.id if purchased_store else None,
+        )
+        repo.add(sl_line)
+        if ticked and actual_unit_price is not None:
+            _harvest_jobs.append((sl_line, selected_product, purchased_store))
+        return sl_line
 
     # Primary: a mix of low/out essentials, one with a chosen offer.
     line(primary.id, milk, 0, qty=2, selected_product=milk_coles)
@@ -595,10 +616,45 @@ def seed_dev_data():
     line(in_progress.id, olive_oil, 1, selected_product=oil_aldi)
     line(in_progress.id, coffee, 2, ticked=True, selected_product=coffee_iga)
 
-    # Archived: completed last week.
-    line(archived.id, pasta, 0, ticked=True, selected_product=pasta_barilla)
-    line(archived.id, pizza, 1, ticked=True)
-    line(archived.id, chips, 2, ticked=True)
+    # Archived: completed last week — now priced + harvested. A sized product
+    # (pasta → measure obs in g) and two sizeless lines (count obs in ea).
+    line(archived.id, pasta, 0, ticked=True, selected_product=pasta_barilla,
+         actual_unit_price=1.30, purchased_store=coles)
+    line(archived.id, pizza, 1, ticked=True, actual_unit_price=6.00, purchased_store=woolworths)
+    line(archived.id, chips, 2, ticked=True, actual_unit_price=3.20)
+
+    # Weekend shop: finished 3 days ago. milk is a sized product (→ measure obs
+    # in L, sitting alongside its manual observations with FK provenance);
+    # bread is sizeless (→ count obs). Both overlap `primary`.
+    line(weekend.id, milk, 0, qty=2, ticked=True, selected_product=milk_coles,
+         actual_unit_price=4.00, purchased_store=coles)
+    line(weekend.id, bread, 1, ticked=True, actual_unit_price=4.40, purchased_store=woolworths)
+
+    repo.save_changes()  # line ids needed for the harvest FK
+
+    # Harvest one observation per finished priced line, via the same shared
+    # helper the /finish handler uses (R-017 — seed exercises the new path).
+    from dora_api.features.shopping_lists._line_price import (
+        harvest_observation_fields, line_paid_unit_price)
+    _completed_at = {archived.id: archived.completed_at, weekend.id: weekend.completed_at}
+    for sl_line, product, store in _harvest_jobs:
+        unit_price = line_paid_unit_price(sl_line)
+        if unit_price is None:
+            continue
+        _tp, _tm, _unit = harvest_observation_fields(
+            unit_price=unit_price,
+            quantity=sl_line.quantity,
+            size_value=product.size_value if product else None,
+            size_unit=product.size_unit if product else None,
+        )
+        _at = _completed_at.get(sl_line.shopping_list_id, now)
+        repo.add(StockItemPriceObservation(
+            stock_item_id=sl_line.stock_item_id,
+            total_price=_tp, total_measure=_tm, unit=_unit,
+            observed_at=_at, store_id=(store.id if store else None),
+            shopping_list_line_id=sl_line.id, created_at=_at,
+        ))
+    repo.save_changes()
 
     # ---------------- SHOPPING LIST TEMPLATES ---------------- #
     staples = ShoppingListTemplate(name="Weekly staples", created_at=now, updated_at=now)

@@ -35,6 +35,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import (StockStatus, is_missing,
                                           level_for_status)
 from dora_api.features.routers import WASTE_ROUTER
+from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
@@ -123,13 +124,9 @@ class GetWasteRescueHandler:
             # "last paid", reports/N6 + purchase_price_stats are the
             # authoritative path.
             for line in sorted(lines, key=lambda l: l.sequence):
-                price = (
-                    line.actual_unit_price
-                    if line.actual_unit_price is not None
-                    else line.picked_offer_price
-                )
+                price = line_paid_unit_price(line)
                 if price is not None:
-                    value_lookup[line.stock_item_id] = float(price)
+                    value_lookup[line.stock_item_id] = price
 
         item_dtos: list[ExpiringItemDto] = []
         for item in items[:_MAX_ROWS]:

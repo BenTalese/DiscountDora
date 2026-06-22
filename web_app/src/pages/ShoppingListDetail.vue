@@ -688,6 +688,16 @@
                                                             prefix="$"
                                                             @keydown.enter.prevent="savePriceEditor(line)"
                                                         />
+                                                        <!-- D3 — where the prefilled
+                                                             number came from, so the user
+                                                             knows it's a starting point. -->
+                                                        <div
+                                                            v-if="line.actual_unit_price == null && line.prefill_source_label"
+                                                            class="text-caption dora-text-muted"
+                                                        >
+                                                            <q-icon :name="ICONS.info" size="14px" class="q-mr-xs" />
+                                                            Prefilled {{ line.prefill_source_label }}
+                                                        </div>
                                                         <q-select
                                                             v-if="storeOptionsFor(line).length > 0"
                                                             v-model="priceEditorDraft.store_id"
@@ -733,6 +743,20 @@
                                             class="text-caption dora-text-muted text-right"
                                         >
                                             {{ line.purchased_store_name }}
+                                        </div>
+                                        <!-- E2 — show where an un-entered price would
+                                             prefill from, so the hint is visible before
+                                             opening the editor (money surfaces only). -->
+                                        <div
+                                            v-else-if="
+                                                moneyEnabled
+                                                    && detail.status !== 'done'
+                                                    && line.actual_unit_price == null
+                                                    && line.prefill_source_label
+                                            "
+                                            class="text-caption dora-text-muted text-right"
+                                        >
+                                            {{ line.prefill_source_label }}
                                         </div>
                                     </q-item-section>
 
@@ -989,6 +1013,7 @@
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useQuasar, type QVirtualScroll } from 'quasar';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
@@ -1029,6 +1054,7 @@
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const productStore = useProductStore();
+    const { moneyEnabled } = useMoneyEnabled();
     const { openQuickAdd, isOpen: quickAddOpen } = useQuickAdd();
 
     const listId = computed(() => String(route.params.id ?? ''));
@@ -1445,7 +1471,9 @@
             case 'shopping':
                 return 'Shopping';
             case 'done':
-                return 'Done';
+                // I1 — a finished list is the receipt of the shop when money
+                // surfaces are on. Pure label swap; status stays 'done'.
+                return moneyEnabled.value ? 'Receipt' : 'Done';
             default:
                 return 'Draft';
         }
@@ -1917,14 +1945,14 @@
 
     function onOpenPriceEditor(line: ShoppingListLine) {
         priceEditorDraft.line_id = line.line_id;
-        // Seed with the existing override, or the chosen offer's price as a
-        // helpful starting point (most edits are small tweaks from "what
-        // the app said it'd be").
+        // Seed with the existing override, else the server-resolved prefill
+        // (D3: prior receipt, else chosen offer — source-labelled), so the
+        // common case is "confirm one number".
         if (line.actual_unit_price != null) {
             priceEditorDraft.price = line.actual_unit_price;
         } else {
-            const offer = chosenOfferFor(line);
-            priceEditorDraft.price = offer?.price_now ?? null;
+            priceEditorDraft.price =
+                line.prefill_unit_price ?? chosenOfferFor(line)?.price_now ?? null;
         }
         if (line.purchased_store_id) {
             priceEditorDraft.store_id = line.purchased_store_id;

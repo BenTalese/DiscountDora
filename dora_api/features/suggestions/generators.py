@@ -26,6 +26,7 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
+from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -170,11 +171,11 @@ def generate_likely_due(repository: SqlAlchemyRepository) -> list[Suggestion]:
     # Bucket completion dates per stock item.
     by_item: dict[UUID, list[date]] = {}
     for line in lines:
-        if not (line.actual_unit_price is not None or line.picked_offer_price is not None):
+        if line_paid_unit_price(line) is None:
             # Without a price the line might not represent a real
             # purchase (e.g. never-ticked). Use price-presence as the
             # "this was actually bought" signal — matches the
-            # purchase_price_stats heuristic.
+            # purchase_price_stats heuristic (same actual→picked ladder).
             continue
         lst = archived_lookup.get(line.shopping_list_id)
         if lst is None or lst.completed_at is None:

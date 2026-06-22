@@ -1,0 +1,125 @@
+"""FU-227 chunk 5 — /finish harvests price observations (the closed loop).
+
+Entering a price at the till on a ticked line, then finishing the list, writes
+one StockItemPriceObservation per priced line — provenance via the
+`shopping_list_line_id` FK (A4). Idempotent under finish double-taps (LC-1).
+And PATCH `status=done` is rejected: /finish is the only path to done (E3).
+
+Sized-vs-count harvest math is covered exhaustively by the pure-function tests
+in ``tests/test_line_price_harvest.py``; the count case is asserted here
+end-to-end (a no-product line). The dev seed exercises the sized path.
+"""
+import uuid
+
+import requests
+
+BASE = "http://localhost:5170/api"
+STOCK_ITEMS = f"{BASE}/stock-items"
+SHOPPING_LISTS = f"{BASE}/shopping-lists"
+
+
+def _new_stock_item() -> str:
+    level = requests.get(f"{BASE}/stock-levels").json()["items"][0]["stock_level_id"]
+    resp = requests.post(STOCK_ITEMS, json={
+        "name": f"FU227h-{uuid.uuid4().hex[:8]}", "stock_level_id": level,
+    })
+    assert resp.status_code == 201, resp.text
+    return resp.json()["stock_item_id"]
+
+
+def _detail(item_id: str) -> dict:
+    return requests.get(f"{STOCK_ITEMS}/{item_id}/detail").json()
+
+
+def _list_with_priced_ticked_line(item_id: str, *, price: float):
+    list_id = requests.post(
+        SHOPPING_LISTS, json={"name": f"FU227h-{uuid.uuid4().hex[:8]}"}
+    ).json()["shopping_list_id"]
+    assert requests.post(
+        f"{SHOPPING_LISTS}/{list_id}/lines", json={"stock_item_id": item_id}
+    ).status_code in (200, 201)
+    line_id = requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["lines"][0]["line_id"]
+    # Enter the actual price and tick it (the mid-shop capture).
+    assert requests.patch(
+        f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}",
+        json={"actual_unit_price": price, "is_ticked": True},
+    ).status_code == 204
+    return list_id, line_id
+
+
+def test__finish__harvests_one_observation_per_priced_line(api):
+    item = _new_stock_item()
+    assert _detail(item)["price_observations"] == []
+    list_id, line_id = _list_with_priced_ticked_line(item, price=5.0)
+
+    resp = requests.post(f"{SHOPPING_LISTS}/{list_id}/finish")
+    assert resp.status_code == 200, resp.text
+
+    obs = _detail(item)["price_observations"]
+    assert len(obs) == 1
+    o = obs[0]
+    # Sizeless line (no selected product) → count observation in ea.
+    assert o["total_price"] == 5.0 and o["total_measure"] == 1.0 and o["unit"] == "ea"
+    # Provenance via the FK — and the SPA gets the list name resolved for it.
+    assert o["shopping_list_line_id"] == line_id
+    assert o["shopping_list_name"]
+
+
+def test__finish__double_tap_is_idempotent(api):
+    item = _new_stock_item()
+    list_id, _ = _list_with_priced_ticked_line(item, price=3.25)
+
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    # LC-1 — the partial UNIQUE on the line FK means the second finish writes
+    # nothing new.
+    assert len(_detail(item)["price_observations"]) == 1
+
+
+def test__finish__unpriced_ticked_line_is_not_harvested(api):
+    item = _new_stock_item()
+    list_id = requests.post(
+        SHOPPING_LISTS, json={"name": f"FU227h-{uuid.uuid4().hex[:8]}"}
+    ).json()["shopping_list_id"]
+    requests.post(f"{SHOPPING_LISTS}/{list_id}/lines", json={"stock_item_id": item})
+    line_id = requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["lines"][0]["line_id"]
+    # Tick it but never set a price → no captured price → nothing to harvest.
+    requests.patch(f"{SHOPPING_LISTS}/{list_id}/lines/{line_id}", json={"is_ticked": True})
+    assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+    assert _detail(item)["price_observations"] == []
+
+
+def test__prefill__draft_line_shows_last_receipt(api):
+    """D3 — a draft line for an item bought before prefills the till editor with
+    that per-item price, labelled 'from your last receipt'."""
+    item = _new_stock_item()
+    done_list, _ = _list_with_priced_ticked_line(item, price=4.50)
+    assert requests.post(f"{SHOPPING_LISTS}/{done_list}/finish").status_code == 200
+
+    draft = requests.post(
+        SHOPPING_LISTS, json={"name": f"FU227pf-{uuid.uuid4().hex[:8]}"}
+    ).json()["shopping_list_id"]
+    requests.post(f"{SHOPPING_LISTS}/{draft}/lines", json={"stock_item_id": item})
+    line = requests.get(f"{SHOPPING_LISTS}/{draft}").json()["lines"][0]
+    assert line["prefill_unit_price"] == 4.50
+    assert line["prefill_source_label"] == "from your last receipt"
+
+
+def test__patch_status_done__is_rejected__use_finish(api):
+    # E3 — the only path to done is POST /finish (it snapshots + restocks).
+    list_id = requests.post(
+        SHOPPING_LISTS, json={"name": f"FU227e3-{uuid.uuid4().hex[:8]}"}
+    ).json()["shopping_list_id"]
+    resp = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "done"})
+    assert resp.status_code == 400, resp.text
+    assert requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["status"] == "draft"
+
+
+def test__patch_status_shopping__still_allowed(api):
+    # draft⇄shopping still flow through PATCH; only `done` is gated.
+    list_id = requests.post(
+        SHOPPING_LISTS, json={"name": f"FU227e3-{uuid.uuid4().hex[:8]}"}
+    ).json()["shopping_list_id"]
+    resp = requests.patch(f"{SHOPPING_LISTS}/{list_id}", json={"status": "shopping"})
+    assert resp.status_code == 204, resp.text
+    assert requests.get(f"{SHOPPING_LISTS}/{list_id}").json()["status"] == "shopping"

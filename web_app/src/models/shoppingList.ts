@@ -88,6 +88,12 @@ export type ShoppingListLine = {
     /** Resolved name for `purchased_store_id`, populated by the detail
      *  endpoint. */
     purchased_store_name: string | null;
+    /** FU-227 chunk 5 (D3) — server-resolved per-item price suggestion for
+     *  the till editor + its human source label ("from your last receipt" /
+     *  "from Coles"). `null` when there's nothing to suggest. Display-only;
+     *  seeds the editor and persists on first edit. */
+    prefill_unit_price: number | null;
+    prefill_source_label: string | null;
     offers: LineProductOffer[];
     /** FU-215 — optional PreferredBuy hint on the line + the item's available
      *  labels for the picker. */

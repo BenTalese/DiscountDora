@@ -52,6 +52,30 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-229 — reports.py spend-by-store ignores `actual_unit_price` (ladder divergence)
+- **Raised:** 2026-06-22 (FU-227 chunk 5 — K2 ladder extract).
+- **Type:** finding (behaviour inconsistency).
+- **What:** the K2 extract collapsed the **actual→picked** ladder
+  (`line_paid_unit_price`) across `budget.py`, `waste.py`, `assistant/tools.py`
+  and `suggestions/generators.py`. `reports.py` was on the plan's K2 list but
+  does **not** apply that ladder: its spend-by-store (`reports.py:~354`) and
+  savings (`SavingsCapturedHandler` ~746) handlers use SQL column projection of
+  `picked_offer_price` only and never reference `actual_unit_price`.
+  - Savings (`list_price_at_pick − picked_offer_price`) is **correctly**
+    snapshot-based — it measures RRP-vs-committed-offer, not what you paid. No
+    change wanted there.
+  - **Spend-by-store**, though, is "what did I spend" and arguably should prefer
+    `actual_unit_price` when set, to match budget/waste/assistant. Today a
+    user's till-receipt override is invisible to spend-by-store.
+- **Why deferred:** folding `actual_unit_price` into the SQL projection changes
+  report numbers — a behaviour change beyond chunk-5 scope (R-007), and not
+  ratified by the user. The ladder helper operates on entity objects, not the
+  column-projected rows these queries return, so it's not a drop-in.
+- **Recommended resolution:** opportunistic — next reports pass or the Postgres
+  migration (FU-045) when these queries get revisited. Decide explicitly whether
+  spend-by-store should prefer actual paid; if yes, project `actual_unit_price`
+  alongside and COALESCE in SQL (or load entities and reuse `line_paid_unit_price`).
+
 ## [OPEN] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
 - **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
 - **Type:** finding.
@@ -76,7 +100,7 @@ long session summary. Distinct from the other logs:
   in case any case depends on the surrounding context. A single PR titled "Phase E rename:
   finish the test-suite update" would be clean.
 
-## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunk 1 of 8 DONE)
+## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunks 1–5 of 8 DONE)
 - **Raised:** 2026-06-19 (pricing reassessment handoff).
 - **Ratified:** 2026-06-22 — the §6 question list A–K is fully walked with the user; all answers,
   revisions, and clarifications are LOCKED. **Ready for plan execution.** No more Q&A needed.
@@ -121,12 +145,21 @@ long session summary. Distinct from the other logs:
   question list with all revisions inline (§6), **A1 deep-dive + user intent clarification (§6a),
   the five locked clarifications LC-1..LC-5 (§6b)**, the per-change impact map (§7), related docs
   (§8), standing constraints incl. the new seed-data rule (§9).
-- **Next action:** write the plan/execution doc (replace `IMPL_PLAN_YOUR_PRICES.md` §S2-10 or a
-  new sibling) per §0's instructions, then implement chunks in §5 sequence. Conversion helper
-  first, harvest last. Update seed data in every chunk. Evaluate seed-data rule for `R-0NN`
-  promotion at close-gate.
-- **Recommended resolution:** **now / next session** — this is the active design track; it is
-  Phase F's "Your prices" build.
+- **Plan doc:** `docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` — 8-chunk sequence (§1/§2).
+- **Progress (per `DORA_WORKLOG.md`):**
+  - chunk 1 (unit-conversion helper + count dim + SPA mirror dedup) — DONE.
+  - chunk 2 (observation reshape + migration `c6e9a4b8d5f2`, partial UNIQUE) — DONE.
+  - chunk 3 (shared `PriceEntry` + row button + `YourPricesWidget`) — DONE.
+  - chunk 4 (baseline math `build_your_prices_for_item`) — DONE.
+  - chunk 5 (shopping-line prefill + `/finish` harvest + Receipt relabel + E3
+    dead-branch removal + K2 ladder extract) — **DONE 2026-06-22**. Backend
+    pytest pending a Python-equipped env (FU-189c).
+- **Next action:** chunk 6 — bottom-sheet "Full history" (C5) + per-product
+  Price-History observation series + baseline line (D2 + H2). Then chunk 7
+  (remove ingestion→observation path, J1) and chunk 8 (verify + seed refresh +
+  promote the seed-data rule to `R-017`; fill the feedback coverage table in the
+  plan §5; browser-walk the full C5 state matrix incl. chunk-5 surfaces).
+- **Recommended resolution:** **now / next session** — active build, Phase F.
 
 ## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
 - **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)

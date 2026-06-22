@@ -16,7 +16,10 @@ export type UpdateShoppingListCommand = {
     /** UX-v2 — explicit `null` clears the custom name (the list then
      *  self-labels from its dates); omitting leaves it alone. */
     name?: string | null;
-    status?: ShoppingListStatus;
+    /** FU-227 chunk 5 (E3) — a list becomes `done` only via POST /finish
+     *  (which snapshots prices + restocks). PATCH can move it between
+     *  draft/shopping; the server 400s on `status: 'done'` here. */
+    status?: Exclude<ShoppingListStatus, 'done'>;
     /** P6-01 Chunk 7 — explicit `null` clears; omitting leaves it alone. */
     planned_shop_date?: string | null;
 };

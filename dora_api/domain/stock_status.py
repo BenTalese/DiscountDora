@@ -61,24 +61,31 @@ def effective_expiring_soon_window(app_setting) -> int:  # noqa: ANN001 — duck
 
 
 def get_stock_item_unit_cost_at(observations, when=None):  # noqa: ANN001 — duck-typed observations
-    """The single server-owned per-unit cost for a stock item (FU-213 /
-    PROPOSAL_PRODUCTS_AS_OVERLAY §3.2): the most-recent direct price
-    observation's ``price / qty`` at or before ``when`` (default: latest).
-    ``None`` when there's nothing to go on.
+    """The single server-owned per-unit cost for a stock item (R-003).
+    Reshaped for FU-227 chunk 2: reads the folded shape
+    ``total_price / total_measure`` from the most-recent observation at or
+    before ``when`` (default: latest). ``None`` when there's no usable
+    observation.
 
-    R-003: the one place "what a unit costs" is derived — the client never
-    divides price by quantity. Pure: the caller passes the already-fetched
-    observations. (The product-derived branch — cheapest linked offer when
-    Products is on — folds in with the consumer rebase, FU-213b.)
+    Returned value is per-unit in the **logged unit** (e.g. dollars per L if
+    the latest row was "$6 for 2 L"). Mixed-unit history is the caller's
+    problem — for the baseline/median path that requires normalisation, use
+    ``build_your_prices_for_item`` (chunk 4). The two consumers of this
+    function (stock-value report at ``reports.py:225-236`` / FU-216 and recipe
+    cost fallback at ``get_recipes.py:505-519``) treat the number as an
+    opaque per-unit cost and don't need dimension awareness — LC-3 absorbs
+    the small output shift silently (pre-release; no data shim).
+
+    Pure: caller passes already-fetched observations.
     """
     candidates = [
         o for o in observations
-        if getattr(o, "qty", 0) and (when is None or o.observed_at <= when)
+        if getattr(o, "total_measure", 0) and (when is None or o.observed_at <= when)
     ]
     if not candidates:
         return None
     latest = max(candidates, key=lambda o: o.observed_at)
-    return latest.price / latest.qty if latest.qty else None
+    return latest.total_price / latest.total_measure if latest.total_measure else None
 
 
 def _sequence_of(level) -> Optional[int]:

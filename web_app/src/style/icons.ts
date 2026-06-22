@@ -204,6 +204,7 @@ export const ICONS = {
     playlist_remove: 'mdi-playlist-remove',
     preview: 'mdi-eye-arrow-right',
     price_check: 'mdi-cash-check',
+    cash_plus: 'mdi-cash-plus',
     query_stats: 'mdi-chart-line-variant',
     restaurant_menu: 'mdi-silverware-variant',
     savings: 'mdi-piggy-bank',

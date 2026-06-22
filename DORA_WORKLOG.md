@@ -9,6 +9,425 @@ next.
 
 ---
 
+## 2026-06-22 — FU-227 chunk 4: baseline math (build_your_prices_for_item)
+
+**Session goal:** light up the YourPricesWidget with real numbers — server-derived
+median / "above usual" / sample_count / last-seen-store / offers sidecar.
+
+**New module — `dora_api/features/stock_items/your_prices.py`:**
+- `YourPrices` dataclass: `{baseline, baseline_unit, current, above_baseline,
+  sample_count, last_observed_at, last_seen_store_name, offers_sidecar}`.
+- `OfferSidecarEntry` dataclass: `{store_name, price_per_unit, unit}` — LC-2
+  sidecar entries (never folded into the median).
+- Constants: `MIN_SAMPLES=3`, `ABOVE_THRESHOLD=1.15`, `BASELINE_WINDOW=365 days`.
+- `build_your_prices_for_item(repo, stock_item_id, *, now=None)` — the chokepoint.
+  Algorithm:
+  1. Load all obs for item → empty state when none.
+  2. Active dimension = dimension of most-recent obs (B4).
+  3. Filter to obs in that dim, within `BASELINE_WINDOW`.
+  4. Normalise each to per-canonical-unit price (`_per_unit_in_canonical`).
+  5. `current` = most-recent obs's per-unit (always set if any obs exist).
+  6. `sample_count < MIN_SAMPLES` → baseline None, above_baseline False.
+     Else `statistics.median(...)`, strict-greater 1.15× threshold compare.
+  7. `_build_offers_sidecar` → linked products' current offers, dimension-matched,
+     normalised, cheapest first.
+- `build_your_prices_for_product(repo, product_id, *, now=None)` — per-product
+  variant for chunk 6 (Price-History page). Same math; aggregates obs across
+  all stock items linked to the product; no sidecar (PriceHistory shows offers
+  as the primary series).
+- `_per_unit_in_canonical` (pure helper): one observation → `(per_canonical, "L"|"kg"|"ea")`.
+- `_as_naive_utc` carve-out: SQLite reads `observed_at` as naive but the cutoff
+  is built tz-aware → `<` raises. Centralises the coercion here; documented
+  with R-005 carve-out comment + FU-045 (Postgres migration) reference.
+
+**Units module — `dora_api/domain/units.py`:**
+- New `CANONICAL_PRICE_UNIT = {"volume": "L", "mass": "kg", "count": "ea"}` —
+  the user-facing denominator per dimension. Single source so baseline labels
+  stay consistent.
+
+**Detail handler — `get_stock_item_detail.py`:**
+- `OfferSidecarDto` + extended `YourPricesDto` (added `offers_sidecar: list[…]`).
+- Imports `build_your_prices_for_item`; computes `_YpRaw` once per detail
+  request (cheap — pure function over already-loaded repo).
+- The chunk-3 placeholder `your_prices=None` replaced with the real DTO mapping.
+
+**SPA:**
+- `web_app/src/models/stockItemDetail.ts` — new `OfferSidecar` type;
+  `YourPrices` gains `offers_sidecar: OfferSidecar[]`.
+- `web_app/src/components/dora/YourPricesWidget.vue` — renders the LC-2
+  sidecar as a separate `dora-bg-sunken` region above the action buttons.
+  Format: "Current shelf prices · $4.99 / L at Coles · $5.20 / L at Woolworths".
+
+**Tests — `tests/e2e/dora_api/test_your_prices.py` (NEW, 13 cases):**
+- Empty observations → full empty state.
+- 2 samples → `baseline=None`, `current=latest`, `above_baseline=False`.
+- 3 samples odd-count median (`[2,3,5]` → 3.0).
+- 4 samples even-count median (`[2,3,4,5]` → 3.5).
+- Current > 1.15× → `above_baseline=True`.
+- **C2 edge case:** `current == baseline * 1.15` → `above_baseline=False`
+  (strict greater).
+- ml → per-L normalisation (`500 ml @ $3` → `$6/L`).
+- g → per-kg normalisation (`250 g @ $5` → `$20/kg`).
+- Count dim B1 (`12 ea @ $7.50` → `$0.625/ea`).
+- Trailing 12-month window: 3-year-old outlier excluded; baseline driven by
+  recent obs only.
+- Mixed dimensions B4: 3 L-obs + 3 ea-obs → active dim follows latest (ea),
+  baseline computed over ea only.
+- Last-seen store name resolved server-side.
+- LC-2 — sample_count counts observations only; sidecar separate.
+
+**End-to-end seed walkthrough:**
+| Item       | Baseline   | Current   | Above   | n | Store      |
+|------------|------------|-----------|---------|---|------------|
+| Milk       | $2.025/L   | $2.00/L   | False   | 4 | Coles      |
+| Olive Oil  | $17.50/L   | $24.00/L  | **True**| 4 | (none)     |
+| Eggs       | $0.625/ea  | $0.625/ea | False   | 3 | Woolworths |
+| Butter     | None       | $27.20/kg | False   | 2 | (none)     |
+| Coffee     | None       | $22.00/kg | False   | 1 | Aldi       |
+
+The seed exercises every expected state of the widget. Notably olive oil's
+latest "$12/500ml" → $24/L which is > $17.50/L * 1.15 = $20.125 → above-usual
+chip fires.
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- `quasar build` — succeeds end-to-end (production SPA).
+- `pytest tests/e2e/dora_api/test_your_prices.py -v` — **13/13 pass.**
+- Combined chunks 1-4 affected backend tests — **121/121 pass.**
+- Full suite — same 54 pre-existing failures as baseline; 0 new failures.
+  Cumulative new passing: +67 (49 from chunk 1 + 5 from chunk 2 + 13 from
+  chunk 4 = 67).
+
+**Engineering-standards close-gate:**
+- R-001 N/A (no new components — `YourPricesWidget` from chunk 3 just got a
+  new section).
+- R-002 — sidecar uses `dora-bg-sunken` + `dora-text-secondary`/`dora-text-muted`
+  token classes; no hex. The warning chip remains semantic.
+- R-003 — baseline / threshold / median all live in one module. Module-level
+  constants (`MIN_SAMPLES`, `ABOVE_THRESHOLD`, `BASELINE_WINDOW`) are not
+  duplicated in TS. `CANONICAL_PRICE_UNIT` is server-only.
+- R-005 — `_as_naive_utc` carve-out: documented inline with the rule id and
+  the FU-045 Postgres-migration cleanup pointer.
+- R-007 — scope tight: did not touch FU-216 (stock-value rebase silently
+  absorbs the LC-3 shift in chunk 2's `get_stock_item_unit_cost_at`); no
+  changes to the per-product Price-History endpoint (chunk 6's job).
+- R-014 — empty state copy stays the visible "Not enough price data yet" line.
+- R-016 N/A.
+- No new ADR (seed-data rule promotion is reserved for chunk 8).
+
+**Ledger:** no new follow-ups.
+
+**Next:** FU-227 chunk 5 — shopping-line prefill + harvest-on-`/finish` +
+Receipt relabel + actual→picked ladder extract (K2). The closed loop:
+prefilled price on a draft list line → user confirms at the till → `/finish`
+snapshots + harvests an observation per ticked priced line → the YourPrices
+widget on the relevant stock items updates without further input.
+User checkpoint per preference.
+
+---
+
+## 2026-06-22 — FU-227 chunk 3: shared PriceEntry + row button + YourPricesWidget
+
+**Session goal:** land the first user-visible "Your prices" surface end-to-end. The shared
+PriceEntry widget, the stock-overview row button, and the inline widget on stock-item detail.
+
+**Backend (additive, no schema change):**
+- `get_stock_item_detail.py` — two new DTOs:
+  - `PriceEntryPrefillDto` (F2) — `{total_price, total_measure, unit, store_id, store_name,
+    source_label}`. Server resolves the source label ("from your last log" vs "from your
+    last receipt") based on the FK provenance — SPA renders a string.
+  - `YourPricesDto` (placeholder shape; chunk 4 lights it up) — `{baseline, baseline_unit,
+    current, above_baseline, sample_count, last_observed_at, last_seen_store_name}`. Chunk 3
+    ships `your_prices=None`; the widget renders the empty state.
+- `StockItemDetailDto` gains `price_entry_prefill` + `your_prices`. Handler at
+  `get_stock_item_detail.py:~400-430` populates the prefill from the most-recent observation
+  (already sorted newest-first earlier in the handler).
+- Backend smoke-tested: milk's detail returns `price_entry_prefill = {…, store_name='Coles',
+  source_label='from your last log'}` from the chunk-2 seed.
+
+**SPA — new components:**
+- **`web_app/src/components/dora/PriceEntry.vue`** (NEW) — the shared form body (F1 / R-001).
+  Two modes: `shelf` (price + size + unit + optional store; no count) and `harvest` (chunk 5
+  wires it). Live `≈ $X.XX per Y` preview. Unit picker pulls from `SUPPORTED_PRICE_UNITS` in
+  the generated table (B3 — flat global list grouped by dimension; B2 — single source of truth
+  with the server). Prefill watch re-seeds on lazy fetch without clobbering user edits.
+- **`web_app/src/components/dora/YourPricesWidget.vue`** (NEW) — the C5 inline widget. LC-2
+  source-blind copy ("Based on N prices"). Empty-state copy when `your_prices == null` or
+  `baseline == null`. [Log a price] opens a BaseDialog with the shared PriceEntry. [Full
+  history] disabled until chunk 6. The above-1.15× chip is wired (chunk 4 lights it up with
+  real data).
+- **`web_app/src/components/stock/StockItemRowPriceButton.vue`** (NEW) — `RowActionButton`
+  wrapper with `cash_plus` icon. Lazy-fetches `getDetailAsync` on dialog open to populate
+  prefill (graceful fallback if the fetch fails — form still works without prefill).
+
+**SPA — wired in:**
+- `web_app/src/components/stock/StockItemRow.vue` — `<StockItemRowPriceButton>` inserted
+  between `<q-space>` and the expiry `<RowActionButton>` (plan §G2). Gated on
+  `useMoneyEnabled` via `v-if`.
+- `web_app/src/pages/StockItemDetailPage.vue` — replaced the inline price-entry form
+  (~70 LOC) with `<YourPricesWidget>` + the existing observation list. The page no longer
+  owns the entry refs/canLogPrice/addObservation glue — the widget owns the dialog and
+  surfaces `@submit` upward.
+- `web_app/src/services/api/stockItemApiService.ts` — no change this chunk (the
+  `addPriceObservationAsync` shape was already updated in chunk 2).
+- `web_app/src/style/icons.ts` — `cash_plus: 'mdi-cash-plus'`.
+
+**SPA — tidy-up extracted in scope:**
+- `web_app/src/helpers/relativeTime.ts` (NEW) — extracted from
+  `StockItemDetailPage.vue:1749-1764`. Used in 3 places now (detail timeline, observation
+  list, widget last-seen line). Detail page imports the helper; local copy removed.
+  R-003 — small pure helper had a third caller; moving was lower-risk than copying.
+
+**Models:**
+- `web_app/src/models/stockItemDetail.ts` — exports `PriceEntryPrefill` + `YourPrices`
+  types and extends `StockItemDetail` with the two new optional fields.
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean (round 1 caught 4 issues — duplicate import,
+  exactOptionalPropertyTypes on optional ReadonlyArray, etc; all fixed).
+- `npm run lint` — clean.
+- **`quasar build` — succeeds end-to-end** (SPA compiles, scoped SCSS resolves, all
+  templates render, no missing tokens). Output: 622 KB CSS / 53 files. This is a stronger
+  signal than vue-tsc alone — catches template-compile + plugin issues vue-tsc misses.
+- Backend pytest (price observations / stock-item router / price history / stock status) —
+  **65/65 pass.** Full suite — same 54 pre-existing failures as baseline; 0 new failures.
+- Backend smoke: milk detail returns the expected prefill (`$2 / 1 L @ Coles · from your
+  last log`).
+
+**Browser-verify status (CLAUDE.md mandate):** **Build verified, not running-app verified.**
+I produced a production build successfully — strong evidence the widget renders without
+runtime errors. A full visual browser walk (cluster button position, dialog open/close, log
+roundtrip, empty-state copy, etc.) is left to the user per their chunk-by-chunk
+checkpointing preference. The expected state matrix from the chunk-2 seed:
+- **Milk / Eggs / Olive Oil** → widget renders empty state (`your_prices: null` until
+  chunk 4) but the obs list shows store / "Last seen at Coles" data.
+- **Butter / Coffee** → empty state with the < MIN_SAMPLES copy.
+- **Row button** → visible on every row when money is on; click → dialog with prefilled
+  inputs (when prior obs exists).
+
+**Engineering-standards close-gate:**
+- R-001 — one PriceEntry component shared by widget + row button; widget uses BaseDialog;
+  row button uses RowActionButton.
+- R-002 — chip colours via `color="warning"` semantic; no hex/numbered palette. The
+  `dora-bg-sunken` / `dora-text-*` utility classes used in the preview block ride tokens.
+- R-003 — per-unit cost still computed server-side; SUPPORTED_PRICE_UNITS sourced from the
+  generated table; relativeTime extracted out of two-file duplication.
+- R-007 — kept scope tight: no work on the products-gating inconsistency (FU-182), no
+  fixes to the Phase E test rot (FU-228).
+- R-014 — empty state is the visible "Not enough price data yet — log a few more." copy,
+  not a hidden widget.
+- R-016 — `storesStore.ensureLoadedAsync()` only triggered when a price-entry surface is
+  rendered (detail page already had it for the usual-store picker; row button calls it
+  too).
+- No new ADR this chunk — seed-data rule still queued for chunk 8.
+
+**Ledger:** no new follow-ups.
+
+**Next:** FU-227 chunk 4 — `build_your_prices_for_item` server helper (median / 1.15× /
+min 3 / trailing 12 months / per-dimension B4 / LC-2 source-blind sample_count) so the
+widget shows real numbers, not the placeholder empty state. User checkpoint per
+preference.
+
+---
+
+## 2026-06-22 — FU-227 chunk 2: observation model reshape + migration
+
+**Session goal:** land the folded-shape observation model + migration so chunks 3–5 can build on it.
+
+**Entity reshape — `StockItemPriceObservation`:**
+- Dropped: `price`, `qty`, `source` (and the `PRICE_OBSERVATION_SOURCES` constant entirely).
+- Added: `total_price`, `total_measure`, `unit` (folded shape per A1); `store_id UUID|None`
+  (A2 — "Last seen at Coles"); `shopping_list_line_id UUID|None` (A4 revised — replaces
+  the source enum, provenance via FK).
+- `Fields` enum members renamed to match.
+
+**Table mapping (`table_mappings.py:340-356`):**
+- New columns; FK to `Store.id` (ON DELETE SET NULL), FK to `ShoppingListLine.id`
+  (ON DELETE SET NULL — LC-4 provenance only).
+- Existing `stock_item_id` FK CASCADE preserved.
+
+**Migration — `c6e9a4b8d5f2_20260622_reshape_price_observations.py` (NEW):**
+- Off head `b5d8a2f4c9e7`. New head = `c6e9a4b8d5f2` (single).
+- Non-preserving (K1): drop + recreate. Old `unit` was free-text — no safe forward path.
+- Named constraints (R-015): all FKs + PK + the partial UNIQUE index named explicitly so
+  batch-mode SQLite can drop them.
+- **Partial UNIQUE on `shopping_list_line_id WHERE NOT NULL`** (LC-1) — makes
+  `/finish` harvest idempotent under double-tap. Postgres + SQLite (≥3.8) both support.
+- `downgrade()` mirror reinstalls the FU-213-era shape.
+
+**Domain helper — `stock_status.py:63-81` (`get_stock_item_unit_cost_at`):**
+- Rewrote to read the folded shape (`total_price / total_measure`).
+- Signature stable — the two downstream consumers (`reports.py:225-236` /
+  `get_recipes.py:505-519`) treat the number as opaque per-unit. LC-3 silently absorbs
+  the cost-output shift (K1 wipes obs data anyway).
+
+**Write path — `price_observations.py` (full rewrite):**
+- Request DTO: `total_price`, `total_measure`, `unit`, `observed_at?`, `store_id?`.
+- Validation: unit must be on the supported list (chunk-1 helper `units.find_unit` +
+  `units.PRICE_DIMENSIONS` — volume / mass / count). Aliases get normalised to canonical
+  on persist (e.g. `"litre"` → `"L"`).
+- Optional `store_id` validated against `Store` (friendly 400 ahead of the FK).
+- Manual writes set `shopping_list_line_id=None` (chunk 5 harvest is the only writer that
+  sets it).
+
+**Detail DTO + read — `get_stock_item_detail.py`:**
+- `PriceObservationDto` reshaped to match the entity + adds resolved `store_name` and
+  `shopping_list_name` so the SPA renders strings, not raw FKs.
+- Read loop resolves stores + lists in a single `IN (…)` batch each (no N+1).
+
+**SPA:**
+- `models/stockItemDetail.ts` — `PriceObservation` interface reshaped; includes resolved
+  `store_name` + `shopping_list_name`.
+- `services/api/stockItemApiService.ts` — request payload uses folded shape + optional
+  `store_id`.
+- `pages/StockItemDetailPage.vue` — inline form fields renamed (`newPriceTotalPrice`,
+  `newPriceTotalMeasure`), template renders `${total_price} for {total_measure} {unit}`
+  and surfaces store + provenance chips when present. (The shared `PriceEntry` widget
+  replaces this inline form in chunk 3.)
+
+**E2E tests — `test_price_observations.py` (full rewrite):**
+- Add/derive/latest-wins/delete/non-positive (preserved from FU-213, new shape).
+- **+5 new cases:** count-dimension acceptance (B1), unsupported-unit rejection (B3 —
+  kJ/celsius/mm/nonsense), unit-alias-persists-as-canonical (`"litre"` → `"L"`),
+  store-id-attached-and-resolved (A2), unknown-store rejection.
+- **9/9 pass.**
+
+**Seed (`persistence/seed.py`) — exercises the full C5 widget state matrix:**
+- Milk: 4 obs in L, store-tagged (Coles + Woolies), median ≈ $2/L, current at baseline
+  → "about average".
+- Olive oil: 4 obs in ml, no store, current $12 vs median ≈ $8.50 → above-1.15× → fires
+  the warning chip in chunk 3.
+- Eggs: 3 obs in `ea` (count dim — B1), store-tagged.
+- Butter: 2 obs → below MIN_SAMPLES → "not enough data yet" empty state.
+- Coffee: 1 obs, store-tagged (Aldi) → another empty-state variant with a single
+  current-price chip.
+- 14 total observations across 5 items. Verified via direct repo query post-`seed_dev_data()`.
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- `pytest tests/e2e/dora_api/test_price_observations.py -v` — **9/9 pass.**
+- Downstream consumer suites (`tests/test_stock_status.py`,
+  `tests/e2e/dora_api/test_stock_item_router.py`, `test_price_history.py`) — **56/56 pass.**
+- Full suite — **same 54 pre-existing failures** as the baseline (verified via
+  `git stash`); my chunks 1+2 added **0** new failures. Cumulative new passing: +54
+  (49 from chunk 1's `test_units.py` + 5 net from chunk 2's reshape).
+- Alembic single head confirmed: `c6e9a4b8d5f2` (off `b5d8a2f4c9e7`).
+- `app.app_context()` import smoke — boots clean.
+
+**Engineering-standards close-gate:**
+- R-001 N/A (no new components — shared `PriceEntry` lands in chunk 3).
+- R-002 N/A (no chart colours touched).
+- R-003 — `get_stock_item_unit_cost_at` remains the single per-unit chokepoint, now over
+  the folded shape; conversion validation in the write path uses the chunk-1 domain
+  helper, no second source.
+- R-005 — migration uses Postgres-portable `sqlite_where`/`postgresql_where` for the
+  partial UNIQUE; FK `ON DELETE SET NULL` works on both engines.
+- R-006/R-015 — non-preserving migration documented in the docstring; every constraint
+  named (`fk_…`, `pk_…`, `uq_…`).
+- R-007 — did NOT fix the pre-existing Phase E test rot (FU-228); stayed in scope.
+- R-008 — comments only where the WHY isn't obvious (LC-1 partial UNIQUE; LC-4 provenance
+  not a sync link; K1 non-preserving rationale).
+- No new rule promotion this chunk (seed-data rule waits for chunk 8).
+
+**Ledger:** nothing new (FU-228 from chunk 1 stands; FU-227 progress tracked at the top
+of its entry, not as a new FU).
+
+**Next:** FU-227 chunk 3 — shared `PriceEntry` component + row button + detail inline widget
+(the visible "Your prices" surface). User checkpoint per their preference.
+
+---
+
+## 2026-06-22 — FU-227 chunk 1: unit-conversion domain helper + count dimension + SPA dedup
+
+**Session goal:** kick off FU-227 implementation. Plan doc rewritten (decision record + 8
+chunks), then chunk 1 landed end-to-end.
+
+**Plan doc:** `docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` rewritten as a full replacement —
+decision record at the top citing every §6 / §6a / §6b ratified answer verbatim; 8 chunks each
+with file:line scope, tests, browser-verify, seed obligations, close-gate. Supersedes the prior
+F-1..F-5 chunking (reshape was too deep for an §S2-10-only patch).
+
+**Chunk 1 — what landed:**
+
+- **`dora_api/domain/units.py`** (NEW) — single source of truth for measurement units
+  (R-003). Tables: `UNIT_TABLE` (every alias), `INGREDIENT_DENSITY_G_PER_ML`, `GAS_MARK_TO_C`.
+  Helpers: `normalise_unit`, `find_unit`, `dimension_of`, `parse_amount`, `convert`,
+  `convert_temperature`, `snap_gas_mark`, `supported_price_units`. New **count dimension** (B1):
+  base `ea`, members `ea`/`each`/`unit`/`pack`/`dozen` (`pack` placeholder, factor=1 — see plan
+  §7 risk for the long-term per-product pack-size lookup). `PRICE_DIMENSIONS = {volume, mass,
+  count}` — the picker restriction for chunk 3.
+- **`dora_api/features/assistant/tools.py`** — deleted the inlined `_UNIT_TABLE`,
+  `_INGREDIENT_DENSITY_G_PER_ML`, `_GAS_MARK_TO_C`, `_GAS_MARK_ALIASES`, `_parse_amount`,
+  `_normalise_unit`, `_snap_gas_mark` (lines 1188-1418). The `convert_measurement(args)` LLM
+  tool function preserved exactly — now a thin adapter around the domain helpers.
+- **`scripts/dump_units.py`** (NEW) — codegens `web_app/src/generated/units_table.ts` from
+  the Python source. **Build-time codegen, not runtime fetch** — runtime fetch would defeat
+  the assistant's offline-fallback purpose. Output is checked in. Ran once this session to
+  produce the initial file.
+- **`web_app/src/generated/units_table.ts`** (NEW, generated) — checked in. Exports
+  `UNIT_TABLE`, `INGREDIENT_DENSITY_G_PER_ML`, `GAS_MARK_TO_C`, `GAS_MARK_ALIASES`,
+  `SUPPORTED_PRICE_UNITS`, types `Dimension`, `UnitDef`, `CanonicalUnitChoice`.
+- **`web_app/src/services/doraIntents.ts`** — deleted inline `UNITS`, `INGREDIENT_DENSITY`,
+  `GAS_MARK_TO_C`, `GAS_MARK_ALIASES`. Imports from the generated TS. `findUnit` rewritten
+  to `UNIT_BY_ALIAS.get()`. All call-site shapes preserved (`Unit.dimension`, `toBase`,
+  `fromBase`). Parsing layer untouched.
+- **`tests/test_units.py`** (NEW) — 49 cases: within-dimension linearity, count dimension
+  (incl. no-bridge to volume/mass), cross-dimension mass↔volume via ingredient density,
+  `normalise_unit` plural+degree handling, temperature offsets, gas-mark snap, `parse_amount`
+  fractions + mixed numbers, `supported_price_units` restriction.
+
+**Decision call this chunk made:** the plan §7 left "runtime fetch vs build-time codegen" open.
+**Chose build-time codegen** because `doraIntents.ts` is the offline assistant rule-engine
+fallback — runtime fetch would break the offline purpose. Codegen script + checked-in TS file =
+synchronous, no network, no drift (single source = Python). Documented in the script's docstring
+and at the top of the generated file.
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- `pytest tests/test_units.py -v` — **49/49 pass**.
+- Full pytest suite — same 54 pre-existing failures as the baseline (verified via `git stash`).
+  Mine added 49 new passing tests; introduced **zero** new failures. The 53 still-failing tests
+  (one was deselected — `test_ingest_batch.py::test__ingest__unknown_store_quarantines`) are
+  all Phase E rename leftovers using `merchant` / `purchased_merchant_id` instead of `store` /
+  `purchased_store_id`. Logged as `[OPEN]` finding in `DORA_FOLLOWUPS.md` (out of scope per
+  R-007).
+- Smoke-tested the LLM-shape `convert_measurement` adapter via the venv: 1 L→ml, 2 dozen→ea,
+  cup-of-flour cross-dim, gas mark 6→200°C, 200°C→gas 6, ea→L returns no-bridge error, 100°C→
+  212°F. All correct.
+
+**No browser verification this chunk** — the change is pure refactor + new domain helper.
+The first browser-verifiable feature lands in chunk 3 (PriceEntry + row button + widget).
+
+**Seed data:** none needed (pure helper change; per the plan's chunk-1 seed line). The first
+seed updates land in chunk 2 (observation reshape).
+
+**Engineering-standards close-gate:**
+- R-001 N/A (no UI).
+- R-002 N/A.
+- R-003 — pricing/conversion math now has a single chokepoint at `domain/units.py`. SPA
+  mirror deleted; codegen guarantees no drift.
+- R-005/R-006/R-015 N/A (no migration).
+- R-007 — did NOT fix the unrelated pre-existing Phase E test rot; logged as a finding
+  instead.
+- R-008 — comments added only where the WHY isn't obvious (pack-placeholder reasoning;
+  R-003 module docstring; codegen disclaimers).
+- No new rule promotion needed this chunk (the seed-data discipline rule waits for chunk 8
+  per the plan).
+
+**Ledger:**
+- `DORA_FOLLOWUPS.md` — new `[OPEN]` finding for the Phase E test-rot (53 failing tests in
+  `test_shopping_list_totals.py` + `test_product_router.py` + 1 in `test_ingest_batch.py`,
+  all from un-renamed `merchant` fields).
+
+**Next:** FU-227 chunk 2 — observation model reshape + migration (folded shape, store_id,
+shopping_list_line_id FK, partial UNIQUE per LC-1, drop source enum). User checkpoint between
+chunks per their preference.
+
+---
+
 ## 2026-06-22 — FU-227 ratification: walked the §6 question list end-to-end (no code)
 
 **Session goal:** pick up FU-227 where the 2026-06-19 handoff stopped (user ran out of time to

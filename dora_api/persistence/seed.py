@@ -302,6 +302,51 @@ def seed_dev_data():
     level_change(parmesan, low, 6)
     level_change(parmesan, out, 1)
 
+    # ---------------- PRICE OBSERVATIONS (FU-227 chunk 2) ---------------- #
+    # Exercises the full state matrix the "Your prices" widget (chunk 3) will
+    # render: ≥3 items with 3+ observations (baseline-ready), ≥1 below
+    # MIN_SAMPLES (the empty-state copy), ≥1 with current > 1.15× median
+    # (above-usual chip), ≥1 with store_id set + ≥1 without (store chip).
+    # `shopping_list_line_id` provenance lands in chunk 5's harvest seed.
+    from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
+
+    def price_obs(item, *, total_price, total_measure, unit, days_ago, store=None):
+        repo.add(StockItemPriceObservation(
+            stock_item_id=item.id,
+            total_price=float(total_price),
+            total_measure=float(total_measure),
+            unit=unit,
+            observed_at=now - timedelta(days=days_ago),
+            store_id=(store.id if store is not None else None),
+            shopping_list_line_id=None,
+            created_at=now - timedelta(days=days_ago),
+        ))
+
+    # Milk — 4 obs in L, store-tagged, baseline ≈ $2.00/L, latest at baseline.
+    price_obs(milk, total_price=4.20, total_measure=2.0, unit="L", days_ago=42, store=woolworths)
+    price_obs(milk, total_price=2.00, total_measure=1.0, unit="L", days_ago=21, store=coles)
+    price_obs(milk, total_price=4.10, total_measure=2.0, unit="L", days_ago=10, store=woolworths)
+    price_obs(milk, total_price=2.00, total_measure=1.0, unit="L", days_ago=2, store=coles)
+
+    # Olive oil — 4 obs in ml, no store, latest 30% above median → above-usual chip.
+    price_obs(olive_oil, total_price=8.00, total_measure=500.0, unit="ml", days_ago=120)
+    price_obs(olive_oil, total_price=9.00, total_measure=500.0, unit="ml", days_ago=80)
+    price_obs(olive_oil, total_price=8.50, total_measure=500.0, unit="ml", days_ago=40)
+    price_obs(olive_oil, total_price=12.00, total_measure=500.0, unit="ml", days_ago=3)  # spike
+
+    # Eggs — 3 obs in ea (count dim), store-tagged.
+    price_obs(eggs, total_price=7.50, total_measure=12.0, unit="ea", days_ago=30, store=woolworths)
+    price_obs(eggs, total_price=8.00, total_measure=12.0, unit="ea", days_ago=14, store=coles)
+    price_obs(eggs, total_price=7.50, total_measure=12.0, unit="ea", days_ago=5, store=woolworths)
+
+    # Butter — 2 obs (below MIN_SAMPLES — drives the "not enough data" empty state).
+    price_obs(butter, total_price=6.50, total_measure=250.0, unit="g", days_ago=18)
+    price_obs(butter, total_price=6.80, total_measure=250.0, unit="g", days_ago=4)
+
+    # Coffee — 1 obs (also empty-state side; lets the widget render with a single
+    # current-price chip but no baseline).
+    price_obs(coffee, total_price=22.00, total_measure=1.0, unit="kg", days_ago=7, store=aldi)
+
     # ---------------- RECIPE COLLECTIONS ---------------- #
     weeknight = RecipeCollection(name="Weeknight Dinners")
     to_try = RecipeCollection(name="To Try")

@@ -337,18 +337,23 @@ def configure_mappings(db: SQLAlchemy):
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
-    # FU-213 — everyday "what this cost me" price substrate on a stock item
-    # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.2). Total price + qty + unit; per-unit
-    # cost derived server-side. No merchant attribution. CASCADE with the item.
+    # FU-227 chunk 2 — reshaped from FU-213. Folded `{total_price, total_measure,
+    # unit}` (A1); nullable `store_id` (A2 — "Last seen at Coles"); nullable
+    # `shopping_list_line_id` provenance FK (A4 revised — replaces the old
+    # `source` enum). Partial UNIQUE on the FK lives in the Alembic migration
+    # (LC-1 — makes /finish harvest idempotent under double-tap). CASCADE with
+    # the stock item; SET NULL when the linked line or store is deleted
+    # (provenance is lossy, not load-bearing).
     stock_item_price_observation_table = Table(
         "StockItemPriceObservation", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
-        Column("price", Float, nullable=False),
-        Column("qty", Float, nullable=False),
-        Column("unit", String(50), nullable=False),
+        Column("total_price", Float, nullable=False),
+        Column("total_measure", Float, nullable=False),
+        Column("unit", String(32), nullable=False),
         Column("observed_at", DateTime(timezone=True), nullable=False),
-        Column("source", String(32), nullable=False),
+        Column("store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
+        Column("shopping_list_line_id", UUIDType, ForeignKey("ShoppingListLine.id", ondelete="SET NULL"), nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 

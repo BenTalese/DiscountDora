@@ -1,7 +1,10 @@
-"""FU-213 — StockItemPriceObservation: log "what this cost me" + derived unit cost.
+"""FU-227 chunk 2 — StockItemPriceObservation reshape.
 
-The user logs the TOTAL price + qty + unit; the server derives the per-unit cost
-(R-003 — the client never divides). PROPOSAL_PRODUCTS_AS_OVERLAY §3.2.
+Folded shape `{total_price, total_measure, unit}` (A1). Per-unit cost derived
+server-side (R-003 — client never divides). Validation: unit must be on the
+supported price list (volume / mass / count) via `domain/units.py`. Optional
+`store_id` (A2). Provenance `shopping_list_line_id` FK set by `/finish`
+harvest (chunk 5), not by this manual endpoint.
 """
 import uuid
 
@@ -14,7 +17,7 @@ STOCK_ITEMS = f"{BASE}/stock-items"
 def _new_stock_item() -> str:
     level = requests.get(f"{BASE}/stock-levels").json()["items"][0]["stock_level_id"]
     resp = requests.post(STOCK_ITEMS, json={
-        "name": f"FU213-{uuid.uuid4().hex[:8]}",
+        "name": f"FU227-{uuid.uuid4().hex[:8]}",
         "stock_level_id": level,
     })
     assert resp.status_code == 201, resp.text
@@ -33,25 +36,31 @@ def test__price_observation__add_derives_unit_cost(api):
 
     resp = requests.post(
         f"{STOCK_ITEMS}/{item}/price-observations",
-        json={"price": 6.0, "qty": 2.0, "unit": "L"},
+        json={"total_price": 6.0, "total_measure": 2.0, "unit": "L"},
     )
     assert resp.status_code == 204, resp.text
     d = _detail(item)
     assert len(d["price_observations"]) == 1
     obs = d["price_observations"][0]
-    assert obs["price"] == 6.0 and obs["qty"] == 2.0 and obs["unit"] == "L"
-    assert obs["source"] == "manual"
-    # Server derives per-unit cost (6 / 2 = 3) — the client never divides.
+    assert obs["total_price"] == 6.0 and obs["total_measure"] == 2.0 and obs["unit"] == "L"
+    # Manual entries have no provenance line and no store unless supplied.
+    assert obs["shopping_list_line_id"] is None
+    assert obs["shopping_list_name"] is None
+    assert obs["store_id"] is None
+    assert obs["store_name"] is None
+    # Server derives per-unit cost (6 / 2 = 3) — client never divides.
     assert d["unit_cost"] == 3.0
 
 
 def test__price_observation__latest_wins_for_unit_cost(api):
     item = _new_stock_item()
     requests.post(f"{STOCK_ITEMS}/{item}/price-observations", json={
-        "price": 10.0, "qty": 1.0, "unit": "L", "observed_at": "2026-01-01T00:00:00+00:00",
+        "total_price": 10.0, "total_measure": 1.0, "unit": "L",
+        "observed_at": "2026-01-01T00:00:00+00:00",
     })
     requests.post(f"{STOCK_ITEMS}/{item}/price-observations", json={
-        "price": 6.0, "qty": 2.0, "unit": "L", "observed_at": "2026-06-01T00:00:00+00:00",
+        "total_price": 6.0, "total_measure": 2.0, "unit": "L",
+        "observed_at": "2026-06-01T00:00:00+00:00",
     })
     d = _detail(item)
     assert len(d["price_observations"]) == 2
@@ -63,7 +72,7 @@ def test__price_observation__delete_clears_unit_cost(api):
     item = _new_stock_item()
     requests.post(
         f"{STOCK_ITEMS}/{item}/price-observations",
-        json={"price": 5.0, "qty": 1.0, "unit": "ea"},
+        json={"total_price": 5.0, "total_measure": 1.0, "unit": "ea"},
     )
     obs_id = _detail(item)["price_observations"][0]["observation_id"]
     resp = requests.delete(f"{STOCK_ITEMS}/{item}/price-observations/{obs_id}")
@@ -77,6 +86,77 @@ def test__price_observation__non_positive_rejected(api):
     item = _new_stock_item()
     resp = requests.post(
         f"{STOCK_ITEMS}/{item}/price-observations",
-        json={"price": 0, "qty": 1, "unit": "L"},
+        json={"total_price": 0, "total_measure": 1, "unit": "L"},
     )
     assert 400 <= resp.status_code < 500
+
+
+def test__price_observation__count_dimension_accepted(api):
+    """B1 — count dimension (ea / pack / dozen) is supported for price entry."""
+    item = _new_stock_item()
+    resp = requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={"total_price": 9.0, "total_measure": 3.0, "unit": "ea"},
+    )
+    assert resp.status_code == 204, resp.text
+    d = _detail(item)
+    assert d["price_observations"][0]["unit"] == "ea"
+    assert d["unit_cost"] == 3.0
+
+
+def test__price_observation__unsupported_unit_rejected(api):
+    """B3 — only volume/mass/count units. Energy/temperature/length rejected
+    even though the conversion engine knows them (they're recipe-side)."""
+    item = _new_stock_item()
+    for bad in ("kJ", "celsius", "mm", "nonsense"):
+        resp = requests.post(
+            f"{STOCK_ITEMS}/{item}/price-observations",
+            json={"total_price": 1.0, "total_measure": 1.0, "unit": bad},
+        )
+        assert 400 <= resp.status_code < 500, f"{bad!r} should be rejected, got {resp.status_code}"
+
+
+def test__price_observation__unit_alias_persists_canonical(api):
+    """Submitting 'litre' / 'LITRES' persists as 'L' (the canonical form).
+    Keeps the data tidy for the median/baseline path in chunk 4."""
+    item = _new_stock_item()
+    requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={"total_price": 3.0, "total_measure": 1.0, "unit": "litre"},
+    )
+    obs = _detail(item)["price_observations"][0]
+    assert obs["unit"] == "L"
+
+
+def test__price_observation__store_id_attached_and_resolved(api):
+    """A2 — optional store_id; server resolves the name for the chip."""
+    item = _new_stock_item()
+    stores = requests.get(f"{BASE}/stores").json().get("items") or requests.get(f"{BASE}/stores").json()
+    # The stores endpoint returns either {items:[...]} or a list; both shapes
+    # are present in seed-vs-empty installs. Skip cleanly if the dev env has no
+    # stores (this test asserts behaviour when there IS one).
+    if not stores:
+        return
+    store_id = stores[0]["store_id"] if isinstance(stores[0], dict) and "store_id" in stores[0] else stores[0].get("id")
+    if not store_id:
+        return
+    resp = requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={"total_price": 4.0, "total_measure": 1.0, "unit": "L", "store_id": store_id},
+    )
+    assert resp.status_code == 204, resp.text
+    obs = _detail(item)["price_observations"][0]
+    assert obs["store_id"] == store_id
+    assert obs["store_name"]  # non-empty string
+
+
+def test__price_observation__unknown_store_rejected(api):
+    item = _new_stock_item()
+    resp = requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={
+            "total_price": 1.0, "total_measure": 1.0, "unit": "L",
+            "store_id": "11111111-1111-1111-1111-111111111111",
+        },
+    )
+    assert resp.status_code == 404, resp.text

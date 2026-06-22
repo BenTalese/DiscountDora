@@ -125,10 +125,18 @@ export default class StockItemApiService {
     // sorts alphabetically client-side and the backend dropped `position` +
     // the `/preferred-buys/reorder` endpoint.
 
-    // FU-213 — price observations ("what this cost me"). Money-gated at the UI.
+    // FU-227 chunk 2 — folded shape ({total_price, total_measure, unit}).
+    // Optional store_id (A2). Provenance FK is only set by /finish harvest
+    // server-side (chunk 5), not by this manual endpoint. Money-gated at UI.
     addPriceObservationAsync = async (
         stockItemID: string,
-        observation: { price: number; qty: number; unit: string; observed_at?: string },
+        observation: {
+            total_price: number;
+            total_measure: number;
+            unit: string;
+            observed_at?: string;
+            store_id?: string | null;
+        },
     ): Promise<void> =>
         await this.httpClient.post<void>(
             `/stock-items/${stockItemID}/price-observations`, observation,

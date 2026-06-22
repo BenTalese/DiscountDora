@@ -56,14 +56,55 @@ export type PreferredBuy = {
     label: string;
 };
 
-// FU-213 — everyday "what this cost me" price points. Money-gated at the UI.
+// FU-227 chunk 2 — folded shape (A1). Money-gated at the UI. Per-unit cost
+// derived server-side (R-003) — client never divides total_price by total_measure.
+// `store_name` populated when a store was attached at entry (A2). When the row
+// was harvested from a finished shopping line at /finish (chunk 5),
+// `shopping_list_line_id` + `shopping_list_name` carry the provenance label
+// ("from Wed's shopping list"); both null for manual entries.
 export type PriceObservation = {
     observation_id: string;
-    price: number;
-    qty: number;
+    total_price: number;
+    total_measure: number;
     unit: string;
     observed_at: string; // ISO datetime
-    source: string;
+    store_id: string | null;
+    store_name: string | null;
+    shopping_list_line_id: string | null;
+    shopping_list_name: string | null;
+};
+
+// FU-227 chunk 3 — what the PriceEntry widget seeds itself with on open (F2).
+// Resolved server-side so the source_label stays consistent. Null when no
+// prior observation exists for the item.
+export type PriceEntryPrefill = {
+    total_price: number;
+    total_measure: number;
+    unit: string;
+    store_id: string | null;
+    store_name: string | null;
+    /** Short human chip ("from your last log" / "from your last receipt"). */
+    source_label: string;
+};
+
+// FU-227 chunk 4 — server-derived baseline + signal (R-003). The widget
+// reads booleans / numbers and renders; never re-computes. `offers_sidecar`
+// (LC-2) is a separate UI region — never folded into the median or count.
+export type OfferSidecar = {
+    store_name: string;
+    price_per_unit: number;
+    unit: string;
+};
+
+export type YourPrices = {
+    baseline: number | null;
+    baseline_unit: string | null;
+    current: number | null;
+    above_baseline: boolean;
+    sample_count: number;
+    last_observed_at: string | null; // ISO datetime
+    last_seen_store_name: string | null;
+    offers_sidecar: OfferSidecar[];
 };
 
 import type { AttentionReasons } from 'src/models/location';
@@ -116,6 +157,13 @@ export type StockItemDetail = {
      *  per-unit cost. Money-gated at the UI. */
     price_observations?: PriceObservation[];
     unit_cost?: number | null;
+    /** FU-227 chunk 3 — what the PriceEntry widget should seed itself with
+     *  on open (F2). Null when no prior observation exists for this item. */
+    price_entry_prefill?: PriceEntryPrefill | null;
+    /** FU-227 chunk 3 placeholder — chunk 4 lights it up with the real
+     *  baseline/threshold output. Until then the widget renders the
+     *  empty state. */
+    your_prices?: YourPrices | null;
     /** X1 — last "still correct" check; surfaced in the lifecycle
      *  timeline as a synthetic Checked entry when it differs from the
      *  most recent level change. Null = never checked. */

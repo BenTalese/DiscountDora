@@ -339,61 +339,36 @@ function extractAfter(text: string, keywords: string[]): string | null {
 }
 
 // ── Unit conversion table ──────────────────────────────────────────────
-// Kitchen units across five dimensions: volume, mass, temperature, length,
-// and energy. Each unit reduces to a base unit per dimension so a single
-// ratio call does the work. Aussie metric defaults (250ml cup, 20ml tbsp)
-// — but US cup (240ml) is explicitly available too.
-// Gas mark <-> °C uses a non-linear lookup table and is handled separately.
+// Data lives in `src/generated/units_table.ts`, codegen'd from the Python
+// source of truth at `dora_api/domain/units.py` (R-003 / FU-227 chunk 1).
+// Never edit the table here — regenerate via `python scripts/dump_units.py`.
+// This file owns the natural-language parsing + assistant-fallback shape;
+// the data tables are the server's.
+import {
+    UNIT_TABLE,
+    INGREDIENT_DENSITY_G_PER_ML,
+    GAS_MARK_TO_C,
+    GAS_MARK_ALIASES,
+    type Dimension,
+} from 'src/generated/units_table';
 
-type Dimension = 'volume' | 'mass' | 'temperature' | 'length' | 'energy';
-type Unit = { aliases: string[]; dimension: Dimension; toBase: (n: number) => number; fromBase: (n: number) => number };
+type Unit = { canonical: string; dimension: Dimension; toBase: (n: number) => number; fromBase: (n: number) => number };
 
-const UNITS: Unit[] = [
-    // Volume — base ml
-    { aliases: ['ml', 'milliliter', 'millilitre', 'milliliters', 'millilitres'], dimension: 'volume', toBase: n => n, fromBase: n => n },
-    { aliases: ['l', 'litre', 'liter', 'litres', 'liters'], dimension: 'volume', toBase: n => n * 1000, fromBase: n => n / 1000 },
-    { aliases: ['smidgen', 'smidgens', 'smidge'], dimension: 'volume', toBase: n => n * 0.156, fromBase: n => n / 0.156 }, // ~1/32 tsp
-    { aliases: ['pinch', 'pinches'], dimension: 'volume', toBase: n => n * 0.3125, fromBase: n => n / 0.3125 }, // ~1/16 tsp
-    { aliases: ['dash', 'dashes'], dimension: 'volume', toBase: n => n * 0.625, fromBase: n => n / 0.625 }, // ~1/8 tsp
-    { aliases: ['tsp', 'teaspoon', 'teaspoons'], dimension: 'volume', toBase: n => n * 5, fromBase: n => n / 5 },
-    { aliases: ['tbsp', 'tablespoon', 'tablespoons'], dimension: 'volume', toBase: n => n * 20, fromBase: n => n / 20 }, // AU metric
-    { aliases: ['us tbsp', 'american tbsp', 'us tablespoon'], dimension: 'volume', toBase: n => n * 14.7868, fromBase: n => n / 14.7868 },
-    { aliases: ['cup', 'cups'], dimension: 'volume', toBase: n => n * 250, fromBase: n => n / 250 }, // AU metric
-    { aliases: ['us cup', 'us cups', 'american cup', 'american cups'], dimension: 'volume', toBase: n => n * 240, fromBase: n => n / 240 },
-    { aliases: ['fl oz', 'floz', 'fluid ounce', 'fluid ounces'], dimension: 'volume', toBase: n => n * 29.5735, fromBase: n => n / 29.5735 },
-    { aliases: ['pint', 'pints', 'pt'], dimension: 'volume', toBase: n => n * 568.261, fromBase: n => n / 568.261 }, // UK pint
-    { aliases: ['quart', 'quarts', 'qt'], dimension: 'volume', toBase: n => n * 946.353, fromBase: n => n / 946.353 }, // US
-    { aliases: ['gallon', 'gallons', 'gal'], dimension: 'volume', toBase: n => n * 3785.41, fromBase: n => n / 3785.41 },
-    // Mass — base g
-    { aliases: ['mg', 'milligram', 'milligrams'], dimension: 'mass', toBase: n => n * 0.001, fromBase: n => n / 0.001 },
-    { aliases: ['g', 'gram', 'grams', 'gm'], dimension: 'mass', toBase: n => n, fromBase: n => n },
-    { aliases: ['kg', 'kilogram', 'kilograms', 'kilo', 'kilos'], dimension: 'mass', toBase: n => n * 1000, fromBase: n => n / 1000 },
-    { aliases: ['oz', 'ounce', 'ounces'], dimension: 'mass', toBase: n => n * 28.3495, fromBase: n => n / 28.3495 },
-    { aliases: ['lb', 'lbs', 'pound', 'pounds'], dimension: 'mass', toBase: n => n * 453.592, fromBase: n => n / 453.592 },
-    { aliases: ['stick', 'sticks'], dimension: 'mass', toBase: n => n * 113, fromBase: n => n / 113 }, // butter
-    // Temperature — base °C
-    { aliases: ['c', '°c', 'celsius', 'celcius'], dimension: 'temperature', toBase: n => n, fromBase: n => n },
-    { aliases: ['f', '°f', 'fahrenheit'], dimension: 'temperature', toBase: n => (n - 32) * 5 / 9, fromBase: n => n * 9 / 5 + 32 },
-    { aliases: ['k', 'kelvin'], dimension: 'temperature', toBase: n => n - 273.15, fromBase: n => n + 273.15 },
-    // Length — base mm. Useful for cake-pan sizing.
-    { aliases: ['mm', 'millimeter', 'millimetre', 'millimeters', 'millimetres'], dimension: 'length', toBase: n => n, fromBase: n => n },
-    { aliases: ['cm', 'centimeter', 'centimetre', 'centimeters', 'centimetres'], dimension: 'length', toBase: n => n * 10, fromBase: n => n / 10 },
-    { aliases: ['m', 'meter', 'metre', 'meters', 'metres'], dimension: 'length', toBase: n => n * 1000, fromBase: n => n / 1000 },
-    { aliases: ['in', 'inch', 'inches', '"'], dimension: 'length', toBase: n => n * 25.4, fromBase: n => n / 25.4 },
-    { aliases: ['ft', 'foot', 'feet'], dimension: 'length', toBase: n => n * 304.8, fromBase: n => n / 304.8 },
-    // Energy — base kJ (AU nutrition labels show both kJ and kcal).
-    { aliases: ['kj', 'kilojoule', 'kilojoules'], dimension: 'energy', toBase: n => n, fromBase: n => n },
-    { aliases: ['kcal', 'calorie', 'calories', 'cal'], dimension: 'energy', toBase: n => n * 4.184, fromBase: n => n / 4.184 },
-    { aliases: ['j', 'joule', 'joules'], dimension: 'energy', toBase: n => n / 1000, fromBase: n => n * 1000 },
-];
+// Wrap the data-only generated table with the closure-based to/from-base
+// shape the parsing layer uses. One-shot build at module load.
+const UNIT_BY_ALIAS: Map<string, Unit> = (() => {
+    const map = new Map<string, Unit>();
+    for (const [alias, def] of Object.entries(UNIT_TABLE)) {
+        map.set(alias, {
+            canonical: def.canonical,
+            dimension: def.dimension,
+            toBase: (n: number) => n * def.factor,
+            fromBase: (n: number) => n / def.factor,
+        });
+    }
+    return map;
+})();
 
-// Gas mark <-> °C — non-linear, so it lives outside the unit table. Common
-// UK oven scale; recipes will say "gas mark 6" rather than "200 °C".
-const GAS_MARK_TO_C: Record<string, number> = {
-    '1/4': 110, '1/2': 120, '1': 140, '2': 150, '3': 160, '4': 180,
-    '5': 190, '6': 200, '7': 220, '8': 230, '9': 240,
-};
-const GAS_MARK_ALIASES = new Set(['gas', 'gas mark', 'gm']);
 
 function isGasMark(token: string): boolean {
     return GAS_MARK_ALIASES.has(token.toLowerCase().trim());
@@ -444,52 +419,14 @@ function parseAmount(raw: string): number | null {
 }
 
 function findUnit(token: string): Unit | null {
-    const t = token.toLowerCase().trim();
-    return UNITS.find(u => u.aliases.includes(t)) ?? null;
+    return UNIT_BY_ALIAS.get(token.toLowerCase().trim()) ?? null;
 }
-
-// Grams per millilitre for common ingredients — mirrors a curated subset of
-// the backend table. Lets the rule engine cross mass↔volume so AI-style
-// phrasings ("how many grams in a cup of chocolate chips") still resolve
-// when AI is unavailable or doesn't tool-call.
-const INGREDIENT_DENSITY: Record<string, number> = {
-    'water': 1.00, 'milk': 1.03,
-    'oil': 0.92, 'olive oil': 0.92, 'vegetable oil': 0.92, 'canola oil': 0.92,
-    'honey': 1.42, 'maple syrup': 1.32, 'golden syrup': 1.40,
-    'flour': 0.53, 'plain flour': 0.53, 'all-purpose flour': 0.53, 'all purpose flour': 0.53,
-    'self-raising flour': 0.53, 'self raising flour': 0.53, 'wholemeal flour': 0.56,
-    'almond flour': 0.42, 'almond meal': 0.42,
-    'sugar': 0.85, 'white sugar': 0.85, 'caster sugar': 0.85, 'granulated sugar': 0.85,
-    'brown sugar': 0.93,
-    'icing sugar': 0.56, 'powdered sugar': 0.56,
-    'butter': 0.91, 'margarine': 0.91,
-    'yogurt': 1.04, 'greek yogurt': 1.05,
-    'sour cream': 0.95, 'cream cheese': 0.95, 'ricotta': 0.85, 'mascarpone': 1.00,
-    'cream': 1.00, 'heavy cream': 1.00, 'thickened cream': 1.00,
-    'peanut butter': 1.05,
-    'rice': 0.78, 'white rice': 0.78, 'brown rice': 0.76,
-    'oats': 0.41, 'rolled oats': 0.41, 'porridge oats': 0.41,
-    'quinoa': 0.72, 'couscous': 0.72,
-    'lentils': 0.85, 'dried lentils': 0.85, 'chickpeas': 0.78,
-    'pasta': 0.50, 'dry pasta': 0.50,
-    'cornstarch': 0.65, 'cornflour': 0.65,
-    'chocolate': 0.62, 'chocolate chips': 0.65, 'choc chips': 0.65,
-    'almonds': 0.60, 'chopped almonds': 0.50, 'sliced almonds': 0.45,
-    'walnuts': 0.55, 'chopped walnuts': 0.55,
-    'raisins': 0.65, 'sultanas': 0.65,
-    'shredded coconut': 0.30, 'desiccated coconut': 0.45,
-    'breadcrumbs': 0.45, 'panko': 0.30,
-    'cocoa': 0.51, 'cocoa powder': 0.51,
-    'salt': 1.20,
-    'parmesan': 0.45, 'grated parmesan': 0.45,
-    'cheddar': 0.48, 'grated cheddar': 0.48, 'grated cheese': 0.48,
-};
 
 function findDensity(name: string): number | null {
     const key = name.trim().toLowerCase();
-    if (key in INGREDIENT_DENSITY) return INGREDIENT_DENSITY[key]!;
+    if (key in INGREDIENT_DENSITY_G_PER_ML) return INGREDIENT_DENSITY_G_PER_ML[key]!;
     const singular = key.replace(/s$/, '');
-    if (singular in INGREDIENT_DENSITY) return INGREDIENT_DENSITY[singular]!;
+    if (singular in INGREDIENT_DENSITY_G_PER_ML) return INGREDIENT_DENSITY_G_PER_ML[singular]!;
     return null;
 }
 

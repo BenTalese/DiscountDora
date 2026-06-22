@@ -475,20 +475,20 @@
                                 />
                             </div>
 
-                            <!-- Prices (FU-213) — money-gated. "What this cost
-                                 me": log total + qty + unit; Dora derives the
-                                 per-unit cost. No merchant here (everyday layer). -->
+                            <!-- FU-227 chunk 3 — "Your prices" widget (C5
+                                 revised) replaces the inline price entry
+                                 form. The widget contains its own [Log a
+                                 price] action that opens the shared
+                                 PriceEntry dialog. Chunk 4 lights up the
+                                 real baseline; chunk 6 wires Full history. -->
                             <template v-if="moneyEnabled">
-                                <div class="q-mt-md dora-text-secondary text-caption q-mb-xs">
-                                    Prices
-                                </div>
-                                <div v-if="detail.unit_cost != null" class="text-body2 q-mb-xs">
-                                    About <strong>${{ detail.unit_cost.toFixed(2) }}</strong> per unit
-                                    <span class="text-caption dora-text-muted">(from your latest entry)</span>
-                                </div>
-                                <div class="text-caption dora-text-muted q-mb-sm">
-                                    Log what you paid — the total and how much you got.
-                                </div>
+                                <YourPricesWidget
+                                    :your-prices="detail.your_prices ?? null"
+                                    :prefill="detail.price_entry_prefill ?? null"
+                                    :stores="storesList"
+                                    :busy="busy"
+                                    @submit="addObservation"
+                                />
                                 <q-list
                                     v-if="priceObservations.length"
                                     separator
@@ -501,10 +501,14 @@
                                     >
                                         <q-item-section>
                                             <q-item-label>
-                                                ${{ obs.price.toFixed(2) }}
-                                                <span class="dora-text-muted">for {{ obs.qty }} {{ obs.unit }}</span>
+                                                ${{ obs.total_price.toFixed(2) }}
+                                                <span class="dora-text-muted">for {{ obs.total_measure }} {{ obs.unit }}</span>
                                             </q-item-label>
-                                            <q-item-label caption>{{ relativeTime(obs.observed_at) }}</q-item-label>
+                                            <q-item-label caption>
+                                                {{ relativeTime(obs.observed_at) }}
+                                                <span v-if="obs.store_name"> · {{ obs.store_name }}</span>
+                                                <span v-if="obs.shopping_list_name"> · from {{ obs.shopping_list_name }}</span>
+                                            </q-item-label>
                                         </q-item-section>
                                         <q-item-section side>
                                             <q-btn
@@ -518,34 +522,6 @@
                                         </q-item-section>
                                     </q-item>
                                 </q-list>
-                                <div class="row items-center no-wrap q-gutter-sm">
-                                    <q-input
-                                        v-model.number="newPricePrice"
-                                        dense outlined type="number"
-                                        prefix="$"
-                                        class="col"
-                                        placeholder="Total paid"
-                                    />
-                                    <q-input
-                                        v-model.number="newPriceQty"
-                                        dense outlined type="number"
-                                        class="col"
-                                        placeholder="Qty"
-                                    />
-                                    <q-input
-                                        v-model="newPriceUnit"
-                                        dense outlined
-                                        class="col"
-                                        maxlength="50"
-                                        placeholder="Unit (e.g. L, kg, ea)"
-                                    />
-                                    <q-btn
-                                        unelevated color="primary" no-caps
-                                        :icon="ICONS.add" label="Log"
-                                        :disable="!canLogPrice || busy"
-                                        @click="addObservation"
-                                    />
-                                </div>
                             </template>
                         </div>
                     </div>
@@ -889,6 +865,8 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
+    import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
+    import { relativeTime } from 'src/helpers/relativeTime';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -1272,27 +1250,29 @@
         );
     }
 
-    // ── Prices (FU-213) — log "what this cost me"; the server derives the
-    // per-unit cost (R-003). Money-gated in the template via `moneyEnabled`.
+    // ── Prices (FU-227 chunk 3) — YourPricesWidget owns the entry UX via
+    // the shared PriceEntry component. This page just exposes the list (with
+    // delete) and a submit handler that talks to the API. R-003: server
+    // derives per-unit cost; we never divide here.
     const priceObservations = computed(() => detail.value?.price_observations ?? []);
-    const newPricePrice = ref<number | null>(null);
-    const newPriceQty = ref<number | null>(null);
-    const newPriceUnit = ref('');
-    const canLogPrice = computed(() =>
-        !!newPricePrice.value && newPricePrice.value > 0
-        && !!newPriceQty.value && newPriceQty.value > 0
-        && newPriceUnit.value.trim().length > 0,
-    );
-    async function addObservation() {
-        if (!canLogPrice.value) return;
+
+    // Stores list for the optional store picker in PriceEntry (A2). Reuses
+    // the existing `storesStore` instance declared above (FU-189 — usual
+    // store picker). Lazy-hydration triggered earlier on this page.
+    const storesList = computed(() => storesStore.stores);
+
+    async function addObservation(value: {
+        total_price: number;
+        total_measure: number;
+        unit: string;
+        store_id: string | null;
+    }) {
         await withBusyReload(() => stockItemApi.addPriceObservationAsync(stockItemId.value, {
-            price: newPricePrice.value as number,
-            qty: newPriceQty.value as number,
-            unit: newPriceUnit.value.trim(),
+            total_price: value.total_price,
+            total_measure: value.total_measure,
+            unit: value.unit,
+            store_id: value.store_id ?? null,
         }));
-        newPricePrice.value = null;
-        newPriceQty.value = null;
-        newPriceUnit.value = '';
     }
     async function deleteObservation(obs: PriceObservation) {
         await withBusyReload(() =>
@@ -1740,22 +1720,8 @@
         if (!iso) return '';
         return new Date(iso).toLocaleString();
     }
-    function relativeTime(iso: string): string {
-        if (!iso) return '';
-        const diffMs = Date.now() - new Date(iso).getTime();
-        const mins = Math.floor(diffMs / 60_000);
-        if (mins < 1) return 'just now';
-        if (mins < 60) return `${mins}m ago`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours}h ago`;
-        const days = Math.floor(hours / 24);
-        if (days < 7) return `${days}d ago`;
-        const weeks = Math.floor(days / 7);
-        if (weeks < 5) return `${weeks}w ago`;
-        const months = Math.floor(days / 30);
-        if (months < 12) return `${months}mo ago`;
-        return `${Math.floor(days / 365)}y ago`;
-    }
+    // relativeTime extracted to src/helpers/relativeTime.ts (R-003) — see
+    // imports at the top of the script block.
 
     function goBack() {
         if (window.history.length > 1) router.back();

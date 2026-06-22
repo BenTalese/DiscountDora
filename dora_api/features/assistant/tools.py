@@ -1177,180 +1177,27 @@ def suggest_recipes(args: dict) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── Unit conversion ──────────────────────────────────────────────────────
-# Two layers: simple linear conversions within a single dimension (volume /
-# mass / temperature), and ingredient-aware mass↔volume for the common
-# bakers' staples whose density we know. Reproduces the frontend table for
-# parity, with extra ingredient densities the rule engine doesn't have.
-
-# Five dimensions: volume, mass, temperature, length, energy. AU-metric
-# defaults (250ml cup, 20ml tbsp); US cup is explicitly distinct. Gas mark
-# (UK ovens) is a non-linear lookup handled separately below.
-_UNIT_TABLE: dict[str, tuple[str, float, float]] = {
-    # name → (dimension, to_base, _unused) — to_base converts a value in this
-    # unit to the base unit of its dimension. Linear units only (temperature
-    # has offsets, gas marks are non-linear; both handled out-of-band).
-
-    # ── Volume — base ml ──────────────────────────────────────────────
-    "ml": ("volume", 1.0, 0.0), "milliliter": ("volume", 1.0, 0.0), "millilitre": ("volume", 1.0, 0.0),
-    "l": ("volume", 1000.0, 0.0), "liter": ("volume", 1000.0, 0.0), "litre": ("volume", 1000.0, 0.0),
-    # Pinch / dash / smidgen — spice-rack territory.
-    "smidgen": ("volume", 0.156, 0.0), "smidge": ("volume", 0.156, 0.0),
-    "pinch": ("volume", 0.3125, 0.0),
-    "dash": ("volume", 0.625, 0.0),
-    "tsp": ("volume", 5.0, 0.0), "teaspoon": ("volume", 5.0, 0.0),
-    "tbsp": ("volume", 20.0, 0.0), "tablespoon": ("volume", 20.0, 0.0),  # AU metric (20ml)
-    "us tbsp": ("volume", 14.7868, 0.0), "american tbsp": ("volume", 14.7868, 0.0),
-    "cup": ("volume", 250.0, 0.0), "cups": ("volume", 250.0, 0.0),       # AU metric (250ml)
-    "us cup": ("volume", 240.0, 0.0), "american cup": ("volume", 240.0, 0.0),
-    "fl oz": ("volume", 29.5735, 0.0), "floz": ("volume", 29.5735, 0.0),
-    "pint": ("volume", 568.261, 0.0), "pt": ("volume", 568.261, 0.0),    # UK
-    "quart": ("volume", 946.353, 0.0), "qt": ("volume", 946.353, 0.0),   # US
-    "gallon": ("volume", 3785.41, 0.0), "gal": ("volume", 3785.41, 0.0),
-
-    # ── Mass — base g ─────────────────────────────────────────────────
-    "mg": ("mass", 0.001, 0.0), "milligram": ("mass", 0.001, 0.0), "milligrams": ("mass", 0.001, 0.0),
-    "g": ("mass", 1.0, 0.0), "gram": ("mass", 1.0, 0.0), "grams": ("mass", 1.0, 0.0),
-    "kg": ("mass", 1000.0, 0.0), "kilo": ("mass", 1000.0, 0.0), "kilos": ("mass", 1000.0, 0.0), "kilogram": ("mass", 1000.0, 0.0),
-    "oz": ("mass", 28.3495, 0.0), "ounce": ("mass", 28.3495, 0.0), "ounces": ("mass", 28.3495, 0.0),
-    "lb": ("mass", 453.592, 0.0), "lbs": ("mass", 453.592, 0.0), "pound": ("mass", 453.592, 0.0),
-    "stick": ("mass", 113.0, 0.0), "sticks": ("mass", 113.0, 0.0),  # butter
-
-    # ── Length — base mm (cake-pan sizing) ────────────────────────────
-    "mm": ("length", 1.0, 0.0), "millimeter": ("length", 1.0, 0.0), "millimetre": ("length", 1.0, 0.0),
-    "cm": ("length", 10.0, 0.0), "centimeter": ("length", 10.0, 0.0), "centimetre": ("length", 10.0, 0.0),
-    "m": ("length", 1000.0, 0.0), "meter": ("length", 1000.0, 0.0), "metre": ("length", 1000.0, 0.0),
-    "in": ("length", 25.4, 0.0), "inch": ("length", 25.4, 0.0), "inches": ("length", 25.4, 0.0), '"': ("length", 25.4, 0.0),
-    "ft": ("length", 304.8, 0.0), "foot": ("length", 304.8, 0.0), "feet": ("length", 304.8, 0.0),
-
-    # ── Energy — base kJ (AU nutrition labels show both) ──────────────
-    "kj": ("energy", 1.0, 0.0), "kilojoule": ("energy", 1.0, 0.0), "kilojoules": ("energy", 1.0, 0.0),
-    "kcal": ("energy", 4.184, 0.0), "cal": ("energy", 4.184, 0.0),
-    "calorie": ("energy", 4.184, 0.0), "calories": ("energy", 4.184, 0.0),
-    "j": ("energy", 0.001, 0.0), "joule": ("energy", 0.001, 0.0), "joules": ("energy", 0.001, 0.0),
-}
-
-# Grams per millilitre. Lets us cross mass↔volume for ingredients whose
-# density is well-known. Sourced from common bakers' references.
-_INGREDIENT_DENSITY_G_PER_ML: dict[str, float] = {
-    # Liquids
-    "water": 1.00, "milk": 1.03,
-    "olive oil": 0.92, "oil": 0.92, "vegetable oil": 0.92, "canola oil": 0.92,
-    "honey": 1.42, "maple syrup": 1.32, "golden syrup": 1.40,
-    # Flours
-    "flour": 0.53, "plain flour": 0.53,
-    "all-purpose flour": 0.53, "all purpose flour": 0.53,
-    "self-raising flour": 0.53, "self raising flour": 0.53,
-    "wholemeal flour": 0.56, "whole wheat flour": 0.56, "bread flour": 0.55,
-    "almond flour": 0.42, "almond meal": 0.42,
-    # Sugars
-    "sugar": 0.85, "white sugar": 0.85, "caster sugar": 0.85, "granulated sugar": 0.85,
-    "brown sugar": 0.93,
-    "icing sugar": 0.56, "powdered sugar": 0.56, "confectioners sugar": 0.56,
-    # Fats / dairy
-    "butter": 0.91, "margarine": 0.91,
-    "yogurt": 1.04, "greek yogurt": 1.05,
-    "sour cream": 0.95, "cream cheese": 0.95, "ricotta": 0.85, "mascarpone": 1.00,
-    "cream": 1.00, "heavy cream": 1.00, "thickened cream": 1.00,
-    "peanut butter": 1.05,
-    # Grains / pulses / starches
-    "rice": 0.78, "white rice": 0.78, "brown rice": 0.76,
-    "rolled oats": 0.41, "oats": 0.41, "porridge oats": 0.41,
-    "quinoa": 0.72, "couscous": 0.72,
-    "dried lentils": 0.85, "lentils": 0.85,
-    "dried beans": 0.85, "chickpeas": 0.78,
-    "pasta": 0.50, "dry pasta": 0.50,
-    "cornstarch": 0.65, "cornflour": 0.65,
-    # Bakery / nuts / dried
-    "chocolate chips": 0.65, "chocolate": 0.62,
-    "chopped almonds": 0.50, "sliced almonds": 0.45, "whole almonds": 0.60,
-    "chopped walnuts": 0.55, "walnuts": 0.55,
-    "raisins": 0.65, "sultanas": 0.65,
-    "shredded coconut": 0.30, "desiccated coconut": 0.45,
-    "breadcrumbs": 0.45, "panko": 0.30,
-    "cocoa powder": 0.51, "cocoa": 0.51,
-    "salt": 1.20,
-    # Cheese (grated)
-    "parmesan": 0.45, "grated parmesan": 0.45,
-    "cheddar": 0.48, "grated cheddar": 0.48, "grated cheese": 0.48,
-}
-
-
-# Gas mark <-> °C — non-linear UK oven scale. Recipes write "gas mark 6"
-# meaning 200°C; we snap to nearest when going the other way.
-_GAS_MARK_TO_C: dict[str, float] = {
-    "1/4": 110, "1/2": 120, "1": 140, "2": 150, "3": 160, "4": 180,
-    "5": 190, "6": 200, "7": 220, "8": 230, "9": 240,
-}
-_GAS_MARK_ALIASES = {"gas", "gas mark", "gm"}
-
-
-def _parse_amount(raw: Any) -> float | None:
-    """Accept 1, 1.5, "1/2", "1 1/2" — fractions and mixed numbers fall out
-    of models more often than clean floats, so handle them here too."""
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float)):
-        return float(raw)
-    s = str(raw).strip()
-    if not s:
-        return None
-    # Mixed number: "1 1/2"
-    parts = s.split()
-    if len(parts) == 2 and "/" in parts[1]:
-        try:
-            whole = float(parts[0])
-            num, den = parts[1].split("/")
-            denom = float(den)
-            if not denom:
-                return None
-            frac = float(num) / denom
-            return whole - frac if whole < 0 else whole + frac
-        except ValueError:
-            return None
-    # Pure fraction
-    if "/" in s:
-        try:
-            num, den = s.split("/")
-            denom = float(den)
-            if not denom:
-                return None
-            return float(num) / denom
-        except ValueError:
-            return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _normalise_unit(unit: str) -> str:
-    return unit.strip().lower().replace("°", "")
-
-
-def _snap_gas_mark(celsius: float) -> str:
-    best_key, best_delta = "4", float("inf")
-    for key, val in _GAS_MARK_TO_C.items():
-        delta = abs(val - celsius)
-        if delta < best_delta:
-            best_key, best_delta = key, delta
-    return best_key
+# The data tables (unit factors, ingredient densities, gas-mark scale) live
+# in dora_api.domain.units — R-003 single source of truth shared with the
+# price-entry widget and the harvest path (FU-227 chunk 1). This function
+# is the assistant tool-call adapter: same return shape the LLM expects.
+from dora_api.domain import units as _units
 
 
 def convert_measurement(args: dict) -> list[dict]:
-    amount = _parse_amount(args.get("amount"))
+    amount = _units.parse_amount(args.get("amount"))
     if amount is None:
         return [{"error": "amount must be a number (decimals and fractions OK)"}]
-    from_unit = _normalise_unit(str(args.get("from_unit") or ""))
-    to_unit = _normalise_unit(str(args.get("to_unit") or ""))
+    from_unit = _units.normalise_unit(str(args.get("from_unit") or ""))
+    to_unit = _units.normalise_unit(str(args.get("to_unit") or ""))
     ingredient = (args.get("ingredient") or "").strip().lower() or None
 
     # Gas mark <-> °C / °F.
-    if from_unit in _GAS_MARK_ALIASES:
-        # The amount comes in as a number but the gas-mark table is keyed by
-        # the user's literal "1/4", "1", etc. Use the original arg string so
-        # "1/2" resolves rather than being collapsed to 0.5.
+    if from_unit in _units.GAS_MARK_ALIASES:
         raw_amount = str(args.get("amount") or "").strip()
-        c = _GAS_MARK_TO_C.get(raw_amount) or _GAS_MARK_TO_C.get(f"{int(amount)}" if amount == int(amount) else "")
+        c = _units.GAS_MARK_TO_C.get(raw_amount) or _units.GAS_MARK_TO_C.get(
+            f"{int(amount)}" if amount == int(amount) else ""
+        )
         if c is None:
             return [{"error": f"gas mark {raw_amount or amount} isn't on the scale (1/4, 1/2, or 1-9)"}]
         if to_unit in ("c", "celsius", "celcius"):
@@ -1358,64 +1205,54 @@ def convert_measurement(args: dict) -> list[dict]:
         if to_unit in ("f", "fahrenheit"):
             return [{"amount": amount, "from_unit": "gas mark", "to_unit": to_unit, "result": round(c * 9 / 5 + 32, 1)}]
         return [{"error": "gas marks convert to temperature (°C or °F)"}]
-    if to_unit in _GAS_MARK_ALIASES:
+    if to_unit in _units.GAS_MARK_ALIASES:
         temp_units = {"c", "celsius", "celcius", "f", "fahrenheit"}
         if from_unit not in temp_units:
             return [{"error": "only temperatures convert to gas marks"}]
         celsius = amount if from_unit in ("c", "celsius", "celcius") else (amount - 32) * 5 / 9
-        return [{"amount": amount, "from_unit": from_unit, "to_unit": "gas mark", "result": _snap_gas_mark(celsius)}]
+        return [{"amount": amount, "from_unit": from_unit, "to_unit": "gas mark", "result": _units.snap_gas_mark(celsius)}]
 
-    # Temperature — offsets, can't share the linear table.
+    # Temperature — offsets handled by the domain helper.
     temp_units = {"c", "celsius", "celcius", "f", "fahrenheit", "k", "kelvin"}
     if from_unit in temp_units or to_unit in temp_units:
         if from_unit not in temp_units or to_unit not in temp_units:
             return [{"error": f"can't convert {from_unit} to {to_unit} — temperature must convert to temperature"}]
-        def to_c(v: float, u: str) -> float:
-            if u in ("c", "celsius", "celcius"): return v
-            if u in ("f", "fahrenheit"): return (v - 32) * 5 / 9
-            return v - 273.15  # kelvin
-        def from_c(v: float, u: str) -> float:
-            if u in ("c", "celsius", "celcius"): return v
-            if u in ("f", "fahrenheit"): return v * 9 / 5 + 32
-            return v + 273.15
-        result = from_c(to_c(amount, from_unit), to_unit)
+        result = _units.convert_temperature(amount, from_unit, to_unit)
+        if result is None:
+            return [{"error": f"can't convert {from_unit} to {to_unit}"}]
         return [{"amount": amount, "from_unit": from_unit, "to_unit": to_unit, "result": round(result, 1)}]
 
-    src = _UNIT_TABLE.get(from_unit)
-    dst = _UNIT_TABLE.get(to_unit)
+    src = _units.find_unit(from_unit)
+    dst = _units.find_unit(to_unit)
     if not src or not dst:
         return [{"error": f"unknown unit(s): {from_unit!r} or {to_unit!r}"}]
-    src_dim, src_factor, _ = src
-    dst_dim, dst_factor, _ = dst
 
-    # Same dimension: straight linear conversion.
-    if src_dim == dst_dim:
-        result = amount * src_factor / dst_factor
+    # Same dimension: linear conversion via the domain helper.
+    if src.dimension == dst.dimension:
+        result = _units.convert(amount, from_unit, to_unit)
+        if result is None:
+            return [{"error": f"can't convert {from_unit} to {to_unit}"}]
         return [{"amount": amount, "from_unit": from_unit, "to_unit": to_unit, "result": round(result, 3)}]
 
     # Cross-dimension mass↔volume needs an ingredient density.
-    if {src_dim, dst_dim} == {"mass", "volume"}:
-        density = _INGREDIENT_DENSITY_G_PER_ML.get(ingredient) if ingredient else None
+    if {src.dimension, dst.dimension} == {_units.MASS, _units.VOLUME}:
+        density = _units.INGREDIENT_DENSITY_G_PER_ML.get(ingredient) if ingredient else None
         if density is None:
             return [{
                 "error": f"need an ingredient to convert {from_unit} to {to_unit} (mass↔volume depends on density)",
-                "known_ingredients": sorted(set(_INGREDIENT_DENSITY_G_PER_ML.keys())),
+                "known_ingredients": sorted(set(_units.INGREDIENT_DENSITY_G_PER_ML.keys())),
             }]
-        # Convert source to base units of its dimension.
-        base = amount * src_factor
-        if src_dim == "mass":  # base is grams → convert to ml using density
-            ml = base / density
-            result = ml / dst_factor
-        else:  # source is volume → grams via density
-            grams = base * density
-            result = grams / dst_factor
+        result = _units.convert(amount, from_unit, to_unit, ingredient=ingredient)
+        if result is None:
+            return [{"error": f"can't convert {from_unit} to {to_unit}"}]
         return [{
             "amount": amount, "from_unit": from_unit, "to_unit": to_unit,
             "ingredient": ingredient, "density_g_per_ml": density,
             "result": round(result, 3),
         }]
 
-    return [{"error": f"can't convert {src_dim} to {dst_dim}"}]
+    return [{"error": f"can't convert {src.dimension} to {dst.dimension}"}]
+
 
 
 # ── Substitution table ───────────────────────────────────────────────────

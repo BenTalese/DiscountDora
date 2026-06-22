@@ -52,7 +52,31 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (NEXT TASK)
+## [OPEN] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
+- **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
+- **Type:** finding.
+- **What:** the Phase E `merchant → store` rename missed several test files. Failing tests
+  consistently fail with `unexpected keyword argument 'purchased_merchant_id'` /
+  `'merchant' Extra inputs are not permitted` (Pydantic `extra="forbid"` on the renamed
+  models). Affected (non-exhaustive):
+  - `tests/test_shopping_list_totals.py` (~8 tests; the `_line()` helper builds
+    `ShoppingListLineDto(... purchased_merchant_id=...)`)
+  - `tests/e2e/dora_api/test_product_router.py` (~6 tests for `update_product` /
+    extra-attrs / price-now-without-price-was — all using the old `merchant` shape)
+  - `tests/e2e/dora_api/test_ingest_batch.py::test__ingest__unknown_store_quarantines`
+    (uses `merchant: 'MysteryStore'` in the ingest payload — renamed to `store`)
+  - plus other product-router cases (53 total failures observed; not all itemised).
+- **Why deferred:** R-007 scope discipline. Chunk 1 of FU-227 is a unit-conversion
+  refactor; sweeping a rename across all test files belongs in a dedicated tidy-up unit.
+- **Confirmed pre-existing** by `git stash`-then-run — baseline = 54 failed; mine = 53
+  failed (one deselected). My changes introduced **zero** new failures.
+- **Recommended resolution:** opportunistic during the next backend pytest pass on a
+  Python-equipped env. The fix is mechanical (s/`purchased_merchant_id`/`purchased_store_id`/g,
+  s/`merchant=`/`store=`/g, s/`'merchant': /'store': /g) — but should be verified test-by-test
+  in case any case depends on the surrounding context. A single PR titled "Phase E rename:
+  finish the test-suite update" would be clean.
+
+## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunk 1 of 8 DONE)
 - **Raised:** 2026-06-19 (pricing reassessment handoff).
 - **Ratified:** 2026-06-22 — the §6 question list A–K is fully walked with the user; all answers,
   revisions, and clarifications are LOCKED. **Ready for plan execution.** No more Q&A needed.

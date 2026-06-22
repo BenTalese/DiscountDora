@@ -133,6 +133,17 @@
 
             <q-space />
 
+            <!-- FU-227 chunk 3 — "Log a price" (G2: money-gated, left of
+                 expiry). Opens the shared PriceEntry dialog. No emit
+                 wiring beyond the optimistic close — the row's visible
+                 surface doesn't depend on observations today; chunks 4/6
+                 surface them in widgets/charts. -->
+            <StockItemRowPriceButton
+                v-if="moneyEnabled"
+                :stock-item-id="item.stock_item_id"
+                :item-name="item.name"
+            />
+
             <!-- ──────────────────────────────────────────────────────
                  Right cluster — expiry / essential / open / cart.
                  Feedback 2026-06-18 (round 2): every button is `flat dense
@@ -240,6 +251,8 @@
     import { useQuasar } from 'quasar';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
+    import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { stockItemImageUrl } from 'src/services/api/stockItemApiService';
@@ -275,6 +288,7 @@
 
     const $q = useQuasar();
     const actions = useStockItemActions();
+    const { moneyEnabled } = useMoneyEnabled();
     // C-1 Chunk 6 / FU-033 — defensive fallback. If the bytes endpoint
     // 404s mid-render (race with a delete, transient error), drop the
     // <img> rather than show a broken icon — placeholder takes over.

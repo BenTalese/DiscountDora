@@ -121,10 +121,9 @@ export default class StockItemApiService {
             `/stock-items/${stockItemID}/preferred-buys/${preferredBuyID}`,
         );
 
-    reorderPreferredBuysAsync = async (stockItemID: string, orderedIds: string[]): Promise<void> =>
-        await this.httpClient.patch<void>(
-            `/stock-items/${stockItemID}/preferred-buys/reorder`, { ordered_ids: orderedIds },
-        );
+    // FU-225 (2026-06-18): `reorderPreferredBuysAsync` removed — the SPA now
+    // sorts alphabetically client-side and the backend dropped `position` +
+    // the `/preferred-buys/reorder` endpoint.
 
     // FU-213 — price observations ("what this cost me"). Money-gated at the UI.
     addPriceObservationAsync = async (

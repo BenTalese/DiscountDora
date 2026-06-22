@@ -104,7 +104,6 @@ class ListAddEventDto:
 class PreferredBuyDto:
     preferred_buy_id: UUID
     label: str
-    position: int
 
 
 # FU-213 — everyday "what this cost me" price points (money-gated at the UI).
@@ -348,19 +347,20 @@ class GetStockItemDetailHandler:
                 for l in _Lines
             ]
 
-        # FU-211 — free-text preferred buys for this item, ordered by position.
+        # FU-211 — free-text preferred buys for this item. FU-225 dropped
+        # the `position` column and the manual reorder UI; sort alphabetically
+        # (case-insensitive) for a stable, predictable order matching the SPA.
         _PreferredBuys = sorted(
             (
                 PreferredBuyDto(
                     preferred_buy_id = pb.id,
                     label = pb.label,
-                    position = pb.position,
                 )
                 for pb in self.repository.get(PreferredBuy).all(
                     EntityField(PreferredBuy, PreferredBuy.Fields.STOCK_ITEM_ID).eq(stock_item_id)
                 )
             ),
-            key=lambda d: d.position,
+            key=lambda d: d.label.lower(),
         )
 
         # FU-213 — price observations (newest first) + the single server-owned

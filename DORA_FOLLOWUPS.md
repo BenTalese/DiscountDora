@@ -52,6 +52,58 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (NEXT TASK)
+- **Raised:** 2026-06-19 (pricing reassessment handoff).
+- **Ratified:** 2026-06-22 — the §6 question list A–K is fully walked with the user; all answers,
+  revisions, and clarifications are LOCKED. **Ready for plan execution.** No more Q&A needed.
+- **Type:** planning + implementation (Phase F's "Your prices" / S2-10 build).
+- **What landed in the ratification session (2026-06-22):**
+  - **A1 folded** observation shape `{total_price, total_measure, unit}` (deep-dive in §6a of the
+    handoff doc; further reinforced by the user's row-button-vs-shopping-list intent split — also
+    in §6a).
+  - **A4 revised:** drop the `source` enum field entirely; replace with nullable
+    `shopping_list_line_id` FK on the observation (ON DELETE SET NULL). Provenance via FK; more
+    information than an enum.
+  - **B3 hardened:** flat global unit list + **last-time prefill for unit choice**;
+    explicit "no smart per-item defaults ever" — predictability over cleverness.
+  - **C5 with display shape:** inline "Your prices" widget on stock-item detail
+    (token-token-styled; baseline + signal chip + most-recent-with-source + "Based on N prices"
+    framing). "Full history" → **bottom-sheet** (Quasar `q-dialog` `position="bottom"`), NOT a new
+    route, NOT a drawer — matches the user's own feedback L226 preference.
+  - **C3 + LC-2:** baseline math stays observations-only; UI is **source-blind**
+    ("Based on N prices"; offers shown as a separate sidecar for the products minority, never
+    folded into the count or median). Stock-only majority gets the cleanest possible mental model.
+  - **E3 revised:** `/finish` is the ONLY completion path. Code trace confirmed no SPA caller for
+    `PATCH status=done` — **remove that dead branch entirely** as part of this work; add a pytest
+    asserting the route 400s on `status=done` input.
+  - **K4 flipped:** **nothing deferred** — per-store surfacing, full chart colour-by-source (D2),
+    and SPA conversion-mirror dedup all in the first build. Cohesively complete.
+  - **L223** (hover bubble white-on-white in dark mode on Price History) — added to FU-214 during
+    the C5 cross-check; it wasn't tracked before.
+  - **LC-1:** double-tap `/finish` idempotent via partial UNIQUE on
+    `shopping_list_line_id` WHERE NOT NULL.
+  - **LC-3:** stock-value report + recipe cost outputs WILL shift post-normalization; absorb
+    silently (pre-release, K1 wipes data anyway).
+  - **LC-4:** harvested observations diverge from their line — FK is provenance, not sync.
+  - **LC-5:** H1 staging is intra-build chunk ordering, not a defer (K4 stays consistent).
+  - **New standing rule (seed-data discipline):** every prompt that adds/modifies/removes a
+    feature also updates dev seed data in the same unit of work. **Flagged for promotion to a new
+    `R-0NN` in `ENGINEERING_STANDARDS.md` at end-of-work close-gate** so it carries across all
+    future prompts.
+- **Everything is captured in:**
+  `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` — read it whole. It now has the task
+  instructions (§0, updated to "go straight to plan writing"), locked decisions (§2), the full
+  current-state map with file:line (§3), the mental model (§4), build sequence (§5), the answered
+  question list with all revisions inline (§6), **A1 deep-dive + user intent clarification (§6a),
+  the five locked clarifications LC-1..LC-5 (§6b)**, the per-change impact map (§7), related docs
+  (§8), standing constraints incl. the new seed-data rule (§9).
+- **Next action:** write the plan/execution doc (replace `IMPL_PLAN_YOUR_PRICES.md` §S2-10 or a
+  new sibling) per §0's instructions, then implement chunks in §5 sequence. Conversion helper
+  first, harvest last. Update seed data in every chunk. Evaluate seed-data rule for `R-0NN`
+  promotion at close-gate.
+- **Recommended resolution:** **now / next session** — this is the active design track; it is
+  Phase F's "Your prices" build.
+
 ## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
 - **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)
 - **Type:** finding (UX policy — needs user judgement)
@@ -143,21 +195,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — re-open when the user has
   walked their pantry through the new queue and decided whether the
   engagement rule is too tight, too loose, or right.
-
-## [OPEN] FU-225 — Deprecate `PreferredBuy.position` + reorder endpoint
-- **Raised:** 2026-06-18 (Stock-pages feedback round 3)
-- **Type:** deferred job
-- **What:** Round-3 dropped the manual reorder UI on preferred buys (SPA now
-  sorts alphabetically client-side). The backend still carries the `position`
-  column on the table and exposes `PATCH /stock-items/{id}/preferred-buys/reorder`
-  + `stockItemApi.reorderPreferredBuysAsync` on the SPA's API service. Nothing
-  calls them anymore. When the schema cleanup is convenient, drop the column +
-  endpoint + SPA method, and update the model. Until then the column gets
-  written on add (legacy default) — harmless.
-- **Why deferred:** scope discipline (R-007). Schema removal warrants its own
-  migration + tests; not on the critical path for this feedback round.
-- **Recommended resolution:** opportunistic — fold into the next preferred-buys
-  / stock-item-detail backend pass.
 
 ## [OPEN] FU-224 — App-wide colour-usage assessment (primary vs secondary vs accent)
 - **Raised:** 2026-06-18 (Stock-pages feedback pass)
@@ -261,19 +298,25 @@ long session summary. Distinct from the other logs:
   vue-tsc/lint is not browser proof.
 - **Recommended resolution:** **now / confirm in browser** (next session at the app).
 
-## [OPEN] FU-189c — Phase E: pytest run pending (no Python on dev box)
+## [OPEN] FU-189c — Phase E: pytest verify still wanted (urgency lowered)
 - **Raised:** 2026-06-18 (Phase E rename close-out)
 - **Type:** finding — verification gap
 - **What:** The Phase E `Merchant → Store` rename + `usual_store_id` + Stores
   CRUD page + image upload landed under `vue-tsc` clean + `npm run lint` clean,
-  but the backend test suite couldn't be exercised in-session because this
-  machine has no Python runtime installed (only the MS Store stub
-  `python.exe`). Pytest had been 405/405 going into the work.
-- **Recommended resolution:** **now** — run `pytest` on a Python-equipped env
-  before relying on the rename. Migration head is `a3e9f6c2d8b4`; if any test
-  failure traces back to a stale `Merchant` reference, grep the failing module
-  and patch it; if a fixture seeded the old `Merchant` shape, regenerate the
-  fixture or rebase against the new `Store` constructor signature.
+  but pytest wasn't exercised in the rename session (MS Store Python stub
+  only). Pytest had been 405/405 going into the work.
+- **Indirect evidence accumulated since (2026-06-18):** the rounds 2 + 3 stock-
+  pages feedback passes were authored against the post-rename codebase in a
+  real env and ran `vue-tsc + lint` clean — *including* on `update_stock_item.py`
+  (which Phase E touched) and `app.py`. That's not the same as pytest passing,
+  but it does mean the renamed Python imports and the migration head
+  `a3e9f6c2d8b4` resolve cleanly in a working env. **Sits alongside FU-223** —
+  same env, same gap.
+- **Recommended resolution:** opportunistic — bundle with the FU-223 pytest
+  run on the next Python-equipped session. If any failure traces to a stale
+  `Merchant` reference, grep the failing module and patch it; if a fixture
+  seeded the old `Merchant` shape, regenerate it against the new `Store`
+  constructor signature.
 
 ## [OPEN] FU-189a — `create_product` still auto-creates a Store when the name is unknown
 - **Raised:** 2026-06-18 (Phase E rename)
@@ -287,21 +330,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later — pair with FU-190 (ingestion store-mapping)
   so the whole "stores are user-curated, never auto-created" rule lands in one
   pass and the SPA's product-create UI gets a store picker at the same time.
-
-## [OPEN] FU-189b — Charter coverage table for Stores CRUD + image upload page
-- **Raised:** 2026-06-18 (Phase E rename)
-- **Type:** doc gap
-- **What:** Per CLAUDE.md's cross-check rule, every per-surface proposal /
-  implementation plan that targets a specific app surface ends with a flat
-  feedback-coverage table (`F1..F49` shape, see `PROPOSAL_MEAL_PLANS.md`).
-  Phase E landed without one because the work was a rename-plus-replace of a
-  surface that already exists (the old "Merchants" admin page). Add a coverage
-  row to `PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.3's feedback table (or its
-  successor) recording that L158 / L184 (the "merchant vs data-provider" and
-  "merchant logo" feedback bullets) are now ADDRESSED by the Stores admin
-  page + per-store image upload (zero shipped logos, hash-swatch fallback).
-- **Recommended resolution:** opportunistic — fold into the next pass that
-  touches `PROPOSAL_PRODUCTS_AS_OVERLAY.md`.
 
 ## [OPEN] FU-221 — Migrate remaining unconditional `getXAsync()` onMounted calls to `ensureLoadedAsync()`
 - **Raised:** 2026-06-18 (R-016 introduction)
@@ -411,7 +439,9 @@ long session summary. Distinct from the other logs:
     acceptable under the ingestion model, where a deleted product just re-ingests).
   - **Price History:** L218 selecting products updates the chart; L219 card not squished + notify
     placeholder visible; L220 notify-under formats as a price; L221/L222 %off text size + chip
-    colour consistent (componentised); L225 graph reaches the box edge.
+    colour consistent (componentised); **L223 hover bubble is theme-aware (today: white-on-white
+    in dark mode — added 2026-06-22 during C5 pricing-reassessment cross-check)**; L225 graph
+    reaches the box edge.
   - **L160** — the product-search bar moves to the companion, but confirm no *other* Dora search
     bar has the same dark-mode white-on-white contrast bug.
 - **Why deferred:** needs the running app + product data present; a static read can't prove a

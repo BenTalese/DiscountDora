@@ -327,13 +327,13 @@ def configure_mappings(db: SQLAlchemy):
 
     # FU-211 — free-text "what I actually buy" reminders on a stock item
     # (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Owned child rows; CASCADE when the
-    # stock item is deleted. Ordered by `position`.
+    # stock item is deleted. FU-225 dropped the `position` column — manual
+    # reorder retired; SPA sorts alphabetically client-side.
     preferred_buy_table = Table(
         "PreferredBuy", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
         Column("label", String(255), nullable=False),
-        Column("position", Integer, nullable=False, server_default="0"),
         Column("created_at", DateTime(timezone=True), nullable=False),
     )
 

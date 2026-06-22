@@ -9,6 +9,178 @@ next.
 
 ---
 
+## 2026-06-22 — FU-227 ratification: walked the §6 question list end-to-end (no code)
+
+**Session goal:** pick up FU-227 where the 2026-06-19 handoff stopped (user ran out of time to
+answer the §6 A–K question list). This session walked the list with the user, captured every
+revision/clarification into the handoff doc, and flipped FU-227 to ready-for-plan-execution.
+
+**What got ratified (all in `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`):**
+
+- **A1 folded shape** — user asked for a deep-dive; got the 9-surface trace + trade-off table.
+  Folded `{total_price, total_measure, unit}` confirmed. User then split the two entry surfaces
+  by intent (row button = "I saw $X/L at Coles" with no count; shopping list = "I bought N for
+  $Y" with count) — strengthens folded (no vestigial `count=1`), and the shared `PriceEntry`
+  widget gets two modes / one persisted shape. Captured in **§6a**.
+- **A4 revised** — drop the `source` enum entirely; use nullable `shopping_list_line_id` FK
+  (ON DELETE SET NULL). Provenance via FK is strictly more information than an enum.
+- **B3 hardened** — flat global unit list **+ last-time prefill**; explicit "no smart per-item
+  defaults ever" (the user flagged auto-guessing as a wrong-more-than-right pattern). The
+  last-time framing is consistent with the rest of the prefill story (F2).
+- **C5 with display shape** — inline widget on stock-item detail; "Full history" → **bottom-sheet**
+  (Quasar `q-dialog` `position="bottom"`), NOT a new route, NOT a drawer. Matches the user's own
+  feedback L226 preference. Per-product `/price-history` page kept in its current role.
+- **C3 + LC-2 (UI framing)** — baseline math stays observations-only, but the widget UI is
+  **source-blind** ("Based on N prices"; offers as a separate sidecar for the products minority).
+  The user's "vast majority is stock-only" reframing was the key insight: for them, source
+  doesn't matter (only observations exist); for products users, keeping baseline obs-only
+  prevents shelf-sale-poisoning and turning-products-on UX shifts.
+- **E3 revised** — code-traced: SPA never sends `PATCH status=done`. `/finish` is the only path.
+  **Remove the dead PATCH-status-done branch entirely** + pytest the 400.
+- **K4 flipped** — **nothing deferred**. Per-store surfacing, full chart colour-by-source (D2),
+  and SPA conversion-mirror dedup all land in the first build.
+- **LC-1..LC-5 (locked clarifications)** in **§6b**: idempotent harvest via partial UNIQUE on
+  the FK; baseline source-blind UI framing (above); silent cost-shift in consumers (pre-release);
+  harvested observations diverge from lines (FK = provenance only); H1 staging is intra-build.
+- **L223** (PH hover bubble dark-mode bug) — added to FU-214 (wasn't tracked).
+- **New standing rule — seed-data discipline.** User asked for "if code changes warrant seed
+  data changes, do them" to be a recurring instruction across all prompts. Added to §9 of the
+  handoff doc with pricing-build implications spelled out, AND flagged for promotion to a new
+  `R-0NN` in `ENGINEERING_STANDARDS.md` at the close-gate of whoever next does a real piece of
+  code (so the rule carries forward automatically).
+
+**Doc structure now:**
+- §0 task — updated to "skip Q&A, go straight to plan writing"; lists the ratified decisions to
+  carry into the plan.
+- §6 — original question list with every revision inline.
+- §6a — A1 deep-dive + entry-surface intent split (user-clarified).
+- §6b — LC-1..LC-5 locked clarifications.
+- §9 — standing constraints including the new seed-data rule.
+
+**Verification:** docs-only edits this session; no code touched.
+
+**Ledger updates:**
+- `DORA_FOLLOWUPS.md` FU-227 rewritten — flipped from "ratify model" to "WRITE THE PLAN +
+  IMPLEMENT"; lists all ratified decisions inline so a fresh agent doesn't have to dig.
+- `DORA_FOLLOWUPS.md` FU-214 — added L223 hover-bubble bug.
+
+**Next:** FU-227 — write `IMPL_PLAN_YOUR_PRICES.md` plan doc per §0 of the handoff, then
+implement chunks in §5 sequence. Conversion helper first, harvest last. Update seed data in every
+chunk. At close-gate, promote the seed-data rule to a new `R-0NN` in `ENGINEERING_STANDARDS.md`.
+
+---
+
+## 2026-06-19 — Recovered lost work + full pricing-system reassessment (research → handoff)
+**Two things this session:**
+
+**1. Recovered the lost FU-225 / Phase-E-cleanup work.** The user did work on another machine,
+deleted this machine's copy, moved the other machine's version here, then recovered this machine's
+work from the recycle bin to `C:\Users\ben.talese\Desktop\ad`. I did a **selective merge** (NOT a
+blind copy — the working dir was newer in places):
+- Re-applied the FU-225 set (drop `PreferredBuy.position`): `preferred_buy.py`, `preferred_buys.py`,
+  `get_stock_item_detail.py`, `table_mappings.py`, migration `b5d8a2f4c9e7`, `stockItemDetail.ts`,
+  `stockItemApiService.ts`; the `IMPL_PLAN_YOUR_PRICES.md` brief; the FU-189b proposal flip.
+- Doc logs: worklog/changelog/resolved were clean supersets → copied; `DORA_FOLLOWUPS.md` was
+  **merged** (kept the working dir's new FU-226, removed the now-resolved FU-225/FU-189b open
+  blocks, swapped FU-189c to the downgraded text).
+- **Left untouched** (newer "Round-18" work in the working dir that a blind copy would have
+  destroyed): `stocktake.py` (engagement filter), `StockOverview.vue`, `useStockFilters.ts`,
+  `StockItemRow.vue`, `StockItemDetailPage.vue`.
+- Verified: single migration head (`b5d8a2f4c9e7` off Phase E head `a3e9f6c2d8b4`; Round-18 added no
+  migration → no fork), `vue-tsc` clean, `npm run lint` clean, no dangling FU-225 consumers.
+
+**2. Full pricing-system reassessment (research + handoff).** The user wants the "Your prices"
+system reassessed before building. Confirmed **Idea A** with the user (offers + observations are
+separate, unioned at read time, never converted — no god-object; observations in-app only;
+ingestion stops writing observations). Ran **4 parallel read-only agents** mapping: shopping-list
+lifecycle + line model, price-entry surfaces + conversion logic, display surfaces + gating, and
+every price-data consumer — all file:line grounded. Produced a long open question list (A–K, with
+recommendations) covering data model, units/conversion, baseline, the offer/observation union,
+shopping integration, the entry widget, the row button, visualisation, gating, ingestion, and
+migration/scope. **User ran out of time to answer**, so everything (research findings, locked
+decisions, current-state map, question list, impact map, build sequence, constraints) was captured
+into a handoff scratch doc.
+
+**Key findings (the load-bearing ones):** unit normalization doesn't exist and the conversion engine
+is assistant-trapped + duplicated front/back + has no count dimension; the observation model can't
+hold price+size+count cleanly (lines are per-unit×count, observations are total+measure — two
+incompatible shapes); no prefill exists but persist-on-edit is already the line pattern (so the
+"shop-mode copy" worry is moot); ingestion can wrongly write observations; the actual→picked price
+ladder is duplicated 4×.
+
+**Deliverable:** `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` (the full brief) +
+**FU-227** logged as the next task.
+
+**Verification:** `vue-tsc` + `npm run lint` clean. Pytest still unrunnable here (FU-189c/FU-223).
+
+**Next:** **FU-227** — the next agent runs the §6 question list with the user, then writes the
+plan/execution doc. No code until the model is ratified (one-way-door data decisions A1/A2).
+
+---
+
+## 2026-06-18 — Phase E aftermath cleanup — FU-225 dropped + FU-189b closed + FU-189c downgraded
+**Trigger:** user reorientation between sessions. Round 2/3 feedback work had been authored on
+top of Phase E in a real env, and the user asked me to double-check current state and pick
+next. Plan: tidy the ledger first (`option 4`), then start Phase F (`option 1`). This entry
+covers the tidy-up; Phase F is the next handoff point.
+
+**FU-189c (Phase E pytest) — downgraded, not closed.**
+Rounds 2 & 3 *do* show vue-tsc + lint clean over the post-rename codebase from a Python-
+capable env, including edits to `update_stock_item.py` and `app.py` (touched by Phase E).
+That's meaningful indirect evidence (the renamed Python imports resolve, migration head
+`a3e9f6c2d8b4` is in place), but neither worklog entry actually ran pytest — both explicitly
+say "FU-223 still pending". FU-189c now reads as **opportunistic, bundle with FU-223** rather
+than blocking. The pre-Phase-F bar is still: pytest before relying on the rename.
+
+**FU-225 — `PreferredBuy.position` dropped end-to-end.**
+- Entity: `position: int` field + `POSITION` constant removed.
+- Mapper: `Column("position", …)` removed from `preferred_buy_table`.
+- Handler: `ReorderPreferredBuysRequest`, the `reorder()` method, the
+  `PATCH /stock-items/<id>/preferred-buys/reorder` route, and the
+  `position=len(...)` line on `add` — all gone.
+- DTO + sort: `PreferredBuyDto.position` removed; server-side sort flipped to alphabetical
+  (case-insensitive label) to match the SPA's round-3 client-side sort.
+- SPA: `reorderPreferredBuysAsync` removed from `stockItemApiService`; `position` removed
+  from the `PreferredBuy` type in `models/stockItemDetail.ts`.
+- Migration: new head `b5d8a2f4c9e7_20260618_drop_preferred_buy_position.py` drops the
+  column. Postgres-portable, batch-mode-safe, deterministic downgrade path.
+
+**FU-189b — feedback-coverage row flipped to ADDRESSED.**
+`docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` line 424: L184 ("Link button as merchant
+logo") moved from TRACKED → ADDRESSED with a note pointing at the user-uploaded `StoreLogo`
++ hash-swatch fallback that landed in Phase E and now renders on ProductChip /
+StockItemDetailPage linked-products / MyProductsPage / Stores admin grid. L157 was already
+ADDRESSED. Both resolved entries archived to `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verified**
+- `npm install` (regenerated `.quasar/tsconfig.json` after this turn's checkout).
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- **Pytest still not run** (FU-189c / FU-223 standing).
+
+**Engineering-standards close-gate**
+- R-002 / R-007 — scope held to the deferred-work ledger; no incidental refactors.
+- R-006 / R-015 — migration is a clean `drop_column`, batch-mode-safe, single head
+  `b5d8a2f4c9e7` chained off `a3e9f6c2d8b4` (the Phase E head). Downgrade restores the
+  column with the original `server_default="0"`.
+- R-003 — server-side preferred-buys sort + SPA sort both case-insensitively by label;
+  single source of truth on the order (label string), no domain constant duplicated.
+
+**Logs**
+- This entry; CHANGELOG appended under Unreleased "Changed" with a one-liner for the
+  preferred-buys schema cleanup.
+- `DORA_FOLLOWUPS.md` — FU-225 + FU-189b moved out; FU-189c body rewritten as
+  "urgency lowered" (still open, recommended `opportunistic`).
+- `DORA_FOLLOWUPS_RESOLVED.md` — FU-225 + FU-189b at the top with state notes.
+
+**Next:** **Phase F** (per the runbook): "Your prices" intelligence (union pushed offer data
++ user `StockItemPriceObservation` receipts → baseline + "paying more than usual" signal,
+surfaced on stock-item detail + Price History). I'll open the runbook §Phase F +
+`PROPOSAL_INGESTION_API.md` §6.4 next session and propose a first concrete chunk for sign-off
+before coding. Pytest still wanted before Phase F lands.
+
+---
+
 ## 2026-06-18 — Feedback pass round 3 — UTC fix + design polish
 **Trigger:** Round 2 went out; the user found the real root cause of the
 "Updated X ago" bug + flagged 7 more polish items.

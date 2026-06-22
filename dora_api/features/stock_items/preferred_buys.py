@@ -3,7 +3,11 @@
 Free-text "what I actually buy" reminders owned by a stock item — the everyday
 counterpart to the power-user Product overlay. Always available (NOT gated by
 the products or money features). Grouped here as one cohesive small surface
-(add / rename / delete / reorder) rather than a file per verb.
+(add / rename / delete) rather than a file per verb.
+
+FU-225 (2026-06-18): the manual reorder UI was retired; the SPA now sorts
+alphabetically client-side. The `position` column + `reorder` endpoint were
+removed at the same time.
 """
 import logging
 from dataclasses import dataclass
@@ -35,12 +39,6 @@ class UpdatePreferredBuyRequest(BaseModel):
     label: str = Field(min_length=1, max_length=255)
 
 
-class ReorderPreferredBuysRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ordered_ids: list[UUID]
-
-
 @dataclass(slots=True)
 class PreferredBuyMutationResponse:
     stock_item_not_found: bool = False
@@ -51,11 +49,6 @@ class PreferredBuyMutationResponse:
 class PreferredBuyHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
-
-    def _for_item(self, stock_item_id: UUID) -> list[PreferredBuy]:
-        return self.repository.get(PreferredBuy).all(
-            EntityField(PreferredBuy, PreferredBuy.Fields.STOCK_ITEM_ID).eq(stock_item_id)
-        )
 
     def _scoped(self, stock_item_id: UUID, preferred_buy_id: UUID) -> PreferredBuy | None:
         # Scope the lookup to the stock item so a mismatched pair 404s rather
@@ -74,7 +67,6 @@ class PreferredBuyHandler:
         self.repository.add(PreferredBuy(
             stock_item_id=stock_item_id,
             label=label,
-            position=len(self._for_item(stock_item_id)),  # append at end
             created_at=datetime.now(timezone.utc),
         ))
         self.repository.save_changes()
@@ -101,19 +93,6 @@ class PreferredBuyHandler:
         self.repository.save_changes()
         return PreferredBuyMutationResponse()
 
-    def reorder(
-        self, stock_item_id: UUID, request: ReorderPreferredBuysRequest
-    ) -> PreferredBuyMutationResponse:
-        if not self.repository.get(StockItem).exists(stock_item_id):
-            return PreferredBuyMutationResponse(stock_item_not_found=True)
-        by_id = {p.id: p for p in self._for_item(stock_item_id)}
-        for index, pid in enumerate(request.ordered_ids):
-            target = by_id.get(pid)
-            if target is not None:
-                target.position = index
-        self.repository.save_changes()
-        return PreferredBuyMutationResponse()
-
 
 @STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys", methods=["POST"])
 @has_request_body(AddPreferredBuyRequest)
@@ -126,20 +105,6 @@ def add_preferred_buy(stock_item_id: UUID):
     if _Response.empty_label:
         return bad_request("A preferred buy needs a label.")
     logging.getLogger(__name__).info("Added preferred buy to stock item %s", stock_item_id)
-    return no_content()
-
-
-# Static `reorder` is registered alongside the dynamic `<preferred_buy_id>`
-# rule; Werkzeug prefers the more-specific static path, so PATCH .../reorder
-# never collides with the per-row update route.
-@STOCK_ITEM_ROUTER.route("<stock_item_id>/preferred-buys/reorder", methods=["PATCH"])
-@has_request_body(ReorderPreferredBuysRequest)
-def reorder_preferred_buys(stock_item_id: UUID):
-    _Handler = get_container().inject(PreferredBuyHandler)
-    _Request: ReorderPreferredBuysRequest = get_request_body()
-    _Response = _Handler.reorder(stock_item_id, _Request)
-    if _Response.stock_item_not_found:
-        return not_found(StockItem.__name__, stock_item_id)
     return no_content()
 
 

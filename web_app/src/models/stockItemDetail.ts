@@ -54,7 +54,6 @@ export type ListAddEvent = {
 export type PreferredBuy = {
     preferred_buy_id: string;
     label: string;
-    position: number;
 };
 
 // FU-213 — everyday "what this cost me" price points. Money-gated at the UI.

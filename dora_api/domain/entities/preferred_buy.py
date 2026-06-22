@@ -13,16 +13,15 @@ class PreferredBuy(BaseEntity):
     The everyday-user counterpart to the power-user `Product` overlay: a short
     label the user types (e.g. "Vitasoy Oat Milky 1L") to remember a favourite
     buy and surface it as a shopping-list hint. Deliberately **separate** from
-    `Product` — no price, SKU, merchant, or validation, and never gated by the
-    products or money features. Ordered per stock item by `position`.
+    `Product` — no price, SKU, store, or validation, and never gated by the
+    products or money features. **Unordered** — the SPA sorts client-side
+    case-insensitively by label (FU-225 dropped the manual reorder column).
     """
     stock_item_id: UUID
     label: str
-    position: int
     created_at: datetime
 
     class Fields(BaseEntity.Fields):
         STOCK_ITEM_ID = "stock_item_id"
         LABEL = "label"
-        POSITION = "position"
         CREATED_AT = "created_at"

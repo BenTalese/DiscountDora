@@ -6,6 +6,14 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Preferred buys are alphabetical, no manual order (FU-225, 2026-06-18).** The round-3
+  stock-item-detail polish dropped the manual reorder UI; the backend now matches. The
+  `PreferredBuy.position` column was dropped (migration `b5d8a2f4c9e7`), the
+  `PATCH /stock-items/<id>/preferred-buys/reorder` endpoint was removed, and the SPA's
+  `reorderPreferredBuysAsync` method went with it. Server- and client-side both sort
+  case-insensitively by label.
+
+### Changed
 - **API: naive datetimes serialize as UTC (2026-06-18).** `DoraJSONProvider`
   now tags timezone-naive `datetime` values with a trailing `Z` on the way
   out. SQLite strips tzinfo from `DateTime(timezone=True)` columns on

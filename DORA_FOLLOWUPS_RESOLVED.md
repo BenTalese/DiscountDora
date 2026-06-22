@@ -10,6 +10,37 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-225 — Deprecate `PreferredBuy.position` + reorder endpoint
+- **Raised:** 2026-06-18 (Stock-pages feedback round 3)
+- **Type:** deferred job
+- **What:** Round-3 dropped the manual reorder UI on preferred buys (SPA now
+  sorts alphabetically client-side). The backend still carried the `position`
+  column on the table and exposed `PATCH /stock-items/{id}/preferred-buys/reorder`
+  + `stockItemApi.reorderPreferredBuysAsync` on the SPA's API service. Nothing
+  called them anymore.
+- **State note:** 2026-06-18 — Dropped end-to-end. Backend:
+  `PreferredBuy.position` removed from the entity, table mapping, and detail
+  DTO; sort is now alphabetical (case-insensitive label) server-side, matching
+  the SPA. The `reorder` route + handler method gone. New Alembic migration
+  `b5d8a2f4c9e7_20260618_drop_preferred_buy_position.py` drops the column.
+  SPA: `reorderPreferredBuysAsync` removed from `stockItemApiService`,
+  `position` removed from `PreferredBuy` in `models/stockItemDetail.ts`.
+  vue-tsc + lint clean. **Pytest not run (same standing posture as FU-189c /
+  FU-223 — bundle on the next Python-equipped session).**
+
+## [RESOLVED] FU-189b — Charter coverage table for Stores CRUD + image upload page
+- **Raised:** 2026-06-18 (Phase E rename)
+- **Type:** doc gap
+- **What:** Phase E landed without flipping the per-surface feedback-coverage
+  rows in `PROPOSAL_PRODUCTS_AS_OVERLAY.md` for the now-built Stores admin
+  page.
+- **State note:** 2026-06-18 — Flipped L184 ("Link button as merchant logo")
+  from TRACKED → ADDRESSED, citing the user-uploaded `StoreLogo` with
+  hash-swatch fallback rendered on ProductChip / StockItemDetailPage linked-
+  products / MyProductsPage / Stores admin grid. L157 (the parallel "merchant
+  vs data-provider conflation" row) was already ADDRESSED in the same table.
+  No code change — proposal-doc edit only.
+
 ## [RESOLVED] FU-024 — A7 leftovers: dead banner CSS + wider footer adoption
 - **Raised:** 2026-06-05 (A7)
 - **Type:** leftover

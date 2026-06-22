@@ -421,7 +421,7 @@ owned by a named proposal/FU.
 | L166-168 | "Cannot save / quick-add / link: Extra inputs not permitted" | COMPANION + ingestion | save-from-search becomes a companion→ingestion action; Dora endpoints refactored under ingestion |
 | L169 | Old (bigger, centred) save button | COMPANION | |
 | L170 | %off label more obvious / card styling | COMPANION | |
-| L184 | Link button as merchant logo | TRACKED | FU-189 (user-uploaded store images) for the surfaces that stay |
+| L184 | Link button as merchant logo | ADDRESSED | Phase E landed user-uploaded store images on `StoreLogo` with a hash-swatch + initial fallback (zero shipped logos). Rendered on `ProductChip`, `StockItemDetailPage` linked-products, `MyProductsPage` cards, and the Stores admin grid. |
 
 ### Price History (stays in Dora — §4)
 | L | Bullet | Status | Where |

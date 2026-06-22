@@ -137,6 +137,7 @@ export default class StockItemApiService {
             unit: string;
             observed_at?: string;
             store_id?: string | null;
+            pack_count?: number | null;
         },
     ): Promise<void> =>
         await this.httpClient.post<void>(

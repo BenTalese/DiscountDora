@@ -6,6 +6,32 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Multipack prices (FU-227 follow-up, 2026-06-23).** The PriceEntry widget
+  gains an "Add pack count (multipack)" disclosure — enter `$4.20`, `125g`
+  each, count `4` and the obs is stored as `total_measure=500g` with
+  `pack_count=4`. The detail-page obs list now reads "$4.20 for 4 × 125g"
+  instead of "500g flat". Shopping-list harvest at `/finish` inherits the
+  multipack context from the linked product.
+- **US unit pricing (FU-227 follow-up).** New install setting
+  `unit_pricing_locale` (default `AU`, optional `US`). Same observation
+  shows as `$2.00 / L` under AU and `$1.89 / qt` under US — the AU `/100ml`
+  vs `/L` flip becomes the US `/fl oz` vs `/qt` flip; `/100g` vs `/kg`
+  becomes `/oz` vs `/lb`. Compute math is locale-independent; only the
+  rendered denominator changes. Admin toggles via `PATCH /api/app-settings`.
+
+### Changed
+- **"Your prices" feature complete (FU-227, 2026-06-22).** All 8 chunks of the
+  pricing-system reassessment shipped end-to-end: shared unit-conversion helper,
+  folded observation shape with store + line-provenance FK, the shared
+  `PriceEntry` widget (used by the row "log a price" button + detail-page widget
+  + shopping-line harvest), server-derived median baseline + "paying more than
+  usual" chip, shopping-line prefill, `/finish` harvest, "Receipt" relabel,
+  bottom-sheet Full History, per-product Price-History observation overlay, and
+  removal of the ingestion → observation path (observations are now in-app
+  input only). Adds a new standing engineering rule R-017: features land with
+  seed coverage in the same unit of work.
+
+### Added
 - **"Full history" price chart for a stock item (FU-227 chunk 6, 2026-06-22).**
   The "Your prices" widget's **Full history** button now opens a bottom-sheet
   chart that overlays the prices you've logged ("your data", solid line + dots)

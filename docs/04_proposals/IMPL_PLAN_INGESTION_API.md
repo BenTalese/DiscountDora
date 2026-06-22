@@ -61,16 +61,17 @@ reversible, single head. Backend-heavy → strong e2e; the keys page + price vie
 
 ### C-10.2 — `POST /api/ingest` — schema + mapping + dedup + idempotency + share with `create_product`
 **Delivers:** the contract itself (proposal §2.2-2.4, §2.7).
-- **Backend:** the batched payload model (`extra="forbid"`; products/offers/price_observations,
-  each with `source`); per-record validation; **`Idempotency-Key`** store (small table w/ TTL,
-  re-send = no-op); the **upsert/dedup mapping** — products by (source+merchant+stockcode|name),
-  **offers append a `ProductHistoricOffer` + move `current_offer`** (fixing the create_product
-  gap), append-only dedup by (product+source+observed_at+price); a **`source` string column** on
-  historic offers (+ observations); the per-record **result DTO** `{accepted, skipped, failed[]}`
-  (a bad record never fails the batch); **sync** commit. **Refactor `create_product` to reuse the
-  same mapping** (one offer-append path — R-003). `price_observations`: implement products+offers
-  fully; add a minimal `PriceObservation` table only if item-level points are pushed (proposal §5
-  open).
+- **Backend:** the batched payload model (`extra="forbid"`; products/offers, each with `source`);
+  per-record validation; **`Idempotency-Key`** store (small table w/ TTL, re-send = no-op); the
+  **upsert/dedup mapping** — products by (source+merchant+stockcode|name), **offers append a
+  `ProductHistoricOffer` + move `current_offer`** (fixing the create_product gap), append-only
+  dedup by (product+source+observed_at+price); a **`source` string column** on historic offers;
+  the per-record **result DTO** `{accepted, skipped, failed[]}` (a bad record never fails the
+  batch); **sync** commit. **Refactor `create_product` to reuse the same mapping** (one
+  offer-append path — R-003). **FU-227 chunk 7 (2026-06-22):** `price_observations[]` was
+  removed from the contract — observations are in-app input only (Idea A); producers that want
+  to push item-level points should publish them as `offers[]` (the same historic-offer
+  substrate the read-time union already covers).
 - **Migrations:** `source` column(s), `IdempotencyKey` table, (maybe) `PriceObservation`.
 - **Risk:** Medium-high — the core mapping + dedup + idempotency; correctness of "changed price →
   one new point." **Close-gate:** R-003 (shared mapping; `create_product` + `/ingest` one path),

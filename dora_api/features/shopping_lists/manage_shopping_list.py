@@ -342,11 +342,12 @@ class FinishShoppingListHandler:
                 products_by_id.get(line.selected_product_id)
                 if line.selected_product_id else None
             )
-            total_price, total_measure, unit = harvest_observation_fields(
+            total_price, total_measure, unit, pack_count = harvest_observation_fields(
                 unit_price=unit_price,
                 quantity=line.quantity,
                 size_value=product.size_value if product else None,
                 size_unit=product.size_unit if product else None,
+                product_pack_count=product.pack_count if product else None,
             )
             self.repository.add(StockItemPriceObservation(
                 stock_item_id=line.stock_item_id,
@@ -357,6 +358,7 @@ class FinishShoppingListHandler:
                 store_id=line.purchased_store_id,   # A2 — where you bought it
                 shopping_list_line_id=line.id,      # A4 — provenance via FK
                 created_at=now,
+                pack_count=pack_count,              # FU-227 multipack
             ))
 
 

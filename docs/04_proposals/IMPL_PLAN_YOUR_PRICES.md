@@ -718,18 +718,31 @@ R-003 (the in-app POST endpoint is now the sole observation writer).
 ## 5. Feedback coverage (CLAUDE.md cross-check rule)
 
 Mapped against [`docs/02_feedback/Feedback _ Fixes - as of [06-Jun-2026].md`](../02_feedback/Feedback%20_%20Fixes%20-%20as%20of%20%5B06-Jun-2026%5D.md).
-The bullets that motivated this work (pricing, observation entry, "what does this
-usually cost me", "warn me when it jumped", shopping-line prefill, bottom-sheet
-chart). Filled at chunk 8 close-gate after a re-read; the live mapping table goes
-here so a reviewer can audit "is anything missing?" at a glance.
+A flat table — every bullet that motivated the FU-227 work, plus the explicit
+out-of-scope deferrals so a reviewer can audit "is anything missing?" at a glance.
 
-| Bullet | Chunk(s) | Notes |
-|---|---|---|
-| L226 (chart from bottom not side) | 6 | bottom-sheet primitive |
-| (to fill at close-gate — pricing/observation bullets) | 3, 4, 5 | inline widget + harvest + prefill |
+| Bullet | Status | Chunk(s) | Notes |
+|---|---|---|---|
+| **L226** — "chart from bottom not side" (bottom-sheet for Price History) | ADDRESSED | 6 | `PriceHistoryBottomSheet.vue` (Quasar `q-dialog position="bottom"`, full-width on mobile). Opens from the YourPricesWidget's `[Full history]` button — exactly the surface the user described. |
+| **L225** — "Price history graph does not extend all the way to the edge of the box" | OUT OF SCOPE | — | Per the plan §6, this is FU-214 (Price-History page bug pass). Not regressed by chunk 6 (we added series + baseline-line; the box-fit bug is separate). |
+| **L226 (related)** — recipe estimated cost via product + receipt reconciliation | PARTIAL | 5 | Chunk 5 ships the harvest path (line → observation), which is the *data layer* L254 wants for downstream recipe-cost numbers. The recipe-cost rebase itself is FU-216 (LC-3 absorbs the silent shift). |
+| **L419** — "Shopping mode should allow you to optionally add or edit pricing as you go. The shopping list BECOMES the receipt." | ADDRESSED | 5 + I1 | Chunk 5 ships prefill-and-persist (the line shows the prefilled price labelled with its source; first edit persists) + the "Receipt" relabel (I1, money-gated). |
+| **L420** — "close the loop: completing a shopping list (after review) should allow you to quickly restock all items… treating the shopping list as the receipt" | ADDRESSED | 5 + I1 | Chunk 5 lands the harvest-on-`/finish` path: ticked priced lines → one observation per line on the linked stock item, idempotent via LC-1 partial UNIQUE. The Receipt relabel (I1) reframes "Done" as "Receipt" once money is on. **E3 revised** also removed the dead `PATCH status=done` branch so `/finish` is the only completion path. |
+| **L226 (graph orientation)** — already a feedback chip-favoured pattern | ADDRESSED | 6 | Bottom-sheet uses `position="bottom"`, drags up; legend reads top-down. The widget's `[Full history]` is the discoverability entry point. |
+| **L130** — "highlight/style the cheaper option" | NOT THIS WORK | — | FU-227 doesn't touch the linked-products tab's pricing visuals; that's owned by the products/cart proposal. Mentioned here so a reviewer doesn't flag the omission. |
+| (implicit "what does this usually cost me?") | ADDRESSED | 3 + 4 | The C5 inline widget ("Usually $X / L · about average"), chunk-4 baseline math (median, 1.15×, min-3, trailing 12 months), LC-2 source-blind framing. |
+| (implicit "warn me when something jumped") | ADDRESSED | 4 | The above-1.15× chip on the widget — strictly greater than `baseline × 1.15`; for the seed dataset, olive oil's $12/500ml latest fires it (`$24/L > $17.50/L × 1.15`). |
+| (implicit "log what I paid quickly") | ADDRESSED | 3 + 5 | Shared `PriceEntry` widget (F1) — shelf-price mode on the row button + detail; harvest mode at `/finish`. Last-time prefill (F2). |
 
-`docs/02_feedback/COVERAGE_GAPS.md` updated at close-gate to flip the now-covered
-bullets from gap → covered.
+**Charter check (Effortless + Anti-creep, the tiebreak):** the visible
+affordance is **one row button + one widget**; the rest is invisible
+plumbing. No new pages, no new routes, no new tabs. The bottom-sheet is
+*pull, not push*. Above-usual chip is *one chip, one threshold*, never
+adjustable per item.
+
+`docs/02_feedback/COVERAGE_GAPS.md` will be updated separately by this
+chunk's seed/coverage sweep to flip the L420/L419/L226 entries from
+gap → covered.
 
 ---
 

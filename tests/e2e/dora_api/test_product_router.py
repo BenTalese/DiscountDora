@@ -23,7 +23,7 @@ def test__create_product__CreatingProductWithAllAttributes__ProductCreated(api):
         image = None,  # TODO: Grab a random image, maybe dora icon from repo
         is_active = True,
         is_available = True,
-        merchant_name = "Woolworths",
+        store_name = "Woolworths",
         merchant_stockcode = "50332BA",
         name = "Banana Mangoes",
         price_now = 4.5,
@@ -48,7 +48,7 @@ def test__create_product__CreatingProductWithIncorrectDataTypes__CannotBeDeseria
         "image": 234,
         "is_active": "AAA",
         "is_available": "BBB",
-        "merchant_name": True,
+        "store_name": True,
         "merchant_stockcode": 2.3,
         "name": 2.4,
         "price_now": "CCC",
@@ -69,7 +69,7 @@ def test__create_product__CreatingProductWithIncorrectDataTypes__CannotBeDeseria
             "image": ["Input should be a valid string"],
             "is_active": ["Input should be a valid boolean, unable to interpret input"],
             "is_available": ["Input should be a valid boolean, unable to interpret input"],
-            "merchant_name": ["Input should be a valid string"],
+            "store_name": ["Input should be a valid string"],
             "merchant_stockcode": ["Input should be a valid string"],
             "name": ["Input should be a valid string"],
             "price_now": ["Input should be a valid number, unable to parse string as a number"],
@@ -89,7 +89,7 @@ def test__create_product__CreatingProductWithOnlyRequiredAttributes__ProductCrea
     _ProductRequest = CreateProductRequest(
         is_active = True,
         is_available = True,
-        merchant_name = "Woolworths",
+        store_name = "Woolworths",
         name = "Milo Chocolate Powder",
         price_now = 4.5,
         price_was = 10.5,
@@ -109,7 +109,7 @@ def test__create_product__PriceNowAtZeroBoundary__IsBadRequest(api):
     _ProductRequest = {
         "is_active": True,
         "is_available": True,
-        "merchant_name": "Woolworths",
+        "store_name": "Woolworths",
         "name": "Boundary Price Product",
         "price_now": 0,
         "price_was": 10.5,
@@ -129,7 +129,7 @@ def test__create_product__PriceWasAtZeroBoundary__IsBadRequest(api):
     _ProductRequest = {
         "is_active": True,
         "is_available": True,
-        "merchant_name": "Woolworths",
+        "store_name": "Woolworths",
         "name": "Boundary Price Product",
         "price_now": 4.5,
         "price_was": 0,
@@ -149,7 +149,7 @@ def test__create_product__PriceNowJustAboveZeroBoundary__ProductCreated(api):
     _ProductRequest = CreateProductRequest(
         is_active=True,
         is_available=True,
-        merchant_name="Woolworths",
+        store_name="Woolworths",
         name="Boundary Price Product Above Zero",
         price_now=0.001,
         price_was=10.5,
@@ -167,7 +167,7 @@ def test__create_product__SizeValueAtZeroBoundary__IsBadRequest(api):
     _ProductRequest = {
         "is_active": True,
         "is_available": True,
-        "merchant_name": "Woolworths",
+        "store_name": "Woolworths",
         "name": "Boundary Size Product",
         "price_now": 4.5,
         "price_was": 10.5,
@@ -187,7 +187,7 @@ def test__create_product__EmptyStringOnRequiredField__IsBadRequest(api):
     _ProductRequest = {
         "is_active": True,
         "is_available": True,
-        "merchant_name": "",
+        "store_name": "",
         "name": "Some Product",
         "price_now": 4.5,
         "price_was": 10.5,
@@ -200,14 +200,14 @@ def test__create_product__EmptyStringOnRequiredField__IsBadRequest(api):
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert 'merchant_name' in _Response.json()['errors']
+    assert 'store_name' in _Response.json()['errors']
 
 
 def test__create_product__EmptyStringOnOptionalField__IsBadRequest(api):
     _ProductRequest = {
         "is_active": True,
         "is_available": True,
-        "merchant_name": "Woolworths",
+        "store_name": "Woolworths",
         "name": "Some Product",
         "price_now": 4.5,
         "price_was": 10.5,
@@ -228,7 +228,7 @@ def test__create_product__MerchantAlreadyExists__MerchantIsReused(api):
     _FirstProductRequest = CreateProductRequest(
         is_active=True,
         is_available=True,
-        merchant_name="ReuseMerchant",
+        store_name="ReuseMerchant",
         name="First Product",
         price_now=4.5,
         price_was=10.5,
@@ -239,7 +239,7 @@ def test__create_product__MerchantAlreadyExists__MerchantIsReused(api):
     _SecondProductRequest = CreateProductRequest(
         is_active=True,
         is_available=True,
-        merchant_name="ReuseMerchant",
+        store_name="ReuseMerchant",
         name="Second Product",
         price_now=3.0,
         price_was=6.0,
@@ -254,9 +254,9 @@ def test__create_product__MerchantAlreadyExists__MerchantIsReused(api):
     _FirstProduct = requests.get(f'{base_route}?filter=name:eq:First Product').json()['items'][0]
     _SecondProduct = requests.get(f'{base_route}?filter=name:eq:Second Product').json()['items'][0]
 
-    assert _FirstProduct['merchant_id'] == _SecondProduct['merchant_id']
-    assert _FirstProduct['merchant_name'] == 'ReuseMerchant'
-    assert _SecondProduct['merchant_name'] == 'ReuseMerchant'
+    assert _FirstProduct['store_id'] == _SecondProduct['store_id']
+    assert _FirstProduct['store_name'] == 'ReuseMerchant'
+    assert _SecondProduct['store_name'] == 'ReuseMerchant'
 
 
 def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):
@@ -269,7 +269,7 @@ def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):
         'errors': {
             'is_active': ['Field required'],
             'is_available': ['Field required'],
-            'merchant_name': ['Field required'],
+            'store_name': ['Field required'],
             'name': ['Field required'],
             'price_now': ['Field required'],
             'price_was': ['Field required'],
@@ -294,7 +294,7 @@ def test__create_product__ProductAlreadyExists__AppendsHistoricOffer(api):
         "image": None,
         "is_active": True,
         "is_available": True,
-        "merchant_name": "Woolworths",
+        "store_name": "Woolworths",
         "merchant_stockcode": unique_stockcode,
         "name": f"FU217-{uuid.uuid4().hex[:6]}",
         "price_now": 4.5,
@@ -326,7 +326,7 @@ def test__create_product__ExtraAttributes__IsBadRequest(api):
         "image": None,
         "is_active": True,
         "is_available": True,
-        "merchant_name": "WoolWorThS",
+        "store_name": "WoolWorThS",
         "merchant_stockcode": "50332ba",
         "name": "Banana Mangoes",
         "price_now": 4.5,
@@ -362,7 +362,7 @@ def test__create_product__EmptyRequest__IsRequiredInputsValidationFailure(api):
         'errors': {
             'is_active': ["Field required"],
             'is_available': ["Field required"],
-            'merchant_name': ["Field required"],
+            'store_name': ["Field required"],
             'name': ["Field required"],
             'price_now': ["Field required"],
             'price_was': ["Field required"],
@@ -388,8 +388,8 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
     assert _Product['has_image'] is False
     assert _Product['is_active'] is True
     assert _Product['is_available'] is True
-    assert is_valid_uuid(_Product['merchant_id'])
-    assert _Product['merchant_name'] == 'Woolworths'
+    assert is_valid_uuid(_Product['store_id'])
+    assert _Product['store_name'] == 'Woolworths'
     assert _Product['merchant_stockcode'] == '50332BA'
     assert _Product['name'] == 'Banana Mangoes'
     assert _Product['price_now'] == 4.5
@@ -404,8 +404,8 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
         'has_image',
         'is_active',
         'is_available',
-        'merchant_id',
-        'merchant_name',
+        'store_id',
+        'store_name',
         'merchant_stockcode',
         'name',
         'price_now',

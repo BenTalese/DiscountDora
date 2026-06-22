@@ -39,6 +39,11 @@ class AddPriceObservationRequest(BaseModel):
     unit: str = Field(min_length=1, max_length=32)
     observed_at: datetime | None = None
     store_id: UUID | None = None
+    # Multipack metadata (FU-227 follow-up). None ⇒ single pack /
+    # free-weight (common case). The math doesn't read pack_count —
+    # `total_measure` is still the TOTAL — pack_count is purely the
+    # "4 × 125g" display context so we don't lose it on entry.
+    pack_count: int | None = Field(default=None, gt=0)
 
 
 @dataclass(slots=True)
@@ -79,6 +84,7 @@ class PriceObservationHandler:
             store_id=request.store_id,
             shopping_list_line_id=None,  # manual entries have no provenance line
             created_at=datetime.now(timezone.utc),
+            pack_count=request.pack_count,
         ))
         self.repository.save_changes()
         return PriceObservationMutationResponse()

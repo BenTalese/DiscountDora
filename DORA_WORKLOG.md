@@ -9,6 +9,363 @@ next.
 
 ---
 
+## 2026-06-23 — FU-227 follow-up: multipack `pack_count` + US locale
+
+**Session goal:** two user-raised gaps from the FU-227 retro — supermarket-style
+multipack pricing (the "Activia 125g × 4 pack" example) handled properly with a
+schema column, and US-locale display so the same data shows as `/qt` or `/lb`
+instead of `/100ml` / `/100g`.
+
+**Schema (migration `d7b3e8f2a5c4`, off head `c6e9a4b8d5f2`):**
+- `Product.pack_count INTEGER NULL` — multipack metadata. ``size_value``
+  keeps the existing convention of being the TOTAL across the bundle (no
+  backfill needed); ``pack_count`` is informational so the obs/row UI can
+  render "4 × 125g" instead of "500g flat".
+- `StockItemPriceObservation.pack_count INTEGER NULL` — same on the user's
+  observation row.
+- `AppSetting.unit_pricing_locale VARCHAR(8) NOT NULL DEFAULT 'AU'` —
+  flips per-unit display between AU shelf convention (``/100ml``/``/100g``/
+  ``/L``/``/kg``) and US (``/fl oz``/``/oz``/``/qt``/``/lb``). Compute
+  math is locale-independent.
+- Postgres + SQLite both ``ADD COLUMN NULL`` without a rewrite; existing
+  rows pick up the locale default on read.
+
+**Domain — `units.py`:**
+- `display_denominator_for` now takes an optional `locale` kwarg.
+  AU/US rules live in private helpers; the public function dispatches.
+  ``SUPPORTED_PRICING_LOCALES = frozenset({"AU", "US"})``.
+- US thresholds in canonical units: 1 qt = 0.946 L (volume flip),
+  1 lb = 0.4536 kg (mass flip). Below the flip → /fl oz / /oz.
+- All conversion factors precomputed from the conversion table so the
+  math stays consistent with the rest of the unit system.
+
+**Domain — `your_prices.py`:**
+- `_locale_from_repo(repo)` helper — reads AppSetting once per build_* call,
+  falls back to "AU" if no row exists.
+- Every `build_*` (item, product, stock-item series, product observation
+  series) now accepts `locale: str | None = None` and resolves via the
+  helper when not passed. Server-side single source.
+- `_display_for_series` takes the locale too; chart axes flip accordingly.
+
+**Harvest — `_line_price.py` / `manage_shopping_list.py`:**
+- `harvest_observation_fields` now returns a 4-tuple
+  `(total_price, total_measure, unit, pack_count)`. Computes
+  `obs.pack_count = product.pack_count × quantity` when the product has
+  pack_count set — so "$4.20 for 1 box of 4-pack yoghurt at qty 2" lands as
+  one observation with `total_measure=1000g, pack_count=8`.
+- `/finish` harvest writes the new field through.
+- `seed.py` updated call site + helper signature.
+
+**Write path — `price_observations.py`:**
+- `AddPriceObservationRequest` accepts optional `pack_count: int | None = Field(default=None, gt=0)`.
+- Persists to the new column.
+
+**Read path — `get_stock_item_detail.py`:**
+- `PriceObservationDto.pack_count` exposed.
+- (Locale is read once in `your_prices.build_your_prices_for_item`; the
+  handler passes it through transparently.)
+
+**Settings — `update_app_settings.py` / `get_app_settings.py`:**
+- `PATCH /api/app-settings` accepts `unit_pricing_locale` ("AU"/"US"),
+  validated against `units.SUPPORTED_PRICING_LOCALES`.
+- `GET /api/app-settings` exposes it on the DTO.
+
+**SPA:**
+- `models/stockItemDetail.ts` — `PriceObservation.pack_count: number | null`.
+- `services/api/stockItemApiService.ts` — `addPriceObservationAsync` accepts
+  `pack_count?: number | null`.
+- `components/dora/PriceEntry.vue` — new "Add pack count (multipack)"
+  disclosure button. When the user enters a count > 1, the "Size" field
+  label flips to "Size each" and the form computes
+  `total_measure = count × per_pack_size` at submit time. Live preview
+  shows "4 × 125g = 500g total". Submit emits `pack_count` (null when
+  not multipack).
+- `YourPricesWidget.vue` / `StockItemRowPriceButton.vue` /
+  `StockItemDetailPage.vue` — all `submit` plumbing widened to include
+  `pack_count`.
+- `StockItemDetailPage.vue` — obs list now renders "4 × 125g" when
+  `pack_count` is set, "500g" otherwise. Trailing-zero trim
+  (`500.0` → `500`) for readability.
+
+**Seed:**
+- New helper kwarg: `price_obs(..., pack_count=None)`.
+- One multipack obs added to butter: `$4.20, 500g, pack_count=4`
+  (an "Activia-style 4×125g yoghurt" purchase). Pushes butter from
+  2 obs (below MIN_SAMPLES) to 3 obs (baseline-ready) — exercises both
+  the multipack render AND the previously-empty-state widget path.
+
+**Tests — `test_your_prices.py` (+4 cases):**
+- `pack_count` round-trips on the obs DTO.
+- `pack_count=0` is rejected.
+- US locale flips mass at ≥1 lb → `/lb` (`$10/kg ≈ $4.54/lb`).
+- US locale below 1 lb → `/oz` (`$20/kg ≈ $0.57/oz`).
+- All 20 existing your_prices tests still pass (locale defaults to AU).
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- `quasar build` — succeeds end-to-end.
+- Full pytest suite — **502 passed / 0 failed / 1 warning**
+  (was 498/0 before this work; +4 = the new your_prices cases).
+- End-to-end AU+US locale walk verified all 5 seeded items render the
+  right denominator + value in each locale:
+  | Item | AU | US |
+  |---|---|---|
+  | Milk | $2.00 / L | $1.89 / qt |
+  | Olive Oil | $1.75 / 100ml | $0.52 / fl oz |
+  | Eggs | $0.62 / ea | $0.62 / ea |
+  | Butter | $2.60 / 100g (4 × 125g obs) | $0.74 / oz |
+  | Coffee | -/kg (n<3) | $9.98 / lb (current shows in /lb) |
+
+**Engineering-standards close-gate:**
+- R-001 — multipack disclosure inside the existing shared `PriceEntry`,
+  not a new component. obs-list helper inline (one caller; extract on a
+  third use).
+- R-002 — no new colours; existing tokens reused.
+- R-003 — display denominator + locale resolution both server-side. SPA
+  renders `baseline_unit` straight; never decides AU vs US itself.
+- R-005/006/015 — migration uses `batch_alter_table` for SQLite,
+  Postgres-compatible `ADD COLUMN NULL`. Server-default on the locale
+  column so existing rows pick up "AU" on read.
+- R-007 — kept tight: the producer/ingestion side is FU-232 (logged),
+  not done here.
+- R-008 — comments only where the WHY isn't obvious (canonical-vs-display
+  separation; multipack semantics; carve-out for the "per-pack vs total"
+  field).
+- R-017 — seed updated in the same unit of work (new multipack obs on
+  butter exercises the new state matrix). The rule held.
+
+**Ledger:** new **FU-232** — companion / ingestion contract still needs
+to accept `pack_count` on `_ProductIn`. Logged with the migration path
+(producers currently flatten `size_value` to total).
+
+**Next:** browser walk by the user. The visible changes:
+- Stock-item detail obs list renders "4 × 125g" on butter.
+- `[Log a price]` dialog has the new "Add pack count (multipack)"
+  disclosure.
+- Switching install locale to "US" via Settings flips every "$ / L"
+  / "$ / 100ml" / "$ / kg" / "$ / 100g" surface to "$ / qt" / "$ / fl oz"
+  / "$ / lb" / "$ / oz" — chart axes, widget headlines, sidecar
+  entries all in sync.
+
+---
+
+## 2026-06-22 — FU-227 chunk 8: CLOSE-GATE — R-017 promotion, coverage table, FU-227 → resolved
+
+**Session goal:** the close-gate for FU-227. Promote the new seed-data
+discipline rule to a standing rule, fill the plan's feedback coverage table,
+flip the coverage-gaps audit log, move FU-227 from open → resolved, and
+verify everything one more time on a fresh seed.
+
+**`docs/01_charter/ENGINEERING_STANDARDS.md` — new standing rule:**
+- **R-017 — Seed-data discipline: features land with seed coverage.** Any
+  diff that adds/modifies/removes a feature also updates `seed.py` in the
+  same unit of work so a fresh `DORA_ALLOW_DESTRUCTIVE` reset yields data
+  exercising the new state matrix. Pure refactors / bug fixes / explicit
+  removals are carve-outs (named in the worklog). The "Your prices" widget
+  matrix is cited as the canonical example — without the chunk-2 seed it
+  would have rendered the empty state on every item on every dev env.
+- **ADR-012** — Seed-data discipline accepted; promotes R-017. The user
+  asked for this to be a standing rule across every prompt; the FU-227
+  build was the prompt that crystallised it.
+
+**`docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` §5 — feedback coverage table:**
+- Filled the flat table per CLAUDE.md's cross-check rule. Mapped:
+  - **L226** (chart from bottom not side) → **ADDRESSED, chunk 6**
+    (`PriceHistoryBottomSheet.vue`, `q-dialog position="bottom"`).
+  - **L419** (shopping mode allows pricing as you go, list becomes receipt)
+    → **ADDRESSED, chunk 5 + I1**.
+  - **L420** (close the loop / completing list restocks all) →
+    **ADDRESSED, chunk 5 + I1**.
+  - Implicit "what does this usually cost me" + "warn me when it jumped"
+    → **ADDRESSED, chunks 3 + 4** (widget + above-1.15× chip).
+  - **L225** (Price-History box-fit bug) → **OUT OF SCOPE**, FU-214.
+  - **L130** (highlight cheaper option on linked-products tab) → **NOT THIS
+    WORK** — different proposal.
+- Added a "Charter check" footer (Effortless + Anti-creep): one row button,
+  one widget, bottom-sheet is pull-not-push, chip is one threshold.
+
+**`docs/02_feedback/COVERAGE_GAPS.md` — audit log:**
+- New entry: "2026-06-22 — FU-227 'Your prices' landed". Lists every
+  flipped bullet (L226 ADDRESSED, L419 ADDRESSED, L420 ADDRESSED) and the
+  L225 deferral, citing the chunk numbers.
+
+**Ledger:**
+- **FU-227** moved from `DORA_FOLLOWUPS.md` → `DORA_FOLLOWUPS_RESOLVED.md`
+  with a full state note (every chunk, what it shipped, what it left
+  behind: R-017, FU-228/229/230/231 as already-tracked spin-offs).
+- No new follow-ups from this chunk.
+
+**`CHANGELOG.md`** — added a "Changed" entry under [Unreleased] summarising
+the FU-227 closure + the R-017 promotion (user-visible framing).
+
+**Fresh-seed C5 state-matrix walk (verified post-seed, end-to-end):**
+
+| Item       | Baseline | Unit | Current | Above       | n | Store      | Sidecar |
+|------------|----------|------|---------|-------------|---|------------|---------|
+| Milk       | 2.0      | L    | 2.0     | False       | 5 | Coles      | **2**   |
+| Olive Oil  | 17.5     | L    | 24.0    | **True** ←  | 4 | –          | 1       |
+| Eggs       | 0.625    | ea   | 0.625   | False       | 3 | Woolworths | 0       |
+| Butter     | None     | –    | 27.2    | False       | 2 | –          | 0       |
+| Coffee     | None     | –    | 22.0    | False       | 1 | Aldi       | 1       |
+
+Every C5 widget state covered:
+- Baseline-ready, about-average (Milk, Eggs).
+- Baseline-ready, above-usual chip fires (Olive Oil — $24/L > $17.50/L × 1.15).
+- Count dimension (Eggs — `ea`).
+- < MIN_SAMPLES empty state (Butter n=2, Coffee n=1).
+- Store-tagged (Milk/Eggs/Coffee).
+- **LC-2 offers sidecar populating end-to-end** (Milk 2 offers, Olive Oil 1,
+  Coffee 1) — confirms the chunk-6 `_linked_products` noload fix (FU-230)
+  works against the real seed, not just the unit tests.
+
+**Verification:**
+- `vue-tsc -p tsconfig.json --noEmit` — clean.
+- `npm run lint` — clean.
+- `quasar build` — succeeds end-to-end.
+- Full pytest suite — **441 passed / 54 failed / 1 warning**. The 54 are all
+  FU-228 Phase E `merchant→store` rename rot (unchanged across chunks 1-8).
+  **Zero regressions** vs the chunk-6 + chunk-7 baseline; cumulative new
+  passing across FU-227 = +90 tests (units 49, observations +5, baseline 13,
+  finish-harvest 7+, price-history 6, stock-item-price-history 6, ingest
+  rejection 1, your_prices +13 etc — exact split per chunk worklog entries).
+- Backend smoke confirmed the prefill + your_prices + sidecar shape on
+  every seeded item end-to-end.
+
+**Browser-verify status:** **left to the user** at this checkpoint per
+preference. Walking-paper for the user-side check (paste into a fresh
+session if needed):
+1. Stock overview → every money-on item shows the `mdi-cash-plus` row
+   button between spacer + expiry.
+2. Click the row button on **Milk** → dialog opens prefilled (`$2 / 1 L
+   @ Coles · from your last log`), live `$2.00 per L` preview, store
+   picker visible.
+3. Open **Milk** detail → widget shows "Usually $2.00 / L · about average
+   · Last seen $2.00 at Coles · Based on 5 prices", plus "Current shelf
+   prices · $1.55 / L at Coles · …" sidecar.
+4. Open **Olive Oil** detail → widget shows the **above-usual warning
+   chip** ("paying more than usual"), baseline $17.50/L, current $24/L.
+5. Open **Butter** detail → empty-state copy "Not enough price data yet —
+   log a few more.", current $27.20/kg.
+6. Click **[Full history]** on any item → bottom-sheet opens, chart
+   renders observations (solid) + offers (dashed) on one per-L axis,
+   "usually $X" baseline line visible.
+7. Build a shopping list with one priced line + finish it → check the
+   linked stock item's detail shows the harvested obs with "from <list>"
+   provenance chip.
+8. Status pill flips from "Done" → "Receipt" once money is on.
+
+**Engineering-standards close-gate (the actual gate):**
+- R-001..R-008 — no new violations in chunk 8; chunks 1-7 each closed their
+  own gates (see worklog entries above).
+- R-009..R-016 — N/A this chunk (docs-only edits).
+- **R-017 (new)** — promoted in this very chunk; ADR-012 documents the
+  decision. All future feature-touching prompts pick it up via the
+  CLAUDE.md load-into-every-session pattern.
+- R-007 — kept tight: no new code outside the four docs being closed out.
+- ADR evaluation — done. One ADR (ADR-012) added, one rule (R-017)
+  promoted.
+
+**FU-227 is COMPLETE.** The chain is intact: feedback → reconciled plan
+→ ratified handoff → 8-chunk impl plan → 8 chunks shipped + verified →
+coverage table filled → standing rule promoted → ledger resolved.
+
+**Next:** the user's own browser walk + however they'd like to verify
+the loop in the live app. Past FU-227, the open Phase F items are
+FU-210 tail, FU-214, FU-212, FU-180 (separate work units per the
+runbook). And FU-228 (Phase E test rot) is still waiting for a tidy-up
+sweep.
+
+---
+
+## 2026-06-22 — FU-227 chunk 7: remove ingestion → observation path (J1)
+
+**Session goal:** make observations an in-app-only substrate. The producer
+contract no longer accepts `price_observations[]`; the path is rejected at
+the request boundary so the rule is mechanically enforced.
+
+**Backend — `dora_api/features/ingestion/submit_ingestion_batch.py`:**
+- Deleted `_PriceObservationIn` (the input pydantic model).
+- Deleted `price_observations` field on `IngestBatchRequest`. `extra="forbid"`
+  was already there, so a payload still sending the field now returns a 400
+  without a single record being processed.
+- Deleted `_apply_observation` (the per-record handler — both the
+  `stock_item_ref` write-an-observation branch and the `product_ref`
+  fold-into-historic-offer branch).
+- Removed the call site in `handle()`.
+- Dropped `"price_observation"` from the `kind` Literal in `_AcceptedRecord`,
+  `_SkippedRecord`, `_FailedRecord`.
+- Dropped unused imports: `StockItemPriceObservation`, `model_validator`.
+- Updated the module docstring to reflect the new contract (products + offers
+  only; payload schema; rejection note).
+
+**Rationale (anchor — locked decision):** Idea A from PROPOSAL_PRODUCTS_AS_
+OVERLAY §2.5 — offers and observations are two separate substrates **unioned
+at read time, never converted**. The old `product_ref` observation branch
+was a quiet misuse: it just pushed a one-point historic offer under a
+different name. The proper way to express "I have a price point for product
+Y at time T" is an `offers[]` row — same substrate, same Price-History
+rendering, no semantic confusion. The `stock_item_ref` branch was a worse
+misuse: ingestion writing into the user's pantry record. Both are gone.
+
+**Tests:**
+- New `test__ingest__rejects_price_observations_field` — sends a payload
+  with the old shape; asserts **400** + "price_observations" / "extra" in
+  the error detail. Pins the contract removal so a future agent can't
+  quietly re-add the field without revisiting Idea A.
+
+**Docs:**
+- `docs/INGESTION_GUIDE.md` — removed the `price_observations[]` row from
+  the payload example, the table of fields, and the `stock_item_ref_not_uuid`
+  failure-code line. New "removed (FU-227 chunk 7)" callout explaining the
+  migration path (publish as `offers[]` instead).
+- `docs/04_proposals/PROPOSAL_INGESTION_API.md` §2.2 — payload now shows
+  products + offers only; added the J1 rationale block. §5 open question on
+  the observations table → marked **Resolved (FU-227 chunk 7)**.
+- `docs/04_proposals/IMPL_PLAN_INGESTION_API.md` C-10.2 — payload model
+  description updated to reflect the contract trim.
+
+**Verification:**
+- Smoke: `IngestBatchRequest(price_observations=[…])` raises (Pydantic
+  `extra="forbid"` rejection). Happy-path `IngestBatchRequest(products=[],
+  offers=[])` constructs cleanly.
+- `pytest tests/e2e/dora_api/test_ingest_batch.py::test__ingest__rejects_price_observations_field`
+  — **PASS** (along with the 3 auth tests that don't depend on the FU-228
+  `/api/merchants` route).
+- Full suite — **441 passed / 54 failed** (vs baseline before chunk 7
+  = 440 passed / 54 failed). My +1 = the new rejection test; **zero new
+  regressions**. All 54 failing tests are still the pre-existing FU-228
+  Phase E `merchant→store` rename rot (6 of them in `test_ingest_batch.py`
+  itself — they hit `/api/merchants` which 404s — entirely unrelated to
+  this chunk).
+
+**Engineering-standards close-gate:**
+- R-001 N/A (no UI).
+- R-002 N/A.
+- R-003 — observations now have a single writer surface (the in-app
+  `POST /stock-items/<id>/price-observations` + `/finish` harvest path).
+  Producer can no longer compete for this concept.
+- R-005/006/015 — no migration.
+- R-007 — kept tight: deleted only the observation path; left other ingest
+  branches (products/offers/store-mapping) untouched. Did not fix the
+  FU-228 rename rot in the same file's test sibling (still out of scope).
+- R-008 — minimal-imports clean (`model_validator` + `StockItemPriceObservation`
+  imports dropped along with their callers). Module docstring updated
+  inline rather than left stale.
+- No new ADR. Seed-data discipline rule still queued for chunk 8.
+
+**Ledger:** no new follow-ups; nothing spun off.
+
+**Next:** **FU-227 chunk 8** — the close-gate. Promote seed-data discipline
+to **R-017** in `ENGINEERING_STANDARDS.md`. Fill the plan §5 feedback
+coverage table. Browser walk of the C5 state matrix on the running app
+(visible cluster button position; widget render across the 5 seed items —
+baseline-ready Milk, above-usual Olive Oil, count-dim Eggs, < MIN_SAMPLES
+Butter/Coffee; finish-harvest round-trip). Move FU-227 from
+`DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md`.
+
+---
+
 ## 2026-06-22 — FU-227 chunk 6: "Full history" bottom-sheet + per-product observation overlay (D2 + H2 + F-3)
 
 **Session goal:** light up `[Full history]` on the YourPrices widget (C5b) and

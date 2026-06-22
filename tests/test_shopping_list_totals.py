@@ -14,8 +14,8 @@ from dora_api.features.shopping_lists.get_shopping_list_detail import (
 
 def _offer(price_now, price_was, *, is_selected=False):
     return LineProductOfferDto(
-        product_id=uuid4(), name="p", brand=None, merchant_id=uuid4(),
-        merchant_name="m", size=None, price_now=price_now, price_was=price_was,
+        product_id=uuid4(), name="p", brand=None, store_id=uuid4(),
+        store_name="m", size=None, price_now=price_now, price_was=price_was,
         is_selected=is_selected,
     )
 
@@ -32,8 +32,8 @@ def _line(*, quantity=1, is_ticked=False, actual_unit_price=None,
         stock_level_name=None, stock_location_id=None, stock_location_breadcrumb=[],
         quantity=quantity, is_ticked=is_ticked, selected_product_id=selected_product_id,
         sequence=0, added_via="manual", added_at=datetime(2026, 1, 1),
-        actual_unit_price=actual_unit_price, purchased_merchant_id=None,
-        purchased_merchant_name=None, offers=list(offers),
+        actual_unit_price=actual_unit_price, purchased_store_id=None,
+        purchased_store_name=None, offers=list(offers),
     )
 
 

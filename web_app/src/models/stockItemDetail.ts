@@ -72,6 +72,10 @@ export type PriceObservation = {
     store_name: string | null;
     shopping_list_line_id: string | null;
     shopping_list_name: string | null;
+    /** Multipack metadata (FU-227 follow-up). When set, the obs list
+     *  renders "4 × 125g" instead of "500g flat". Math is unaffected —
+     *  `total_measure` is still the TOTAL. */
+    pack_count: number | null;
 };
 
 // FU-227 chunk 3 — what the PriceEntry widget seeds itself with on open (F2).

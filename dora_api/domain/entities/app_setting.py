@@ -68,6 +68,13 @@ class AppSetting(BaseEntity):
     # "Set up in Settings" hint (R-014 reveal-and-disable). See
     # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
     product_search_url: str = ""
+    # FU-227 follow-up — the AU-shelf vs US-shelf display convention for
+    # per-unit prices. `"AU"` shows `/100ml`/`/100g`/`/L`/`/kg`/`/ea` with
+    # the flip at 1 L / 1 kg; `"US"` shows `/fl oz`/`/qt`/`/oz`/`/lb`/`/ea`
+    # with the flip at 1 qt / 1 lb. Compute math stays in canonical L/kg;
+    # only the display denominator changes. Default `"AU"` because Dora's
+    # built here and ships AU-first; admin can flip to `"US"` in Settings.
+    unit_pricing_locale: str = "AU"
 
     class Fields(BaseEntity.Fields):
         LLM_ENABLED = "llm_enabled"
@@ -84,3 +91,4 @@ class AppSetting(BaseEntity):
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         DEFAULT_DAYS_UNTIL_STOCKTAKE_ALERT = "default_days_until_stocktake_alert"
         PRODUCT_SEARCH_URL = "product_search_url"
+        UNIT_PRICING_LOCALE = "unit_pricing_locale"

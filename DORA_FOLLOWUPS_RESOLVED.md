@@ -10,6 +10,41 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-227 — Pricing system reassessment: "Your prices" intelligence (8 chunks shipped)
+- **Raised:** 2026-06-19 (pricing reassessment handoff).
+- **Ratified:** 2026-06-22 — the §6 question list A–K fully walked with the user;
+  all answers, revisions, and clarifications LOCKED.
+- **Type:** planning + implementation (Phase F's "Your prices" / S2-10 build).
+- **State note (resolved 2026-06-22):** all 8 chunks landed. Chunk 1 — unit-
+  conversion helper + count dim + SPA mirror dedup. Chunk 2 — observation
+  reshape (folded shape, store_id, FK provenance, partial UNIQUE) + migration
+  `c6e9a4b8d5f2`. Chunk 3 — shared `PriceEntry` + row-overview button + inline
+  `YourPricesWidget` on stock-item detail. Chunk 4 — `build_your_prices_for_item`
+  (median / 1.15× strict-greater / min-3 / trailing 12mo / per-dim B4 / LC-2
+  source-blind / offers sidecar). Chunk 5 — shopping-line prefill +
+  `/finish` harvest + I1 Receipt relabel + K2 ladder extract + E3
+  PATCH-status-done removal. Chunk 6 — `PriceHistoryBottomSheet` (C5b)
+  + per-product observation overlay (H2 fallback) + baseline reference
+  line (F-3) + D2 colour-coding. Chunk 7 — removed the `stock_item_ref →
+  observation` ingestion branch (J1) and trimmed `price_observations[]`
+  from the contract entirely. Chunk 8 — promoted seed-data discipline to
+  **R-017** in `ENGINEERING_STANDARDS.md` + ADR-012; filled the feedback
+  coverage table in the plan; updated `COVERAGE_GAPS.md` audit log
+  (flipped L226/L419/L420 to ADDRESSED); moved this entry to resolved.
+- **What it left behind:** **R-017** (new standing rule, every future
+  feature-touching prompt picks it up automatically). FU-228 (Phase E
+  rename test rot — pre-existing, surfaced by the chunk-1 full-suite run).
+  FU-229 (`reports.py` spend-by-store ignores `actual_unit_price` — surfaced
+  during the K2 ladder extract). FU-230 (offers-sidecar noload —
+  fixed in chunk 6, still wants a browser confirm). FU-231 (chunk 5 status=done
+  test fallout — fixed in chunk 6). The browser walk of the C5 state matrix
+  is the user's at the close-gate.
+- **Plan doc:** `docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` (the 8-chunk
+  spec) — feedback coverage table (§5) filled at chunk 8.
+- **Handoff doc:** `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md`
+  — the source of truth for every ratified decision (§6 / §6a / §6b /
+  LC-1..LC-5). Keep for audit; future reassessments cite it.
+
 ## [RESOLVED] FU-225 — Deprecate `PreferredBuy.position` + reorder endpoint
 - **Raised:** 2026-06-18 (Stock-pages feedback round 3)
 - **Type:** deferred job

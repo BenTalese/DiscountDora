@@ -72,8 +72,7 @@ Content-Type: application/json
 
 {
   "products":           [ ... ],
-  "offers":             [ ... ],
-  "price_observations": [ ... ]
+  "offers":             [ ... ]
 }
 ```
 
@@ -104,7 +103,7 @@ source's id if omitted). Empty arrays are fine — push only what you have.
 
 | Field                 | Required | Notes                              |
 |-----------------------|----------|------------------------------------|
-| `ref`                 | yes      | Stable id in this batch — referenced by `offers` / `price_observations` |
+| `ref`                 | yes      | Stable id in this batch — referenced by `offers` |
 | `name`                | yes      |                                    |
 | `merchant`            | yes      | The external store name; resolved via the store mapping |
 | `merchant_stockcode`  | no       | Primary dedupe key when present    |
@@ -131,21 +130,20 @@ collapses to one `Product` row (shared catalogue).
 Dedupe — `(product_id, observed_at, price_now)`. Append-only; an identical
 record is `skipped` with reason `duplicate`.
 
-**`price_observations`** — a single price point, anchored either to a product
-(routes into the same historic-offer substrate as `offers`) or to one of your
-**Dora stock items** by id.
+**`price_observations`** — **removed** (FU-227 chunk 7, J1). Price
+*observations* are the user's own in-app record of what they paid; the
+producer never writes them. If your batch carries a `price_observations[]`
+field today, the request now returns a **400** (`extra="forbid"` rejection).
 
-| Field            | Required | Notes                                       |
-|------------------|----------|---------------------------------------------|
-| `product_ref`    | one-of   | Targets a product pushed in this batch      |
-| `stock_item_ref` | one-of   | The Dora stock-item UUID                    |
-| `price`          | yes      | > 0                                         |
-| `qty`            | no       | Quantity for the per-unit derivation        |
-| `unit`           | no       | Unit string                                 |
-| `observed_at`    | yes      |                                             |
-| `source`         | no       |                                             |
+If you used to push observations via this endpoint:
 
-Exactly one of `product_ref` and `stock_item_ref` must be set.
+- Anchored to a `product_ref` → publish the same point as a row in
+  `offers[]`. The "your prices" union at read time treats offers and
+  observations symmetrically, so the user still sees your point on the
+  Price-History chart.
+- Anchored to a `stock_item_ref` → that path is gone. Stock-item-level
+  observations are now the user's pantry record (PriceEntry widget,
+  shopping-list harvest). No replacement endpoint — by design.
 
 ### Result DTO
 
@@ -172,10 +170,8 @@ Stable `reason` codes (will only grow, not change meaning):
 
 - `store_not_mapped` — the external `merchant` name has no resolved mapping.
 - `duplicate` — same `(product, observed_at, price)` already on file.
-- `product_unknown` — an offer / observation referenced a `ref` not in this
-  batch's products and no existing product matched.
-- `stock_item_ref_not_uuid` — a `price_observation.stock_item_ref` wasn't a
-  UUID.
+- `product_unknown` — an offer referenced a `ref` not in this batch's
+  products and no existing product matched.
 
 Every batch also bumps the source's **Accepted / Skipped / Failed** counters
 (visible on the API access page) and refreshes its `last_used_at`.

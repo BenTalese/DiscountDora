@@ -35,6 +35,8 @@ class AppSettingsDto:
     default_days_until_stocktake_alert: int
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     product_search_url: str
+    # FU-227 follow-up — AU vs US per-unit display locale.
+    unit_pricing_locale: str
 
 
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
@@ -53,6 +55,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
         default_days_until_stocktake_alert=int(setting.default_days_until_stocktake_alert),
         product_search_url=setting.product_search_url or "",
+        unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
     )
 
 

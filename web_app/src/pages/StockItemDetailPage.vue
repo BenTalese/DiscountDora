@@ -504,7 +504,7 @@
                                         <q-item-section>
                                             <q-item-label>
                                                 ${{ obs.total_price.toFixed(2) }}
-                                                <span class="dora-text-muted">for {{ obs.total_measure }} {{ obs.unit }}</span>
+                                                <span class="dora-text-muted">for {{ formatObsMeasure(obs) }}</span>
                                             </q-item-label>
                                             <q-item-label caption>
                                                 {{ relativeTime(obs.observed_at) }}
@@ -1268,14 +1268,32 @@
         total_measure: number;
         unit: string;
         store_id: string | null;
+        pack_count: number | null;
     }) {
         await withBusyReload(() => stockItemApi.addPriceObservationAsync(stockItemId.value, {
             total_price: value.total_price,
             total_measure: value.total_measure,
             unit: value.unit,
             store_id: value.store_id ?? null,
+            pack_count: value.pack_count ?? null,
         }));
     }
+    // Multipack (FU-227 follow-up): render "4 × 125g" instead of "500g
+    // flat" when the obs carries a pack_count. Per-pack = total/count.
+    // Trims trailing zeros so "4 × 125g" reads cleaner than "4 × 125.0g".
+    function formatObsMeasure(obs: PriceObservation): string {
+        const total = obs.total_measure;
+        const unit = obs.unit;
+        if (obs.pack_count != null && obs.pack_count > 1) {
+            const perPack = total / obs.pack_count;
+            return `${obs.pack_count} × ${trimZero(perPack)} ${unit}`;
+        }
+        return `${trimZero(total)} ${unit}`;
+    }
+    function trimZero(n: number): string {
+        return Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/\.?0+$/, '');
+    }
+
     async function deleteObservation(obs: PriceObservation) {
         await withBusyReload(() =>
             stockItemApi.deletePriceObservationAsync(stockItemId.value, obs.observation_id),

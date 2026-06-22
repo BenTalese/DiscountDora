@@ -90,15 +90,18 @@ def test__stock_item_price_history__observations_only__sorted_and_tagged(api):
     assert dates == sorted(dates)
 
 
-def test__stock_item_price_history__ml_normalises_to_per_L(api):
-    """A 500 ml observation surfaces on the chart as its $/L value."""
+def test__stock_item_price_history__ml_observation_displays_per_100ml(api):
+    """A 500 ml observation surfaces on the chart in /100ml — AU shelf
+    convention applies to the chart series the same as the widget headline
+    (below 1 L → /100ml; at or above → /L). See units.display_denominator_for."""
     item = _new_stock_item()
     _log(item, total_price=3.0, total_measure=500.0, unit="ml",
          observed_at="2026-05-01T00:00:00+00:00")
     body = _history(item).json()
-    assert body["canonical_unit"] == "L"
+    assert body["canonical_unit"] == "100ml"
     assert len(body["points"]) == 1
-    assert abs(body["points"][0]["unit_price"] - 6.0) < 1e-6   # $3 / 0.5 L
+    # $3 / 0.5 L = $6/L = $0.60/100ml
+    assert abs(body["points"][0]["unit_price"] - 0.6) < 1e-6
 
 
 # ── Seeded milk: observations ∪ offers, comparable scale ───────────────────

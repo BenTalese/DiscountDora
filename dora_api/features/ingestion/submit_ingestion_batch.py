@@ -10,13 +10,15 @@ Contract (PROPOSAL_INGESTION_API §2.2-§2.4):
 - `Idempotency-Key` header: re-sending the same key under the same
   source is a no-op (last result is NOT cached — we just refuse to
   re-process to avoid double-writes).
-- Payload: `{ products[], offers[], price_observations[] }`. Each record
-  carries a `source` provenance string (defaults to the IngestionSource
-  id if absent).
+- Payload: `{ products[], offers[] }`. Each record carries a `source`
+  provenance string (defaults to the IngestionSource id if absent).
+  **FU-227 chunk 7 (J1):** observations are in-app user input only;
+  `price_observations[]` is no longer accepted (`extra="forbid"` rejects
+  the field with a 400 — see PROPOSAL_PRODUCTS_AS_OVERLAY §2.5 "Idea A").
 - Products dedupe on (store_id + stockcode) when stockcode is present,
   else (store_id + name) — same product across sources collapses into
   one row (shared catalogue, proposal §1/§5).
-- Offers/observations are append-only, deduped on
+- Offers are append-only, deduped on
   (product_id, observed_at, price_now).
 - FU-190: the producer's `store` string is resolved through
   `IngestionStoreMapping`. Unknown names quarantine (record skipped
@@ -35,7 +37,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from flask import request
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.idempotency_key import IdempotencyKey
 from dora_api.domain.entities.ingestion_source import IngestionSource
@@ -46,8 +48,6 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
-from dora_api.domain.entities.stock_item_price_observation import \
-    StockItemPriceObservation
 from dora_api.features.ingestion.offer_mapping import (OfferOutcome,
                                                        apply_offer_to_product)
 from dora_api.features.routers import INGEST_ROUTER
@@ -98,24 +98,12 @@ class _OfferIn(BaseModel):
     source: str | None = Field(default=None, max_length=64)
 
 
-class _PriceObservationIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    product_ref: str | None = Field(default=None, max_length=255)
-    stock_item_ref: str | None = Field(default=None, max_length=255)
-    price: float = Field(gt=0)
-    qty: float | None = Field(default=None, gt=0)
-    unit: str | None = Field(default=None, max_length=32)
-    observed_at: datetime
-    source: str | None = Field(default=None, max_length=64)
-
-    @model_validator(mode="after")
-    def _exactly_one_anchor(self) -> "_PriceObservationIn":
-        if (self.product_ref is None) == (self.stock_item_ref is None):
-            raise ValueError(
-                "exactly one of product_ref or stock_item_ref is required"
-            )
-        return self
+# FU-227 chunk 7 (J1) — `_PriceObservationIn` removed. Observations are an
+# in-app user-input substrate only (PROPOSAL_PRODUCTS_AS_OVERLAY §2.5, Idea A):
+# the producer never writes them. A request carrying `price_observations[]`
+# is now rejected by `extra="forbid"` below; producers that wanted to push
+# "I paid $X for product Y" should publish a one-point historic offer via
+# the `offers[]` array instead — that's the offer/observation union point.
 
 
 class IngestBatchRequest(BaseModel):
@@ -123,14 +111,13 @@ class IngestBatchRequest(BaseModel):
 
     products: list[_ProductIn] = Field(default_factory=list)
     offers: list[_OfferIn] = Field(default_factory=list)
-    price_observations: list[_PriceObservationIn] = Field(default_factory=list)
 
 
 # ── Result DTOs ────────────────────────────────────────────────────────
 
 @dataclass(frozen=True, slots=True)
 class _AcceptedRecord:
-    kind: Literal["product", "offer", "price_observation"]
+    kind: Literal["product", "offer"]
     ref: str
     id: str
     note: str | None = None  # e.g. "created" / "duplicate"
@@ -138,14 +125,14 @@ class _AcceptedRecord:
 
 @dataclass(frozen=True, slots=True)
 class _SkippedRecord:
-    kind: Literal["product", "offer", "price_observation"]
+    kind: Literal["product", "offer"]
     ref: str
     reason: str  # short stable code: duplicate, store_not_mapped, product_unknown, ...
 
 
 @dataclass(frozen=True, slots=True)
 class _FailedRecord:
-    kind: Literal["product", "offer", "price_observation"]
+    kind: Literal["product", "offer"]
     ref: str
     reason: str
 
@@ -197,8 +184,8 @@ class SubmitIngestionBatchHandler:
             self._apply_product(ctx, raw)
         for raw in payload.offers:
             self._apply_offer(ctx, raw)
-        for raw in payload.price_observations:
-            self._apply_observation(ctx, raw)
+        # FU-227 chunk 7 — observations are in-app input only; the producer
+        # path was removed (J1). Offer pushes still flow through above.
 
         # Counters land on the source row (consumed by C-10.3's
         # observability surface) — additive, so a re-send of a key
@@ -396,63 +383,13 @@ class SubmitIngestionBatchHandler:
             note="appended",
         ))
 
-    def _apply_observation(
-        self, ctx: _IngestionContext, raw: _PriceObservationIn
-    ) -> None:
-        record_source = raw.source or str(ctx.source.id)
-        if raw.stock_item_ref is not None:
-            try:
-                stock_item_id = UUID(raw.stock_item_ref)
-            except (ValueError, TypeError):
-                ctx.result.failed.append(_FailedRecord(
-                    kind="price_observation", ref=raw.stock_item_ref,
-                    reason="stock_item_ref_not_uuid",
-                ))
-                return
-            obs = StockItemPriceObservation(
-                stock_item_id=stock_item_id,
-                price=raw.price,
-                qty=raw.qty or 1.0,
-                unit=raw.unit or "",
-                observed_at=raw.observed_at,
-                source=record_source,
-                created_at=datetime.now(timezone.utc),
-            )
-            self.repository.add(obs)
-            ctx.result.accepted.append(_AcceptedRecord(
-                kind="price_observation", ref=raw.stock_item_ref,
-                id=str(obs.id), note="stock_item",
-            ))
-            return
-
-        # product_ref path — route into a single-point historic offer
-        # so it surfaces on the existing price-history view (the
-        # "your prices" union in C-10.4 builds on this same substrate).
-        product = ctx.products_by_ref.get(raw.product_ref or "")
-        if product is None:
-            ctx.result.failed.append(_FailedRecord(
-                kind="price_observation", ref=raw.product_ref or "",
-                reason="product_unknown",
-            ))
-            return
-        outcome = apply_offer_to_product(
-            self.repository,
-            product,
-            price_now=raw.price,
-            price_was=None,
-            observed_at=raw.observed_at,
-            source=record_source,
-        )
-        if outcome.outcome == OfferOutcome.DUPLICATE:
-            ctx.result.skipped.append(_SkippedRecord(
-                kind="price_observation", ref=raw.product_ref or "",
-                reason="duplicate",
-            ))
-            return
-        ctx.result.accepted.append(_AcceptedRecord(
-            kind="price_observation", ref=raw.product_ref or "",
-            id=outcome.historic_offer_id or "", note="product",
-        ))
+# FU-227 chunk 7 (J1) — `_apply_observation` removed. The producer no longer
+# writes observations; users do, via the in-app PriceEntry widget. The
+# product-anchored half of the old method (push a single-point historic offer
+# from a "$X for product Y" payload) was always a misuse of the observation
+# substrate — that intent is properly expressed by a row in `offers[]` with
+# the same `observed_at` + `price_now`, which the `_apply_offer` path above
+# already covers.
 
 
 # ── Route ──────────────────────────────────────────────────────────────

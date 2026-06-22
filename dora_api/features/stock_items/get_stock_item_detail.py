@@ -126,6 +126,9 @@ class PriceObservationDto:
     # ("Wed's shopping list") so the client renders a string, not the FK.
     shopping_list_line_id: UUID | None
     shopping_list_name: str | None
+    # Multipack metadata (FU-227 follow-up). When set, the obs list shows
+    # "4 × 125g" instead of "500g flat"; math is unaffected.
+    pack_count: int | None
 
 
 # FU-227 chunk 3 — what the PriceEntry widget seeds itself with on open (F2 —
@@ -470,6 +473,7 @@ class GetStockItemDetailHandler:
                 store_name = _StoreNamesById.get(o.store_id) if o.store_id is not None else None,
                 shopping_list_line_id = o.shopping_list_line_id,
                 shopping_list_name = _ListNamesByLineId.get(o.shopping_list_line_id) if o.shopping_list_line_id is not None else None,
+                pack_count = o.pack_count,
             )
             for o in _Observations
         ]

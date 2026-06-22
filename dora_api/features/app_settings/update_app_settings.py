@@ -48,6 +48,8 @@ class UpdateAppSettingsRequest(BaseModel):
     # problem (the field never echoes back as a clickable link to other
     # users — it ALWAYS opens via target="_blank" rel="noopener").
     product_search_url: str | None = Field(default=None, max_length=500)
+    # FU-227 follow-up — AU vs US per-unit display locale.
+    unit_pricing_locale: str | None = Field(default=None, max_length=8)
 
 
 @dataclass(slots=True)
@@ -111,6 +113,20 @@ class UpdateAppSettingsHandler:
             and request.default_days_until_stocktake_alert is not None
         ):
             setting.default_days_until_stocktake_alert = request.default_days_until_stocktake_alert
+
+        # FU-227 follow-up — unit_pricing_locale. Validated against the
+        # supported set so a typo can't silently degrade display.
+        if "unit_pricing_locale" in set_fields and request.unit_pricing_locale is not None:
+            from dora_api.domain.units import SUPPORTED_PRICING_LOCALES
+            _Locale = request.unit_pricing_locale.strip().upper()
+            if _Locale not in SUPPORTED_PRICING_LOCALES:
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{_Locale}' is not a supported unit-pricing locale. "
+                        f"Supported: {sorted(SUPPORTED_PRICING_LOCALES)}."
+                    ),
+                )
+            setting.unit_pricing_locale = _Locale
 
         # Phase D / FU-186 — product_search_url. Strip; reject obviously
         # non-http schemes so a typo doesn't render a hostile link, but

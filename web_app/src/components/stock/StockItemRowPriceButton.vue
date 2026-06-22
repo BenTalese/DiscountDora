@@ -90,6 +90,7 @@
         total_measure: number;
         unit: string;
         store_id: string | null;
+        pack_count: number | null;
     }) {
         submitting.value = true;
         try {

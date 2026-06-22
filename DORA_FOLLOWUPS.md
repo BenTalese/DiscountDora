@@ -52,6 +52,31 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-232 — Companion / ingestion contract: push `pack_count` on Product
+- **Raised:** 2026-06-23 (FU-227 multipack follow-up).
+- **Type:** deferred job.
+- **What:** the in-app side of multipack pricing is wired — observations now
+  carry `pack_count`, the PriceEntry widget exposes it as a disclosure
+  ("Add pack count (multipack)"), the obs list renders "4 × 125g", and the
+  harvest path at `/finish` reads `Product.pack_count` to populate it. But
+  **the producer-facing contract still doesn't accept pack_count.** The
+  `_ProductIn` model in `submit_ingestion_batch.py` accepts
+  `{size, size_unit, size_value}` but not the new column. Producers that
+  want to push "Activia 125g × 4 pack" today must flatten `size_value=500`
+  (the existing convention — `size_value` is the TOTAL across the bundle)
+  and lose the structured pack-context.
+- **Why deferred:** the schema column is in place
+  (migration `d7b3e8f2a5c4`) and the existing user-side surfaces work
+  without the producer push (default = NULL). The contract change is its
+  own piece of work — needs producer-side coordination, doc updates,
+  acceptance test for the field round-trip, decision on whether to also
+  accept multipack metadata on `offers[]` or just `products[]`.
+- **Recommended resolution:** when the next companion / ingestion-contract
+  work lands. Add `pack_count: int | None = Field(default=None, gt=0)` on
+  `_ProductIn`; thread it through the upsert in `_apply_product`; update
+  `INGESTION_GUIDE.md` and `PROPOSAL_INGESTION_API.md` to document the
+  field; add a pytest asserting it round-trips on the Product row.
+
 ## [OPEN] FU-230 — confirm the offers sidecar now renders in the browser
 - **Raised:** 2026-06-22 (FU-227 chunk 6).
 - **Type:** finding (latent bug fixed — needs browser confirmation).
@@ -129,73 +154,6 @@ long session summary. Distinct from the other logs:
   fixture + hint-invalid test (archived lists via `status=done`). Those are **fixed** in
   chunk 6 (test-only). So this FU-228 backlog is now purely the rename rot above.
 
-## [OPEN] FU-227 — Pricing system reassessment: WRITE THE PLAN + IMPLEMENT (IN PROGRESS — chunks 1–6 of 8 DONE)
-- **Raised:** 2026-06-19 (pricing reassessment handoff).
-- **Ratified:** 2026-06-22 — the §6 question list A–K is fully walked with the user; all answers,
-  revisions, and clarifications are LOCKED. **Ready for plan execution.** No more Q&A needed.
-- **Type:** planning + implementation (Phase F's "Your prices" / S2-10 build).
-- **What landed in the ratification session (2026-06-22):**
-  - **A1 folded** observation shape `{total_price, total_measure, unit}` (deep-dive in §6a of the
-    handoff doc; further reinforced by the user's row-button-vs-shopping-list intent split — also
-    in §6a).
-  - **A4 revised:** drop the `source` enum field entirely; replace with nullable
-    `shopping_list_line_id` FK on the observation (ON DELETE SET NULL). Provenance via FK; more
-    information than an enum.
-  - **B3 hardened:** flat global unit list + **last-time prefill for unit choice**;
-    explicit "no smart per-item defaults ever" — predictability over cleverness.
-  - **C5 with display shape:** inline "Your prices" widget on stock-item detail
-    (token-token-styled; baseline + signal chip + most-recent-with-source + "Based on N prices"
-    framing). "Full history" → **bottom-sheet** (Quasar `q-dialog` `position="bottom"`), NOT a new
-    route, NOT a drawer — matches the user's own feedback L226 preference.
-  - **C3 + LC-2:** baseline math stays observations-only; UI is **source-blind**
-    ("Based on N prices"; offers shown as a separate sidecar for the products minority, never
-    folded into the count or median). Stock-only majority gets the cleanest possible mental model.
-  - **E3 revised:** `/finish` is the ONLY completion path. Code trace confirmed no SPA caller for
-    `PATCH status=done` — **remove that dead branch entirely** as part of this work; add a pytest
-    asserting the route 400s on `status=done` input.
-  - **K4 flipped:** **nothing deferred** — per-store surfacing, full chart colour-by-source (D2),
-    and SPA conversion-mirror dedup all in the first build. Cohesively complete.
-  - **L223** (hover bubble white-on-white in dark mode on Price History) — added to FU-214 during
-    the C5 cross-check; it wasn't tracked before.
-  - **LC-1:** double-tap `/finish` idempotent via partial UNIQUE on
-    `shopping_list_line_id` WHERE NOT NULL.
-  - **LC-3:** stock-value report + recipe cost outputs WILL shift post-normalization; absorb
-    silently (pre-release, K1 wipes data anyway).
-  - **LC-4:** harvested observations diverge from their line — FK is provenance, not sync.
-  - **LC-5:** H1 staging is intra-build chunk ordering, not a defer (K4 stays consistent).
-  - **New standing rule (seed-data discipline):** every prompt that adds/modifies/removes a
-    feature also updates dev seed data in the same unit of work. **Flagged for promotion to a new
-    `R-0NN` in `ENGINEERING_STANDARDS.md` at end-of-work close-gate** so it carries across all
-    future prompts.
-- **Everything is captured in:**
-  `docs/99_scratch/PRICING_SYSTEM_REASSESSMENT_HANDOFF.md` — read it whole. It now has the task
-  instructions (§0, updated to "go straight to plan writing"), locked decisions (§2), the full
-  current-state map with file:line (§3), the mental model (§4), build sequence (§5), the answered
-  question list with all revisions inline (§6), **A1 deep-dive + user intent clarification (§6a),
-  the five locked clarifications LC-1..LC-5 (§6b)**, the per-change impact map (§7), related docs
-  (§8), standing constraints incl. the new seed-data rule (§9).
-- **Plan doc:** `docs/04_proposals/IMPL_PLAN_YOUR_PRICES.md` — 8-chunk sequence (§1/§2).
-- **Progress (per `DORA_WORKLOG.md`):**
-  - chunk 1 (unit-conversion helper + count dim + SPA mirror dedup) — DONE.
-  - chunk 2 (observation reshape + migration `c6e9a4b8d5f2`, partial UNIQUE) — DONE.
-  - chunk 3 (shared `PriceEntry` + row button + `YourPricesWidget`) — DONE.
-  - chunk 4 (baseline math `build_your_prices_for_item`) — DONE.
-  - chunk 5 (shopping-line prefill + `/finish` harvest + Receipt relabel + E3
-    dead-branch removal + K2 ladder extract) — **DONE 2026-06-22**.
-  - chunk 6 (bottom-sheet "Full history" C5b + per-product observation overlay
-    H2 + baseline reference line F-3 + D2 colour-coding) — **DONE 2026-06-22**.
-    Decision: **H2-fallback-only** on the per-product page (offers keep raw
-    scale; observations + baseline only render there when a product has no
-    offers). Backend pytest **run** (real Python 3.11.9 found on this box — see
-    worklog: mine 54 failed / 0 errors vs baseline 55 / 7 errors → 0 new
-    regressions). Fixed a latent chunk-4 noload bug (offers sidecar never loaded)
-    → FU-230. Repaired chunk-5 status=done test fallout (see FU-228 note).
-- **Next action:** chunk 7 — remove the `stock_item_ref → observation` ingestion
-  branch (J1); observations become in-app-only. Then chunk 8 (verify + seed
-  refresh + promote the seed-data rule to `R-017`; fill the feedback coverage
-  table in the plan §5; browser-walk the full C5 state matrix incl. the
-  chunk-6 bottom-sheet + dark theme).
-- **Recommended resolution:** **now / next session** — active build, Phase F.
 
 ## [OPEN] FU-226 — Assess the new stocktake-queue rules (history vs. current vs. desired)
 - **Raised:** 2026-06-19 (Stock Overview bulk + stocktake feedback round)

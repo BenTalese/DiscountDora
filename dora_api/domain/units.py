@@ -37,17 +37,106 @@ ENERGY = "energy"
 PRICE_DIMENSIONS = frozenset({VOLUME, MASS, COUNT})
 
 
-# FU-227 chunk 4 — the user-facing per-unit denominator for each price
-# dimension. "Usually $5.20 / L" is friendlier than "/ ml"; "/ kg" friendlier
-# than "/ g". Count stays at "ea". Baseline math (`your_prices.py`) normalises
-# every observation into one of these before computing the median, so the
-# rendered number is dimension-consistent regardless of what unit the user
-# logged in.
+# FU-227 chunk 4 — the **compute** denominator per dimension. Baseline math
+# (`your_prices.py`) normalises every observation into one of these before
+# computing the median, so the median is comparable across observations
+# logged in different aliases (e.g. "L" + "ml" both land on "L"). The
+# user-facing denominator may differ — see `display_denominator_for` below.
 CANONICAL_PRICE_UNIT: dict[str, str] = {
     VOLUME: "L",
     MASS: "kg",
     COUNT: "ea",
 }
+
+
+SUPPORTED_PRICING_LOCALES: frozenset[str] = frozenset({"AU", "US"})
+
+
+def display_denominator_for(
+    active_dim: str,
+    latest_measure_in_canonical: float,
+    *,
+    locale: str = "AU",
+) -> tuple[str, float]:
+    """The shelf display convention for a per-unit price.
+
+    Returns ``(label, divide_factor)``: the user-facing denominator the
+    widget renders (e.g. ``"L"`` / ``"100ml"`` for AU; ``"qt"`` / ``"fl oz"``
+    for US) and the number by which a price computed in the dimension's
+    :data:`CANONICAL_PRICE_UNIT` (compute unit) must be divided to land in
+    that denominator.
+
+    Size-aware: the flip kicks in only once the latest observation reaches a
+    full target unit (≥ 1 L / ≥ 1 kg under AU; ≥ 1 qt / ≥ 1 lb under US).
+    Below that, the convention is the smaller denominator
+    ("$1.75 / 100ml" reads more naturally than "$17.50 / L" for a 500 ml
+    bottle; same for "$0.50 / fl oz" vs "$16.00 / qt"). Count stays "ea"
+    (no fractional convention either way).
+
+    Locale is resolved server-side from ``AppSetting.unit_pricing_locale``
+    — single source so the chart axis, sidecar entries, widget headline,
+    and chart points all share one denominator. Compute math is locale-
+    independent; only the rendered denominator changes.
+    """
+    if active_dim == COUNT:
+        return ("ea", 1.0)
+    if locale == "US":
+        return _us_denominator(active_dim, latest_measure_in_canonical)
+    # AU is the default for any unrecognised locale string — safe fallback.
+    return _au_denominator(active_dim, latest_measure_in_canonical)
+
+
+def _au_denominator(active_dim: str, measure_in_canonical: float) -> tuple[str, float]:
+    if active_dim == VOLUME:
+        if measure_in_canonical >= 1.0:
+            return ("L", 1.0)
+        return ("100ml", 10.0)
+    # MASS
+    if measure_in_canonical >= 1.0:
+        return ("kg", 1.0)
+    return ("100g", 10.0)
+
+
+# US flip thresholds in the dimension's canonical unit:
+#   1 qt = 0.946 L (volume canonical)
+#   1 lb = 0.4536 kg (mass canonical)
+# Divide factors precomputed from the conversion table so $/L → $/qt is
+# `price / (qt-per-L)` = `price / 1.0567` ≈ `price × 0.946`.
+_US_FLIP_QT_L = 0.946352946
+_US_FLIP_LB_KG = 0.45359237
+_US_FACTOR_QT = 1.0 / _US_FLIP_QT_L          # qt per L  ≈ 1.0567
+_US_FACTOR_FL_OZ = 1000.0 / 29.5735           # fl oz per L  ≈ 33.8140
+_US_FACTOR_LB = 1.0 / _US_FLIP_LB_KG          # lb per kg  ≈ 2.2046
+_US_FACTOR_OZ = 1000.0 / 28.3495              # oz per kg  ≈ 35.2740
+
+
+def _us_denominator(active_dim: str, measure_in_canonical: float) -> tuple[str, float]:
+    if active_dim == VOLUME:
+        # 1 qt = 0.946 L. At-or-above 1 qt → /qt; below → /fl oz.
+        if measure_in_canonical >= _US_FLIP_QT_L:
+            return ("qt", _US_FACTOR_QT)
+        return ("fl oz", _US_FACTOR_FL_OZ)
+    # MASS — 1 lb = 0.4536 kg.
+    if measure_in_canonical >= _US_FLIP_LB_KG:
+        return ("lb", _US_FACTOR_LB)
+    return ("oz", _US_FACTOR_OZ)
+
+
+# Practical price-entry picker whitelist. The conversion engine knows many
+# more units (`cup` / `tsp` / `tbsp` / `pinch` / `dash` / `fl oz` / `pt` /
+# `qt` / `gal` / `smidgen` / `stick`), but those are **cooking** units —
+# nobody in AU buys oil by the cup or eggs by the pinch. The picker shows
+# only what people actually shop in. The server still ACCEPTS the broader
+# set (the harvest path may see a sized product in `cup` or `fl oz`), so
+# this is purely a UI narrowing, not a validation tightening.
+PRICE_PICKER_CANONICAL_UNITS: frozenset[str] = frozenset({
+    # volume
+    "ml", "L",
+    # mass — practical AU + imperial for meat/cheese
+    "g", "kg", "oz", "lb",
+    # count
+    "ea", "dozen", "pack",
+})
 
 
 # ── Unit table ────────────────────────────────────────────────────────────
@@ -394,11 +483,16 @@ class CanonicalUnitChoice:
 
 def supported_price_units() -> list[CanonicalUnitChoice]:
     """Flat global list of units the price-entry widget offers (B3),
-    grouped client-side by dimension. Volume + mass + count only — no
-    temperature/length/energy on price rows."""
+    grouped client-side by dimension. The cooking-only units (cup, tsp,
+    tbsp, pinch, dash, fl oz, pt, qt, gal, smidgen, stick) are filtered out
+    via :data:`PRICE_PICKER_CANONICAL_UNITS` — the conversion engine still
+    knows them for the assistant and the harvest path, but the picker
+    shows only what AU shoppers actually shop in."""
     seen: dict[str, CanonicalUnitChoice] = {}
     for udef in UNIT_TABLE.values():
         if udef.dimension not in PRICE_DIMENSIONS:
+            continue
+        if udef.canonical not in PRICE_PICKER_CANONICAL_UNITS:
             continue
         if udef.canonical in seen:
             continue

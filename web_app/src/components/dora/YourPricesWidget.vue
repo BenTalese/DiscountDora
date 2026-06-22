@@ -29,6 +29,7 @@
             <div v-if="yourPrices?.current != null" class="text-caption dora-text-muted q-mb-xs">
                 Last seen
                 <strong>${{ yourPrices.current.toFixed(2) }}</strong>
+                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
                 <span v-if="yourPrices.last_observed_at">
                     · {{ relativeTime(yourPrices.last_observed_at) }}
                 </span>
@@ -61,6 +62,7 @@
             <div v-if="yourPrices.current != null" class="text-caption dora-text-muted q-mb-xs">
                 Last seen
                 <strong>${{ yourPrices.current.toFixed(2) }}</strong>
+                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
                 <span v-if="yourPrices.last_observed_at">
                     · {{ relativeTime(yourPrices.last_observed_at) }}
                 </span>
@@ -179,6 +181,7 @@
             total_measure: number;
             unit: string;
             store_id: string | null;
+            pack_count: number | null;
         }): void;
     }>();
 
@@ -198,6 +201,7 @@
         total_measure: number;
         unit: string;
         store_id: string | null;
+        pack_count: number | null;
     }) {
         emit('submit', value);
         dialogOpen.value = false;

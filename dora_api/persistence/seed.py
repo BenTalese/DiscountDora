@@ -312,7 +312,7 @@ def seed_dev_data():
     # bread).
     from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 
-    def price_obs(item, *, total_price, total_measure, unit, days_ago, store=None):
+    def price_obs(item, *, total_price, total_measure, unit, days_ago, store=None, pack_count=None):
         repo.add(StockItemPriceObservation(
             stock_item_id=item.id,
             total_price=float(total_price),
@@ -322,6 +322,7 @@ def seed_dev_data():
             store_id=(store.id if store is not None else None),
             shopping_list_line_id=None,
             created_at=now - timedelta(days=days_ago),
+            pack_count=pack_count,
         ))
 
     # Milk — 4 obs in L, store-tagged, baseline ≈ $2.00/L, latest at baseline.
@@ -329,6 +330,12 @@ def seed_dev_data():
     price_obs(milk, total_price=2.00, total_measure=1.0, unit="L", days_ago=21, store=coles)
     price_obs(milk, total_price=4.10, total_measure=2.0, unit="L", days_ago=10, store=woolworths)
     price_obs(milk, total_price=2.00, total_measure=1.0, unit="L", days_ago=2, store=coles)
+    # Yoghurt-style multipack observation on butter (FU-227 follow-up:
+    # exercises the pack_count column + the obs list's "4 × 125g" render).
+    # "$4.20 for 4 × 125g pack of yoghurt" — keeps butter at 3 obs so the
+    # widget flips from empty-state to baseline-ready.
+    price_obs(butter, total_price=4.20, total_measure=500.0, unit="g",
+              days_ago=10, store=woolworths, pack_count=4)
 
     # Olive oil — 4 obs in ml, no store, latest 30% above median → above-usual chip.
     price_obs(olive_oil, total_price=8.00, total_measure=500.0, unit="ml", days_ago=120)
@@ -641,11 +648,12 @@ def seed_dev_data():
         unit_price = line_paid_unit_price(sl_line)
         if unit_price is None:
             continue
-        _tp, _tm, _unit = harvest_observation_fields(
+        _tp, _tm, _unit, _pc = harvest_observation_fields(
             unit_price=unit_price,
             quantity=sl_line.quantity,
             size_value=product.size_value if product else None,
             size_unit=product.size_unit if product else None,
+            product_pack_count=product.pack_count if product else None,
         )
         _at = _completed_at.get(sl_line.shopping_list_id, now)
         repo.add(StockItemPriceObservation(
@@ -653,6 +661,7 @@ def seed_dev_data():
             total_price=_tp, total_measure=_tm, unit=_unit,
             observed_at=_at, store_id=(store.id if store else None),
             shopping_list_line_id=sl_line.id, created_at=_at,
+            pack_count=_pc,
         ))
     repo.save_changes()
 

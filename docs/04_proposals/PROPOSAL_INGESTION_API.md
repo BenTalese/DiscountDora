@@ -85,14 +85,20 @@ POST /api/ingest        Authorization: Bearer <key>        Idempotency-Key: <bat
 {
   "products":           [ { ref, name, brand?, size?, size_unit?, size_value?, merchant,
                             merchant_stockcode?, web_url?, source } ],
-  "offers":             [ { product_ref, price_now, price_was?, valid_until?, observed_at, source } ],
-  "price_observations": [ { product_ref?, stock_item_ref?, price, observed_at, source } ]
+  "offers":             [ { product_ref, price_now, price_was?, valid_until?, observed_at, source } ]
 }
 ```
 - **product** → upsert the catalogue. **offer** → set `current_offer` + **append a
-  `ProductHistoricOffer`** (the history point). **price_observation** → a lighter point (price +
-  when + source) that attaches to a product **or** a stock item, feeding personal price history
-  without a full product row.
+  `ProductHistoricOffer`** (the history point).
+
+**`price_observations[]` removed (FU-227 chunk 7, J1).** Observations are
+the user's own pantry record (PriceEntry widget + `/finish` harvest); the
+producer never writes them (PROPOSAL_PRODUCTS_AS_OVERLAY §2.5 "Idea A" —
+offers and observations are two substrates, unioned at read time, **never
+converted**). Producers that previously pushed `product_ref`-anchored
+observations should publish the same point as an `offers[]` row — same
+historic-offer substrate, same Price-History rendering. A payload still
+carrying `price_observations[]` now returns a **400** (`extra="forbid"`).
 
 ### 2.3 Idempotency & dedup (accepted defaults)
 - **Batch idempotency** via `Idempotency-Key` (store processed keys w/ TTL; re-send = no-op).
@@ -159,9 +165,9 @@ external producer owns acquisition. This is what keeps Dora-core legally clean a
 - Sync v1; `Idempotency-Key`; `source` as a string column; **append-only** dedup by
   (product+source+observed_at+price); **keep `POST /products`, refactor to reuse the ingest
   mapping**; **shared catalogue, defer multi-user scoping** (Phase 4); carry `trust`, enforce later.
-- **Open (build-time):** whether `price_observations` needs a small new `PriceObservation` table or
-  can be a query-time union of historic offers + receipt snapshots (lean to: products+offers fully
-  in v1; a minimal observation store only if the producer pushes item-level points).
+- **Resolved (FU-227 chunk 7, 2026-06-22):** observations are **in-app input
+  only**, never producer-written. The ingest endpoint no longer accepts
+  `price_observations[]` — see §2.2.
 
 ---
 

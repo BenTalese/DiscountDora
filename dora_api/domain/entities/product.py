@@ -26,6 +26,13 @@ class Product(BaseEntity):
     size_unit: str
     size_value: float
     web_url: str | None
+    # Multipack count (FU-227 follow-up). ``size_value`` keeps the existing
+    # convention of being the TOTAL measure across the whole bundle (so the
+    # per-unit math stays unchanged); ``pack_count`` is informational —
+    # captures "this is a 4-pack of 125g" so the obs / row UI can render
+    # "$4.20 for 4 × 125g" rather than "500g flat". ``None`` ⇒ single
+    # pack / free-weight, the common case.
+    pack_count: int | None = None
 
     class Fields(BaseEntity.Fields):
         BRAND = "brand"
@@ -41,3 +48,4 @@ class Product(BaseEntity):
         SIZE_UNIT = "size_unit"
         SIZE_VALUE = "size_value"
         WEB_URL = "web_url"
+        PACK_COUNT = "pack_count"

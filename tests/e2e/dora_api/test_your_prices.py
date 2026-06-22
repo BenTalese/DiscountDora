@@ -126,27 +126,68 @@ def test__your_prices__current_exactly_at_threshold__not_above(api):
 # ── Unit normalisation: ml ↔ L, g ↔ kg ────────────────────────────────────
 
 
-def test__your_prices__ml_normalises_to_per_L(api):
-    """500 ml at $3.00 = $6/L. Three obs → median in canonical L."""
+def test__your_prices__ml_observations_display_per_100ml(api):
+    """500 ml at $3.00 = $6/L = $0.60/100ml. AU shelf convention: below
+    1 L → /100ml; at or above → /L (see units.display_denominator_for)."""
     item = _new_stock_item()
     for i in range(1, 4):
         _log(item, total_price=3.0, total_measure=500.0, unit="ml",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
     yp = _yp(item)
+    assert yp["baseline_unit"] == "100ml"
+    # $6/L / 10 = $0.60/100ml
+    assert abs(yp["baseline"] - 0.6) < 1e-6
+
+
+def test__your_prices__litre_observations_display_per_L(api):
+    """1 L at $3.00 = $3/L. At-or-above 1 L → display denominator stays /L."""
+    item = _new_stock_item()
+    for i in range(1, 4):
+        _log(item, total_price=3.0, total_measure=1.0, unit="L",
+             observed_at=f"2026-0{i}-01T00:00:00+00:00")
+    yp = _yp(item)
     assert yp["baseline_unit"] == "L"
-    # Median of [6.0, 6.0, 6.0] = 6.0
-    assert abs(yp["baseline"] - 6.0) < 1e-6
+    assert abs(yp["baseline"] - 3.0) < 1e-6
 
 
-def test__your_prices__g_normalises_to_per_kg(api):
-    """250 g at $5.00 = $20/kg. Three obs."""
+def test__your_prices__g_observations_display_per_100g(api):
+    """250 g at $5.00 = $20/kg = $2.00/100g. Below 1 kg → /100g."""
     item = _new_stock_item()
     for i in range(1, 4):
         _log(item, total_price=5.0, total_measure=250.0, unit="g",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
     yp = _yp(item)
+    assert yp["baseline_unit"] == "100g"
+    # $20/kg / 10 = $2.00/100g
+    assert abs(yp["baseline"] - 2.0) < 1e-6
+
+
+def test__your_prices__kg_observations_display_per_kg(api):
+    """1 kg+ observations stay on /kg (above the flip threshold)."""
+    item = _new_stock_item()
+    for i in range(1, 4):
+        _log(item, total_price=10.0, total_measure=1.0, unit="kg",
+             observed_at=f"2026-0{i}-01T00:00:00+00:00")
+    yp = _yp(item)
     assert yp["baseline_unit"] == "kg"
-    assert abs(yp["baseline"] - 20.0) < 1e-6
+    assert abs(yp["baseline"] - 10.0) < 1e-6
+
+
+def test__your_prices__display_flip_follows_latest_observation(api):
+    """Latest observation drives the flip — if the user buys a 1L bottle
+    after several 500ml buys, the display shifts to /L."""
+    item = _new_stock_item()
+    # Three 500ml buys → would otherwise be /100ml.
+    for i in range(1, 4):
+        _log(item, total_price=3.0, total_measure=500.0, unit="ml",
+             observed_at=f"2026-0{i}-01T00:00:00+00:00")
+    # Latest = 1L → flips to /L.
+    _log(item, total_price=6.0, total_measure=1.0, unit="L",
+         observed_at="2026-04-01T00:00:00+00:00")
+    yp = _yp(item)
+    assert yp["baseline_unit"] == "L"
+    # Median over per-L prices [6, 6, 6, 6] = 6.0/L.
+    assert abs(yp["baseline"] - 6.0) < 1e-6
 
 
 # ── Count dimension (B1) ──────────────────────────────────────────────────
@@ -253,3 +294,92 @@ def test__your_prices__offers_sidecar_does_not_affect_sample_count(api):
     assert yp["sample_count"] == 3
     # No linked products → sidecar empty.
     assert yp["offers_sidecar"] == []
+
+
+# ── Multipack (pack_count) ────────────────────────────────────────────────
+
+
+def test__your_prices__pack_count_round_trips(api):
+    """pack_count is stored + surfaced on the obs DTO without affecting
+    baseline math. "$4.20 for 4 × 125g" → total_measure=500, pack_count=4."""
+    item = _new_stock_item()
+    r = requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={
+            "total_price": 4.20,
+            "total_measure": 500.0,
+            "unit": "g",
+            "pack_count": 4,
+        },
+    )
+    assert r.status_code == 204, r.text
+    detail = requests.get(f"{STOCK_ITEMS}/{item}/detail").json()
+    obs = detail["price_observations"][0]
+    assert obs["pack_count"] == 4
+    assert obs["total_measure"] == 500.0
+
+
+def test__your_prices__pack_count_rejected_when_not_positive(api):
+    item = _new_stock_item()
+    r = requests.post(
+        f"{STOCK_ITEMS}/{item}/price-observations",
+        json={
+            "total_price": 4.20,
+            "total_measure": 500.0,
+            "unit": "g",
+            "pack_count": 0,
+        },
+    )
+    assert 400 <= r.status_code < 500
+
+
+# ── US locale display ────────────────────────────────────────────────────
+
+
+def _set_locale(locale: str) -> None:
+    """Flip the install-wide unit_pricing_locale via the admin endpoint."""
+    r = requests.patch(
+        f"{BASE}/app-settings",
+        json={"unit_pricing_locale": locale},
+    )
+    assert r.status_code in (200, 204), r.text
+
+
+def test__your_prices__us_locale_displays_per_lb(api):
+    """At-or-above 1 lb (0.4536 kg), US locale displays /lb."""
+    try:
+        _set_locale("US")
+    except Exception:
+        return
+    try:
+        item = _new_stock_item()
+        # 1 kg ≈ 2.2 lb → above the flip threshold.
+        for i in range(1, 4):
+            _log(item, total_price=10.0, total_measure=1.0, unit="kg",
+                 observed_at=f"2026-0{i}-01T00:00:00+00:00")
+        yp = _yp(item)
+        assert yp["baseline_unit"] == "lb"
+        # $10/kg × 0.4536 ≈ $4.54/lb
+        assert abs(yp["baseline"] - 10.0 / 2.2046226218) < 1e-3
+    finally:
+        _set_locale("AU")
+
+
+def test__your_prices__us_locale_displays_per_oz(api):
+    """Below 1 lb under US locale displays /oz."""
+    try:
+        _set_locale("US")
+    except Exception:
+        return
+    try:
+        item = _new_stock_item()
+        # 100 g ≈ 0.22 lb → below the flip threshold; should land on /oz.
+        for i in range(1, 4):
+            _log(item, total_price=2.0, total_measure=100.0, unit="g",
+                 observed_at=f"2026-0{i}-01T00:00:00+00:00")
+        yp = _yp(item)
+        assert yp["baseline_unit"] == "oz"
+        # $20/kg × 0.02835 ≈ $0.567/oz
+        assert abs(yp["baseline"] - 20.0 / 35.27399072) < 1e-3
+    finally:
+        _set_locale("AU")

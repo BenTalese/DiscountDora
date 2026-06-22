@@ -41,6 +41,14 @@ class StockItemPriceObservation(BaseEntity):
     store_id: UUID | None
     shopping_list_line_id: UUID | None
     created_at: datetime
+    # Multipack count (FU-227 follow-up). ``total_measure`` keeps the existing
+    # convention of being the TOTAL the user got — for a "$4.20 for 4 × 125g"
+    # purchase that's `500.0`. ``pack_count`` captures the "4" so the obs
+    # list can render "4 × 125g" instead of "500g flat" without losing the
+    # multipack context. None ⇒ single pack / free-weight (the common case).
+    # Math (per-unit cost, baseline, sidecar) reads only total_price /
+    # total_measure — pack_count is informational, never load-bearing.
+    pack_count: int | None = None
 
     class Fields(BaseEntity.Fields):
         STOCK_ITEM_ID = "stock_item_id"
@@ -51,3 +59,4 @@ class StockItemPriceObservation(BaseEntity):
         STORE_ID = "store_id"
         SHOPPING_LIST_LINE_ID = "shopping_list_line_id"
         CREATED_AT = "created_at"
+        PACK_COUNT = "pack_count"

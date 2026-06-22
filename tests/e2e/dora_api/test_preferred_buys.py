@@ -35,7 +35,10 @@ def test__preferred_buys__add_shows_on_detail(api):
     buys = _preferred_buys(item)
     assert len(buys) == 1
     assert buys[0]["label"] == "Vitasoy Oat Milky 1L"
-    assert buys[0]["position"] == 0
+    # FU-225: `position` column dropped — list is now sorted alphabetically
+    # by the detail handler (see get_stock_item_detail.py:419). No `position`
+    # field on the DTO.
+    assert "position" not in buys[0]
 
 
 def test__preferred_buys__rename_and_delete(api):
@@ -54,17 +57,13 @@ def test__preferred_buys__rename_and_delete(api):
     assert _preferred_buys(item) == []
 
 
-def test__preferred_buys__reorder_sets_positions(api):
+def test__preferred_buys__detail_lists_alphabetically(api):
+    """FU-225: the `/preferred-buys/reorder` endpoint was removed (manual
+    reorder UI retired); the detail handler sorts by label.lower() instead."""
     item = _new_stock_item()
-    for label in ("A", "B", "C"):
+    for label in ("Charlie", "Alpha", "Bravo"):
         requests.post(f"{STOCK_ITEMS}/{item}/preferred-buys", json={"label": label})
-    ids = [b["preferred_buy_id"] for b in _preferred_buys(item)]  # A, B, C @ 0,1,2
-    resp = requests.patch(
-        f"{STOCK_ITEMS}/{item}/preferred-buys/reorder",
-        json={"ordered_ids": list(reversed(ids))},
-    )
-    assert resp.status_code == 204, resp.text
-    assert [b["label"] for b in _preferred_buys(item)] == ["C", "B", "A"]
+    assert [b["label"] for b in _preferred_buys(item)] == ["Alpha", "Bravo", "Charlie"]
 
 
 def test__preferred_buys__blank_label_rejected(api):

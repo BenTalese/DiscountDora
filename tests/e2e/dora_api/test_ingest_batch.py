@@ -34,20 +34,20 @@ def _post_ingest(key: str, body: dict, idem: str | None = None) -> requests.Resp
     return requests.post(INGEST, json=body, headers=headers)
 
 
-def _seeded_merchant_id() -> str:
-    """Reuse a seeded Merchant — the test DB is session-scoped and other
-    tests assert on the seeded merchant total, so we must not pollute."""
-    merchants = requests.get(f"{BASE}/merchants").json()["items"]
-    assert merchants, "expected seed to provision at least one merchant"
-    return merchants[0]["merchant_id"]
+def _seeded_store_id() -> str:
+    """Reuse a seeded Store — the test DB is session-scoped and other
+    tests assert on the seeded store total, so we must not pollute."""
+    stores = requests.get(f"{BASE}/stores").json()["items"]
+    assert stores, "expected seed to provision at least one store"
+    return stores[0]["store_id"]
 
 
-def _map_store(source_id: str, external_name: str, merchant_id: str) -> None:
+def _map_store(source_id: str, external_name: str, store_id: str) -> None:
     """C-10.3 admin route — used here to satisfy FU-190 before pushing
     real records. Defined in C-10.3 (ingestion_source_admin)."""
     resp = requests.put(
         f"{SOURCES}/{source_id}/store-mappings",
-        json={"external_name": external_name, "merchant_id": merchant_id},
+        json={"external_name": external_name, "store_id": store_id},
     )
     assert resp.status_code in (200, 201, 204), resp.text
 
@@ -78,7 +78,7 @@ def test__ingest__unknown_store_quarantines(api):
         "products": [{
             "ref": "p1",
             "name": "Brand X Oat Milk 1L",
-            "merchant": "MysteryStore",
+            "store": "MysteryStore",
             "merchant_stockcode": "ABC123",
         }],
     }
@@ -92,14 +92,14 @@ def test__ingest__unknown_store_quarantines(api):
 def test__ingest__roundtrip_after_store_mapping(api):
     """Map the store, push a product + offer, observe it appended."""
     sid, key = _mint_key()
-    merchant_id = _seeded_merchant_id()
-    _map_store(sid, "ExternalStoreName", merchant_id)
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStoreName", store_id)
 
     body = {
         "products": [{
             "ref": "p1",
             "name": f"Brand X Oat Milk {uuid.uuid4().hex[:6]}",
-            "merchant": "ExternalStoreName",
+            "store": "ExternalStoreName",
             "merchant_stockcode": uuid.uuid4().hex[:10],
         }],
         "offers": [{
@@ -120,15 +120,15 @@ def test__ingest__product_dedupe_by_stockcode_then_offer_appends(api):
     """Re-push the same product (same stockcode) → it dedupes; the
     new offer appends a new historic point."""
     sid, key = _mint_key()
-    merchant_id = _seeded_merchant_id()
-    _map_store(sid, "ExternalStore", merchant_id)
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
     stockcode = uuid.uuid4().hex[:10]
 
     first = _post_ingest(key, {
         "products": [{
             "ref": "p1",
             "name": "Same Product",
-            "merchant": "ExternalStore",
+            "store": "ExternalStore",
             "merchant_stockcode": stockcode,
         }],
         "offers": [{
@@ -143,7 +143,7 @@ def test__ingest__product_dedupe_by_stockcode_then_offer_appends(api):
         "products": [{
             "ref": "p1",
             "name": "Same Product",
-            "merchant": "ExternalStore",
+            "store": "ExternalStore",
             "merchant_stockcode": stockcode,
         }],
         "offers": [{
@@ -166,15 +166,15 @@ def test__ingest__duplicate_offer_skipped(api):
     """Same (product, observed_at, price_now) twice → second is
     deduped as `duplicate`, not appended."""
     sid, key = _mint_key()
-    merchant_id = _seeded_merchant_id()
-    _map_store(sid, "ExternalStore", merchant_id)
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
 
     stockcode = uuid.uuid4().hex[:10]
     base = {
         "products": [{
             "ref": "p1",
             "name": "Dup Test",
-            "merchant": "ExternalStore",
+            "store": "ExternalStore",
             "merchant_stockcode": stockcode,
         }],
         "offers": [{
@@ -194,15 +194,15 @@ def test__ingest__duplicate_offer_skipped(api):
 
 def test__ingest__idempotency_key_replays_to_noop(api):
     sid, key = _mint_key()
-    merchant_id = _seeded_merchant_id()
-    _map_store(sid, "ExternalStore", merchant_id)
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
     idem = uuid.uuid4().hex
 
     body = {
         "products": [{
             "ref": "p1",
             "name": "Idem Test",
-            "merchant": "ExternalStore",
+            "store": "ExternalStore",
             "merchant_stockcode": uuid.uuid4().hex[:10],
         }],
         "offers": [{
@@ -226,14 +226,14 @@ def test__ingest__idempotency_key_replays_to_noop(api):
 def test__ingest__bad_record_does_not_fail_batch(api):
     """A bad record returns per-record `failed`, not a 4xx."""
     sid, key = _mint_key()
-    merchant_id = _seeded_merchant_id()
-    _map_store(sid, "ExternalStore", merchant_id)
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
 
     body = {
         "products": [{
             "ref": "p1",
             "name": "Good Product",
-            "merchant": "ExternalStore",
+            "store": "ExternalStore",
             "merchant_stockcode": uuid.uuid4().hex[:10],
         }],
         "offers": [
@@ -258,3 +258,25 @@ def test__ingest__bad_record_does_not_fail_batch(api):
         r["kind"] == "offer" and r["reason"] == "product_unknown"
         for r in result["failed"]
     ), result
+
+
+def test__ingest__rejects_price_observations_field(api):
+    """FU-227 chunk 7 (J1) — observations are in-app input only; the producer
+    path was removed. A payload still sending `price_observations[]` is
+    rejected by `extra="forbid"` (400) before any record is processed. This
+    pins the contract removal so a future agent can't quietly re-add the
+    field without revisiting Idea A."""
+    _, key = _mint_key()
+    body = {
+        "products": [],
+        "offers": [],
+        "price_observations": [{
+            "product_ref": "p1",
+            "price": 1.00,
+            "observed_at": "2026-06-17T10:00:00+00:00",
+        }],
+    }
+    resp = _post_ingest(key, body)
+    assert resp.status_code == 400, resp.text
+    detail = (resp.json().get("errors") or "") + (resp.json().get("detail") or "")
+    assert "price_observations" in detail.lower() or "extra" in detail.lower(), resp.text

@@ -100,6 +100,9 @@ def configure_mappings(db: SQLAlchemy):
         # Phase D / FU-186 — admin-set URL the Product Search nav opens.
         # Empty string ⇒ unset; see entity comment.
         Column("product_search_url", String(500), nullable=False, server_default=""),
+        # FU-227 follow-up — AU vs US per-unit display convention. Compute
+        # math is locale-independent; only the rendered denominator changes.
+        Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
     )
 
     product_offer_table = Table(
@@ -140,6 +143,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("size_unit", String(255)),
         Column("size_value", Float),
         Column("web_url", String(255), nullable=True),
+        # Multipack metadata (FU-227 follow-up). NULL = single pack /
+        # free-weight. ``size_value`` stays as the total measure of the
+        # whole bundle (existing convention); pack_count is informational.
+        Column("pack_count", Integer, nullable=True),
     )
 
     stock_group_table = Table(
@@ -355,6 +362,11 @@ def configure_mappings(db: SQLAlchemy):
         Column("store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
         Column("shopping_list_line_id", UUIDType, ForeignKey("ShoppingListLine.id", ondelete="SET NULL"), nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
+        # Multipack metadata (FU-227 follow-up). NULL = single pack /
+        # free-weight. ``total_measure`` stays as the total the user got;
+        # pack_count is informational so the obs row can render
+        # "4 × 125g" instead of "500g flat".
+        Column("pack_count", Integer, nullable=True),
     )
 
     # P2-04 — user's negative decisions on Dora suggestions. One row per

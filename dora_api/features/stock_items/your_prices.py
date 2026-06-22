@@ -35,12 +35,24 @@ def _as_naive_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 from dora_api.domain import units
+from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.stock_item_price_observation import \
     StockItemPriceObservation
 from dora_api.domain.entities.store import Store
 from dora_api.persistence.field import EntityField
+
+
+def _locale_from_repo(repo) -> str:
+    """Resolve the install-wide unit-pricing locale ("AU" or "US") from the
+    AppSetting singleton. Falls back to "AU" if no row exists yet (the
+    accessor lazily creates one on first read elsewhere). Single read per
+    build_* call — small fetch, never hot enough to need caching."""
+    rows = repo.get(AppSetting).all()
+    if not rows:
+        return "AU"
+    return getattr(rows[0], "unit_pricing_locale", "AU") or "AU"
 
 
 # Tunable constants — module-level so they're discoverable for review.
@@ -102,7 +114,8 @@ def _per_unit_in_canonical(
 
 
 def build_your_prices_for_item(
-    repo, stock_item_id: UUID, *, now: datetime | None = None,
+    repo, stock_item_id: UUID, *,
+    now: datetime | None = None, locale: str | None = None,
 ) -> YourPrices:
     """Build the YourPrices signal for one stock item.
 
@@ -120,6 +133,7 @@ def build_your_prices_for_item(
          unit. Never contributes to the median.
     """
     _now = now or datetime.now(timezone.utc)
+    _locale = locale or _locale_from_repo(repo)
 
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
@@ -157,6 +171,20 @@ def build_your_prices_for_item(
         unit=latest.unit,
     )
     current_value = latest_per_unit[0] if latest_per_unit else None
+
+    # AU-shelf display denominator (FU-228 follow-up): pick /L vs /100ml (or
+    # /kg vs /100g) based on whether the **latest** observation reached a
+    # full canonical unit. Below the flip, display per-100; at-or-above,
+    # display per-canonical. `display_factor` is what we divide a
+    # per-canonical price by to land in the display denominator. Single
+    # source so the widget headline, the sidecar entries, and the chart
+    # axis can't drift.
+    latest_measure_in_canonical = units.convert(
+        latest.total_measure, latest.unit, canonical_unit,
+    ) or 0.0
+    display_unit, display_factor = units.display_denominator_for(
+        active_dim, latest_measure_in_canonical, locale=_locale,
+    )
 
     # Resolve the most-recent observation's store name (A2 — surfaced in the
     # widget's "Last seen $X at Coles" line).
@@ -197,13 +225,28 @@ def build_your_prices_for_item(
             above = current_value > baseline * ABOVE_THRESHOLD
 
     # LC-2 offers sidecar — never folded into the median above. Populated
-    # only when there are linked products with a current offer.
-    offers = _build_offers_sidecar(repo, stock_item_id, canonical_unit=canonical_unit)
+    # only when there are linked products with a current offer. Already in
+    # display units (sidecar builder applies the same display factor).
+    offers = _build_offers_sidecar(
+        repo, stock_item_id,
+        canonical_unit=canonical_unit,
+        display_unit=display_unit,
+        display_factor=display_factor,
+    )
 
+    # Apply the display factor to the price-bearing fields one final time.
+    # Internal compute stays in canonical units; only the DTO is shifted.
+    display_baseline = baseline / display_factor if baseline is not None else None
+    display_current = current_value / display_factor if current_value is not None else None
+
+    # `baseline_unit` is also the unit `current` is reported in — so set it
+    # whenever the active dimension is known (even when baseline is null
+    # below MIN_SAMPLES), otherwise the widget renders "Last seen $2.72"
+    # with no denominator.
     return YourPrices(
-        baseline=baseline,
-        baseline_unit=canonical_unit if baseline is not None else None,
-        current=current_value,
+        baseline=display_baseline,
+        baseline_unit=display_unit if display_current is not None else None,
+        current=display_current,
         above_baseline=above,
         sample_count=sample_count,
         last_observed_at=latest.observed_at,
@@ -213,7 +256,8 @@ def build_your_prices_for_item(
 
 
 def build_your_prices_for_product(
-    repo, product_id: UUID, *, now: datetime | None = None,
+    repo, product_id: UUID, *,
+    now: datetime | None = None, locale: str | None = None,
 ) -> YourPrices:
     """Per-product variant used by the Price-History page (chunk 6).
 
@@ -252,6 +296,7 @@ def build_your_prices_for_product(
         )
 
     _now = now or datetime.now(timezone.utc)
+    _locale = locale or _locale_from_repo(repo)
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
             StockItemPriceObservation,
@@ -317,10 +362,22 @@ def build_your_prices_for_product(
         if current_value is not None:
             above = current_value > baseline * ABOVE_THRESHOLD
 
+    # AU-shelf display denominator (FU-228 follow-up) — same rule as the
+    # per-item variant. The Price-History page card reads this baseline_unit
+    # for its "Your usual: $X" caption (F-3).
+    latest_measure_in_canonical = units.convert(
+        latest.total_measure, latest.unit, canonical_unit,
+    ) or 0.0
+    display_unit, display_factor = units.display_denominator_for(
+        active_dim, latest_measure_in_canonical, locale=_locale,
+    )
+    display_baseline = baseline / display_factor if baseline is not None else None
+    display_current = current_value / display_factor if current_value is not None else None
+
     return YourPrices(
-        baseline=baseline,
-        baseline_unit=canonical_unit if baseline is not None else None,
-        current=current_value,
+        baseline=display_baseline,
+        baseline_unit=display_unit if display_current is not None else None,
+        current=display_current,
         above_baseline=above,
         sample_count=sample_count,
         last_observed_at=latest.observed_at,
@@ -360,6 +417,46 @@ def _resolve_store_names(repo, store_ids: Iterable[UUID | None]) -> dict[UUID, s
     for s in repo.get(Store).all(EntityField(Store, "id").in_(list(ids))):
         out[s.id] = s.name
     return out
+
+
+def _display_for_series(
+    observations: list[StockItemPriceObservation],
+    products: list[Product],
+    *,
+    active_dim: str,
+    canonical_unit: str,
+    locale: str = "AU",
+) -> tuple[str, float]:
+    """Pick the shelf display denominator for a chart series.
+
+    Mirrors the YourPrices rule: use the latest observation's measure in
+    canonical units to decide whether to flip to the smaller unit
+    (AU /100ml / /100g, US /fl oz / /oz). If there are no observations
+    (offer-only series — e.g. a linked product with no in-app obs yet),
+    fall back to the first usable linked-product size so the chart axis
+    still picks an appropriate denominator.
+    """
+    measure_in_canonical = 0.0
+    if observations:
+        latest = max(observations, key=lambda o: o.observed_at)
+        latest_def = units.find_unit(latest.unit)
+        if latest_def is not None and latest_def.dimension == active_dim:
+            measure_in_canonical = units.convert(
+                latest.total_measure, latest.unit, canonical_unit,
+            ) or 0.0
+    if measure_in_canonical == 0.0:
+        for prod in products:
+            if not prod.size_unit or not prod.size_value:
+                continue
+            offer_def = units.find_unit(prod.size_unit)
+            if offer_def is None or offer_def.dimension != active_dim:
+                continue
+            measure_in_canonical = units.convert(
+                prod.size_value, prod.size_unit, canonical_unit,
+            ) or 0.0
+            if measure_in_canonical > 0:
+                break
+    return units.display_denominator_for(active_dim, measure_in_canonical, locale=locale)
 
 
 def _active_dim_from_latest(
@@ -493,17 +590,19 @@ def _offer_points_from_products(
 
 
 def build_stock_item_price_series(
-    repo, stock_item_id: UUID,
+    repo, stock_item_id: UUID, *, locale: str | None = None,
 ) -> tuple[str | None, list[PriceSeriesPoint]]:
     """Unioned per-unit price series for one stock item (C5b bottom-sheet).
 
-    Returns ``(canonical_unit, points)`` sorted oldest→newest, with every
-    ``unit_price`` expressed in ``canonical_unit`` so observations ("your
-    data") and linked-product offers ("context") share the chart's y-axis.
-    Active dimension follows the most-recent observation (B4); with no
-    observations we fall back to a linked product's dimension so offer context
-    still renders. Returns ``(None, [])`` when neither exists.
+    Returns ``(display_unit, points)`` sorted oldest→newest, with every
+    ``unit_price`` expressed in the install's locale display denominator
+    (AU ``L``/``100ml``/``kg``/``100g``/``ea`` or US ``qt``/``fl oz``/``lb``
+    /``oz``/``ea`` — see `units.display_denominator_for`). Active dimension
+    follows the most-recent observation (B4); with no observations we fall
+    back to a linked product's dimension so offer context still renders.
+    Returns ``(None, [])`` when neither exists.
     """
+    _locale = locale or _locale_from_repo(repo)
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
             StockItemPriceObservation,
@@ -517,15 +616,34 @@ def build_stock_item_price_series(
         return None, []
     canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
 
+    # Display factor sourced from the latest **observation** when one exists
+    # (the user's most-recent buy is the strongest signal for "what size are
+    # we shopping in?"); falls back to the cheapest linked offer's size so
+    # the chart axis still flips sensibly for an offer-only item.
+    display_unit, display_factor = _display_for_series(
+        observations, products, active_dim=active_dim,
+        canonical_unit=canonical_unit, locale=_locale,
+    )
+
     store_names = _resolve_store_names(repo, (o.store_id for o in observations))
     points = _observation_points(observations, active_dim=active_dim, store_names=store_names)
     points += _offer_points_from_products(products, active_dim=active_dim, canonical_unit=canonical_unit)
+    if display_factor != 1.0:
+        points = [
+            PriceSeriesPoint(
+                observed_at=p.observed_at,
+                unit_price=p.unit_price / display_factor,
+                source=p.source,
+                store_name=p.store_name,
+            )
+            for p in points
+        ]
     points.sort(key=lambda p: p.observed_at)
-    return canonical_unit, points
+    return display_unit, points
 
 
 def build_product_observation_series(
-    repo, product_id: UUID,
+    repo, product_id: UUID, *, locale: str | None = None,
 ) -> tuple[str | None, list[PriceSeriesPoint]]:
     """Per-unit observation series for a product (H2 overlay on the
     per-product Price-History page).
@@ -562,21 +680,39 @@ def build_product_observation_series(
     if active_dim is None:
         return None, []
     canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
+    _locale = locale or _locale_from_repo(repo)
+    display_unit, display_factor = _display_for_series(
+        observations, [], active_dim=active_dim,
+        canonical_unit=canonical_unit, locale=_locale,
+    )
     store_names = _resolve_store_names(repo, (o.store_id for o in observations))
     points = _observation_points(observations, active_dim=active_dim, store_names=store_names)
+    if display_factor != 1.0:
+        points = [
+            PriceSeriesPoint(
+                observed_at=p.observed_at,
+                unit_price=p.unit_price / display_factor,
+                source=p.source,
+                store_name=p.store_name,
+            )
+            for p in points
+        ]
     points.sort(key=lambda p: p.observed_at)
-    return canonical_unit, points
+    return display_unit, points
 
 
 def _build_offers_sidecar(
-    repo, stock_item_id: UUID, *, canonical_unit: str,
+    repo, stock_item_id: UUID, *,
+    canonical_unit: str, display_unit: str, display_factor: float,
 ) -> list[OfferSidecarEntry]:
     """LC-2 — "Current shelf prices: $X at Y · $Z at W" for products users.
 
     Reads the current offers of every linked product, normalised to the
-    same canonical unit as the baseline so they're directly comparable
-    visually. Never returns offers in a different dimension than the
-    baseline (a sized product in ml can't sit next to a count baseline).
+    same **display** denominator as the baseline so the sidebar reads as
+    a direct comparison ("Usually $1.75 / 100ml" · "Current shelf prices:
+    $1.50 / 100ml at Coles"). Sized in canonical first, then divided by
+    `display_factor` to land in `display_unit`. Cross-dimension offers
+    (e.g. a `12 ea` pack against a per-L baseline) are dropped.
     """
     # Shared loader (eager-loads current_offer/store — the relationships are
     # noload, so a bare repo fetch would leave current_offer None and the
@@ -606,12 +742,12 @@ def _build_offers_sidecar(
         size_in_canonical = units.convert(prod.size_value, prod.size_unit, canonical_unit)
         if size_in_canonical is None or size_in_canonical <= 0:
             continue
-        per_unit = float(offer.price_now) / size_in_canonical
+        per_canonical = float(offer.price_now) / size_in_canonical
         store_name = prod.store.name if prod.store else "Unknown store"
         out.append(OfferSidecarEntry(
             store_name=store_name,
-            price_per_unit=per_unit,
-            unit=canonical_unit,
+            price_per_unit=per_canonical / display_factor,
+            unit=display_unit,
         ))
     # Cheapest first — what users care about most is the deal.
     out.sort(key=lambda e: e.price_per_unit)

@@ -17,8 +17,8 @@ def _mint() -> tuple[str, str]:
     return body["source"]["id"], body["key"]
 
 
-def _seeded_merchant_id() -> str:
-    return requests.get(f"{BASE}/merchants").json()["items"][0]["merchant_id"]
+def _seeded_store_id() -> str:
+    return requests.get(f"{BASE}/stores").json()["items"][0]["store_id"]
 
 
 def test__store_mappings__list_starts_empty(api):
@@ -29,46 +29,46 @@ def test__store_mappings__list_starts_empty(api):
 
 def test__store_mappings__upsert_then_list(api):
     sid, _ = _mint()
-    mid = _seeded_merchant_id()
+    mid = _seeded_store_id()
     name = f"ExternalCo-{uuid.uuid4().hex[:6]}"
 
     resp = requests.put(f"{SOURCES}/{sid}/store-mappings", json={
-        "external_name": name, "merchant_id": mid,
+        "external_name": name, "store_id": mid,
     })
     assert resp.status_code == 200, resp.text
-    assert resp.json()["merchant_id"] == mid
+    assert resp.json()["store_id"] == mid
     assert resp.json()["external_name"] == name
 
     items = requests.get(f"{SOURCES}/{sid}/store-mappings").json()["items"]
-    assert any(m["external_name"] == name and m["merchant_id"] == mid for m in items)
+    assert any(m["external_name"] == name and m["store_id"] == mid for m in items)
 
 
-def test__store_mappings__quarantine_via_null_merchant(api):
+def test__store_mappings__quarantine_via_null_store(api):
     sid, _ = _mint()
     name = f"PendingCo-{uuid.uuid4().hex[:6]}"
     resp = requests.put(f"{SOURCES}/{sid}/store-mappings", json={
-        "external_name": name, "merchant_id": None,
+        "external_name": name, "store_id": None,
     })
     assert resp.status_code == 200, resp.text
-    assert resp.json()["merchant_id"] is None
-    assert resp.json()["merchant_name"] is None
+    assert resp.json()["store_id"] is None
+    assert resp.json()["store_name"] is None
 
 
-def test__store_mappings__bad_merchant_id_rejected(api):
+def test__store_mappings__bad_store_id_rejected(api):
     sid, _ = _mint()
     resp = requests.put(f"{SOURCES}/{sid}/store-mappings", json={
         "external_name": "X",
-        "merchant_id": str(uuid.uuid4()),
+        "store_id": str(uuid.uuid4()),
     })
     assert resp.status_code == 400, resp.text
 
 
 def test__store_mappings__delete(api):
     sid, _ = _mint()
-    mid = _seeded_merchant_id()
+    mid = _seeded_store_id()
     created = requests.put(f"{SOURCES}/{sid}/store-mappings", json={
         "external_name": f"DropMe-{uuid.uuid4().hex[:6]}",
-        "merchant_id": mid,
+        "store_id": mid,
     }).json()
 
     resp = requests.delete(f"{SOURCES}/{sid}/store-mappings/{created['id']}")
@@ -82,5 +82,5 @@ def test__store_mappings__unknown_source_404(api):
     assert requests.get(f"{SOURCES}/{bogus}/store-mappings").status_code == 404
     assert requests.put(
         f"{SOURCES}/{bogus}/store-mappings",
-        json={"external_name": "x", "merchant_id": None},
+        json={"external_name": "x", "store_id": None},
     ).status_code == 404

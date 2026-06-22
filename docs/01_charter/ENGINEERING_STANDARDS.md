@@ -435,6 +435,52 @@ exceptions, which still must be commented) · **Source** (where it was establish
   ShoppingListDetail / MyProductsPage / BarcodesQR / ShoppingListTemplates
   were the recurring shape that prompted the rule.
 
+### R-017 — Seed-data discipline: features land with seed coverage
+- **Rule:** any code change that **adds, modifies, or removes a feature**
+  MUST also update `dora_api/persistence/seed.py` in the same unit of work,
+  so a fresh `DORA_ALLOW_DESTRUCTIVE` reset yields plentiful, varied test
+  data that exercises the new/changed feature's **state matrix**. New
+  entities → seed rows covering edge cases (empty / threshold / over).
+  Modified entities → updated seed values (no orphan rows the new code
+  can't render). Removed entities/columns → cleaned references. Pure
+  refactors, non-feature tidy-ups, and shared-helper extractions are
+  carve-outs (no behaviour change → no seed movement).
+- **Why:** Repeatedly a feature has landed, code-reviewed clean, but a fresh
+  dev env produced no row that triggered the new code path — the next agent
+  (or the user, on browser walk) had to hand-click their way through the app
+  to manufacture the state. The "Your prices" widget is the canonical
+  example: without the FU-227 chunk-2 observation seed (3+ obs / 1 above-1.15× /
+  count-dim / store-tagged / < MIN_SAMPLES variants), the widget renders the
+  empty state on every item and the above-usual chip is invisible. Seed-data
+  reviews then *also* drift behind code reviews. Move them together.
+- **Apply:** When the diff touches a feature surface (new endpoint, new
+  entity field, changed read shape, new conditional render), open `seed.py`
+  in the same commit and ask "does the fresh seed surface this end-to-end?".
+  Add rows that cover **(a)** the happy path, **(b)** at least one edge — the
+  threshold, the empty state, the < min-samples branch, whatever the feature
+  has. Use the existing helper functions when present (`make_item`,
+  `make_product`, `price_obs`, …); extract one if a third use appears.
+  Re-run the seed locally (`DORA_ALLOW_DESTRUCTIVE=1` + restart) and verify
+  the new state renders before closing the work unit.
+- **Violation signal:** a chunk's diff touches a feature but `seed.py` is
+  untouched; the worklog entry doesn't mention seed updates; the close-gate
+  browser walk requires hand-clicking through the app to manufacture a state
+  the new code is supposed to render; a future PR adds seed rows "to test
+  a feature that landed three chunks ago".
+- **Carve-outs (must be commented):** pure refactors that don't change a
+  user-visible shape (extracting a helper, renaming an internal symbol);
+  bug fixes that don't introduce a new state (a one-line null-check); chunks
+  that explicitly **remove** a feature without adding a replacement (the
+  seed clean-up is the action, not new rows). For each carve-out, the
+  worklog says "no seed change needed because…".
+- **Source:** FU-227 chunk 1 → chunk 8 (the pricing-system reassessment).
+  The handoff doc spelled out the matrix the widget needed to render —
+  baseline-ready, above-1.15×, count-dim, store-tagged, < MIN_SAMPLES — and
+  chunk 2 shipped exactly those seed rows in the same unit. Without that
+  discipline the visible widget would have looked broken on every item in
+  the dev env. The user asked for this to be a standing rule across every
+  prompt, and chunk 8 promotes it here.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -738,6 +784,37 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   / StockOverview) are an opportunistic follow-up — they work today, but
   each re-fetches on every visit instead of trusting the cache.
 - **Promotes rule:** R-016.
+
+### ADR-012 — Seed-data discipline: feature changes carry seed updates
+- **Date / task:** 2026-06-22 (FU-227 chunk 8; user request raised in the
+  pricing-system reassessment, locked in §9 of the handoff doc).
+- **Status:** accepted
+- **Context:** Repeatedly a feature has landed clean (vue-tsc + lint + tests
+  green) but a fresh `DORA_ALLOW_DESTRUCTIVE` reset produced no row that
+  triggered the new code path. The next agent — or the user, doing a browser
+  walk — had to manually fabricate state to see the feature render. The
+  "Your prices" widget made this acute: without the chunk-2 observation
+  seed (3+ obs / 1 above-1.15× / count dimension / store-tagged / <
+  MIN_SAMPLES variants), the widget renders the empty state on every item
+  and the above-usual chip is invisible. Seed reviews lagged code reviews
+  by a chunk, then two, then a whole feature pack. The user asked for this
+  to be a standing rule.
+- **Decision:** Adopt R-017. Every feature-touching diff opens `seed.py` in
+  the same unit of work and ensures the **state matrix** the feature renders
+  is exercised in the fresh seed — happy path + the obvious edges (empty,
+  threshold, below-minimum, error-y). Pure refactors, bug fixes that don't
+  introduce a new state, and explicit removals are carve-outs but must be
+  named in the worklog. Existing seed helpers (`make_item`, `make_product`,
+  `price_obs`, ...) are the preferred extension point — extract a new helper
+  on the third use.
+- **Consequences:** Marginal per-chunk overhead (open the seed; add a few
+  rows; verify with a fresh reset). Big payoff: the close-gate browser walk
+  becomes a real walk (every state matrix visible without hand-clicking),
+  the dev env stays honest, future agents picking up cold see the feature
+  the same way the user does. Rules out the lazy "I'll seed it later" path
+  that always drifts. Doesn't replace e2e tests — seed is the *visible*
+  surface; tests are the *correctness* surface.
+- **Promotes rule:** R-017.
 
 ---
 

@@ -39,9 +39,11 @@ def harvest_observation_fields(
     quantity: int | None,
     size_value: float | None,
     size_unit: str | None,
-) -> tuple[float, float, str]:
+    product_pack_count: int | None = None,
+) -> tuple[float, float, str, int | None]:
     """Fold a finished line's price into one observation's
-    ``(total_price, total_measure, unit)`` (A1 / E4).
+    ``(total_price, total_measure, unit, pack_count)`` (A1 / E4 + FU-227
+    multipack follow-up).
 
     ``unit_price`` is per *item* (one bottle, one pack); ``quantity`` is how
     many items the line bought. ``total_price`` is therefore always
@@ -58,11 +60,20 @@ def harvest_observation_fields(
     * **Sizeless / unsupported unit** — a *count* observation: one ``ea`` per
       item (``total_measure = quantity``, ``unit = "ea"``). Covers the
       "$9 for 3 punnets" case and product-less lines.
+
+    The returned ``pack_count`` carries the multipack context: when the
+    product has ``pack_count`` set (e.g. ``4`` for "125g × 4 pack"), the obs
+    inherits ``product_pack_count × quantity`` so a "$4.20 for 1 box of
+    4-pack" obs renders as "4 × 125g" rather than "500g flat". ``None`` for
+    non-multipack purchases.
     """
     qty = quantity or 1
     total_price = float(unit_price) * qty
+    pack_count: int | None = None
+    if product_pack_count and product_pack_count > 0:
+        pack_count = int(product_pack_count) * qty
     if size_value and float(size_value) > 0 and size_unit:
         udef = units.find_unit(size_unit)
         if udef is not None and udef.dimension in units.PRICE_DIMENSIONS:
-            return total_price, float(size_value) * qty, udef.canonical
-    return total_price, float(qty), "ea"
+            return total_price, float(size_value) * qty, udef.canonical, pack_count
+    return total_price, float(qty), "ea", pack_count

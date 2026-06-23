@@ -166,7 +166,11 @@ next reviewer can fast-skip them.
   §2.6 (C-cross); headcount → C-3. **Update 2026-06-17:** personas + the `products_enabled` flag
   are retired and L46 (stock-vs-product explainer) is dropped — onboarding is one un-personalized
   "show everything" path. See `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5.
-- DASHBOARD — deferred per master plan.
+- DASHBOARD — `04_proposals/IMPL_PLAN_DASHBOARD_REBUILD.md` (written 2026-06-23
+  after a `/design-critique` pass; maps §DASHBOARD L48-61 + strays L176/L272/L480
+  in its §5 coverage table). Supersedes the prior "deferred per master plan" hold —
+  the user pulled the dashboard forward. L480 (cross-app undo) marked out-of-scope
+  there → tracked as a follow-up for the undo/toast owner.
 - STOCK OVERVIEW — `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (C-1, written
   2026-06-06; maps L63-99). Cart bullets → C-7; planned-meals metric → C-2;
   location display → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` §2.5 (C-cross);

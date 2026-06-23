@@ -52,6 +52,20 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-287 — Cross-app undo off after dashboard "push expiry"
+- **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
+- **Type:** finding.
+- **What:** feedback L480 — "Undo cross-app seems off, e.g. dashboard push
+  expiry, then go to stock item and clear its expiry." An undo/toast initiated
+  on the dashboard alert action doesn't behave correctly once you navigate to
+  the stock item and mutate the same field. Marked **out-of-scope** in
+  `IMPL_PLAN_DASHBOARD_REBUILD.md` §5 — it's an undo/toast-ownership defect, not
+  a dashboard-design item.
+- **Why deferred:** belongs to whoever owns the cross-app undo/toast mechanism,
+  not the dashboard rebuild scope (R-007).
+- **Recommended resolution:** confirm in browser, then route to the undo/toast
+  owner (likely the global notify/undo layer).
+
 ## [OPEN] FU-286 — Settings Phase 4 (profile picture): backend run + browser walk pending
 - **Raised:** 2026-06-23 (Settings rebuild Phase 4).
 - **Type:** finding (static-only verification debt).

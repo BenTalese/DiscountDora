@@ -9,6 +9,57 @@ next.
 
 ---
 
+## 2026-06-23 — Dashboard `/design-critique` + rebuild plan (no code)
+
+**Session goal:** deep design review of `DashboardPage.vue` (mirroring the
+Settings critique flow) + assess the widgets, then codify into a phased rebuild
+plan. **No code changed** — this unit produced a design doc only.
+
+**Critique findings (delivered to user + folded into the plan):** the dashboard
+is visually accomplished but structurally hollow — ~40% of the grid is **vanity
+counters** (`products`/`recipes`/`meals`/`shopping_lists`) that answer no
+question, while the app's headline value (**money saved**) is invisible despite
+`reportsApiService.getSavingsCapturedAsync` + the whole reports API being built
+and unused by the dashboard. Other findings: actionable cards hide when empty
+(inversion — calm/new-user state looks worst), flat hierarchy with no triage
+gradient, a11y gaps (clickable `<article @click>`, `href="#" @click.prevent`,
+nested interactives), no quick actions, no temporal/predictive intelligence.
+
+**Deliverable:** `docs/04_proposals/IMPL_PLAN_DASHBOARD_REBUILD.md` — 8 phases
+(0 foundations/a11y/token-audit + de-monolith the 1964-line page → 1 prune
+vanity + welcome system → 2 zones + reorder → 3 alert-card redesign → 4 Money
+zone (savings/price-drops/spend/pantry-value from the unused reports) → 5
+restock radar + quick actions + cookable upgrade → 6 fortnight calendar → 7
+mobile). Ends with the **mandatory §5 coverage table** mapping every
+§DASHBOARD bullet (L48-61) + strays (L176/L272/L480) to a phase.
+
+**Widget verdicts:** keep+flagship `attention`; keep `use_soon`/`best_deals`/
+`budget`/`cookable`/`meal_plan`/`primary_list`; verify `suggestions` vs chat
+badge; modify `stock_items` (deep-link buckets); demote/merge `recipes`+`meals`;
+cut `shopping_lists` (→ primary list) + `products`. Add savings + restock by
+default; spend-trend/pantry-value/price-drops opt-in.
+
+**Ledger:** COVERAGE_GAPS L169 flipped DASHBOARD gap→covered (points at the new
+plan). New open: **FU-287** (cross-app undo off — L480, out-of-scope of the
+rebuild, routed to the undo/toast owner).
+
+**Engineering-standards close-gate:** no code touched, so no R-rule violations
+introduced. The plan itself encodes the gates per phase (R-001 de-monolith,
+R-002 tokens, R-003 state-ownership, R-007 scope, R-011 controls, R-014 empty
+states, C13 drag+tap, §7.5 portability for new endpoints). No ADR — this is a
+design doc, not a recurring engineering decision.
+
+**Open decisions for the user (plan §2):** card-prefs storage (local vs
+server-persisted once reorder lands), default-visible card set (Anti-creep),
+whether the fortnight calendar (needs a new aggregation endpoint) is in scope
+now or deferred, and the price-drop "new low" signal source.
+
+**Next up:** user confirms the §2 decisions, then execute Phase 0. (The other
+big impl plans — State Ownership, Cookbook, Cook Mode, Meal Plans — remain on
+the board per the prior entry.)
+
+---
+
 ## 2026-06-23 — Settings rebuild Phase 5: mobile pass (rebuild COMPLETE)
 
 **Session goal:** Phase 5 (final) of `IMPL_PLAN_SETTINGS_REBUILD.md` — the

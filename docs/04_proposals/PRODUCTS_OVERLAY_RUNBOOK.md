@@ -58,7 +58,7 @@ New test files: `tests/e2e/dora_api/test_preferred_buys.py`, `test_price_observa
 | **C** | Companion: standalone + wired to `/api/ingest` | **DONE** — backend GREEN (5 unit + 4 round-trip integration tests against live in-process `dora_api`); FE shipped (FU-219 resolved — Vue 3 + Quasar + Pinia in `../dora-companion/web_app/`) | `../dora-companion` |
 | **D** | Decommission `merchant_api`/`emailer` from Dora + search-URL nav (FU-186) | **DONE** — directories deleted; FE + BE + infra wiring stripped; new `AppSetting.product_search_url` powers the re-pointed nav (data-gated + R-014 disabled-with-hint); pytest 405/405, tsc + lint clean | dora_api + web_app |
 | **E** | `Merchant → Store` rename + `usual_store_id` + Stores page (FU-189) | **unblocked** — "merchant" = entity only now | dora_api + web_app |
-| **F** | Finish overlay: "your prices" intelligence, FU-210 tail, FU-214, FU-212 docs, FU-180 | not started | various |
+| **F** | Finish overlay: "your prices" intelligence, FU-210 tail, FU-214, FU-212 docs, FU-180 | **in progress** — "your prices" ✅ (FU-227 resolved 2026-06-22 + multipack/locale follow-up 2026-06-23); FU-212 ✅; FU-180 ✅ (closed 2026-06-23 — `PreferredBuy` + `usual_store_id` cover the intent); FU-232 ✅ (companion contract `pack_count` 2026-06-23); FU-210 tail **code-complete, browser-verify pending**; FU-214 not started (needs running app) | various |
 
 ---
 
@@ -116,12 +116,12 @@ New test files: `tests/e2e/dora_api/test_preferred_buys.py`, `test_price_observa
 - **Acceptance:** app boots; grep-clean; `usual_store_id` round-trips; Stores CRUD works.
 
 ### Phase F — Finish the overlay vision
-- **"Your prices" intelligence** (`PROPOSAL_INGESTION_API.md` §2.5/§6.4): union pushed data + receipts →
-  baseline + "paying more than usual"; surface on stock-item detail + Price History.
-- **FU-210 tail:** remove the illustrative hero-loop persona preview (`OnboardingLoop.vue` / `OnboardingStory.vue`).
-- **FU-214:** product-surface browser verify + build the L205/206 bulk-select variants + decide L197 hard-delete.
-- **FU-212:** power-user/ingestion docs (how to source product data; producer stays unnamed).
-- **FU-180:** reassess a preferred-store/merchant affordance now that `PreferredBuy` + `usual_store_id` exist.
+- ~~**"Your prices" intelligence**~~ ✅ resolved 2026-06-22 (FU-227, 8 chunks) + multipack `pack_count` + AU/US locale follow-up 2026-06-23.
+- ~~**FU-212** power-user/ingestion docs~~ ✅ resolved.
+- ~~**FU-180** preferred-store/merchant reassessment~~ ✅ closed 2026-06-23 — `PreferredBuy` (per-item product) + `StockItem.usual_store_id` (per-item store) cover the practical intent; app-wide preferred-store is YAGNI / cheap to add later if real usage demands.
+- ~~**FU-232** companion ingestion contract `pack_count`~~ ✅ resolved 2026-06-23 — `_ProductIn.pack_count` accepts the multipack count and persists to `Product.pack_count`; docs + round-trip pytest in place (static-only, needs env to execute).
+- **FU-210 tail:** the persona-preview removal sweep landed (smaller intentional trim, post-user-direction revert — see FU-210 in `DORA_FOLLOWUPS.md` 2026-06-17 updates). vue-tsc / lint / pytest clean. **Browser-verify pending** — confirm Story plays without LOOP_INSIGHT, renamed chips, Finish step, draft resume.
+- **FU-214:** product-surface browser verify + build the L205/206 bulk-select variants + decide L197 hard-delete. Needs running app.
 
 ---
 

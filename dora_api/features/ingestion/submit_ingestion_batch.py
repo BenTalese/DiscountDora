@@ -81,6 +81,11 @@ class _ProductIn(BaseModel):
     size: str | None = Field(default=None, max_length=255)
     size_unit: str | None = Field(default=None, max_length=255)
     size_value: float | None = Field(default=None, gt=0)
+    # Multipack metadata (FU-232). `size_value` remains the TOTAL across
+    # the bundle (e.g. 4×125g yoghurt → size_value=500); `pack_count` is
+    # informational, drives the "4 × 125g" obs-list label and the
+    # multipack disclosure in PriceEntry. NULL = single-pack.
+    pack_count: int | None = Field(default=None, gt=0)
     # `merchant_stockcode` carve-out: the producer's SKU code, kept
     # verbatim across the rename per the runbook.
     merchant_stockcode: str | None = Field(default=None, max_length=255)
@@ -316,6 +321,7 @@ class SubmitIngestionBatchHandler:
             existing.size = raw.size or existing.size
             existing.size_unit = raw.size_unit or existing.size_unit
             existing.size_value = raw.size_value or existing.size_value
+            existing.pack_count = raw.pack_count or existing.pack_count
             existing.web_url = raw.web_url or existing.web_url
             existing.is_active = True
             ctx.products_by_ref[raw.ref] = existing
@@ -345,6 +351,7 @@ class SubmitIngestionBatchHandler:
             size=raw.size or "",
             size_unit=raw.size_unit or "",
             size_value=raw.size_value or 0.0,
+            pack_count=raw.pack_count,
             web_url=raw.web_url,
         )
         self.repository.add(initial_offer)

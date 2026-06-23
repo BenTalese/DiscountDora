@@ -212,7 +212,7 @@
             >
                 <article
                     class="dora-card dora-card-clickable"
-                    @click="goTo('/settings/preferences')"
+                    @click="goTo('/settings/money')"
                 >
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />

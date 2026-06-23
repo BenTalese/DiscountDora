@@ -8,10 +8,16 @@ Covers the producer-facing contract:
 - Idempotency-Key replay = no-op
 - FU-190: unknown merchant quarantines into IngestionStoreMapping;
   mapping it then unblocks future ingest for that name.
+- FU-232: multipack `pack_count` round-trips onto the Product row.
 """
 import uuid
 
 import requests
+
+from dora_api.app import app
+from dora_api.domain.entities.product import Product
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 BASE = "http://localhost:5170/api"
 INGEST = f"{BASE}/ingest"
@@ -258,6 +264,72 @@ def test__ingest__bad_record_does_not_fail_batch(api):
         r["kind"] == "offer" and r["reason"] == "product_unknown"
         for r in result["failed"]
     ), result
+
+
+def test__ingest__pack_count_round_trips_on_product(api):
+    """FU-232 — the multipack `pack_count` column (schema added with the
+    FU-227 follow-up) is now accepted on `_ProductIn` and persisted on
+    `Product.pack_count`. Re-pushing the same product with a different
+    `pack_count` updates the row (additive: a NULL push doesn't clobber
+    an existing value, matching the other `or existing.*` fields)."""
+    sid, key = _mint_key()
+    store_id = _seeded_store_id()
+    _map_store(sid, "MultipackStore", store_id)
+
+    stockcode = uuid.uuid4().hex[:10]
+    name = f"Activia 4-pack {uuid.uuid4().hex[:6]}"
+    body = {
+        "products": [{
+            "ref": "p1",
+            "name": name,
+            "store": "MultipackStore",
+            "merchant_stockcode": stockcode,
+            "size_value": 500.0,    # total across the bundle
+            "size_unit": "g",
+            "pack_count": 4,
+        }],
+    }
+    resp = _post_ingest(key, body)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["accepted"][0]["kind"] == "product", resp.text
+
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        stockcode_field = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
+        rows = repo.get(Product).all(stockcode_field.eq(stockcode))
+        assert len(rows) == 1, rows
+        assert rows[0].pack_count == 4
+        assert rows[0].size_value == 500.0
+
+    # Push the same product again with no pack_count — the existing
+    # value sticks (matches `existing.pack_count or existing.pack_count`).
+    body_no_pack = {
+        "products": [{
+            "ref": "p1",
+            "name": name,
+            "store": "MultipackStore",
+            "merchant_stockcode": stockcode,
+        }],
+    }
+    resp = _post_ingest(key, body_no_pack)
+    assert resp.status_code == 200, resp.text
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        stockcode_field = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
+        rows = repo.get(Product).all(stockcode_field.eq(stockcode))
+        assert rows[0].pack_count == 4
+
+    # And rejects a non-positive pack_count (Field(gt=0)).
+    body_bad = {
+        "products": [{
+            "ref": "p1",
+            "name": f"bad {uuid.uuid4().hex[:6]}",
+            "store": "MultipackStore",
+            "pack_count": 0,
+        }],
+    }
+    resp = _post_ingest(key, body_bad)
+    assert resp.status_code == 400, resp.text
 
 
 def test__ingest__rejects_price_observations_field(api):

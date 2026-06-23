@@ -52,31 +52,6 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-232 — Companion / ingestion contract: push `pack_count` on Product
-- **Raised:** 2026-06-23 (FU-227 multipack follow-up).
-- **Type:** deferred job.
-- **What:** the in-app side of multipack pricing is wired — observations now
-  carry `pack_count`, the PriceEntry widget exposes it as a disclosure
-  ("Add pack count (multipack)"), the obs list renders "4 × 125g", and the
-  harvest path at `/finish` reads `Product.pack_count` to populate it. But
-  **the producer-facing contract still doesn't accept pack_count.** The
-  `_ProductIn` model in `submit_ingestion_batch.py` accepts
-  `{size, size_unit, size_value}` but not the new column. Producers that
-  want to push "Activia 125g × 4 pack" today must flatten `size_value=500`
-  (the existing convention — `size_value` is the TOTAL across the bundle)
-  and lose the structured pack-context.
-- **Why deferred:** the schema column is in place
-  (migration `d7b3e8f2a5c4`) and the existing user-side surfaces work
-  without the producer push (default = NULL). The contract change is its
-  own piece of work — needs producer-side coordination, doc updates,
-  acceptance test for the field round-trip, decision on whether to also
-  accept multipack metadata on `offers[]` or just `products[]`.
-- **Recommended resolution:** when the next companion / ingestion-contract
-  work lands. Add `pack_count: int | None = Field(default=None, gt=0)` on
-  `_ProductIn`; thread it through the upsert in `_apply_product`; update
-  `INGESTION_GUIDE.md` and `PROPOSAL_INGESTION_API.md` to document the
-  field; add a pytest asserting it round-trips on the Product row.
-
 ## [OPEN] FU-230 — confirm the offers sidecar now renders in the browser
 - **Raised:** 2026-06-22 (FU-227 chunk 6).
 - **Type:** finding (latent bug fixed — needs browser confirmation).
@@ -1301,48 +1276,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — pair the email work with the
   broader email/INV-4 effort; the `meals_per_week` pref with the next
   settings/onboarding touch (C-5 seeds it).
-
-## [OPEN] FU-180 — Reassess "preferred product" before commercialise (Phase 4)
-- **Raised:** 2026-06-14 (preferred-product removal sweep)
-- **Type:** open decision
-- **What:** `StockItem.preferred_product_id` was removed end-to-end this
-  session — column dropped, two sort orders degraded to `cheapest → name`,
-  barcode lookup collapsed to the m2m fallback, stock-value report rebased on
-  cheapest most-recent linked-product price. The original concern was your
-  own (feedback L131 — "Not sold... fluff vs noise"), and the manual per-item
-  annotation never earned its keep at this stage of the build. **Open
-  question:** once the rest of the app is built out (and the cart-button
-  picker, shop-mode, and stock-value report have real usage data), revisit
-  whether a "preferred *product*" or "preferred *merchant*" affordance is
-  worth adding back. The original spec wanted preferred *store/merchant*
-  (Feature Board L66, Unprocessed-Ideas #48/49/52) — a different shape from
-  the per-product field we deleted, and arguably more defensible because one
-  merchant choice would travel across all products from that merchant.
-- **Why deferred:** the existing design instinct (cart-button proposal open-Q
-  2: "always show the picker; preferred only pre-selects") means even a
-  rebuilt preferred only changes *order*, not *behaviour* — which cheapest-
-  first already does for free. Only worth revisiting if real usage shows
-  users wanting to express brand loyalty / size preference / allergen
-  avoidance and the current sort isn't getting them there.
-- **Recommended resolution:** later — end of app build (Phase 3 polish or
-  the first Phase 4 commercialise pass). Inputs to weigh: (a) any signals
-  in feedback that users wished they could pin a specific product; (b) the
-  cart-button picker's actual UX with cheapest-first sort; (c) whether a
-  preferred-*merchant* model (one annotation, app-wide) earns its keep
-  better than the per-stock-item preferred-product we just deleted.
-- **Update 2026-06-15 (C-5 onboarding design):** the onboarding **preferred-stores**
-  capture (feedback L45) was **dropped** and folded into this reconsideration — per the
-  user, it's the same uncertain bucket (stock-items-only friction + whether the companion
-  app ships, which would otherwise force custom/receipt product entry). So this FU now also
-  owns: **does onboarding ever capture preferred stores/merchants, and what would they
-  do** — revisit alongside the preferred-product question when the cart/companion surfaces
-  make a merchant preference earn its keep. (Merchant currently has only `name`; no
-  `is_enabled`/`preferred` field exists.)
-- **Update 2026-06-17 (products-as-overlay pivot):** the everyday "remember my favourite products"
-  intent is now met by **`PreferredBuy`** (free-text, on the stock item — FU-211), distinct from
-  the *preferred-merchant* sort/loyalty question this FU still owns. So the product side of this
-  reconsideration is largely addressed by PreferredBuy + `usual_store_id`; what remains open is
-  whether a preferred-*store* affordance (sort / pre-select) earns its keep.
 
 ## [OPEN] FU-179 — Browser-verify the whole Meal Plans surface (C-2 — all chunks)
 - **Raised:** 2026-06-14 (C-2.A…J — full redesign, static-only verified)

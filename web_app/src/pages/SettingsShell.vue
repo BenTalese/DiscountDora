@@ -12,24 +12,72 @@
                 <q-card flat bordered>
                     <q-list>
                         <q-item-label header class="settings-group-header">
-                            Your settings
+                            Account
                         </q-item-label>
-                        <q-item
-                            v-for="section in personalSections"
-                            :key="section.path"
-                            clickable
-                            :to="section.path"
-                            active-class="settings-section-active"
-                            exact
-                        >
-                            <q-item-section avatar>
-                                <q-icon :name="section.icon" />
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>{{ section.label }}</q-item-label>
-                                <q-item-label caption>{{ section.caption }}</q-item-label>
-                            </q-item-section>
-                        </q-item>
+                        <template v-for="entry in accountSections" :key="entryKey(entry)">
+                            <!-- Sub-group: non-clickable header + indented leaves -->
+                            <template v-if="'subheader' in entry">
+                                <q-item-label header class="settings-subheader">
+                                    {{ entry.subheader }}
+                                </q-item-label>
+                                <q-item
+                                    v-for="item in entry.items"
+                                    :key="item.path"
+                                    clickable
+                                    :to="item.path"
+                                    active-class="settings-section-active"
+                                    class="settings-subitem"
+                                    exact
+                                >
+                                    <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
+                                    <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
+                                </q-item>
+                            </template>
+                            <q-item
+                                v-else
+                                clickable
+                                :to="entry.path"
+                                active-class="settings-section-active"
+                                exact
+                            >
+                                <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
+                                <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
+                            </q-item>
+                        </template>
+
+                        <q-separator class="q-my-sm" />
+                        <q-item-label header class="settings-group-header">
+                            Kitchen setup
+                        </q-item-label>
+                        <template v-for="entry in kitchenSetupSections" :key="entryKey(entry)">
+                            <template v-if="'subheader' in entry">
+                                <q-item-label header class="settings-subheader">
+                                    {{ entry.subheader }}
+                                </q-item-label>
+                                <q-item
+                                    v-for="item in entry.items"
+                                    :key="item.path"
+                                    clickable
+                                    :to="item.path"
+                                    active-class="settings-section-active"
+                                    class="settings-subitem"
+                                    exact
+                                >
+                                    <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
+                                    <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
+                                </q-item>
+                            </template>
+                            <q-item
+                                v-else
+                                clickable
+                                :to="entry.path"
+                                active-class="settings-section-active"
+                                exact
+                            >
+                                <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
+                                <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
+                            </q-item>
+                        </template>
 
                         <template v-if="isAdmin">
                             <q-separator class="q-my-sm" />
@@ -37,22 +85,35 @@
                                 <q-icon :name="ICONS.shield" size="14px" class="q-mr-xs" />
                                 Admin · global
                             </q-item-label>
-                            <q-item
-                                v-for="section in adminSections"
-                                :key="section.path"
-                                clickable
-                                :to="section.path"
-                                active-class="settings-section-active"
-                                exact
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="section.icon" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>{{ section.label }}</q-item-label>
-                                    <q-item-label caption>{{ section.caption }}</q-item-label>
-                                </q-item-section>
-                            </q-item>
+                            <template v-for="entry in adminSections" :key="entryKey(entry)">
+                                <template v-if="'subheader' in entry">
+                                    <q-item-label header class="settings-subheader">
+                                        {{ entry.subheader }}
+                                    </q-item-label>
+                                    <q-item
+                                        v-for="item in entry.items"
+                                        :key="item.path"
+                                        clickable
+                                        :to="item.path"
+                                        active-class="settings-section-active"
+                                        class="settings-subitem"
+                                        exact
+                                    >
+                                        <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
+                                        <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
+                                    </q-item>
+                                </template>
+                                <q-item
+                                    v-else
+                                    clickable
+                                    :to="entry.path"
+                                    active-class="settings-section-active"
+                                    exact
+                                >
+                                    <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
+                                    <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
+                                </q-item>
+                            </template>
                         </template>
                     </q-list>
                 </q-card>
@@ -83,80 +144,59 @@
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
 
-    type Section = { path: string; label: string; caption: string; icon: string };
+    // IMPL_PLAN_SETTINGS_REBUILD §2.1 — three top-level groups, Account first.
+    // §6.5 (user pick): nested groupings render as an indented sub-list under a
+    // non-clickable sub-header (Recipe taxonomies under Kitchen setup; System
+    // under Admin). Captions dropped — label + icon only.
+    // NOTE: the SettingsNavGroup.vue extraction + visual rebuild are Phase 3;
+    // the per-group template here is intentionally repeated until then (the
+    // shared structure is what Phase 3 lifts out).
+    type NavLeaf = { path: string; label: string; icon: string };
+    type NavSubGroup = { subheader: string; items: NavLeaf[] };
+    type NavEntry = NavLeaf | NavSubGroup;
 
-    const personalSections: Section[] = [
-        {
-            path: '/settings/preferences',
-            label: 'Preferences',
-            caption: 'Email schedule and personal toggles',
-            icon: ICONS.tune
-        },
-        {
-            path: '/settings/stock-locations',
-            label: 'Stock locations',
-            caption: 'Zones, areas and sections',
-            icon: ICONS.place
-        },
-        {
-            path: '/settings/stock-groups',
-            label: 'Stock groups',
-            caption: 'Tag items for filtering',
-            icon: ICONS.label
-        },
-        {
-            path: '/settings/recipe-vocab',
-            label: 'Recipe tags & categories',
-            caption: 'Cuisines, categories, dietary tags',
-            icon: ICONS.menu_book
-        },
-        {
-            path: '/settings/account',
-            label: 'Account',
-            caption: 'Your profile and sign-out',
-            icon: ICONS.person
-        },
-        {
-            path: '/settings/about',
-            label: 'About',
-            caption: 'Version + project info',
-            icon: ICONS.info
-        }
+    const entryKey = (e: NavEntry): string =>
+        'subheader' in e ? `sub:${e.subheader}` : e.path;
+
+    const accountSections: NavEntry[] = [
+        { path: '/settings/account', label: 'Account', icon: ICONS.person },
+        { path: '/settings/preferences', label: 'Preferences', icon: ICONS.tune },
+        { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
+        { path: '/settings/money', label: 'Money', icon: ICONS.savings },
+        { path: '/settings/voice', label: 'Voice', icon: ICONS.record_voice_over },
+        { path: '/settings/nutrition', label: 'Nutrition', icon: ICONS.restaurant },
+        { path: '/settings/about', label: 'About', icon: ICONS.info },
     ];
 
-    const adminSections: Section[] = [
-        // FU-189 / Phase E — replaced the legacy "Merchants" admin page that
-        // controlled the deleted merchant_api scraper backend (Phase D / FU-186).
+    const kitchenSetupSections: NavEntry[] = [
+        { path: '/settings/kitchen-setup/stock-locations', label: 'Stock locations', icon: ICONS.place },
+        { path: '/settings/kitchen-setup/stock-groups', label: 'Stock groups', icon: ICONS.label },
+        { path: '/settings/kitchen-setup/stores', label: 'Stores', icon: ICONS.store },
         {
-            path: '/settings/admin/stores',
-            label: 'Stores',
-            caption: 'Retail stores you shop at (logos upload here)',
-            icon: ICONS.store
+            subheader: 'Recipe taxonomies',
+            items: [
+                { path: '/settings/kitchen-setup/recipe-cuisines', label: 'Cuisines', icon: ICONS.menu_book },
+                { path: '/settings/kitchen-setup/recipe-categories', label: 'Categories', icon: ICONS.menu_book },
+                { path: '/settings/kitchen-setup/recipe-tools', label: 'Tools', icon: ICONS.menu_book },
+                { path: '/settings/kitchen-setup/recipe-meal-slots', label: 'Meal slots', icon: ICONS.menu_book },
+                { path: '/settings/kitchen-setup/recipe-dietary-tags', label: 'Dietary tags', icon: ICONS.label },
+            ],
         },
+    ];
+
+    const adminSections: NavEntry[] = [
+        { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
         {
-            path: '/settings/admin/users',
-            label: 'Users',
-            caption: 'Accounts, admin role, deals subs',
-            icon: ICONS.group
+            subheader: 'System',
+            items: [
+                { path: '/settings/admin/system/timezone', label: 'Timezone', icon: ICONS.event },
+                { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
+                { path: '/settings/admin/system/assistant', label: 'AI assistant', icon: ICONS.smart_toy },
+                { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
+            ],
         },
-        {
-            path: '/settings/admin/system',
-            label: 'System',
-            caption: 'Install-wide toggles',
-            icon: ICONS.settings_applications
-        },
-        {
-            path: '/settings/admin/audit-log',
-            label: 'Audit log',
-            caption: 'Every mutation, login, and client crash',
-            icon: ICONS.fact_check
-        },
-        {
-            path: '/settings/admin/api-access',
-            label: 'API access',
-            caption: 'Keys for sources that push data in',
-            icon: ICONS.key
-        }
+        { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.fact_check },
+        { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
     ];
 
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -173,5 +213,18 @@
         letter-spacing: 0.06em;
         color: var(--text-muted);
         padding-top: 12px;
+    }
+    /* §6.5 — second-level sub-header + indented children. */
+    .settings-subheader {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        padding-top: 8px;
+        padding-left: 28px;
+        min-height: unset;
+    }
+    .settings-subitem {
+        padding-left: 28px;
     }
 </style>

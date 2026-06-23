@@ -37,8 +37,8 @@ admin runs; **its existence is never referenced anywhere in the app.**
 ## 1. Current state (what we map into)
 
 Products are a **shared catalogue** (no `user_id`):
-- `Product` — name, brand, size/size_unit/size_value, `merchant`, `merchant_stockcode`, image,
-  is_active, is_available, web_url, **`current_offer`** (1:1 `ProductOffer`), **`historic_offers`**
+- `Product` — name, brand, size/size_unit/size_value, `pack_count` (multipack count, FU-232),
+  `merchant`, `merchant_stockcode`, image, is_active, is_available, web_url, **`current_offer`** (1:1 `ProductOffer`), **`historic_offers`**
   (1:N `ProductHistoricOffer`, append-only — what the price-history view reads).
 - `ProductOffer` / `ProductHistoricOffer` — `offered_on`, `price_now`, `price_was`.
 - `Merchant` — **just `name`** (no source/provider/`is_enabled` — C-8 territory).
@@ -83,8 +83,8 @@ e.g. "home box"), `key_hash` (SHA-256 of the secret, mirroring `AuthToken.token_
 ```
 POST /api/ingest        Authorization: Bearer <key>        Idempotency-Key: <batch id>
 {
-  "products":           [ { ref, name, brand?, size?, size_unit?, size_value?, merchant,
-                            merchant_stockcode?, web_url?, source } ],
+  "products":           [ { ref, name, brand?, size?, size_unit?, size_value?, pack_count?,
+                            merchant, merchant_stockcode?, web_url?, source } ],
   "offers":             [ { product_ref, price_now, price_was?, valid_until?, observed_at, source } ]
 }
 ```

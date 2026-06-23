@@ -109,10 +109,11 @@ export default defineRouter(function (/* { store, ssrContext } */) {
         }
 
         // Block non-admins from the global/admin settings tree. They get
-        // bounced to the personal Preferences page so they don't end up on a
-        // blank screen if they navigated by URL.
+        // bounced to the Account landing page (the post-rebuild settings
+        // landing per IMPL_PLAN_SETTINGS_REBUILD §2.3) so they don't end up
+        // on a blank screen if they navigated by URL.
         if (to.path.startsWith('/settings/admin') && !authStore.currentUser?.is_admin) {
-            return { path: '/settings/preferences' };
+            return { path: '/settings/account' };
         }
         return true;
     });

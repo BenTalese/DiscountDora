@@ -9,6 +9,331 @@ next.
 
 ---
 
+## 2026-06-23 — Settings rebuild Phase 2: page-level splits
+
+**Session goal:** Phase 2 of `IMPL_PLAN_SETTINGS_REBUILD.md` — break the two
+monolithic settings pages into focused ones + split Recipe vocab 1→5. Pure
+lift-and-shift; **no visual repaint** (cards/chrome unchanged — that's Phase 3).
+Verified `vue-tsc` + `eslint` GREEN on this machine.
+
+**Preferences split (1168 lines → Appearance-only + 4 new pages + Account lift):**
+- `PreferencesSettings.vue` — now **Appearance only** (Mode / Theme / Font /
+  Text size + all the theme-resolution logic).
+- `NotificationsSettings.vue` (NEW, `/settings/notifications`) — Weekly deals
+  email + Alerts email digest + Push notifications. Lifted drafts + handlers +
+  `useFeatureFlags` / `usePushSubscription` wholesale.
+- `MoneySettings.vue` (NEW, `/settings/money`) — Money-features toggle +
+  Grocery budget combined into one conditional flow (toggle → reveals budget
+  toggle → reveals amount + period), per §2.10.
+- `VoiceSettings.vue` (NEW, `/settings/voice`) — voice input + speech output.
+- `NutritionSettings.vue` (NEW, `/settings/nutrition`) — nutrition mode.
+- `AccountSettings.vue` — REWRITTEN. **Gains** the username/email/password edit
+  forms (lifted from the misnamed "Account" card on Preferences, §2.4). **Drops**
+  the "Danger zone" heading (sign-out stands alone, negative button carries the
+  weight) and "Restart onboarding" (→ About).
+- `AboutSettings.vue` — **gains** Restart onboarding + its dialog/handler.
+
+**System split (763 lines → 4 admin pages):**
+- `AdminSystemTimezoneSettings.vue` (`/settings/admin/system/timezone`).
+- `AdminSystemAlertsSettings.vue` (`/settings/admin/system/alerts`).
+- `AdminSystemAssistantSettings.vue` (`/settings/admin/system/assistant`) — LLM
+  config + probe/model-discovery + the Ollama setup banner.
+- `AdminSystemFeaturesSettings.vue` (`/settings/admin/system/features`) — the
+  feature-flag list **+ the scanning/QR toggle + the Product search URL**.
+  Each page does its own `app-settings` GET on mount + keeps the `!isAdmin`
+  banner (router guard already blocks, banner is belt-and-braces).
+- `SystemSettings.vue` DELETED.
+
+**Recipe vocab split (1 page → 5 + 2 new shared components):**
+- `TaxonomyManagerPage.vue` (NEW shared, R-001) — page wrapper hosting the
+  existing `VocabListEditor` + owning load/busy/run. Data access injected by
+  the caller (load/create/rename/remove/reorder callbacks) so it stays
+  service-agnostic (R-003 — each type already owns its CRUD endpoints).
+- `RecipeCuisinesSettings.vue` / `RecipeCategoriesSettings.vue` /
+  `RecipeToolsSettings.vue` / `RecipeMealSlotsSettings.vue` (NEW) — thin
+  `TaxonomyManagerPage` callers. Meal slots passes the reorder callback.
+- `RecipeDietaryTagsSettings.vue` (NEW, bespoke — tags carry a grouping label).
+- `DietaryTagFormDialog.vue` (NEW, §2.11) — single `BaseDialog` with name +
+  category in one form, replacing the **two sequential `$q.dialog.prompt`s**.
+- `RecipeVocabSettings.vue` DELETED.
+
+**Shell + routing:**
+- `SettingsShell.vue` — nav extended to the full IA: Account group gains
+  Notifications / Money / Voice / Nutrition; Kitchen setup gains a nested
+  **"Recipe taxonomies"** sub-list (5 children indented under a non-clickable
+  sub-header); Admin gains a nested **"System"** sub-list (4 children). §6.5
+  indented-sub-list pattern implemented inline via a small `NavEntry` union
+  (leaf | subgroup) + repeated per-group template. Icons: Money=`savings`,
+  Voice=`record_voice_over`, Nutrition=`restaurant`.
+- `routes.ts` — added all new child routes; redirects: old `recipe-vocab`
+  (both `/settings/recipe-vocab` and `/settings/kitchen-setup/recipe-vocab`)
+  → `…/recipe-cuisines`; old `/settings/admin/system` → `…/system/timezone`.
+- `DashboardPage.vue` — the grocery-budget card linked to
+  `/settings/preferences`; since the budget control moved to Money, repointed
+  it to `/settings/money` (a regression my own split introduced — fixed in the
+  same unit).
+- `HelpPage.vue` — AI-assistant entry repointed to `…/system/assistant`;
+  copy updated to "System > AI assistant". (Theme/font entry stays on
+  `/settings/preferences` — correct, that's Appearance.)
+- `BarcodesQR.vue` — "enable scanning" link repointed to `…/system/features`
+  (where the scanning toggle now lives).
+
+**Deviations from the literal plan, all logged:**
+- **Scanning toggle → Features** (plan §2.4 didn't place it). It's an install
+  capability flag, so it sits with the feature-flag list on Features, not on
+  Assistant where it visually lived pre-split. Cleaner mental model; Assistant
+  stays purely about the LLM.
+- **`TaxonomyManagerPage` injects callbacks** rather than a `type="cuisines"`
+  string prop (plan §2.4 sketch). Keeps the wrapper service-agnostic and
+  avoids a switch over taxonomy types inside it (R-003 — it never needs to
+  know which endpoints exist; the caller wires them). The five pages stay thin.
+- **`SettingsNavGroup.vue` not extracted yet** — the plan assigns that + the
+  indented-sub-nav polish to Phase 3 (visual). Phase 2 implements the indent
+  inline in `SettingsShell.vue`; Phase 3 lifts the repeated per-group template
+  into the component. The repetition is deliberate and flagged in-file.
+
+**Engineering-standards close-gate:**
+- R-001 — `TaxonomyManagerPage` + `DietaryTagFormDialog` extracted as shared
+  components rather than copy-pasting the vocab/dialog logic across pages.
+  `SettingsNavGroup` deferred to Phase 3 (noted above + in-file).
+- R-002 — no new colours/hex; existing tokens + Quasar classes reused exactly
+  as the originals had them.
+- R-003 — `TaxonomyManagerPage` is data-access-agnostic (caller injects the
+  service calls). Each split System page reads `app-settings` itself rather
+  than threading shared state. No domain constant duplicated.
+- R-007 — scope held. Did NOT repaint anything (Phase 3), did NOT touch the
+  settings backend (out of scope §9), did NOT redesign adjacent surfaces.
+  The two link fixes (Dashboard, BarcodesQR) + Help copy are direct
+  consequences of routes I moved, not drift.
+- R-008 — comments added where the WHY isn't obvious (scanning-on-Features
+  carve-out, the Phase-3-defers-this note on the inline nav, the
+  injected-callback rationale on TaxonomyManagerPage).
+- R-011 — Vue 3 `<script setup>` + composition API throughout; `withDefaults`,
+  typed props/emits. `exactOptionalPropertyTypes` pass-through caught by tsc
+  and fixed by coercing the optional bindings to their defaults in
+  `TaxonomyManagerPage`.
+- R-016 — each page loads its own data on mount (the per-type vocab pages and
+  the split System pages); no eager global hydration added.
+- R-017 — no seed change needed; this is a pure FE re-organisation of existing
+  surfaces, no new server state matrix.
+
+**Verification:** `vue-tsc -p tsconfig.json --noEmit` GREEN; `npm run lint`
+GREEN. Grep-swept for stale `/settings/preferences`, `/settings/recipe-vocab`,
+`/settings/admin/system`, `RecipeVocabSettings`, `SystemSettings` references —
+all either repointed or are intentional (the Appearance link, the redirects).
+**Browser walk still pending** (no running app this session) — confirm every
+split page renders + saves, the nested sub-nav reads cleanly, dietary-tag
+single-dialog works, and old URLs redirect.
+
+**Ledger:** no new opens.
+
+**Next:** **Settings rebuild Phase 3** — the visual rebuild. Extract
+`SettingsSection.vue`, `DoraSegmented.vue`, `SettingsNavGroup.vue`; drop the
+per-section card chrome for the left-info/right-control layout; replace the
+loud `q-btn-toggle`s; compact the theme cards; real page `<h1>`s; sticky
+nav + 3px accent active bar. §6 visual decisions still open for the user:
+§6.1 (DoraSegmented active style — rec underline), §6.3 (mobile nav — rec top
+tab strip), §6.4 (theme blurbs keep-in-tooltip vs drop). Phase 4 = profile
+picture (backend + SPA). Phase 5 = mobile pass.
+
+---
+
+## 2026-06-23 — Settings rebuild Phase 1: IA + routing
+
+**Session goal:** the first phase of `IMPL_PLAN_SETTINGS_REBUILD.md` — route
+structure + side-nav grouping. **No visual change** (cards still bordered,
+chrome identical pixel-wise); Phase 3 owns the look-and-feel pass. Phase-by-
+phase delivery confirmed by the user; visual decisions deferred to their phase.
+
+**Pre-flight decisions (plan §6, asked the user):**
+- §6.2 group name → **"Kitchen setup"** (user override, not on the option list).
+  Cleaner than "Library" / "Catalogue" — concrete, reads naturally for both
+  stock taxonomy and recipe taxonomies.
+- §6.5 sub-nav pattern → **indented sub-list** (Recommended). Will be applied
+  in Phase 3 when the visual rebuild lands; Phase 1 doesn't yet need the
+  hierarchy because System and Recipe vocab are still one entry each (they
+  split in Phase 2).
+- §6.1 / §6.3 / §6.4 → deferred to Phase 3 (visual rebuild) where they belong.
+
+**Routes — `web_app/src/router/routes.ts`:**
+- Landing redirect flipped: `/settings` → `/settings/account` (was
+  `/settings/preferences`). Matches the user feedback "opens onto Account
+  is not first in the list" + plan §2.3.
+- Three new "kitchen setup" route paths added:
+  - `/settings/kitchen-setup/stock-locations` → `StockLocationsSettings.vue`
+  - `/settings/kitchen-setup/stock-groups`    → `StockGroupsSettings.vue`
+  - `/settings/kitchen-setup/stores`          → `StoresSettings.vue`
+    (moved out of Admin per §2.1 — Stores is user-curated retail data, not
+    install governance after the Phase E rename)
+  - `/settings/kitchen-setup/recipe-vocab`    → `RecipeVocabSettings.vue`
+- Backwards-compat redirects for every moved path so bookmarks / email
+  links / external references keep working:
+  - `/settings/stock-locations` → `/settings/kitchen-setup/stock-locations`
+  - `/settings/stock-groups`    → `/settings/kitchen-setup/stock-groups`
+  - `/settings/recipe-vocab`    → `/settings/kitchen-setup/recipe-vocab`
+  - `/settings/admin/stores`    → `/settings/kitchen-setup/stores`
+- **Deviation from the literal plan §3 Phase 1 task 1.** The plan said to
+  add **five** new `recipe-*` routes in Phase 1 all pointing at the same
+  monolithic page, ready for Phase 2 to split. I consolidated to one
+  `recipe-vocab` route under kitchen-setup. Reason: in Phase 1 the nav
+  still shows ONE "Recipe vocab" entry (no split yet), so five overlapping
+  routes pointing at the same page would be dead URL slots until Phase 2
+  redirects them onto real per-type pages. Phase 2 will add both the five
+  routes AND the five page components in the same unit of work — cleaner
+  phase boundary, no orphan routes mid-rebuild. Logged this here so the
+  next agent picking up Phase 2 knows the five routes don't exist yet.
+
+**Side-nav — `web_app/src/pages/SettingsShell.vue`:**
+- Reshaped from two groups (`personalSections` + `adminSections`) to three:
+  `accountSections` / `kitchenSetupSections` / `adminSections`.
+- **Account is FIRST in the Account group** (was: Preferences first). Matches
+  user feedback + the new landing route.
+- **Captions dropped** per Phase 1 task 2 ("Drop captions. Keep current card
+  chrome (visual rebuild is Phase 3).") — nav items render with label + icon
+  only. The 2-line captions were ~22 lines of nav chrome for 11 destinations;
+  the cut is a Phase 1 deliverable not a Phase 3 visual change.
+- Card chrome + active-state styling kept identical pixel-wise — Phase 3
+  owns the visual rebuild.
+- Stores removed from the admin section list (now in kitchenSetupSections).
+- New group header "Kitchen setup" between Account and Admin · global. The
+  non-admin-only "Admin (global) settings are only visible…" banner unchanged.
+
+**HelpPage — `web_app/src/pages/HelpPage.vue`:**
+- The "Manage stores (admin)" entry's `path` updated from `/settings/admin/stores`
+  to `/settings/kitchen-setup/stores`. The redirect would have caught it, but
+  fixing the source means click-throughs don't bounce.
+- The "Preferences" help link (`/settings/preferences`) and other deep-links
+  stay as-is — those routes still exist; Phase 2 will narrow Preferences to
+  appearance-only at which point the help copy can be revisited.
+
+**Router guard — `web_app/src/router/index.ts`:**
+- Non-admin bounce target flipped from `/settings/preferences` to
+  `/settings/account` for consistency with the new landing. The guard logic
+  itself (`startsWith('/settings/admin')`) keeps working because Stores moved
+  OUT of `/settings/admin/*` to `/settings/kitchen-setup/*`, so non-admins can
+  reach Stores naturally (it's now a Kitchen setup page, not admin).
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation) — Phase 1 doesn't extract anything; SettingsShell
+  still owns the nav. `SettingsNavGroup` extraction lives in Phase 3 (plan §2.8).
+- R-002 (theme tokens only) — no new colour / hex / numbered palette in the
+  diff. Existing `--brand-primary-soft` / `--text-muted` tokens reused.
+- R-003 (single source of truth) — nav structure defined ONCE in
+  `SettingsShell.vue`; routes defined ONCE in `routes.ts`. No duplication.
+- R-007 (scope discipline) — only touched what Phase 1 asked for. The
+  `PreferencesSettings.vue` monolith stays untouched (Phase 2). The card
+  chrome + bordered nav stays (Phase 3). No drift.
+- R-008 (comments) — added inline comments where the WHY isn't obvious:
+  the redirect block (why backwards-compat matters), the Stores move
+  (why it left Admin), the IMPL_PLAN cross-reference for the executing-agent
+  trail.
+- R-011 (framework-idiomatic) — Vue Router 4 `redirect:` field used per
+  the framework convention (not a custom guard hack).
+- R-016 (lazy hydration) — not touched this phase.
+
+**Verification (static-only — no env on this machine):**
+- Routes and shell are TypeScript syntax-checked by reading; awaiting
+  `vue-tsc` + `npm run lint` + browser walk on a provisioned env.
+- No other surfaces grep'd as referencing the moved paths beyond
+  HelpPage (fixed).
+
+**Ledger:** no new opens. No `DORA_FOLLOWUPS.md` items closed.
+
+**Next:** **Settings rebuild Phase 2** — page-level splits. The big ones:
+- `PreferencesSettings.vue` (1168 lines) → splits into Notifications,
+  Money, Voice, Nutrition + the misplaced "Account" card lifts to
+  `AccountSettings.vue` + Appearance stays on Preferences.
+- `SystemSettings.vue` (763 lines) → splits into Timezone, Alerts, Assistant,
+  Features (admin pages under `/settings/admin/system/*`).
+- `RecipeVocabSettings.vue` → splits into 5 pages under
+  `/settings/kitchen-setup/recipe-*` + `TaxonomyManagerPage` extraction +
+  `DietaryTagFormDialog` (§2.11 sequential-prompt fix).
+- Account gains the lifted identity edit forms + drops Restart-onboarding
+  (moves to About) + drops the "Danger zone" theatre.
+
+The user wants phase-by-phase, so this is the close of Phase 1.
+
+---
+
+## 2026-06-23 — Runbook tidy-up: FU-180 + FU-232 resolved, Phase F status refreshed
+
+**Session goal:** the parts of the products-as-overlay runbook that could be
+closed on paper today, without a running env or browser. No new build work
+beyond a small ingestion-contract addition.
+
+**FU-180 — RESOLVED.** Discussed and closed fully (not narrowed). The 2026-06-17
+update on the FU already conceded the product-side intent is met by
+`PreferredBuy` (per-item product) + `StockItem.usual_store_id` (per-item store).
+The residual app-wide preferred-*store* question + the onboarding preferred-stores
+capture (folded in 2026-06-15) were both judged YAGNI — cheapest-first sort
+already does what an app-wide store sort would do, and an app-wide layer is
+cheap to add later if usage demands it. Moved to `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**FU-232 — RESOLVED (static-only, needs env to exercise pytest).** Wired
+multipack `pack_count` through the ingestion contract:
+- `dora_api/features/ingestion/submit_ingestion_batch.py` — added
+  `pack_count: int | None = Field(default=None, gt=0)` to `_ProductIn`.
+  Threaded through both `_apply_product` paths
+  (`existing.pack_count = raw.pack_count or existing.pack_count` for the
+  update branch; `pack_count=raw.pack_count` on create).
+- `docs/INGESTION_GUIDE.md` — new row in the products table, with the
+  "size_value is the TOTAL across the bundle" note made explicit.
+- `docs/04_proposals/PROPOSAL_INGESTION_API.md` — added the field to
+  the catalogue field list (§1) and the §2.2 payload sketch.
+- `tests/e2e/dora_api/test_ingest_batch.py` — new
+  `test__ingest__pack_count_round_trips_on_product` asserts:
+  (a) create-with-pack persists 4 onto the Product row;
+  (b) no-overwrite-on-null-republish (the `or existing.pack_count`
+      keeps the value when a later push omits it);
+  (c) `gt=0` rejects pack_count=0 with a 400.
+- `CHANGELOG.md` entry added.
+
+**FU-210 tail — NOT touched.** Reading the FU carefully: the
+"TAIL was MIS-INTERPRETED" revert + the actually-intended smaller
+trim (strip `LOOP_INSIGHT`, re-frame persona-preview labels as
+outcome chips, remove Finish-step recap) already landed
+2026-06-17 with `vue-tsc` + `eslint` + pytest 401/401 clean.
+There's no code work left — only browser-verify. Runbook bullet
+updated to say so; FU stays `[OPEN]` with "confirm in browser"
+as the only resolution gate.
+
+**FU-212 — already resolved.** The runbook's Phase F bullet still
+listed it as TODO; that was stale. No action beyond runbook tidy.
+
+**Runbook (`PRODUCTS_OVERLAY_RUNBOOK.md`):**
+- Status table Phase F flipped from "not started" to "in progress"
+  with per-item state inline.
+- Phase F bullet list rewritten to strike the resolved items and
+  spell out the remaining gates (FU-210 browser-verify, FU-214
+  browser-verify + L205/206 build + L197 decision).
+
+**Engineering-standards close-gate:**
+- R-007 (scope discipline) — kept tight: didn't touch the GET
+  `/api/products` DTO to expose `pack_count` even though it's
+  obvious; the FU only required the ingestion-side round-trip and
+  the existing in-app surfaces already read `pack_count` via
+  `get_stock_item_detail`'s DTO. A new surface is its own task.
+- R-008 (comments) — one inline comment on the new `_ProductIn`
+  field explaining the size_value-as-total convention.
+- R-017 (seed discipline) — not applicable; ingestion contract
+  changes don't surface a new state matrix to seed (the user-facing
+  multipack state matrix was already seeded in the FU-227 chunk 2
+  work).
+
+**Ledger:** FU-180 + FU-232 moved to resolved. No new opens.
+
+**Next:** the open Phase F items all require a running app:
+- **FU-210 tail** — browser-verify the onboarding flow (Story plays
+  without LOOP_INSIGHT, renamed chips read sensibly, Finish step
+  clean, draft resume works) + flip the FU to resolved.
+- **FU-214** — product-surface browser verify, then build the
+  L205/206 bulk-select variants and decide L197 hard-delete.
+- The lingering Phase A/B browser-verify debt (FU-202/208/211/213/215
+  + the FU-216 stock-value/recipe surfaces).
+- FU-232 pytest needs a Python env to actually run.
+
+---
+
 ## 2026-06-23 — FU-227 follow-up: multipack `pack_count` + US locale
 
 **Session goal:** two user-raised gaps from the FU-227 retro — supermarket-style

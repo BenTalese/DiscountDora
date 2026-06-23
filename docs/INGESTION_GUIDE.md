@@ -108,7 +108,8 @@ source's id if omitted). Empty arrays are fine — push only what you have.
 | `merchant`            | yes      | The external store name; resolved via the store mapping |
 | `merchant_stockcode`  | no       | Primary dedupe key when present    |
 | `brand`               | no       |                                    |
-| `size`, `size_unit`, `size_value` | no | Free strings + numeric size |
+| `size`, `size_unit`, `size_value` | no | Free strings + numeric size. `size_value` is the **total across the bundle** for multipacks (e.g. 4×125g yoghurt → `size_value=500`). |
+| `pack_count`          | no       | Integer > 0; informational multipack count (e.g. `4` for a 4-pack). Drives the obs-list "4 × 125g" label and the PriceEntry multipack disclosure. Omit / `null` for single-packs. |
 | `web_url`             | no       |                                    |
 | `source`              | no       | Provenance string                  |
 

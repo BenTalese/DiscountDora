@@ -10,7 +10,7 @@
                 <q-icon :name="ICONS.info" />
             </template>
             Scanning &amp; QR labels are turned off. An admin can enable them in
-            <router-link to="/settings/admin/system">Settings → System</router-link>.
+            <router-link to="/settings/admin/system/features">Settings → System → Features</router-link>.
         </q-banner>
 
         <template v-else-if="scanningEnabled">

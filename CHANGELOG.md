@@ -5,7 +5,43 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Settings rebuild — Phase 2 (page splits, 2026-06-23).** The two monolithic
+  settings pages are broken into focused ones. **Preferences** (was ~1170 lines,
+  9 concerns) is now Appearance-only; its other concerns split into new
+  **Notifications**, **Money** (money toggle + grocery budget combined),
+  **Voice**, and **Nutrition** pages, and the misplaced username/email/password
+  forms moved to **Account** (where the section header always said they were).
+  **Account** also drops the theatrical "Danger zone" heading (sign-out stands
+  alone) and hands "Restart onboarding" to **About**. The admin **System** page
+  (was ~760 lines, 5 concerns) splits into **Timezone**, **Alert thresholds**,
+  **AI assistant**, and **Features** (the latter absorbs the feature-flag list,
+  the scanning/QR toggle, and the Product search URL). **Recipe tags &
+  categories** splits into five pages — Cuisines, Categories, Tools, Meal slots,
+  Dietary tags — under Kitchen setup, with a nested "Recipe taxonomies" sub-nav.
+  Creating/renaming a dietary tag now uses one dialog instead of two sequential
+  prompts. All old URLs redirect to their new homes. Still no visual repaint —
+  that's Phase 3.
+
+- **Settings rebuild — Phase 1 (IA + routing, 2026-06-23).** The settings
+  side-nav reorganises from two groups ("Your settings" + "Admin · global")
+  into three: **Account**, **Kitchen setup**, **Admin · global**. Stock
+  locations, Stock groups, Recipe tags & categories, and Stores all live
+  under the new "Kitchen setup" group; their old URLs (`/settings/stock-*`
+  etc.) keep working via redirects so bookmarks survive. Settings now
+  lands on **Account** instead of Preferences. Visual look unchanged
+  pixel-wise — the visual rebuild is Phase 3. Nav captions dropped (label
+  + icon only) per `IMPL_PLAN_SETTINGS_REBUILD.md` §2.7.
+
 ### Added
+- **Ingestion contract — multipack `pack_count` (FU-232, 2026-06-23).**
+  `POST /api/ingest` `products[]` now accepts an optional `pack_count`
+  (integer > 0) — the producer-facing other half of the FU-227 multipack
+  work. Persists to `Product.pack_count`; the existing convention that
+  `size_value` is the TOTAL across the bundle is unchanged.
+  `INGESTION_GUIDE.md` + `PROPOSAL_INGESTION_API.md` updated; new
+  round-trip pytest in `test_ingest_batch.py`.
+
 - **Multipack prices (FU-227 follow-up, 2026-06-23).** The PriceEntry widget
   gains an "Add pack count (multipack)" disclosure — enter `$4.20`, `125g`
   each, count `4` and the obs is stored as `total_measure=500g` with

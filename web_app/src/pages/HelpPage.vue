@@ -311,7 +311,7 @@
                     title: 'Manage stores (admin)',
                     summary:
                         'Curate the list of retail stores Dora knows about. Add a store, upload a logo, or remove ones you no longer track. No stores ship by default.',
-                    path: '/settings/admin/stores',
+                    path: '/settings/kitchen-setup/stores',
                 },
             ],
         },
@@ -332,8 +332,8 @@
                 {
                     title: 'Set up the AI assistant (admin)',
                     summary:
-                        "The assistant is opt-in and uses a language model you host yourself (e.g. Ollama). Install Ollama on a machine on your network, pull a tool-capable model like qwen2.5:7b, then in Settings > System enter its base URL (e.g. http://localhost:11434) and model name, enable, and save. Nothing is downloaded or enabled by default.",
-                    path: '/settings/admin/system',
+                        "The assistant is opt-in and uses a language model you host yourself (e.g. Ollama). Install Ollama on a machine on your network, pull a tool-capable model like qwen2.5:7b, then in Settings > System > AI assistant enter its base URL (e.g. http://localhost:11434) and model name, enable, and save. Nothing is downloaded or enabled by default.",
+                    path: '/settings/admin/system/assistant',
                 },
             ],
         },

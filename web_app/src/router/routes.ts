@@ -181,63 +181,159 @@ const routes: RouteRecordRaw[] = [
                 ]
             },
             // Settings shell hosts sub-routes via its own <router-view>.
-            // Personal sections live at /settings/*, admin/global sections at
-            // /settings/admin/* (gated by the global router guard).
+            // Three top-level groups (IMPL_PLAN_SETTINGS_REBUILD §2.1):
+            //   Account — identity + per-user preferences
+            //   Kitchen setup — user-curated reference data (stock taxonomy,
+            //     stores, recipe taxonomies)
+            //   Admin · global — install-wide concerns (gated by the router
+            //     guard in `router/index.ts`)
+            // Phase 1 = routing structure only; Phase 2 splits the monoliths
+            // (Preferences, RecipeVocab, System) into focused pages.
             {
                 path: 'settings',
                 component: () => import('pages/SettingsShell.vue'),
-                redirect: '/settings/preferences',
+                redirect: '/settings/account',
                 meta: { title: 'Settings' },
                 children: [
-                    {
-                        path: 'preferences',
-                        component: () => import('pages/settings/PreferencesSettings.vue'),
-                        meta: { title: 'Preferences' }
-                    },
-                    {
-                        path: 'stock-locations',
-                        component: () => import('pages/settings/StockLocationsSettings.vue'),
-                        meta: { title: 'Stock locations' }
-                    },
-                    {
-                        path: 'stock-groups',
-                        component: () => import('pages/settings/StockGroupsSettings.vue'),
-                        meta: { title: 'Stock groups' }
-                    },
-                    {
-                        path: 'recipe-vocab',
-                        component: () => import('pages/settings/RecipeVocabSettings.vue'),
-                        meta: { title: 'Recipe tags & categories' }
-                    },
+                    // Account group ────────────────────────────────────────
                     {
                         path: 'account',
                         component: () => import('pages/settings/AccountSettings.vue'),
                         meta: { title: 'Account' }
                     },
                     {
+                        // Phase 2: Appearance-only after the split below.
+                        path: 'preferences',
+                        component: () => import('pages/settings/PreferencesSettings.vue'),
+                        meta: { title: 'Preferences' }
+                    },
+                    {
+                        path: 'notifications',
+                        component: () => import('pages/settings/NotificationsSettings.vue'),
+                        meta: { title: 'Notifications' }
+                    },
+                    {
+                        path: 'money',
+                        component: () => import('pages/settings/MoneySettings.vue'),
+                        meta: { title: 'Money' }
+                    },
+                    {
+                        path: 'voice',
+                        component: () => import('pages/settings/VoiceSettings.vue'),
+                        meta: { title: 'Voice' }
+                    },
+                    {
+                        path: 'nutrition',
+                        component: () => import('pages/settings/NutritionSettings.vue'),
+                        meta: { title: 'Nutrition' }
+                    },
+                    {
                         path: 'about',
                         component: () => import('pages/settings/AboutSettings.vue'),
                         meta: { title: 'About' }
                     },
-                    // Phase D / FU-186 — the admin Merchants page targeted the
-                    // standalone merchant_api scraper backend (provider toggles +
-                    // health). That backend left this repo, so the page goes too.
-                    // FU-189 / Phase E — replaced by /settings/admin/stores below
-                    // (user-curated, no scraper toggles; logos uploaded by user).
+                    // Kitchen setup group ──────────────────────────────────
                     {
-                        path: 'admin/stores',
+                        path: 'kitchen-setup/stock-locations',
+                        component: () => import('pages/settings/StockLocationsSettings.vue'),
+                        meta: { title: 'Stock locations' }
+                    },
+                    {
+                        path: 'kitchen-setup/stock-groups',
+                        component: () => import('pages/settings/StockGroupsSettings.vue'),
+                        meta: { title: 'Stock groups' }
+                    },
+                    // Stores moved out of Admin per §2.1 — it's user-curated
+                    // retail data, not install governance.
+                    {
+                        path: 'kitchen-setup/stores',
                         component: () => import('pages/settings/StoresSettings.vue'),
                         meta: { title: 'Stores' }
                     },
+                    // Phase 2: Recipe vocab splits 1 → 5 focused pages. The
+                    // first four share TaxonomyManagerPage; dietary tags keeps
+                    // its bespoke editor (grouping field).
+                    {
+                        path: 'kitchen-setup/recipe-cuisines',
+                        component: () => import('pages/settings/RecipeCuisinesSettings.vue'),
+                        meta: { title: 'Recipe cuisines' }
+                    },
+                    {
+                        path: 'kitchen-setup/recipe-categories',
+                        component: () => import('pages/settings/RecipeCategoriesSettings.vue'),
+                        meta: { title: 'Recipe categories' }
+                    },
+                    {
+                        path: 'kitchen-setup/recipe-tools',
+                        component: () => import('pages/settings/RecipeToolsSettings.vue'),
+                        meta: { title: 'Recipe tools' }
+                    },
+                    {
+                        path: 'kitchen-setup/recipe-meal-slots',
+                        component: () => import('pages/settings/RecipeMealSlotsSettings.vue'),
+                        meta: { title: 'Recipe meal slots' }
+                    },
+                    {
+                        path: 'kitchen-setup/recipe-dietary-tags',
+                        component: () => import('pages/settings/RecipeDietaryTagsSettings.vue'),
+                        meta: { title: 'Recipe dietary tags' }
+                    },
+                    // Backwards-compat redirects for moved/split routes.
+                    // Bookmarks, email deep-links and HelpPage entries that
+                    // shipped under the old paths keep working. Drop these
+                    // only when there's no surface still referencing them.
+                    {
+                        path: 'stock-locations',
+                        redirect: '/settings/kitchen-setup/stock-locations'
+                    },
+                    {
+                        path: 'stock-groups',
+                        redirect: '/settings/kitchen-setup/stock-groups'
+                    },
+                    {
+                        // Old single recipe-vocab page → first of the five.
+                        path: 'recipe-vocab',
+                        redirect: '/settings/kitchen-setup/recipe-cuisines'
+                    },
+                    {
+                        path: 'kitchen-setup/recipe-vocab',
+                        redirect: '/settings/kitchen-setup/recipe-cuisines'
+                    },
+                    {
+                        path: 'admin/stores',
+                        redirect: '/settings/kitchen-setup/stores'
+                    },
+                    // Admin · global group ─────────────────────────────────
                     {
                         path: 'admin/users',
                         component: () => import('pages/settings/UsersAdminSettings.vue'),
                         meta: { title: 'Users' }
                     },
+                    // Phase 2: System splits 1 → 4 focused admin pages.
                     {
+                        path: 'admin/system/timezone',
+                        component: () => import('pages/settings/AdminSystemTimezoneSettings.vue'),
+                        meta: { title: 'System: Timezone' }
+                    },
+                    {
+                        path: 'admin/system/alerts',
+                        component: () => import('pages/settings/AdminSystemAlertsSettings.vue'),
+                        meta: { title: 'System: Alert thresholds' }
+                    },
+                    {
+                        path: 'admin/system/assistant',
+                        component: () => import('pages/settings/AdminSystemAssistantSettings.vue'),
+                        meta: { title: 'System: AI assistant' }
+                    },
+                    {
+                        path: 'admin/system/features',
+                        component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
+                        meta: { title: 'System: Features' }
+                    },
+                    {
+                        // Old single System page → first of the four.
                         path: 'admin/system',
-                        component: () => import('pages/settings/SystemSettings.vue'),
-                        meta: { title: 'System' }
+                        redirect: '/settings/admin/system/timezone'
                     },
                     {
                         path: 'admin/audit-log',

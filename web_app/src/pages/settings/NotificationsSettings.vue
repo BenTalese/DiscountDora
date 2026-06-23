@@ -1,39 +1,33 @@
 <template>
     <div v-if="!currentUser">
-        <q-card flat bordered>
-            <q-card-section>
-                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-            </q-card-section>
-        </q-card>
+        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
     </div>
 
-    <div v-else class="column q-gutter-md">
-        <!-- Weekly deals email ─────────────────────────────────────── -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Weekly deals email</div>
-                <div class="text-caption dora-text-muted">
-                    Dashy Dora can email you a digest of the latest deals
-                    once a week.
-                </div>
-            </q-card-section>
-            <q-separator />
+    <div v-else class="settings-page">
+        <SettingsPageHeader
+            title="Notifications"
+            description="Choose how Dashy Dora reaches you about deals, alerts, and push messages on this device."
+        />
 
-            <q-card-section>
+        <SettingsSection>
+            <template #title>Weekly deals email</template>
+            <template #description>
+                A digest of the latest deals once a week.
+            </template>
+
+            <SettingsRow
+                label="Subscribe me to the weekly deals email"
+                help="One email per week summarising deals at your stores."
+            >
                 <q-toggle
                     :model-value="currentUser.deals_email_enabled"
-                    label="Subscribe me to the weekly deals email"
                     :disable="saving"
                     @update:model-value="onDealsEnabledChange"
                 />
-            </q-card-section>
+            </SettingsRow>
 
-            <q-card-section
-                v-if="currentUser.deals_email_enabled"
-                class="row q-col-gutter-md items-center"
-            >
-                <div class="col-12 col-sm-4 text-subtitle2">Send on</div>
-                <div class="col-12 col-sm-8">
+            <template v-if="currentUser.deals_email_enabled">
+                <SettingsRow label="Send on">
                     <q-select
                         v-model="sendDealsOnDay"
                         :options="dayOptions"
@@ -43,83 +37,60 @@
                         map-options
                         outlined
                         dense
-                        style="max-width: 260px"
+                        style="min-width: 180px"
                         :disable="saving"
                         @update:model-value="onSendDealsOnDayChange"
                     />
-                </div>
-            </q-card-section>
+                </SettingsRow>
 
-            <q-card-section v-if="currentUser.deals_email_enabled">
-                <q-toggle
-                    :model-value="currentUser.deals_email_compact"
-                    label="Compact format (one-line per deal)"
-                    :disable="saving"
-                    @update:model-value="onDealsCompactChange"
-                />
-            </q-card-section>
-        </q-card>
+                <SettingsRow
+                    label="Compact format"
+                    help="One line per deal."
+                >
+                    <q-toggle
+                        :model-value="currentUser.deals_email_compact"
+                        :disable="saving"
+                        @update:model-value="onDealsCompactChange"
+                    />
+                </SettingsRow>
+            </template>
+        </SettingsSection>
 
-        <!-- C-9.7 — Alerts email digest. SMTP-gated (R-014): the master
-             toggle disables when the backend doesn't have email
-             configured, so a self-hosted install without SMTP doesn't
-             silently swallow opt-ins. -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Alerts email digest</div>
-                <div class="text-caption dora-text-muted">
-                    Get your actionable alerts emailed to you on a daily or
-                    weekly cadence. The digest matches what you'd see on the
-                    Alerts page; the same alert won't email again until it
-                    clears and re-fires.
-                </div>
-            </q-card-section>
-            <q-separator />
+        <hr class="settings-divider" />
 
-            <q-card-section>
+        <!-- C-9.7 — Alerts email digest. SMTP-gated (R-014). -->
+        <SettingsSection>
+            <template #title>Alerts email digest</template>
+            <template #description>
+                Email me my actionable alerts on a daily or weekly cadence.
+                The same alert won't email again until it clears and re-fires.
+            </template>
+
+            <SettingsRow label="Email me a digest of my alerts">
                 <q-toggle
                     :model-value="currentUser.alerts_email_enabled"
-                    label="Email me a digest of my alerts"
                     :disable="saving || !emailSmtpConfigured"
                     @update:model-value="onAlertsEmailEnabledChange"
                 />
-                <div
-                    v-if="!emailSmtpConfigured"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    Email isn't set up on this install yet — ask an admin
-                    to configure SMTP and this toggle will unlock.
-                </div>
-            </q-card-section>
-
-            <q-card-section
-                v-if="currentUser.alerts_email_enabled"
-                class="row q-col-gutter-md items-center"
+            </SettingsRow>
+            <div
+                v-if="!emailSmtpConfigured"
+                class="settings-page__note dora-text-muted"
             >
-                <div class="col-12 col-sm-4 text-subtitle2">Cadence</div>
-                <div class="col-12 col-sm-8">
-                    <q-select
-                        v-model="alertsEmailCadenceDraft"
+                Email isn't set up on this install yet — ask an admin to
+                configure SMTP and this toggle will unlock.
+            </div>
+
+            <template v-if="currentUser.alerts_email_enabled">
+                <SettingsRow label="Cadence">
+                    <DoraSegmented
+                        :model-value="alertsEmailCadenceDraft"
                         :options="alertsCadenceOptions"
-                        option-value="value"
-                        option-label="label"
-                        emit-value
-                        map-options
-                        outlined
-                        dense
-                        style="max-width: 260px"
-                        :disable="saving"
                         @update:model-value="onAlertsEmailCadenceChange"
                     />
-                </div>
-            </q-card-section>
+                </SettingsRow>
 
-            <q-card-section
-                v-if="currentUser.alerts_email_enabled && alertsEmailCadenceDraft === 'weekly'"
-                class="row q-col-gutter-md items-center"
-            >
-                <div class="col-12 col-sm-4 text-subtitle2">Send on</div>
-                <div class="col-12 col-sm-8">
+                <SettingsRow v-if="alertsEmailCadenceDraft === 'weekly'" label="Send on">
                     <q-select
                         v-model="alertsEmailDayDraft"
                         :options="dayOptions"
@@ -129,73 +100,65 @@
                         map-options
                         outlined
                         dense
-                        style="max-width: 260px"
+                        style="min-width: 180px"
                         :disable="saving"
                         @update:model-value="onAlertsEmailDayChange"
                     />
-                </div>
-            </q-card-section>
-        </q-card>
+                </SettingsRow>
+            </template>
+        </SettingsSection>
 
-        <!-- C-9.8 — Push notifications. VAPID-gated (R-014): the toggle
-             disables when the backend isn't configured, mirroring the
-             alerts-email SMTP gate. The four-state lifecycle (loading /
-             unsupported / denied / subscribed) is surfaced via the
-             caption beneath the toggle. -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Push notifications</div>
-                <div class="text-caption dora-text-muted">
-                    Get a system notification on this device the moment a new
-                    actionable alert fires. Only actionable alerts are pushed —
-                    FYI items stay in the hub and the email digest. Subscribe
-                    on every device you want to be notified on.
-                </div>
-            </q-card-section>
-            <q-separator />
+        <hr class="settings-divider" />
 
-            <q-card-section>
+        <!-- C-9.8 — Push notifications. VAPID-gated (R-014). -->
+        <SettingsSection>
+            <template #title>Push notifications</template>
+            <template #description>
+                System notifications on this device the moment a new
+                actionable alert fires. Subscribe on every device you want.
+            </template>
+
+            <SettingsRow label="Send me push notifications on this device">
                 <q-toggle
                     :model-value="pushSubscribed"
-                    label="Send me push notifications on this device"
                     :disable="saving || !pushVapidConfigured || !pushSupported || pushLoading"
                     @update:model-value="onPushToggle"
                 />
-                <div
-                    v-if="!pushVapidConfigured"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    Push isn't set up on this install yet — ask an admin
-                    to generate VAPID keys and this toggle will unlock.
-                </div>
-                <div
-                    v-else-if="!pushSupported"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    This browser doesn't support web push.
-                </div>
-                <div
-                    v-else-if="pushState === 'denied'"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    Notifications are blocked for this site. Re-enable them in
-                    your browser's site settings, then refresh.
-                </div>
-                <div
-                    v-else-if="pushError"
-                    class="text-caption text-negative q-mt-xs"
-                >
-                    {{ pushError }}
-                </div>
-                <div
-                    v-else-if="pushSubscribed"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    This device is subscribed. Toggle off to stop receiving
-                    pushes here (other devices keep their own subscriptions).
-                </div>
-            </q-card-section>
-        </q-card>
+            </SettingsRow>
+            <div
+                v-if="!pushVapidConfigured"
+                class="settings-page__note dora-text-muted"
+            >
+                Push isn't set up on this install yet — ask an admin to
+                generate VAPID keys and this toggle will unlock.
+            </div>
+            <div
+                v-else-if="!pushSupported"
+                class="settings-page__note dora-text-muted"
+            >
+                This browser doesn't support web push.
+            </div>
+            <div
+                v-else-if="pushState === 'denied'"
+                class="settings-page__note dora-text-muted"
+            >
+                Notifications are blocked for this site. Re-enable them in
+                your browser's site settings, then refresh.
+            </div>
+            <div
+                v-else-if="pushError"
+                class="settings-page__note text-negative"
+            >
+                {{ pushError }}
+            </div>
+            <div
+                v-else-if="pushSubscribed"
+                class="settings-page__note dora-text-muted"
+            >
+                This device is subscribed. Toggle off to stop receiving
+                pushes here (other devices keep their own subscriptions).
+            </div>
+        </SettingsSection>
     </div>
 </template>
 
@@ -207,22 +170,22 @@
     import { usePushSubscription } from 'src/composables/usePushSubscription';
     import { computed, ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
-    // C-9.7 — alerts email digest gating. The backend feature flag
-    // mirrors `email_sender._config().dry_run` so the toggle reflects
-    // whether emails would actually leave the box (R-014).
     const { emailSmtpConfigured, pushVapidConfigured } = useFeatureFlags();
-    const alertsCadenceOptions = [
-        { label: 'Daily', value: 'daily' as const },
-        { label: 'Weekly', value: 'weekly' as const },
+    type AlertsCadence = 'daily' | 'weekly';
+    const alertsCadenceOptions: DoraSegmentedOption<AlertsCadence>[] = [
+        { label: 'Daily', value: 'daily' },
+        { label: 'Weekly', value: 'weekly' },
     ];
 
-    // C-9.8 — push subscription lifecycle for this device. The
-    // composable owns the four-state machine; the card binds against it.
     const {
         state: pushState,
         error: pushError,
@@ -244,17 +207,13 @@
     ];
 
     const sendDealsOnDay = ref<number>(currentUser.value?.send_deals_on_day ?? 0);
-    // C-9.7 — alerts email digest. Cadence and day are draft refs so the
-    // q-select reflects the freshly saved value without flickering through
-    // the watcher; the toggle reads `currentUser` directly (instant-flip).
-    const alertsEmailCadenceDraft = ref<'daily' | 'weekly'>(
+    const alertsEmailCadenceDraft = ref<AlertsCadence>(
         (currentUser.value?.alerts_email_cadence === 'weekly') ? 'weekly' : 'daily'
     );
     const alertsEmailDayDraft = ref<number>(currentUser.value?.alerts_email_day ?? 0);
 
     const saving = ref(false);
 
-    // Re-sync drafts when the auth store reloads (e.g. after refresh, login).
     watch(currentUser, (u) => {
         if (!u) return;
         sendDealsOnDay.value = u.send_deals_on_day ?? 0;
@@ -311,10 +270,6 @@
         );
     }
 
-    // C-9.7 — alerts email digest handlers. Toggling the master switch
-    // sends both `alerts_email_enabled` and the current cadence so a
-    // fresh-opt-in user starts on a sensible default ('daily') without
-    // a second click. Cadence/day changes are saved instantly.
     async function onAlertsEmailEnabledChange(value: boolean) {
         const cadence = value ? alertsEmailCadenceDraft.value : 'off';
         await update(
@@ -328,7 +283,7 @@
         );
     }
 
-    async function onAlertsEmailCadenceChange(value: 'daily' | 'weekly') {
+    async function onAlertsEmailCadenceChange(value: AlertsCadence) {
         const previous = alertsEmailCadenceDraft.value;
         alertsEmailCadenceDraft.value = value;
         const result = await update('Digest cadence updated.', () =>
@@ -346,9 +301,6 @@
         if (result === null) alertsEmailDayDraft.value = previous;
     }
 
-    // C-9.8 — push toggle. The composable handles the permission
-    // prompt + server round-trip; we just translate success/failure
-    // into the standard $q.notify pattern.
     async function onPushToggle(value: boolean) {
         try {
             if (value) {
@@ -363,3 +315,21 @@
         }
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page {
+        display: flex;
+        flex-direction: column;
+    }
+    .settings-page__note {
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        margin-top: 4px;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 0;
+    }
+</style>

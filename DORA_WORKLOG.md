@@ -9,6 +9,140 @@ next.
 
 ---
 
+## 2026-06-23 — Settings rebuild Phase 3: visual rebuild
+
+**Session goal:** Phase 3 of `IMPL_PLAN_SETTINGS_REBUILD.md` — the look-and-
+feel pass. Extract shared chrome (`SettingsSection`, `SettingsRow`,
+`SettingsPageHeader`, `DoraSegmented`, `SettingsNavGroup`, `DoraBrand`),
+drop per-section card chrome across every settings page, replace the loud
+`q-btn-toggle`s, compact theme cards, real page `<h1>`s, rebuild the side
+nav. **§6 visual decisions resolved with the user** before starting:
+§6.1 → soft sunken fill on active segment, §6.3 → top tab strip on mobile
+(deferred to Phase 5 implementation), §6.4 → keep theme blurbs in tooltip.
+
+**New shared components (R-001):**
+- `components/settings/SettingsSection.vue` — left-info / right-control
+  wrapper (§2.5). Slots: `#title`, `#description`, `#actions`, default.
+- `components/settings/SettingsRow.vue` — single row inside a section;
+  label + optional help on the left, control on the right; collapses to
+  label-above-control on `<sm`. (Not in the literal plan; promoted to a
+  shared component because every page needed it — R-001.)
+- `components/settings/SettingsPageHeader.vue` — page-header chrome:
+  title (h1 / 24 / 700) + description + optional eyebrow icon + actions
+  slot for refresh/export/primary action. Standardised across every
+  page (§2.5 step 5).
+- `components/settings/DoraSegmented.vue` — replaces `q-btn-toggle`.
+  Active = `dora-bg-sunken` + bold text per §6.1; hover on inactive →
+  accent. Same family as `DoraTabs`.
+- `components/settings/SettingsNavGroup.vue` — side-nav group (§2.7):
+  drops card wrapper, drops captions, 3px accent left-edge bar, sticky
+  via the shell, eyebrow group header, indented sub-group support.
+- `components/DoraBrand.vue` — shared "Dashy Dora" mark (Cute Dino font)
+  per §2.5 step 5. Used on `AboutSettings` for the brand line.
+
+**Shell rebuild (§2.8):**
+- `SettingsShell.vue` rewritten — real `<h1>Settings</h1>` page header
+  (was a soft caption). Card wrapper dropped from the nav, repeated
+  per-group template lifted into `SettingsNavGroup`. Sticky nav with
+  28px page padding. Non-admin "(global settings are only visible to
+  admin accounts)" banner dropped (§2.7 — non-admins don't need to know).
+  Two-column grid (232px / 1fr) with 40px gap. Mobile (<1024px) collapses
+  to a horizontal scrollable nav — placeholder for the Phase 5 top-tab
+  strip; the data shape is right but the chip-strip mode-switcher is the
+  Phase 5 unit.
+
+**Every page refactored** (drops `q-card flat bordered` chrome,
+adopts SettingsPageHeader, uses SettingsSection/Row, dividers via
+`<hr class="settings-divider">`):
+- `PreferencesSettings.vue` — Mode/Font/Text-size now `DoraSegmented`.
+  Theme cards compacted (180px min, blurb in tooltip, active = 2px accent
+  border + `check_circle` badge top-right, swatch height 32px). Page now
+  reads as Appearance with three sections (Mode / Theme / Typography).
+- `NotificationsSettings.vue` — three cards → one page with three sections
+  (Weekly deals / Alerts digest / Push), each a `SettingsSection` with
+  rows. Cadence selector is now `DoraSegmented` (Daily / Weekly).
+- `AccountSettings.vue` — identity strip + four sections (Username /
+  Email / Change password / Sign out). Save buttons inline with their
+  inputs; the loud "Danger zone" framing is already retired by Phase 2.
+- `AboutSettings.vue` — `DoraBrand` for the mark, build/install/API-URL
+  rows borderless, restart-onboarding in its own section.
+- `MoneySettings.vue` — money toggle + conditional Grocery budget section;
+  period uses `DoraSegmented`.
+- `VoiceSettings.vue` — two sections (Microphone / Spoken replies).
+- `NutritionSettings.vue` — single section, Off/Simple/Complex on
+  `DoraSegmented` (Complex disabled state preserved).
+- `AdminSystemTimezoneSettings.vue` / `AdminSystemAlertsSettings.vue` /
+  `AdminSystemAssistantSettings.vue` / `AdminSystemFeaturesSettings.vue` —
+  outer cards dropped, `SettingsPageHeader` with eyebrow icon, internal
+  layout uses SettingsSection + SettingsRow. The Assistant page splits
+  Enable / Server / Model / Save into four sections; the help banner sits
+  below (kept as a callout since it's instructional, not a control).
+- `StoresSettings.vue` / `StockLocationsSettings.vue` /
+  `StockGroupsSettings.vue` / `UsersAdminSettings.vue` /
+  `ApiAccessSettings.vue` — same shell shape; refresh button moves to the
+  page-header's `#actions` slot (R-001 — single shape across all
+  collection pages). The list bodies keep their `q-list separator`
+  rendering — wrapped in a thin top/bottom border via `.settings-list`.
+- `AuditLogSettings.vue` — primary-coloured side icon comes down to the
+  standard eyebrow size; Export CSV moves into the right-action slot per
+  §2.5 step 5.
+- `VocabListEditor.vue` — rewritten to drop its outer `q-card` and adopt
+  `SettingsPageHeader`. All five Recipe* taxonomy pages (Cuisines /
+  Categories / Tools / Meal slots / Dietary tags) thread through this
+  refactor for free since they're thin callers of
+  `TaxonomyManagerPage` → `VocabListEditor`. Dietary tags has its own
+  bespoke page that mirrors the same shape.
+
+**Deviations from the literal plan (all logged):**
+- **`SettingsRow` extracted** even though §2.5 only names `SettingsSection`.
+  Every page needed left-label / right-control rows; copy-pasting the
+  CSS 20× would violate R-001. The component is the minimum surface
+  (`label`/`help` props + `stacked` modifier) and falls back gracefully
+  to stacked on `<sm`.
+- **`SettingsPageHeader` extracted** for the same reason — §2.5 step 5
+  standardises the page-header chrome, and the action slot pattern
+  recurs on every collection page (Stores / Users / Audit log / API
+  access / Vocab editors). Single component, single shape.
+- **Mobile nav (§6.3 → top tab strip)** — Phase 5 owns the tab-strip
+  implementation. Phase 3 ships the desktop shape and a horizontal-scroll
+  fallback on narrow so nothing breaks. Worklog'd; Phase 5 picks up.
+- **Recipe-categories empty-state copy** stays "to start tagging recipes"
+  even on Meal slots / Dietary tags (slots use a different word). The
+  string is in `VocabListEditor.vue` and would need a prop to vary — out
+  of scope for Phase 3, logged as FU-285.
+
+**Engineering-standards close-gate:**
+- R-001 — six shared components extracted; consumer pages thin.
+- R-002 — colours come from existing theme tokens; the only hex usage
+  is the swatch grid (already in `THEMES` data).
+- R-003 — `TaxonomyManagerPage` callback injection preserved; no
+  service-type discrimination in shared chrome.
+- R-005 — distribution posture unchanged (frontend-only refactor).
+- R-007 — scope discipline; no out-of-scope features added beyond
+  what §2.5–§2.8 specify (the `SettingsRow`/`SettingsPageHeader`
+  promotions are R-001 carve-outs).
+
+**Verification:**
+- `vue-tsc --noEmit` → 0 errors.
+- `eslint` on `src/pages/settings` + `src/components/settings` + new
+  `DoraBrand.vue` → 0 issues.
+- Browser walk not yet performed on this machine — flagged for the
+  user.
+
+**Ledger:** FU-285 opened (VocabListEditor empty-state copy genericisation).
+
+**Next:** Phase 4 — profile picture (backend + SPA). New `User.image`
+column + migration, `GET /api/users/<id>/image` endpoint, SPA
+`UserAvatar.vue` adopted at every avatar site (menu bar + Account header
++ Users admin rows). See §2.9 + Phase 4 task list. Before Phase 4 the
+user should do a browser walk of every settings page to validate the
+visual rebuild (Pesto Light + Pesto Dark + Cherry Cola Dark at minimum
+per §2.5 verification list); flag any regressions and they get folded
+into a Phase 3b touch-up. Phase 5 = mobile pass (top tab strip; collapse
+behaviour for SettingsSection rows + theme grid + DoraSegmented).
+
+---
+
 ## 2026-06-23 — Settings rebuild Phase 2: page-level splits
 
 **Session goal:** Phase 2 of `IMPL_PLAN_SETTINGS_REBUILD.md` — break the two

@@ -1,48 +1,42 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">
-                    <q-icon :name="ICONS.store" size="20px" class="q-mr-xs" />
-                    Stores
-                </div>
-                <div class="text-caption dora-text-muted">
-                    The retail stores you actually shop at. Curate this list
-                    yourself — Dora ships zero pre-seeded stores. Upload a
-                    logo so each store is recognisable on cards and lines.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                flat
-                round
-                dense
-                :icon="ICONS.refresh"
-                :loading="loading"
-                @click="reload"
-            >
-                <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
-            <q-btn
-                color="primary"
-                no-caps
-                :icon="ICONS.add"
-                label="Add store"
-                class="q-ml-sm"
-                @click="openCreate"
-            />
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Stores"
+            description="The retail stores you actually shop at. Curate this list yourself — Dora ships zero pre-seeded stores. Upload a logo so each store is recognisable on cards and lines."
+            :icon="ICONS.store"
+        >
+            <template #actions>
+                <q-btn
+                    flat
+                    round
+                    dense
+                    :icon="ICONS.refresh"
+                    :loading="loading"
+                    @click="reload"
+                >
+                    <q-tooltip>Refresh</q-tooltip>
+                </q-btn>
+                <q-btn
+                    color="primary"
+                    unelevated
+                    no-caps
+                    :icon="ICONS.add"
+                    label="Add store"
+                    @click="openCreate"
+                />
+            </template>
+        </SettingsPageHeader>
 
         <q-banner
             v-if="loadError"
-            class="dora-bg-negative-soft text-negative q-mx-md q-mb-md"
+            class="dora-bg-negative-soft text-negative q-mb-md"
             dense
             rounded
         >
             {{ loadError }}
         </q-banner>
 
-        <q-list v-if="stores.length > 0" separator>
+        <q-list v-if="stores.length > 0" class="settings-list" separator>
             <q-item v-for="s in stores" :key="s.store_id">
                 <q-item-section avatar>
                     <StoreLogo
@@ -85,7 +79,7 @@
             <q-icon :name="ICONS.store" size="48px" class="q-mb-sm" />
             <div>No stores yet. Add the ones you actually shop at.</div>
         </div>
-    </q-card>
+    </div>
 
     <!-- Create / edit dialog. The picker is reused for both modes; `editing`
          carries the row when editing, null when creating. -->
@@ -165,6 +159,7 @@
     import { storeToRefs } from 'pinia';
     import { onMounted, reactive, ref } from 'vue';
     import type { Store } from 'src/models/store';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const storesStore = useStoresStore();
@@ -319,3 +314,11 @@
         });
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+</style>

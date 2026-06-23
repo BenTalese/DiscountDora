@@ -1,49 +1,42 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">
-                    <q-icon :name="ICONS.key" size="20px" class="q-mr-xs" />
-                    API access
-                </div>
-                <div class="text-caption dora-text-muted">
-                    Bearer keys for authenticated sources that push data into
-                    Dora. Always-on; not tied to any feature being enabled.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                flat
-                round
-                dense
-                :icon="ICONS.refresh"
-                :loading="loading"
-                @click="loadSources"
-            >
-                <q-tooltip>Refresh</q-tooltip>
-            </q-btn>
-            <q-btn
-                color="primary"
-                no-caps
-                :icon="ICONS.add"
-                label="New key"
-                class="q-ml-sm"
-                @click="openCreate"
-            />
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="API access"
+            description="Bearer keys for authenticated sources that push data into Dora. Always-on; not tied to any feature being enabled."
+            :icon="ICONS.key"
+        >
+            <template #actions>
+                <q-btn
+                    flat
+                    round
+                    dense
+                    :icon="ICONS.refresh"
+                    :loading="loading"
+                    @click="loadSources"
+                >
+                    <q-tooltip>Refresh</q-tooltip>
+                </q-btn>
+                <q-btn
+                    color="primary"
+                    unelevated
+                    no-caps
+                    :icon="ICONS.add"
+                    label="New key"
+                    @click="openCreate"
+                />
+            </template>
+        </SettingsPageHeader>
 
         <q-banner
             v-if="loadError"
-            class="dora-bg-negative-soft text-negative q-mx-md q-mb-md"
+            class="dora-bg-negative-soft text-negative q-mb-md"
             dense
             rounded
         >
             {{ loadError }}
         </q-banner>
 
-        <q-separator />
-
-        <q-list separator>
+        <q-list class="settings-list" separator>
             <q-expansion-item
                 v-for="src in sources"
                 :key="src.id"
@@ -329,7 +322,7 @@
                 />
             </template>
         </BaseDialog>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -337,6 +330,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
     import { copyToClipboard, useQuasar } from 'quasar';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import IngestionSourcesApiService, {
         type DoraStore,
         type IngestionSource,
@@ -550,7 +544,12 @@
     });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
     .reveal-readout :deep(input) {
         font-family: var(--font-mono, monospace);
         font-size: 0.9rem;

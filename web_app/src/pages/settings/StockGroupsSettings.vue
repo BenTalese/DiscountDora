@@ -1,31 +1,28 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">Stock groups</div>
-                <div class="text-caption dora-text-muted">
-                    Tag your stock items so they're easier to filter on the
-                    overview. {{ groups.length }} group{{ groups.length === 1 ? '' : 's' }}.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                color="primary"
-                no-caps
-                :icon="ICONS.add"
-                label="New group"
-                :loading="creating"
-                @click="onCreate"
-            />
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Stock groups"
+            :description="`Tag your stock items so they're easier to filter on the overview. ${groups.length} group${groups.length === 1 ? '' : 's'}.`"
+            :icon="ICONS.label"
+        >
+            <template #actions>
+                <q-btn
+                    color="primary"
+                    unelevated
+                    no-caps
+                    :icon="ICONS.add"
+                    label="New group"
+                    :loading="creating"
+                    @click="onCreate"
+                />
+            </template>
+        </SettingsPageHeader>
 
-        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
-        <q-separator />
-
-        <q-list separator>
+        <q-list class="settings-list" separator>
             <q-item v-for="group in groups" :key="group.stock_group_id" class="q-py-sm">
                 <q-item-section avatar>
                     <q-icon :name="ICONS.label" />
@@ -83,7 +80,7 @@
         <q-inner-loading :showing="loading && groups.length === 0">
             <q-spinner color="primary" size="48px" />
         </q-inner-loading>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -93,6 +90,7 @@
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import { onMounted, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const api = new StockGroupApiService();
@@ -205,3 +203,11 @@
 
     onMounted(load);
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; position: relative; }
+    .settings-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+</style>

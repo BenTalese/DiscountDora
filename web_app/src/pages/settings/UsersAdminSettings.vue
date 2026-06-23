@@ -1,35 +1,29 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">
-                    <q-icon :name="ICONS.group" size="20px" class="q-mr-xs" />
-                    Users
-                </div>
-                <div class="text-caption dora-text-muted">
-                    Manage every account in this install.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                flat
-                round
-                dense
-                :icon="ICONS.refresh"
-                :loading="loading"
-                @click="loadUsers"
-            >
-                <q-tooltip>Refresh user list</q-tooltip>
-            </q-btn>
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Users"
+            description="Manage every account in this install."
+            :icon="ICONS.group"
+        >
+            <template #actions>
+                <q-btn
+                    flat
+                    round
+                    dense
+                    :icon="ICONS.refresh"
+                    :loading="loading"
+                    @click="loadUsers"
+                >
+                    <q-tooltip>Refresh user list</q-tooltip>
+                </q-btn>
+            </template>
+        </SettingsPageHeader>
 
-        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
 
-        <q-separator />
-
-        <q-list separator>
+        <q-list class="settings-list" separator>
             <q-item v-for="user in users" :key="user.user_id" class="q-py-md">
                 <q-item-section avatar>
                     <q-avatar
@@ -183,7 +177,7 @@
                     <BaseButton variant="ghost" label="Done" v-close-popup />
                 </template>
         </BaseDialog>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -195,6 +189,7 @@
     import UserAdminApiService, {
         type AdminUser
     } from 'src/services/api/userAdminApiService';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -337,7 +332,12 @@
     onMounted(loadUsers);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; position: relative; }
+    .settings-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
     .reset-password-readout :deep(input) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         letter-spacing: 0.05em;

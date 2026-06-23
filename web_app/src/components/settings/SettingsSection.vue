@@ -1,0 +1,73 @@
+<template>
+    <section class="settings-section">
+        <header v-if="$slots.title || $slots.description || $slots.actions" class="settings-section__header">
+            <div class="settings-section__heading">
+                <h2 v-if="$slots.title" class="settings-section__title">
+                    <slot name="title" />
+                </h2>
+                <p v-if="$slots.description" class="settings-section__description">
+                    <slot name="description" />
+                </p>
+            </div>
+            <div v-if="$slots.actions" class="settings-section__actions">
+                <slot name="actions" />
+            </div>
+        </header>
+        <div class="settings-section__body">
+            <slot />
+        </div>
+    </section>
+</template>
+
+<script setup lang="ts">
+    // IMPL_PLAN_SETTINGS_REBUILD §2.5 — left-info / right-control wrapper.
+    // The parent page renders a 1px divider between sections so spacing
+    // stays consistent.
+</script>
+
+<style scoped lang="scss">
+    .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 4px 0 24px;
+    }
+    .settings-section__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .settings-section__heading {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+    .settings-section__title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+        line-height: 1.3;
+    }
+    .settings-section__description {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        line-height: 1.4;
+    }
+    .settings-section__actions {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .settings-section__body {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+</style>

@@ -1,100 +1,93 @@
 <template>
     <div v-if="!currentUser">
-        <q-card flat bordered>
-            <q-card-section>
-                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-            </q-card-section>
-        </q-card>
+        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
     </div>
 
-    <div v-else class="column q-gutter-md">
-        <!-- Identity ───────────────────────────────────────────────── -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Account</div>
-                <div class="text-caption dora-text-muted">Your sign-in identity.</div>
-            </q-card-section>
+    <div v-else class="settings-page">
+        <SettingsPageHeader
+            title="Account"
+            description="Your sign-in identity."
+        />
 
-            <q-separator />
-
-            <q-card-section>
-                <div class="row items-center q-gutter-md">
-                    <q-avatar size="60px" color="accent" text-color="dark">
-                        {{ initials }}
-                    </q-avatar>
-                    <div>
-                        <div class="text-h6">{{ currentUser.username }}</div>
-                        <div class="text-caption dora-text-muted">
-                            {{ currentUser.email ?? 'No email on file.' }}
-                        </div>
-                    </div>
+        <section class="account-identity">
+            <q-avatar size="60px" color="accent" text-color="dark">
+                {{ initials }}
+            </q-avatar>
+            <div class="account-identity__text">
+                <div class="account-identity__name">{{ currentUser.username }}</div>
+                <div class="account-identity__email dora-text-muted">
+                    {{ currentUser.email ?? 'No email on file.' }}
                 </div>
+                <div class="account-identity__userid dora-text-muted">
+                    <span class="text-mono">{{ currentUser.user_id }}</span>
+                </div>
+            </div>
+        </section>
 
-                <q-list class="q-mt-md" separator>
-                    <q-item>
-                        <q-item-section>
-                            <q-item-label caption>User ID</q-item-label>
-                            <q-item-label class="text-mono">{{ currentUser.user_id }}</q-item-label>
-                        </q-item-section>
-                    </q-item>
-                </q-list>
-            </q-card-section>
+        <hr class="settings-divider" />
 
-            <!-- Identity edit forms — lifted from the (misnamed) "Account"
-                 card that used to live on Preferences. This is where the
-                 user feedback said they belong. -->
-            <q-separator />
+        <SettingsSection>
+            <template #title>Username</template>
+            <SettingsRow stacked>
+                <div class="row q-col-gutter-sm items-end">
+                    <q-input
+                        v-model="usernameDraft"
+                        outlined
+                        dense
+                        class="col-12 col-sm-8"
+                        :disable="saving"
+                        autocomplete="username"
+                    />
+                    <q-btn
+                        color="primary"
+                        unelevated
+                        no-caps
+                        :icon="ICONS.save"
+                        label="Save"
+                        :loading="savingUsername"
+                        :disable="usernameUnchanged || !usernameDraft.trim()"
+                        @click="onSaveUsername"
+                    />
+                </div>
+            </SettingsRow>
+        </SettingsSection>
 
-            <q-card-section class="row q-col-gutter-md items-end">
-                <q-input
-                    v-model="usernameDraft"
-                    label="Username"
-                    outlined
-                    dense
-                    class="col-12 col-sm-6"
-                    :disable="saving"
-                    autocomplete="username"
-                />
-                <q-btn
-                    color="primary"
-                    no-caps
-                    :icon="ICONS.save"
-                    label="Save username"
-                    :loading="savingUsername"
-                    :disable="usernameUnchanged || !usernameDraft.trim()"
-                    @click="onSaveUsername"
-                />
-            </q-card-section>
+        <hr class="settings-divider" />
 
-            <q-separator />
+        <SettingsSection>
+            <template #title>Email</template>
+            <SettingsRow stacked>
+                <div class="row q-col-gutter-sm items-end">
+                    <q-input
+                        v-model="emailDraft"
+                        outlined
+                        dense
+                        placeholder="you@example.com"
+                        class="col-12 col-sm-8"
+                        :disable="saving"
+                        autocomplete="email"
+                    />
+                    <q-btn
+                        color="primary"
+                        unelevated
+                        no-caps
+                        :icon="ICONS.save"
+                        label="Save"
+                        :loading="savingEmail"
+                        :disable="emailUnchanged"
+                        @click="onSaveEmail"
+                    />
+                </div>
+            </SettingsRow>
+        </SettingsSection>
 
-            <q-card-section class="row q-col-gutter-md items-end">
-                <q-input
-                    v-model="emailDraft"
-                    label="Email"
-                    outlined
-                    dense
-                    class="col-12 col-sm-6"
-                    placeholder="you@example.com"
-                    :disable="saving"
-                    autocomplete="email"
-                />
-                <q-btn
-                    color="primary"
-                    no-caps
-                    :icon="ICONS.save"
-                    label="Save email"
-                    :loading="savingEmail"
-                    :disable="emailUnchanged"
-                    @click="onSaveEmail"
-                />
-            </q-card-section>
+        <hr class="settings-divider" />
 
-            <q-separator />
+        <SettingsSection>
+            <template #title>Change password</template>
 
-            <q-card-section>
-                <div class="text-subtitle2 q-mb-sm">Change password</div>
-                <div class="row q-col-gutter-md">
+            <SettingsRow stacked>
+                <div class="row q-col-gutter-sm">
                     <q-input
                         v-model="currentPassword"
                         label="Current password"
@@ -112,12 +105,7 @@
                         type="password"
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
-                        :rules="[
-                            (v) =>
-                                !v ||
-                                v.length >= 4 ||
-                                'At least 4 characters'
-                        ]"
+                        :rules="[(v) => !v || v.length >= 4 || 'At least 4 characters']"
                     />
                     <q-input
                         v-model="confirmPassword"
@@ -128,16 +116,14 @@
                         class="col-12 col-sm-4"
                         autocomplete="new-password"
                         :error="confirmPassword.length > 0 && confirmPassword !== newPassword"
-                        :error-message="
-                            confirmPassword.length > 0 && confirmPassword !== newPassword
-                                ? 'Passwords do not match'
-                                : ''
-                        "
+                        :error-message="confirmPassword.length > 0 && confirmPassword !== newPassword
+                            ? 'Passwords do not match' : ''"
                     />
                 </div>
-                <div class="q-mt-md">
+                <div class="q-mt-sm">
                     <q-btn
                         color="primary"
+                        unelevated
                         no-caps
                         :icon="ICONS.lock_reset"
                         label="Change password"
@@ -146,28 +132,32 @@
                         @click="onChangePassword"
                     />
                 </div>
-            </q-card-section>
-        </q-card>
+            </SettingsRow>
+        </SettingsSection>
 
-        <!-- Sign out — sits on its own, no "Danger zone" theatre (sign-out
-             is benign; the action's weight is signalled by the button
-             colour, not a section label). -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-subtitle2 q-mb-sm">Sign out</div>
-                <div class="text-caption dora-text-muted q-mb-md">
-                    Sign out of this device. Your data stays where it is on the server.
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Sign out</template>
+            <template #description>
+                Sign out of this device. Your data stays where it is on the
+                server.
+            </template>
+
+            <SettingsRow stacked>
+                <div>
+                    <q-btn
+                        color="negative"
+                        unelevated
+                        no-caps
+                        :icon="ICONS.logout"
+                        label="Sign out"
+                        :loading="signingOut"
+                        @click="onSignOut"
+                    />
                 </div>
-                <q-btn
-                    color="negative"
-                    no-caps
-                    :icon="ICONS.logout"
-                    label="Sign out"
-                    :loading="signingOut"
-                    @click="onSignOut"
-                />
-            </q-card-section>
-        </q-card>
+            </SettingsRow>
+        </SettingsSection>
     </div>
 </template>
 
@@ -179,6 +169,9 @@
     import { computed, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -197,7 +190,6 @@
     const savingPassword = ref(false);
     const signingOut = ref(false);
 
-    // Re-sync drafts when the auth store reloads (e.g. after refresh, login).
     watch(currentUser, (u) => {
         if (!u) return;
         usernameDraft.value = u.username;
@@ -292,7 +284,36 @@
     }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
+    .account-identity {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 4px 0 12px;
+    }
+    .account-identity__text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .account-identity__name {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .account-identity__email {
+        font-size: 0.875rem;
+    }
+    .account-identity__userid {
+        font-size: 0.75rem;
+    }
     .text-mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         font-size: 0.85em;

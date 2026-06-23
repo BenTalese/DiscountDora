@@ -1,70 +1,69 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section>
-            <div class="text-subtitle1 text-weight-medium">
-                <q-icon :name="ICONS.smart_toy" size="20px" class="q-mr-xs" />
-                AI assistant
-            </div>
-            <div class="text-caption dora-text-muted">
-                Optional. Connect Dora's chat to a language model you run
-                yourself. Off by default — when off, the assistant uses its
-                built-in rule-based replies.
-            </div>
-        </q-card-section>
-        <q-separator />
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="AI assistant"
+            description="Optional. Connect Dora's chat to a language model you run yourself. Off by default — when off, the assistant uses its built-in rule-based replies."
+            :icon="ICONS.smart_toy"
+        />
 
-        <q-card-section v-if="!isAdmin">
-            <q-banner class="dora-bg-negative-soft text-negative" dense rounded>
-                You don't have admin permissions to view this page.
-            </q-banner>
-        </q-card-section>
+        <q-banner v-if="!isAdmin" class="dora-bg-negative-soft text-negative" dense rounded>
+            You don't have admin permissions to view this page.
+        </q-banner>
 
-        <q-card-section v-else-if="loading" class="row justify-center">
+        <div v-else-if="loading" class="row justify-center q-py-md">
             <q-spinner-dots size="28px" color="primary" />
-        </q-card-section>
+        </div>
 
-        <template v-else-if="isAdmin">
-            <q-card-section>
-                <q-toggle
-                    v-model="enabledDraft"
-                    label="Enable the AI assistant"
-                    :disable="saving"
-                />
-                <div class="text-caption dora-text-muted q-ml-sm">
+        <template v-else>
+            <SettingsSection>
+                <template #title>Enable</template>
+                <template #description>
                     {{ enabledDraft
                         ? 'Enter a base URL and model below, then Save to apply.'
                         : 'Toggle on to configure. Nothing is applied until you Save.' }}
-                </div>
-            </q-card-section>
+                </template>
 
-            <q-card-section class="row q-col-gutter-md items-start">
-                <q-input
-                    v-model="baseUrlDraft"
-                    label="LLM base URL"
-                    placeholder="http://localhost:11434"
-                    outlined
-                    dense
-                    class="col-12 col-sm-8"
-                    :disable="saving || !enabledDraft"
-                    hint="Your LLM server's address (Ollama's default is shown). Models load when you leave this field."
-                    @blur="onBaseUrlBlur"
-                />
-                <div class="col-12 col-sm-4">
-                    <q-btn
-                        color="secondary"
-                        no-caps
-                        outline
-                        :icon="ICONS.wifi_tethering"
-                        label="Test connection"
-                        :loading="probing"
-                        :disable="saving || !enabledDraft || !baseUrlDraft.trim()"
-                        @click="() => onTest(true)"
-                    />
-                </div>
-            </q-card-section>
+                <SettingsRow label="Enable the AI assistant">
+                    <q-toggle v-model="enabledDraft" :disable="saving" />
+                </SettingsRow>
+            </SettingsSection>
 
-            <q-card-section v-if="probeResult" class="q-pt-none">
+            <hr class="settings-divider" />
+
+            <SettingsSection>
+                <template #title>Server</template>
+                <template #description>
+                    Your LLM server's address (Ollama's default is shown).
+                    Models load when you leave the URL field.
+                </template>
+
+                <SettingsRow stacked>
+                    <div class="row q-col-gutter-sm items-end">
+                        <q-input
+                            v-model="baseUrlDraft"
+                            label="LLM base URL"
+                            placeholder="http://localhost:11434"
+                            outlined
+                            dense
+                            class="col-12 col-sm-8"
+                            :disable="saving || !enabledDraft"
+                            @blur="onBaseUrlBlur"
+                        />
+                        <q-btn
+                            color="secondary"
+                            no-caps
+                            outline
+                            :icon="ICONS.wifi_tethering"
+                            label="Test"
+                            :loading="probing"
+                            :disable="saving || !enabledDraft || !baseUrlDraft.trim()"
+                            @click="() => onTest(true)"
+                        />
+                    </div>
+                </SettingsRow>
+
                 <q-banner
+                    v-if="probeResult"
                     :class="probeResult.reachable ? 'dora-bg-positive-soft text-positive' : 'dora-bg-negative-soft text-negative'"
                     dense
                     rounded
@@ -87,90 +86,96 @@
                         </span>
                     </span>
                 </q-banner>
-            </q-card-section>
+            </SettingsSection>
 
-            <q-card-section class="row q-col-gutter-md">
-                <q-select
-                    v-model="modelDraft"
-                    label="Model"
-                    outlined
-                    dense
-                    class="col-12 col-sm-7"
-                    :options="modelOptions"
-                    use-input
-                    fill-input
-                    hide-selected
-                    input-debounce="0"
-                    new-value-mode="add-unique"
-                    :disable="saving || !enabledDraft"
-                    :hint="allModels.length
+            <hr class="settings-divider" />
+
+            <SettingsSection>
+                <template #title>Model</template>
+                <template #description>
+                    {{ allModels.length
                         ? 'Pick a detected model, or type one to pull later.'
-                        : 'Type a model name, or test the connection to list installed models. Must support tool-calling.'"
-                    @filter="onFilterModels"
-                    @new-value="onNewModel"
-                >
-                    <template #no-option>
-                        <q-item>
-                            <q-item-section class="dora-text-muted">
-                                No detected models — type a name (e.g. qwen2.5:7b).
-                            </q-item-section>
-                        </q-item>
-                    </template>
-                </q-select>
-            </q-card-section>
+                        : 'Type a model name, or test the connection to list installed models. Must support tool-calling.' }}
+                </template>
 
-            <q-card-section>
-                <q-btn
-                    color="primary"
-                    no-caps
-                    :icon="ICONS.save"
-                    label="Save AI settings"
-                    :loading="saving"
-                    :disable="!canSave"
-                    @click="onSave"
-                />
-                <div
-                    v-if="!unchanged && !canSave"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    Enable, then fill in both the base URL and the model
-                    before saving.
-                </div>
-            </q-card-section>
+                <SettingsRow stacked>
+                    <q-select
+                        v-model="modelDraft"
+                        outlined
+                        dense
+                        :options="modelOptions"
+                        use-input
+                        fill-input
+                        hide-selected
+                        input-debounce="0"
+                        new-value-mode="add-unique"
+                        :disable="saving || !enabledDraft"
+                        @filter="onFilterModels"
+                        @new-value="onNewModel"
+                    >
+                        <template #no-option>
+                            <q-item>
+                                <q-item-section class="dora-text-muted">
+                                    No detected models — type a name (e.g. qwen2.5:7b).
+                                </q-item-section>
+                            </q-item>
+                        </template>
+                    </q-select>
+                </SettingsRow>
 
-            <q-card-section>
-                <q-banner class="dora-bg-info-soft text-info" dense rounded>
-                    <template #avatar>
-                        <q-icon :name="ICONS.info" size="20px" />
-                    </template>
-                    <div class="text-weight-medium q-mb-xs">Setting up your own LLM</div>
-                    <ol class="q-my-none q-pl-md">
-                        <li>
-                            Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
-                            on a machine on your network (a desktop or home server).
-                        </li>
-                        <li>
-                            Pull a tool-capable model:
-                            <code>ollama pull qwen2.5:7b</code>
-                            (larger models answer better but need more RAM).
-                        </li>
-                        <li>
-                            Make sure it's serving (<code>ollama serve</code>; on Linux it
-                            usually runs as a service already).
-                        </li>
-                        <li>
-                            Enter the base URL (e.g. <code>http://localhost:11434</code>)
-                            and model name above, enable, and save.
-                        </li>
-                    </ol>
-                    <div class="q-mt-sm">
-                        More detail is on the
-                        <router-link to="/help">Help page</router-link>.
+                <SettingsRow stacked>
+                    <div>
+                        <q-btn
+                            color="primary"
+                            unelevated
+                            no-caps
+                            :icon="ICONS.save"
+                            label="Save AI settings"
+                            :loading="saving"
+                            :disable="!canSave"
+                            @click="onSave"
+                        />
+                        <div
+                            v-if="!unchanged && !canSave"
+                            class="text-caption dora-text-muted q-mt-xs"
+                        >
+                            Enable, then fill in both the base URL and the model
+                            before saving.
+                        </div>
                     </div>
-                </q-banner>
-            </q-card-section>
+                </SettingsRow>
+            </SettingsSection>
+
+            <hr class="settings-divider" />
+
+            <q-banner class="dora-bg-info-soft text-info" dense rounded>
+                <template #avatar>
+                    <q-icon :name="ICONS.info" size="20px" />
+                </template>
+                <div class="text-weight-medium q-mb-xs">Setting up your own LLM</div>
+                <ol class="q-my-none q-pl-md">
+                    <li>
+                        Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
+                        on a machine on your network.
+                    </li>
+                    <li>
+                        Pull a tool-capable model:
+                        <code>ollama pull qwen2.5:7b</code>.
+                    </li>
+                    <li>
+                        Make sure it's serving (<code>ollama serve</code>).
+                    </li>
+                    <li>
+                        Enter the base URL and model name above, enable, and save.
+                    </li>
+                </ol>
+                <div class="q-mt-sm">
+                    More detail is on the
+                    <router-link to="/help">Help page</router-link>.
+                </div>
+            </q-banner>
         </template>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -181,6 +186,9 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -306,3 +314,13 @@
         }
     });
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
+</style>

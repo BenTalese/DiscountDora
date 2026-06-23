@@ -1,35 +1,31 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">Stock locations</div>
-                <div class="text-caption dora-text-muted">
-                    Where things live. Zones at the top (e.g. Pantry), areas
-                    inside (e.g. Top shelf), sections inside those (e.g. Left).
-                    Items can attach at any level.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                color="primary"
-                no-caps
-                :icon="ICONS.add"
-                label="New zone"
-                @click="onAddChild(null, 'zone')"
-            />
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Stock locations"
+            description="Where things live. Zones at the top (e.g. Pantry), areas inside (e.g. Top shelf), sections inside those (e.g. Left). Items can attach at any level."
+            :icon="ICONS.place"
+        >
+            <template #actions>
+                <q-btn
+                    color="primary"
+                    unelevated
+                    no-caps
+                    :icon="ICONS.add"
+                    label="New zone"
+                    @click="onAddChild(null, 'zone')"
+                />
+            </template>
+        </SettingsPageHeader>
 
-        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mx-md q-mb-md" dense rounded>
+        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
-
-        <q-separator />
 
         <div v-if="!loading && tree.length === 0" class="q-pa-lg text-center dora-text-muted">
             No zones yet. Create one to start organising your pantry.
         </div>
 
-        <q-list separator>
+        <q-list class="settings-list" separator>
             <LocationRow
                 v-for="zone in tree"
                 :key="zone.location_id"
@@ -51,7 +47,7 @@
         <q-inner-loading :showing="loading && tree.length === 0">
             <q-spinner color="primary" size="48px" />
         </q-inner-loading>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -62,6 +58,7 @@
     import { useLocationStore } from 'src/stores/locationStore';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import LocationRow from 'src/components/settings/LocationRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const locationStore = useLocationStore();
@@ -197,3 +194,11 @@
         }
     });
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; position: relative; }
+    .settings-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+</style>

@@ -1,33 +1,21 @@
 <template>
-    <!--
-        C-4 Chunk 2 — generic name-only vocabulary editor (cuisine, category).
-        Owns the list + create/rename/delete dialogs; the parent supplies the
-        items and the api calls via events, then refetches. Dietary tags have
-        an extra grouping field and are edited separately.
-    -->
-    <q-card flat bordered>
-        <q-card-section class="row items-center">
-            <div>
-                <div class="text-h6">{{ title }}</div>
-                <div class="text-caption dora-text-muted">
-                    {{ description }} {{ items.length }} {{ items.length === 1 ? noun : nounPlural }}.
-                </div>
-            </div>
-            <q-space />
-            <q-btn
-                color="primary"
-                no-caps
-                :icon="ICONS.add"
-                :label="`New ${noun}`"
-                :loading="busy"
-                @click="onCreate"
-            />
-        </q-card-section>
+    <div class="settings-page">
+        <SettingsPageHeader :title="title" :description="rolledDescription">
+            <template #actions>
+                <q-btn
+                    color="primary"
+                    no-caps
+                    unelevated
+                    :icon="ICONS.add"
+                    :label="`New ${noun}`"
+                    :loading="busy"
+                    @click="onCreate"
+                />
+            </template>
+        </SettingsPageHeader>
 
-        <q-separator />
-
-        <q-list separator>
-            <q-item v-for="(item, index) in items" :key="item.id" class="q-py-sm">
+        <q-list class="vocab-list" separator>
+            <q-item v-for="(item, index) in items" :key="item.id" class="vocab-list__item">
                 <q-item-section avatar>
                     <q-icon :name="ICONS.label" />
                 </q-item-section>
@@ -50,9 +38,6 @@
                 </q-item-section>
                 <q-item-section side>
                     <div class="row q-gutter-xs items-center">
-                        <!-- C-2.A — optional reorder affordance (slot order is
-                             user-facing). Opt-in via `reorderable`; the other
-                             vocab cards omit it and are unchanged. -->
                         <template v-if="reorderable">
                             <q-btn
                                 flat
@@ -94,13 +79,14 @@
         <q-inner-loading :showing="loading && items.length === 0">
             <q-spinner color="primary" size="48px" />
         </q-inner-loading>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
-    import { ref } from 'vue';
+    import { computed, ref } from 'vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     type VocabItem = { id: string; name: string; recipe_count?: number };
 
@@ -113,14 +99,8 @@
             items: VocabItem[];
             loading: boolean;
             busy: boolean;
-            // C-2.A — opt in to the up/down reorder controls (meal slots).
             reorderable?: boolean;
-            // What uses an item (for the count caption + delete warning). FK
-            // vocabs use the default "recipe"; meal slots are free-text labels
-            // on entries, so they pass "entry" + `preservesLabel`.
             usageLabel?: string;
-            // When true the delete warning says usages keep their label (slots,
-            // no FK) rather than the FK-nulled "the recipes themselves stay".
             preservesLabel?: boolean;
         }>(),
         { reorderable: false, usageLabel: 'recipe', preservesLabel: false },
@@ -132,6 +112,12 @@
         (e: 'delete', id: string): void;
         (e: 'reorder', id: string, direction: 'up' | 'down'): void;
     }>();
+
+    const rolledDescription = computed(() => {
+        const count = props.items.length;
+        const word = count === 1 ? props.noun : props.nounPlural;
+        return `${props.description} ${count} ${word}.`;
+    });
 
     const $q = useQuasar();
     const editingId = ref<string | null>(null);
@@ -185,3 +171,18 @@
         if (ok) emit('delete', item.id);
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page {
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+    .vocab-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .vocab-list__item {
+        padding: 10px 4px;
+    }
+</style>

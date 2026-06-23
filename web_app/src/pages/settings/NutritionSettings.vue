@@ -1,57 +1,44 @@
 <template>
     <div v-if="!currentUser">
-        <q-card flat bordered>
-            <q-card-section>
-                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-            </q-card-section>
-        </q-card>
+        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
     </div>
 
-    <div v-else class="column q-gutter-md">
-        <!-- C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
-             Three-way toggle. `complex` is disabled when the install
-             admin hasn't configured a nutrition source (the reserved
-             seam). The per-recipe kcal field + cookbook kcal sort axis
-             are C-4 Chunk 9, gated on this composable. -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Nutrition</div>
-                <div class="text-caption dora-text-muted">
-                    Off by default. <strong>Simple</strong> adds a single kcal
-                    number per recipe that you type in.
-                    <strong>Complex</strong> would derive nutrition from a
-                    nutrition database — not built yet, and disabled until an
-                    admin configures a source.
-                </div>
-            </q-card-section>
-            <q-separator />
+    <div v-else class="settings-page">
+        <SettingsPageHeader
+            title="Nutrition"
+            description="Off by default. Simple adds a single kcal number per recipe that you type in. Complex would derive nutrition from a database — not built yet."
+        />
 
-            <q-card-section>
-                <div class="row items-center q-gutter-md">
-                    <q-btn-toggle
-                        :model-value="currentUser.nutrition_mode"
-                        :options="nutritionToggleOptions"
-                        no-caps
-                        toggle-color="primary"
-                        :disable="!nutritionInstallEnabled || saving"
-                        @update:model-value="onNutritionModeChange"
-                    />
-                </div>
-                <div
-                    v-if="!nutritionInstallEnabled"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    This install has nutrition turned off. Ask an admin to
-                    enable it in System → Features.
-                </div>
-                <div
-                    v-else-if="currentUser.nutrition_mode === 'complex' && !complexAvailable"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    Complex mode needs an admin-configured nutrition source.
-                </div>
-            </q-card-section>
-        </q-card>
+        <SettingsSection>
+            <template #title>Mode</template>
+            <template #description>
+                <strong>Complex</strong> stays disabled until an admin
+                configures a nutrition source.
+            </template>
+
+            <SettingsRow label="Per-user nutrition mode">
+                <DoraSegmented
+                    :model-value="currentUser.nutrition_mode"
+                    :options="nutritionToggleOptions"
+                    :disabled="!nutritionInstallEnabled || saving"
+                    @update:model-value="onNutritionModeChange"
+                />
+            </SettingsRow>
+
+            <div
+                v-if="!nutritionInstallEnabled"
+                class="settings-page__note dora-text-muted"
+            >
+                This install has nutrition turned off. Ask an admin to
+                enable it in System → Features.
+            </div>
+            <div
+                v-else-if="currentUser.nutrition_mode === 'complex' && !complexAvailable"
+                class="settings-page__note dora-text-muted"
+            >
+                Complex mode needs an admin-configured nutrition source.
+            </div>
+        </SettingsSection>
     </div>
 </template>
 
@@ -65,22 +52,23 @@
     } from 'src/composables/useNutritionMode';
     import { computed, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
-    // C-cross Chunk 3 — nutrition opt-in layering. `complexAvailable`
-    // gates the third toggle button + caption; the install flag gates
-    // the whole control.
     const {
         installEnabled: nutritionInstallEnabled,
         complexAvailable,
     } = useNutritionMode();
-    const nutritionToggleOptions = computed(() => [
-        { label: 'Off', value: 'off' as NutritionMode },
-        { label: 'Simple', value: 'simple' as NutritionMode },
-        { label: 'Complex', value: 'complex' as NutritionMode, disable: !complexAvailable.value },
+    const nutritionToggleOptions = computed<DoraSegmentedOption<NutritionMode>[]>(() => [
+        { label: 'Off', value: 'off' },
+        { label: 'Simple', value: 'simple' },
+        { label: 'Complex', value: 'complex', disabled: !complexAvailable.value },
     ]);
 
     const saving = ref(false);
@@ -111,10 +99,6 @@
         }
     }
 
-    // C-cross Chunk 3 — per-user nutrition mode. Server rejects
-    // `complex` when no nutrition source is configured; the toggle
-    // option is also disabled in that state so this should never
-    // 422 in normal use.
     async function onNutritionModeChange(value: NutritionMode) {
         const labelByMode: Record<NutritionMode, string> = {
             off: 'Nutrition turned off.',
@@ -127,3 +111,12 @@
         );
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-page__note {
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        margin-top: 4px;
+    }
+</style>

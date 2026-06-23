@@ -1,138 +1,22 @@
 <template>
-    <div class="settings-shell q-pa-md">
-        <div class="row items-center q-mb-md">
-            <div class="text-caption dora-text-muted">
-                Manage your account and, if you're an admin, the install itself.
-            </div>
-        </div>
+    <div class="settings-shell">
+        <header class="settings-shell__header">
+            <h1 class="settings-shell__title">Settings</h1>
+        </header>
 
-        <div class="row q-col-gutter-md">
-            <!-- Side nav ──────────────────────────────────────────────── -->
-            <aside class="col-12 col-md-3">
-                <q-card flat bordered>
-                    <q-list>
-                        <q-item-label header class="settings-group-header">
-                            Account
-                        </q-item-label>
-                        <template v-for="entry in accountSections" :key="entryKey(entry)">
-                            <!-- Sub-group: non-clickable header + indented leaves -->
-                            <template v-if="'subheader' in entry">
-                                <q-item-label header class="settings-subheader">
-                                    {{ entry.subheader }}
-                                </q-item-label>
-                                <q-item
-                                    v-for="item in entry.items"
-                                    :key="item.path"
-                                    clickable
-                                    :to="item.path"
-                                    active-class="settings-section-active"
-                                    class="settings-subitem"
-                                    exact
-                                >
-                                    <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
-                                    <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
-                                </q-item>
-                            </template>
-                            <q-item
-                                v-else
-                                clickable
-                                :to="entry.path"
-                                active-class="settings-section-active"
-                                exact
-                            >
-                                <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
-                                <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
-                            </q-item>
-                        </template>
-
-                        <q-separator class="q-my-sm" />
-                        <q-item-label header class="settings-group-header">
-                            Kitchen setup
-                        </q-item-label>
-                        <template v-for="entry in kitchenSetupSections" :key="entryKey(entry)">
-                            <template v-if="'subheader' in entry">
-                                <q-item-label header class="settings-subheader">
-                                    {{ entry.subheader }}
-                                </q-item-label>
-                                <q-item
-                                    v-for="item in entry.items"
-                                    :key="item.path"
-                                    clickable
-                                    :to="item.path"
-                                    active-class="settings-section-active"
-                                    class="settings-subitem"
-                                    exact
-                                >
-                                    <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
-                                    <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
-                                </q-item>
-                            </template>
-                            <q-item
-                                v-else
-                                clickable
-                                :to="entry.path"
-                                active-class="settings-section-active"
-                                exact
-                            >
-                                <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
-                                <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
-                            </q-item>
-                        </template>
-
-                        <template v-if="isAdmin">
-                            <q-separator class="q-my-sm" />
-                            <q-item-label header class="settings-group-header">
-                                <q-icon :name="ICONS.shield" size="14px" class="q-mr-xs" />
-                                Admin · global
-                            </q-item-label>
-                            <template v-for="entry in adminSections" :key="entryKey(entry)">
-                                <template v-if="'subheader' in entry">
-                                    <q-item-label header class="settings-subheader">
-                                        {{ entry.subheader }}
-                                    </q-item-label>
-                                    <q-item
-                                        v-for="item in entry.items"
-                                        :key="item.path"
-                                        clickable
-                                        :to="item.path"
-                                        active-class="settings-section-active"
-                                        class="settings-subitem"
-                                        exact
-                                    >
-                                        <q-item-section avatar><q-icon :name="item.icon" /></q-item-section>
-                                        <q-item-section><q-item-label>{{ item.label }}</q-item-label></q-item-section>
-                                    </q-item>
-                                </template>
-                                <q-item
-                                    v-else
-                                    clickable
-                                    :to="entry.path"
-                                    active-class="settings-section-active"
-                                    exact
-                                >
-                                    <q-item-section avatar><q-icon :name="entry.icon" /></q-item-section>
-                                    <q-item-section><q-item-label>{{ entry.label }}</q-item-label></q-item-section>
-                                </q-item>
-                            </template>
-                        </template>
-                    </q-list>
-                </q-card>
-
-                <q-banner
-                    v-if="!isAdmin"
-                    class="dora-bg-sunken dora-text-secondary q-mt-md text-caption"
-                    dense
-                    rounded
-                >
-                    <template #avatar>
-                        <q-icon :name="ICONS.lock" size="18px" />
-                    </template>
-                    Admin (global) settings are only visible to admin accounts.
-                </q-banner>
+        <div class="settings-shell__body">
+            <aside class="settings-shell__nav">
+                <SettingsNavGroup label="Account" :items="accountSections" />
+                <SettingsNavGroup label="Kitchen setup" :items="kitchenSetupSections" />
+                <SettingsNavGroup
+                    v-if="isAdmin"
+                    label="Admin · global"
+                    :items="adminSections"
+                    :icon="ICONS.shield"
+                />
             </aside>
 
-            <!-- Active section ─────────────────────────────────────────── -->
-            <main class="col-12 col-md-9">
+            <main class="settings-shell__main">
                 <router-view />
             </main>
         </div>
@@ -143,22 +27,17 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
+    import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
 
     // IMPL_PLAN_SETTINGS_REBUILD §2.1 — three top-level groups, Account first.
     // §6.5 (user pick): nested groupings render as an indented sub-list under a
     // non-clickable sub-header (Recipe taxonomies under Kitchen setup; System
     // under Admin). Captions dropped — label + icon only.
-    // NOTE: the SettingsNavGroup.vue extraction + visual rebuild are Phase 3;
-    // the per-group template here is intentionally repeated until then (the
-    // shared structure is what Phase 3 lifts out).
-    type NavLeaf = { path: string; label: string; icon: string };
-    type NavSubGroup = { subheader: string; items: NavLeaf[] };
-    type NavEntry = NavLeaf | NavSubGroup;
+    // Phase 3 §2.7: the per-group template is now lifted into SettingsNavGroup;
+    // the §2.8 shell sheds its card chrome, drops the non-admin banner, and the
+    // page header carries the real h1 (was a soft caption).
 
-    const entryKey = (e: NavEntry): string =>
-        'subheader' in e ? `sub:${e.subheader}` : e.path;
-
-    const accountSections: NavEntry[] = [
+    const accountSections: SettingsNavEntry[] = [
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
         { path: '/settings/preferences', label: 'Preferences', icon: ICONS.tune },
         { path: '/settings/notifications', label: 'Notifications', icon: ICONS.notifications },
@@ -168,7 +47,7 @@
         { path: '/settings/about', label: 'About', icon: ICONS.info },
     ];
 
-    const kitchenSetupSections: NavEntry[] = [
+    const kitchenSetupSections: SettingsNavEntry[] = [
         { path: '/settings/kitchen-setup/stock-locations', label: 'Stock locations', icon: ICONS.place },
         { path: '/settings/kitchen-setup/stock-groups', label: 'Stock groups', icon: ICONS.label },
         { path: '/settings/kitchen-setup/stores', label: 'Stores', icon: ICONS.store },
@@ -184,7 +63,7 @@
         },
     ];
 
-    const adminSections: NavEntry[] = [
+    const adminSections: SettingsNavEntry[] = [
         { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
         {
             subheader: 'System',
@@ -202,29 +81,53 @@
     const { isAdmin } = storeToRefs(useAuthStore());
 </script>
 
-<style scoped>
-    .settings-section-active {
-        background: var(--brand-primary-soft);
-        font-weight: 600;
+<style scoped lang="scss">
+    .settings-shell {
+        padding: 28px;
+        max-width: 1280px;
+        margin: 0 auto;
     }
-    .settings-group-header {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        padding-top: 12px;
+    .settings-shell__header {
+        margin-bottom: 20px;
     }
-    /* §6.5 — second-level sub-header + indented children. */
-    .settings-subheader {
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-muted);
-        padding-top: 8px;
-        padding-left: 28px;
-        min-height: unset;
+    .settings-shell__title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+        line-height: 1.2;
     }
-    .settings-subitem {
-        padding-left: 28px;
+    .settings-shell__body {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        gap: 40px;
+        align-items: flex-start;
+    }
+    .settings-shell__nav {
+        position: sticky;
+        top: 16px;
+        align-self: flex-start;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .settings-shell__main {
+        min-width: 0;
+    }
+
+    @media (max-width: 1023px) {
+        .settings-shell { padding: 20px; }
+        .settings-shell__body {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        .settings-shell__nav {
+            position: static;
+            flex-direction: row;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .settings-shell__nav::-webkit-scrollbar { display: none; }
     }
 </style>

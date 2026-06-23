@@ -1,103 +1,82 @@
 <template>
     <div v-if="!currentUser">
-        <q-card flat bordered>
-            <q-card-section>
-                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-            </q-card-section>
-        </q-card>
+        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
     </div>
 
-    <div v-else class="column q-gutter-md">
-        <!-- C-cross Chunk 2 — Money features opt-in.
-             Layered with the install-wide `money_enabled` flag (admin
-             owns that one in Settings → System → Features). The Grocery
-             budget card below stays hidden until both layers are on.
-             Saved `budget_amount` survives toggling this off. -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Money &amp; budgets</div>
-                <div class="text-caption dora-text-muted">
-                    Show dollar surfaces — recipe cost estimates, shopping-list
-                    totals, the dashboard budget card. Off by default; turn on
-                    to opt in. Your saved budget number is kept either way.
-                </div>
-            </q-card-section>
-            <q-separator />
+    <div v-else class="settings-page">
+        <SettingsPageHeader
+            title="Money &amp; budgets"
+            description="Show dollar surfaces — recipe cost estimates, shopping-list totals, the dashboard budget card. Off by default; turn on to opt in."
+        />
 
-            <q-card-section>
+        <SettingsSection>
+            <template #title>Money features</template>
+            <template #description>
+                Your saved budget number is kept either way.
+            </template>
+
+            <SettingsRow label="Show money features">
                 <q-toggle
                     :model-value="currentUser.money_features_enabled"
                     :disable="!moneyInstallEnabled || saving"
-                    label="Show money features"
                     @update:model-value="onMoneyFeaturesChange"
                 />
-                <div
-                    v-if="!moneyInstallEnabled"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    This install has money features turned off. Ask an admin
-                    to enable them in System → Features.
-                </div>
-            </q-card-section>
+            </SettingsRow>
+            <div
+                v-if="!moneyInstallEnabled"
+                class="settings-page__note dora-text-muted"
+            >
+                This install has money features turned off. Ask an admin
+                to enable them in System → Features.
+            </div>
+        </SettingsSection>
 
-            <!-- Grocery budget (P2-05) — same page, revealed once money
-                 features are on (install-wide AND per-user). Saved value
-                 preserved across toggles. -->
-            <template v-if="moneyEnabled">
-                <q-separator />
+        <template v-if="moneyEnabled">
+            <hr class="settings-divider" />
 
-                <q-card-section>
-                    <div class="text-subtitle2">Grocery budget</div>
-                    <div class="text-caption dora-text-muted">
-                        Optional. Set a weekly or monthly target and Dora will
-                        track how much you've spent across every finished
-                        shopping list in the period.
-                    </div>
-                </q-card-section>
+            <SettingsSection>
+                <template #title>Grocery budget</template>
+                <template #description>
+                    Set a weekly or monthly target; Dora will track how much
+                    you've spent across every finished shopping list in the
+                    period.
+                </template>
 
-                <q-card-section>
+                <SettingsRow label="Track a grocery budget">
                     <q-toggle
                         :model-value="budgetEnabledDraft"
-                        label="Track a grocery budget"
                         :disable="saving"
                         @update:model-value="onBudgetEnabledChange"
                     />
-                </q-card-section>
+                </SettingsRow>
 
-                <q-card-section
-                    v-if="budgetEnabledDraft"
-                    class="row q-col-gutter-md items-end"
-                >
-                    <q-input
-                        v-model.number="budgetAmountDraft"
-                        label="Amount"
-                        type="number"
-                        step="1"
-                        min="0"
-                        prefix="$"
-                        outlined
-                        dense
-                        class="col-12 col-sm-4"
-                        :disable="saving"
-                        @blur="onBudgetAmountBlur"
-                        @keydown.enter.prevent="onBudgetAmountBlur"
-                    />
-                    <div class="col-12 col-sm-8">
-                        <q-btn-toggle
-                            v-model="budgetPeriodDraft"
-                            no-caps
-                            spread
-                            toggle-color="primary"
-                            :options="[
-                                { label: 'Weekly (Mon–Sun)', value: 'weekly' },
-                                { label: 'Monthly', value: 'monthly' }
-                            ]"
+                <template v-if="budgetEnabledDraft">
+                    <SettingsRow label="Amount">
+                        <q-input
+                            v-model.number="budgetAmountDraft"
+                            type="number"
+                            step="1"
+                            min="0"
+                            prefix="$"
+                            outlined
+                            dense
+                            style="max-width: 160px"
+                            :disable="saving"
+                            @blur="onBudgetAmountBlur"
+                            @keydown.enter.prevent="onBudgetAmountBlur"
+                        />
+                    </SettingsRow>
+
+                    <SettingsRow label="Period">
+                        <DoraSegmented
+                            :model-value="budgetPeriodDraft"
+                            :options="budgetPeriodOptions"
                             @update:model-value="onBudgetPeriodChange"
                         />
-                    </div>
-                </q-card-section>
-            </template>
-        </q-card>
+                    </SettingsRow>
+                </template>
+            </SettingsSection>
+        </template>
     </div>
 </template>
 
@@ -109,32 +88,33 @@
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
 
-    // C-cross Chunk 2 — money opt-in layering. The Settings page exposes
-    // both layers explicitly so the user can see why the budget card
-    // might be missing (install off vs. their own toggle off).
     const {
         moneyEnabled,
         installEnabled: moneyInstallEnabled,
     } = useMoneyEnabled();
 
-    // P2-05 — budget drafts. `enabled` is derived from amount-being-set;
-    // we keep it as a separate draft so toggling off doesn't blow away
-    // the user's amount typing (we restore it if they toggle back on
-    // without saving).
     const budgetAmountDraft = ref<number | null>(currentUser.value?.budget_amount ?? null);
     const budgetPeriodDraft = ref<BudgetPeriod>(currentUser.value?.budget_period ?? 'weekly');
     const budgetEnabledDraft = ref<boolean>(
         currentUser.value?.budget_amount != null && currentUser.value.budget_amount > 0
     );
 
+    const budgetPeriodOptions: DoraSegmentedOption<BudgetPeriod>[] = [
+        { label: 'Weekly (Mon–Sun)', value: 'weekly' },
+        { label: 'Monthly', value: 'monthly' },
+    ];
+
     const saving = ref(false);
 
-    // Re-sync drafts when the auth store reloads (e.g. after refresh, login).
     watch(currentUser, (u) => {
         if (!u) return;
         budgetAmountDraft.value = u.budget_amount ?? null;
@@ -168,8 +148,6 @@
         }
     }
 
-    // C-cross Chunk 2 — per-user money-features opt-in. The saved
-    // budget value isn't touched (proposal §2.2: "data preserved").
     async function onMoneyFeaturesChange(value: boolean) {
         await update(
             value ? 'Money features turned on.' : 'Money features turned off.',
@@ -177,20 +155,15 @@
         );
     }
 
-    // P2-05 — budget handlers.
     async function onBudgetEnabledChange(value: boolean) {
         budgetEnabledDraft.value = value;
         if (!value) {
-            // Toggling off clears the persisted amount but keeps the draft
-            // so a quick "actually, keep tracking" toggle restores it.
             const result = await update('Budget tracking turned off.', () =>
                 authStore.updateMeAsync({ clear_budget_amount: true })
             );
             if (result === null) budgetEnabledDraft.value = true;
             return;
         }
-        // Turning on without a number is a no-op until the user types one
-        // and blurs — keeps the wire calm.
         if (
             budgetAmountDraft.value != null
             && budgetAmountDraft.value > 0
@@ -210,8 +183,6 @@
         if (!budgetEnabledDraft.value) return;
         const value = budgetAmountDraft.value;
         if (value == null || Number.isNaN(value) || value <= 0) {
-            // Empty / zero input is treated as "turn this off" — saves the
-            // user a trip back to the toggle.
             budgetEnabledDraft.value = false;
             await update('Budget tracking turned off.', () =>
                 authStore.updateMeAsync({ clear_budget_amount: true })
@@ -228,9 +199,25 @@
 
     async function onBudgetPeriodChange(value: BudgetPeriod) {
         const previous = currentUser.value?.budget_period ?? 'weekly';
+        budgetPeriodDraft.value = value;
         const result = await update('Budget period updated.', () =>
             authStore.updateMeAsync({ budget_period: value })
         );
         if (result === null) budgetPeriodDraft.value = previous;
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-page__note {
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        margin-top: 4px;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 0;
+    }
+</style>

@@ -1,28 +1,24 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center q-gutter-md">
-            <q-icon :name="ICONS.fact_check" size="32px" class="text-primary" />
-            <div class="col">
-                <div class="text-h6">Audit log</div>
-                <div class="text-caption dora-text-muted">
-                    Every mutating request, login attempt, client crash, and
-                    explicit service-layer event lands here. Filters narrow
-                    the view; click a row to see the full payload.
-                </div>
-            </div>
-            <q-btn
-                outline
-                no-caps
-                :icon="ICONS.file_download"
-                label="Export CSV"
-                :disable="rows.length === 0"
-                @click="exportCsv"
-            />
-        </q-card-section>
-        <q-separator />
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Audit log"
+            description="Every mutating request, login attempt, client crash, and explicit service-layer event lands here. Filters narrow the view; click a row to see the full payload."
+            :icon="ICONS.fact_check"
+        >
+            <template #actions>
+                <q-btn
+                    outline
+                    no-caps
+                    :icon="ICONS.file_download"
+                    label="Export CSV"
+                    :disable="rows.length === 0"
+                    @click="exportCsv"
+                />
+            </template>
+        </SettingsPageHeader>
 
         <!-- ── Filters ───────────────────────────────────────────────── -->
-        <q-card-section>
+        <section class="audit-filters">
             <div class="row q-col-gutter-sm">
                 <q-select
                     v-model="filters.source"
@@ -110,6 +106,7 @@
             <div class="row q-mt-sm q-gutter-sm">
                 <q-btn
                     color="primary"
+                    unelevated
                     no-caps
                     :icon="ICONS.search"
                     label="Apply filters"
@@ -123,13 +120,14 @@
                     @click="clearFilters"
                 />
             </div>
-        </q-card-section>
-        <q-separator />
+        </section>
+
+        <hr class="settings-divider" />
 
         <!-- ── Table ─────────────────────────────────────────────────── -->
-        <q-card-section v-if="loadError" class="text-negative">
+        <div v-if="loadError" class="text-negative q-py-sm">
             {{ loadError }}
-        </q-card-section>
+        </div>
         <q-table
             v-else
             :rows="rows"
@@ -163,7 +161,7 @@
             </template>
         </q-table>
 
-        <q-card-section class="row items-center q-gutter-sm">
+        <div class="row items-center q-gutter-sm q-mt-md">
             <q-btn
                 flat
                 dense
@@ -195,7 +193,7 @@
                 style="min-width: 110px"
                 @update:model-value="reload(1)"
             />
-        </q-card-section>
+        </div>
 
         <!-- ── Detail drawer ─────────────────────────────────────────── -->
         <BaseDialog
@@ -249,7 +247,7 @@
                     <BaseButton variant="ghost" label="Close" v-close-popup />
                 </template>
         </BaseDialog>
-    </q-card>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -259,6 +257,7 @@
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref } from 'vue';
     import AuditApiService, { type AuditEvent, type AuditFilters } from 'src/services/api/auditApiService';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const auditApi = new AuditApiService();
@@ -424,7 +423,15 @@
     });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .audit-filters { padding: 4px 0 12px; }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
     .audit-payload {
         background: var(--surface-sunken);
         border-radius: 4px;

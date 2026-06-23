@@ -1,52 +1,44 @@
 <template>
     <div v-if="!currentUser">
-        <q-card flat bordered>
-            <q-card-section>
-                <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
-            </q-card-section>
-        </q-card>
+        <q-banner class="dora-bg-sunken" dense>Not signed in.</q-banner>
     </div>
 
-    <div v-else class="column q-gutter-md">
-        <!-- Voice (P2-13) ──────────────────────────────────────────── -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-h6">Voice</div>
-                <div class="text-caption dora-text-muted">
-                    Talk to Dora and let her talk back. Voice features
-                    use your browser's built-in speech recognition and
-                    synthesis — they only work where the browser
-                    supports them, and your browser will ask for
-                    microphone permission the first time you tap the mic.
-                </div>
-            </q-card-section>
-            <q-separator />
+    <div v-else class="settings-page">
+        <SettingsPageHeader
+            title="Voice"
+            description="Talk to Dora and let her talk back. Voice uses your browser's built-in speech recognition and synthesis — it only works where the browser supports it, and your browser will ask for microphone permission the first time."
+        />
 
-            <q-card-section>
+        <SettingsSection>
+            <template #title>Microphone</template>
+            <SettingsRow label="Enable voice input">
                 <q-toggle
                     :model-value="currentUser.voice_input_enabled"
                     :disable="!voiceInputAvailable || saving"
-                    label="Enable voice input (microphone)"
                     @update:model-value="onVoiceInputChange"
                 />
-                <div v-if="!voiceInputAvailable" class="text-caption dora-text-muted q-mt-xs">
-                    Your browser doesn't expose the Web Speech API for
-                    recognition. Try Chrome or Edge.
-                </div>
-            </q-card-section>
+            </SettingsRow>
+            <div v-if="!voiceInputAvailable" class="settings-page__note dora-text-muted">
+                Your browser doesn't expose the Web Speech API for
+                recognition. Try Chrome or Edge.
+            </div>
+        </SettingsSection>
 
-            <q-card-section>
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Spoken replies</template>
+            <SettingsRow label="Let Dora speak her replies">
                 <q-toggle
                     :model-value="currentUser.voice_output_enabled"
                     :disable="!voiceOutputAvailable || saving"
-                    label="Let Dora speak her replies"
                     @update:model-value="onVoiceOutputChange"
                 />
-                <div v-if="!voiceOutputAvailable" class="text-caption dora-text-muted q-mt-xs">
-                    Your browser doesn't expose SpeechSynthesis.
-                </div>
-            </q-card-section>
-        </q-card>
+            </SettingsRow>
+            <div v-if="!voiceOutputAvailable" class="settings-page__note dora-text-muted">
+                Your browser doesn't expose SpeechSynthesis.
+            </div>
+        </SettingsSection>
     </div>
 </template>
 
@@ -58,6 +50,9 @@
     import { useVoiceInput } from 'src/composables/useVoiceInput';
     import { computed, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const authStore = useAuthStore();
@@ -91,10 +86,6 @@
         }
     }
 
-    // P2-13 — voice prefs. Availability flags come from cheap probes
-    // against the browser's globals; they don't actually start a
-    // recognition session, so the user can flip the toggle without
-    // a microphone prompt firing here.
     const voiceProbeInput = useVoiceInput();
     const voiceProbeOutput = useSpeechOutput();
     const voiceInputAvailable = computed(() => voiceProbeInput.available.value);
@@ -107,8 +98,6 @@
         );
     }
     async function onVoiceOutputChange(value: boolean) {
-        // Cancel any in-flight utterance when the user opts out so the
-        // toggle's effect is immediate.
         if (!value) voiceProbeOutput.cancel();
         await update(
             value ? 'Dora will speak her replies.' : 'Dora\'s voice muted.',
@@ -116,3 +105,18 @@
         );
     }
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-page__note {
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        margin-top: 4px;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 0;
+    }
+</style>

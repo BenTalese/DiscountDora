@@ -1,19 +1,25 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section class="row items-center q-gutter-md">
+    <div class="settings-page">
+        <header class="about-header">
             <q-avatar size="56px" square>
                 <img src="../../assets/logo-mascot.png" alt="Dashy Dora" />
             </q-avatar>
             <div>
-                <div class="text-h6" style="font-family: 'Cute Dino'">Dashy Dora</div>
-                <div class="text-caption dora-text-muted">Your pantry at your fingertips.</div>
+                <h1 class="about-header__title">
+                    <DoraBrand inline />
+                </h1>
+                <p class="about-header__tagline dora-text-muted">
+                    Your pantry at your fingertips.
+                </p>
             </div>
-        </q-card-section>
+        </header>
 
-        <q-separator />
+        <hr class="settings-divider" />
 
-        <q-card-section>
-            <q-list separator>
+        <SettingsSection>
+            <template #title>About this install</template>
+
+            <q-list class="about-list">
                 <q-item>
                     <q-item-section>
                         <q-item-label>Build</q-item-label>
@@ -44,7 +50,7 @@
                     <q-item-section>
                         <q-item-label>Web client</q-item-label>
                         <q-item-label caption>
-                            Quasar 2 / Vue 3, talks to two Flask APIs over CORS.
+                            Quasar 2 / Vue 3, talks to the Flask API over CORS.
                         </q-item-label>
                     </q-item-section>
                 </q-item>
@@ -55,58 +61,54 @@
                         <q-item-label caption class="text-mono">{{ doraApiUrl }}</q-item-label>
                     </q-item-section>
                 </q-item>
-
-                <!-- Phase D / FU-186: the standalone merchant_api backend
-                     was retired from this repo; the SPA only talks to dora_api
-                     now. The retailer-scraping side runs in the sibling
-                     dora-companion repo + pushes via POST /api/ingest. -->
-
-                <!-- Repo is private — public-repo + public issue
-                     links removed. Bug reports go through whatever
-                     channel the operator has set up. -->
-
             </q-list>
-        </q-card-section>
+        </SettingsSection>
 
-        <q-separator />
+        <hr class="settings-divider" />
 
-        <!-- ── Onboarding (F1) ─────────────────────────────────────────
-             Moved here from Account (Settings rebuild Phase 2): it's a
-             help / re-tour action, not identity management. -->
-        <q-card-section>
-            <div class="text-subtitle2 q-mb-sm">First-run wizard</div>
-            <div class="text-caption dora-text-muted q-mb-md">
+        <!-- F1 — onboarding restart lives here as a help / re-tour action. -->
+        <SettingsSection>
+            <template #title>First-run wizard</template>
+            <template #description>
                 Want to revisit the welcome tour? This sends you back to
                 /welcome — nothing in your data is touched, you'll just
                 step through the prompts again.
-            </div>
-            <q-btn
-                outline
-                no-caps
-                :icon="ICONS.restart_alt"
-                label="Restart onboarding"
-                :loading="restartingOnboarding"
-                @click="onRestartOnboarding"
-            />
-        </q-card-section>
+            </template>
 
-        <q-separator />
+            <SettingsRow stacked>
+                <div>
+                    <q-btn
+                        outline
+                        no-caps
+                        :icon="ICONS.restart_alt"
+                        label="Restart onboarding"
+                        :loading="restartingOnboarding"
+                        @click="onRestartOnboarding"
+                    />
+                </div>
+            </SettingsRow>
+        </SettingsSection>
 
-        <q-card-section class="text-caption dora-text-muted">
+        <hr class="settings-divider" />
+
+        <p class="about-footer dora-text-muted">
             Dora is a hobby project. The mascot is doing its best.
-        </q-card-section>
-    </q-card>
+        </p>
+    </div>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';
+    import DoraBrand from 'src/components/DoraBrand.vue';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -133,12 +135,7 @@
         restartingOnboarding.value = true;
         try {
             await onboardingApi.restartAsync();
-            // Refresh the auth payload so the router guard sees the
-            // newly-NULL onboarding_completed_at and bounces us to /welcome
-            // on the next navigation.
             await authStore.refreshAsync();
-            // Drop the "skipped" flag too so the dashboard banner is
-            // suppressed once the user is back in the wizard properly.
             try {
                 localStorage.removeItem('dora.onboarding.skipped_at');
             } catch {
@@ -157,8 +154,6 @@
         }
     }
 
-    // Reflects what AxiosHttpClient will actually use — keeps this section
-    // honest for debugging deployments.
     const doraApiUrl = computed(() => {
         const env = import.meta.env.VITE_API_BASE_URL;
         if (env) return env;
@@ -172,7 +167,42 @@
     const buildLabel = computed(() => (import.meta.env.PROD ? 'production' : 'dev'));
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .about-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 12px;
+    }
+    .about-header__title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.1;
+    }
+    .about-header__tagline {
+        margin: 4px 0 0;
+        font-size: 0.9375rem;
+    }
+    .about-list {
+        border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .about-list :deep(.q-item) {
+        border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 6%, transparent);
+        padding: 12px 4px;
+    }
+    .about-footer {
+        margin: 4px 0 0;
+        font-size: 0.8125rem;
+    }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
     .text-mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }

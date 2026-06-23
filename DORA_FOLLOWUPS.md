@@ -52,6 +52,47 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-285 — `VocabListEditor` empty-state copy is recipe-specific
+- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
+- **Type:** leftover (cosmetic copy mismatch).
+- **What:** the empty-state row in `web_app/src/components/settings/VocabListEditor.vue`
+  reads `No {{ nounPlural }} yet. Create one to start tagging recipes.` That
+  works for cuisines/categories/tools/dietary tags but is slightly off for
+  **meal slots** ("entries" are the consumer, not "recipes"). Phase 3 left it
+  as-is — a single-string mismatch on the empty state, only visible on a
+  freshly-emptied taxonomy page.
+- **Why deferred:** out of scope for the visual rebuild; needs a prop or
+  slot threaded through `TaxonomyManagerPage` so the caller can override
+  the empty-state tail. Trivial but not load-bearing.
+- **Recommended resolution:** opportunistic — pick up next time a Recipe*
+  page is touched, or fold into a Phase 3b polish pass.
+
+## [OPEN] FU-284 — settings mobile nav still horizontal-scroll fallback (Phase 5 owes top tab strip)
+- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
+- **Type:** deferred job.
+- **What:** §6.3 was resolved as **top tab strip** but Phase 3 only ships the
+  desktop shell + a `flex-direction: row; overflow-x: auto` fallback on
+  `<1024px`. The real implementation (three top tabs → chip strip with the
+  selected group's sub-items) is owned by Phase 5.
+- **Why deferred:** Phase 3 owns desktop visuals only; mobile is a dedicated
+  phase that also revisits SettingsSection row collapse + theme grid + the
+  DoraSegmented overflow shape.
+- **Recommended resolution:** later during Phase 5 (mobile pass).
+
+## [OPEN] FU-283 — confirm Phase 3 visual rebuild in the browser across themes
+- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
+- **Type:** finding (verification still pending).
+- **What:** Phase 3 §"Verification" expects a browser walk of every settings
+  page covering Pesto Light + Pesto Dark + Cherry Cola Dark at minimum.
+  `vue-tsc` + `eslint` are clean on this machine but the visual outcome
+  (sticky nav, dropped card chrome, DoraSegmented in sunken-fill mode,
+  theme card 2px accent border + check_circle badge, page padding breath)
+  has not yet been eyeballed end-to-end here.
+- **Why deferred:** no dev server in this session; per repo convention the
+  user runs the SPA.
+- **Recommended resolution:** confirm in browser before starting Phase 4 —
+  regressions get folded into a Phase 3b touch-up.
+
 ## [OPEN] FU-230 — confirm the offers sidecar now renders in the browser
 - **Raised:** 2026-06-22 (FU-227 chunk 6).
 - **Type:** finding (latent bug fixed — needs browser confirmation).

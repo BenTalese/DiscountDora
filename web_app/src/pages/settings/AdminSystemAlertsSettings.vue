@@ -1,55 +1,65 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section>
-            <div class="text-subtitle1 text-weight-medium">
-                <q-icon :name="ICONS.notifications" size="20px" class="q-mr-xs" />
-                Alert thresholds
-            </div>
-            <div class="text-caption dora-text-muted">
-                Household-wide tuning for inventory alerts. These shape the
-                alerts list and the location heatmap for everyone; each
-                account's own on/off and priority preferences layer on top.
-            </div>
-        </q-card-section>
-        <q-separator />
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Alert thresholds"
+            description="Household-wide tuning for inventory alerts. These shape the alerts list and the location heatmap for everyone; each account's own on/off and priority preferences layer on top."
+            :icon="ICONS.notifications"
+        />
 
-        <q-card-section v-if="!isAdmin">
-            <q-banner class="dora-bg-negative-soft text-negative" dense rounded>
-                You don't have admin permissions to view this page.
-            </q-banner>
-        </q-card-section>
+        <q-banner v-if="!isAdmin" class="dora-bg-negative-soft text-negative" dense rounded>
+            You don't have admin permissions to view this page.
+        </q-banner>
 
-        <q-card-section v-else-if="!loading" class="row q-col-gutter-md items-start">
-            <q-input
-                v-model.number="expiringSoonWindowDraft"
-                type="number"
-                label="Expiring-soon window (days)"
-                outlined
-                dense
-                class="col-12 col-sm-6"
-                :min="1"
-                :max="365"
-                :disable="savingThresholds"
-                :loading="savingThresholds"
-                hint="Items within this many days of their expiry date show as 'expiring soon'."
-                @blur="() => onSaveThreshold('expiring_soon_window_days', expiringSoonWindowDraft)"
-            />
-            <q-input
-                v-model.number="stocktakeDefaultDraft"
-                type="number"
-                label="Default stocktake reminder (days)"
-                outlined
-                dense
-                class="col-12 col-sm-6"
-                :min="0"
-                :max="3650"
-                :disable="savingThresholds"
-                :loading="savingThresholds"
-                hint="Pre-filled check-in cadence for new stock items (0 = no reminder)."
-                @blur="() => onSaveThreshold('default_days_until_stocktake_alert', stocktakeDefaultDraft)"
-            />
-        </q-card-section>
-    </q-card>
+        <template v-else-if="!loading">
+            <SettingsSection>
+                <template #title>Expiring-soon window</template>
+                <template #description>
+                    Items within this many days of their expiry date show as
+                    "expiring soon".
+                </template>
+
+                <SettingsRow label="Days">
+                    <q-input
+                        v-model.number="expiringSoonWindowDraft"
+                        type="number"
+                        outlined
+                        dense
+                        style="max-width: 140px"
+                        :min="1"
+                        :max="365"
+                        :disable="savingThresholds"
+                        :loading="savingThresholds"
+                        @blur="() => onSaveThreshold('expiring_soon_window_days', expiringSoonWindowDraft)"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+
+            <hr class="settings-divider" />
+
+            <SettingsSection>
+                <template #title>Default stocktake reminder</template>
+                <template #description>
+                    Pre-filled check-in cadence for new stock items
+                    (0 = no reminder).
+                </template>
+
+                <SettingsRow label="Days">
+                    <q-input
+                        v-model.number="stocktakeDefaultDraft"
+                        type="number"
+                        outlined
+                        dense
+                        style="max-width: 140px"
+                        :min="0"
+                        :max="3650"
+                        :disable="savingThresholds"
+                        :loading="savingThresholds"
+                        @blur="() => onSaveThreshold('default_days_until_stocktake_alert', stocktakeDefaultDraft)"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+        </template>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -60,6 +70,9 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, reactive, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -67,9 +80,6 @@
 
     const loading = ref(true);
 
-    // ── Alert thresholds (C-9.2) ─────────────────────────────────────────
-    // Household-wide. Saved on blur (one PATCH per committed edit); a no-op
-    // blur (unchanged value) is skipped.
     const expiringSoonWindowDraft = ref<number>(7);
     const stocktakeDefaultDraft = ref<number>(0);
     const savedThresholds = reactive({
@@ -86,8 +96,6 @@
     }
 
     async function onSaveThreshold(key: ThresholdKey, value: number) {
-        // q-input can hand back '' / NaN mid-edit; ignore those and reset the
-        // field, and skip a no-op save (blur fires even with no change).
         if (typeof value !== 'number' || Number.isNaN(value)) {
             resetThresholdDrafts();
             return;
@@ -137,3 +145,13 @@
         }
     });
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
+</style>

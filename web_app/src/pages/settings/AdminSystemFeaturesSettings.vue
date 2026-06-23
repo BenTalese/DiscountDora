@@ -1,104 +1,70 @@
 <template>
-    <div class="column q-gutter-md">
-        <!-- C-cross Chunk 1 — install-wide feature flags. Each toggle is
-             wired to AppSetting via PATCH /api/app-settings; the server-side
-             `_feature_flags()` exposes them through `/api/health features.*`
-             for consumer composables. -->
-        <q-card flat bordered>
-            <q-card-section>
-                <div class="text-subtitle1 text-weight-medium">
-                    <q-icon :name="ICONS.tune" size="20px" class="q-mr-xs" />
-                    Features
-                </div>
-                <div class="text-caption dora-text-muted">
-                    Turn whole features on or off for this install. When a feature is off
-                    here, it's hidden for everyone — per-user preferences only apply when
-                    the install allows the feature at all.
-                </div>
-            </q-card-section>
-            <q-separator />
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Features"
+            description="Turn whole features on or off for this install. When a feature is off here, it's hidden for everyone — per-user preferences only apply when the install allows the feature at all."
+            :icon="ICONS.tune"
+        />
 
-            <q-card-section v-if="!isAdmin">
-                <q-banner class="dora-bg-negative-soft text-negative" dense rounded>
-                    You don't have admin permissions to view this page.
-                </q-banner>
-            </q-card-section>
+        <q-banner v-if="!isAdmin" class="dora-bg-negative-soft text-negative" dense rounded>
+            You don't have admin permissions to view this page.
+        </q-banner>
 
-            <template v-else>
-                <q-list separator>
-                    <q-item v-for="flag in featureFlagItems" :key="flag.key">
-                        <q-item-section>
-                            <q-item-label>{{ flag.label }}</q-item-label>
-                            <q-item-label caption>{{ flag.caption }}</q-item-label>
-                        </q-item-section>
-                        <q-item-section side>
-                            <q-toggle
-                                :model-value="flag.value"
-                                :disable="savingFeatures.has(flag.key)"
-                                @update:model-value="(next: boolean) => onFeatureFlagToggle(flag.key, next)"
-                            />
-                        </q-item-section>
-                    </q-item>
+        <template v-else>
+            <SettingsSection>
+                <template #title>Install-wide flags</template>
 
-                    <!-- Scanning & QR labels — an install capability flag,
-                         saved on toggle. Lives with the feature flags (was
-                         under the AI assistant block pre-rebuild). -->
-                    <q-item>
-                        <q-item-section>
-                            <q-item-label>Scanning &amp; QR labels</q-item-label>
-                            <q-item-label caption>
-                                Camera scanning of real-world product barcodes (to jump to
-                                a linked stock item) and printing Dora's own QR labels for
-                                items and shelves. Navigation only — scanning never looks up
-                                live prices. Off by default.
-                            </q-item-label>
-                        </q-item-section>
-                        <q-item-section side>
-                            <q-toggle
-                                :model-value="scanningDraft"
-                                :disable="savingScanning"
-                                @update:model-value="onScanningToggle"
-                            />
-                        </q-item-section>
-                    </q-item>
-                </q-list>
-            </template>
-        </q-card>
+                <SettingsRow
+                    v-for="flag in featureFlagItems"
+                    :key="flag.key"
+                    :label="flag.label"
+                    :help="flag.caption"
+                >
+                    <q-toggle
+                        :model-value="flag.value"
+                        :disable="savingFeatures.has(flag.key)"
+                        @update:model-value="(next: boolean) => onFeatureFlagToggle(flag.key, next)"
+                    />
+                </SettingsRow>
 
-        <!-- Product search URL (Phase D / FU-186) — folded onto Features per
-             the rebuild (§2.4): a single input controlling a single behaviour. -->
-        <q-card v-if="isAdmin" flat bordered>
-            <q-card-section>
-                <div class="text-subtitle1 text-weight-medium">
-                    <q-icon :name="ICONS.search" size="20px" class="q-mr-xs" />
-                    Product search
-                </div>
-                <div class="text-caption dora-text-muted">
-                    A URL the "Product Search" nav entry opens in a new tab
-                    when product data is present. Point this at whatever
-                    search surface you run yourself; Dora doesn't know or
-                    care what it is. Leave blank to show the entry as
-                    "not set up".
-                </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section v-if="!loading" class="row q-col-gutter-md items-start">
-                <q-input
-                    v-model="productSearchUrlDraft"
-                    label="Product search URL"
-                    placeholder="https://your-search.example/"
-                    outlined
-                    dense
-                    class="col-12"
-                    :disable="savingProductSearchUrl"
-                    :loading="savingProductSearchUrl"
-                    :error="!!productSearchUrlError"
-                    :error-message="productSearchUrlError ?? undefined"
-                    hint="Must start with http:// or https://. Leave blank to clear."
-                    @blur="onSaveProductSearchUrl"
-                />
-            </q-card-section>
-        </q-card>
+                <SettingsRow
+                    label="Scanning & QR labels"
+                    help="Camera scanning of product barcodes (to jump to a linked stock item) and printing Dora's own QR labels. Navigation only — never looks up live prices. Off by default."
+                >
+                    <q-toggle
+                        :model-value="scanningDraft"
+                        :disable="savingScanning"
+                        @update:model-value="onScanningToggle"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+
+            <hr class="settings-divider" />
+
+            <SettingsSection>
+                <template #title>Product search</template>
+                <template #description>
+                    A URL the "Product Search" nav entry opens in a new tab.
+                    Point this at whatever search surface you run yourself;
+                    leave blank to show the entry as "not set up".
+                </template>
+
+                <SettingsRow v-if="!loading" stacked>
+                    <q-input
+                        v-model="productSearchUrlDraft"
+                        placeholder="https://your-search.example/"
+                        outlined
+                        dense
+                        :disable="savingProductSearchUrl"
+                        :loading="savingProductSearchUrl"
+                        :error="!!productSearchUrlError"
+                        :error-message="productSearchUrlError ?? undefined"
+                        hint="Must start with http:// or https://. Leave blank to clear."
+                        @blur="onSaveProductSearchUrl"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+        </template>
     </div>
 </template>
 
@@ -111,6 +77,9 @@
     import { computed, onMounted, reactive, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     // C-cross Chunk 1 — when the admin flips a flag, refresh the cached
     // `/api/health features.*` answer so every consumer composable picks
@@ -293,3 +262,13 @@
         }
     });
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+    .settings-divider {
+        border: 0;
+        height: 1px;
+        background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+        margin: 8px 0;
+    }
+</style>

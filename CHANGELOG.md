@@ -6,6 +6,22 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Settings rebuild — Phase 3 (visual rebuild, 2026-06-23).** Every settings
+  page sheds its `q-card flat bordered` chrome and adopts a shared
+  page-header + `SettingsSection`/`SettingsRow` layout (left-info /
+  right-control, modelled on Stripe / Linear / GitHub). The loud
+  `q-btn-toggle` controls (Mode / Font / Text size / Cadence / Budget
+  period) are replaced by a new `DoraSegmented` with a soft-sunken active
+  fill — same family as `DoraTabs`. Theme cards compact to a swatch +
+  family name; the blurb moves to a tooltip; active state is a 2px accent
+  border + `check_circle` badge. Side nav drops its card wrapper and
+  captions, sticks while the main pane scrolls, and gets a 3px accent
+  left-edge bar on the active item; the "(admin) only visible to admins"
+  banner is retired. Every page now begins with a real `<h1>`-style page
+  title; page padding bumps to 28px. Collection pages (Stores / Users /
+  Audit log / API access / Vocab editors) share one refresh/primary-action
+  shape via the page-header's `#actions` slot. Backend untouched —
+  frontend-only refactor.
 - **Settings rebuild — Phase 2 (page splits, 2026-06-23).** The two monolithic
   settings pages are broken into focused ones. **Preferences** (was ~1170 lines,
   9 concerns) is now Appearance-only; its other concerns split into new

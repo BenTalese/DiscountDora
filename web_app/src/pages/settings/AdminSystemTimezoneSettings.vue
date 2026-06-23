@@ -1,52 +1,46 @@
 <template>
-    <q-card flat bordered>
-        <q-card-section>
-            <div class="text-subtitle1 text-weight-medium">
-                <q-icon :name="ICONS.event" size="20px" class="q-mr-xs" />
-                Timezone
-            </div>
-            <div class="text-caption dora-text-muted">
-                The household's timezone. Dates like "today" on the meal
-                planner are worked out here, so they stay correct no matter
-                where the server runs.
-            </div>
-        </q-card-section>
-        <q-separator />
+    <div class="settings-page">
+        <SettingsPageHeader
+            title="Timezone"
+            description="The household's timezone. Dates like &quot;today&quot; on the meal planner are worked out here, so they stay correct no matter where the server runs."
+            :icon="ICONS.event"
+        />
 
-        <q-card-section v-if="!isAdmin">
-            <q-banner class="dora-bg-negative-soft text-negative" dense rounded>
-                You don't have admin permissions to view this page.
-            </q-banner>
-        </q-card-section>
+        <q-banner v-if="!isAdmin" class="dora-bg-negative-soft text-negative" dense rounded>
+            You don't have admin permissions to view this page.
+        </q-banner>
 
-        <q-card-section v-else-if="!loading" class="row q-col-gutter-md items-center">
-            <q-select
-                :model-value="timezoneDraft"
-                :options="timezoneOptions"
-                label="Household timezone"
-                outlined
-                dense
-                use-input
-                input-debounce="0"
-                options-dense
-                class="col-12 col-sm-8"
-                :disable="savingTimezone"
-                :loading="savingTimezone"
-                @filter="onTimezoneFilter"
-                @update:model-value="onSaveTimezone"
-            />
-            <div class="col-12 col-sm-4">
-                <q-btn
-                    color="secondary"
-                    no-caps
-                    outline
-                    label="Use this device's timezone"
-                    :disable="savingTimezone"
-                    @click="onDetectTimezone"
-                />
-            </div>
-        </q-card-section>
-    </q-card>
+        <SettingsSection v-else-if="!loading">
+            <template #title>Household timezone</template>
+
+            <SettingsRow stacked>
+                <div class="row q-col-gutter-sm items-end">
+                    <q-select
+                        :model-value="timezoneDraft"
+                        :options="timezoneOptions"
+                        outlined
+                        dense
+                        use-input
+                        input-debounce="0"
+                        options-dense
+                        class="col-12 col-sm-8"
+                        :disable="savingTimezone"
+                        :loading="savingTimezone"
+                        @filter="onTimezoneFilter"
+                        @update:model-value="onSaveTimezone"
+                    />
+                    <q-btn
+                        color="secondary"
+                        no-caps
+                        outline
+                        label="Use this device"
+                        :disable="savingTimezone"
+                        @click="onDetectTimezone"
+                    />
+                </div>
+            </SettingsRow>
+        </SettingsSection>
+    </div>
 </template>
 
 <script lang="ts" setup>
@@ -57,6 +51,9 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -66,8 +63,6 @@
     const timezoneDraft = ref<string>('UTC');
     const savingTimezone = ref(false);
 
-    // `Intl.supportedValuesOf` ships in modern engines but isn't in every TS
-    // lib target — feature-detect with a precise type rather than `any`.
     type IntlWithSupported = typeof Intl & { supportedValuesOf?: (key: string) => string[] };
     const _supportedValuesOf = (Intl as IntlWithSupported).supportedValuesOf;
     const allTimezones: string[] = _supportedValuesOf ? _supportedValuesOf('timeZone') : ['UTC'];
@@ -123,3 +118,7 @@
         }
     });
 </script>
+
+<style scoped lang="scss">
+    .settings-page { display: flex; flex-direction: column; }
+</style>

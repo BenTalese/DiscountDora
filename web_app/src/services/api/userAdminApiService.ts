@@ -8,6 +8,9 @@ export type AdminUser = {
     is_admin: boolean;
     send_deals_on_day: number;
     deals_email_enabled: boolean;
+    // Settings rebuild Phase 4 — whether the user has a profile picture
+    // (bulk-stamped server-side; bytes fetched via /users/<id>/image).
+    has_image: boolean;
 };
 
 export type AdminUpdateUserCommand = {

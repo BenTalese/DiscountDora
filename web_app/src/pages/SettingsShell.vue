@@ -4,15 +4,17 @@
             <h1 class="settings-shell__title">Settings</h1>
         </header>
 
+        <!-- Mobile (<md): top tab strip (§6.3). Shown via CSS below. -->
+        <SettingsMobileNav class="settings-shell__mnav" :groups="navGroups" />
+
         <div class="settings-shell__body">
             <aside class="settings-shell__nav">
-                <SettingsNavGroup label="Account" :items="accountSections" />
-                <SettingsNavGroup label="Kitchen setup" :items="kitchenSetupSections" />
                 <SettingsNavGroup
-                    v-if="isAdmin"
-                    label="Admin · global"
-                    :items="adminSections"
-                    :icon="ICONS.shield"
+                    v-for="group in navGroups"
+                    :key="group.label"
+                    :label="group.label"
+                    :items="group.items"
+                    :icon="group.icon"
                 />
             </aside>
 
@@ -28,14 +30,16 @@
     import { storeToRefs } from 'pinia';
     import { useAuthStore } from 'src/stores/authStore';
     import SettingsNavGroup, { type SettingsNavEntry } from 'src/components/settings/SettingsNavGroup.vue';
+    import SettingsMobileNav, { type SettingsNavGroupDef } from 'src/components/settings/SettingsMobileNav.vue';
+    import { computed } from 'vue';
 
     // IMPL_PLAN_SETTINGS_REBUILD §2.1 — three top-level groups, Account first.
     // §6.5 (user pick): nested groupings render as an indented sub-list under a
     // non-clickable sub-header (Recipe taxonomies under Kitchen setup; System
     // under Admin). Captions dropped — label + icon only.
-    // Phase 3 §2.7: the per-group template is now lifted into SettingsNavGroup;
-    // the §2.8 shell sheds its card chrome, drops the non-admin banner, and the
-    // page header carries the real h1 (was a soft caption).
+    // §6.3 (user pick): on <md the sidebar is replaced by SettingsMobileNav (a
+    // top tab strip). Both navs read the SAME `navGroups` definition (R-003 —
+    // one source for the IA), so they can't drift.
 
     const accountSections: SettingsNavEntry[] = [
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
@@ -79,6 +83,14 @@
     ];
 
     const { isAdmin } = storeToRefs(useAuthStore());
+
+    const navGroups = computed<SettingsNavGroupDef[]>(() => [
+        { label: 'Account', items: accountSections },
+        { label: 'Kitchen setup', items: kitchenSetupSections },
+        ...(isAdmin.value
+            ? [{ label: 'Admin · global', items: adminSections, icon: ICONS.shield }]
+            : []),
+    ]);
 </script>
 
 <style scoped lang="scss">
@@ -116,18 +128,22 @@
         min-width: 0;
     }
 
+    // §6.3 — the mobile tab strip is hidden on desktop; the sidebar shows.
+    .settings-shell__mnav {
+        display: none;
+    }
+
     @media (max-width: 1023px) {
         .settings-shell { padding: 20px; }
+        // Swap: hide the sidebar, show the top tab strip.
+        .settings-shell__nav { display: none; }
+        .settings-shell__mnav {
+            display: flex;
+            margin-bottom: 20px;
+        }
         .settings-shell__body {
             grid-template-columns: 1fr;
             gap: 20px;
         }
-        .settings-shell__nav {
-            position: static;
-            flex-direction: row;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        .settings-shell__nav::-webkit-scrollbar { display: none; }
     }
 </style>

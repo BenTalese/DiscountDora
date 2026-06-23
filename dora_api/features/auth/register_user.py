@@ -86,6 +86,12 @@ class AuthenticatedUserDto:
     alerts_email_enabled: bool
     alerts_email_cadence: str
     alerts_email_day: int
+    # Settings rebuild Phase 4 (§2.9) — whether the user has a profile
+    # picture. Bytes never travel inline; the SPA fetches them via
+    # `GET /users/<id>/image`. For this single-user projection it's a cheap
+    # `is not None` check (the deferred blob loads once); the user-list DTO
+    # bulk-stamps it instead (get_users) to avoid per-row byte loads.
+    has_image: bool
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -126,6 +132,7 @@ class AuthenticatedUserDto:
             alerts_email_enabled=bool(user.alerts_email_enabled),
             alerts_email_cadence=user.alerts_email_cadence,
             alerts_email_day=int(user.alerts_email_day),
+            has_image=user.image is not None,
         )
 
 

@@ -6,6 +6,27 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Settings rebuild — Phase 5 (mobile pass, 2026-06-23).** On narrow screens
+  (`<md`) the settings side-nav is replaced by a top tab strip: a row of group
+  tabs (Account / Kitchen setup / Admin) with the selected group's destinations
+  as a horizontally-scrolling chip strip beneath — the active tab follows the
+  current page. Desktop keeps the sticky sidebar. (Section rows already
+  collapse to label-above-control, the theme grid wraps to one column, and the
+  segmented controls scroll — all from Phase 3.) This completes the settings
+  rebuild (Phases 1–5).
+
+### Added
+- **Profile pictures (Settings rebuild Phase 4, 2026-06-23).** Users can set a
+  profile picture on Settings → Account; it appears on the menu-bar account
+  button, the Account header, and the admin Users list. When none is set, the
+  menu bar keeps its account icon and the larger avatars show initials (the
+  existing behaviour). New `User.image` column (migration `a4f7c2e9b6d1`),
+  `GET /api/users/<id>/image` bytes endpoint, `image`/`clear_image` on
+  `PATCH /api/auth/me` (and the admin user update), `has_image` on the
+  current-user + user-list payloads, and a shared `UserAvatar` SPA component.
+  Image cap ~4.5 MB (mirrors stock-item images).
+
+### Changed
 - **Settings rebuild — Phase 3 (visual rebuild, 2026-06-23).** Every settings
   page sheds its `q-card flat bordered` chrome and adopts a shared
   page-header + `SettingsSection`/`SettingsRow` layout (left-info /

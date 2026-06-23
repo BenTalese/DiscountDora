@@ -10,9 +10,15 @@
         />
 
         <section class="account-identity">
-            <q-avatar size="60px" color="accent" text-color="dark">
-                {{ initials }}
-            </q-avatar>
+            <UserAvatar
+                :user-id="currentUser.user_id"
+                :has-image="currentUser.has_image"
+                size="60px"
+                fallback="initials"
+                :username="currentUser.username"
+                color="accent"
+                text-color="dark"
+            />
             <div class="account-identity__text">
                 <div class="account-identity__name">{{ currentUser.username }}</div>
                 <div class="account-identity__email dora-text-muted">
@@ -23,6 +29,25 @@
                 </div>
             </div>
         </section>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Profile picture</template>
+            <template #description>
+                Shown in the menu bar and anywhere Dora needs to identify you.
+            </template>
+            <SettingsRow stacked>
+                <ImageUploadField
+                    :preview-url="profilePreviewUrl"
+                    :name="currentUser.username"
+                    :alt="`${currentUser.username}'s profile picture`"
+                    :can-clear="currentUser.has_image"
+                    @pick="onPickImage"
+                    @clear="onClearImage"
+                />
+            </SettingsRow>
+        </SettingsSection>
 
         <hr class="settings-divider" />
 
@@ -172,11 +197,41 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import UserAvatar from 'src/components/UserAvatar.vue';
+    import ImageUploadField from 'src/components/ImageUploadField.vue';
+    import { userImageUrl } from 'src/services/api/authApiService';
 
     const $q = useQuasar();
     const router = useRouter();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+
+    // Profile-picture preview: the live bytes URL (cache-busted by the store's
+    // image-version counter) when one exists, else null so ImageUploadField
+    // renders its initial placeholder.
+    const profilePreviewUrl = computed(() =>
+        currentUser.value?.has_image
+            ? userImageUrl(currentUser.value.user_id, authStore.imageVersionOf(currentUser.value.user_id))
+            : null
+    );
+
+    async function onPickImage(dataUrl: string) {
+        try {
+            await authStore.updateMeAsync({ image: dataUrl });
+            notifySuccess('Profile picture updated.');
+        } catch (err) {
+            notifyError('Could not update your profile picture.', err);
+        }
+    }
+
+    async function onClearImage() {
+        try {
+            await authStore.updateMeAsync({ clear_image: true });
+            notifySuccess('Profile picture removed.');
+        } catch (err) {
+            notifyError('Could not remove your profile picture.', err);
+        }
+    }
 
     const usernameDraft = ref(currentUser.value?.username ?? '');
     const emailDraft = ref(currentUser.value?.email ?? '');
@@ -194,11 +249,6 @@
         if (!u) return;
         usernameDraft.value = u.username;
         emailDraft.value = u.email ?? '';
-    });
-
-    const initials = computed(() => {
-        const name = currentUser.value?.username ?? '';
-        return name.length > 0 ? name.charAt(0).toUpperCase() : '?';
     });
 
     const usernameUnchanged = computed(

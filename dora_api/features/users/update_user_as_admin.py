@@ -31,6 +31,11 @@ class AdminUpdateUserRequest(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     is_admin: bool | None = None
     deals_email_enabled: bool | None = None
+    # Settings rebuild Phase 4 (§2.9) — admins can clear a problematic user's
+    # profile picture (and set one, for completeness). Same data-URL contract
+    # as `/auth/me`: `clear_image` wins; `image=None` without it = untouched.
+    image: str | None = Field(default=None, max_length=6_000_000)
+    clear_image: bool = False
 
 
 @dataclass(slots=True)
@@ -104,6 +109,13 @@ class AdminUpdateUserHandler:
 
         if "deals_email_enabled" in _SetFields and request.deals_email_enabled is not None:
             _Target.deals_email_enabled = request.deals_email_enabled
+
+        # Settings rebuild Phase 4 — profile picture. `clear_image` wins over
+        # `image` in the same payload (mirrors update_me).
+        if request.clear_image:
+            _Target.image = None
+        elif "image" in _SetFields and request.image is not None:
+            _Target.image = request.image.encode("utf-8")
 
         self.repository.save_changes()
         return AdminUpdateUserResponse()

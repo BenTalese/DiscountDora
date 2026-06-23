@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from flask import request
+from sqlalchemy import select
 
+from dora_api.app import db
 from dora_api.domain.entities.user import User
 from dora_api.features.routers import USER_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
@@ -23,6 +25,10 @@ class UserDto:
     user_id: UUID
     is_admin: bool
     deals_email_enabled: bool
+    # Settings rebuild Phase 4 — bulk-stamped from an IS-NOT-NULL select (see
+    # `_stamp_has_image`) so the user list never triggers the deferred
+    # profile-picture blob per row. Mirrors StoreDto / StockItemDto.
+    has_image: bool = False
 
     @classmethod
     def from_entity(cls, user: User) -> 'UserDto':
@@ -33,6 +39,7 @@ class UserDto:
             user_id = user.id,
             is_admin = bool(user.is_admin),
             deals_email_enabled = bool(user.deals_email_enabled),
+            has_image = False,
         )
 
 
@@ -41,14 +48,33 @@ _FIELD_MAP: dict[str, EntityField] = {
 }
 
 
+def _stamp_has_image(repository, dtos: list[UserDto]) -> None:
+    """Bulk-derive `has_image` from a single IS-NOT-NULL select so the list
+    never loads the deferred image blob per row (mirrors StoreDto)."""
+    if not dtos:
+        return
+    user_ids = [d.user_id for d in dtos]
+    user_table = db.metadata.tables["User"]
+    rows = repository.session.execute(
+        select(user_table.c.id, user_table.c.image.isnot(None))
+        .where(user_table.c.id.in_(user_ids))
+    ).all()
+    flag_by_id = {row[0]: bool(row[1]) for row in rows}
+    # Frozen dataclass — write through object.__setattr__ rather than rebuild.
+    for dto in dtos:
+        object.__setattr__(dto, "has_image", flag_by_id.get(dto.user_id, False))
+
+
 class GetUsersHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
 
     def handle(self, options) -> Page[UserDto]:
-        return self.repository.get(User).paginate(
+        page = self.repository.get(User).paginate(
             options, UserDto.from_entity, field_map=_FIELD_MAP
         )
+        _stamp_has_image(self.repository, page.items)
+        return page
 
 
 @USER_ROUTER.route("")

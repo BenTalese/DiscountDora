@@ -26,14 +26,16 @@
         <q-list class="settings-list" separator>
             <q-item v-for="user in users" :key="user.user_id" class="q-py-md">
                 <q-item-section avatar>
-                    <q-avatar
+                    <UserAvatar
+                        :user-id="user.user_id"
+                        :has-image="user.has_image"
+                        size="42px"
+                        fallback="initials"
+                        :username="user.username"
                         :color="user.is_admin ? 'accent' : undefined"
                         :class="user.is_admin ? '' : 'dora-bg-sunken dora-text-secondary'"
                         :text-color="user.is_admin ? 'dark' : undefined"
-                        size="42px"
-                    >
-                        {{ initials(user.username) }}
-                    </q-avatar>
+                    />
                 </q-item-section>
                 <q-item-section>
                     <q-item-label class="text-weight-medium">
@@ -190,6 +192,7 @@
         type AdminUser
     } from 'src/services/api/userAdminApiService';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import UserAvatar from 'src/components/UserAvatar.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
@@ -216,10 +219,6 @@
     const resetTargetName = ref('');
 
     const currentUserId = computed(() => currentUser.value?.user_id ?? null);
-
-    function initials(name: string): string {
-        return name.length > 0 ? name.charAt(0).toUpperCase() : '?';
-    }
 
     async function loadUsers() {
         loading.value = true;

@@ -702,6 +702,8 @@ def configure_mappings(db: SQLAlchemy):
         Column("alerts_email_enabled", Boolean, nullable=False, server_default="0"),
         Column("alerts_email_cadence", String(16), nullable=False, server_default="off"),
         Column("alerts_email_day", Integer, nullable=False, server_default="0"),
+        # Settings rebuild Phase 4 — profile picture blob, deferred below.
+        Column("image", LargeBinary, nullable=True),
     )
 
     # C-10.1 — admin-minted bearer credential for `POST /api/ingest`. The
@@ -805,6 +807,11 @@ def configure_mappings(db: SQLAlchemy):
     _mapper_registry.map_imperatively(User, user_table, properties={
         "_id_col": user_table.c.id,
         "id": user_table.c.id,
+        # Settings rebuild Phase 4 — defer the profile-picture blob so the
+        # user-list endpoint never pulls bytes per row just to set
+        # `has_image`. The `/users/<id>/image` route loads it on access;
+        # list `has_image` is hydrated via a separate IS-NOT-NULL select.
+        "image": deferred(user_table.c.image),
     })
 
     _mapper_registry.map_imperatively(ProductOffer, product_offer_table, properties={

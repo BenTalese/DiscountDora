@@ -33,6 +33,22 @@ export const useAuthStore = defineStore('auth', () => {
     const isAuthenticated = () => currentUser.value !== null;
     const isAdmin = computed(() => currentUser.value?.is_admin === true);
 
+    // Settings rebuild Phase 4 — per-user profile-picture version counter,
+    // bumped whenever an `image`/`clear_image` field is sent on updateMeAsync
+    // (mirrors stockItemStore's `imageVersionOf`). Any consumer painting
+    // `userImageUrl(id, imageVersionOf(id))` reactively refreshes after an
+    // upload / clear, since the bytes endpoint sends `Cache-Control: no-cache`.
+    const imageVersions = ref<Record<string, number>>({});
+    function imageVersionOf(userId: string): number {
+        return imageVersions.value[userId] ?? 0;
+    }
+    function bumpImageVersion(userId: string): void {
+        imageVersions.value = {
+            ...imageVersions.value,
+            [userId]: (imageVersions.value[userId] ?? 0) + 1,
+        };
+    }
+
     const runBootstrap = async () => {
         while (!isBootstrapped.value) {
             try {
@@ -79,7 +95,13 @@ export const useAuthStore = defineStore('auth', () => {
     };
 
     const updateMeAsync = async (command: UpdateMeCommand) => {
+        const touchedImage = 'image' in command || 'clear_image' in command;
         currentUser.value = await authApiService.updateMeAsync(command);
+        // Bust the avatar cache everywhere it's painted once the server
+        // confirms the image change.
+        if (touchedImage && currentUser.value) {
+            bumpImageVersion(currentUser.value.user_id);
+        }
     };
 
     const changePasswordAsync = async (command: ChangePasswordCommand) => {
@@ -107,6 +129,8 @@ export const useAuthStore = defineStore('auth', () => {
         bootstrapError: readonly(bootstrapError),
         isAdmin,
         isAuthenticated,
+        imageVersionOf,
+        bumpImageVersion,
         bootstrapAsync,
         retryBootstrap,
         refreshAsync,

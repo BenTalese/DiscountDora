@@ -91,6 +91,58 @@ def test__reset_password__weak_password__is_422(api):
     assert response.status_code == 422
 
 
+# Settings rebuild Phase 4 — profile picture round-trip.
+_PNG_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA"
+    "60e6kgAAAABJRU5ErkJggg=="
+)
+
+
+def test__profile_picture__set_fetch_and_clear(api):
+    """A user can set a profile picture (data-URL), it round-trips on the
+    `has_image` flag + the bytes endpoint, and clearing removes it again."""
+    s = _fresh_session()
+    username = f"pic-{uuid.uuid4().hex[:8]}"
+    reg = _register(s, username, "Abcdefghij1", f"{username}@example.com")
+    assert reg.status_code == 200, reg.text
+    user_id = reg.json()["user_id"]
+    assert reg.json()["has_image"] is False
+
+    # No picture yet → bytes endpoint 404s.
+    img = s.get(f"http://localhost:5170/api/users/{user_id}/image")
+    assert img.status_code == 404
+
+    # Set one via PATCH /auth/me.
+    patched = s.patch(f"{BASE}/me", json={"image": _PNG_DATA_URL})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["has_image"] is True
+
+    # Bytes now served with the declared mime.
+    img = s.get(f"http://localhost:5170/api/users/{user_id}/image")
+    assert img.status_code == 200, img.text
+    assert img.headers["Content-Type"].startswith("image/png")
+    assert len(img.content) > 0
+
+    # Clear it → flag flips back, bytes 404 again.
+    cleared = s.patch(f"{BASE}/me", json={"clear_image": True})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["has_image"] is False
+    img = s.get(f"http://localhost:5170/api/users/{user_id}/image")
+    assert img.status_code == 404
+
+
+def test__profile_picture__rejects_oversize_data_url(api):
+    """The ~4.5 MB base64 cap (max_length=6_000_000) rejects a huge payload
+    with a 422 rather than letting a 50 MB selfie through."""
+    s = _fresh_session()
+    username = f"big-{uuid.uuid4().hex[:8]}"
+    assert _register(s, username, "Abcdefghij1", f"{username}@example.com").status_code == 200
+    oversize = "data:image/png;base64," + ("A" * 6_000_001)
+    resp = s.patch(f"{BASE}/me", json={"image": oversize})
+    assert resp.status_code == 422, resp.status_code
+
+
 def test__login__rate_limit_returns_429_eventually(api):
     s = _fresh_session()
     # The endpoint allows 5/min per IP. Spam past the limit.

@@ -9,6 +9,179 @@ next.
 
 ---
 
+## 2026-06-23 — Settings rebuild Phase 5: mobile pass (rebuild COMPLETE)
+
+**Session goal:** Phase 5 (final) of `IMPL_PLAN_SETTINGS_REBUILD.md` — the
+mobile pass. Verified `vue-tsc` + `eslint` GREEN. With this the settings
+rebuild is complete end-to-end (Phases 1–5).
+
+**§6.3 mobile nav — top tab strip (the only real build this phase):**
+- `components/settings/SettingsMobileNav.vue` (NEW) — shown on `<md`. A row of
+  group tabs (Account / Kitchen setup / Admin · global) with an underline
+  active indicator; the selected group's destinations render below as a
+  horizontally-scrolling pill/chip strip. Subgroups (Recipe taxonomies /
+  System) flatten to their leaves — one flat chip row, no second-level nesting
+  on mobile. The active tab is derived from the current route (`useRoute` +
+  watch on `route.path`) so a deep link / redirect lands with the right strip
+  open, and tapping a chip / navigating elsewhere keeps the tab in sync.
+- `pages/SettingsShell.vue` — refactored so BOTH navs read one `navGroups`
+  computed (R-003 — single IA source, can't drift): desktop `v-for`s
+  `SettingsNavGroup` over it, mobile feeds it to `SettingsMobileNav`. Replaced
+  Phase 3's placeholder (`flex-direction: row; overflow-x` on the sidebar) with
+  a clean CSS swap at `<1024px`: hide `.settings-shell__nav`, show
+  `.settings-shell__mnav`. Admin group is filtered into `navGroups` by
+  `isAdmin` (was a `v-if` on the third `SettingsNavGroup`).
+
+**Phase 5 tasks already satisfied by Phase 3 (verified, no change):**
+- §Phase5.2 `SettingsRow` collapses to label-above-control — `@media
+  (max-width: 599px)` already in `SettingsRow.vue`.
+- §Phase5.3 theme card grid wraps — `repeat(auto-fill, minmax(180px, 1fr))`
+  gives 1-up at 360px, ~3-up on a tablet-width main pane. No change.
+- §Phase5.4 `DoraSegmented` segments scroll on narrow — `@media (max-width:
+  599px) { overflow-x: auto; flex-wrap: nowrap }` already in `DoraSegmented.vue`.
+
+**Engineering-standards close-gate:**
+- R-001 — `SettingsMobileNav` extracted (not inlined into the shell); reuses
+  the `SettingsNavEntry`/`SettingsNavLeaf` types exported by `SettingsNavGroup`.
+- R-002 — tokens only (`--q-accent`, `--brand-primary-soft`, `color-mix` on
+  `--text-primary`); no hex.
+- R-003 — one `navGroups` definition feeds desktop + mobile navs. The IA is
+  not duplicated across the two renderers.
+- R-007 — scope held to §3 Phase 5 + §6.3; nothing else touched.
+- R-008 — comments on the single-source nav rationale + the flatten-on-mobile
+  choice.
+- `exactOptionalPropertyTypes` — `SettingsNavGroup.icon` widened to
+  `string | undefined` so the computed group list can omit an icon (same
+  class of fix as Phases 2 & 4).
+
+**Verification:** `vue-tsc -p tsconfig.json --noEmit` GREEN; `npm run lint`
+GREEN. **Browser walk pending** (no running app) — confirm at 360 / 768 / 1280:
+the tab strip shows `<1024`, the sidebar `>=1024`, the active tab matches the
+open page, chips scroll, and deep-linking to e.g. `/settings/admin/system/
+features` opens the Admin tab with Features chip active.
+
+**Ledger:** no new opens. (FU-285 VocabListEditor copy + FU-286 Phase-4 backend
+run/browser walk remain open from prior phases.)
+
+**Settings rebuild status:** ✅ **COMPLETE** — Phase 1 (IA + routing), Phase 2
+(page splits), Phase 3 (visual rebuild), Phase 4 (profile picture), Phase 5
+(mobile). Remaining is verification only: the full browser walk across phases
+(FU-286 covers Phase 4's slice; a general settings walk + FU-285 copy tweak are
+the loose ends).
+
+**Next (beyond settings):** the big untouched impl plans remain on the board —
+**State Ownership** (cleanup; good to land before the feature plans),
+**Cookbook** (RecipeStep schema; unblocks Cook Mode), **Cook Mode**, **Meal
+Plans**. Recommend State Ownership next as a low-risk consolidation, or
+Cookbook to start the recipe-feature chain. Otherwise a browser walk of the
+settings rebuild.
+
+---
+
+## 2026-06-23 — Settings rebuild Phase 4: profile picture (backend + SPA)
+
+**Session goal:** Phase 4 of `IMPL_PLAN_SETTINGS_REBUILD.md` (§2.9) — profile
+pictures: a `User.image` column + bytes endpoint + a reusable `UserAvatar`
+adopted at the menu bar, Account header, and admin Users rows. SPA verified
+`vue-tsc` + `eslint` GREEN; **backend static-only** (no Python env — see
+FU-286).
+
+**Backend (`dora_api`):**
+- `domain/entities/user.py` — `image: bytes | None = None` + `Fields.IMAGE`.
+- `persistence/table_mappings.py` — `User` gains `Column("image", LargeBinary,
+  nullable=True)` + `"image": deferred(...)` on the mapper (list endpoints
+  never drag the bytes per row).
+- Migration `a4f7c2e9b6d1_20260623_user_profile_image.py` (off head
+  `d7b3e8f2a5c4`) — batch `ADD COLUMN image NULL`, Postgres+SQLite portable
+  (R-005/006), batch mode (R-015). Single head.
+- `features/auth/register_user.py` — `AuthenticatedUserDto.has_image`
+  (single-user `user.image is not None` — one deferred load, acceptable on
+  the me/login/register path; the LIST path bulk-stamps instead).
+- `features/users/get_users.py` — `UserDto.has_image` + `_stamp_has_image`
+  bulk IS-NOT-NULL select (mirrors `StoreDto`; never loads the blob per row).
+- `features/auth/update_me.py` — `image` / `clear_image` on `UpdateMeRequest`
+  (cap `max_length=6_000_000`); `clear_image` wins over `image` (mirrors the
+  Store handler). Stored as data-URL bytes.
+- `features/users/update_user_as_admin.py` — same `image`/`clear_image` so an
+  admin can clear a problematic user's picture (§2.9).
+- `features/users/get_user_image.py` (NEW) — `GET /users/<id>/image`, raw
+  bytes + mime, `Cache-Control: no-cache`, 404 when unset. Replicates the
+  per-feature `_decode_data_url` helper (consistent with store/stock-item/
+  product copies — no shared util exists). Route auto-discovered by the
+  `get_attributes_ending_with('router', features/)` sweep — no manual wiring.
+- `tests/e2e/dora_api/test_auth_flows.py` — `test__profile_picture__set_fetch_
+  and_clear` (round-trip: set → has_image true + bytes 200 → clear → false +
+  404) and `__rejects_oversize_data_url` (422 at the cap).
+
+**SPA (`web_app`):**
+- `models/auth.ts` + `services/api/userAdminApiService.ts` — `has_image` on the
+  current-user and admin-user types.
+- `services/api/authApiService.ts` — `image`/`clear_image` on `UpdateMeCommand`
+  + exported `userImageUrl(id, version)` helper (mirrors `stockItemImageUrl`).
+- `stores/authStore.ts` — `imageVersionOf` / `bumpImageVersion` counter
+  (mirrors `stockItemStore`); `updateMeAsync` bumps it when the payload
+  touched `image`/`clear_image`, so every avatar surface cache-busts on save.
+- `components/UserAvatar.vue` (NEW, R-001) — the one place "the user" is drawn.
+  Renders the picture when `has_image` (cache-busted `<img>`), else a
+  per-consumer fallback: menu bar → `account_circle` icon (preserves the old
+  look per the feedback), Account header + admin rows → initials. `imgFailed`
+  latch drops a broken `<img>` to the fallback (mirrors `StockItemRow`),
+  resetting when the version counter bumps.
+- `pages/settings/AccountSettings.vue` — header avatar → `UserAvatar`; new
+  "Profile picture" `SettingsSection` with the shared `ImageUploadField`
+  (`@pick` → `updateMeAsync({image})`, `@clear` → `{clear_image:true}`). Dead
+  `initials` computed removed.
+- `layouts/MainLayout.vue` — account-circle `q-btn` icon → `UserAvatar`
+  (`fallback="icon"`, `fallbackIcon=account_circle`); identical hit area + menu.
+- `pages/settings/UsersAdminSettings.vue` — per-row `q-avatar` → `UserAvatar`
+  (`fallback="initials"`, admin/non-admin colouring preserved via passed
+  `color`/`text-color`/`class`). Dead `initials` fn removed.
+
+**Engineering-standards close-gate:**
+- R-001 — `UserAvatar` extracted once, adopted at all three avatar sites
+  (the plan's §2.10 "initials avatars diverge across 3 sites" finding).
+- R-002 — no new colours; fallback uses passed tokens / existing classes.
+- R-003 — `has_image` is server-derived (single-user `is not None`; list
+  bulk IS-NOT-NULL). SPA never keeps its own truth about whether a picture
+  exists; the version counter is SPA-local *view* state (cache-bust), not
+  domain state — exactly the split the principle calls for.
+- R-005/006/015 — migration batch-mode, NULL add-column, Postgres+SQLite
+  portable, single head `a4f7c2e9b6d1`.
+- R-007 — scope held to §2.9; no adjacent redesign.
+- R-008 — comments on the deferred-blob rationale, the single-vs-list
+  has_image split, and the icon-vs-initials fallback choice.
+- R-016 — image bytes deferred at the mapper; only the dedicated route loads
+  them.
+- **R-017 carve-out (named):** seed.py NOT given a synthetic profile image.
+  Profile pictures are user-generated; a fake binary avatar would render as a
+  meaningless square and can't be verified on this Python-less machine. The
+  default `has_image=false` state IS seeded (the single `dora` user) and
+  exercises the fallback at all three avatar sites — the visible, important
+  path. The `true` path is covered by the new pytest round-trip and reachable
+  by uploading in-app. Logged here so the carve-out isn't silent.
+
+**`exactOptionalPropertyTypes` note:** `UserAvatar`'s `color`/`textColor` are
+typed `string | undefined` (not just `?: string`) so the admin rows can pass
+`isAdmin ? 'accent' : undefined` without a tsc error — same class of fix as
+Phase 2's `TaxonomyManagerPage`.
+
+**Verification:** `vue-tsc -p tsconfig.json --noEmit` GREEN; `npm run lint`
+GREEN. Backend static-only (no Python) → **FU-286** logged for the env run +
+browser walk. `COVERAGE_GAPS.md` A-5 profile-picture bullet flipped →
+RESOLVED (cites this phase).
+
+**Ledger:** FU-286 opened (backend run + browser walk for Phase 4).
+
+**Next:** **Phase 5** — the mobile pass (the only Settings-rebuild phase left):
+§6.3 top tab strip for the nav on `<md`, confirm `SettingsSection` rows
+collapse to label-above-control, theme grid wraps, `DoraSegmented` segments
+wrap/scroll. Walk every settings page at 360 / 768 / 1280. (Phase 3 shipped a
+horizontal-scroll nav fallback as a placeholder — Phase 5 replaces it.) Also
+outstanding: the Phase 1–4 browser walk (FU-286 covers Phase 4's slice) and
+FU-285 (VocabListEditor empty-state copy).
+
+---
+
 ## 2026-06-23 — Settings rebuild Phase 3: visual rebuild
 
 **Session goal:** Phase 3 of `IMPL_PLAN_SETTINGS_REBUILD.md` — the look-and-

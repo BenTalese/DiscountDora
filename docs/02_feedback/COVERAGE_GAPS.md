@@ -111,11 +111,15 @@ Deferred area per master plan, but the bullets are actionable.
 - [OPEN] Theme **type** (system / light / dark) separated from theme
   **identity** (pesto, lemon, …) — two dropdowns, not coloured
   light/dark buttons on each theme card.
-- [ADDRESSED] Profile picture — set/update; surface on the menu-bar
-  avatar. Folded into `IMPL_PLAN_SETTINGS_REBUILD.md` §2.9 + Phase 4
-  (raised 2026-06-21). Phase 4 ships the backend column + endpoints +
-  the SPA `UserAvatar` component for the menu bar. Flip this entry to
-  RESOLVED once Phase 4 lands.
+- [RESOLVED 2026-06-23] Profile picture — set/update; surface on the
+  menu-bar avatar. Shipped in `IMPL_PLAN_SETTINGS_REBUILD.md` Phase 4:
+  `User.image` column + migration `a4f7c2e9b6d1`, `GET /users/<id>/image`
+  bytes endpoint, `image`/`clear_image` on `PATCH /auth/me` (+ admin
+  update), `has_image` on the me/list DTOs, and a shared SPA `UserAvatar`
+  adopted at the menu bar (fallback icon), the Account header + the Users
+  admin rows (fallback initials), with the upload picker on Account.
+  Backend static-only this session (no Python env) — pytest round-trip
+  added; run + browser walk pending (see `DORA_FOLLOWUPS.md`).
 
 **Recommended home:** small additions to a deferred-Settings polish
 prompt (or fold into Wave A theme work).

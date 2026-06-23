@@ -98,4 +98,8 @@ export type AuthenticatedUser = {
     alerts_email_enabled: boolean;
     alerts_email_cadence: 'off' | 'daily' | 'weekly';
     alerts_email_day: number;
+    // Settings rebuild Phase 4 — whether the user has a profile picture.
+    // Bytes are fetched separately via `GET /users/<id>/image`; server-derived
+    // so the SPA never keeps its own truth about whether a picture exists.
+    has_image: boolean;
 };

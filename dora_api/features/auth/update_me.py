@@ -66,6 +66,12 @@ class UpdateMeRequest(BaseModel):
     alerts_email_enabled: bool | None = None
     alerts_email_cadence: str | None = None
     alerts_email_day: int | None = Field(default=None, ge=0, le=6)
+    # Settings rebuild Phase 4 (§2.9) — profile picture. Data-URL string to
+    # set, `clear_image: true` to remove. Mirrors the Store image contract:
+    # `image=None` without the clear flag means "leave untouched". Cap mirrors
+    # the StockItem ceiling (~4.5 MB of base64).
+    image: str | None = Field(default=None, max_length=6_000_000)
+    clear_image: bool = False
 
 
 class UpdateMeHandler:
@@ -195,6 +201,14 @@ class UpdateMeHandler:
             _User.alerts_email_cadence = cadence
         if "alerts_email_day" in _SetFields and request.alerts_email_day is not None:
             _User.alerts_email_day = request.alerts_email_day
+
+        # Settings rebuild Phase 4 — profile picture. `clear_image` wins over
+        # any `image` in the same payload (clear is the primary intent), same
+        # shape as the Store image handler. Stored as data-URL bytes.
+        if request.clear_image:
+            _User.image = None
+        elif "image" in _SetFields and request.image is not None:
+            _User.image = request.image.encode("utf-8")
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

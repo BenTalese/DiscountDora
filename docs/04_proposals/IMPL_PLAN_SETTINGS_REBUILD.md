@@ -1,6 +1,8 @@
 # Settings Rebuild — Implementation Plan
 
-**Status:** Brief — ready for execution by a Claude agent.
+**Status:** ✅ COMPLETE (Phases 1–5 landed 2026-06-23; static/tsc/lint-verified,
+full browser walk pending — see `DORA_WORKLOG.md` + FU-286). Originally: brief —
+ready for execution by a Claude agent.
 **Raised:** 2026-06-19 (after a `/design-critique` pass + user feedback on the
 current Settings surface). Round-2 deep-read findings folded in 2026-06-21
 (see §2.10).

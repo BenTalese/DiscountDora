@@ -52,6 +52,28 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-286 — Settings Phase 4 (profile picture): backend run + browser walk pending
+- **Raised:** 2026-06-23 (Settings rebuild Phase 4).
+- **Type:** finding (static-only verification debt).
+- **What:** the profile-picture feature (Phase 4) was built backend + SPA but
+  **the backend was never executed** — this machine has no Python env (mirrors
+  FU-189c / FU-223 handling). Static-only changes: `User.image` column +
+  migration `a4f7c2e9b6d1`, `deferred` mapper prop, `GET /users/<id>/image`,
+  `image`/`clear_image` on `update_me` + `update_user_as_admin`, `has_image`
+  on `AuthenticatedUserDto` (single-user `is not None`) + `UserDto` (bulk
+  IS-NOT-NULL stamp). New pytest `test__profile_picture__*` in
+  `tests/e2e/dora_api/test_auth_flows.py`. SPA side (`vue-tsc` + `eslint`
+  GREEN) — `UserAvatar.vue`, authStore image-version counter, ImageUploadField
+  on Account.
+- **Why deferred:** no Python on the dev box; static read isn't proof.
+- **Recommended resolution:** **confirm on a Python-equipped env + in browser** —
+  (1) `flask db upgrade` applies `a4f7c2e9b6d1` up **and** down, single head;
+  (2) `pytest tests/e2e/dora_api/test_auth_flows.py` green (the two new tests +
+  no regressions); (3) browser: upload a picture on Account → it appears
+  immediately on the menu bar (cache-bust works), Account header, and the admin
+  Users row; clear → all revert to icon/initials; hard-refresh both states
+  survive; a >4.5 MB image is rejected with a usable message.
+
 ## [OPEN] FU-285 — `VocabListEditor` empty-state copy is recipe-specific
 - **Raised:** 2026-06-23 (Settings rebuild Phase 3).
 - **Type:** leftover (cosmetic copy mismatch).

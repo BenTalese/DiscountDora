@@ -26,13 +26,24 @@
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
                 <q-btn
+                    v-if="currentUser"
                     flat
                     no-caps
                     round
                     dense
-                    :icon="ICONS.account_circle"
-                    v-if="currentUser"
+                    aria-label="Account menu"
                 >
+                    <!-- Settings rebuild Phase 4: profile picture when set,
+                         else the original account-circle icon (preserved per
+                         the feedback). -->
+                    <UserAvatar
+                        :user-id="currentUser.user_id"
+                        :has-image="currentUser.has_image"
+                        size="30px"
+                        fallback="icon"
+                        :fallback-icon="ICONS.account_circle"
+                        :username="currentUser.username"
+                    />
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 200px">
                             <q-item>
@@ -116,6 +127,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AlertsBell from 'src/components/AlertsBell.vue';
+    import UserAvatar from 'src/components/UserAvatar.vue';
     import DoraBubble from 'src/components/dora/DoraBubble.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';

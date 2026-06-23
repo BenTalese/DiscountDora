@@ -203,6 +203,12 @@ class User(BaseEntity):
     alerts_email_enabled: bool = False
     alerts_email_cadence: str = ALERTS_EMAIL_CADENCE_OFF
     alerts_email_day: int = 0
+    # Settings rebuild Phase 4 (§2.9) — optional profile picture, stored as a
+    # data-URL blob (same convention as Store/StockItem images). Deferred at
+    # the ORM layer so list endpoints never drag the bytes per row; the
+    # dedicated `/users/<id>/image` route triggers the load on access and
+    # `has_image` is derived from an IS-NOT-NULL check (mirrors StoreDto).
+    image: bytes | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -232,3 +238,4 @@ class User(BaseEntity):
         ALERTS_EMAIL_ENABLED = "alerts_email_enabled"
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
         ALERTS_EMAIL_DAY = "alerts_email_day"
+        IMAGE = "image"

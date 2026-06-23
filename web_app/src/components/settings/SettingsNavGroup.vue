@@ -56,7 +56,9 @@
     defineProps<{
         label: string;
         items: SettingsNavEntry[];
-        icon?: string;
+        // `| undefined` so a computed nav-group list can pass an absent icon
+        // under exactOptionalPropertyTypes.
+        icon?: string | undefined;
     }>();
 
     function entryKey(e: SettingsNavEntry): string {

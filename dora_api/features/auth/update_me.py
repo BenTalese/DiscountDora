@@ -8,9 +8,11 @@ from dora_api.domain.entities.user import (ALERTS_EMAIL_CADENCE_VALUES,
                                            ALLOWED_BUDGET_PERIODS,
                                            ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES, ALLOWED_THEMES,
+                                           ALLOWED_VOICE_ENGINES,
                                            NUTRITION_MODE_COMPLEX,
                                            NUTRITION_MODE_VALUES, User)
 from dora_api.features.app_settings.access import get_or_create_app_setting
+from dora_api.features.tts.voice_catalog import VOICE_IDS
 from dora_api.features.auth.register_user import (AuthenticatedUserDto,
                                                   SESSION_USER_ID_KEY)
 from dora_api.features.routers import AUTH_ROUTER
@@ -47,6 +49,11 @@ class UpdateMeRequest(BaseModel):
     # the feature is two-state per setting.
     voice_input_enabled: bool | None = None
     voice_output_enabled: bool | None = None
+    # Voice engine + Piper voice. Closed-set sentinels validated below
+    # (R-010 carve-out): engine ∈ ALLOWED_VOICE_ENGINES, voice_id ∈ the TTS
+    # catalog's VOICE_IDS.
+    voice_engine: str | None = None
+    voice_id: str | None = None
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     money_features_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
@@ -148,6 +155,17 @@ class UpdateMeHandler:
             _User.voice_input_enabled = request.voice_input_enabled
         if "voice_output_enabled" in _SetFields and request.voice_output_enabled is not None:
             _User.voice_output_enabled = request.voice_output_enabled
+
+        # Voice engine + Piper voice. R-010 carve-out: closed-set sentinels
+        # validated here against the domain engine set and the TTS catalog ids.
+        if "voice_engine" in _SetFields and request.voice_engine is not None:
+            if request.voice_engine not in ALLOWED_VOICE_ENGINES:
+                return None, f"Invalid voice engine '{request.voice_engine}'."
+            _User.voice_engine = request.voice_engine
+        if "voice_id" in _SetFields and request.voice_id is not None:
+            if request.voice_id not in VOICE_IDS:
+                return None, f"Invalid voice '{request.voice_id}'."
+            _User.voice_id = request.voice_id
 
         # C-cross Chunk 2 — per-user money opt-in. Plain bool; the
         # saved `budget_amount` survives toggling off (data preserved).

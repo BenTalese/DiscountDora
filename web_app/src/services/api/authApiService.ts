@@ -3,7 +3,8 @@ import type {
     BudgetPeriod,
     FontFamilyPreference,
     FontSizePreference,
-    ThemePreference
+    ThemePreference,
+    VoiceEngine
 } from 'src/models/auth';
 import AxiosHttpClient, { NormalisedApiError, resolveBaseURL } from './axiosHttpClient';
 
@@ -40,6 +41,10 @@ export type UpdateMeCommand = {
     /** P2-13 — voice opt-in toggles. Saved per user. */
     voice_input_enabled?: boolean;
     voice_output_enabled?: boolean;
+    /** Voice engine (`browser` | `piper`) + chosen Piper voice id. Server
+     *  validates the voice id against its catalog (GET /api/tts/voices). */
+    voice_engine?: VoiceEngine;
+    voice_id?: string;
     /** C-cross Chunk 2 — per-user money-features opt-in. Layered with the
      *  install-wide `money_enabled` flag via `useMoneyEnabled()`. */
     money_features_enabled?: boolean;

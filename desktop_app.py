@@ -93,6 +93,34 @@ def _bootstrap_spa_dir() -> None:
             return
 
 
+def _bootstrap_piper() -> None:
+    """Point DORA_PIPER_BIN at the bundled Piper binary so Dora's neural voice
+    works out of the box on desktop (R-018 / ADR-013).
+
+    `dora.spec` ships `packaging/piper/` to `<bundle>/piper/` when the build
+    fetched it (packaging/fetch_piper.py). One-folder + one-file PyInstaller
+    both expose that via `sys._MEIPASS`; we also check alongside the script so
+    a dev `python desktop_app.py` with a populated `packaging/piper/` works.
+    If no bundled binary is found we leave DORA_PIPER_BIN unset — `/api/tts`
+    then 503s and the SPA falls back to the browser voice. Voice models are
+    downloaded on demand into the data dir, untouched here."""
+    if os.environ.get("DORA_PIPER_BIN"):
+        return
+    exe = "piper.exe" if sys.platform.startswith("win") else "piper"
+    roots = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.append(Path(meipass))
+    here = Path(__file__).resolve().parent
+    roots.append(here)                 # alongside the bundled executable
+    roots.append(here / "packaging")   # dev checkout layout
+    for root in roots:
+        candidate = root / "piper" / exe
+        if candidate.is_file():
+            os.environ["DORA_PIPER_BIN"] = str(candidate)
+            return
+
+
 def _pick_free_port() -> int:
     """Bind to port 0 to let the kernel pick, then release. Tiny
     race window between release and Flask binding — acceptable for a
@@ -119,6 +147,7 @@ def _wait_for_health(url: str, timeout_seconds: float = 5.0) -> bool:
 def main() -> int:
     _bootstrap_paths()
     _bootstrap_spa_dir()
+    _bootstrap_piper()
 
     # Set up file-based logging early so anything that goes wrong
     # below leaves a trail in user_log_dir. The desktop bundle has

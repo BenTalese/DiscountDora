@@ -56,6 +56,9 @@ dist-ssr
 build/
 *.AppImage
 packaging/.cache/
+# Piper binary fetched at build time by packaging/fetch_piper.py — a build
+# artefact, never committed (it's bundled into the PyInstaller output instead).
+packaging/piper/
 web_app_old/.vscode/*
 web_app/.vscode/*
 lerna-debug.log*

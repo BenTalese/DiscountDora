@@ -481,6 +481,41 @@ exceptions, which still must be commented) · **Source** (where it was establish
   the dev env. The user asked for this to be a standing rule across every
   prompt, and chunk 8 promotes it here.
 
+### R-018 — Optional engines degrade gracefully and never hard-block install or boot
+- **Rule:** any feature backed by an **optional external/native engine** — a
+  separate binary, a bring-your-own service, or a platform-specific native
+  wheel — MUST (a) **degrade gracefully** when the engine is absent (the app
+  still boots; the surface hides, disables, or falls back to a built-in
+  alternative), and (b) **not** be added as a hard dependency in
+  `requirements.txt` when it can't install cleanly on **every** supported
+  platform — notably the Windows desktop build. Gate it behind a runtime
+  availability probe (binary on PATH / endpoint reachable / model file present)
+  and document the per-platform install instead of pinning it.
+- **Why:** `piper-tts` (Dora's neural voice) can't be pip-installed on Windows —
+  its `piper-phonemize` dependency ships no Windows wheel — so pinning it would
+  break `pip install -r requirements.txt` for the desktop target, the opposite
+  of "properly added". The LLM assistant is the prior instance of the same
+  shape: bring-your-own Ollama, `llm_enabled` off by default, never bundled or
+  auto-downloaded. Both are optional, runtime-detected, and fall back (TTS →
+  browser speech; assistant → rule-based intents) so the standard artifact
+  always boots.
+- **Apply:** wiring an engine = add the probe + a graceful empty/503 + a client
+  fallback path. Ship the engine automatically where you cleanly can (Docker
+  `RUN pip install …`; bundle the binary into the desktop build via the spec —
+  guard the bundle so a missing artifact doesn't fail the build) and document
+  the optional install for the paths you can't (the 503 hint / README). Large
+  data assets the engine needs (e.g. Piper voice models, ~60 MB each) are **not**
+  committed to git — provision them at runtime into the data dir (download on
+  demand from a pinned, checksum-verified source), so a clone stays lean and the
+  asset rides the persistent data volume / backups.
+- **Violation signal:** a heavy/native/platform-specific package pinned in the
+  main `requirements.txt`; an engine surface that 500s or blocks boot when the
+  engine is missing instead of degrading; an availability check that assumes the
+  engine is always present.
+- **Source:** Piper TTS wiring (2026-06-23) — the near-miss of pinning
+  `piper-tts` and breaking the Windows install; generalised from the existing
+  BYO-LLM posture. Promotes ADR-013.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -815,6 +850,41 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   that always drifts. Doesn't replace e2e tests — seed is the *visible*
   surface; tests are the *correctness* surface.
 - **Promotes rule:** R-017.
+
+### ADR-013 — Optional engines degrade gracefully; never hard-pin a cross-platform-breaking dependency
+- **Date / task:** 2026-06-23 (Piper TTS wiring — chat + cook mode + voice
+  settings).
+- **Status:** accepted
+- **Context:** Wiring Dora's neural voice meant depending on Piper. The obvious
+  move — add `piper-tts` to `requirements.txt` — turned out to break the install
+  on Windows: `piper-tts`'s `piper-phonemize` has no Windows wheel, so
+  `pip install -r requirements.txt` fails outright, and Dora ships as a Windows
+  desktop app. The feature is also inherently optional: without Piper the app
+  can still speak via the browser's Web Speech API. This is the same shape the
+  LLM assistant already has (BYO Ollama, off by default, rule-based fallback).
+- **Decision:** Adopt R-018. Optional external/native engines (a) must degrade
+  gracefully when absent — app still boots; surface hides/disables/falls back —
+  and (b) must not be hard-pinned in `requirements.txt` when they can't install
+  cleanly on every supported platform. Gate behind a runtime availability probe
+  (`/api/tts` checks for the `piper` binary + the selected voice model; returns
+  503 with a setup hint; the SPA's `useSpeechOutput` then uses browser speech).
+  Ship the engine automatically where clean — the **Docker image** installs
+  `piper-tts` in a `RUN` step, the **desktop bundle** ships the prebuilt binary
+  (fetched by `packaging/fetch_piper.py`, bundled by `dora.spec`, pointed to by
+  `desktop_app.py`); document the install for bare source/pip runs. **Voice
+  models are not in git** — they're downloaded on demand into the data dir
+  (`voice_provision.py`, checksum-verified) when the user picks one in
+  onboarding / Settings → Voice. No manual end-user steps; no repo bloat.
+- **Consequences:** `requirements.txt` keeps installing everywhere; the neural
+  voice is a progressive enhancement, not a gate, and "works out of the box" on
+  the shipped artifacts without bloating the repo or forcing manual setup. Cost:
+  the engine isn't guaranteed present on bare source runs, so every call site
+  needs the probe + fallback (already the pattern for the LLM); the desktop
+  binary-bundling is per-OS build wiring that can't be verified without a build
+  runner (flag it as a build/browser-walk item, not "tested"). Runtime model
+  download adds a one-time per-voice fetch + a checksum/atomic-rename path to
+  get right (a partial download must never read as "ready").
+- **Promotes rule:** R-018.
 
 ---
 

@@ -76,7 +76,6 @@ const routes: RouteRecordRaw[] = [
             // data as the header bell). The full alerts control centre is
             // the C-wave design brief.
             { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
-            { path: 'tts-test', component: () => import('pages/TtsTestPage.vue'), meta: { title: 'TTS test' } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
             // A8 + 2026-06-12 migration — recipe routes all live under
             // `/cookbook` (the cookbook is the page; a recipe is an

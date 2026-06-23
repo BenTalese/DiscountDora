@@ -41,3 +41,16 @@ tzdata==2026.2
 # mode and the install still boots fine.
 pywebpush==2.0.0
 python-dotenv==1.2.2
+# Piper neural TTS gives Dora a natural offline voice for chat replies +
+# cook-mode steps (POST /api/tts, features/tts; bundled Amy/Ryan models in
+# features/tts/voices). It is deliberately NOT pinned here: it's optional at
+# runtime — without it the endpoint returns 503 and the SPA falls back to the
+# browser's built-in speech synthesis, so the app boots and speaks regardless.
+# It also can't be a hard dependency because `piper-tts`'s `piper-phonemize`
+# has no Windows wheel (and Dora ships as a Windows desktop app), so a pin
+# would break `pip install -r requirements.txt` there. To enable the neural
+# voice:
+#   - Linux / macOS: `pip install piper-tts` (puts `piper` on PATH), or
+#   - Windows / any: download the standalone Piper binary from
+#     https://github.com/rhasspy/piper/releases and point DORA_PIPER_BIN at it.
+# See dora_api/features/tts/voices/README.md for the voice models.

@@ -9,6 +9,137 @@ next.
 
 ---
 
+## 2026-06-23 — Voice provisioning rework: download-on-demand + auto Piper binary
+
+**Why:** the first TTS pass bundled two ~63 MB voice models into the repo (Git
+LFS). The user (rightly) reconsidered — that bloats every clone/CI — and asked
+for voice files to be **installed at deploy/install time with no manual user
+steps**. New decisions: user-driven model downloads from onboarding/Settings
+(pick male/female + enable), and the Piper **binary** shipped automatically on
+all platforms.
+
+**What changed vs. the prior entry:**
+- **Models out of git.** Deleted the bundled `.onnx` from
+  `dora_api/features/tts/voices/` (moved to the local gitignored `data/voices`
+  for dev); removed the `.gitattributes` LFS rule. Voice dir default is now the
+  **data dir** (`<DORA_DATA_DIR>/voices`) via new
+  `configuration_manager.get_voices_dir()` (env override `DORA_PIPER_VOICE_DIR`).
+- **Download-on-demand.** New `features/tts/voice_provision.py` — background,
+  atomic (`.part`→rename), SHA-256-verified download from the catalog's pinned
+  HuggingFace URLs; process-local in-flight/error state. Catalog
+  (`voice_catalog.py`) gained `hf_path` / `size_bytes` / `sha256` (all five
+  fetched + verified) and dropped `bundled`. New `POST /api/tts/voices/<id>/
+  download`; `GET /api/tts/voices` now reports per-voice `status`
+  (downloadable / downloading / ready / error) + `size_bytes` + `piper_available`.
+- **Settings UI.** `VoicePicker.vue` rebuilt for the state machine: Download
+  (~MB) → Downloading… → Ready (selectable + Preview) / Retry. `VoiceSettings.vue`
+  drives the download + polls `/voices` until ready; engine gating on
+  `piper_available` + any-ready. `ttsApiService` gained `downloadVoiceAsync` +
+  the new `TtsVoice` shape.
+- **Auto Piper binary (R-018/ADR-013 stays — install-time, not pip-pinned).**
+  Docker: `RUN pip install piper-tts==1.2.0`. Desktop: `packaging/fetch_piper.py`
+  (per-OS prebuilt binary) + `dora.spec` bundles `packaging/piper/` (guarded) +
+  `desktop_app.py::_bootstrap_piper` sets `DORA_PIPER_BIN`; `build-linux.sh`
+  runs the fetch; `.gitignore`s `packaging/piper/`.
+
+**Verification:** `pytest tests/` → **510 passed**, same 3 pre-existing
+profile-pic failures (FU-288). Crucially the **real download path is proven** —
+fetched Lessac through `voice_provision`, atomic rename worked, SHA-256 matched
+the catalog. `vue-tsc` + `eslint` GREEN. **Unverified (no runner here):** actual
+piper *synthesis*, the Docker `piper-tts` install, and the desktop binary bundle
+(FU-290); the browser walk (FU-291).
+
+**Ledger:** FU-290 repurposed (was "LFS bundle ~126 MB" — now obsolete; replaced
+with "Piper-binary auto-provisioning unverified on real builds"). FU-291 updated
+(download mechanism now verified; synthesis + UI walk still pending). ADR-013 +
+R-018 amended: ship the engine automatically where clean; large model assets are
+downloaded at runtime, never committed.
+
+**Docs updated:** CHANGELOG (rewritten — download-on-demand + auto binary, no
+LFS), `features/tts/voices/README.md`, ENGINEERING_STANDARDS R-018/ADR-013.
+
+**Next up:** same as below — browser walk on a Piper-equipped env (FU-291) +
+build verification (FU-290).
+
+---
+
+## 2026-06-23 — Wire Piper TTS into Dora (chat + cook mode + voice settings)
+
+**Session goal:** take the unwired "Text to speech test" prototype (commit
+`2941d0d` — `POST /api/tts` + a standalone `/tts-test` slider page) and
+*properly* adopt it: give Dora a real neural voice in the chat assistant and the
+cook-mode Sous Chef, and let users pick a voice in Settings. Plan approved in
+plan mode; user locked four decisions (engine = explicit user choice with
+fallback; bundle a default female + male voice + auto-detect extras; warm/
+friendly catalogue; remove the test page → preview in settings).
+
+**Key architecture insight:** chat (`DoraChat.vue`) and cook mode
+(`RecipeCookMode.vue`) both already speak through **one** composable,
+`useSpeechOutput.ts`. Upgrading that composable wired *both* surfaces at once —
+no call-site changes needed.
+
+**Backend:**
+- `features/tts/voice_catalog.py` (NEW) — the single server-side source of truth
+  (R-003): id/label/description/gender/filename/bundled + per-voice Piper tuning.
+  Amy (warm US female, default) + Ryan (US male) bundled; Jenny/Kristin/Lessac
+  documented downloads. `VOICE_IDS` exported for boundary validation.
+- `features/tts/tts_synthesize.py` — reworked: `DORA_PIPER_VOICE_DIR` resolution
+  (default the bundled `voices/`), `voice` param applies catalogue defaults with
+  request overrides, legacy `DORA_PIPER_VOICE` kept; new `GET /api/tts/voices`
+  (catalogue + on-disk availability + `configured`). 503+hint preserved as the
+  fallback signal.
+- Persistence: `User.voice_engine` (`piper`|`browser`, default piper) +
+  `voice_id` (default amy); constants + `Fields` in `user.py`; `table_mappings`
+  columns; migration `c2e9f4a6b8d3` (off head `a4f7c2e9b6d1`); `update_me`
+  request + R-010 closed-set validation; `AuthenticatedUserDto`.
+- Voice models committed under `features/tts/voices/` via **Git LFS** (new
+  `.gitattributes`, `*.onnx filter=lfs`) + a README documenting the per-platform
+  Piper install and the extra voices.
+
+**Frontend:**
+- `services/api/ttsApiService.ts` (NEW) — `getVoicesAsync` + a blob `synthesize`.
+- `useSpeechOutput.ts` — engine-aware: prefers Piper per the user's prefs, plays
+  the WAV via an `<audio>` element, and **transparently falls back to browser
+  speech** on 503/error; a monotonic token discards superseded utterances;
+  `cancel()` stops both audio + synthesis. Public surface unchanged.
+- `pages/settings/VoiceSettings.vue` — new "Dora's voice" section: engine
+  `DoraSegmented` (Piper disabled + hint when no models — R-014) + a new
+  `components/settings/VoicePicker.vue` (R-001) with per-voice **Preview**.
+- `models/auth.ts` + `UpdateMeCommand` fields; deleted `TtsTestPage.vue` + route.
+
+**Decision worth flagging:** I did **not** pin `piper-tts` in `requirements.txt`.
+It can't pip-install on Windows (no `piper-phonemize` wheel) and Dora ships as a
+Windows desktop app — pinning would break `pip install -r requirements.txt`. The
+feature is optional-at-runtime (503 → browser fallback), so Piper is documented
+as a per-platform optional install instead. Promoted to **R-018 / ADR-013**
+(optional engines degrade gracefully; never hard-pin a cross-platform-breaking
+dep — generalised from the existing BYO-LLM posture).
+
+**Engineering-standards close-gate:** R-003 (catalogue + tuning server-only,
+client picks by id), R-002 (VoicePicker/VoiceSettings use theme tokens only),
+R-001 (VoicePicker extracted), R-010 (closed-set engine/voice validated at the
+`update_me` boundary), R-014 (Piper engine reveal-and-disabled with a hint),
+R-007 (scope held; adjacent issues logged not fixed), §7.5 (env-configurable
+voice dir, graceful degrade, two portable columns). New rule **R-018** + ADR-013.
+
+**Verification:** `pytest tests/` → **508 passed**, 3 failed — all 3 **pre-
+existing** profile-picture/user-list tests (confirmed via `git stash` on clean
+HEAD; logged FU-288). New `test_tts.py` (6) pass. Migration up/down verified on
+scratch SQLite (pre-existing row backfills to `piper`/`amy`). `vue-tsc` +
+`eslint` GREEN. **Live-Piper browser walk pending** — couldn't run Piper here
+(no Windows wheel; external-binary download blocked); FU-291 tracks it.
+
+**Ledger:** FU-288 (pre-existing profile-pic test failures + FU-286 premise now
+stale — backend *does* run here), FU-289 (`available` ignores Piper-only
+browsers), FU-290 (bundled-voice Git-LFS size/deploy heads-up), FU-291 (live
+Piper + browser walk pending).
+
+**Next up:** browser walk with Piper installed (FU-291). Big impl plans (State
+Ownership, Cookbook, Cook Mode, Meal Plans, Dashboard rebuild) remain on the
+board per prior entries.
+
+---
+
 ## 2026-06-23 — Dashboard `/design-critique` + rebuild plan (no code)
 
 **Session goal:** deep design review of `DashboardPage.vue` (mirroring the

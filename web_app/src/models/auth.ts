@@ -41,6 +41,10 @@ export type FontFamilyPreference =
     | 'plus_jakarta_sans';
 export type FontSizePreference = 'sm' | 'md' | 'lg' | 'xl';
 export type BudgetPeriod = 'weekly' | 'monthly';
+// Which engine speaks Dora's replies / cook-mode steps. `piper` is the
+// neural voice (POST /api/tts); `browser` is the built-in Web Speech voice.
+// useSpeechOutput falls back from piper → browser when Piper isn't available.
+export type VoiceEngine = 'browser' | 'piper';
 
 export type AuthenticatedUser = {
     user_id: string;
@@ -73,6 +77,11 @@ export type AuthenticatedUser = {
     // per-page mic / volume toggles from these on boot.
     voice_input_enabled: boolean;
     voice_output_enabled: boolean;
+    // Voice engine + chosen Piper voice id (from the server catalog,
+    // GET /api/tts/voices). Drive useSpeechOutput; only matter when
+    // voice_output_enabled is on. Default `piper` / `amy`.
+    voice_engine: VoiceEngine;
+    voice_id: string;
     // C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     // Layered with the install-wide `money_enabled` flag via
     // `useMoneyEnabled()`. `budget_amount` above stays the per-user

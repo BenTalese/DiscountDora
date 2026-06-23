@@ -35,6 +35,8 @@ infer them statically:
 5. **Email + onboarding seed templates** + bundled JSON seed data
    are read from disk at runtime — ship as data.
 """
+import os
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # ── Hidden imports ──────────────────────────────────────────────────
@@ -92,6 +94,16 @@ datas = [
     ("dora_api/email_templates", "dora_api/email_templates"),
 ]
 datas += collect_data_files("alembic", subdir="templates")
+
+# Piper neural-TTS engine — bundled when `packaging/fetch_piper.py` has
+# populated `packaging/piper/` (build-linux.sh / the Windows build run it
+# before pyinstaller). Lands at `<bundle>/piper/`; `desktop_app.py` points
+# DORA_PIPER_BIN there at runtime. Optional: if the folder is absent the build
+# still succeeds and the desktop app falls back to the browser voice (or a
+# DORA_PIPER_BIN the user sets). Voice MODELS are not bundled — they're
+# downloaded on demand into the data dir via Settings → Voice.
+if os.path.isdir("packaging/piper"):
+    datas += [("packaging/piper", "piper")]
 
 # ── Analysis / build ────────────────────────────────────────────────
 a = Analysis(

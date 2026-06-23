@@ -16,6 +16,25 @@ semver — major bumps signal schema or breaking-config changes.
   rebuild (Phases 1–5).
 
 ### Added
+- **Dora's neural voice (Piper TTS, 2026-06-23).** Dora can now speak with a
+  natural, offline neural voice instead of only the browser's built-in one.
+  When "Let Dora speak her replies" is on, the chat assistant reads her replies
+  and cook-mode Sous Chef reads each step through the chosen voice; both share
+  one `useSpeechOutput` path so they're wired together. Settings → Voice gains a
+  **Dora's voice** section: pick the engine (Dora's neural voice vs. your
+  browser voice) and choose from a curated catalogue (Amy — the warm default —
+  Ryan, Jenny, Kristin, Lessac), each with a **Download** button (voices are
+  free, ~60 MB, run on your server) and a **Preview**. The neural voice runs
+  server-side via Piper (`POST /api/tts`, `GET /api/tts/voices`). Voice models
+  are **downloaded on demand** into the data dir (checksum-verified;
+  `POST /api/tts/voices/<id>/download`) — nothing large is committed to git, and
+  there are no manual setup steps. The Piper engine itself ships automatically:
+  the Docker image installs it and the desktop bundle includes the binary. If
+  Piper isn't available the endpoint returns 503 and Dora transparently falls
+  back to the browser voice, so she's never silent. New per-user `voice_engine`
+  / `voice_id` preferences (migration `c2e9f4a6b8d3`). The prototype `/tts-test`
+  page was removed — its preview lives in Settings now. See
+  `dora_api/features/tts/voices/README.md`.
 - **Profile pictures (Settings rebuild Phase 4, 2026-06-23).** Users can set a
   profile picture on Settings → Account; it appears on the menu-bar account
   button, the Account header, and the admin Users list. When none is set, the

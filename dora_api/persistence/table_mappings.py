@@ -686,6 +686,11 @@ def configure_mappings(db: SQLAlchemy):
         # toggles from these and the user can override per session.
         Column("voice_input_enabled", Boolean, nullable=False, server_default="0"),
         Column("voice_output_enabled", Boolean, nullable=False, server_default="0"),
+        # Voice engine ('browser' | 'piper') + Piper voice id. Default piper/amy
+        # — Dora uses the bundled neural voice when available, browser fallback
+        # otherwise (resolved client-side).
+        Column("voice_engine", String(16), nullable=False, server_default="piper"),
+        Column("voice_id", String(32), nullable=False, server_default="amy"),
         # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
         Column("money_features_enabled", Boolean, nullable=False, server_default="0"),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).

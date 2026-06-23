@@ -104,6 +104,18 @@ NUTRITION_MODE_VALUES = (
     NUTRITION_MODE_COMPLEX,
 )
 
+# Voice — which speech engine speaks Dora's replies / cook-mode steps and,
+# for the Piper engine, which catalog voice. R-010 carve-out: closed-set
+# string sentinels validated at a single boundary (`update_me.py`). The
+# engine is the user's *preference*; if Piper can't actually speak (no
+# binary / model), the SPA transparently falls back to the browser voice
+# (see useSpeechOutput) — so `piper` is a safe default. The set of valid
+# `voice_id`s is owned by the TTS feature catalog (features/tts/
+# voice_catalog.py `VOICE_IDS`), not duplicated here.
+VOICE_ENGINE_BROWSER = "browser"
+VOICE_ENGINE_PIPER = "piper"
+ALLOWED_VOICE_ENGINES = (VOICE_ENGINE_BROWSER, VOICE_ENGINE_PIPER)
+
 # C-9.7 — per-user alerts-email cadence (PROPOSAL_ALERTS §4.4). `off` is
 # the absent-feature value (paired with `alerts_email_enabled=False` it's
 # the default for a fresh user — quiet until opted in). R-010 carve-out:
@@ -163,6 +175,14 @@ class User(BaseEntity):
     # boot to seed the per-page toggles.
     voice_input_enabled: bool = False
     voice_output_enabled: bool = False
+    # Voice engine + Piper voice selection. `voice_engine` is `browser` |
+    # `piper`; default `piper` so Dora uses the nicer neural voice when it's
+    # available (the bundled Amy/Ryan models ship for this), with a
+    # browser-speech fallback when it isn't. `voice_id` names the chosen
+    # catalog voice (default Amy). Only consulted when `voice_output_enabled`
+    # is on — these decide *how* she speaks, not *whether*.
+    voice_engine: str = VOICE_ENGINE_PIPER
+    voice_id: str = "amy"
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     # Default False — Charter P10 Anti-creep. Layered with the
     # install-wide `money_enabled` AppSetting (see useFeatureFlags +
@@ -230,6 +250,8 @@ class User(BaseEntity):
         BUDGET_PERIOD = "budget_period"
         VOICE_INPUT_ENABLED = "voice_input_enabled"
         VOICE_OUTPUT_ENABLED = "voice_output_enabled"
+        VOICE_ENGINE = "voice_engine"
+        VOICE_ID = "voice_id"
         MONEY_FEATURES_ENABLED = "money_features_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"

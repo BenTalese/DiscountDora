@@ -221,6 +221,20 @@ class DoraConfig:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def get_voices_dir(self) -> Path:
+        """Where Piper TTS voice models (`.onnx` + `.onnx.json`) are stored.
+        Downloaded on demand from the catalog (see features/tts) into the data
+        dir so they persist across restarts (captured by backups, ride a
+        mounted volume) and never bloat the repo. `DORA_PIPER_VOICE_DIR`
+        overrides the location for operators who stage models elsewhere."""
+        override = _env("DORA_PIPER_VOICE_DIR")
+        if override:
+            path = Path(override).expanduser().resolve()
+        else:
+            path = self.get_data_dir() / "voices"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def get_log_dir(self) -> Path:
         """Where logging_setup.py drops rotated log files. Defaults to
         `<DATA_DIR>/logs/dapi` so logs sit next to other runtime

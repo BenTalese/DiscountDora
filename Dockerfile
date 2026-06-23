@@ -22,6 +22,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Piper neural-TTS engine for Dora's voice. Installed here, NOT pinned in
+# requirements.txt (R-018 / ADR-013): piper-tts can't install on the Windows
+# desktop build, so it would break `pip install -r requirements.txt` there —
+# but the Linux container ships it so the neural voice works out of the box.
+# Voice models are downloaded on demand into the data volume via Settings →
+# Voice (features/tts/voice_provision); if this install ever fails the app
+# still runs and falls back to the browser voice.
+RUN pip install --no-cache-dir piper-tts==1.2.0
+
 # ── Frontend deps. Critical: install inside /app/web_app so `quasar build`
 #    can find node_modules there. The previous Dockerfile ran npm install in
 #    /app, which left /app/web_app without a node_modules directory and broke

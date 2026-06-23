@@ -86,6 +86,12 @@ if ! command -v pyinstaller >/dev/null 2>&1; then
     exit 1
 fi
 
+# Fetch the Piper TTS binary so the bundle ships Dora's neural voice (R-018 /
+# ADR-013). Idempotent; non-fatal — if it fails the bundle still builds and the
+# desktop app falls back to the browser voice.
+echo "[build] Fetching Piper binary (packaging/fetch_piper.py)"
+python packaging/fetch_piper.py || echo "[build] WARN: Piper fetch failed; bundle will use browser-voice fallback"
+
 echo "[build] Running pyinstaller dora.spec"
 pyinstaller --noconfirm dora.spec
 

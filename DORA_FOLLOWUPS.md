@@ -52,6 +52,79 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-291 — Live Piper synthesis + browser walk for the voice feature pending
+- **Raised:** 2026-06-23 (Piper TTS wiring; updated after the provisioning rework).
+- **Type:** finding (verification debt — engine path not run here).
+- **What:** verified on this box: 8 `tests/e2e/dora_api/test_tts.py` pass;
+  migration `c2e9f4a6b8d3` up/down on scratch SQLite; the **real voice-model
+  download + SHA-256 check** (downloaded Lessac via `voice_provision`, hash
+  matched the catalog); `vue-tsc` + `eslint` GREEN. **Not** exercised: actual
+  neural-voice *synthesis* (needs the `piper` binary, which won't pip-install on
+  this Windows box and whose standalone exe download is sandbox-blocked), so the
+  Settings → Voice Preview, the Download→Ready UI poll in the browser, and chat
+  + cook-mode speaking in the chosen voice are unconfirmed end-to-end.
+- **Why deferred:** no runnable Piper engine in this environment.
+- **Recommended resolution:** **confirm in browser** on an env with Piper
+  present (the Docker image, the desktop bundle, or `pip install piper-tts` on
+  Linux/macOS): Settings → Voice — download a voice (watch it flip to Ready),
+  Preview each, switch engine; Dora chat with "speak replies" on; cook-mode Sous
+  Chef stepping; and the 503→browser fallback when Piper is absent.
+
+## [OPEN] FU-290 — Piper-binary auto-provisioning unverified on real builds (Docker + desktop)
+- **Raised:** 2026-06-23 (Piper TTS provisioning rework).
+- **Type:** finding (build wiring, untested here).
+- **What:** to make the neural voice work with no manual steps, the engine
+  binary is shipped automatically — **Docker** adds `RUN pip install
+  piper-tts==1.2.0` (`Dockerfile`); the **desktop** bundle fetches the prebuilt
+  binary (`packaging/fetch_piper.py`), bundles it (`dora.spec` →
+  `packaging/piper/` → `<bundle>/piper/`), and resolves `DORA_PIPER_BIN`
+  (`desktop_app.py::_bootstrap_piper`). None of this could be run here: no
+  `docker build` and no PyInstaller/Windows build runner; the standalone binary
+  download is sandbox-blocked. Unknowns: does `piper-tts` resolve a manylinux
+  wheel on `python:3.11-slim`; does the Piper release archive extract to
+  `packaging/piper/<exe>` as `fetch_piper.py` assumes; does the bundled exe find
+  its sibling DLLs/`espeak-ng-data` at runtime.
+- **Why deferred:** no build runner in this environment; bundling is config.
+- **Recommended resolution:** run a Docker build (confirm `piper` on PATH in the
+  image) and a desktop build on Linux + Windows (`packaging/build-linux.sh`
+  fetches Piper; confirm the bundle contains `piper/` and the app synthesises).
+  All paths degrade to browser voice if the engine is missing, so this gates
+  "works out of the box," not basic function.
+
+## [OPEN] FU-289 — `useSpeechOutput.available` ignores Piper when browser has no SpeechSynthesis
+- **Raised:** 2026-06-23 (Piper TTS wiring).
+- **Type:** finding (minor edge).
+- **What:** `useSpeechOutput().available` reflects only browser
+  `window.speechSynthesis` support. On the rare browser that lacks it **but**
+  has Piper configured server-side, the Settings → Voice "Let Dora speak her
+  replies" toggle and the chat mute button stay hidden, so the user can't enable
+  output even though the neural voice would work.
+- **Why deferred:** edge case (modern browsers all expose SpeechSynthesis);
+  out of scope to make `available` query Piper async this unit (R-007).
+- **Recommended resolution:** opportunistic — if it matters, have `available`
+  also consider the `GET /api/tts/voices` `configured` flag (async) so the
+  toggle appears when Piper alone can speak.
+
+## [OPEN] FU-288 — Three profile-picture e2e tests fail (pre-existing; FU-286 "no Python env" premise is stale)
+- **Raised:** 2026-06-23 (found while running the suite for the TTS work).
+- **Type:** finding.
+- **What:** running `pytest tests/` shows **3 failures, all pre-existing** (they
+  fail identically on clean HEAD — confirmed via `git stash`):
+  `test_auth_flows.py::test__profile_picture__set_fetch_and_clear`,
+  `test_auth_flows.py::test__profile_picture__rejects_oversize_data_url`, and
+  `test_user_router.py::test__get_users__GettingUsers__GetsAllExpectedAttributes`
+  (the last asserts a frozen attribute set that no longer matches the user-list
+  DTO after `has_image` was added). They are unrelated to the TTS change.
+  Separately, this run **proves the backend pytest suite runs on this box** (508
+  passed) — so FU-286's "this machine has no Python env / backend never
+  executed" premise is **stale** (matches the standing memory note).
+- **Why deferred:** out of scope of the TTS unit (R-007); pre-existing drift
+  from the profile-picture (Phase 4) work.
+- **Recommended resolution:** now/opportunistic for the profile-picture owner —
+  update the stale assertions (the `_User.keys() == {...}` frozen set; the two
+  profile-picture flows) and re-run; and update FU-286 to reflect that the
+  backend does run here.
+
 ## [OPEN] FU-287 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
 - **Type:** finding.

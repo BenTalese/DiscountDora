@@ -329,6 +329,50 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 5 (restock radar + quick actions, GREEN)
+
+**Session goal:** Phase 5 — restock radar, quick-action row, cookable upgrade,
+donut deep-links. Frontend-only; `DashboardPage.vue`.
+
+**Done:**
+- **Restock radar** (default-on, zone 'today') — `getKeepsRunningOutAsync(5)`;
+  top items the user keeps running out of, name → `/stock/:id`, "ran out N×", and
+  a one-tap **Add** that routes through `useStockItemActions().addToList` (same
+  no-draft / multiple-draft / toast handling as the cart button — R-011). Reuses
+  the `.dora-cook-*` row styles. Onboarding empty state (decision §8).
+- **Quick-action bar** (decision §9) — between hero and cards: **Add item** opens
+  the shared `CreateStockItemDialog` (`@created` → refresh summary + restock);
+  **Add to list** pops the global `QuickAddSheet` via `useQuickAdd().openQuickAdd()`.
+  No navigation; both reuse existing components/flows.
+
+**Deferred (logged):**
+- **FU-298** — cookable upgrade (L272: meal-plan-driven + ready/missing). The
+  current card shows cookable-NOW; L272 wants plan-driven "next to cook" with a
+  missing-ingredients flag — a design call that overlaps the meal-plan card.
+- **FU-299** — donut bucket deep-links. Needs `/stock?status=` filter support on
+  the stock overview (out of dashboard scope, R-007).
+- **FU-300** — "Log price" quick action. Needs an item/product target picker.
+
+**Engineering-standards close-gate:** R-011 (quick actions + restock add reuse the
+shared `useStockItemActions` / `useQuickAdd` / `CreateStockItemDialog` — no
+duplicated create/add logic), R-001 (reused existing components rather than
+inlining new forms), R-007 (didn't extend the stock overview for donut links —
+deferred), R-002 (quick-action bar style tokenised; restock reuses cook-row
+styles), R-008 (comments on the reuse rationale). No new ADR.
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN. **Browser walk pending** —
+confirm restock list + Add works (toast, list refresh), Add-item dialog creates +
+refreshes, Add-to-list sheet opens.
+
+**Ledger:** opened **FU-298** (cookable upgrade), **FU-299** (donut deep-links),
+**FU-300** (log-price quick action).
+
+**Next up:** **Phase 7** — mobile pass (zones stack, quick-action bar wraps, touch
+targets ≥44px, calendar strip). Then deferred Phase 6 (calendar) + FU-293
+(DashboardCard extraction) + the static-only backend runs (FU-292) + browser walk.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 4 (Money zone, GREEN)
 
 **Session goal:** Phase 4 — surface the unused reports API as Money-zone widgets.

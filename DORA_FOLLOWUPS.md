@@ -52,6 +52,47 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-300 — Dashboard quick actions: add "Log price" (needs a product target)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up.
+- **What:** the Phase-5 quick-action bar ships **Add item** (CreateStockItemDialog)
+  and **Add to list** (QuickAddSheet). Decision §9 also listed **Log price**, but a
+  standalone log-price action has no obvious target (price is logged against a
+  specific product/stock item) — it needs an item/product picker first.
+- **Why deferred:** unclear UX without a target picker; the other two quick actions
+  delivered the "home screen does, not just routes" value.
+- **Recommended resolution:** opportunistic — add a Log-price quick action that
+  first picks a stock item (reuse the QuickAddSheet search) then opens the existing
+  `PriceEntry` flow.
+
+## [OPEN] FU-299 — Dashboard stock donut: deep-link buckets to filtered /stock
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up (enhancement) — was slated as a Phase-5 item.
+- **What:** the critique wanted the Pantry donut's low/out segments to deep-link to
+  a filtered stock view (`/stock?status=low|out`). The donut card is currently a
+  whole-card link to `/stock`. `StockOverviewPage` has **no status query-param
+  filter**, so the deep-link target doesn't exist yet.
+- **Why deferred:** adding query-driven filtering to the stock overview is out of
+  the dashboard's scope (R-007).
+- **Recommended resolution:** when touching the stock overview — add `?status=`
+  query support there, then de-clickable the donut card and link each legend
+  row/segment to the matching filtered view.
+
+## [OPEN] FU-298 — Dashboard "Cookable tonight" upgrade (L272: meal-plan-driven + ready/missing)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up — was slated as a Phase-5 item.
+- **What:** feedback L272 wanted the cookable card to show the **next recipes to
+  cook from the meal plan** with an at-a-glance **ready / missing-N-ingredients**
+  flag. The current card shows the top-3 **cookable-now** recipes (all in stock) —
+  related but not the same (it's not meal-plan-driven and doesn't surface
+  almost-cookable recipes).
+- **Why deferred:** overlaps the meal-plan card + needs a small design call on how
+  "next to cook" (plan order) interacts with "cookable now" (stock); didn't want to
+  bundle a design question into the Phase-5 mechanical work.
+- **Recommended resolution:** when reworking meal-plan/cookbook surfaces — drive the
+  card off `meal_plan.upcoming_entries`, joining each recipe's cookability to show
+  ready vs missing-N, deep-linking to the recipe.
+
 ## [OPEN] FU-297 — Budget card isn't money-gated (consistency with the Money zone)
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
 - **Type:** finding (consistency, pre-existing).

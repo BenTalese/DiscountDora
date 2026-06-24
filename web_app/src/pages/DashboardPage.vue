@@ -73,6 +73,29 @@
             </div>
         </section>
 
+        <!-- Phase 5 quick actions (decision §9): the home screen *does*, not just
+             routes. Lightweight inline dialogs — Add item opens the shared
+             CreateStockItemDialog; Add to list pops the global QuickAddSheet.
+             No navigation. (Log-price is a future add — needs a product target.) -->
+        <div class="dora-quick-actions">
+            <q-btn
+                outline
+                no-caps
+                :icon="ICONS.add"
+                label="Add item"
+                color="primary"
+                @click="showCreateStockItem = true"
+            />
+            <q-btn
+                outline
+                no-caps
+                :icon="ICONS.shopping_cart"
+                label="Add to list"
+                color="primary"
+                @click="openQuickAdd()"
+            />
+        </div>
+
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
         </q-banner>
@@ -796,6 +819,53 @@
                 </router-link>
             </div>
 
+            <!-- ───── Restock radar (Phase 5) ─────────────────────────────── -->
+            <div
+                v-if="isCardVisible('restock')"
+                class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('restock') }"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.replay" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Restock radar</h3>
+                        <router-link
+                            v-if="restockItems.length > 0"
+                            class="dora-card-action dora-card-link"
+                            to="/stock"
+                        >
+                            Pantry →
+                        </router-link>
+                    </header>
+                    <ul v-if="restockItems.length > 0" class="dora-cook-list">
+                        <li
+                            v-for="item in restockItems"
+                            :key="item.stock_item_id"
+                            class="dora-cook-row"
+                        >
+                            <router-link class="dora-cook-name" :to="`/stock/${item.stock_item_id}`">
+                                {{ item.name }}
+                            </router-link>
+                            <span class="dora-cook-meta">ran out {{ item.times_out_when_added }}×</span>
+                            <q-btn
+                                flat
+                                dense
+                                no-caps
+                                size="sm"
+                                :icon="ICONS.shopping_cart"
+                                label="Add"
+                                color="primary"
+                                @click="addRestockToList(item.stock_item_id)"
+                            />
+                        </li>
+                    </ul>
+                    <div v-else class="dora-empty">
+                        Once you've restocked the same things a few times, I'll flag
+                        what to keep an eye on.
+                    </div>
+                </article>
+            </div>
+
             <!-- ───── Savings captured (Phase 4 — Money zone flagship) ────── -->
             <div
                 v-if="isCardVisible('savings')"
@@ -915,6 +985,12 @@
         </div>
         </FadeTransition>
 
+        <!-- Phase 5 "Add item" quick action — the shared create dialog; refreshes
+             the summary/restock on success so the new item shows immediately. -->
+        <CreateStockItemDialog
+            v-model="showCreateStockItem"
+            @created="onStockItemCreated"
+        />
     </div>
 </template>
 
@@ -959,12 +1035,16 @@
         type SavingsCapturedResponse,
         type StoreSpendResponse,
         type StockValueResponse,
+        type KeepsRunningOutResponse,
     } from 'src/services/api/reportsApiService';
+    import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useStockItemActions } from 'src/composables/useStockItemActions';
+    import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
@@ -981,7 +1061,9 @@
         // Phase 4 — Money zone widgets backed by the reports API.
         | 'savings'
         | 'spend_trend'
-        | 'pantry_value';
+        | 'pantry_value'
+        // Phase 5 — predictive restock.
+        | 'restock';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
     // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
@@ -1019,6 +1101,7 @@
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
         { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
+        { id: 'restock', label: 'Restock radar', icon: ICONS.replay, zone: 'today' },
         // Money zone. Savings leads (the headline payoff, default-on when money
         // is enabled); spend + pantry value are opt-in glances. best_deals is
         // gated on product data-presence (§2.4).
@@ -1039,6 +1122,10 @@
     // product data-presence flag (§2.4). Read by `cardAvailable`.
     const { moneyEnabled } = useMoneyEnabled();
     const { products: productsEnabled } = useFeatureFlags();
+    // Phase 5 — quick actions reuse the shared cross-feature actions so add-to-
+    // list / create behave identically to the rest of the app (R-011).
+    const { addToList } = useStockItemActions();
+    const { openQuickAdd } = useQuickAdd();
 
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
@@ -1135,6 +1222,10 @@
     const savingsRange = ref<ReportRange>('30d');
     const spendByStore = ref<StoreSpendResponse | null>(null);
     const pantryValue = ref<StockValueResponse | null>(null);
+    // Phase 5 — restock radar (items the user keeps running out of) + the
+    // "Add item" quick-action dialog state.
+    const keepsRunningOut = ref<KeepsRunningOutResponse | null>(null);
+    const showCreateStockItem = ref(false);
 
     const firstName = computed(() => currentUser.value?.username ?? '');
 
@@ -1683,6 +1774,30 @@
         }
     }
 
+    // ── Restock radar (Phase 5) ──────────────────────────────────────────
+    async function loadKeepsRunningOut() {
+        try {
+            keepsRunningOut.value = await reportsApi.getKeepsRunningOutAsync(5);
+        } catch {
+            keepsRunningOut.value = null;
+        }
+    }
+    const restockItems = computed(() => keepsRunningOut.value?.rows ?? []);
+
+    // One-tap "Add to list" from a restock row — routes through the shared
+    // cross-feature action (handles the no-draft / multiple-draft cases +
+    // toast), so it behaves exactly like the cart button elsewhere.
+    function addRestockToList(stockItemId: string) {
+        void addToList(stockItemId);
+    }
+
+    // After creating a stock item via the quick-action dialog, refresh the
+    // summary/restock so the new item is reflected.
+    function onStockItemCreated() {
+        void loadSummary();
+        void loadKeepsRunningOut();
+    }
+
     // Top stores by spend for the spend-trend card (display slice of the
     // server-aggregated rows).
     const topSpendStores = computed(() => spendByStore.value?.rows.slice(0, 3) ?? []);
@@ -1733,6 +1848,7 @@
             loadSavings(),
             loadSpendByStore(),
             loadPantryValue(),
+            loadKeepsRunningOut(),
             suggestionStore.refreshAsync(),
             recipes.value.length === 0
                 ? recipeStore.getRecipesAsync()
@@ -1822,6 +1938,14 @@
         display: flex;
         align-items: center;
         gap: 4px;
+    }
+
+    /* Phase 5 quick-action bar — sits between the hero and the cards. */
+    .dora-quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
     }
 
     /* ───── Cards ────────────────────────────────────────────────────── */

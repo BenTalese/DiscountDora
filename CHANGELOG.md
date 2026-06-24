@@ -6,6 +6,12 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 5 (restock radar + quick actions, 2026-06-24).** A
+  new **Restock radar** card flags the things you keep running out of, each with
+  a one-tap **Add** to your shopping list. A **quick-action bar** at the top of
+  the dashboard lets you **Add item** or **Add to list** without leaving the
+  page — the home screen now *does*, not just links out. (A "Log price" quick
+  action and a meal-plan-driven cookable upgrade are still to come.)
 - **Dashboard rebuild — Phase 4 (Money zone, 2026-06-24).** The dashboard now
   surfaces the money story it was hiding. A flagship **"You've saved"** card
   shows what you've saved vs RRP with a Month / Year / All toggle; opt-in

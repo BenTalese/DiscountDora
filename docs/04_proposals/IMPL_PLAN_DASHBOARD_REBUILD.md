@@ -343,6 +343,16 @@ the price-drop signal), §7.5 portability if any endpoint is added.
 
 ### Phase 5 — Restock radar, quick actions, cookable upgrade
 
+> **Status (2026-06-24): restock + quick actions DONE + green; cookable upgrade
+> + donut deep-links deferred.** Shipped: **Restock radar** (default-on, zone
+> 'today', `getKeepsRunningOutAsync`, one-tap Add-to-list via the shared
+> `useStockItemActions`), and a **quick-action bar** (Add item → CreateStockItem
+> Dialog; Add to list → global QuickAddSheet `openQuickAdd`). Deferred: cookable
+> upgrade L272 (FU-298 — overlaps meal-plan, design call), donut deep-links
+> (FU-299 — needs `/stock` status-filter support), log-price quick action
+> (FU-300 — needs a target picker).
+
+
 Add temporal intelligence and let the home screen *do*, not just route.
 
 - **Restock radar** (`getKeepsRunningOutAsync`) — items that keep running out,

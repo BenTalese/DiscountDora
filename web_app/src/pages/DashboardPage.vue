@@ -51,27 +51,78 @@
             {{ loadError }}
         </q-banner>
 
-        <!-- F1: 24h skip-reminder. Shown when the user pressed
-             "Skip everything" in the wizard; gentle nudge with a Continue
-             link, plus a dismiss that suppresses for the rest of the
-             window. After 24h the skip flag is treated as expired. -->
-        <q-banner
-            v-if="showSkipReminder"
-            class="dora-bg-warning-soft dora-text-primary q-mb-md skip-reminder"
-            rounded
-            dense
-        >
-            <template #avatar>
-                <q-icon :name="ICONS.auto_awesome" size="20px" color="warning" />
-            </template>
-            <strong>Welcome —</strong>
-            you skipped the setup wizard. Finish in two minutes whenever
-            you're ready.
-            <template #action>
-                <q-btn flat no-caps :icon="ICONS.east" label="Continue" :loading="continuingOnboarding" @click="onContinueOnboarding" />
-                <q-btn flat no-caps :icon="ICONS.close" label="Hide" @click="dismissSkipReminder" />
-            </template>
-        </q-banner>
+        <!-- D1: the 24h skip-reminder and the day's welcome share one warm
+             "Dora says" treatment. The skip-reminder (F1) owns the
+             not-yet-finished-onboarding window — its Continue/Hide buttons are
+             now inline (D1b), not on their own row. Once that window lapses or
+             is hidden, the rotating welcome (D1c/d/e) takes over; it replaces
+             the old bottom-right "Dora says" bubble but keeps its look. -->
+        <transition name="fade">
+            <aside
+                v-if="showSkipReminder"
+                class="dora-welcome dora-welcome--warn q-mb-md"
+                role="note"
+                aria-label="Finish setup"
+            >
+                <q-avatar size="40px" square class="dora-welcome-mascot">
+                    <img src="../assets/logo-mascot.png" alt="" />
+                </q-avatar>
+                <div class="dora-welcome-body">
+                    <div class="dora-welcome-line">
+                        <strong>Welcome —</strong> you skipped the setup wizard.
+                        Finish in two minutes whenever you're ready.
+                    </div>
+                    <div class="dora-welcome-actions">
+                        <q-btn
+                            flat
+                            dense
+                            no-caps
+                            :icon="ICONS.east"
+                            label="Continue"
+                            :loading="continuingOnboarding"
+                            @click="onContinueOnboarding"
+                        />
+                        <q-btn
+                            flat
+                            dense
+                            no-caps
+                            :icon="ICONS.close"
+                            label="Hide"
+                            @click="dismissSkipReminder"
+                        />
+                    </div>
+                </div>
+            </aside>
+        </transition>
+
+        <transition name="fade">
+            <aside
+                v-if="showWelcome"
+                class="dora-welcome q-mb-md"
+                role="note"
+                aria-label="A note from Dora"
+            >
+                <q-avatar size="40px" square class="dora-welcome-mascot">
+                    <img src="../assets/logo-mascot.png" alt="" />
+                </q-avatar>
+                <div class="dora-welcome-body">
+                    <div class="dora-welcome-line">
+                        <strong>Dora says</strong> · {{ welcomeMessage }}
+                    </div>
+                    <div class="dora-welcome-hint">{{ welcomeHint }}</div>
+                </div>
+                <q-btn
+                    flat
+                    round
+                    dense
+                    size="sm"
+                    :icon="ICONS.close"
+                    @click="welcomeDismissed = true"
+                >
+                    <q-tooltip>Hide for today</q-tooltip>
+                </q-btn>
+            </aside>
+        </transition>
 
         <FadeTransition mode="out-in">
         <div v-if="loading && !summary" key="dash-loading" class="row justify-center q-pa-xl">
@@ -80,8 +131,11 @@
 
         <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
             <!-- ───── Needs your attention (P12) ─────────────────────────── -->
+            <!-- R-014: renders whenever the card is visible — a calm "all clear"
+                 state instead of vanishing, so the dashboard looks best (not
+                 emptiest) when nothing's wrong. -->
             <div
-                v-if="isCardVisible('attention') && topAlerts.length > 0"
+                v-if="isCardVisible('attention')"
                 class="col-12 col-lg-6"
             >
                 <article class="dora-card">
@@ -89,13 +143,18 @@
                         <q-icon :name="ICONS.notifications_active" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Needs your attention</h3>
                         <router-link
+                            v-if="alerts.length > 0"
                             class="dora-card-action dora-card-link"
                             to="/alerts"
                         >
                             All {{ alerts.length }} →
                         </router-link>
                     </header>
-                    <ul class="dora-attn-list">
+                    <div v-if="topAlerts.length === 0" class="dora-empty dora-empty-ok">
+                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
+                        All clear — nothing needs your attention right now.
+                    </div>
+                    <ul v-else class="dora-attn-list">
                         <li
                             v-for="alert in topAlerts"
                             :key="alert.alert_id"
@@ -149,14 +208,16 @@
                 v-if="isCardVisible('primary_list') && quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
             >
-                <router-link
-                    class="dora-card dora-card-clickable"
-                    :to="`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`"
-                >
+                <article class="dora-card">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Primary shopping list</h3>
-                        <span class="dora-card-action">Open list →</span>
+                        <router-link
+                            class="dora-card-action dora-card-link"
+                            :to="`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`"
+                        >
+                            Open list →
+                        </router-link>
                     </header>
                     <div class="dora-primary-list-name">
                         {{ quickAddTargetSummary.display_name }}
@@ -187,7 +248,15 @@
                     <div v-else class="dora-empty q-mt-sm">
                         Loading totals…
                     </div>
-                </router-link>
+                    <router-link
+                        v-if="otherActiveListCount > 0"
+                        class="dora-card-footer-link"
+                        to="/shopping-lists"
+                    >
+                        +{{ otherActiveListCount }} other active
+                        {{ otherActiveListCount === 1 ? 'list' : 'lists' }} →
+                    </router-link>
+                </article>
             </div>
             <div
                 v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
@@ -267,8 +336,10 @@
             </div>
 
             <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
+            <!-- R-014: calm empty state instead of vanishing when Dora has
+                 nothing to suggest. -->
             <div
-                v-if="isCardVisible('suggestions') && suggestionStore.count > 0"
+                v-if="isCardVisible('suggestions')"
                 class="col-12 col-sm-6 col-lg-6"
             >
                 <article class="dora-card">
@@ -282,7 +353,11 @@
                             +{{ suggestionStore.count - 2 }} more in chat
                         </span>
                     </header>
-                    <div class="dora-suggest-list">
+                    <div v-if="suggestionStore.count === 0" class="dora-empty dora-empty-ok">
+                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
+                        Nothing to suggest right now — you're on top of things.
+                    </div>
+                    <div v-else class="dora-suggest-list">
                         <div
                             v-for="suggestion in suggestionStore.suggestions.slice(0, 2)"
                             :key="`${suggestion.kind}:${suggestion.dedup_key}`"
@@ -322,19 +397,32 @@
             </div>
 
             <!-- ───── Use soon (P2-06) ────────────────────────────────────── -->
+            <!-- R-014: calm empty state instead of vanishing when nothing's
+                 near its use-by date. -->
             <div
-                v-if="isCardVisible('use_soon') && wasteRescue && wasteRescue.items.length > 0"
+                v-if="isCardVisible('use_soon')"
                 class="col-12 col-sm-6 col-lg-6"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.expiry" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Use soon</h3>
-                        <router-link class="dora-card-action dora-card-link" to="/waste">
+                        <router-link
+                            v-if="wasteRescue && wasteRescue.items.length > 0"
+                            class="dora-card-action dora-card-link"
+                            to="/waste"
+                        >
                             Rescue ideas →
                         </router-link>
                     </header>
-                    <ul class="dora-attn-list">
+                    <div
+                        v-if="!wasteRescue || wasteRescue.items.length === 0"
+                        class="dora-empty dora-empty-ok"
+                    >
+                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
+                        Nothing's near its use-by date. Nice.
+                    </div>
+                    <ul v-else class="dora-attn-list">
                         <li
                             v-for="item in wasteRescue.items.slice(0, 4)"
                             :key="item.stock_item_id"
@@ -368,7 +456,7 @@
                         </li>
                     </ul>
                     <div
-                        v-if="wasteRescue.recipes.length > 0"
+                        v-if="wasteRescue && wasteRescue.items.length > 0 && wasteRescue.recipes.length > 0"
                         class="text-caption dora-text-muted q-mt-xs"
                     >
                         {{ wasteRescue.recipes[0]!.matching_count }} can go into
@@ -617,89 +705,12 @@
                 </router-link>
             </div>
 
-            <!-- ───── Recipes card ──────────────────────────────────────── -->
-            <div v-if="isCardVisible('recipes')" class="col-12 col-sm-6 col-lg-4">
-                <router-link class="dora-card dora-card-clickable" to="/cookbook">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.menu_book" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Recipes</h3>
-                        <span class="dora-card-action">Browse →</span>
-                    </header>
-                    <div class="dora-stat-grid">
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">
-                                <AnimatedNumber :value="summary.recipes.total" />
-                            </div>
-                            <div class="dora-stat-label">in your book</div>
-                        </div>
-                        <div class="dora-stat dora-stat-accent">
-                            <div class="dora-stat-num">
-                                <q-icon :name="ICONS.favorite" size="18px" class="q-mr-xs" />
-                                <AnimatedNumber :value="summary.recipes.favourites" />
-                            </div>
-                            <div class="dora-stat-label">favourites</div>
-                        </div>
-                    </div>
-                </router-link>
-            </div>
-
-            <!-- ───── Meals card ────────────────────────────────────────── -->
-            <div v-if="isCardVisible('meals')" class="col-12 col-sm-6 col-lg-4">
-                <router-link class="dora-card dora-card-clickable" to="/cookbook">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.restaurant" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Meals on hand</h3>
-                        <span class="dora-card-action">Open →</span>
-                    </header>
-                    <div class="dora-stat-grid">
-                        <div class="dora-stat dora-stat-ok">
-                            <div class="dora-stat-num">{{ summary.meals.total_in_stock }}</div>
-                            <div class="dora-stat-label">in the pool</div>
-                        </div>
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.meals.total_definitions }}</div>
-                            <div class="dora-stat-label">recipes stocked</div>
-                        </div>
-                    </div>
-                </router-link>
-            </div>
-
-            <!-- ───── Shopping lists card ───────────────────────────────── -->
-            <div v-if="isCardVisible('shopping_lists')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Shopping</h3>
-                    </header>
-                    <div class="dora-stat-grid">
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.shopping_lists.total }}</div>
-                            <div class="dora-stat-label">lists</div>
-                        </div>
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.shopping_lists.total_items }}</div>
-                            <div class="dora-stat-label">items queued</div>
-                        </div>
-                    </div>
-                </article>
-            </div>
-
-            <!-- ───── Products card ─────────────────────────────────────── -->
-            <div v-if="isCardVisible('products')" class="col-12 col-sm-6 col-lg-4">
-                <router-link class="dora-card dora-card-clickable" to="/product-search">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Products</h3>
-                        <span class="dora-card-action">Search →</span>
-                    </header>
-                    <div class="dora-stat-grid">
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">{{ summary.products.total }}</div>
-                            <div class="dora-stat-label">tracked</div>
-                        </div>
-                    </div>
-                </router-link>
-            </div>
+            <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
+                 counter cards were cut — raw totals answer no question the user
+                 has. `shopping_lists` merged into the primary-list card above
+                 (the "+N other lists" footer); cookable-tonight + the week-ahead
+                 cover the recipe questions; product totals → the Money zone
+                 widgets (Phase 4). -->
 
             <div v-if="visibleCardCount === 0" class="col-12">
                 <q-banner class="dora-bg-sunken">
@@ -709,25 +720,6 @@
         </div>
         </FadeTransition>
 
-        <!-- ───── Dora tip footer ───────────────────────────────────────── -->
-        <transition name="fade">
-            <aside
-                v-if="tip && !tipDismissed"
-                class="dora-tip"
-                role="note"
-                aria-label="Tip from Dora"
-            >
-                <q-avatar size="32px" square class="dora-tip-mascot">
-                    <img src="../assets/logo-mascot.png" alt="" />
-                </q-avatar>
-                <div class="dora-tip-body">
-                    <strong>Dora says</strong> · {{ tip }}
-                </div>
-                <q-btn flat round dense size="sm" :icon="ICONS.close" @click="tipDismissed = true">
-                    <q-tooltip>Hide for today</q-tooltip>
-                </q-btn>
-            </aside>
-        </transition>
     </div>
 </template>
 
@@ -748,6 +740,7 @@
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
     import type { Product } from 'src/models/product';
     import { discountPercent } from 'src/helpers/scrapedProductOfferLogic';
+    import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import type { Recipe } from 'src/models/recipe';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
@@ -778,11 +771,7 @@
         | 'cookable'
         | 'best_deals'
         | 'stock_items'
-        | 'recipes'
-        | 'meals'
-        | 'meal_plan'
-        | 'shopping_lists'
-        | 'products';
+        | 'meal_plan';
 
     type CardDef = { id: CardId; label: string; icon: string };
 
@@ -798,25 +787,7 @@
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu },
         { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month },
-        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' },
-        { id: 'recipes', label: 'Recipes', icon: ICONS.menu_book },
-        { id: 'meals', label: 'Meals', icon: ICONS.restaurant },
-        { id: 'shopping_lists', label: 'Shopping', icon: ICONS.shopping_cart },
-        { id: 'products', label: 'Products', icon: ICONS.local_offer }
-    ];
-
-    // Tip pool. One is picked deterministically per calendar day so the user
-    // sees the same one all day but a fresh one tomorrow. New tips can be
-    // added without rebalancing — the picker just modulos over the array.
-    const TIPS: string[] = [
-        "I quietly judge anyone who lets the salmon hit six months in the freezer.",
-        "Mark a stock item as 'open' and the opened-on date is recorded automatically.",
-        "Recipes greyed out on the list? At least one ingredient is fully out.",
-        "Cook mode auto-detects 'X minutes' in your steps and offers a timer.",
-        "Setting your default shopping list makes the cart button one-tap.",
-        "Logging a cook on a recipe also bumps its last-cooked date.",
-        "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now.",
-        "A meal plan entry's servings can exceed the recipe's; quantities scale."
+        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' }
     ];
 
     const authStore = useAuthStore();
@@ -841,7 +812,7 @@
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-    const tipDismissed = ref(false);
+    const welcomeDismissed = ref(false);
 
     // ── 24h "you skipped the wizard" reminder (F1) ───────────────────
     // The wizard writes `dora.onboarding.skipped_at` on Skip-everything;
@@ -1067,11 +1038,21 @@
         return "Everything's stocked, planned, and quietly humming along.";
     });
 
-    // ── Tip of the day (rotating, stable per calendar day) ───────────────
-    const tip = computed(() => {
-        const epochDay = Math.floor(Date.now() / 86_400_000);
-        return TIPS[epochDay % TIPS.length] ?? null;
-    });
+    // ── Welcome + hint of the day (D1c/d/e) ──────────────────────────────
+    // A day-of-week-flavoured welcome plus a day-agnostic hint, both stable
+    // per calendar day (see helpers/dashboardMessages). This replaces the old
+    // bottom-right "Dora says" tip bubble — the warm "Dora says" treatment is
+    // kept, but it now lives inline near the top of the dashboard and only
+    // shows once onboarding is actually complete (the skip-reminder banner
+    // owns the not-yet-finished case). Recomputed cheaply on each render; the
+    // underlying pick is deterministic so it doesn't flicker.
+    const welcomeMessage = computed(() => pickWelcome());
+    const welcomeHint = computed(() => pickHint());
+    // Only greet once the user has finished (or skipped past) onboarding —
+    // while the skip-reminder is showing, that banner is the message.
+    const showWelcome = computed(
+        () => !welcomeDismissed.value && !showSkipReminder.value
+    );
 
     // ── Helpers ──────────────────────────────────────────────────────────
     function plural(n: number, one: string, many: string): string {
@@ -1208,6 +1189,14 @@
             ticked: t.ticked_count,
             total: t.line_count,
         };
+    });
+
+    // Count of *other* active lists, surfaced as a footer link on the primary
+    // card (the standalone "Shopping" counter card was merged in here, §2.6).
+    // The summary counts active (non-done) lists; the primary is one of them.
+    const otherActiveListCount = computed(() => {
+        const total = summary.value?.shopping_lists.total ?? 0;
+        return quickAddTargetSummary.value ? Math.max(0, total - 1) : total;
     });
 
     async function loadPrimaryListDetail() {
@@ -1874,37 +1863,89 @@
         }
     }
 
-    /* ───── Dora tip footer ──────────────────────────────────────────── */
-    .dora-tip {
-        position: fixed;
-        bottom: 16px;
-        right: 16px;
-        max-width: 380px;
+    /* ───── Dora welcome / message banner (D1) ───────────────────────────
+       Inline, top-of-dashboard greeting that replaced the old fixed
+       bottom-right tip bubble — keeps the warm "Dora says" treatment. The
+       `--warn` modifier is the skip-reminder variant. */
+    .dora-welcome {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 6px 10px 12px;
+        gap: 12px;
+        padding: 12px 12px 12px 14px;
         background: var(--c-surface);
         border: 1px solid var(--c-line);
+        border-left: 4px solid var(--c-accent);
         border-radius: 14px;
-        box-shadow: var(--elevation-card-hover);
-        z-index: 50;
+        box-shadow: var(--elevation-card);
     }
-    .dora-tip-mascot {
-        border-radius: 8px;
+    .dora-welcome--warn {
+        border-left-color: var(--c-warn);
+        background: var(--c-warn-soft);
+    }
+    .dora-welcome-mascot {
+        border-radius: 10px;
         background: var(--c-accent-soft);
-        padding: 2px;
+        padding: 3px;
         flex-shrink: 0;
+        :deep(img) {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
     }
-    .dora-tip-body {
-        font-size: 0.85rem;
+    .dora-welcome-body {
+        min-width: 0;
+        flex: 1;
+    }
+    .dora-welcome-line {
+        font-size: 0.95rem;
         line-height: 1.35;
         color: var(--c-ink);
     }
-    .dora-tip-body strong {
+    .dora-welcome-line strong {
         color: var(--c-accent);
         font-weight: 700;
     }
+    .dora-welcome--warn .dora-welcome-line strong {
+        color: var(--c-warn);
+    }
+    .dora-welcome-hint {
+        margin-top: 3px;
+        font-size: 0.82rem;
+        color: var(--c-ink-mute);
+    }
+    .dora-welcome-actions {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* Positive ("all clear") empty state — softer + green-tinted so a calm
+       dashboard reads as reassuring rather than broken (R-014). */
+    .dora-empty-ok {
+        display: flex;
+        align-items: center;
+        background: var(--c-ok-soft);
+        color: var(--c-ink-mute);
+    }
+    .dora-empty-ok .q-icon {
+        color: var(--c-ok);
+    }
+
+    /* Footer link on the primary-list card ("+N other lists →"). */
+    .dora-card-footer-link {
+        display: inline-block;
+        margin-top: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--c-accent);
+        text-decoration: none;
+    }
+    .dora-card-footer-link:hover {
+        text-decoration: underline;
+    }
+
     .fade-enter-active,
     .fade-leave-active {
         transition: opacity 0.25s ease, transform 0.25s ease;

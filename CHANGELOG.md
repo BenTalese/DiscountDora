@@ -6,6 +6,18 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 1 (declutter + welcome, 2026-06-24).** The
+  dashboard now leads with what's *actionable*, not vanity totals. Four
+  counter-only cards were removed — **Products**, **Recipes**, **Meals on
+  hand**, and the standalone **Shopping** card (its count is now a "+N other
+  active lists" link on the Primary shopping list card). The **alerts**,
+  **Use soon**, and **Dora suggests** cards no longer disappear when empty —
+  they show a calm "all clear" state, so a tidy kitchen looks reassuring
+  instead of blank. The bottom-right "Dora says" tip bubble is replaced by an
+  inline **welcome** at the top: a day-of-the-week greeting plus a rotating
+  helpful hint, keeping the warm "Dora says" look. The "skipped setup wizard"
+  reminder keeps its Continue/Hide buttons **inline** instead of on their own
+  row.
 - **Dashboard rebuild — Phase 0 (foundations, 2026-06-24).** Groundwork ahead of
   the dashboard content/layout rebuild (`IMPL_PLAN_DASHBOARD_REBUILD.md`). The
   manual **Refresh button is gone** — the dashboard already reloads on every

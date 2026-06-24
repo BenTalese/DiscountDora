@@ -329,6 +329,62 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 1 (declutter + welcome, GREEN)
+
+**Session goal:** Phase 1 of `IMPL_PLAN_DASHBOARD_REBUILD.md` — content work
+(turn the demo page into a tool). `DashboardPage.vue` + new
+`helpers/dashboardMessages.ts`.
+
+**Done:**
+- **Cut 4 counter cards** (§2.6): `products`, `recipes`, `meals`, and the
+  standalone `shopping_lists` "Shopping" card. Removed from `CardId` + `CARD_DEFS`
+  (stored prefs referencing the dropped ids are filtered out by the existing
+  `known.has(id)` guard — no migration needed).
+- **Merged shopping-lists into the primary-list card**: de-clickabled it (was a
+  whole-card `<router-link>` — couldn't nest links), header "Open list →" now
+  links to the primary list, and a new "+N other active lists →" footer links to
+  `/shopping-lists` via the `otherActiveListCount` computed (`summary.shopping_lists.total
+  − 1`).
+- **Empty-state inversion (R-014)** on `attention`, `use_soon`, `suggestions`:
+  they now render whenever visible with a calm "all clear" `dora-empty-ok` state
+  (green-tinted, check icon) instead of `v-if`-hiding. The dashboard looks best,
+  not emptiest, when nothing's wrong.
+- **Welcome / message system (D1c/d/e):** new `helpers/dashboardMessages.ts` —
+  `WEEKDAY_WELCOMES` (7 weekdays × ~5 phrases ≈ 35, day-of-week-flavoured) +
+  `HINTS` (15, day-agnostic), both picked deterministically per calendar day.
+  Removed the inline `TIPS` pool + the fixed bottom-right `.dora-tip` bubble;
+  added an inline top-of-dashboard `.dora-welcome` banner (warm "Dora says"
+  treatment kept) showing the day's welcome + a hint, shown once onboarding is
+  complete (`showWelcome = !dismissed && !showSkipReminder`).
+- **Skip-reminder buttons inlined (D1b):** the F1 skip banner is now the same
+  `.dora-welcome --warn` element with Continue/Hide inline, not a `q-banner`
+  `#action` row.
+
+**Deferred on purpose:** `DashboardCard.vue` extraction (R-001 de-monolith) moved
+to **Phase 2** — Phase 1 deletes 4 cards and Phase 2 restructures the grid into
+zones, so extracting survivors is done during that restructure, not here (would
+churn cards about to move/delete). Plan §Phase 1/2 updated to say so.
+
+**Engineering-standards close-gate:** R-002 (welcome/empty styles all token-based),
+R-003 (one message-picker module; `otherActiveListCount` derived from the
+server summary, not re-summed), R-014 (positive empty states), R-007 (scope held
+to Phase 1; no adjacent refactors), R-008 (comments on the cut rationale +
+welcome system). No new ADR. Note: `summary.meals`/`summary.products` model
+fields are now unused by the page but kept (backend DTO owns them) — not drift.
+
+**Verification:** `npx vue-tsc -p tsconfig.json --noEmit` GREEN; `npx eslint` on
+the page + helper GREEN. Leftover-reference scan clean (only comments mention the
+old tip). **Browser walk pending** — confirm the welcome rotates per day, empty
+states read well, primary-list footer link, and no layout gap from the cut cards.
+
+**Ledger:** no new opens.
+
+**Next up:** **Phase 2** — layout zones (Act now / Today / Money / Kitchen) +
+server-persisted card reorder (drag + tap, mobile-off) + the `DashboardCard.vue`
+extraction folded in.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 0 (foundations, GREEN)
 
 **Session goal:** Phase 0 of `IMPL_PLAN_DASHBOARD_REBUILD.md` — hygiene + a11y

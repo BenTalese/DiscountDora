@@ -220,6 +220,14 @@ controls). `vue-tsc` + `eslint` green.
 
 ### Phase 1 — Prune the vanity, fix empty-state inversion, welcome system
 
+> **Status (2026-06-24): content work DONE + green.** Cuts, the shopping-lists
+> merge, empty-state inversion, and the welcome/message system have landed.
+> `DashboardCard.vue` extraction was **moved to Phase 2** on purpose — Phase 1
+> *deletes* 4 cards and Phase 2 *restructures* the grid into zones, so extracting
+> the surviving cards into a shell is done there (during the restructure), not
+> here where it'd churn cards about to be moved/deleted.
+
+
 Turn counters into answers; make the calm-state dashboard look *best*, not
 emptiest.
 
@@ -245,9 +253,16 @@ emptiest.
 *Gate:* R-014 (empty states), R-003 (single message picker), R-007 (no
 scope bleed into the message *content* engine beyond pools).
 
-### Phase 2 — Layout zones + card reorder
+### Phase 2 — Layout zones + card reorder (+ DashboardCard extraction)
 
-Give the eye a triage gradient and satisfy the drag/reorder ask.
+Give the eye a triage gradient and satisfy the drag/reorder ask. **Also do the
+R-001 de-monolith here:** while restructuring the grid into zones, extract each
+surviving card into `web_app/src/components/dashboard/` behind a shared
+`DashboardCard.vue` shell (header + action slot + body slot + empty-state slot),
+moving the shell SCSS (`.dora-card*`) into that component (the body SCSS for
+slotted content stays in the page — slotted content keeps the parent's scope).
+This was deferred out of Phases 0/1 deliberately (don't extract cards you're
+about to delete or move).
 
 - **Zones** — group the grid into labelled bands rendered in priority order:
   **Act now** (alerts, use-soon, suggestions) · **Today** (cookable, week

@@ -329,6 +329,50 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — DashboardCard extraction (R-001 de-monolith, GREEN) — FU-293 resolved
+
+**Session goal:** FU-293 — extract the repeated dashboard card shell into a
+reusable component (R-001). `DashboardPage.vue` + new `components/dashboard/
+DashboardCard.vue`.
+
+**Done:**
+- New **`DashboardCard.vue`** (119 lines) — renders `<router-link>` when `to` is
+  set (whole-card nav) else `<article>`; props `icon`/`title` (+ `#title` slot for
+  rich titles like cookable's count), `#action` header slot, default body slot.
+  Owns the shell SCSS.
+- **All 15 card instances** in DashboardPage converted from inline
+  `<article/router-link class="dora-card"><header…>` to `<DashboardCard>` with the
+  header action moved to `<template #action>`. 0 shell elements left in the page.
+- **Shell SCSS moved** into the component (`.dora-card*`, head/icon/title/action/
+  link/clickable + hover + a reduced-motion rule). Used the **global** tokens
+  (`--surface-component`, `--border-default`, `--brand-primary`, `--text-secondary`,
+  …) instead of the page's private `--c-*` aliases — scoped child styles can't
+  inherit those aliases. Action/link styling uses `:deep()` because the `#action`
+  slot content carries the parent's scope. Removed the moved rules + the
+  `.dora-card`/`.dora-card-action` entries from the page's reduced-motion query.
+- Card BODY SCSS stays in the page (slotted content keeps parent scope) — correct
+  + intentional.
+
+**Engineering-standards close-gate:** R-001 (the de-monolith itself — one shell,
+reused 15×, no repeated boilerplate), R-002 (component styles tokenised — global
+tokens), R-011 (idiomatic `<component :is>` + slots), R-008 (comments on the
+global-token + `:deep` scope rationale). New ADR? Worth considering an R-rule on
+"extract a shell when the same wrapper markup repeats N× across a page" — noting it
+here, not adding blind; revisit when the pattern recurs.
+
+**Verification:** `vue-tsc` GREEN; `eslint` (page + component) GREEN; 0 leftover
+shell elements. **Visual no-regression check folded into FU-301** — the extraction's
+only residual risk is CSS (border/shadow/hover/action styling), browser-verifiable.
+
+**Ledger:** **FU-293 RESOLVED** (moved to `DORA_FOLLOWUPS_RESOLVED.md`); FU-301
+extended with the extraction visual-parity check.
+
+**Next up:** the remaining deferred widgets (FU-296 price-drops, FU-298 cookable
+upgrade, FU-299 donut deep-links, FU-300 log-price, FU-297 budget-gating) + the
+verification gate (FU-292 backend run, FU-295, FU-301 browser/device walk).
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 6 (fortnight calendar, GREEN — no backend needed)
 
 **Session goal:** Phase 6 (D7) — the unified "this fortnight" calendar. Expected to

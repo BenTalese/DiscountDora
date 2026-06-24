@@ -6,6 +6,10 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard internals — card shell extracted (2026-06-24).** No behaviour
+  change: the dashboard's repeated card markup is now a single reusable
+  `DashboardCard` component, so the cards stay visually identical but the page
+  is no longer a monolith (R-001). Verify-in-browser for visual parity.
 - **Dashboard rebuild — Phase 6 (fortnight calendar, 2026-06-24).** A new opt-in
   **This fortnight** card shows the next 14 days as a grid, with coloured dots
   marking days that have meals (green), expiries (red) or planned shopping

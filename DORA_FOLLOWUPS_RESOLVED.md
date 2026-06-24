@@ -10,6 +10,26 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-293 — DashboardPage R-001 de-monolith (DashboardCard extraction)
+- **Raised:** 2026-06-24 (Dashboard rebuild, deferred across Phases 0–7).
+- **Type:** finding (R-001 — componentisation).
+- **What:** `DashboardPage.vue`'s 15 inline card shells repeated the same
+  `<article/router-link class="dora-card"><header class="dora-card-head">…`
+  boilerplate; the shell SCSS lived in the page.
+- **State note (resolved 2026-06-24):** extracted
+  `web_app/src/components/dashboard/DashboardCard.vue` — a shell that renders a
+  `<router-link>` when `to` is set (whole-card nav) or `<article>` otherwise,
+  with `icon`/`title` props (+ `#title` slot for rich titles like cookable's
+  count), an `#action` header slot, and the body default slot. All 15 card
+  instances converted to `<DashboardCard>`. Moved the shell styles
+  (`.dora-card*`, head/icon/title/action/link/clickable + hover + reduced-motion)
+  into the component, using the **global** theme tokens directly (not the page's
+  private `--c-*` aliases, which scoped child styles can't inherit); the action/
+  link styling uses `:deep()` since the `#action` slot content carries the
+  parent's scope. Card BODY SCSS stays in the page (slotted content keeps parent
+  scope). `vue-tsc` + `eslint` green. **Visual no-regression check folded into
+  FU-301** (the extraction's only residual risk is CSS, browser-verifiable).
+
 ## [RESOLVED] FU-232 — Companion / ingestion contract: push `pack_count` on Product
 - **Raised:** 2026-06-23 (FU-227 multipack follow-up).
 - **Type:** deferred job.

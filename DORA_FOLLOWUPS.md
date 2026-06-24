@@ -68,6 +68,10 @@ long session summary. Distinct from the other logs:
   opt-in "This fortnight" calendar (enable via Cards menu) renders the 14-day grid
   with correct dots, tapping a day expands its detail + links work; (7) at
   360/768/1280 — zones stack, quick-action bar wraps, touch targets comfortable.
+  **Also (FU-293 extraction):** every card still looks identical after the
+  DashboardCard extraction — shell border/padding/shadow, header icon/title,
+  hover lift on the clickable cards (Pantry/week-ahead/budget), and the header
+  action link/text styling + hover.
 - **Why deferred:** no running app / Python env on this machine (per session).
 - **Recommended resolution:** now, on a capable machine — walk the list above;
   fold any defects back as their own findings. Pairs with FU-292 (run the
@@ -173,22 +177,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic / when browser-verifiable — add
   `draggable` rows (desktop only, `!$q.platform.is.mobile`) constrained
   within-zone, on top of the existing `moveCard`/order model.
-
-## [OPEN] FU-293 — DashboardPage R-001 de-monolith (DashboardCard extraction)
-- **Raised:** 2026-06-24 (Dashboard rebuild, deferred across Phases 0–2).
-- **Type:** finding (R-001 — componentisation).
-- **What:** `DashboardPage.vue` is still one ~1900-line file (template + script +
-  scoped SCSS, 9 inline cards). The plan slated a `DashboardCard.vue` shell +
-  per-card extraction; zones/reorder were delivered via CSS `order` **without**
-  extraction, so the page works but isn't de-monolithed.
-- **Why deferred:** extraction is a **pure-internal refactor** whose only real
-  risk (scoped-SCSS relocation → CSS regressions) is **only catchable in a
-  browser**, which this env lacks. It has no user-visible benefit on its own.
-- **Recommended resolution:** when browser-verifiable — extract each surviving
-  card into `web_app/src/components/dashboard/` behind a shared `DashboardCard`
-  shell, moving the `.dora-card*` shell SCSS into it (body SCSS stays in the
-  page — slotted content keeps parent scope). Cites `ENGINEERING_STANDARDS.md`
-  R-001.
 
 ## [OPEN] FU-292 — Dashboard `dashboard_layout`: backend static-only (migration + e2e unrun)
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).

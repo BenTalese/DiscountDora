@@ -202,10 +202,8 @@
                 class="col-12 col-lg-6"
                 :style="{ order: cardCssOrder('attention') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.notifications_active" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Needs your attention</h3>
+                <DashboardCard :icon="ICONS.notifications_active" title="Needs your attention">
+                    <template #action>
                         <router-link
                             v-if="alerts.length > 0"
                             class="dora-card-action dora-card-link"
@@ -213,7 +211,7 @@
                         >
                             All {{ alerts.length }} →
                         </router-link>
-                    </header>
+                    </template>
                     <div v-if="topAlerts.length === 0" class="dora-empty dora-empty-ok">
                         <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
                         All clear — nothing needs your attention right now.
@@ -299,7 +297,7 @@
                             See all alerts →
                         </router-link>
                     </template>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
@@ -308,17 +306,15 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('primary_list') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Primary shopping list</h3>
+                <DashboardCard :icon="ICONS.shopping_cart" title="Primary shopping list">
+                    <template #action>
                         <router-link
                             class="dora-card-action dora-card-link"
                             :to="`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`"
                         >
                             Open list →
                         </router-link>
-                    </header>
+                    </template>
                     <div class="dora-primary-list-name">
                         {{ quickAddTargetSummary.display_name }}
                     </div>
@@ -356,23 +352,21 @@
                         +{{ otherActiveListCount }} other active
                         {{ otherActiveListCount === 1 ? 'list' : 'lists' }} →
                     </router-link>
-                </article>
+                </DashboardCard>
             </div>
             <div
                 v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('primary_list') }"
             >
-                <router-link class="dora-card dora-card-clickable" to="/shopping-lists">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Primary shopping list</h3>
+                <DashboardCard :icon="ICONS.shopping_cart" title="Primary shopping list" :to="'/shopping-lists'">
+                    <template #action>
                         <span class="dora-card-action">Pick one →</span>
-                    </header>
+                    </template>
                     <div class="dora-empty">
                         No primary set — the cart button needs one to one-tap items in.
                     </div>
-                </router-link>
+                </DashboardCard>
             </div>
 
             <!-- ───── Grocery budget (P2-05) ──────────────────────────────── -->
@@ -381,19 +375,15 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('budget') }"
             >
-                <router-link
-                    class="dora-card dora-card-clickable"
-                    to="/settings/money"
-                >
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">
-                            {{ budgetStatus.enabled ? 'Grocery budget' : 'Grocery spend this ' + budgetStatus.period.replace('ly', '') }}
-                        </h3>
+                <DashboardCard :icon="ICONS.savings" :to="'/settings/money'">
+                    <template #title>
+                        {{ budgetStatus.enabled ? 'Grocery budget' : 'Grocery spend this ' + budgetStatus.period.replace('ly', '') }}
+                    </template>
+                    <template #action>
                         <span class="dora-card-action">
                             {{ budgetStatus.enabled ? 'Settings →' : 'Set a budget →' }}
                         </span>
-                    </header>
+                    </template>
                     <div v-if="budgetStatus.enabled" class="dora-budget-body">
                         <div class="dora-budget-headline">
                             <span
@@ -434,7 +424,7 @@
                         ${{ budgetStatus.spent.toFixed(2) }} spent so far. Set a target
                         in Settings to see how you're tracking.
                     </div>
-                </router-link>
+                </DashboardCard>
             </div>
 
             <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
@@ -445,17 +435,15 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('suggestions') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon name="auto_awesome" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Dora suggests</h3>
+                <DashboardCard icon="auto_awesome" title="Dora suggests">
+                    <template #action>
                         <span
                             v-if="suggestionStore.count > 2"
                             class="dora-card-action"
                         >
                             +{{ suggestionStore.count - 2 }} more in chat
                         </span>
-                    </header>
+                    </template>
                     <div v-if="suggestionStore.count === 0" class="dora-empty dora-empty-ok">
                         <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
                         Nothing to suggest right now — you're on top of things.
@@ -496,7 +484,7 @@
                             </div>
                         </div>
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Use soon (P2-06) ────────────────────────────────────── -->
@@ -507,10 +495,8 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('use_soon') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.expiry" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Use soon</h3>
+                <DashboardCard :icon="ICONS.expiry" title="Use soon">
+                    <template #action>
                         <router-link
                             v-if="wasteRescue && wasteRescue.items.length > 0"
                             class="dora-card-action dora-card-link"
@@ -518,7 +504,7 @@
                         >
                             Rescue ideas →
                         </router-link>
-                    </header>
+                    </template>
                     <div
                         v-if="!wasteRescue || wasteRescue.items.length === 0"
                         class="dora-empty dora-empty-ok"
@@ -571,7 +557,7 @@
                             }})
                         </span>
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Cookable tonight (P12) ──────────────────────────────── -->
@@ -580,23 +566,22 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('cookable') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.restaurant_menu" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">
-                            Cookable tonight
-                            <span
-                                v-if="summary && summary.recipes.cookable_count > 0"
-                                class="dora-text-muted text-body2"
-                            >({{ summary.recipes.cookable_count }})</span>
-                        </h3>
+                <DashboardCard :icon="ICONS.restaurant_menu">
+                    <template #title>
+                        Cookable tonight
+                        <span
+                            v-if="summary && summary.recipes.cookable_count > 0"
+                            class="dora-text-muted text-body2"
+                        >({{ summary.recipes.cookable_count }})</span>
+                    </template>
+                    <template #action>
                         <router-link
                             class="dora-card-action dora-card-link"
                             to="/cookbook?cookable=true"
                         >
                             See more →
                         </router-link>
-                    </header>
+                    </template>
                     <ul v-if="cookableTonight.length > 0" class="dora-cook-list">
                         <li
                             v-for="r in cookableTonight"
@@ -640,7 +625,7 @@
                         Nothing's fully in stock right now.
                         <router-link class="dora-empty-cta" to="/cookbook">Browse recipes →</router-link>
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Best deals on saved products (P12) ──────────────────── -->
@@ -649,17 +634,15 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('best_deals') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Best deals on your saved products</h3>
+                <DashboardCard :icon="ICONS.local_offer" title="Best deals on your saved products">
+                    <template #action>
                         <router-link
                             class="dora-card-action dora-card-link"
                             to="/my-products"
                         >
                             My products →
                         </router-link>
-                    </header>
+                    </template>
                     <ul v-if="bestDeals.length > 0" class="dora-deal-list">
                         <li
                             v-for="p in bestDeals"
@@ -706,7 +689,7 @@
                         Nothing on special among your saved products right now.
                         <router-link class="dora-empty-cta" to="/product-search">Hunt for deals →</router-link>
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
@@ -715,12 +698,10 @@
                 class="col-12 col-sm-6 col-lg-4"
                 :style="{ order: cardCssOrder('stock_items') }"
             >
-                <router-link class="dora-card dora-card-clickable" to="/stock">
-                    <header class="dora-card-head">
-                        <q-icon name="inventory_2" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Pantry</h3>
+                <DashboardCard icon="inventory_2" title="Pantry" :to="'/stock'">
+                    <template #action>
                         <span class="dora-card-action">View →</span>
-                    </header>
+                    </template>
                     <div class="dora-stock-body">
                         <svg
                             viewBox="0 0 36 36"
@@ -765,7 +746,7 @@
                             </li>
                         </ul>
                     </div>
-                </router-link>
+                </DashboardCard>
             </div>
 
             <!-- ───── Meal plan card (with 7-day strip) ──────────────────── -->
@@ -774,12 +755,10 @@
                 class="col-12 col-lg-8"
                 :style="{ order: cardCssOrder('meal_plan') }"
             >
-                <router-link class="dora-card dora-card-clickable" to="/meal-plans">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">The week ahead</h3>
+                <DashboardCard :icon="ICONS.calendar_month" title="The week ahead" :to="'/meal-plans'">
+                    <template #action>
                         <span class="dora-card-action">Plan →</span>
-                    </header>
+                    </template>
                     <div v-if="nextEntry" class="dora-next-up">
                         <div class="dora-next-up-label">Next up</div>
                         <div class="dora-next-up-meal">{{ nextEntry.recipe_name }}</div>
@@ -816,7 +795,7 @@
                             </div>
                         </div>
                     </div>
-                </router-link>
+                </DashboardCard>
             </div>
 
             <!-- ───── This fortnight calendar (Phase 6 / D7) ──────────────── -->
@@ -825,16 +804,14 @@
                 class="col-12"
                 :style="{ order: cardCssOrder('calendar') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">This fortnight</h3>
+                <DashboardCard :icon="ICONS.calendar_month" title="This fortnight">
+                    <template #action>
                         <div class="dora-cal-legend">
                             <span class="dora-cal-leg"><span class="dora-cal-dot dot-meal" /> meals</span>
                             <span class="dora-cal-leg"><span class="dora-cal-dot dot-expiry" /> expiry</span>
                             <span class="dora-cal-leg"><span class="dora-cal-dot dot-shopping" /> shopping</span>
                         </div>
-                    </header>
+                    </template>
                     <template v-if="calendarCells.length > 0">
                         <div class="dora-cal-grid" role="grid">
                             <button
@@ -902,7 +879,7 @@
                     <div v-else class="dora-empty">
                         Nothing scheduled in the next fortnight — enjoy the calm.
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Restock radar (Phase 5) ─────────────────────────────── -->
@@ -911,10 +888,8 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('restock') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.replay" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Restock radar</h3>
+                <DashboardCard :icon="ICONS.replay" title="Restock radar">
+                    <template #action>
                         <router-link
                             v-if="restockItems.length > 0"
                             class="dora-card-action dora-card-link"
@@ -922,7 +897,7 @@
                         >
                             Pantry →
                         </router-link>
-                    </header>
+                    </template>
                     <ul v-if="restockItems.length > 0" class="dora-cook-list">
                         <li
                             v-for="item in restockItems"
@@ -949,7 +924,7 @@
                         Once you've restocked the same things a few times, I'll flag
                         what to keep an eye on.
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Savings captured (Phase 4 — Money zone flagship) ────── -->
@@ -958,10 +933,8 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('savings') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">You've saved</h3>
+                <DashboardCard :icon="ICONS.savings" title="You've saved">
+                    <template #action>
                         <div class="dora-range-toggle">
                             <button
                                 v-for="r in SAVINGS_RANGES"
@@ -974,7 +947,7 @@
                                 {{ r.label }}
                             </button>
                         </div>
-                    </header>
+                    </template>
                     <div v-if="savings && savings.total_savings > 0">
                         <div class="dora-savings-amount">
                             <AnimatedNumber :value="savings.total_savings" prefix="$" />
@@ -988,7 +961,7 @@
                     <div v-else class="dora-empty">
                         Finish a shop and I'll tally what you saved vs RRP.
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Spend by store (Phase 4 — opt-in) ───────────────────── -->
@@ -997,12 +970,10 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('spend_trend') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.storefront" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Spend by store</h3>
+                <DashboardCard :icon="ICONS.storefront" title="Spend by store">
+                    <template #action>
                         <span class="dora-card-action">last 30 days</span>
-                    </header>
+                    </template>
                     <ul v-if="topSpendStores.length > 0" class="dora-spend-list">
                         <li
                             v-for="row in topSpendStores"
@@ -1019,7 +990,7 @@
                     <div v-else class="dora-empty">
                         Your spend by store shows up once you complete a shop.
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- ───── Pantry value (Phase 4 — opt-in) ─────────────────────── -->
@@ -1028,11 +999,7 @@
                 class="col-12 col-sm-6 col-lg-4"
                 :style="{ order: cardCssOrder('pantry_value') }"
             >
-                <article class="dora-card">
-                    <header class="dora-card-head">
-                        <q-icon :name="ICONS.inventory" size="22px" class="dora-card-icon" />
-                        <h3 class="dora-card-title">Pantry value</h3>
-                    </header>
+                <DashboardCard :icon="ICONS.inventory" title="Pantry value">
                     <div v-if="pantryValueLatest !== null">
                         <div class="dora-stat-num">${{ pantryValueLatest.toFixed(2) }}</div>
                         <div
@@ -1053,7 +1020,7 @@
                     <div v-else class="dora-empty">
                         Add prices to your stock items to see what your pantry's worth.
                     </div>
-                </article>
+                </DashboardCard>
             </div>
 
             <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
@@ -1085,6 +1052,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AnimatedNumber from 'src/components/AnimatedNumber.vue';
+    import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import { storeToRefs } from 'pinia';
     import {
         actionsFor as alertActionsFor,
@@ -2138,60 +2106,10 @@
         opacity: 0.9;
         padding-top: 8px;
     }
-    .dora-card {
-        /* `display:block` + inherit/none let a clickable card render as a real
-           <router-link> (an <a>) without inline-anchor layout or link chrome —
-           the whole card is one keyboard-focusable, middle-clickable control
-           (R-011, a11y). Harmless on the non-clickable <article> cards. */
-        display: block;
-        color: inherit;
-        text-decoration: none;
-        background: var(--c-surface);
-        border: 1px solid var(--c-line);
-        border-radius: 18px;
-        padding: 18px 20px 20px;
-        height: 100%;
-        transition:
-            transform 0.18s ease,
-            box-shadow 0.18s ease,
-            border-color 0.18s ease;
-        box-shadow: var(--elevation-card);
-    }
-    .dora-card-clickable {
-        cursor: pointer;
-    }
-    .dora-card-clickable:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--elevation-card-hover);
-        border-color: var(--border-strong);
-    }
-    .dora-card-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 14px;
-    }
-    .dora-card-icon {
-        color: var(--c-accent);
-    }
-    .dora-card-title {
-        margin: 0;
-        font-size: 1.05rem;
-        font-weight: 600;
-        flex: 1;
-        letter-spacing: 0.005em;
-    }
-    .dora-card-action {
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: var(--c-ink-mute);
-        opacity: 0.85;
-        transition: color 0.18s ease, opacity 0.18s ease;
-    }
-    .dora-card-clickable:hover .dora-card-action {
-        color: var(--c-accent);
-        opacity: 1;
-    }
+    /* The card shell (`.dora-card`, head, icon, title, action, link, clickable
+       + hover) now lives in `components/dashboard/DashboardCard.vue` (R-001
+       de-monolith). Card BODY styles stay below — slotted content keeps this
+       page's scope. */
 
     /* ───── Stat grid (recipes / meals / shopping / products) ────────── */
     .dora-stat-grid {
@@ -2646,15 +2564,6 @@
         opacity: 0.7;
     }
 
-    /* ───── P12 cards ──────────────────────────────────────────────── */
-    .dora-card-link {
-        color: var(--c-accent);
-        text-decoration: none;
-        font-weight: 600;
-    }
-    .dora-card-link:hover {
-        text-decoration: underline;
-    }
 
     /* Needs your attention — D6 two-section card */
     /* Top: by-kind summary chips. */
@@ -2981,10 +2890,10 @@
 
     /* Respect the user's motion preference — no animation or transitions. */
     @media (prefers-reduced-motion: reduce) {
+        /* `.dora-card`/`.dora-card-action` motion is handled inside
+           DashboardCard's own reduced-motion rule. */
         .dora-cards,
         .dora-donut-seg,
-        .dora-card,
-        .dora-card-action,
         .fade-enter-active,
         .fade-leave-active {
             animation: none !important;

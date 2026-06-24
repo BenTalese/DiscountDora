@@ -1766,7 +1766,7 @@
             summary.value = await dashboardApiService.getSummaryAsync();
         } catch (err) {
             loadError.value = 'Could not load the dashboard. Try refreshing.';
-             
+
             console.warn('dashboard summary failed', err);
         } finally {
             loading.value = false;
@@ -2032,7 +2032,7 @@
         display: flex;
         align-items: center;
         gap: 16px;
-        padding: 20px 24px;
+        padding: 24px;
         margin-bottom: 24px;
         background: var(--c-surface);
         border: 1px solid var(--c-line);
@@ -2042,14 +2042,8 @@
     .dora-hero-mascot {
         border-radius: 14px;
         background: var(--c-accent-soft);
-        padding: 4px;
+        padding: 2px;
         flex-shrink: 0;
-        // B9.8: centre the mascot in its padded square.
-        :deep(img) {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
     }
     .dora-hero-text {
         min-width: 0;
@@ -2806,13 +2800,7 @@
     .dora-welcome-mascot {
         border-radius: 10px;
         background: var(--c-accent-soft);
-        padding: 3px;
-        flex-shrink: 0;
-        :deep(img) {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
+        padding: 1px;
     }
     .dora-welcome-body {
         min-width: 0;

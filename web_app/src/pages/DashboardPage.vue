@@ -21,26 +21,52 @@
                      itself stays (alert actions re-fetch through it). -->
                 <q-btn flat dense no-caps :icon="ICONS.tune" label="Cards">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
-                        <q-list dense style="min-width: 240px">
-                            <q-item-label header>Show on dashboard</q-item-label>
-                            <q-item
-                                v-for="card in CARD_DEFS"
-                                :key="card.id"
-                                clickable
-                                v-ripple
-                                @click="toggleCard(card.id)"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="card.icon" />
-                                </q-item-section>
-                                <q-item-section>{{ card.label }}</q-item-section>
-                                <q-item-section side>
-                                    <q-toggle
-                                        :model-value="isCardVisible(card.id)"
-                                        @update:model-value="toggleCard(card.id)"
-                                    />
-                                </q-item-section>
-                            </q-item>
+                        <q-list dense style="min-width: 300px">
+                            <q-item-label header>Show & order cards</q-item-label>
+                            <!-- Grouped by zone; reorder is within a zone via the
+                                 up/down buttons (C13 tap alternative — works on
+                                 mobile, keyboard-accessible). -->
+                            <template v-for="group in cardsByZone" :key="group.zone.id">
+                                <q-item-label header class="dora-cards-menu-zone">
+                                    {{ group.zone.label }}
+                                </q-item-label>
+                                <q-item v-for="card in group.cards" :key="card.id">
+                                    <q-item-section avatar>
+                                        <q-icon :name="card.icon" />
+                                    </q-item-section>
+                                    <q-item-section>{{ card.label }}</q-item-section>
+                                    <q-item-section side>
+                                        <div class="row items-center no-wrap">
+                                            <q-btn
+                                                flat
+                                                dense
+                                                round
+                                                size="sm"
+                                                :icon="ICONS.arrow_upward"
+                                                :disable="!canMove(card.id, 'up')"
+                                                @click="moveCard(card.id, 'up')"
+                                            >
+                                                <q-tooltip>Move up</q-tooltip>
+                                            </q-btn>
+                                            <q-btn
+                                                flat
+                                                dense
+                                                round
+                                                size="sm"
+                                                :icon="ICONS.arrow_downward"
+                                                :disable="!canMove(card.id, 'down')"
+                                                @click="moveCard(card.id, 'down')"
+                                            >
+                                                <q-tooltip>Move down</q-tooltip>
+                                            </q-btn>
+                                            <q-toggle
+                                                :model-value="isCardVisible(card.id)"
+                                                @update:model-value="toggleCard(card.id)"
+                                            />
+                                        </div>
+                                    </q-item-section>
+                                </q-item>
+                            </template>
                         </q-list>
                     </q-menu>
                 </q-btn>
@@ -130,6 +156,20 @@
         </div>
 
         <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
+            <!-- Zone band headers (Phase 2). Full-width flex items whose CSS
+                 `order` places each just before its zone's cards, forcing a
+                 line break so the cards below read as a labelled band. Shown
+                 only when the zone has at least one visible card. -->
+            <div
+                v-for="z in ZONES"
+                v-show="zoneHasVisibleCards(z.id)"
+                :key="z.id"
+                class="col-12 dora-zone-label"
+                :style="{ order: zoneHeaderOrder(z.id) }"
+            >
+                {{ z.label }}
+            </div>
+
             <!-- ───── Needs your attention (P12) ─────────────────────────── -->
             <!-- R-014: renders whenever the card is visible — a calm "all clear"
                  state instead of vanishing, so the dashboard looks best (not
@@ -137,6 +177,7 @@
             <div
                 v-if="isCardVisible('attention')"
                 class="col-12 col-lg-6"
+                :style="{ order: cardCssOrder('attention') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -207,6 +248,7 @@
             <div
                 v-if="isCardVisible('primary_list') && quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('primary_list') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -261,6 +303,7 @@
             <div
                 v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('primary_list') }"
             >
                 <router-link class="dora-card dora-card-clickable" to="/shopping-lists">
                     <header class="dora-card-head">
@@ -278,6 +321,7 @@
             <div
                 v-if="isCardVisible('budget') && budgetStatus"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('budget') }"
             >
                 <router-link
                     class="dora-card dora-card-clickable"
@@ -341,6 +385,7 @@
             <div
                 v-if="isCardVisible('suggestions')"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('suggestions') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -402,6 +447,7 @@
             <div
                 v-if="isCardVisible('use_soon')"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('use_soon') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -474,6 +520,7 @@
             <div
                 v-if="isCardVisible('cookable')"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('cookable') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -542,6 +589,7 @@
             <div
                 v-if="isCardVisible('best_deals')"
                 class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('best_deals') }"
             >
                 <article class="dora-card">
                     <header class="dora-card-head">
@@ -604,7 +652,11 @@
             </div>
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
-            <div v-if="isCardVisible('stock_items')" class="col-12 col-sm-6 col-lg-4">
+            <div
+                v-if="isCardVisible('stock_items')"
+                class="col-12 col-sm-6 col-lg-4"
+                :style="{ order: cardCssOrder('stock_items') }"
+            >
                 <router-link class="dora-card dora-card-clickable" to="/stock">
                     <header class="dora-card-head">
                         <q-icon name="inventory_2" size="22px" class="dora-card-icon" />
@@ -659,7 +711,11 @@
             </div>
 
             <!-- ───── Meal plan card (with 7-day strip) ──────────────────── -->
-            <div v-if="isCardVisible('meal_plan')" class="col-12 col-lg-8">
+            <div
+                v-if="isCardVisible('meal_plan')"
+                class="col-12 col-lg-8"
+                :style="{ order: cardCssOrder('meal_plan') }"
+            >
                 <router-link class="dora-card dora-card-clickable" to="/meal-plans">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
@@ -773,21 +829,41 @@
         | 'stock_items'
         | 'meal_plan';
 
-    type CardDef = { id: CardId; label: string; icon: string };
+    // Zones group cards into purpose-bands so the eye gets a triage gradient
+    // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
+    // *within* a zone + toggles visibility. Render order = zone order, then the
+    // user's order within each zone (applied via CSS `order`, below).
+    type ZoneId = 'act' | 'today' | 'money' | 'kitchen';
+    const ZONES: { id: ZoneId; label: string }[] = [
+        { id: 'act', label: 'Act now' },
+        { id: 'today', label: 'Today' },
+        { id: 'money', label: 'Money' },
+        { id: 'kitchen', label: 'Your kitchen' },
+    ];
 
-    // Order matters: this is the visible order in the "Cards" toggle menu,
-    // and the default render order on first visit. Newer P12 cards lead so
-    // first-time users land on the actionable stuff before the totals.
+    type CardDef = {
+        id: CardId;
+        label: string;
+        icon: string;
+        zone: ZoneId;
+        // Opt-in-by-default cards (Anti-creep, §2.2) start hidden — e.g. the
+        // Money-zone glance widgets added in later phases. None of the current
+        // cards are opt-in; the flag is the seam for the ones that will be.
+        defaultHidden?: boolean;
+    };
+
+    // The default order within each zone (and the toggle-menu order). The user
+    // can reorder within a zone; their saved order overrides this.
     const CARD_DEFS: CardDef[] = [
-        { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active },
-        { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart },
-        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings },
-        { id: 'use_soon', label: 'Use soon', icon: ICONS.expiry },
-        { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome' },
-        { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu },
-        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer },
-        { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month },
-        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2' }
+        { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active, zone: 'act' },
+        { id: 'use_soon', label: 'Use soon', icon: ICONS.expiry, zone: 'act' },
+        { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome', zone: 'act' },
+        { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
+        { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
+        { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
+        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money' },
+        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money' },
+        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
     ];
 
     const authStore = useAuthStore();
@@ -890,52 +966,144 @@
         return 'Good evening';
     });
 
-    // ── Card-visibility prefs (per user, persisted in localStorage) ──────
-    const storageKey = computed(() => {
-        const userId = currentUser.value?.user_id ?? 'anonymous';
-        return `dora.dashboard.cards.${userId}`;
-    });
-    const visibleCards = ref<Set<CardId>>(loadVisibleCards(storageKey.value));
+    // ── Dashboard layout prefs (server-persisted, §2.1) ──────────────────
+    // Card order + hidden set live on the user (`dashboard_layout` JSON) so the
+    // layout survives a cache clear and follows the user across devices. We
+    // render with CSS `order` rather than moving markup — each card keeps its
+    // template position and flexbox sorts them, with full-width zone headers
+    // forcing the visual bands (see `cardCssOrder` / the `.dora-zone-label`s).
+    type DashLayout = { order: CardId[]; hidden: CardId[] };
 
-    function loadVisibleCards(key: string): Set<CardId> {
+    const KNOWN_CARD_IDS = new Set<CardId>(CARD_DEFS.map((c) => c.id));
+    const ZONE_OF = new Map<CardId, ZoneId>(CARD_DEFS.map((c) => [c.id, c.zone]));
+
+    function defaultOrder(): CardId[] {
+        return CARD_DEFS.map((c) => c.id);
+    }
+    function baseHiddenSet(): Set<CardId> {
+        return new Set(CARD_DEFS.filter((c) => c.defaultHidden).map((c) => c.id));
+    }
+    function parseLayout(raw: string | null): DashLayout {
+        if (!raw) return { order: defaultOrder(), hidden: [...baseHiddenSet()] };
         try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return new Set(CARD_DEFS.map((c) => c.id));
-            const parsed = JSON.parse(raw) as string[];
-            const known = new Set(CARD_DEFS.map((c) => c.id) as string[]);
-            const result = new Set(parsed.filter((id) => known.has(id)) as CardId[]);
-            // Default newly-introduced cards to visible — otherwise users
-            // with stored state never see them until they open the menu.
+            // Untrusted JSON — treat the arrays as raw strings and narrow each
+            // entry to a known CardId at runtime.
+            const parsed = JSON.parse(raw) as { order?: string[]; hidden?: string[] };
+            const order = (parsed.order ?? []).filter(
+                (id): id is CardId => KNOWN_CARD_IDS.has(id as CardId)
+            );
+            // Append any card missing from the stored order (e.g. a card shipped
+            // since the user last saved) at its CARD_DEFS position.
+            for (const def of CARD_DEFS) if (!order.includes(def.id)) order.push(def.id);
+            const hidden = new Set<CardId>(
+                (parsed.hidden ?? []).filter(
+                    (id): id is CardId => KNOWN_CARD_IDS.has(id as CardId)
+                )
+            );
+            // A card the user has never seen inherits its default visibility, so
+            // a new opt-in-by-default card starts hidden even for existing users.
+            const seen = new Set<string>([...(parsed.order ?? []), ...(parsed.hidden ?? [])]);
             for (const def of CARD_DEFS) {
-                if (!parsed.includes(def.id)) result.add(def.id);
+                if (def.defaultHidden && !seen.has(def.id)) hidden.add(def.id);
             }
-            return result;
+            return { order, hidden: [...hidden] };
         } catch {
-            return new Set(CARD_DEFS.map((c) => c.id));
+            return { order: defaultOrder(), hidden: [...baseHiddenSet()] };
         }
     }
-    function saveVisibleCards() {
-        try {
-            localStorage.setItem(storageKey.value, JSON.stringify([...visibleCards.value]));
-        } catch {
-            // localStorage may be unavailable; skip silently.
-        }
+
+    const cardOrder = ref<CardId[]>(defaultOrder());
+    const hiddenCards = ref<Set<CardId>>(baseHiddenSet());
+
+    function applyLayoutFromUser() {
+        const parsed = parseLayout(currentUser.value?.dashboard_layout ?? null);
+        cardOrder.value = parsed.order;
+        hiddenCards.value = new Set(parsed.hidden);
     }
-    watch(storageKey, (newKey) => {
-        visibleCards.value = loadVisibleCards(newKey);
-    });
+    applyLayoutFromUser();
+    // Reload on user switch (or another device's update landing via refresh).
+    // Our own saves also replace currentUser, but re-applying is idempotent.
+    watch(() => currentUser.value?.user_id, applyLayoutFromUser);
+
+    function persistLayout() {
+        const payload: DashLayout = {
+            order: cardOrder.value,
+            hidden: [...hiddenCards.value],
+        };
+        // Fire-and-forget — local refs already reflect the change optimistically;
+        // a failed save just means it isn't remembered.
+        void authStore.updateMeAsync({ dashboard_layout: JSON.stringify(payload) });
+    }
 
     function isCardVisible(id: CardId): boolean {
-        return visibleCards.value.has(id);
+        return KNOWN_CARD_IDS.has(id) && !hiddenCards.value.has(id);
     }
     function toggleCard(id: CardId) {
-        const next = new Set(visibleCards.value);
+        const next = new Set(hiddenCards.value);
         if (next.has(id)) next.delete(id);
         else next.add(id);
-        visibleCards.value = next;
-        saveVisibleCards();
+        hiddenCards.value = next;
+        persistLayout();
     }
-    const visibleCardCount = computed(() => visibleCards.value.size);
+    const visibleCardCount = computed(
+        () => CARD_DEFS.filter((c) => isCardVisible(c.id)).length
+    );
+
+    // CSS `order` per card: a fixed per-zone base (so a card never visually
+    // leaves its zone) plus its index in the user's order array (so reorder
+    // within a zone sticks). The base spacing (100) ≫ the ≤9 card indices, so
+    // zones never interleave. Zone headers sit just before their band.
+    const ZONE_BASE = 100;
+    function orderIndexOf(id: CardId): number {
+        const i = cardOrder.value.indexOf(id);
+        return i === -1 ? CARD_DEFS.findIndex((c) => c.id === id) : i;
+    }
+    function cardCssOrder(id: CardId): number {
+        const zi = ZONES.findIndex((z) => z.id === ZONE_OF.get(id));
+        return zi * ZONE_BASE + orderIndexOf(id);
+    }
+    function zoneHeaderOrder(zone: ZoneId): number {
+        return ZONES.findIndex((z) => z.id === zone) * ZONE_BASE - 1;
+    }
+    function zoneHasVisibleCards(zone: ZoneId): boolean {
+        return CARD_DEFS.some((c) => c.zone === zone && isCardVisible(c.id));
+    }
+
+    // Reorder within a zone — the tap alternative to drag (C13: drag is the
+    // power-user extra, the tap control is always present + works on mobile).
+    function zonePeers(id: CardId): CardId[] {
+        const zone = ZONE_OF.get(id);
+        return cardOrder.value.filter((c) => ZONE_OF.get(c) === zone);
+    }
+    function canMove(id: CardId, dir: 'up' | 'down'): boolean {
+        const peers = zonePeers(id);
+        const i = peers.indexOf(id);
+        return dir === 'up' ? i > 0 : i < peers.length - 1;
+    }
+    function moveCard(id: CardId, dir: 'up' | 'down') {
+        const peers = zonePeers(id);
+        const i = peers.indexOf(id);
+        const j = dir === 'up' ? i - 1 : i + 1;
+        if (j < 0 || j >= peers.length) return;
+        const other = peers[j]!;
+        const next = [...cardOrder.value];
+        const oi = next.indexOf(id);
+        const oj = next.indexOf(other);
+        [next[oi], next[oj]] = [next[oj]!, next[oi]!];
+        cardOrder.value = next;
+        persistLayout();
+    }
+
+    // Cards grouped by zone for the toggle menu (display order), zones with no
+    // cards dropped.
+    const cardsByZone = computed(() =>
+        ZONES.map((z) => ({
+            zone: z,
+            cards: cardOrder.value
+                .filter((id) => ZONE_OF.get(id) === z.id)
+                .map((id) => CARD_DEFS.find((c) => c.id === id)!),
+        })).filter((g) => g.cards.length > 0)
+    );
 
     // ── Derived data for stock donut ─────────────────────────────────────
     const stockInStockCount = computed(() => {
@@ -1373,6 +1541,30 @@
     /* ───── Cards ────────────────────────────────────────────────────── */
     .dora-cards {
         animation: dora-fade-up 0.4s ease-out both;
+    }
+    /* Zone band header — a full-width flex item; CSS `order` (set inline)
+       places it just before its zone's cards, and being full-width it forces
+       the cards onto the next line so each zone reads as a labelled band. */
+    .dora-zone-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--c-ink-mute);
+        opacity: 0.8;
+        margin-top: 6px;
+    }
+    /* Zone sub-header inside the Cards toggle menu. NB: q-menu teleports to
+       <body>, outside `.dora-dash` — so use the GLOBAL `--brand-primary` token
+       here, not the page-local `--c-accent` alias (which wouldn't resolve). */
+    .dora-cards-menu-zone {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--brand-primary);
+        opacity: 0.9;
+        padding-top: 8px;
     }
     .dora-card {
         /* `display:block` + inherit/none let a clickable card render as a real

@@ -6,6 +6,15 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 2 (zones + reorder, 2026-06-24).** Dashboard
+  cards are now grouped into labelled bands — **Act now**, **Today**, **Money**,
+  **Your kitchen** — so the most urgent things sit up top instead of every card
+  having equal weight. From the **Cards** menu you can show/hide cards and
+  **reorder them within a band** (up/down controls). Your layout now **saves to
+  your account** instead of just this browser, so it survives a cache clear and
+  follows you to another device. (Backend column + migration are static-only on
+  this machine — verified by type-check/lint; runtime migration + e2e pending a
+  Python-capable environment.)
 - **Dashboard rebuild — Phase 1 (declutter + welcome, 2026-06-24).** The
   dashboard now leads with what's *actionable*, not vanity totals. Four
   counter-only cards were removed — **Products**, **Recipes**, **Meals on

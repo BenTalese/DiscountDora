@@ -52,6 +52,51 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-294 — Dashboard card reorder: drag-handles (literal DnD) not built
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).
+- **Type:** follow-up (enhancement).
+- **What:** D4 asked for "draggable rows" to reorder dashboard cards. Phase 2
+  shipped **within-zone up/down (tap) reorder** in the Cards menu — C13's
+  *required* alternative (mobile + keyboard-accessible) — but not literal
+  drag-and-drop handles. No drag library exists in the SPA.
+- **Why deferred:** native HTML5 DnD is fiddly and **can't be browser-verified
+  on this machine**; shipping untested DnD is riskier than the solid tap path.
+  C13 frames drag as the power-user *extra*, desktop-only, tap mandatory — so
+  the mandate is met.
+- **Recommended resolution:** opportunistic / when browser-verifiable — add
+  `draggable` rows (desktop only, `!$q.platform.is.mobile`) constrained
+  within-zone, on top of the existing `moveCard`/order model.
+
+## [OPEN] FU-293 — DashboardPage R-001 de-monolith (DashboardCard extraction)
+- **Raised:** 2026-06-24 (Dashboard rebuild, deferred across Phases 0–2).
+- **Type:** finding (R-001 — componentisation).
+- **What:** `DashboardPage.vue` is still one ~1900-line file (template + script +
+  scoped SCSS, 9 inline cards). The plan slated a `DashboardCard.vue` shell +
+  per-card extraction; zones/reorder were delivered via CSS `order` **without**
+  extraction, so the page works but isn't de-monolithed.
+- **Why deferred:** extraction is a **pure-internal refactor** whose only real
+  risk (scoped-SCSS relocation → CSS regressions) is **only catchable in a
+  browser**, which this env lacks. It has no user-visible benefit on its own.
+- **Recommended resolution:** when browser-verifiable — extract each surviving
+  card into `web_app/src/components/dashboard/` behind a shared `DashboardCard`
+  shell, moving the `.dora-card*` shell SCSS into it (body SCSS stays in the
+  page — slotted content keeps parent scope). Cites `ENGINEERING_STANDARDS.md`
+  R-001.
+
+## [OPEN] FU-292 — Dashboard `dashboard_layout`: backend static-only (migration + e2e unrun)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).
+- **Type:** finding (static-only verification debt — mirrors FU-286).
+- **What:** the server-persisted dashboard layout (decision §2.1) was built
+  backend + SPA but **the backend was never executed** — no Python env here.
+  Static-only: `User.dashboard_layout` Text column + mapping, migration
+  `b9e1d4f7a2c8_20260624_user_dashboard_layout.py` (off head `c2e9f4a6b8d3`),
+  `AuthenticatedUserDto.dashboard_layout`, `UpdateMeRequest.dashboard_layout` +
+  handler, and the e2e `test__dashboard_layout__set_and_clear`.
+- **Why deferred:** can't run `alembic upgrade` / pytest here (mirrors FU-286).
+- **Recommended resolution:** on a Python-capable machine — run the migration,
+  run the e2e suite, and browser-walk: reorder/hide cards, reload, confirm the
+  layout persists and follows the user to another device/browser.
+
 ## [OPEN] FU-288 — Windows + macOS desktop build scripts for the Piper bundle
 - **Raised:** 2026-06-24 (Piper platform audit).
 - **Type:** deferred job.

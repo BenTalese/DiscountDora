@@ -143,6 +143,26 @@ def test__profile_picture__rejects_oversize_data_url(api):
     assert resp.status_code == 422, resp.status_code
 
 
+def test__dashboard_layout__set_and_clear(api):
+    """A user's dashboard layout JSON round-trips on /auth/me and clears with
+    an explicit null (Dashboard rebuild Phase 2)."""
+    s = _fresh_session()
+    username = f"dash-{uuid.uuid4().hex[:8]}"
+    reg = _register(s, username, "Abcdefghij1", f"{username}@example.com")
+    assert reg.status_code == 200, reg.text
+    assert reg.json()["dashboard_layout"] is None
+
+    layout = '{"order":["budget","attention"],"hidden":["meal_plan"]}'
+    patched = s.patch(f"{BASE}/me", json={"dashboard_layout": layout})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["dashboard_layout"] == layout
+
+    # Explicit null clears it back to the default layout.
+    cleared = s.patch(f"{BASE}/me", json={"dashboard_layout": None})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["dashboard_layout"] is None
+
+
 def test__login__rate_limit_returns_429_eventually(api):
     s = _fresh_session()
     # The endpoint allows 5/min per IP. Spam past the limit.

@@ -97,6 +97,10 @@ class AuthenticatedUserDto:
     # `is not None` check (the deferred blob loads once); the user-list DTO
     # bulk-stamps it instead (get_users) to avoid per-row byte loads.
     has_image: bool
+    # Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card order +
+    # hidden set), or None when the user hasn't customised. The SPA parses it
+    # to seed the dashboard; the backend treats it as an opaque string.
+    dashboard_layout: str | None
 
     @classmethod
     def from_entity(cls, user: User) -> "AuthenticatedUserDto":
@@ -140,6 +144,7 @@ class AuthenticatedUserDto:
             alerts_email_cadence=user.alerts_email_cadence,
             alerts_email_day=int(user.alerts_email_day),
             has_image=user.image is not None,
+            dashboard_layout=user.dashboard_layout,
         )
 
 

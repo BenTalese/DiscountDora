@@ -329,6 +329,70 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 2 (zones + reorder + server prefs, GREEN/static)
+
+**Session goal:** full Phase 2 per user decision ("full, backend static-only") —
+layout zones + within-zone reorder + server-persisted card prefs. Touches the
+SPA dashboard + new backend `User.dashboard_layout`.
+
+**Backend (static-only — no Python env, FU-292):**
+- `domain/entities/user.py` — `dashboard_layout: str | None` + `Fields.DASHBOARD_LAYOUT`.
+- `persistence/table_mappings.py` — `Column("dashboard_layout", Text, nullable=True)`
+  (added `Text` to the import). Not deferred (tiny text, read on /me).
+- Migration `b9e1d4f7a2c8_20260624_user_dashboard_layout.py` off head
+  `c2e9f4a6b8d3` (batch add-column, Postgres/SQLite portable). Single head.
+- `features/auth/register_user.py` — `AuthenticatedUserDto.dashboard_layout` (+
+  `from_entity`). `features/auth/update_me.py` — `UpdateMeRequest.dashboard_layout`
+  (max_length 20k) + handler (present-in-body sets; null clears).
+- `tests/e2e/.../test_auth_flows.py` — `test__dashboard_layout__set_and_clear`.
+
+**SPA:**
+- `models/auth.ts` + `services/api/authApiService.ts` — `dashboard_layout` on the
+  current-user type + `UpdateMeCommand`.
+- `DashboardPage.vue`:
+  - **Zones** — cards carry a `zone` ('act'|'today'|'money'|'kitchen'); rendered
+    via **CSS `order`** (full-width `.dora-zone-label` band headers at a per-zone
+    base, cards at base+order-index) so **no markup moved** and scoped SCSS stayed
+    put. Headers `v-show` only when the zone has a visible card.
+  - **Server-persisted prefs** — replaced the localStorage `visibleCards` Set with
+    `cardOrder`/`hiddenCards` parsed from `currentUser.dashboard_layout` and saved
+    via `authStore.updateMeAsync({ dashboard_layout })` (optimistic, fire-and-forget).
+    `defaultHidden` seam on `CardDef` for future opt-in-by-default cards (§2.2);
+    none current.
+  - **Within-zone reorder** — up/down (`moveCard`/`canMove`) in the Cards menu,
+    grouped by zone. **Tap, not drag** (C13's required alternative; literal
+    drag-handles → FU-294).
+
+**Why no DashboardCard extraction (R-001):** zones via CSS `order` removed the
+need for data-driven rendering, so extraction wasn't required to ship Phase 2. It
+remains a pure-internal refactor whose only risk (scoped-SCSS relocation → CSS
+regressions) is browser-only-verifiable → deferred to **FU-293**. Plan §Phase 2
+updated to say so.
+
+**Engineering-standards close-gate:** R-003 (prefs server-owned per §2.1; layout
+is client view-state persisted opaquely — backend doesn't parse it), R-005/006
+(Text column portable, batch migration), R-002 (zone styles tokenised; menu-zone
+header uses GLOBAL `--brand-primary` not the page-local `--c-accent` alias because
+q-menu teleports outside `.dora-dash` — commented), R-011 (reuse `updateMeAsync`
++ existing `/auth/me`; no bespoke endpoint), C13 (tap reorder + mobile-safe),
+R-008 (comments on CSS-order zoning + the teleport token note). New ADR? No — this
+reuses the established per-user-pref-on-User pattern (theme/budget/image).
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN (fixed two unnecessary-assertion
+errors by typing parsed JSON as `string[]`). Backend **static-only** (FU-292).
+**Browser walk pending** — confirm zone bands render, reorder persists across
+reload + devices, hidden cards stay hidden, empty-all banner still shows.
+
+**Ledger:** opened **FU-292** (backend static-only), **FU-293** (DashboardCard
+R-001 extraction deferred), **FU-294** (drag-handles enhancement).
+
+**Next up:** **Phase 3** — two-section alert card redesign (D6) + confirm the
+alerts control page (D5/C-9) resolves the old 404. Then Phase 4 (Money zone:
+savings/price-drops/spend/pantry-value), Phase 5 (restock + quick actions +
+cookable upgrade), Phase 7 (mobile), then deferred Phase 6 (calendar).
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 1 (declutter + welcome, GREEN)
 
 **Session goal:** Phase 1 of `IMPL_PLAN_DASHBOARD_REBUILD.md` — content work

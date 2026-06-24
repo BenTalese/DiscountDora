@@ -65,6 +65,10 @@ export type UpdateMeCommand = {
      *  `clear_image: true` to remove. Omitting both leaves it untouched. */
     image?: string | null;
     clear_image?: boolean;
+    /** Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card order +
+     *  hidden set). A string sets it; `null` clears it back to the default
+     *  layout. Omitting it leaves it untouched. */
+    dashboard_layout?: string | null;
 };
 export type ChangePasswordCommand = {
     current_password: string;

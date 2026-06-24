@@ -79,6 +79,11 @@ class UpdateMeRequest(BaseModel):
     # the StockItem ceiling (~4.5 MB of base64).
     image: str | None = Field(default=None, max_length=6_000_000)
     clear_image: bool = False
+    # Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card order +
+    # hidden set). Present-in-body sets it; sending `null` clears it back to
+    # the default layout. Opaque to the backend (client view-state); the cap is
+    # generous for the small JSON but bounds abuse.
+    dashboard_layout: str | None = Field(default=None, max_length=20_000)
 
 
 class UpdateMeHandler:
@@ -227,6 +232,12 @@ class UpdateMeHandler:
             _User.image = None
         elif "image" in _SetFields and request.image is not None:
             _User.image = request.image.encode("utf-8")
+
+        # Dashboard rebuild Phase 2 — layout JSON. Present-in-body sets it (a
+        # null clears it back to the default layout). Stored verbatim; the
+        # backend doesn't parse it (client view-state).
+        if "dashboard_layout" in _SetFields:
+            _User.dashboard_layout = request.dashboard_layout
 
         self.repository.save_changes()
         return AuthenticatedUserDto.from_entity(_User), None

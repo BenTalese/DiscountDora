@@ -111,4 +111,9 @@ export type AuthenticatedUser = {
     // Bytes are fetched separately via `GET /users/<id>/image`; server-derived
     // so the SPA never keeps its own truth about whether a picture exists.
     has_image: boolean;
+    // Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card order +
+    // hidden set), or null when the user hasn't customised. Parsed by the
+    // dashboard to seed card order/visibility; persisted via PATCH /auth/me so
+    // it survives a cache clear and follows the user across devices.
+    dashboard_layout: string | null;
 };

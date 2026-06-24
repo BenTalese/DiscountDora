@@ -255,6 +255,16 @@ scope bleed into the message *content* engine beyond pools).
 
 ### Phase 2 — Layout zones + card reorder (+ DashboardCard extraction)
 
+> **Status (2026-06-24): zones + reorder + server-persisted prefs DONE + green.**
+> Zones (Act now / Today / Money / Your kitchen) render via CSS `order` (full-
+> width band headers + per-card order) — no markup moves. Reorder is within-zone
+> up/down (tap — C13's required alternative; literal drag-handles → FU-294).
+> Prefs are server-persisted on `User.dashboard_layout` (backend static-only,
+> FU-292). **DashboardCard extraction was NOT done** — delivering zones via CSS
+> `order` avoided needing it, and it's a pure-internal R-001 refactor with
+> browser-only-verifiable CSS risk → deferred to FU-293.
+
+
 Give the eye a triage gradient and satisfy the drag/reorder ask. **Also do the
 R-001 de-monolith here:** while restructuring the grid into zones, extract each
 surviving card into `web_app/src/components/dashboard/` behind a shared

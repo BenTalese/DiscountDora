@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text
 from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
@@ -709,6 +709,11 @@ def configure_mappings(db: SQLAlchemy):
         Column("alerts_email_day", Integer, nullable=False, server_default="0"),
         # Settings rebuild Phase 4 — profile picture blob, deferred below.
         Column("image", LargeBinary, nullable=True),
+        # Dashboard rebuild Phase 2 — per-user dashboard layout JSON (card
+        # order + hidden set). Small opaque client view-state; Text for
+        # Postgres/SQLite portability (R-005/006). Not deferred — it's tiny and
+        # read on the /me path; never selected on user-list rows in practice.
+        Column("dashboard_layout", Text, nullable=True),
     )
 
     # C-10.1 — admin-minted bearer credential for `POST /api/ingest`. The

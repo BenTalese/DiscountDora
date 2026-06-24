@@ -229,6 +229,13 @@ class User(BaseEntity):
     # dedicated `/users/<id>/image` route triggers the load on access and
     # `has_image` is derived from an IS-NOT-NULL check (mirrors StoreDto).
     image: bytes | None = None
+    # Dashboard rebuild Phase 2 — per-user dashboard layout (card order +
+    # hidden set + future zone tweaks), stored as a small JSON string. NULL =
+    # the user hasn't customised; the SPA falls back to the default order. Kept
+    # opaque to the backend on purpose (it's pure client view-state, R-003:
+    # presentation belongs to the client) — we persist it verbatim so it
+    # survives a cache clear and follows the user across devices.
+    dashboard_layout: str | None = None
     # TODO: avoid god object | separate auth credential from user profile
 
     class Fields(BaseEntity.Fields):
@@ -261,3 +268,4 @@ class User(BaseEntity):
         ALERTS_EMAIL_CADENCE = "alerts_email_cadence"
         ALERTS_EMAIL_DAY = "alerts_email_day"
         IMAGE = "image"
+        DASHBOARD_LAYOUT = "dashboard_layout"

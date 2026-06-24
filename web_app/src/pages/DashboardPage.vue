@@ -2736,5 +2736,22 @@
         .dora-dash {
             padding: 16px 16px 96px;
         }
+        /* Phase 7 mobile pass. The zone grid already stacks (cards are
+           col-12 below sm); these tidy the new Phase 4/5 bits for touch. */
+        /* Quick-action buttons span the row so they're easy thumb targets. */
+        .dora-quick-actions {
+            gap: 8px;
+        }
+        .dora-quick-actions :deep(.q-btn) {
+            flex: 1 1 auto;
+        }
+        /* Give the savings range-toggle chips a comfortable tap height. */
+        .dora-range-chip {
+            padding: 6px 12px;
+        }
+        /* The summary chips wrap freely; keep them from getting too cramped. */
+        .dora-alert-chip {
+            padding: 6px 12px;
+        }
     }
 </style>

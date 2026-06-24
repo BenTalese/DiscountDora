@@ -380,6 +380,13 @@ client fetches into a calendar in the browser); Postgres/SQLite portable (§7.5)
 
 ### Phase 7 — Mobile pass
 
+> **Status (2026-06-24): code tweaks DONE + green; needs a device walk (FU-301).**
+> The zone grid already stacks (cards are col-12 below `sm`); added mobile rules
+> for the quick-action bar (buttons span the row), the savings range chips, and
+> the alert summary chips (comfortable tap targets). Inherently visual — the
+> real validation is a device/responsive walk, folded into FU-301.
+
+
 - Zones stack cleanly; quick-action row collapses sensibly.
 - Drag disabled (Phase 2 already), tap-reorder works on touch.
 - Touch targets ≥44px (critique flagged the dense `size="sm"` row buttons).

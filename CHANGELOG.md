@@ -6,6 +6,10 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 7 (mobile pass, 2026-06-24).** Mobile tidy-ups on
+  the rebuilt dashboard: the quick-action buttons span the row for easy tapping,
+  and the savings/alert chips get comfortable touch targets. The zone layout
+  already stacks to a single column on narrow screens.
 - **Dashboard rebuild — Phase 5 (restock radar + quick actions, 2026-06-24).** A
   new **Restock radar** card flags the things you keep running out of, each with
   a one-tap **Add** to your shopping list. A **quick-action bar** at the top of

@@ -52,6 +52,25 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-301 — Dashboard rebuild: full browser + device walk (Phases 0–7)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phases 0–7).
+- **Type:** finding (verification debt — the whole rebuild was built static/
+  tsc+eslint-only, no running app on this machine).
+- **What:** confirm in a browser + on a narrow viewport/device, across the
+  rebuild: (0) cards keyboard-focus + middle-click; the dark-mode question; (1)
+  welcome rotates per day, empty states read well, primary-list footer link;
+  (2) zone bands render in order, within-zone reorder persists across reload AND
+  another device (this exercises FU-292's backend too), hidden cards stay hidden;
+  (3) alert summary chips + peek + "See all" → `/alerts` (also FU-295); (4) Money
+  band shows only with money enabled, savings range toggle re-fetches, best_deals
+  hidden without products, money empty states; (5) restock Add works (toast +
+  list refresh), Add-item dialog creates + refreshes, Add-to-list sheet; (7) at
+  360/768/1280 — zones stack, quick-action bar wraps, touch targets comfortable.
+- **Why deferred:** no running app / Python env on this machine (per session).
+- **Recommended resolution:** now, on a capable machine — walk the list above;
+  fold any defects back as their own findings. Pairs with FU-292 (run the
+  layout migration first so persistence can be tested).
+
 ## [OPEN] FU-300 — Dashboard quick actions: add "Log price" (needs a product target)
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
 - **Type:** follow-up.

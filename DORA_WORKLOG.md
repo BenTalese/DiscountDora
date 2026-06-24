@@ -329,6 +329,46 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 7 (mobile pass, GREEN) + main sequence COMPLETE
+
+**Session goal:** Phase 7 mobile pass — the last of the initial rebuild sequence
+(Phase 6 calendar is deferred by design). `DashboardPage.vue`.
+
+**Done:** the zone grid already stacks (cards col-12 below `sm`), so Phase 7 is
+small + low-risk: extended the `@media (max-width:600px)` block so the quick-action
+buttons span the row (thumb targets), and the savings range chips + alert summary
+chips get a comfortable tap height. No structural change.
+
+**Inherently visual → FU-301.** A mobile pass can't be validated without a device;
+the real check is the consolidated browser+device walk.
+
+**Engineering-standards close-gate:** R-002 (mobile rules token/relative only),
+R-007 (scope held to mobile tidy-ups), R-008 (comment on the mobile block). No ADR.
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN. Device walk pending (FU-301).
+
+**Ledger:** opened **FU-301** (full dashboard browser + device walk, Phases 0–7).
+
+**Dashboard rebuild status:** ✅ **Main sequence COMPLETE (Phases 0–5, 7).** The
+dashboard went from a vanity-counter demo to a zoned, actionable, money-aware tool:
+declutter + welcome system (1), zones + within-zone reorder + server-persisted
+prefs (2), two-section alert card (3), Money zone — savings/spend/pantry (4),
+restock radar + quick actions (5), mobile tidy (7). All green via tsc+eslint;
+**none browser-verified** (FU-301) and the layout backend is static-only (FU-292).
+
+**Remaining (all deferred, logged):** Phase 6 fortnight calendar (own build +
+backend); FU-293 DashboardCard R-001 extraction; FU-296 price-drops widget
+(+backend); FU-298 cookable upgrade; FU-299 donut deep-links; FU-300 log-price
+quick action; FU-297 budget money-gating decision; FU-292 backend run; FU-295
+alerts-404 confirm; **FU-301 the full browser/device walk** (do this first — it
+gates trusting Phases 0–7).
+
+**Next up:** strongly recommend the **FU-301 browser walk** (+ FU-292 migration)
+on a capable machine before building Phase 6 or the other deferred widgets on top
+of six unverified phases.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 5 (restock radar + quick actions, GREEN)
 
 **Session goal:** Phase 5 — restock radar, quick-action row, cookable upgrade,

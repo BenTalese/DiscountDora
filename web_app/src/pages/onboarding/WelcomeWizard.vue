@@ -613,6 +613,11 @@
             icon: ICONS.savings, help: '/help',
         });
         cards.push({
+            path: '/settings/voice', shortTitle: 'voice', title: "Pick Dora's voice",
+            description: "Dora has a natural neural voice for chat replies and cook-mode steps — pick a voice (or stick with the browser default) and download a sample.",
+            icon: ICONS.record_voice_over,
+        });
+        cards.push({
             path: '/help', shortTitle: 'guides', title: 'Dora & the guides',
             description: 'Dora’s help bubble follows you everywhere; the guides explain each area in depth.',
             icon: ICONS.smart_toy,

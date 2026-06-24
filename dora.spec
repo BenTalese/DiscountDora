@@ -100,10 +100,18 @@ datas += collect_data_files("alembic", subdir="templates")
 # before pyinstaller). Lands at `<bundle>/piper/`; `desktop_app.py` points
 # DORA_PIPER_BIN there at runtime. Optional: if the folder is absent the build
 # still succeeds and the desktop app falls back to the browser voice (or a
-# DORA_PIPER_BIN the user sets). Voice MODELS are not bundled — they're
-# downloaded on demand into the data dir via Settings → Voice.
+# DORA_PIPER_BIN the user sets).
 if os.path.isdir("packaging/piper"):
     datas += [("packaging/piper", "piper")]
+
+# Piper default voice model — bundled when `packaging/fetch_default_voice.py`
+# has populated `packaging/voices/`. Lands at `<bundle>/voices/`;
+# `voice_provision.bundled_voices_dir()` picks it up at runtime so a fresh
+# desktop install can speak Dora's neural voice immediately without the user
+# having to click Download. Additional voices the user chooses in Settings →
+# Voice still land in the writable data dir (downloaded on demand).
+if os.path.isdir("packaging/voices"):
+    datas += [("packaging/voices", "voices")]
 
 # ── Analysis / build ────────────────────────────────────────────────
 a = Analysis(

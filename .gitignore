@@ -59,6 +59,10 @@ packaging/.cache/
 # Piper binary fetched at build time by packaging/fetch_piper.py — a build
 # artefact, never committed (it's bundled into the PyInstaller output instead).
 packaging/piper/
+# Piper voice models fetched at build time by packaging/fetch_default_voice.py
+# — ~60 MB each, never committed. Bundled into Docker / desktop builds so
+# Dora's neural voice works out of the box on first run.
+packaging/voices/
 web_app_old/.vscode/*
 web_app/.vscode/*
 lerna-debug.log*

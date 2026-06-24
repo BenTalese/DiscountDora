@@ -30,6 +30,13 @@ import zipfile
 from pathlib import Path
 
 # Pinned Piper release. Bump deliberately (and re-test the bundle).
+# Integrity: the rhasspy/piper GitHub release artefacts are not signed and we
+# don't pin a SHA-256 for them, so this download is trust-on-first-use against
+# GitHub's TLS. The bundled binary is *the engine*, not the speech output —
+# voice MODELS (which actually shape what Dora says) are SHA-256-pinned in
+# `voice_catalog.py` and verified on every download by `voice_provision`. If
+# binary-level supply-chain checks become a requirement, mirror the release to
+# our own bucket and pin a SHA here.
 PIPER_RELEASE = "2023.11.14-2"
 _BASE = f"https://github.com/rhasspy/piper/releases/download/{PIPER_RELEASE}"
 

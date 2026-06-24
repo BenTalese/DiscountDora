@@ -29,14 +29,12 @@
 
             <!-- Ready: preview + (implicit) select-by-clicking-the-card -->
             <div v-if="voice.status === 'ready'" class="voice-card__actions">
-                <span
+                <button
+                    type="button"
                     class="voice-card__btn voice-card__btn--ghost"
-                    :class="{ 'voice-card__btn--disabled': !piperAvailable }"
-                    role="button"
-                    :tabindex="piperAvailable ? 0 : -1"
+                    :disabled="!piperAvailable || disabled"
                     :aria-label="`Preview ${voice.label}`"
                     @click.stop="onPreview(voice)"
-                    @keydown.enter.stop.prevent="onPreview(voice)"
                 >
                     <q-spinner v-if="loadingId === voice.id" size="14px" />
                     <q-icon v-else :name="ICONS.play_arrow" size="16px" />
@@ -44,22 +42,21 @@
                     <q-tooltip v-if="!piperAvailable">
                         The neural voice engine isn't installed on this server yet.
                     </q-tooltip>
-                </span>
+                </button>
             </div>
 
             <!-- Downloadable: fetch the model -->
             <div v-else-if="voice.status === 'downloadable'" class="voice-card__actions">
-                <span
+                <button
+                    type="button"
                     class="voice-card__btn"
-                    role="button"
-                    tabindex="0"
+                    :disabled="disabled"
                     :aria-label="`Download ${voice.label}`"
                     @click.stop="emit('download', voice.id)"
-                    @keydown.enter.stop.prevent="emit('download', voice.id)"
                 >
                     <q-icon name="download" size="16px" />
                     <span>Download · {{ sizeMb(voice.size_bytes) }}</span>
-                </span>
+                </button>
             </div>
 
             <!-- Downloading: spinner -->
@@ -70,17 +67,16 @@
 
             <!-- Error: retry -->
             <div v-else-if="voice.status === 'error'" class="voice-card__actions">
-                <span
+                <button
+                    type="button"
                     class="voice-card__btn voice-card__btn--error"
-                    role="button"
-                    tabindex="0"
+                    :disabled="disabled"
                     :aria-label="`Retry downloading ${voice.label}`"
                     @click.stop="emit('download', voice.id)"
-                    @keydown.enter.stop.prevent="emit('download', voice.id)"
                 >
                     <q-icon :name="ICONS.replay" size="16px" />
                     <span>Retry download</span>
-                </span>
+                </button>
                 <span v-if="voice.error" class="voice-card__error">{{ voice.error }}</span>
             </div>
         </div>
@@ -246,6 +242,12 @@
         color: var(--text-secondary);
     }
     .voice-card__btn {
+        // Native <button> — reset UA chrome (border, font, etc.) so the chip
+        // styling below carries the look. `disabled` is the real attribute, so
+        // we drop the prior `pointer-events: none` trick.
+        appearance: none;
+        border: 0;
+        font-family: inherit;
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -257,16 +259,17 @@
         background: color-mix(in srgb, var(--q-accent) 12%, transparent);
         cursor: pointer;
     }
-    .voice-card__btn:hover { background: color-mix(in srgb, var(--q-accent) 20%, transparent); }
+    .voice-card__btn:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--q-accent) 20%, transparent);
+    }
     .voice-card__btn:focus-visible { outline: 2px solid var(--ring-focus); outline-offset: 2px; }
+    .voice-card__btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
     .voice-card__btn--ghost {
         color: var(--text-secondary);
         background: color-mix(in srgb, var(--text-primary) 6%, transparent);
-    }
-    .voice-card__btn--disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
     }
     .voice-card__btn--error {
         color: var(--negative, #c10015);

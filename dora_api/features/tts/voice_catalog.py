@@ -116,6 +116,43 @@ VOICE_CATALOG: tuple[VoiceDef, ...] = (
         sha256="5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
         params=dict(_DORA_CADENCE),
     ),
+    # Downloadable extras (not bundled). Picked for "warm + friendly fits a
+    # kitchen assistant" and to extend the catalog beyond the US-heavy default
+    # set with UK / Scottish / softer-US options. Size / SHA verified against
+    # https://huggingface.co/rhasspy/piper-voices on 2026-06-24.
+    VoiceDef(
+        id="alba",
+        label="Alba",
+        description="Scottish woman with a warm, lilting cadence.",
+        gender="female",
+        filename="en_GB-alba-medium.onnx",
+        hf_path="en/en_GB/alba/medium/en_GB-alba-medium",
+        size_bytes=63201294,
+        sha256="401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b",
+        params=dict(_DORA_CADENCE),
+    ),
+    VoiceDef(
+        id="northern_english_male",
+        label="Northern English",
+        description="Friendly northern English man.",
+        gender="male",
+        filename="en_GB-northern_english_male-medium.onnx",
+        hf_path="en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium",
+        size_bytes=63201294,
+        sha256="57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689",
+        params=dict(_DORA_CADENCE),
+    ),
+    VoiceDef(
+        id="hfc_female",
+        label="Hannah",
+        description="Soft, intimate American woman.",
+        gender="female",
+        filename="en_US-hfc_female-medium.onnx",
+        hf_path="en/en_US/hfc_female/medium/en_US-hfc_female-medium",
+        size_bytes=63201294,
+        sha256="914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7",
+        params=dict(_DORA_CADENCE),
+    ),
 )
 
 # The default voice a fresh user gets. Resolution falls back to it when a

@@ -9,6 +9,195 @@ next.
 
 ---
 
+## 2026-06-24 — Piper voice catalog: 3 download-only voices + platform audit
+
+**Why:** the user asked for "a few additional voices" as **downloadable** (not
+bundled) options. Also wanted a flawless-on-all-platforms audit:
+iOS / Android / web / desktop installs.
+
+**Catalog additions** (`voice_catalog.py`) — picked for warm/friendly +
+diversity beyond the US-heavy default set. SHA-256 + size_bytes verified
+against the real files on huggingface.co/rhasspy/piper-voices today (downloaded,
+checksummed, deleted — no bytes shipped):
+
+| id | label | shape |
+|---|---|---|
+| `alba` | Alba | Scottish woman, warm + lilting (en_GB) |
+| `northern_english_male` | Northern English | friendly northern English man (en_GB) |
+| `hfc_female` | Hannah | soft, intimate American woman (en_US) |
+
+These ride the existing download-card UX in `VoicePicker.vue` (Download · 60
+MB → Downloading… → Ready → Preview) — no UI changes needed. The bundled
+five (Amy / Ryan / Jenny / Kristin / Lessac) still ship as before; the new
+three only show the "Downloadable" chip until the user picks one.
+
+**Cross-platform assessment** — captured at the end of this entry so a
+future agent has the same starting point. tl;dr: server-side Piper synth +
+browser-voice fallback works everywhere a real audio element does, with one
+sharp edge that *is not a regression* but matters: iOS Safari (and macOS
+WKWebView) enforce a strict autoplay gate that an `await fetch()` between
+the user gesture and `audio.play()` can break. Detail in §FU-287.
+
+**Engineering-standards close-gate:**
+- R-010 — `VOICE_IDS` derived from the catalog tuple at module load, so the
+  `update_me.py` boundary validator picks up the new ids automatically.
+- R-018 — extras are user-driven downloads, not pinned deps; the bundled
+  set still degrades gracefully to the browser voice.
+
+**Verification:**
+- `vue-tsc --noEmit` → 0 errors.
+- `python3 -m py_compile` on `voice_catalog.py` → clean.
+- Live URL probe + SHA-256 verify on all 4 candidates (Bryce was dropped —
+  too similar to Ryan in character; Alba / NE Male / Hannah picked for
+  diversity).
+
+**Ledger:** FU-287 (iOS / WKWebView autoplay across an `await`),
+FU-288 (Windows + macOS desktop build scripts).
+
+**Next:** browser walk per FU-283 still owes; add the iOS / Android PWA
+probe per FU-287 to that pass. Phase 4 of `IMPL_PLAN_SETTINGS_REBUILD.md`
+(profile picture) after.
+
+---
+
+### Platform audit (carried forward — refresh if engine path changes)
+
+| Platform | Engine path | Bundled voice | Verdict |
+|---|---|---|---|
+| **Hosted web** (Docker) | server Piper | Amy bundled in image | works |
+| **Self-hosted Docker** | server Piper | Amy bundled in image | works |
+| **Desktop bundle — Linux** | bundled `piper` binary | Amy in `<bundle>/voices/` | works |
+| **Desktop bundle — Windows** | bundled `piper.exe` | Amy in `<bundle>/voices/` | works (no build script wired — FU-288) |
+| **Desktop bundle — macOS x86_64 / arm64** | bundled binary | Amy in `<bundle>/voices/` | mostly works; WKWebView shares the iOS autoplay gate (FU-287); no build script wired (FU-288) |
+| **PWA — Android Chrome / installed** | server Piper via fetch | n/a (server-side) | works |
+| **PWA — iOS Safari / installed (A2HS)** | server Piper via fetch | n/a (server-side) | works for *direct* user-gesture taps; fragile for replies that come back across an `await` (FU-287) |
+| **Native iOS app** | n/a — no Capacitor / Cordova wrapper in repo | n/a | PWA is the iOS path |
+| **Native Android app** | n/a — same | n/a | PWA is the Android path |
+
+The chat-reply case in `DoraChat.vue` and the timer narration in
+`RecipeCookMode.vue` both speak across an `await` (LLM round-trip / timer
+fire) — both predate the Piper rewire, so iOS autoplay was already a
+constraint there. The Piper path adds *one more await* (the synth fetch)
+before `audio.play()`, which makes the gate fractionally easier to hit.
+Fix shape: a one-time silent-audio unlock on the first user gesture (FU-287).
+
+---
+
+## 2026-06-24 — Piper TTS: review fixes + build-time bundling of default voice
+
+**Why:** code review of `0a69f77` ("Add Dora's neural voice (Piper TTS)") +
+the user's question — *is download-on-demand the lowest-friction way?* No, not
+quite. The cleaner shape is **bundle the default voice (Amy) at build time** so
+shipped artifacts (Docker + desktop) have a working neural voice on first run
+without any clicks; keep on-demand downloads for the rest of the catalog and
+for source/pip installs (the power-user path). Repo stays lean — voice models
+remain `.gitignore`'d, fetched only by build scripts.
+
+**Review fixes (`voice_provision.py`):**
+- `_fetch` checks `Content-Length` before opening the destination file so a
+  bad redirect aborts at the header rather than streaming megabytes first.
+- `_fetch` now wraps the stream in a `try` / `except BaseException` so any
+  failure (network blip, ceiling, checksum, cancellation) unlinks the orphan
+  `.part`. Previous behaviour only cleaned up on checksum mismatch.
+- Tuple `_TIMEOUT = (60, 30)` — separates connect from read so a stuck mid-
+  stream doesn't hang the worker thread forever. Was a single 60s connect
+  timeout with no read deadline.
+- `status_for` clears the stale `_ERRORS` entry when the file is detected
+  present (e.g. an operator drops the model in manually) so the picker flips
+  from "Retry" to "Ready" without a server restart.
+- Comment block calls out the reload-mid-download path: the `.part` file
+  survives a worker restart, atomic-rename means a partial never reads as
+  "ready", and the next download attempt overwrites in place — no orphan
+  accumulation.
+
+**Review fixes (frontend):**
+- `VoicePicker` Preview / Download / Retry chips are now real
+  `<button type="button">` elements with the `disabled` attribute, instead of
+  the `<span role="button">` + `pointer-events: none` trick. One layer of
+  defence, native semantics, native keyboard handling.
+- `.voice-card__btn` CSS adds `appearance: none; border: 0;
+  font-family: inherit;` to reset the UA `<button>` chrome; hover scopes to
+  `:not(:disabled)`; `--disabled` class removed.
+
+**Review fixes (other):**
+- `fetch_piper.py` carries a comment explaining the binary download is TOFU
+  against GitHub TLS (no SHA pin) — and *why* that's acceptable: the engine
+  binary is not the speech output; voice **models** (which actually shape what
+  Dora says) are SHA-256-pinned in `voice_catalog.py` and verified on every
+  download by `voice_provision._fetch`. Mirror + pin the binary if supply-
+  chain checks become a hard requirement.
+- `tts_synthesize.py`: dropped the now-orphaned `_voice_dir()` /
+  `_model_path_for()` helpers and the `DORA_CONFIG` import; `_resolve_model`
+  delegates to `voice_provision.is_downloaded` / `model_path`, which is the
+  single resolution path (data dir → bundle dir → not present).
+- `requirements.txt` audit (review item 8): the 13 added lines were all
+  commentary explaining why `piper-tts` is **not** pinned — no platform-
+  breaking dep snuck in.
+
+**UX (the bigger change): default-voice bundling at build time.**
+- `packaging/fetch_default_voice.py` — new build-time script. Reads
+  URL/SHA/filename from `voice_catalog.py` so build and runtime agree on
+  "what the default voice file is" (no duplicated truth). Default fetches
+  Amy; can be invoked with explicit ids (`amy ryan`) to bundle more.
+- `dora.spec` — adds `("packaging/voices", "voices")` to `datas`, mirroring
+  the existing pattern for the Piper binary. Bundled file lands at
+  `<bundle>/voices/<filename>.onnx`.
+- `Dockerfile` — `RUN python packaging/fetch_default_voice.py` between the
+  `COPY . .` and the frontend build, so the image ships `packaging/voices/`
+  populated. Non-fatal: a failed fetch falls back to the browser voice.
+- `packaging/build-linux.sh` — runs the same script alongside the existing
+  `fetch_piper.py` pre-flight.
+- `.gitignore` — adds `packaging/voices/` (matches the existing
+  `packaging/piper/` line).
+- `voice_provision.bundled_voices_dir()` — new resolver returning the
+  read-only build-time bundle dir when present (`DORA_PIPER_BUNDLED_VOICE_DIR`
+  override → PyInstaller `_MEIPASS/voices/` → `<repo_root>/packaging/voices/`).
+  Returns None on a source install with no prefetch.
+- `voice_provision.is_downloaded` / `model_path` check the data dir first
+  (writable, where user downloads of additional voices land), bundle dir
+  second (read-only, the build-time default). The picker calls `is_downloaded`
+  unchanged, so the bundled voice reads as **Ready** from first boot with no
+  status-machine changes.
+- `tts_synthesize._resolve_model` delegates to the same — synth picks up the
+  bundle path transparently.
+
+**Why this beats the alternatives:**
+- *Bundle in git:* exactly what the user just un-did. ~63 MB per voice, every
+  clone pays the cost forever. Hard no.
+- *Auto-download on first boot:* silent network egress without user consent;
+  fails on air-gapped installs.
+- *Auto-download on first speak:* the user gets browser voice for the first
+  utterance, then it suddenly switches — jarring; also still needs internet at
+  runtime, not at build.
+- *Onboarding step "Download Dora's voice?":* extra friction; an avoidable
+  prompt the user will probably skip.
+- *Build-time bundle (chosen):* zero clicks on shipped artifacts; repo stays
+  lean; source installs still work via on-demand download. Net cost: one
+  build-step network fetch per artifact, ~63 MB on top of the Docker image
+  and the desktop installer. Worth it.
+
+**Verification:**
+- `vue-tsc --noEmit` → 0 errors.
+- `eslint` on `VoicePicker.vue` / `VoiceSettings.vue` / `WelcomeWizard.vue`
+  → 0 issues.
+- `python3 -m py_compile` on the touched .py files → clean.
+- Runtime smoke skipped (no venv with `pydantic` on this dev box) — backend
+  changes are mechanical (file-existence checks, path joins, helper renames)
+  so the FU-283 browser-walk pass picks it up.
+
+**Ledger:** FU-286 opened — build-runner verification that the Docker image
+and desktop bundle actually ship Amy in their respective `voices/` dirs
+(can't test locally without a build runner).
+
+**Next:** browser walk per FU-283 (covers settings rebuild + the new voice
+bundle): on a fresh install, Settings → Voice should show Amy already in
+"Ready" with Preview working, and the engine toggle should default to
+"Dora's voice" with audible neural speech in chat + cook mode. Then
+Phase 4 of `IMPL_PLAN_SETTINGS_REBUILD.md` — profile picture (backend +
+SPA).
+
+---
+
 ## 2026-06-23 — Voice provisioning rework: download-on-demand + auto Piper binary
 
 **Why:** the first TTS pass bundled two ~63 MB voice models into the repo (Git

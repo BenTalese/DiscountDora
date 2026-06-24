@@ -45,6 +45,15 @@ RUN npm install
 WORKDIR /app
 COPY . .
 
+# Prefetch the default Piper voice into `packaging/voices/` so the image
+# ships with Dora's neural voice ready out of the box (R-018 / ADR-013).
+# Reads the catalog from the source we just copied, so build + runtime stay
+# in sync on URL / SHA. Non-fatal: a network blip during build still produces
+# a working image — the SPA falls back to the browser voice and the user can
+# still pick + download a voice from Settings → Voice later.
+RUN python packaging/fetch_default_voice.py \
+    || echo "[build] WARN: default voice fetch failed; image will use browser-voice fallback until a user downloads one"
+
 # ── Frontend build ─────────────────────────────────────────────────────────
 WORKDIR /app/web_app
 RUN quasar build

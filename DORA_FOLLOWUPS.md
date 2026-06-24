@@ -52,6 +52,86 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-288 — Windows + macOS desktop build scripts for the Piper bundle
+- **Raised:** 2026-06-24 (Piper platform audit).
+- **Type:** deferred job.
+- **What:** `packaging/build-linux.sh` is the only platform build script. The
+  spec (`dora.spec`) is platform-agnostic, but the Piper binary fetch
+  (`packaging/fetch_piper.py`) only runs when invoked explicitly, and the
+  default-voice fetch (`packaging/fetch_default_voice.py`) ditto. A Windows
+  desktop bundle needs `build-windows.bat` (or PowerShell) that runs the same
+  three steps in order — `fetch_piper.py --platform windows_amd64`,
+  `fetch_default_voice.py`, then `pyinstaller dora.spec`. macOS needs
+  `build-macos.sh` for both arm64 and x86_64 (separate runs).
+- **Why deferred:** the dev machine for this session is Linux; can't smoke
+  Windows / macOS builds without runners. The fetch script already has
+  `_ASSETS` entries for all three platforms — only the orchestration is
+  missing.
+- **Recommended resolution:** opportunistic — first time a Windows or macOS
+  release is needed. Until then the Linux + Docker artifacts are the shipped
+  paths and they're complete.
+
+## [OPEN] FU-287 — iOS / WKWebView autoplay across an `await` for Piper synth
+- **Raised:** 2026-06-24 (Piper platform audit).
+- **Type:** finding (real cross-platform constraint, not a regression).
+- **What:** iOS Safari (and the macOS WKWebView the desktop bundle uses on
+  Mac) enforce a strict user-gesture rule for `HTMLAudioElement.play()`. The
+  gesture-permission "credit" is consumed the first time `play()` is called
+  after a user interaction — and crucially, it can be **revoked** by an
+  intervening `await` that spans more than a few hundred ms. Two flows
+  affected:
+  - `DoraChat.vue:1061` — user sends → LLM round-trip (`await`) → reply →
+    `speechOut.speak(reply.text)` → `await ttsApi.synthesizeAsync()` → new
+    `<audio>` → `await audio.play()`. On iOS, after the LLM round-trip + the
+    synth fetch the gesture token is often gone. Browser-voice fallback
+    (`SpeechSynthesis`) is subject to the same rule but is more forgiving —
+    not a guaranteed fix.
+  - `RecipeCookMode.vue:923, 1222-1228` — timer-fired narration. No gesture
+    at all; the timer callback is not a user activation.
+  This is not a regression — the cook-mode timer narration already had the
+  same problem on the pre-Piper SpeechSynthesis path. Piper just adds one
+  more `await` (the synth fetch) before `audio.play()`, making the gate
+  fractionally easier to hit on chat replies.
+- **Why deferred:** needs iOS device testing + a small refactor to add a
+  silent-audio unlock primer. The current code is correct on every other
+  platform.
+- **Recommended resolution:** when the user reports voice failing on iPhone,
+  OR opportunistic with the FU-283 browser walk. Fix shape:
+  - Add a one-time `unlockAudio()` to `useSpeechOutput`: on the first user
+    interaction (router init or a global `pointerdown` listener), play a
+    silent / muted audio buffer to claim the gesture credit. Subsequent
+    network-trip `audio.play()` calls then inherit it.
+  - Alternative: keep a single long-lived `<audio>` element rather than
+    creating one per utterance; iOS treats reused elements more leniently.
+  - Document the timer-narration limitation in `RecipeCookMode.vue` (it
+    already half-acknowledges it at line 944).
+
+## [OPEN] FU-286 — Verify Docker + desktop builds actually bundle the default voice
+- **Raised:** 2026-06-24 (Piper review fixes + build-time bundling).
+- **Type:** finding (build-runner verification).
+- **What:** `packaging/fetch_default_voice.py` is wired into `Dockerfile`,
+  `packaging/build-linux.sh`, and `dora.spec`. On a working build runner the
+  result should be:
+  - Docker image: `/app/packaging/voices/en_US-amy-medium.onnx` (+ `.json`)
+    present; on container boot `GET /api/tts/voices` returns `amy` with
+    `status: "ready"` even before any user touches Settings → Voice.
+  - Desktop bundle: `<dist>/Dora/voices/en_US-amy-medium.onnx` (+ `.json`)
+    present; same UI behaviour.
+  Neither is verifiable on this dev box (no build runner / no PyInstaller
+  run). The fetch script + spec + Dockerfile are syntactically clean and
+  the runtime resolver (`voice_provision.bundled_voices_dir`) covers both
+  `_MEIPASS` and `<repo_root>/packaging/voices/`, but actual build/run
+  artefacts haven't been smoke-tested end-to-end.
+- **Why deferred:** no build runner attached to this session; the user runs
+  the SPA + builds per repo convention.
+- **Recommended resolution:** confirm in the next Docker image / desktop
+  build that Amy is "Ready" out of the box. If she isn't, the most likely
+  culprits are (a) the GitHub Actions / build runner blocking the HF
+  download (firewall / quota — check the WARN line from the build script),
+  (b) the spec's `if os.path.isdir(...)` guard hiding a path mismatch, or
+  (c) `bundled_voices_dir`'s `_MEIPASS`/`packaging/voices` path search
+  missing whichever layout the runner produced.
+
 ## [OPEN] FU-291 — Live Piper synthesis + browser walk for the voice feature pending
 - **Raised:** 2026-06-23 (Piper TTS wiring; updated after the provisioning rework).
 - **Type:** finding (verification debt — engine path not run here).

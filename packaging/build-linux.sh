@@ -92,6 +92,13 @@ fi
 echo "[build] Fetching Piper binary (packaging/fetch_piper.py)"
 python packaging/fetch_piper.py || echo "[build] WARN: Piper fetch failed; bundle will use browser-voice fallback"
 
+# Prefetch the default Piper voice so the bundle ships a neural voice ready
+# out of the box (R-018 / ADR-013). Idempotent + non-fatal: a network blip
+# only costs the zero-friction first-run experience, not the build itself.
+echo "[build] Fetching default Piper voice (packaging/fetch_default_voice.py)"
+python packaging/fetch_default_voice.py \
+    || echo "[build] WARN: default voice fetch failed; user will need to download one from Settings"
+
 echo "[build] Running pyinstaller dora.spec"
 pyinstaller --noconfirm dora.spec
 

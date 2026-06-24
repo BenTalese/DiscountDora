@@ -51,8 +51,6 @@ from dora_api.features.tts import voice_provision
 from dora_api.features.tts.voice_catalog import (DEFAULT_VOICE_ID,
                                                  VOICE_CATALOG, VoiceDef,
                                                  get_voice)
-from dora_api.infrastructure.configuration_manager import DORA_CONFIG
-
 _LOG = logging.getLogger(__name__)
 
 # Piper's per-voice numeric knobs, in the order we forward them as CLI flags.
@@ -66,12 +64,6 @@ def _piper_bin() -> str | None:
     return shutil.which("piper")
 
 
-def _voice_dir() -> Path:
-    # Models are downloaded on demand into the data dir (see voice_provision);
-    # `DORA_PIPER_VOICE_DIR` override is handled inside get_voices_dir().
-    return DORA_CONFIG.get_voices_dir()
-
-
 def _legacy_voice_override() -> Path | None:
     """The original single-voice env var. When present and valid it wins for
     every request (back-compat); otherwise we resolve from the catalog + dir."""
@@ -82,21 +74,23 @@ def _legacy_voice_override() -> Path | None:
     return p if p.exists() else None
 
 
-def _model_path_for(voice: VoiceDef) -> Path:
-    return _voice_dir() / voice.filename
-
-
 def _resolve_model(voice_id: str | None) -> tuple[Path | None, VoiceDef | None]:
     """Return (model_path, voice_def) for the requested voice, or (path, None)
-    when the legacy override is in force. (None, None) when nothing usable."""
+    when the legacy override is in force. (None, None) when nothing usable.
+
+    Falls through `voice_provision.is_downloaded` which checks the writable
+    data dir first and the build-time bundle dir as a fallback — so a shipped
+    artifact (Docker / desktop) speaks the bundled default voice immediately,
+    while user downloads of additional voices still land in the data dir."""
     override = _legacy_voice_override()
     if override is not None:
         return override, None
     voice = get_voice(voice_id or DEFAULT_VOICE_ID) or get_voice(DEFAULT_VOICE_ID)
     if voice is None:
         return None, None
-    model = _model_path_for(voice)
-    return (model if model.exists() else None), voice
+    if not voice_provision.is_downloaded(voice):
+        return None, voice
+    return voice_provision.model_path(voice), voice
 
 
 @TTS_ROUTER.route("/voices", methods=["GET"])
@@ -162,9 +156,10 @@ def synthesize():
             "error": "Piper is not configured",
             "hint": "Install Piper — `pip install piper-tts` on Linux/macOS, or "
                     "download the binary from github.com/rhasspy/piper/releases "
-                    "and set DORA_PIPER_BIN — then place the voice .onnx models "
-                    "under DORA_PIPER_VOICE_DIR (the bundled Amy/Ryan voices live "
-                    "in dora_api/features/tts/voices).",
+                    "and set DORA_PIPER_BIN — then download a voice from Settings "
+                    "→ Voice (or run `python -m dora_api.features.tts.voice_provision "
+                    "amy` to prefetch the default). Shipped Docker / desktop "
+                    "builds bundle a default voice — only source installs need this.",
         }), 503
 
     # Start from the voice's curated defaults, then let explicit request knobs

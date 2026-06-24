@@ -6,6 +6,23 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Three more voices on the catalog (2026-06-24, download-only).** Alba
+  (Scottish woman, warm and lilting), Northern English (friendly northern
+  English man), and Hannah (soft American woman) join the five bundled
+  voices. They're not shipped in the artifact — the user picks one in
+  Settings → Voice and it downloads server-side into the data dir like
+  any other catalog voice, ~60 MB each. SHA-256 pinned + verified.
+- **Dora's neural voice now works out of the box on shipped artifacts
+  (2026-06-24).** The Docker image and desktop installer prefetch the
+  default voice (Amy) at build time into a read-only bundle directory —
+  no clicks, no 60 MB download on first run, no git bloat (voice files
+  are still gitignored). Source installs keep the on-demand download path
+  from Settings → Voice. Hardening pass on the on-demand fetch alongside:
+  Content-Length pre-check, orphan `.part` cleanup on any failure (was
+  only on checksum mismatch), split connect/read timeout (60/30 s) so a
+  stuck stream doesn't hang the worker, and the voice picker's preview /
+  download / retry chips are now real `<button disabled>` elements
+  instead of the prior `pointer-events: none` trick.
 - **Settings rebuild — Phase 5 (mobile pass, 2026-06-23).** On narrow screens
   (`<md`) the settings side-nav is replaced by a top tab strip: a row of group
   tabs (Account / Kitchen setup / Admin) with the selected group's destinations

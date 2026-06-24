@@ -796,6 +796,110 @@
                 </router-link>
             </div>
 
+            <!-- ───── Savings captured (Phase 4 — Money zone flagship) ────── -->
+            <div
+                v-if="isCardVisible('savings')"
+                class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('savings') }"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">You've saved</h3>
+                        <div class="dora-range-toggle">
+                            <button
+                                v-for="r in SAVINGS_RANGES"
+                                :key="r.value"
+                                type="button"
+                                class="dora-range-chip"
+                                :class="{ 'is-active': savingsRange === r.value }"
+                                @click="savingsRange = r.value"
+                            >
+                                {{ r.label }}
+                            </button>
+                        </div>
+                    </header>
+                    <div v-if="savings && savings.total_savings > 0">
+                        <div class="dora-savings-amount">
+                            <AnimatedNumber :value="savings.total_savings" prefix="$" />
+                        </div>
+                        <div class="dora-savings-sub">vs RRP, {{ savingsRangeLabel }}</div>
+                        <div class="dora-savings-spent">
+                            on ${{ savings.total_spent.toFixed(2) }} spent across
+                            {{ savings.lists.length }} shop{{ savings.lists.length === 1 ? '' : 's' }}
+                        </div>
+                    </div>
+                    <div v-else class="dora-empty">
+                        Finish a shop and I'll tally what you saved vs RRP.
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Spend by store (Phase 4 — opt-in) ───────────────────── -->
+            <div
+                v-if="isCardVisible('spend_trend')"
+                class="col-12 col-sm-6 col-lg-6"
+                :style="{ order: cardCssOrder('spend_trend') }"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.storefront" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Spend by store</h3>
+                        <span class="dora-card-action">last 30 days</span>
+                    </header>
+                    <ul v-if="topSpendStores.length > 0" class="dora-spend-list">
+                        <li
+                            v-for="row in topSpendStores"
+                            :key="row.store_id ?? row.store"
+                            class="dora-spend-row"
+                        >
+                            <span class="dora-spend-store">{{ row.store }}</span>
+                            <span class="dora-spend-amt">${{ row.spend.toFixed(2) }}</span>
+                        </li>
+                    </ul>
+                    <div v-if="topSpendStores.length > 0" class="dora-spend-total">
+                        ${{ totalSpend.toFixed(2) }} total
+                    </div>
+                    <div v-else class="dora-empty">
+                        Your spend by store shows up once you complete a shop.
+                    </div>
+                </article>
+            </div>
+
+            <!-- ───── Pantry value (Phase 4 — opt-in) ─────────────────────── -->
+            <div
+                v-if="isCardVisible('pantry_value')"
+                class="col-12 col-sm-6 col-lg-4"
+                :style="{ order: cardCssOrder('pantry_value') }"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.inventory" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">Pantry value</h3>
+                    </header>
+                    <div v-if="pantryValueLatest !== null">
+                        <div class="dora-stat-num">${{ pantryValueLatest.toFixed(2) }}</div>
+                        <div
+                            v-if="pantryValueDelta !== null && pantryValueDelta !== 0"
+                            class="dora-pantry-delta"
+                            :class="pantryValueDelta > 0 ? 'is-up' : 'is-down'"
+                        >
+                            {{ pantryValueDelta > 0 ? '▲' : '▼' }}
+                            ${{ Math.abs(pantryValueDelta).toFixed(2) }} over 90 days
+                        </div>
+                        <div
+                            v-if="pantryValue?.estimate_note"
+                            class="text-caption dora-text-muted q-mt-xs"
+                        >
+                            {{ pantryValue.estimate_note }}
+                        </div>
+                    </div>
+                    <div v-else class="dora-empty">
+                        Add prices to your stock items to see what your pantry's worth.
+                    </div>
+                </article>
+            </div>
+
             <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
                  counter cards were cut — raw totals answer no question the user
                  has. `shopping_lists` merged into the primary-list card above
@@ -850,9 +954,17 @@
     import OnboardingApiService from 'src/services/api/onboardingApiService';
     import ProductApiService from 'src/services/api/productApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
+    import ReportsApiService, {
+        type ReportRange,
+        type SavingsCapturedResponse,
+        type StoreSpendResponse,
+        type StockValueResponse,
+    } from 'src/services/api/reportsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
@@ -865,7 +977,11 @@
         | 'cookable'
         | 'best_deals'
         | 'stock_items'
-        | 'meal_plan';
+        | 'meal_plan'
+        // Phase 4 — Money zone widgets backed by the reports API.
+        | 'savings'
+        | 'spend_trend'
+        | 'pantry_value';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
     // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
@@ -885,9 +1001,13 @@
         icon: string;
         zone: ZoneId;
         // Opt-in-by-default cards (Anti-creep, §2.2) start hidden — e.g. the
-        // Money-zone glance widgets added in later phases. None of the current
-        // cards are opt-in; the flag is the seam for the ones that will be.
+        // secondary Money-zone glance widgets (spend trend, pantry value).
         defaultHidden?: boolean;
+        // Feature gate: the card is unavailable (hidden from the dashboard AND
+        // the Cards menu) unless its gate is on. 'money' → useMoneyEnabled
+        // (any dollar surface, ADR-005); 'products' → product data-presence
+        // (§2.4 — don't offer product widgets to users with no products).
+        gate?: 'money' | 'products';
     };
 
     // The default order within each zone (and the toggle-menu order). The user
@@ -899,8 +1019,14 @@
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
         { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
+        // Money zone. Savings leads (the headline payoff, default-on when money
+        // is enabled); spend + pantry value are opt-in glances. best_deals is
+        // gated on product data-presence (§2.4).
+        { id: 'savings', label: 'Savings captured', icon: ICONS.savings, zone: 'money', gate: 'money' },
         { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money' },
-        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money' },
+        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money', gate: 'products' },
+        { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
+        { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
     ];
 
@@ -908,11 +1034,18 @@
     const router = useRouter();
     const { currentUser } = storeToRefs(authStore);
 
+    // Feature gates for the Money/Products cards (Phase 4). `moneyEnabled`
+    // layers install + per-user money opt-in (ADR-005); `productsEnabled` is the
+    // product data-presence flag (§2.4). Read by `cardAvailable`.
+    const { moneyEnabled } = useMoneyEnabled();
+    const { products: productsEnabled } = useFeatureFlags();
+
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
     const productApi = new ProductApiService();
     const budgetApi = new BudgetApiService();
     const wasteApi = new WasteApiService();
+    const reportsApi = new ReportsApiService();
     // P2-04 — suggestion store shared with the Dora launcher badge and
     // the chat panel so dismiss/snooze here propagates everywhere.
     const suggestionStore = useSuggestionStore();
@@ -994,6 +1127,15 @@
     // /waste page.
     const wasteRescue = ref<WasteRescue | null>(null);
 
+    // Phase 4 — Money zone widgets, each backed by an existing reports endpoint.
+    // Only loaded when money is enabled (the cards are gated on it anyway). The
+    // savings widget carries its own range toggle; spend/pantry use a sensible
+    // default window.
+    const savings = ref<SavingsCapturedResponse | null>(null);
+    const savingsRange = ref<ReportRange>('30d');
+    const spendByStore = ref<StoreSpendResponse | null>(null);
+    const pantryValue = ref<StockValueResponse | null>(null);
+
     const firstName = computed(() => currentUser.value?.username ?? '');
 
     const greeting = computed(() => {
@@ -1073,8 +1215,20 @@
         void authStore.updateMeAsync({ dashboard_layout: JSON.stringify(payload) });
     }
 
+    // A card is *available* unless its feature gate is off — gated-off cards
+    // vanish from both the dashboard and the Cards menu (§2.4 / ADR-005), so we
+    // never offer a dollar widget with money disabled or a product widget to a
+    // user with no products.
+    const CARD_GATE = new Map(CARD_DEFS.map((c) => [c.id, c.gate]));
+    function cardAvailable(id: CardId): boolean {
+        const gate = CARD_GATE.get(id);
+        if (gate === 'money') return moneyEnabled.value;
+        if (gate === 'products') return productsEnabled.value;
+        return true;
+    }
+
     function isCardVisible(id: CardId): boolean {
-        return KNOWN_CARD_IDS.has(id) && !hiddenCards.value.has(id);
+        return KNOWN_CARD_IDS.has(id) && cardAvailable(id) && !hiddenCards.value.has(id);
     }
     function toggleCard(id: CardId) {
         const next = new Set(hiddenCards.value);
@@ -1132,13 +1286,14 @@
         persistLayout();
     }
 
-    // Cards grouped by zone for the toggle menu (display order), zones with no
-    // cards dropped.
+    // Cards grouped by zone for the toggle menu (display order). Gated-off cards
+    // are dropped (so the menu never offers an unavailable card), and zones with
+    // nothing left collapse.
     const cardsByZone = computed(() =>
         ZONES.map((z) => ({
             zone: z,
             cards: cardOrder.value
-                .filter((id) => ZONE_OF.get(id) === z.id)
+                .filter((id) => ZONE_OF.get(id) === z.id && cardAvailable(id))
                 .map((id) => CARD_DEFS.find((c) => c.id === id)!),
         })).filter((g) => g.cards.length > 0)
     );
@@ -1480,6 +1635,72 @@
         }
     }
 
+    // ── Money zone loaders (Phase 4) ─────────────────────────────────────
+    // Guarded on `moneyEnabled` — the cards are gated on it, so there's no point
+    // fetching dollar reports when money is off. Each is non-fatal (the card
+    // shows its empty state on error). The reports endpoints already aggregate
+    // server-side (state-ownership) — we just render.
+    const RANGE_LABEL: Record<ReportRange, string> = {
+        '30d': 'last 30 days',
+        '90d': 'last 90 days',
+        '1y': 'last year',
+        'all': 'all time',
+    };
+    const savingsRangeLabel = computed(() => RANGE_LABEL[savingsRange.value]);
+    // The savings card's range toggle (Month / Year / All).
+    const SAVINGS_RANGES: { value: ReportRange; label: string }[] = [
+        { value: '30d', label: 'Month' },
+        { value: '1y', label: 'Year' },
+        { value: 'all', label: 'All' },
+    ];
+
+    async function loadSavings() {
+        if (!moneyEnabled.value) { savings.value = null; return; }
+        try {
+            savings.value = await reportsApi.getSavingsCapturedAsync(savingsRange.value);
+        } catch {
+            savings.value = null;
+        }
+    }
+    // Re-fetch when the user flips the savings range toggle.
+    watch(savingsRange, () => { void loadSavings(); });
+
+    async function loadSpendByStore() {
+        if (!moneyEnabled.value) { spendByStore.value = null; return; }
+        try {
+            spendByStore.value = await reportsApi.getSpendByStoreAsync('30d');
+        } catch {
+            spendByStore.value = null;
+        }
+    }
+
+    async function loadPantryValue() {
+        if (!moneyEnabled.value) { pantryValue.value = null; return; }
+        try {
+            pantryValue.value = await reportsApi.getStockValueAsync('90d');
+        } catch {
+            pantryValue.value = null;
+        }
+    }
+
+    // Top stores by spend for the spend-trend card (display slice of the
+    // server-aggregated rows).
+    const topSpendStores = computed(() => spendByStore.value?.rows.slice(0, 3) ?? []);
+    const totalSpend = computed(() =>
+        (spendByStore.value?.rows ?? []).reduce((sum, r) => sum + r.spend, 0)
+    );
+
+    // Latest pantry value + the delta since the window's first point.
+    const pantryValueLatest = computed(() => {
+        const pts = pantryValue.value?.points ?? [];
+        return pts.length > 0 ? pts[pts.length - 1]!.value : null;
+    });
+    const pantryValueDelta = computed(() => {
+        const pts = pantryValue.value?.points ?? [];
+        if (pts.length < 2) return null;
+        return pts[pts.length - 1]!.value - pts[0]!.value;
+    });
+
     async function acceptSuggestion(suggestion: DoraSuggestion) {
         if (!suggestion.primary_action) return;
         try {
@@ -1509,6 +1730,9 @@
             loadBestDeals(),
             loadBudget(),
             loadWasteRescue(),
+            loadSavings(),
+            loadSpendByStore(),
+            loadPantryValue(),
             suggestionStore.refreshAsync(),
             recipes.value.length === 0
                 ? recipeStore.getRecipesAsync()
@@ -1849,6 +2073,97 @@
         margin-left: auto;
         font-size: 0.85rem;
         font-weight: 600;
+    }
+
+    /* ───── Money zone widgets (Phase 4) ─────────────────────────────── */
+    /* Savings card — range toggle + headline amount. */
+    .dora-range-toggle {
+        display: inline-flex;
+        gap: 2px;
+        background: var(--surface-elevated);
+        border-radius: 999px;
+        padding: 2px;
+    }
+    .dora-range-chip {
+        border: none;
+        background: transparent;
+        color: var(--c-ink-mute);
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    .dora-range-chip.is-active {
+        background: var(--c-accent);
+        color: var(--text-inverse);
+    }
+    .dora-savings-amount {
+        font-size: 2.2rem;
+        font-weight: 700;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        color: var(--c-ok);
+    }
+    .dora-savings-sub {
+        margin-top: 2px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--c-ink-mute);
+    }
+    .dora-savings-spent {
+        margin-top: 6px;
+        font-size: 0.82rem;
+        color: var(--c-ink-mute);
+    }
+    /* Spend-by-store card. */
+    .dora-spend-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .dora-spend-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        background: var(--surface-elevated);
+        border-radius: 10px;
+    }
+    .dora-spend-store {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    .dora-spend-amt {
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .dora-spend-total {
+        margin-top: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--c-ink-mute);
+        text-align: right;
+    }
+    /* Pantry-value card. */
+    .dora-pantry-delta {
+        margin-top: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .dora-pantry-delta.is-up {
+        color: var(--c-ok);
+    }
+    .dora-pantry-delta.is-down {
+        color: var(--c-bad);
     }
     /* P2-04 — suggestion rows on the dashboard card. Severity drives
        the left border; the rest of the visual weight is on the title

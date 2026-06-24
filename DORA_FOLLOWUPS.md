@@ -52,6 +52,38 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-297 — Budget card isn't money-gated (consistency with the Money zone)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
+- **Type:** finding (consistency, pre-existing).
+- **What:** the Phase-4 Money widgets (savings / spend / pantry value) gate on
+  `useMoneyEnabled` (ADR-005 — dollar surfaces need money on). The **budget**
+  card does **not** — it renders whenever `budgetStatus` loads, even with money
+  features off (showing a passive "spent this week"). So with money off, the
+  Money zone shows budget but hides savings — slightly inconsistent.
+- **Why deferred:** changing budget's gating is out of Phase-4 scope (R-007) and
+  may be intentional (budget as the soft entry point to money). Flagging for a
+  deliberate call, not fixing blind.
+- **Recommended resolution:** opportunistic — decide whether budget should gate
+  on `moneyEnabled` like the other dollar surfaces (add `gate: 'money'` to its
+  CardDef) or stay an ungated nudge; document the choice in ADR-005.
+
+## [OPEN] FU-296 — Dashboard "price drops" widget (needs server "new low" signal)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
+- **Type:** deferred job.
+- **What:** the Money-zone **price-drops** widget (§2.4) — tracked products at a
+  genuine new low / recent drop — was **not built**. Savings / spend / pantry
+  value shipped (existing reports endpoints), but price-drops needs a new
+  server-side "new low since last seen" signal (Honesty: the claim must be true)
+  that doesn't exist yet, plus the product-data-presence gate (the `gate:
+  'products'` seam + `cardAvailable` are already in place for it).
+- **Why deferred:** requires a new backend endpoint (price-history analysis) that
+  can't be built+verified without a Python env here; the other three Money
+  widgets delivered the phase's value on existing endpoints.
+- **Recommended resolution:** when on a Python-capable machine — add a
+  `/reports/price-drops` (or extend price-trends) endpoint returning products at
+  a new low, then add the `price_drops` card (zone 'money', `gate: 'products'`,
+  `defaultHidden: true`) consuming it.
+
 ## [OPEN] FU-295 — Confirm the Alerts page (D5) no longer 404s
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 3).
 - **Type:** finding (reported defect, static-only verification).

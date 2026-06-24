@@ -6,6 +6,14 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 4 (Money zone, 2026-06-24).** The dashboard now
+  surfaces the money story it was hiding. A flagship **"You've saved"** card
+  shows what you've saved vs RRP with a Month / Year / All toggle; opt-in
+  **Spend by store** and **Pantry value** cards round out the Money band (all
+  from existing reports). These appear only when money features are enabled, and
+  the **Best deals** card now appears only when you actually track products.
+  (Savings/spend/pantry use endpoints that already shipped — no backend change.
+  A "price drops" widget is still to come; it needs a new server signal.)
 - **Dashboard rebuild — Phase 3 (alert card redesign, 2026-06-24).** The
   "Needs your attention" card now leads with a **summary** — a row of chips
   showing the shape of what's wrong at a glance ("5 · expiring soon", "3 · out

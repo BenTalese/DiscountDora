@@ -329,6 +329,51 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 4 (Money zone, GREEN)
+
+**Session goal:** Phase 4 — surface the unused reports API as Money-zone widgets.
+Frontend-only (the savings/spend/pantry endpoints already exist); `DashboardPage.vue`.
+
+**Done:**
+- **Savings captured** (flagship, default-on, `gate: 'money'`) — `getSavingsCaptured
+  Async(range)`; big saved-vs-RRP amount + "$spent across N shops", with a
+  Month/Year/All range toggle (`savingsRange` watch re-fetches). Onboarding empty
+  state (decision §8) when no completed shops.
+- **Spend by store** (opt-in, `gate: 'money'`, `defaultHidden`) — `getSpendByStore
+  Async('30d')`; top-3 stores + total.
+- **Pantry value** (opt-in, `gate: 'money'`, `defaultHidden`) — `getStockValueAsync
+  ('90d')`; latest value + 90-day delta + the server's estimate note.
+- **Feature gating seam** — `CardDef.gate` ('money' | 'products') + `cardAvailable`
+  (reads `useMoneyEnabled` / `useFeatureFlags().products`). Gated-off cards vanish
+  from the dashboard AND the Cards menu. Applied `gate: 'products'` to **best_deals**
+  (implements decision §2.4 — product widgets hidden without product data).
+- Money loaders guarded on `moneyEnabled` + wired into `loadAll`.
+
+**Deferred (logged):** **price drops** (FU-296) — needs a new server-side "new low"
+signal (no Python env). The `gate: 'products'` + `cardAvailable` seam is already in
+place for it. Also noticed the **budget card isn't money-gated** like the new Money
+widgets — flagged FU-297 (pre-existing; decide deliberately, R-007).
+
+**Engineering-standards close-gate:** R-003 (widgets render server-aggregated
+reports; the only client math is display slices — top-3 stores, latest/delta points),
+R-002 (all new styles tokenised), R-011 (reused `useMoneyEnabled`/`useFeatureFlags`
+gates + existing reports service — no new fetch patterns), R-007 (didn't touch the
+budget gating — flagged instead), R-008 (gate + R-003 comments). No new ADR (reuses
+ADR-005 money gating); FU-297 may extend ADR-005.
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN. **Browser walk pending** — confirm
+the Money band shows only with money enabled, savings range toggle re-fetches,
+best_deals hidden when no products, empty states read well.
+
+**Ledger:** opened **FU-296** (price-drops widget + backend signal), **FU-297**
+(budget money-gating consistency).
+
+**Next up:** **Phase 5** — restock radar (`getKeepsRunningOutAsync` — exists),
+quick-action row (inline popups, decision §9), cookable upgrade (L272), donut
+deep-links. Then Phase 7 (mobile), deferred Phase 6 (calendar), FU-293 extraction.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 3 (two-section alert card, GREEN)
 
 **Session goal:** Phase 3 (D6) — redesign the "Needs your attention" card into a

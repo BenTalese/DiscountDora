@@ -311,6 +311,16 @@ R-001 (extracted `AlertSummaryWidget.vue`).
 
 ### Phase 4 — The Money zone (surface the unused reports)
 
+> **Status (2026-06-24): savings + spend + pantry DONE + green; price-drops
+> deferred (FU-296).** Three widgets shipped on existing reports endpoints:
+> **Savings captured** (flagship, default-on, range toggle Month/Year/All),
+> **Spend by store** (opt-in), **Pantry value** (opt-in). All gate on
+> `useMoneyEnabled` (ADR-005); `best_deals` now gates on product data-presence
+> (§2.4) via a new `cardAvailable` + `gate` seam on CardDef. **Price drops** was
+> NOT built — it needs a new server-side "new low" signal (no Python env here) →
+> FU-296. Budget-card money-gating inconsistency noted → FU-297.
+
+
 The highest-value phase — turns "demo" into "tool". All endpoints exist
 (`reportsApiService`); compute any new derivation server-side (state-ownership).
 

@@ -52,7 +52,9 @@ Generated from `Feedback / Fixes (MASTER).md` via `FEEDBACK_TRIAGE_AND_PLAN.md`.
 | `C_big_rock_design_briefs.md` | One design-brief each: stock-overview, meal-plans, cook-mode, recipes/cookbook, onboarding, alerts control centre, **C-10 ingestion-API contract** (Dora-core). **C-6 product-search + C-8 merchant/provider are COMPANION-scope**, not Dora-core (master Decision 1). Plus implementation-planning prompts for shopping-lists & state-ownership. | 🔵 |
 
 ## Deferred (do NOT design yet — you said you'll revisit)
-dashboard, reports, waste, settings, mobile view. The app is interconnected; prompts above flag where they ripple into these.
+dashboard, reports, settings, mobile view. The app is interconnected; prompts above flag where they ripple into these.
+
+> **Waste** was on this list until 2026-06-24, when `C-waste` (in `C_big_rock_design_briefs.md`) replaced the `/waste` page with a row-level capture + cookbook filter + StockOverview sort. See `04_proposals/PROPOSAL_WASTE_MINIMISATION.md` + `IMPL_PLAN_WASTE_MINIMISATION.md`.
 
 ## The per-prompt ritual
 1. Open this prompt's section in `../00_DOC_GRAPH.md` and read every cited doc (charter anchors, engineering rules, feedback bullets, related proposals/investigations, open follow-ups, cross-prompt dependencies). If the cited docs and the prompt body disagree, the cited docs usually win — confirm with the user.

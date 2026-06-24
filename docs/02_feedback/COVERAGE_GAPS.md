@@ -202,7 +202,8 @@ next reviewer can fast-skip them.
   2026-06-06; maps L401-422), B9.1. **UX layer superseded 2026-06-12 by
   `04_proposals/PROPOSAL_SHOPPING_LIST_UX_V2.md`** (S1-S18 session bullets +
   re-maps L402-421; shop-mode page merged away, rail/dropdown, chip axe).
-- REPORTS / WASTE — feedback empty; deferred.
+- REPORTS — feedback empty; deferred.
+- WASTE — `04_proposals/PROPOSAL_WASTE_MINIMISATION.md` (C-waste, written 2026-06-24). Feedback was empty; this is charter-/scope-discipline driven. The `/waste` page is dissolved into a StockItemRow capture (Mark as wasted + Undo), a Cookbook filter (Uses expiring ingredients, 14d), a StockOverview sort (Expires soonest), and a simplified `waste_insights` Dora tool. Dora Score waste-as-pillar reassessment deferred → **FU-302**.
 - ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
   L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only
   (deferred); price/back-in-stock subscriptions folded into central management.

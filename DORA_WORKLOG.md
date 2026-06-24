@@ -9,6 +9,73 @@ next.
 
 ---
 
+## 2026-06-24 — C-waste: dissolve `/waste` page (design + impl plan, NO code)
+
+**Why:** the user asked for an honest assessment of `/waste`
+(`docs/99_scratch/WASTE_PAGE_ASSESSMENT_2026-06-24.md`), then took the
+assessment further than the doc proposed — instead of "reshape, don't remove",
+they elected to **dissolve the page** into smaller surfaces, keeping only the
+data signal needed for the future Dora Score. All decisions co-designed in this
+session; nothing else open.
+
+**Headline decisions (all in `PROPOSAL_WASTE_MINIMISATION.md` §2):**
+- Delete the `/waste` page + route + nav entry (no redirect, pre-release).
+- StockOverview: axe the misimplemented `Stalest first` sort
+  (`useStockFilters.ts:241` sorts by `stock_level_last_updated asc`, not by
+  expiry); add `Expires soonest` instead. `Recently updated` already covers
+  the "what have I touched" question.
+- StockItemRow expiry dropdown: new `Mark as wasted` option. Opens a tile-grid
+  modal with **reason only** (no value, no note, no out-of-stock toggle, no
+  freeze action). Tile tap = submit. 5-second Undo toast restores both event
+  and expiry.
+- Cookbook: new `Uses expiring ingredients (14d)` filter; recipes ordered by
+  count of expiring ingredients used (desc); `Uses N expiring` badge shown
+  only while the filter is active (no noise when off).
+- Dashboard: `Use soon` card cut; `Needs your attention` is the single
+  near-expiry surface.
+- `StockItemWasteEvent` schema slimmed (drop `quantity`/`estimated_value`/
+  `note`). Clean `DROP COLUMN` migration; no idempotent guards (per migrations
+  memory).
+- `waste_insights` Dora tool simplified to `{most_wasted, most_recent}`;
+  `expiry_rescue` unchanged; `frequent_waster` suggestion re-pointed from
+  `/waste` to `/stock-items/:id`.
+
+**Explicitly NOT doing** (proposal §7): no money capture, no freeze action, no
+note field, no out-of-stock toggle on the modal, no bulk logging, no Reports
+"Waste & money lost" card, no dashboard replacement card, no `/waste` redirect.
+
+**Engineering-standards close-gate:** R-002 (token-only styling for the new
+modal), R-003 (cookbook filter predicate pushed to server, no client cross-
+entity computation), R-007 (the "NOT doing" list IS this rule), R-018 (no
+compat shims).
+
+**Charter touch:** waste is a Dora Score pillar in DDCP §§334, 346, 444–447.
+The C-waste design **preserves the signal** (events still logged + queryable)
+so the Score can still read it. The de-emphasis as a UI feature is a quiet
+vote that the Score model may want re-weighting — logged as **FU-302**,
+deferred to pre-Phase 3.
+
+**Files produced this session:**
+- `docs/04_proposals/PROPOSAL_WASTE_MINIMISATION.md`
+- `docs/04_proposals/IMPL_PLAN_WASTE_MINIMISATION.md`
+- `docs/03_prompts/C_big_rock_design_briefs.md` — new `C-waste` section
+- `docs/03_prompts/00_INDEX.md` — removed `waste` from deferred list
+- `docs/02_feedback/COVERAGE_GAPS.md` — split the old `REPORTS / WASTE` line;
+  `WASTE` now points at the proposal
+- `DORA_FOLLOWUPS.md` — FU-302 added
+
+**Verification:** NO CODE yet. Verification belongs to the impl plan (W1–W7)
+when it runs.
+
+**Ledger:** FU-302 (Dora Score reassessment, pre-Phase 3).
+
+**Next:** await user approval of the proposal. If approved, run the impl plan
+chunks W1 → W2/W3/W4/W5 (parallelisable) → W6 → W7 in that order. W6 is the
+point-of-no-return; W3 (replacement capture flow) and W5 (dashboard cleanup)
+must land before it.
+
+---
+
 ## 2026-06-24 — Piper voice catalog: 3 download-only voices + platform audit
 
 **Why:** the user asked for "a few additional voices" as **downloadable** (not

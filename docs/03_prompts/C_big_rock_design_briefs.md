@@ -67,6 +67,22 @@ C. full UI translation (deferred big rock).** **Open decisions:** currency home
 (install-wide vs per-user); vue-i18n adopt-lite-for-formatting vs rip-out; whether
 C-10 price observations carry a currency; merchant-logo fate. Written 2026-06-06.
 
+## C-waste — Waste minimisation → `PROPOSAL_WASTE_MINIMISATION.md`
+User-floated (2026-06-24) after the `WASTE_PAGE_ASSESSMENT_2026-06-24.md` scratch read. The
+`/waste` page is dissolved into smaller surfaces: row-level `Mark as wasted` under the
+existing expiry dropdown (tile-grid modal, reason only, no value/note/freeze/out-of-stock,
+Undo toast); a new `Expires soonest` sort on StockOverview (replacing the misimplemented
+`Stalest first`); a new `Uses expiring ingredients (14d)` filter on Cookbook (recipes ordered
+by count of expiring ingredients used; per-card badge only when the filter is active); the
+dashboard `Use soon` card removed (`Needs your attention` absorbs); the `/waste` route
+deleted (no redirect, pre-release). Backend: `StockItemWasteEvent` schema slimmed (drop
+`quantity`/`estimated_value`/`note`); `waste_insights` Dora tool simplified to "most/recently
+wasted"; `expiry_rescue` unchanged; `frequent_waster` suggestion deep-link re-pointed to
+StockItemDetail. **All decisions resolved in-session — see PROPOSAL §2.** Charter pillar of
+the future Dora Score is preserved as a *signal* (events still logged + queryable) but the
+de-emphasis of waste as a UI feature spawns **FU-302** (Dora Score reassessment, deferred
+pre-Phase 3). Written 2026-06-24.
+
 ## C-help — Opt-in contextual help overlay → `PROPOSAL_HELP_OVERLAY.md`
 User-floated (2026-06-06): a persistent **"?" toggle** that overlays dismissible
 "what does this do" bubbles on the current page's controls — the **opt-in inverse**

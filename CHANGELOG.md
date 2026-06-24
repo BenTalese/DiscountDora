@@ -6,6 +6,12 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 6 (fortnight calendar, 2026-06-24).** A new opt-in
+  **This fortnight** card shows the next 14 days as a grid, with coloured dots
+  marking days that have meals (green), expiries (red) or planned shopping
+  (accent). Tap a day to expand what's on — with links straight to the recipe,
+  stock item or list. Enable it from the **Cards** menu. (Reuses the existing
+  upcoming-events feed — no new backend.)
 - **Dashboard rebuild — Phase 7 (mobile pass, 2026-06-24).** Mobile tidy-ups on
   the rebuilt dashboard: the quick-action buttons span the row for easy tapping,
   and the savings/alert chips get comfortable touch targets. The zone layout

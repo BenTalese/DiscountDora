@@ -64,7 +64,9 @@ long session summary. Distinct from the other logs:
   (3) alert summary chips + peek + "See all" → `/alerts` (also FU-295); (4) Money
   band shows only with money enabled, savings range toggle re-fetches, best_deals
   hidden without products, money empty states; (5) restock Add works (toast +
-  list refresh), Add-item dialog creates + refreshes, Add-to-list sheet; (7) at
+  list refresh), Add-item dialog creates + refreshes, Add-to-list sheet; (6) the
+  opt-in "This fortnight" calendar (enable via Cards menu) renders the 14-day grid
+  with correct dots, tapping a day expands its detail + links work; (7) at
   360/768/1280 — zones stack, quick-action bar wraps, touch targets comfortable.
 - **Why deferred:** no running app / Python env on this machine (per session).
 - **Recommended resolution:** now, on a capable machine — walk the list above;

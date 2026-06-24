@@ -819,6 +819,92 @@
                 </router-link>
             </div>
 
+            <!-- ───── This fortnight calendar (Phase 6 / D7) ──────────────── -->
+            <div
+                v-if="isCardVisible('calendar')"
+                class="col-12"
+                :style="{ order: cardCssOrder('calendar') }"
+            >
+                <article class="dora-card">
+                    <header class="dora-card-head">
+                        <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
+                        <h3 class="dora-card-title">This fortnight</h3>
+                        <div class="dora-cal-legend">
+                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-meal" /> meals</span>
+                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-expiry" /> expiry</span>
+                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-shopping" /> shopping</span>
+                        </div>
+                    </header>
+                    <template v-if="calendarCells.length > 0">
+                        <div class="dora-cal-grid" role="grid">
+                            <button
+                                v-for="cell in calendarCells"
+                                :key="cell.iso"
+                                type="button"
+                                class="dora-cal-cell"
+                                :class="{
+                                    'is-today': cell.isToday,
+                                    'is-selected': cell.iso === selectedCalDate,
+                                    'has-events': cell.hasMeal || cell.hasExpiry || cell.hasShopping,
+                                }"
+                                @click="selectCalDate(cell.iso)"
+                            >
+                                <span class="dora-cal-num">{{ cell.dayNum }}</span>
+                                <span class="dora-cal-dots">
+                                    <span v-if="cell.hasMeal" class="dora-cal-dot dot-meal" />
+                                    <span v-if="cell.hasExpiry" class="dora-cal-dot dot-expiry" />
+                                    <span v-if="cell.hasShopping" class="dora-cal-dot dot-shopping" />
+                                </span>
+                            </button>
+                        </div>
+                        <div v-if="selectedCalDay" class="dora-cal-detail">
+                            <div class="dora-cal-detail-date">
+                                {{ formatRelativeDay(selectedCalDay.date) }}
+                            </div>
+                            <div v-if="selectedCalDay.meals.length > 0" class="dora-cal-group">
+                                <div class="dora-cal-group-label">Meals</div>
+                                <router-link
+                                    v-for="(m, i) in selectedCalDay.meals"
+                                    :key="`${m.recipe_id}-${m.slot}-${i}`"
+                                    class="dora-cal-item"
+                                    :to="`/cookbook/${m.recipe_id}`"
+                                >
+                                    {{ m.recipe_name }} <span class="dora-cal-slot">· {{ m.slot }}</span>
+                                </router-link>
+                            </div>
+                            <div v-if="selectedCalDay.expiries.length > 0" class="dora-cal-group">
+                                <div class="dora-cal-group-label">Expiring</div>
+                                <router-link
+                                    v-for="e in selectedCalDay.expiries"
+                                    :key="e.stock_item_id"
+                                    class="dora-cal-item"
+                                    :to="`/stock/${e.stock_item_id}`"
+                                >
+                                    {{ e.name }}
+                                </router-link>
+                            </div>
+                            <div v-if="selectedCalDay.shopping.length > 0" class="dora-cal-group">
+                                <div class="dora-cal-group-label">Shopping</div>
+                                <router-link
+                                    v-for="s in selectedCalDay.shopping"
+                                    :key="s.list_id"
+                                    class="dora-cal-item"
+                                    :to="`/shopping-lists/${s.list_id}`"
+                                >
+                                    {{ s.name }}
+                                </router-link>
+                            </div>
+                        </div>
+                        <div v-else class="dora-cal-hint">
+                            Tap a day with dots to see what's on.
+                        </div>
+                    </template>
+                    <div v-else class="dora-empty">
+                        Nothing scheduled in the next fortnight — enjoy the calm.
+                    </div>
+                </article>
+            </div>
+
             <!-- ───── Restock radar (Phase 5) ─────────────────────────────── -->
             <div
                 v-if="isCardVisible('restock')"
@@ -1010,6 +1096,8 @@
         type AlertAction,
         type AlertKind,
         type AlertSeverity,
+        type Upcoming,
+        type UpcomingDay,
     } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
     import type { Product } from 'src/models/product';
@@ -1063,7 +1151,9 @@
         | 'spend_trend'
         | 'pantry_value'
         // Phase 5 — predictive restock.
-        | 'restock';
+        | 'restock'
+        // Phase 6 — unified fortnight calendar (D7).
+        | 'calendar';
 
     // Zones group cards into purpose-bands so the eye gets a triage gradient
     // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
@@ -1102,6 +1192,9 @@
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
         { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
         { id: 'restock', label: 'Restock radar', icon: ICONS.replay, zone: 'today' },
+        // Wide fortnight calendar — opt-in (it's large and overlaps the
+        // week-ahead strip; users enable it from the Cards menu).
+        { id: 'calendar', label: 'This fortnight', icon: ICONS.calendar_month, zone: 'today', defaultHidden: true },
         // Money zone. Savings leads (the headline payoff, default-on when money
         // is enabled); spend + pantry value are opt-in glances. best_deals is
         // gated on product data-presence (§2.4).
@@ -1226,6 +1319,10 @@
     // "Add item" quick-action dialog state.
     const keepsRunningOut = ref<KeepsRunningOutResponse | null>(null);
     const showCreateStockItem = ref(false);
+    // Phase 6 — the fortnight calendar's server-aggregated dated events + the
+    // currently-expanded day.
+    const upcoming = ref<Upcoming | null>(null);
+    const selectedCalDate = ref<string | null>(null);
 
     const firstName = computed(() => currentUser.value?.username ?? '');
 
@@ -1798,6 +1895,68 @@
         void loadKeepsRunningOut();
     }
 
+    // ── Fortnight calendar (Phase 6 / D7) ────────────────────────────────
+    // The server aggregates dated events (C-9.6 /alerts/upcoming); the client
+    // only builds the grid + renders per-category dots (R-003 — no client-side
+    // joining of three sources). `dates` carries non-empty days only, so we
+    // walk the full window and look each date up.
+    async function loadUpcoming() {
+        try {
+            upcoming.value = await alertApi.getUpcomingAsync(14);
+        } catch {
+            upcoming.value = null;
+        }
+    }
+
+    type CalendarCell = {
+        iso: string;
+        dayNum: number;
+        isToday: boolean;
+        hasExpiry: boolean;
+        hasShopping: boolean;
+        hasMeal: boolean;
+    };
+    function parseLocalIso(iso: string): Date {
+        const p = iso.split('-');
+        return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    }
+    const calendarCells = computed<CalendarCell[]>(() => {
+        const u = upcoming.value;
+        if (!u) return [];
+        const byDate = new Map(u.dates.map((d) => [d.date, d]));
+        const todayIso = isoOf(new Date());
+        const start = parseLocalIso(u.start);
+        const cells: CalendarCell[] = [];
+        for (let i = 0; i < u.days; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            const iso = isoOf(d);
+            const day = byDate.get(iso);
+            cells.push({
+                iso,
+                dayNum: d.getDate(),
+                isToday: iso === todayIso,
+                hasExpiry: !!day && day.expiries.length > 0,
+                hasShopping: !!day && day.shopping.length > 0,
+                hasMeal: !!day && day.meals.length > 0,
+            });
+        }
+        return cells;
+    });
+    const selectedCalDay = computed<UpcomingDay | null>(() =>
+        upcoming.value?.dates.find((d) => d.date === selectedCalDate.value) ?? null
+    );
+    function selectCalDate(iso: string) {
+        selectedCalDate.value = selectedCalDate.value === iso ? null : iso;
+    }
+    // Lazy-load the calendar's data the first time the user enables it.
+    watch(
+        () => isCardVisible('calendar'),
+        (visible) => {
+            if (visible && !upcoming.value) void loadUpcoming();
+        }
+    );
+
     // Top stores by spend for the spend-trend card (display slice of the
     // server-aggregated rows).
     const topSpendStores = computed(() => spendByStore.value?.rows.slice(0, 3) ?? []);
@@ -1849,6 +2008,9 @@
             loadSpendByStore(),
             loadPantryValue(),
             loadKeepsRunningOut(),
+            // Calendar is opt-in — only fetch the (heavier) aggregation when
+            // the card is actually shown (R-016 lazy hydration).
+            isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
             suggestionStore.refreshAsync(),
             recipes.value.length === 0
                 ? recipeStore.getRecipesAsync()
@@ -2288,6 +2450,113 @@
     }
     .dora-pantry-delta.is-down {
         color: var(--c-bad);
+    }
+
+    /* ───── Fortnight calendar (Phase 6 / D7) ────────────────────────── */
+    .dora-cal-legend {
+        display: flex;
+        gap: 12px;
+        font-size: 0.72rem;
+        color: var(--c-ink-mute);
+    }
+    .dora-cal-leg {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .dora-cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .dora-cal-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-height: 56px;
+        padding: 8px 4px 6px;
+        border: 1px solid var(--c-line);
+        border-radius: 10px;
+        background: var(--surface-elevated);
+        color: var(--c-ink);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+    .dora-cal-cell.has-events:hover {
+        border-color: var(--border-strong);
+        transform: translateY(-1px);
+    }
+    .dora-cal-cell.is-today {
+        border-color: var(--c-accent);
+        font-weight: 700;
+    }
+    .dora-cal-cell.is-selected {
+        background: var(--c-accent-soft);
+        border-color: var(--c-accent);
+    }
+    .dora-cal-num {
+        font-size: 0.95rem;
+        line-height: 1;
+    }
+    .dora-cal-dots {
+        display: flex;
+        gap: 3px;
+        min-height: 6px;
+    }
+    .dora-cal-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        flex-shrink: 0;
+    }
+    .dora-cal-dot.dot-meal {
+        background: var(--c-ok);
+    }
+    .dora-cal-dot.dot-expiry {
+        background: var(--c-bad);
+    }
+    .dora-cal-dot.dot-shopping {
+        background: var(--c-accent);
+    }
+    .dora-cal-hint {
+        margin-top: 12px;
+        font-size: 0.82rem;
+        color: var(--c-ink-mute);
+    }
+    .dora-cal-detail {
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: var(--surface-elevated);
+        border-radius: 12px;
+    }
+    .dora-cal-detail-date {
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .dora-cal-group {
+        margin-top: 8px;
+    }
+    .dora-cal-group-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--c-ink-mute);
+        margin-bottom: 2px;
+    }
+    .dora-cal-item {
+        display: block;
+        color: var(--c-ink);
+        text-decoration: none;
+        font-size: 0.9rem;
+        padding: 2px 0;
+    }
+    .dora-cal-item:hover {
+        text-decoration: underline;
+    }
+    .dora-cal-slot {
+        color: var(--c-ink-mute);
+        font-size: 0.82rem;
     }
     /* P2-04 — suggestion rows on the dashboard card. Severity drives
        the left border; the rest of the visual weight is on the title

@@ -329,6 +329,51 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 6 (fortnight calendar, GREEN — no backend needed)
+
+**Session goal:** Phase 6 (D7) — the unified "this fortnight" calendar. Expected to
+need a new backend aggregation endpoint, but **it already existed**:
+`GET /alerts/upcoming` (C-9.6, `get_upcoming.py`) + the `Upcoming`/`UpcomingDay`
+types already mirror it. So Phase 6 shipped **frontend-only** and is fully
+tsc/eslint-verifiable. `DashboardPage.vue` only.
+
+**Done:**
+- New **calendar** card (zone 'today', **opt-in** `defaultHidden` — it's wide and
+  overlaps the week-ahead strip; enable via Cards menu). Lazy-loads its data only
+  when shown (R-016): `loadUpcoming` is guarded in `loadAll` + a `watch` on
+  `isCardVisible('calendar')` fetches on first enable.
+- 14-day grid built from `upcoming.start`/`days` (local-date parse to avoid tz
+  drift), each cell looked up against `upcoming.dates` (server sends non-empty days
+  only). Cells are `<button>`s (keyboard-accessible); coloured dots per category
+  (meal=positive, expiry=negative, shopping=accent); today + selected highlighted.
+- Tapping a day expands an inline detail panel: meals (→ recipe), expiries (→ stock
+  item), shopping (→ list), all real router-links. Empty state when the fortnight's
+  clear.
+
+**Engineering-standards close-gate:** R-003 (the server aggregates the three event
+sources; the client only builds the grid + renders — no client-side joining),
+R-001 (kept inline, consistent with the rest of the page pending FU-293 extraction),
+R-002 (calendar styles tokenised), R-016 (lazy-load when shown), R-008 (R-003 +
+lazy-load comments). No new ADR. Plan §Phase 6/§2.3 corrected (no new backend after
+all). Possible week-strip/calendar consolidation noted in the plan.
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN (fixed an array-destructure
+assertion by parsing via `Number()`). Browser walk folded into **FU-301** (added a
+calendar step).
+
+**Ledger:** no new opens (FU-301 updated to cover the calendar).
+
+**Dashboard rebuild status:** ✅ **ALL phases done (0–7).** Phase 6 is no longer
+deferred — the only remaining items are the deferred *widgets/refactors* (FU-293
+extraction, FU-296 price-drops, FU-298 cookable upgrade, FU-299 donut deep-links,
+FU-300 log-price, FU-297 budget-gating) and **verification** (FU-292 backend run,
+FU-295 alerts-404, FU-301 full browser/device walk).
+
+**Next up:** the **FU-301 browser walk** + **FU-292 migration** on a capable machine
+— now covering all 8 phases including the calendar.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 7 (mobile pass, GREEN) + main sequence COMPLETE
 
 **Session goal:** Phase 7 mobile pass — the last of the initial rebuild sequence

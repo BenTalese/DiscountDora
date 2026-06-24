@@ -367,11 +367,19 @@ Add temporal intelligence and let the home screen *do*, not just route.
 *Gate:* R-001 (each is its own component), R-011 (use existing mutation
 services for quick actions — no bespoke fetch), Effortless principle.
 
-### Phase 6 — "This fortnight" calendar widget (D7) — DEFERRED (§2.3)
+### Phase 6 — "This fortnight" calendar widget (D7)
 
-**Not part of the initial rebuild sequence** — spec retained here; build as a
-dedicated follow-up after Phases 0–5 + 7 land. The largest new build; needs a
-backend aggregation endpoint (§2.3). A 14-day grid; each date carries coloured dots for **planned shopping /
+> **Status (2026-06-24): DONE + green — and NO new backend needed.** §2.3 assumed
+> this required a new aggregation endpoint, but `GET /alerts/upcoming` (C-9.6,
+> `get_upcoming.py`) already returns exactly the per-date expiries + shopping +
+> meals D7 wants (server-aggregated, R-003). So the calendar shipped frontend-only
+> and is fully tsc/eslint-verifiable. Built as an **opt-in** card (zone 'today',
+> `defaultHidden` — it's wide and overlaps the week-ahead strip; enable from the
+> Cards menu). A 14-day grid (lazy-loads when shown, R-016); each cell shows
+> coloured dots (meal/expiry/shopping); tapping a day expands its detail with
+> deep-links. Possible future consolidation with the week-strip noted.
+
+A 14-day grid; each date carries coloured dots for **planned shopping /
 item expiries / planned meals**; clicking a date opens that day's detail
 (meals + events). One range query server-side (R-003 — don't stitch three
 client fetches into a calendar in the browser); Postgres/SQLite portable (§7.5).
@@ -426,7 +434,7 @@ able to audit "is anything missing?" at a glance.
 | D4 — Reorder cards via draggable rows in toggle list (L58) | Phase 2 | Drag + tap alternative + mobile-off (C13). |
 | D5 — Alerts nav 404 → build alerts control page (L59) | Phase 3 (dep.) | C-9 surface; `/alerts` route present — confirm resolved. |
 | D6 — Alert card redesign: top summary + bottom peek + "See all" (L60) | Phase 3 | Two-section `AlertSummaryWidget`. |
-| D7 — "This fortnight" calendar widget, coloured dots, click-a-date (L61) | Phase 6 (DEFERRED follow-up, §2.3) | New build + aggregation endpoint; after Phases 0–5/7. |
+| D7 — "This fortnight" calendar widget, coloured dots, click-a-date (L61) | Phase 6 — DONE | Opt-in card; reused existing `/alerts/upcoming` (C-9.6) — no new backend. |
 | L176 — Mascot not centred in greeting card | Phase 0 | B9.8 claims fixed; verify. |
 | L272 — "Next up to cook": next 3 by meal-plan + stock, ready/missing (L272) | Phase 5 | Cookable widget upgrade. |
 | L480 — Cross-app undo off (dashboard push-expiry → clear at stock item) | Out of scope (bug) | Cross-app undo defect, not a dashboard-design item; log as `DORA_FOLLOWUPS` finding for the undo/toast owner. |

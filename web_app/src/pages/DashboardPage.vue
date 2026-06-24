@@ -195,52 +195,87 @@
                         <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
                         All clear — nothing needs your attention right now.
                     </div>
-                    <ul v-else class="dora-attn-list">
-                        <li
-                            v-for="alert in topAlerts"
-                            :key="alert.alert_id"
-                            class="dora-attn-row"
-                        >
-                            <span
-                                class="dora-attn-dot"
-                                :class="`dora-attn-dot-${alert.severity}`"
-                            />
-                            <q-icon
-                                :name="alertIconFor(alert.kind)"
-                                :color="alertColorFor(alert.severity)"
-                                size="18px"
-                            />
-                            <!-- R-011/a11y carve-out: these alert links route to
-                                 a *dynamic* target (`alertLinkFor` may be null), so
-                                 they aren't a clean `<router-link>` swap like the
-                                 static nav links above. The whole alert card +
-                                 its links are rebuilt in the Phase 3 two-section
-                                 alert redesign (D6), which owns making these
-                                 keyboard-operable. Left as-is for this phase. -->
-                            <a
-                                v-if="alert.stock_item_name"
-                                href="#"
-                                class="dora-attn-name"
-                                @click.prevent="goToAlert(alert)"
+                    <template v-else>
+                        <!-- D6 top section: a by-kind summary so you see the
+                             *shape* of what's wrong at a glance ("5 expiring
+                             soon", "3 out of stock") before the detail rows.
+                             Each chip opens the alerts control page. -->
+                        <div class="dora-alert-summary">
+                            <router-link
+                                v-for="g in alertKindSummary"
+                                :key="g.kind"
+                                to="/alerts"
+                                class="dora-alert-chip"
                             >
-                                {{ alert.stock_item_name }}
-                            </a>
-                            <span class="dora-attn-msg" @click="goToAlert(alert)">{{ alert.message }}</span>
-                            <span class="dora-attn-actions">
-                                <q-btn
-                                    v-for="a in alertActionsFor(alert.kind)"
-                                    :key="a.action"
-                                    flat
-                                    dense
-                                    size="sm"
-                                    no-caps
-                                    :icon="a.icon"
-                                    :label="a.label"
-                                    @click="applyAlertAction(alert, a.action)"
+                                <q-icon
+                                    :name="alertIconFor(g.kind)"
+                                    :color="alertColorFor(g.severity)"
+                                    size="16px"
                                 />
-                            </span>
-                        </li>
-                    </ul>
+                                <span class="dora-alert-chip-num">{{ g.count }}</span>
+                                <span class="dora-alert-chip-label">{{ kindTheme(g.kind) }}</span>
+                            </router-link>
+                        </div>
+
+                        <!-- D6 bottom section: a peek at the top few, most-urgent
+                             first, with the inline quick-actions. -->
+                        <ul class="dora-attn-list">
+                            <li
+                                v-for="p in peekAlerts"
+                                :key="p.alert.alert_id"
+                                class="dora-attn-row"
+                            >
+                                <span
+                                    class="dora-attn-dot"
+                                    :class="`dora-attn-dot-${p.alert.severity}`"
+                                />
+                                <q-icon
+                                    :name="alertIconFor(p.alert.kind)"
+                                    :color="alertColorFor(p.alert.severity)"
+                                    size="18px"
+                                />
+                                <!-- a11y: real <router-link> when the alert has a
+                                     deep-link target (replaces the old href="#"
+                                     handler). Stock alerts link the item name;
+                                     non-stock nudges link the message text. -->
+                                <router-link
+                                    v-if="p.alert.stock_item_name && p.link"
+                                    :to="p.link"
+                                    class="dora-attn-name"
+                                >
+                                    {{ p.alert.stock_item_name }}
+                                </router-link>
+                                <span v-else-if="p.alert.stock_item_name" class="dora-attn-name">
+                                    {{ p.alert.stock_item_name }}
+                                </span>
+                                <router-link
+                                    v-if="!p.alert.stock_item_name && p.link"
+                                    :to="p.link"
+                                    class="dora-attn-msg dora-attn-msg-link"
+                                >
+                                    {{ p.alert.message }}
+                                </router-link>
+                                <span v-else class="dora-attn-msg">{{ p.alert.message }}</span>
+                                <span class="dora-attn-actions">
+                                    <q-btn
+                                        v-for="a in alertActionsFor(p.alert.kind)"
+                                        :key="a.action"
+                                        flat
+                                        dense
+                                        size="sm"
+                                        no-caps
+                                        :icon="a.icon"
+                                        :label="a.label"
+                                        @click="applyAlertAction(p.alert, a.action)"
+                                    />
+                                </span>
+                            </li>
+                        </ul>
+
+                        <router-link to="/alerts" class="dora-alert-seeall">
+                            See all alerts →
+                        </router-link>
+                    </template>
                 </article>
             </div>
 
@@ -789,9 +824,12 @@
         actionsFor as alertActionsFor,
         colorFor as alertColorFor,
         iconFor as alertIconFor,
+        kindTheme,
         linkFor as alertLinkFor,
         type Alert,
         type AlertAction,
+        type AlertKind,
+        type AlertSeverity,
     } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
     import type { Product } from 'src/models/product';
@@ -1257,23 +1295,47 @@
         void router.push(path);
     }
 
-    // Open an alert's linked surface (stock item, list, or planner — C-9.4).
-    function goToAlert(alert: Alert) {
-        const link = alertLinkFor(alert);
-        if (link) void router.push(link);
-    }
+    // ── Needs your attention (D6 two-section card) ───────────────────────
+    // Top section: a by-kind summary; bottom: a peek at the most-urgent few.
+    // The alerts control page (/alerts) is the canonical surface for the rest.
+    const SEVERITY_RANK: Record<AlertSeverity, number> = { high: 0, medium: 1, low: 2 };
+    const PEEK_LIMIT = 3;
 
-    // ── Needs your attention ─────────────────────────────────────────────
-    // Top-by-severity alerts; the panel page (P13) handles bulk-acknowledge
-    // and history. Dashboard only ever shows the most urgent few.
-    const ATTENTION_LIMIT = 5;
+    const topAlerts = computed(() =>
+        [...alerts.value].sort(
+            (a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
+        )
+    );
 
-    const topAlerts = computed(() => {
-        const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
-        return [...alerts.value]
-            .sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9))
-            .slice(0, ATTENTION_LIMIT);
+    // By-kind breakdown of the active alerts for the summary chips. This is
+    // display grouping of the *already-fetched* alerts list (not a new
+    // cross-entity aggregate), so it stays client-side — R-003 note. The
+    // per-kind label/icon come from the shared alert model (one source).
+    type AlertKindGroup = { kind: AlertKind; count: number; severity: AlertSeverity };
+    const alertKindSummary = computed<AlertKindGroup[]>(() => {
+        const groups = new Map<AlertKind, AlertKindGroup>();
+        for (const a of alerts.value) {
+            const g = groups.get(a.kind);
+            if (g) {
+                g.count += 1;
+                if (SEVERITY_RANK[a.severity] < SEVERITY_RANK[g.severity]) g.severity = a.severity;
+            } else {
+                groups.set(a.kind, { kind: a.kind, count: 1, severity: a.severity });
+            }
+        }
+        return [...groups.values()].sort(
+            (x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity] || y.count - x.count
+        );
     });
+
+    // The peek rows (most-urgent first), each with its precomputed deep-link
+    // target so the template can render a real <router-link> (a11y).
+    const peekAlerts = computed(() =>
+        topAlerts.value.slice(0, PEEK_LIMIT).map((alert) => ({
+            alert,
+            link: alertLinkFor(alert),
+        }))
+    );
 
     async function loadAlerts() {
         try {
@@ -1886,7 +1948,49 @@
         text-decoration: underline;
     }
 
-    /* Needs your attention */
+    /* Needs your attention — D6 two-section card */
+    /* Top: by-kind summary chips. */
+    .dora-alert-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .dora-alert-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--surface-elevated);
+        border: 1px solid var(--c-line);
+        text-decoration: none;
+        color: var(--c-ink);
+        font-size: 0.8rem;
+        transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .dora-alert-chip:hover {
+        border-color: var(--border-strong);
+        background: var(--c-accent-soft);
+    }
+    .dora-alert-chip-num {
+        font-weight: 700;
+    }
+    .dora-alert-chip-label {
+        color: var(--c-ink-mute);
+    }
+    /* Bottom: peek + "see all". */
+    .dora-alert-seeall {
+        display: inline-block;
+        margin-top: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--c-accent);
+        text-decoration: none;
+    }
+    .dora-alert-seeall:hover {
+        text-decoration: underline;
+    }
     .dora-attn-list {
         list-style: none;
         margin: 0;
@@ -1931,6 +2035,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    /* When the message itself is the deep-link (non-stock nudges) — strip the
+       default anchor chrome, reveal an underline on hover. */
+    .dora-attn-msg-link {
+        text-decoration: none;
+    }
+    .dora-attn-msg-link:hover {
+        text-decoration: underline;
     }
     .dora-attn-actions {
         display: flex;

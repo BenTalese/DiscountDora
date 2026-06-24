@@ -329,6 +329,48 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 3 (two-section alert card, GREEN)
+
+**Session goal:** Phase 3 (D6) — redesign the "Needs your attention" card into a
+top summary + bottom peek, and make the alert links keyboard-operable (the
+Phase-0 a11y carve-out). Frontend-only; `DashboardPage.vue`.
+
+**Done:**
+- **Top section — by-kind summary chips.** New `alertKindSummary` computed groups
+  the already-fetched active alerts by `kind` (display grouping of a fetched list,
+  not a new aggregate — R-003 note in code) → chips like "5 · expiring soon",
+  ordered by severity then count, each linking to `/alerts`. Labels/icons/colours
+  come from the shared alert model helpers (`kindTheme`, `iconFor`, `colorFor`),
+  which already existed "for the summary boxes" — one source.
+- **Bottom section — peek.** `peekAlerts` = top 3 by severity (was 5), each with a
+  precomputed `link` so the row renders a real `<router-link>`. Inline quick-actions
+  unchanged. Prominent **"See all alerts →"** footer link to `/alerts`.
+- **A11y (resolves the Phase-0 carve-out):** the alert name (stock kinds) /
+  message (non-stock nudges) are now `<router-link>`s when a deep-link target
+  exists — keyboard-focusable, middle-clickable. Removed `goToAlert` (the old
+  `href="#" @click.prevent` handler) and the unused `ATTENTION_LIMIT`.
+- `topAlerts` now returns the full severity-sorted list (peek slices it).
+
+**Engineering-standards close-gate:** R-003 (by-kind grouping is display of the
+already-fetched list — commented; severity counts on the payload remain server-
+owned), R-011 (real links, shared model helpers reused — no duplicated label/icon
+logic), R-002 (chip/see-all styles tokenised), R-008 (R-003 + a11y comments). No
+new ADR.
+
+**Verification:** `vue-tsc` GREEN; `eslint` GREEN; orphan-scan clean (no goToAlert/
+ATTENTION_LIMIT left). **Browser walk pending** — confirm chips render + link,
+peek shows 3 most-urgent, row links navigate, "See all" → `/alerts`.
+
+**Ledger:** opened **FU-295** (confirm `/alerts` no longer 404s — D5; route exists
+statically, needs a browser click-through per the reported-defect rule).
+
+**Next up:** **Phase 4** — the Money zone (savings captured / price drops /
+spend trend / pantry value from the unused reports API; more backend → static-
+only here). Then Phase 5 (restock + quick actions + cookable upgrade), Phase 7
+(mobile), deferred Phase 6 (calendar), and the FU-293 DashboardCard extraction.
+
+---
+
 ## 2026-06-24 — Dashboard rebuild Phase 2 (zones + reorder + server prefs, GREEN/static)
 
 **Session goal:** full Phase 2 per user decision ("full, backend static-only") —

@@ -52,6 +52,19 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-295 — Confirm the Alerts page (D5) no longer 404s
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 3).
+- **Type:** finding (reported defect, static-only verification).
+- **What:** feedback D5 reported "Alerts navigation is broken (goes to 404)". A
+  static read shows the `/alerts` route IS registered (`routes.ts` →
+  `pages/AlertsPage.vue`, the C-9 control surface), so it appears fixed — but a
+  static read is not proof. The Phase-3 dashboard alert card + its chips/
+  "See all" all link to `/alerts`.
+- **Why deferred:** no running app on this machine to click through.
+- **Recommended resolution:** confirm in browser — from the dashboard alert card
+  (chips, "See all alerts →") and the header bell, `/alerts` loads the control
+  page, not a 404.
+
 ## [OPEN] FU-294 — Dashboard card reorder: drag-handles (literal DnD) not built
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).
 - **Type:** follow-up (enhancement).

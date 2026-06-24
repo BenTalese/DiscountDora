@@ -6,6 +6,13 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 3 (alert card redesign, 2026-06-24).** The
+  "Needs your attention" card now leads with a **summary** — a row of chips
+  showing the shape of what's wrong at a glance ("5 · expiring soon", "3 · out
+  of stock") — above a peek at the three most-urgent alerts with their inline
+  quick-actions, and a clear **"See all alerts →"** into the alerts page. Alert
+  rows are now proper links (keyboard-accessible, open-in-new-tab) instead of
+  mouse-only handlers.
 - **Dashboard rebuild — Phase 2 (zones + reorder, 2026-06-24).** Dashboard
   cards are now grouped into labelled bands — **Act now**, **Today**, **Money**,
   **Your kitchen** — so the most urgent things sit up top instead of every card

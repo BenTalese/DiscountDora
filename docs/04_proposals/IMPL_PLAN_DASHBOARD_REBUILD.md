@@ -289,6 +289,14 @@ order/zone source), R-016 (don't eager-load widget data for hidden cards).
 
 ### Phase 3 — Alert card redesign (the two-section summary)
 
+> **Status (2026-06-24): DONE + green.** Top = by-kind summary chips ("5 ·
+> expiring soon"), bottom = peek at the top 3 (most-urgent first) with inline
+> actions, plus a prominent "See all alerts →". Alert row links are now real
+> `<router-link>`s (the Phase-0 a11y carve-out is resolved). `/alerts` route
+> exists (D5 appears fixed — confirm-in-browser FU-295). By-kind grouping is
+> client-side display of the already-fetched list (R-003 note in code).
+
+
 Depends on the alerts control page (C-9 / `PROPOSAL_ALERTS.md`) existing — the
 `/alerts` route is already referenced in code, so D5's 404 is likely resolved;
 **confirm in browser** and log a finding if not.

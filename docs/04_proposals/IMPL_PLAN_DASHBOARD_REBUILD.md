@@ -96,8 +96,8 @@ These are the raw material for the new value widgets (Phase 4–5).
 | 7 | `best_deals` | money | **Keep** |
 | 8 | `meal_plan` (week strip) | glance | **Keep** |
 | 9 | `stock_items` (donut) | glance | **Modify — deep-link buckets** |
-| 10 | `recipes` (total/favs) | counter | **Demote/merge** |
-| 11 | `meals` (on hand) | counter | **Demote/merge** |
+| 10 | `recipes` (total/favs) | counter | **Cut** (§2.6) |
+| 11 | `meals` (on hand) | counter | **Cut** (§2.6) |
 | 12 | `shopping_lists` (count) | counter | **Cut → merge into `primary_list`** |
 | 13 | `products` (total) | counter | **Cut** |
 
@@ -134,24 +134,56 @@ From the critique pass:
 
 ---
 
-## 2. Impact & decisions (resolve with user before Phase 2+)
+## 2. Impact & decisions — RESOLVED with user 2026-06-23
 
-1. **Card-prefs storage.** Today visibility lives in `localStorage` per user.
-   Adding reorder (Phase 2) — keep client-local, or promote to a
-   server-persisted preference (multi-device, survives cache clear)? *Recommend:*
-   server-persisted via the existing user-prefs path, since reorder + zone
-   assignment is real user investment. Decision affects Phase 2 backend scope.
-2. **Net card-count budget (Anti-creep).** Plan **cuts 1, merges 2, demotes 1,
-   adds 2 by default** (savings + restock) with the rest opt-in via the toggle.
-   Confirm the default-visible set so we don't ship a wall of widgets.
-3. **Fortnight calendar (D7)** is the largest new build and needs a backend
-   aggregation endpoint (shopping dates + expiries + meal-plan entries in one
-   range query). Confirm it's in scope now or deferred to a follow-up phase.
-4. **Price-drops widget** needs a "new low / dropped since last seen" signal —
-   compute server-side off price history, or derive from `best_deals`?
-   *Recommend* a small server addition (Honesty: "new low" must be true).
-5. **Suggestions vs. chat badge** — confirm `dora-suggests` isn't pure
-   duplication before keeping it.
+1. **Card-prefs storage → SERVER-PERSISTED.** Reorder + zone membership +
+   visibility move off `localStorage` to a per-user preference saved via the
+   backend (multi-device, survives cache clear). Phase 2 carries a small prefs
+   endpoint + migration (repository-routed, Postgres/SQLite portable — §7.5).
+2. **Default-visible set → CURATED.** On a fresh install, default-on is **only**:
+   Act-now (alerts / use-soon / suggestions), Today (cookable / week-ahead /
+   primary-list), **Savings**, **Restock radar**. Everything else (spend trend,
+   pantry value, price drops, any surviving glance stat) is **opt-in** via the
+   Cards menu. The dashboard looks focused out of the box (Anti-creep).
+3. **Fortnight calendar (D7) → DEFERRED to its own phase.** Build Phases 0–5
+   (high-value, mostly-existing-data) first; the calendar + its new aggregation
+   endpoint becomes a dedicated follow-up after the rebuild lands. Phase 6 below
+   is retained as the spec but is **not** part of the initial rebuild sequence.
+4. **Price-drops signal → SERVER-SIDE "new low".** A small backend addition
+   computes a genuine new-low / drop from price history (Honesty: "lowest you've
+   seen" must be true). **Plus a data-presence gate:** the product-derived money
+   widgets (**price drops** *and* **best deals**) are **hidden from the Cards
+   list entirely** unless product data exists — products is a data-presence
+   overlay now (`products_enabled` flag was dropped — see
+   `PROPOSAL_PRODUCTS_AS_OVERLAY.md`), so users with no products never see
+   widgets they can't populate. Reuse the existing `v-if="productsEnabled"`
+   data-presence signal that gates other product surfaces (R-003 — one signal).
+5. **Suggestions → KEEP, verify non-duplication.** Keep the `suggestions` card
+   but, during the build, confirm in the running app that it surfaces something
+   the chat-launcher badge doesn't already. If it's pure duplication, cut it then.
+6. **Recipes + meals counters → CUT BOTH.** Not merged — removed entirely.
+   Cookable-tonight + week-ahead already answer the useful recipe questions; raw
+   totals add nothing. (Updates the Phase 1 / §1 verdicts below from
+   "demote/merge" to "cut".)
+7. **Welcome-message copy → I draft.** The build authors the full pools
+   (~35–40 day-of-week-flavoured welcomes + a separate helpful-hints pool) in
+   Dora's voice, for the user to trim/tweak.
+8. **Empty-state for default money/restock cards → friendly onboarding.**
+   Savings + Restock are default-visible but empty for new users (no completed
+   shops / no run-out history). They render a **positive "here's what this will
+   track" empty state + CTA** ("Finish a shop to see your savings") and stay
+   visible so the feature is discoverable — consistent with the Phase-1
+   empty-state inversion (R-014). They do **not** auto-hide.
+9. **Quick-action row → lightweight inline popups.** Add-item / add-to-list /
+   log-price open a small inline dialog on the dashboard, submit, done — no
+   navigation (max Effortless). Reuse the existing mutation services + any
+   existing create-form sub-components where possible (R-001/R-011); don't
+   duplicate validation logic.
+10. **Delivery cadence → power through, one chunk at a time.** The user cannot
+    review in this environment, so phases are executed sequentially without
+    gating on PR review. Still: one clean commit + `CHANGELOG`/`DORA_WORKLOG`
+    entry per phase, and `vue-tsc` + `eslint` green before moving to the next
+    chunk (build-to-plan, verify-in-browser later).
 
 ---
 
@@ -194,8 +226,8 @@ emptiest.
 - **Cut `products`** card (pure vanity).
 - **Merge `shopping_lists`** into `primary_list` (show "+N other lists" line);
   drop the standalone counter.
-- **Demote/merge `recipes` + `meals`** into one compact "Your kitchen" glance
-  stat, or cut if Phase 4–5 widgets cover the intent. (Confirm via §2.2.)
+- **Cut `recipes` + `meals`** entirely (§2.6) — cookable-tonight + week-ahead
+  cover the useful recipe questions; raw totals add nothing.
 - **Invert empty states (R-014):** actionable cards (`attention`, `use_soon`,
   `suggestions`) render a *positive* empty state ("Nothing expiring — nice")
   instead of `v-if`-hiding. No value card silently disappears.
@@ -252,8 +284,11 @@ The highest-value phase — turns "demo" into "tool". All endpoints exist
 - 🥇 **Savings captured** widget — "You've saved **$X** this {period} vs. RRP",
   sparkline + lifetime toggle (`getSavingsCapturedAsync`). **Default-visible.**
   Sits beside `budget` so spend + saved tell the whole money story.
-- **Price drops** — tracked products at a new low / dropped (needs the §2.4
-  signal). Honesty: only claim "new low" when true.
+- **Price drops** — tracked products at a server-computed new low / drop (§2.4).
+  Honesty: only claim "new low" when true. **Data-presence gated** — this card
+  *and* `best_deals` are hidden from the Cards list unless product data exists
+  (§2.4); reuse the existing `productsEnabled` data-presence signal (R-003).
+  Opt-in even when present.
 - **Spend trend** — this period vs. last, by store (`getSpendByStoreAsync`).
   Opt-in.
 - **Pantry value** — estimated value on hand + trend (`getStockValueAsync`).
@@ -279,10 +314,11 @@ Add temporal intelligence and let the home screen *do*, not just route.
 *Gate:* R-001 (each is its own component), R-011 (use existing mutation
 services for quick actions — no bespoke fetch), Effortless principle.
 
-### Phase 6 — "This fortnight" calendar widget (D7)
+### Phase 6 — "This fortnight" calendar widget (D7) — DEFERRED (§2.3)
 
-The largest new build; likely needs a backend aggregation endpoint
-(§2.3). A 14-day grid; each date carries coloured dots for **planned shopping /
+**Not part of the initial rebuild sequence** — spec retained here; build as a
+dedicated follow-up after Phases 0–5 + 7 land. The largest new build; needs a
+backend aggregation endpoint (§2.3). A 14-day grid; each date carries coloured dots for **planned shopping /
 item expiries / planned meals**; clicking a date opens that day's detail
 (meals + events). One range query server-side (R-003 — don't stitch three
 client fetches into a calendar in the browser); Postgres/SQLite portable (§7.5).
@@ -330,12 +366,12 @@ able to audit "is anything missing?" at a glance.
 | D4 — Reorder cards via draggable rows in toggle list (L58) | Phase 2 | Drag + tap alternative + mobile-off (C13). |
 | D5 — Alerts nav 404 → build alerts control page (L59) | Phase 3 (dep.) | C-9 surface; `/alerts` route present — confirm resolved. |
 | D6 — Alert card redesign: top summary + bottom peek + "See all" (L60) | Phase 3 | Two-section `AlertSummaryWidget`. |
-| D7 — "This fortnight" calendar widget, coloured dots, click-a-date (L61) | Phase 6 | New build + aggregation endpoint (§2.3). |
+| D7 — "This fortnight" calendar widget, coloured dots, click-a-date (L61) | Phase 6 (DEFERRED follow-up, §2.3) | New build + aggregation endpoint; after Phases 0–5/7. |
 | L176 — Mascot not centred in greeting card | Phase 0 | B9.8 claims fixed; verify. |
 | L272 — "Next up to cook": next 3 by meal-plan + stock, ready/missing (L272) | Phase 5 | Cookable widget upgrade. |
 | L480 — Cross-app undo off (dashboard push-expiry → clear at stock item) | Out of scope (bug) | Cross-app undo defect, not a dashboard-design item; log as `DORA_FOLLOWUPS` finding for the undo/toast owner. |
 | Critique — no savings widget | Phase 4 | Flagship `SavingsCapturedWidget`. |
-| Critique — vanity counters dominate (`products`/`recipes`/`meals`/`shopping_lists`) | Phase 1 | Cut/merge/demote. |
+| Critique — vanity counters dominate (`products`/`recipes`/`meals`/`shopping_lists`) | Phase 1 | Cut `products`+`recipes`+`meals`; merge `shopping_lists` into primary list (§2.6). |
 | Critique — actionable cards hide when empty (inversion) | Phase 1 | Positive empty states (R-014). |
 | Critique — flat hierarchy / no triage gradient | Phase 2 | Zones. |
 | Critique — a11y (clickable articles, `href="#"`, nested interactives) | Phase 0 | Real controls / router-links (R-011). |

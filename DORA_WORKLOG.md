@@ -329,6 +329,61 @@ board per prior entries.
 
 ---
 
+## 2026-06-24 — Dashboard rebuild Phase 0 (foundations, GREEN)
+
+**Session goal:** Phase 0 of `IMPL_PLAN_DASHBOARD_REBUILD.md` — hygiene + a11y
+groundwork, no new widgets. `web_app/src/pages/DashboardPage.vue` only.
+
+**Done:**
+- **Refresh button removed** (D3 / feedback C16) — `onMounted(loadAll)` already
+  refreshes on nav. `loadAll` kept (alert actions + Cook button still use it).
+- **Card interaction model → real links (a11y / R-011).** All whole-card-clickable
+  cards converted from `<article @click="goTo()">` to `<router-link :to>`:
+  primary-list (both variants), budget, Pantry/stock donut, the-week-ahead, +
+  the doomed `recipes`/`meals`/`products` stat cards (converted for uniformity
+  even though Phase 1 deletes them). In-list static nav links converted from
+  `<a href="#" @click.prevent>` to `<router-link>`: attention "All N", cookable
+  "See more"/recipe names/empty CTA, best-deals "My products"/linked-stock/empty.
+- **Un-nested the "Use soon" card** (was a clickable card *containing* item
+  links — invalid + ambiguous). Now a plain card; "Rescue ideas →" header is the
+  `/waste` link, item names are their own router-links.
+- **`.dora-card` CSS** gained `display:block; color:inherit; text-decoration:none`
+  so a card renders cleanly as an `<a>` (commented, R-008).
+
+**Deliberately NOT done this phase (flagged, not silent):**
+- **Dark mode (D2):** the dashboard SCSS is **already fully token-clean** (audited
+  — every value is `var(--…)`; only the donut's `getComputedStyle` fallback hexes
+  remain, and only fire if a token is missing). No code change; **verify in
+  browser** (could be an app-wide theme issue, not dashboard-local).
+- **Mascot centring (L176):** already handled by the B9.8 `:deep(img){object-fit:
+  contain}` rule (line ~1373). Verify-only.
+- **The two dynamic alert links** (`goToAlert`, `alertLinkFor` may be null) kept
+  as `<a href="#">` with an inline R-011 carve-out comment — the **Phase 3**
+  alert-card redesign (D6) owns making them keyboard-operable.
+- **`DashboardCard.vue` scaffold** deferred from Phase 0 to **Phase 1** (its
+  first real consumer) to avoid committing an unused component (R-007). Phase 0
+  achieved the a11y goal via router-link in-place instead.
+
+**Engineering-standards close-gate:** R-002 (tokens — audited clean), R-011
+(framework-idiomatic real links), R-008 (carve-out comment on the deferred alert
+links + the `.dora-card` block note). No new R-rule/ADR. R-001 de-monolith
+begins in Phase 1 with the first extracted component.
+
+**Verification:** `npx vue-tsc -p tsconfig.json --noEmit` GREEN; `npx eslint`
+on the page GREEN (caught + fixed one `</article>`→`</router-link>` mismatch on
+the week-ahead card mid-edit). **Browser walk pending** (no running app this
+env) — confirm cards keyboard-focus + middle-click open, no visual regression,
+and the dark-mode question.
+
+**Ledger:** no new opens. (FU-287 cross-app-undo still open from the critique.)
+
+**Next up:** **Phase 1** — prune vanity (`products`/`recipes`/`meals` cut,
+`shopping_lists` merged into primary-list), empty-state inversion (R-014
+positive empties on actionable cards), the welcome/message system (agent-drafted
+pools), and create `DashboardCard.vue` as the first extracted widget shell.
+
+---
+
 ## 2026-06-23 — Dashboard `/design-critique` + rebuild plan (no code)
 
 **Session goal:** deep design review of `DashboardPage.vue` (mirroring the
@@ -369,14 +424,25 @@ R-002 tokens, R-003 state-ownership, R-007 scope, R-011 controls, R-014 empty
 states, C13 drag+tap, §7.5 portability for new endpoints). No ADR — this is a
 design doc, not a recurring engineering decision.
 
-**Open decisions for the user (plan §2):** card-prefs storage (local vs
-server-persisted once reorder lands), default-visible card set (Anti-creep),
-whether the fortnight calendar (needs a new aggregation endpoint) is in scope
-now or deferred, and the price-drop "new low" signal source.
+**§2 decisions — RESOLVED with user this session:** (1) card prefs →
+**server-persisted** (Phase 2 carries a prefs endpoint + migration); (2)
+default-visible set → **curated** (act-now + today + savings + restock only;
+rest opt-in); (3) fortnight calendar → **deferred** to its own follow-up after
+Phases 0–5/7; (4) price-drops → **server-side "new low"**, AND product-derived
+money widgets (price-drops + best-deals) **hidden from the Cards list unless
+product data is present** — reuses the data-presence `productsEnabled` signal
+(the `products_enabled` flag was dropped; products is a data-presence overlay
+now per `PROPOSAL_PRODUCTS_AS_OVERLAY.md`); (5) suggestions → **keep, verify
+non-dup in browser**; (6) `recipes` + `meals` counters → **cut both** (not
+merged); (7) welcome-message copy → **agent drafts** the ~35–40 day-aware
+welcomes + hints pool. All folded into the plan (§2 + verdict/phase lines).
 
-**Next up:** user confirms the §2 decisions, then execute Phase 0. (The other
-big impl plans — State Ownership, Cookbook, Cook Mode, Meal Plans — remain on
-the board per the prior entry.)
+**Next up:** execute **Phase 0** (foundations — remove refresh, fix card
+a11y/click model, dashboard token/dark-mode audit, verify mascot centring, and
+scaffold `components/dashboard/` + `DashboardCard.vue` to start de-monolithing
+the 1964-line page). Phases are independently shippable; do not roll up. (The
+other big impl plans — State Ownership, Cookbook, Cook Mode, Meal Plans —
+remain on the board per the prior entry.)
 
 ---
 

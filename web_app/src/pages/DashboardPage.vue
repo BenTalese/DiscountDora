@@ -15,16 +15,10 @@
             <q-space />
 
             <div class="dora-hero-actions">
-                <q-btn
-                    flat
-                    round
-                    dense
-                    :icon="ICONS.refresh"
-                    :loading="loading"
-                    @click="loadAll"
-                >
-                    <q-tooltip>Refresh dashboard</q-tooltip>
-                </q-btn>
+                <!-- D3 / feedback C16: the manual refresh button was removed —
+                     `onMounted(loadAll)` already refreshes on every navigation
+                     to the dashboard, so the button earned nothing. `loadAll`
+                     itself stays (alert actions re-fetch through it). -->
                 <q-btn flat dense no-caps :icon="ICONS.tune" label="Cards">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 240px">
@@ -94,13 +88,12 @@
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.notifications_active" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Needs your attention</h3>
-                        <a
+                        <router-link
                             class="dora-card-action dora-card-link"
-                            href="#"
-                            @click.prevent="goTo('/alerts')"
+                            to="/alerts"
                         >
                             All {{ alerts.length }} →
-                        </a>
+                        </router-link>
                     </header>
                     <ul class="dora-attn-list">
                         <li
@@ -117,6 +110,13 @@
                                 :color="alertColorFor(alert.severity)"
                                 size="18px"
                             />
+                            <!-- R-011/a11y carve-out: these alert links route to
+                                 a *dynamic* target (`alertLinkFor` may be null), so
+                                 they aren't a clean `<router-link>` swap like the
+                                 static nav links above. The whole alert card +
+                                 its links are rebuilt in the Phase 3 two-section
+                                 alert redesign (D6), which owns making these
+                                 keyboard-operable. Left as-is for this phase. -->
                             <a
                                 v-if="alert.stock_item_name"
                                 href="#"
@@ -149,9 +149,9 @@
                 v-if="isCardVisible('primary_list') && quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
             >
-                <article
+                <router-link
                     class="dora-card dora-card-clickable"
-                    @click="goTo(`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`)"
+                    :to="`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`"
                 >
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
@@ -187,13 +187,13 @@
                     <div v-else class="dora-empty q-mt-sm">
                         Loading totals…
                     </div>
-                </article>
+                </router-link>
             </div>
             <div
                 v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
                 class="col-12 col-sm-6 col-lg-6"
             >
-                <article class="dora-card dora-card-clickable" @click="goTo('/shopping-lists')">
+                <router-link class="dora-card dora-card-clickable" to="/shopping-lists">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.shopping_cart" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Primary shopping list</h3>
@@ -202,7 +202,7 @@
                     <div class="dora-empty">
                         No primary set — the cart button needs one to one-tap items in.
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Grocery budget (P2-05) ──────────────────────────────── -->
@@ -210,9 +210,9 @@
                 v-if="isCardVisible('budget') && budgetStatus"
                 class="col-12 col-sm-6 col-lg-6"
             >
-                <article
+                <router-link
                     class="dora-card dora-card-clickable"
-                    @click="goTo('/settings/money')"
+                    to="/settings/money"
                 >
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.savings" size="22px" class="dora-card-icon" />
@@ -263,7 +263,7 @@
                         ${{ budgetStatus.spent.toFixed(2) }} spent so far. Set a target
                         in Settings to see how you're tracking.
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
@@ -326,14 +326,13 @@
                 v-if="isCardVisible('use_soon') && wasteRescue && wasteRescue.items.length > 0"
                 class="col-12 col-sm-6 col-lg-6"
             >
-                <article
-                    class="dora-card dora-card-clickable"
-                    @click="goTo('/waste')"
-                >
+                <article class="dora-card">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.expiry" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Use soon</h3>
-                        <span class="dora-card-action">Rescue ideas →</span>
+                        <router-link class="dora-card-action dora-card-link" to="/waste">
+                            Rescue ideas →
+                        </router-link>
                     </header>
                     <ul class="dora-attn-list">
                         <li
@@ -349,13 +348,12 @@
                                         ? 'dora-attn-dot-medium'
                                         : 'dora-attn-dot-low'"
                             />
-                            <a
-                                href="#"
+                            <router-link
                                 class="dora-attn-name"
-                                @click.prevent.stop="goTo(`/stock/${item.stock_item_id}`)"
+                                :to="`/stock/${item.stock_item_id}`"
                             >
                                 {{ item.name }}
-                            </a>
+                            </router-link>
                             <span class="dora-attn-msg">
                                 {{
                                     item.is_expired
@@ -399,13 +397,12 @@
                                 class="dora-text-muted text-body2"
                             >({{ summary.recipes.cookable_count }})</span>
                         </h3>
-                        <a
+                        <router-link
                             class="dora-card-action dora-card-link"
-                            href="#"
-                            @click.prevent="goTo('/cookbook?cookable=true')"
+                            to="/cookbook?cookable=true"
                         >
                             See more →
-                        </a>
+                        </router-link>
                     </header>
                     <ul v-if="cookableTonight.length > 0" class="dora-cook-list">
                         <li
@@ -413,10 +410,9 @@
                             :key="r.recipe_id"
                             class="dora-cook-row"
                         >
-                            <a
-                                href="#"
+                            <router-link
                                 class="dora-cook-name"
-                                @click.prevent="goTo(`/cookbook/${r.recipe_id}`)"
+                                :to="`/cookbook/${r.recipe_id}`"
                             >
                                 <q-icon
                                     v-if="r.is_favourite"
@@ -426,7 +422,7 @@
                                     class="q-mr-xs"
                                 />
                                 {{ r.name }}
-                            </a>
+                            </router-link>
                             <span class="dora-cook-meta">
                                 <span v-if="recipeTotalTime(r) !== null">
                                     {{ recipeTotalTime(r) }}m
@@ -449,11 +445,7 @@
                     </ul>
                     <div v-else class="dora-empty">
                         Nothing's fully in stock right now.
-                        <a
-                            class="dora-empty-cta"
-                            href="#"
-                            @click.prevent="goTo('/cookbook')"
-                        >Browse recipes →</a>
+                        <router-link class="dora-empty-cta" to="/cookbook">Browse recipes →</router-link>
                     </div>
                 </article>
             </div>
@@ -467,13 +459,12 @@
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Best deals on your saved products</h3>
-                        <a
+                        <router-link
                             class="dora-card-action dora-card-link"
-                            href="#"
-                            @click.prevent="goTo('/my-products')"
+                            to="/my-products"
                         >
                             My products →
-                        </a>
+                        </router-link>
                     </header>
                     <ul v-if="bestDeals.length > 0" class="dora-deal-list">
                         <li
@@ -495,13 +486,12 @@
                                     {{ p.store_name }}
                                     <span v-if="p.linked_stock_item_id">
                                         ·
-                                        <a
-                                            href="#"
+                                        <router-link
                                             class="text-primary"
-                                            @click.prevent="goTo(`/stock/${p.linked_stock_item_id}`)"
+                                            :to="`/stock/${p.linked_stock_item_id}`"
                                         >
                                             {{ p.linked_stock_item_name }}
-                                        </a>
+                                        </router-link>
                                     </span>
                                 </div>
                             </div>
@@ -520,18 +510,14 @@
                     </ul>
                     <div v-else class="dora-empty">
                         Nothing on special among your saved products right now.
-                        <a
-                            class="dora-empty-cta"
-                            href="#"
-                            @click.prevent="goTo('/product-search')"
-                        >Hunt for deals →</a>
+                        <router-link class="dora-empty-cta" to="/product-search">Hunt for deals →</router-link>
                     </div>
                 </article>
             </div>
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div v-if="isCardVisible('stock_items')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/stock')">
+                <router-link class="dora-card dora-card-clickable" to="/stock">
                     <header class="dora-card-head">
                         <q-icon name="inventory_2" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Pantry</h3>
@@ -581,12 +567,12 @@
                             </li>
                         </ul>
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Meal plan card (with 7-day strip) ──────────────────── -->
             <div v-if="isCardVisible('meal_plan')" class="col-12 col-lg-8">
-                <article class="dora-card dora-card-clickable" @click="goTo('/meal-plans')">
+                <router-link class="dora-card dora-card-clickable" to="/meal-plans">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.calendar_month" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">The week ahead</h3>
@@ -628,12 +614,12 @@
                             </div>
                         </div>
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Recipes card ──────────────────────────────────────── -->
             <div v-if="isCardVisible('recipes')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/cookbook')">
+                <router-link class="dora-card dora-card-clickable" to="/cookbook">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.menu_book" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Recipes</h3>
@@ -654,12 +640,12 @@
                             <div class="dora-stat-label">favourites</div>
                         </div>
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Meals card ────────────────────────────────────────── -->
             <div v-if="isCardVisible('meals')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/cookbook')">
+                <router-link class="dora-card dora-card-clickable" to="/cookbook">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.restaurant" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Meals on hand</h3>
@@ -675,7 +661,7 @@
                             <div class="dora-stat-label">recipes stocked</div>
                         </div>
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <!-- ───── Shopping lists card ───────────────────────────────── -->
@@ -700,7 +686,7 @@
 
             <!-- ───── Products card ─────────────────────────────────────── -->
             <div v-if="isCardVisible('products')" class="col-12 col-sm-6 col-lg-4">
-                <article class="dora-card dora-card-clickable" @click="goTo('/product-search')">
+                <router-link class="dora-card dora-card-clickable" to="/product-search">
                     <header class="dora-card-head">
                         <q-icon :name="ICONS.local_offer" size="22px" class="dora-card-icon" />
                         <h3 class="dora-card-title">Products</h3>
@@ -712,7 +698,7 @@
                             <div class="dora-stat-label">tracked</div>
                         </div>
                     </div>
-                </article>
+                </router-link>
             </div>
 
             <div v-if="visibleCardCount === 0" class="col-12">
@@ -1400,6 +1386,13 @@
         animation: dora-fade-up 0.4s ease-out both;
     }
     .dora-card {
+        /* `display:block` + inherit/none let a clickable card render as a real
+           <router-link> (an <a>) without inline-anchor layout or link chrome —
+           the whole card is one keyboard-focusable, middle-clickable control
+           (R-011, a11y). Harmless on the non-clickable <article> cards. */
+        display: block;
+        color: inherit;
+        text-decoration: none;
         background: var(--c-surface);
         border: 1px solid var(--c-line);
         border-radius: 18px;

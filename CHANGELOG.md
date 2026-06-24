@@ -6,6 +6,16 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Dashboard rebuild — Phase 0 (foundations, 2026-06-24).** Groundwork ahead of
+  the dashboard content/layout rebuild (`IMPL_PLAN_DASHBOARD_REBUILD.md`). The
+  manual **Refresh button is gone** — the dashboard already reloads on every
+  navigation, so it earned nothing. Every dashboard **card and link is now a
+  real link**: cards that navigate (Pantry, the week ahead, primary shopping
+  list, budget, and the soon-to-change stat cards) are keyboard-focusable and
+  open-in-new-tab–able instead of mouse-only `@click` blocks, and the in-card
+  links (alerts "All", "Rescue ideas", recipe names, deal items, empty-state
+  CTAs) became proper router links. The "Use soon" card no longer nests links
+  inside a clickable card. No visual change intended.
 - **Three more voices on the catalog (2026-06-24, download-only).** Alba
   (Scottish woman, warm and lilting), Northern English (friendly northern
   English man), and Hannah (soft American woman) join the five bundled

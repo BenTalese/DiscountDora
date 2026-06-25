@@ -1,0 +1,123 @@
+"""PROPOSAL_RECIPE_IMAGE_STEPS — read/write helpers for image-mode steps.
+
+A recipe in `steps_mode = 'image'` owns 0..N `RecipeStepImage` rows ordered
+by `sequence`. Each row stores the same `data:image/...;base64,...` UTF-8
+bytes shape as `Recipe.image` (the client picks → resizes → emits a data
+URL; the server stores the encoded bytes; the bytes endpoint decodes +
+serves raw).
+
+`replace_step_images_for_recipe` is the single write path: wipe + re-create
+from the request (mirrors `replace_steps_for_recipe`).
+"""
+from dataclasses import dataclass
+from typing import Iterable
+from uuid import UUID, uuid4
+
+from sqlalchemy import select
+
+from dora_api.app import db
+
+# Soft cap mirrored on the client. The hard guard lives here so the API
+# rejects a runaway client payload before allocating bytes.
+MAX_STEP_IMAGES_PER_RECIPE = 20
+
+
+@dataclass(slots=True)
+class StepImageWrite:
+    """Wire shape for a single step image on create/update.
+
+    `image_data_url` is the encoded `data:image/<jpeg|png|webp>;base64,...`
+    string the client uploaded. None of the call sites need a separate MIME
+    field — the format lives inside the data URL, same as Recipe.image.
+    """
+    sequence: int
+    image_data_url: str
+
+
+def _step_image_table():
+    return db.metadata.tables["RecipeStepImage"]
+
+
+def has_step_images(recipe_id: UUID) -> bool:
+    table = _step_image_table()
+    row = db.session.execute(
+        select(table.c.id).where(table.c.recipe_id == recipe_id).limit(1)
+    ).first()
+    return row is not None
+
+
+def has_step_images_for_recipes(recipe_ids: Iterable[UUID]) -> set[UUID]:
+    """Bulk variant — returns the subset of input ids that own >= 1 image."""
+    ids = list(recipe_ids)
+    if not ids:
+        return set()
+    table = _step_image_table()
+    rows = db.session.execute(
+        select(table.c.recipe_id.distinct()).where(table.c.recipe_id.in_(ids))
+    ).all()
+    return {row[0] for row in rows}
+
+
+def get_step_image_metadata_for_recipe(recipe_id: UUID) -> list[dict]:
+    """Return ordered {id, sequence} dicts for the detail DTO. Bytes are
+    never inlined — the SPA loads each image via the dedicated bytes
+    endpoint so list/detail JSON stays slim."""
+    table = _step_image_table()
+    rows = db.session.execute(
+        select(table.c.id, table.c.sequence)
+        .where(table.c.recipe_id == recipe_id)
+        .order_by(table.c.sequence)
+    ).all()
+    return [{"id": row[0], "sequence": row[1]} for row in rows]
+
+
+def get_step_image_bytes(recipe_id: UUID, image_id: UUID) -> bytes | None:
+    """Load the encoded data-URL bytes for a single step image. Returns
+    None when the image isn't on this recipe (or doesn't exist)."""
+    table = _step_image_table()
+    row = db.session.execute(
+        select(table.c.image)
+        .where(table.c.id == image_id)
+        .where(table.c.recipe_id == recipe_id)
+    ).first()
+    return row[0] if row else None
+
+
+def _validate_writes(writes: list[StepImageWrite]) -> None:
+    if len(writes) > MAX_STEP_IMAGES_PER_RECIPE:
+        raise ValueError(
+            f"Too many step images ({len(writes)}); the cap is "
+            f"{MAX_STEP_IMAGES_PER_RECIPE} per recipe."
+        )
+    for write in writes:
+        if not (write.image_data_url or "").startswith("data:image/"):
+            raise ValueError(
+                "Each step image must be a 'data:image/<type>;base64,...' "
+                "data URL."
+            )
+
+
+def replace_step_images_for_recipe(
+    recipe_id: UUID, writes: list[StepImageWrite]
+) -> None:
+    """Wipe existing step images and re-insert from `writes`. Empty list
+    clears all rows; the recipe still has `steps_mode = 'image'` (the
+    endpoint validates that the mode + payload agree).
+    """
+    _validate_writes(writes)
+
+    table = _step_image_table()
+    db.session.execute(table.delete().where(table.c.recipe_id == recipe_id))
+
+    if not writes:
+        return
+
+    db.session.execute(table.insert(), [
+        {
+            "id": uuid4(),
+            "recipe_id": recipe_id,
+            "sequence": write.sequence,
+            "image": write.image_data_url.encode("utf-8"),
+        }
+        for write in writes
+    ])

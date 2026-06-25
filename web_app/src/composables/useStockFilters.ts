@@ -21,7 +21,7 @@ export type StockSortKey =
     | 'level_lowest'
     | 'level_highest'
     | 'updated_recent'
-    | 'updated_oldest';
+    | 'expiry_asc';
 
 export type StockCartFilter = 'all' | 'on_list' | 'off_list';
 
@@ -31,7 +31,7 @@ export const STOCK_SORT_OPTIONS: { value: StockSortKey; label: string }[] = [
     { value: 'level_lowest', label: 'Stock level (lowest first)' },
     { value: 'level_highest', label: 'Stock level (highest first)' },
     { value: 'updated_recent', label: 'Recently updated' },
-    { value: 'updated_oldest', label: 'Stalest first' },
+    { value: 'expiry_asc', label: 'Expires soonest' },
 ];
 
 /**
@@ -238,12 +238,23 @@ export function useStockFilters(sources: {
                     ),
                 );
                 break;
-            case 'updated_oldest':
-                sorted.sort((a, b) =>
-                    (a.stock_level_last_updated ?? '').localeCompare(
-                        b.stock_level_last_updated ?? '',
-                    ),
-                );
+            case 'expiry_asc':
+                // C-waste W2: nearest-expiry first; items without an
+                // expiry date fall to the bottom (nulls last). Ties
+                // break on stock_level_last_updated asc (least-recently
+                // touched falls back into "stalest" territory) then by
+                // name so the order is fully deterministic.
+                sorted.sort((a, b) => {
+                    const ae = a.expiry_date ?? '';
+                    const be = b.expiry_date ?? '';
+                    if (ae && !be) return -1;
+                    if (!ae && be) return 1;
+                    if (ae !== be) return ae.localeCompare(be);
+                    const au = a.stock_level_last_updated ?? '';
+                    const bu = b.stock_level_last_updated ?? '';
+                    if (au !== bu) return au.localeCompare(bu);
+                    return collator.compare(a.name, b.name);
+                });
                 break;
             case 'name_asc':
             default:

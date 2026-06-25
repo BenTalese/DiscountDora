@@ -487,78 +487,10 @@
                 </DashboardCard>
             </div>
 
-            <!-- ───── Use soon (P2-06) ────────────────────────────────────── -->
-            <!-- R-014: calm empty state instead of vanishing when nothing's
-                 near its use-by date. -->
-            <div
-                v-if="isCardVisible('use_soon')"
-                class="col-12 col-sm-6 col-lg-6"
-                :style="{ order: cardCssOrder('use_soon') }"
-            >
-                <DashboardCard :icon="ICONS.expiry" title="Use soon">
-                    <template #action>
-                        <router-link
-                            v-if="wasteRescue && wasteRescue.items.length > 0"
-                            class="dora-card-action dora-card-link"
-                            to="/waste"
-                        >
-                            Rescue ideas →
-                        </router-link>
-                    </template>
-                    <div
-                        v-if="!wasteRescue || wasteRescue.items.length === 0"
-                        class="dora-empty dora-empty-ok"
-                    >
-                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
-                        Nothing's near its use-by date. Nice.
-                    </div>
-                    <ul v-else class="dora-attn-list">
-                        <li
-                            v-for="item in wasteRescue.items.slice(0, 4)"
-                            :key="item.stock_item_id"
-                            class="dora-attn-row"
-                        >
-                            <span
-                                class="dora-attn-dot"
-                                :class="item.is_expired
-                                    ? 'dora-attn-dot-high'
-                                    : item.days_until_expiry <= 2
-                                        ? 'dora-attn-dot-medium'
-                                        : 'dora-attn-dot-low'"
-                            />
-                            <router-link
-                                class="dora-attn-name"
-                                :to="`/stock/${item.stock_item_id}`"
-                            >
-                                {{ item.name }}
-                            </router-link>
-                            <span class="dora-attn-msg">
-                                {{
-                                    item.is_expired
-                                        ? `expired ${Math.abs(item.days_until_expiry)}d ago`
-                                        : item.days_until_expiry === 0
-                                            ? 'today'
-                                            : item.days_until_expiry === 1
-                                                ? 'tomorrow'
-                                                : `in ${item.days_until_expiry}d`
-                                }}
-                            </span>
-                        </li>
-                    </ul>
-                    <div
-                        v-if="wasteRescue && wasteRescue.items.length > 0 && wasteRescue.recipes.length > 0"
-                        class="text-caption dora-text-muted q-mt-xs"
-                    >
-                        {{ wasteRescue.recipes[0]!.matching_count }} can go into
-                        <em>{{ wasteRescue.recipes[0]!.name }}</em>
-                        <span v-if="wasteRescue.recipes.length > 1">
-                            (+{{ wasteRescue.recipes.length - 1 }} more idea{{
-                                wasteRescue.recipes.length === 2 ? '' : 's'
-                            }})
-                        </span>
-                    </div>
-                </DashboardCard>
-            </div>
+            <!-- C-waste W5 — the standalone "Use soon" card was removed
+                 (PROPOSAL_WASTE_MINIMISATION §4.5). Near-expiry items
+                 surface via the existing "Needs your attention" card's
+                 `expired` / `expiring_soon` alert kinds. -->
 
             <!-- ───── Cookable tonight (P12) ──────────────────────────────── -->
             <div
@@ -1077,9 +1009,6 @@
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
-    import WasteApiService, {
-        type WasteRescue,
-    } from 'src/services/api/wasteApiService';
     import { useSuggestionStore } from 'src/stores/suggestionStore';
     import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
@@ -1108,7 +1037,6 @@
         | 'attention'
         | 'primary_list'
         | 'budget'
-        | 'use_soon'
         | 'suggestions'
         | 'cookable'
         | 'best_deals'
@@ -1154,7 +1082,6 @@
     // can reorder within a zone; their saved order overrides this.
     const CARD_DEFS: CardDef[] = [
         { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active, zone: 'act' },
-        { id: 'use_soon', label: 'Use soon', icon: ICONS.expiry, zone: 'act' },
         { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome', zone: 'act' },
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
@@ -1192,7 +1119,6 @@
     const alertApi = new AlertApiService();
     const productApi = new ProductApiService();
     const budgetApi = new BudgetApiService();
-    const wasteApi = new WasteApiService();
     const reportsApi = new ReportsApiService();
     // P2-04 — suggestion store shared with the Dora launcher badge and
     // the chat panel so dismiss/snooze here propagates everywhere.
@@ -1270,11 +1196,6 @@
     // card is hidden when the loader errors so we never block dashboard
     // render on this slot.
     const budgetStatus = ref<BudgetStatus | null>(null);
-    // P2-06 — expiry rescue. Surfaces the top few at-risk items as a
-    // peek; the full picture (plus log/freeze/used actions) lives on the
-    // /waste page.
-    const wasteRescue = ref<WasteRescue | null>(null);
-
     // Phase 4 — Money zone widgets, each backed by an existing reports endpoint.
     // Only loaded when money is enabled (the cards are gated on it anyway). The
     // savings widget carries its own range toggle; spend/pantry use a sensible
@@ -1783,14 +1704,6 @@
         }
     }
 
-    async function loadWasteRescue() {
-        try {
-            wasteRescue.value = await wasteApi.getRescueAsync(7);
-        } catch {
-            wasteRescue.value = null;
-        }
-    }
-
     // ── Money zone loaders (Phase 4) ─────────────────────────────────────
     // Guarded on `moneyEnabled` — the cards are gated on it, so there's no point
     // fetching dollar reports when money is off. Each is non-fatal (the card
@@ -1971,7 +1884,6 @@
             loadAlerts(),
             loadBestDeals(),
             loadBudget(),
-            loadWasteRescue(),
             loadSavings(),
             loadSpendByStore(),
             loadPantryValue(),

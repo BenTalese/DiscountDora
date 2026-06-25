@@ -869,6 +869,7 @@
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
     import { relativeTime } from 'src/helpers/relativeTime';
+    import { humaniseWasteReason } from 'src/helpers/wasteReasons';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
@@ -1571,18 +1572,8 @@
         auto_meal_plan: 'Auto-added from meal plan',
         auto_frequently_added: 'Auto-added: frequently added',
     };
-    const WASTE_REASON_LABELS: Record<string, string> = {
-        expired: 'expired',
-        spoiled: 'spoiled',
-        did_not_like: "didn't like",
-        overbought: 'overbought',
-        other: 'other reason',
-    };
     function humaniseAddedVia(via: string): string {
         return ADDED_VIA_LABELS[via] ?? 'Added to a list';
-    }
-    function humaniseWasteReason(reason: string): string {
-        return WASTE_REASON_LABELS[reason] ?? reason;
     }
     const lifecycleEvents = computed<LifecycleEvent[]>(() => {
         const d = detail.value;
@@ -1618,22 +1609,17 @@
             });
         }
 
-        // Waste events.
+        // Waste events. C-waste slim: reason-only — no quantity / value /
+        // note. The timeline entry is a single line.
         for (const w of d.waste_events ?? []) {
             const reason = humaniseWasteReason(w.reason);
-            const qty = w.quantity != null ? `${w.quantity} ` : '';
-            const value = w.estimated_value != null
-                ? ` (~$${w.estimated_value.toFixed(2)})`
-                : '';
-            const entry: LifecycleEvent = {
+            out.push({
                 id: `waste-${w.occurred_at}-${reason}`,
                 at: w.occurred_at,
-                title: `Wasted: ${qty}${reason}${value}`.trim(),
+                title: `Wasted: ${reason}`,
                 icon: ICONS.delete_outline,
                 color: 'negative',
-            };
-            if (w.note) entry.body = w.note;
-            out.push(entry);
+            });
         }
 
         // Past list-adds — list name + provenance ("auto: low stock").

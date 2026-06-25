@@ -1,6 +1,12 @@
 import AxiosHttpClient from './axiosHttpClient';
 
-/** P2-06 — expiry rescue + waste log. */
+/**
+ * C-waste — slim waste log + expiry rescue.
+ *
+ * Capture is reason-only (no quantity/value/note). The expiry-rescue
+ * feed is unchanged — the dashboard's "Needs your attention" card and
+ * Dora's `expiry_rescue` tool both still read it.
+ */
 
 export type WasteReason =
     | 'expired'
@@ -39,10 +45,6 @@ export type WasteRescue = {
 export type LogWasteEventCommand = {
     stock_item_id: string;
     reason: WasteReason;
-    quantity?: number | null;
-    estimated_value?: number | null;
-    note?: string | null;
-    mark_out_of_stock?: boolean;
 };
 
 export type WasteEvent = {
@@ -50,27 +52,29 @@ export type WasteEvent = {
     stock_item_id: string | null;
     stock_item_name: string;
     reason: WasteReason;
-    quantity: number | null;
-    estimated_value: number | null;
-    note: string | null;
     occurred_at: string | null;
 };
 
-export type WasteInsightItem = {
+export type MostWastedRow = {
     stock_item_id: string | null;
     stock_item_name: string;
     event_count: number;
-    total_quantity: number;
-    estimated_value: number;
-    reasons: Record<string, number>;
     last_occurred_at: string | null;
+};
+
+export type MostRecentRow = {
+    event_id: string;
+    stock_item_id: string | null;
+    stock_item_name: string;
+    reason: WasteReason;
+    occurred_at: string | null;
 };
 
 export type WasteInsights = {
     window_days: number;
     total_events: number;
-    total_estimated_value: number;
-    by_item: WasteInsightItem[];
+    most_wasted: MostWastedRow[];
+    most_recent: MostRecentRow[];
 };
 
 export default class WasteApiService {

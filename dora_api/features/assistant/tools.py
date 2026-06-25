@@ -598,9 +598,9 @@ TOOL_SCHEMAS: list[dict] = [
             "description": (
                 "How often the user has been throwing food out, by item — "
                 "use for 'what am I wasting often?', 'what should I stop "
-                "buying?', 'where am I losing money?'. Sourced from "
-                "voluntary 'Log as wasted' taps on the Waste page; will "
-                "report no data when the user hasn't logged anything."
+                "buying?'. Sourced from voluntary 'Mark as wasted' taps "
+                "on each stock item's expiry menu; will report no data "
+                "when the user hasn't logged anything."
             ),
             "parameters": {
                 "type": "object",
@@ -2052,8 +2052,9 @@ def expiry_rescue(args: dict) -> list[dict]:
 
 
 def waste_insights(args: dict) -> list[dict]:
-    # Same DB walk as GET /api/waste/insights but plain dict output so
-    # the model doesn't have to learn the wrapper shape.
+    # C-waste slim: only two answer shapes — items wasted most often,
+    # and the most recent events. No reason breakdowns, no value sums
+    # (those fields are gone from the schema).
     try:
         window_days = int(args.get("window_days", 90))
     except (TypeError, ValueError):
@@ -2076,39 +2077,41 @@ def waste_insights(args: dict) -> list[dict]:
             "status": "no_data",
             "note": (
                 "No waste events have been logged in this window. The "
-                "user logs them via the Waste page when they have to "
-                "throw something out."
+                "user logs them with a one-tap action from a stock "
+                "item's expiry dropdown."
             ),
         }]
+    events.sort(key=lambda e: e.occurred_at, reverse=True)
 
     buckets: dict[tuple, dict] = {}
-    total_value = 0.0
     for event in events:
         key = (event.stock_item_id, event.stock_item_name)
         bucket = buckets.setdefault(key, {
             "name": event.stock_item_name,
             "events": 0,
-            "estimated_value": 0.0,
-            "reasons": {},
         })
         bucket["events"] += 1
-        if event.estimated_value:
-            bucket["estimated_value"] += float(event.estimated_value)
-            total_value += float(event.estimated_value)
-        bucket["reasons"][event.reason] = bucket["reasons"].get(event.reason, 0) + 1
 
-    rows = sorted(
+    most_wasted = sorted(
         buckets.values(),
-        key=lambda b: (-b["events"], -b["estimated_value"], b["name"]),
-    )
-    for row in rows:
-        row["estimated_value"] = round(row["estimated_value"], 2)
+        key=lambda b: (-b["events"], b["name"]),
+    )[:_MAX_ROWS]
+
+    most_recent = [
+        {
+            "name": e.stock_item_name,
+            "reason": e.reason,
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+        }
+        for e in events[:10]
+    ]
+
     return [{
         "window_days": window_days,
         "status": "ok",
         "total_events": len(events),
-        "total_estimated_value": round(total_value, 2),
-        "by_item": rows[:_MAX_ROWS],
+        "most_wasted": most_wasted,
+        "most_recent": most_recent,
     }]
 
 
@@ -2587,8 +2590,12 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "compare_prices": {"path": "/product-search", "label": "Open product search"},
     "purchase_price_stats": {"path": "/reports", "label": "Open Reports"},
     "budget_status": {"path": "/settings/preferences", "label": "Adjust budget"},
-    "expiry_rescue": {"path": "/waste", "label": "Open Waste page"},
-    "waste_insights": {"path": "/waste", "label": "Open Waste page"},
+    # C-waste W6 — the /waste page is gone. Rescue intent ("what's
+    # expiring?") now lives on the stock overview's "Expires soonest"
+    # sort and on the dashboard's Needs-your-attention card; the
+    # `waste_insights` answer carries the data itself (most_wasted /
+    # most_recent), no separate page to "open".
+    "expiry_rescue": {"path": "/stock", "label": "Open Stock"},
     # list_suggestions intentionally has no nav target — the SPA reads
     # primary_action off each suggestion and routes from there.
     "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},

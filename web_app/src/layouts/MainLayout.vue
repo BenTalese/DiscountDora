@@ -226,7 +226,10 @@
             { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },
             { label: 'Data', icon: ICONS.storage, link: '/data' },
             { label: 'Reports', icon: ICONS.insights, link: '/reports' },
-            { label: 'Waste', icon: ICONS.expiry, link: '/waste' }
+            // C-waste W6 — Waste nav slot removed; near-expiry items
+            // surface via Needs-your-attention on the dashboard and
+            // through Dora's `expiry_rescue` tool. No replacement slot
+            // (PROPOSAL_WASTE_MINIMISATION §2 D11).
             // B9.3: Settings used to live here too; it's already in the user
             // dropdown (header avatar). Duplicating it in the main menu was
             // confusing — removed.

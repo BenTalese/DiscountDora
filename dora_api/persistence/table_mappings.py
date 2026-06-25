@@ -31,6 +31,7 @@ from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.recipe_section import RecipeSection
 from dora_api.domain.entities.recipe_step import RecipeStep
+from dora_api.domain.entities.recipe_step_image import RecipeStepImage
 from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine,
@@ -429,18 +430,16 @@ def configure_mappings(db: SQLAlchemy):
         Column("tier_override", String(16), nullable=True),
     )
 
-    # P2-06 — append-only log of discarded food. FK is SET NULL (not
+    # C-waste — append-only log of discarded food. FK is SET NULL (not
     # CASCADE) so deleting a stock item doesn't wipe waste history; the
-    # denormalised name on the row keeps insights readable.
+    # denormalised name on the row keeps insights readable. Capture is
+    # reason-only (no quantity/value/note) per PROPOSAL_WASTE_MINIMISATION.
     stock_item_waste_event_table = Table(
         "StockItemWasteEvent", metadata,
         Column("id", UUIDType, primary_key=True),
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="SET NULL"), nullable=True),
         Column("stock_item_name", String(255), nullable=False),
         Column("reason", String(32), nullable=False),
-        Column("quantity", Integer, nullable=True),
-        Column("estimated_value", Float, nullable=True),
-        Column("note", String, nullable=True),
         Column("occurred_at", DateTime(timezone=True), nullable=False),
     )
 
@@ -521,6 +520,11 @@ def configure_mappings(db: SQLAlchemy):
         Column("version_group_id", UUIDType, nullable=True, index=True),
         # C-4 Chunk 9 — simple nutrition (kcal). NULL when unset.
         Column("kcal", Integer, nullable=True),
+        # PROPOSAL_RECIPE_IMAGE_STEPS — explicit steps payload selector
+        # ('structured' | 'freeform' | 'image'). Server-default 'freeform'
+        # so new recipes start in the dumbest mode; backfill migration
+        # promotes existing recipes with RecipeStep rows to 'structured'.
+        Column("steps_mode", String(16), nullable=False, server_default="freeform"),
     )
 
     # C-4 Chunk 2 — recipe → dietary-tag association. The tag vocabulary is
@@ -599,6 +603,20 @@ def configure_mappings(db: SQLAlchemy):
         "RecipeStepTool", metadata,
         Column("step_id", UUIDType, ForeignKey("RecipeStep.id", ondelete="CASCADE"), primary_key=True),
         Column("tool_id", UUIDType, ForeignKey("Tool.id", ondelete="CASCADE"), primary_key=True),
+    )
+
+    # PROPOSAL_RECIPE_IMAGE_STEPS — ordered photo-mode step images. One row
+    # per uploaded image; `sequence` orders them. Image blob is the same
+    # `data:image/...;base64,...` UTF-8 bytes shape as Recipe.image (so the
+    # client picker -> server -> bytes-endpoint pipeline is identical
+    # across upload sites). Deferred at the mapper so the list/detail
+    # endpoints never inline blob bytes.
+    recipe_step_image_table = Table(
+        "RecipeStepImage", metadata,
+        Column("id", UUIDType, primary_key=True),
+        Column("recipe_id", UUIDType, ForeignKey("Recipe.id", ondelete="CASCADE"), nullable=False),
+        Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("image", LargeBinary, nullable=False),
     )
 
     meal_plan_table = Table(
@@ -982,6 +1000,18 @@ def configure_mappings(db: SQLAlchemy):
         "name": recipe_section_table.c.name,
     })
 
+    # PROPOSAL_RECIPE_IMAGE_STEPS — step image rows. Image blob deferred so
+    # list reads never drag bytes; the dedicated
+    # `/recipes/<id>/step-images/<image_id>` route triggers the load on
+    # attribute access.
+    _mapper_registry.map_imperatively(RecipeStepImage, recipe_step_image_table, properties={
+        "_id_col": recipe_step_image_table.c.id,
+        "id": recipe_step_image_table.c.id,
+        "recipe_id": recipe_step_image_table.c.recipe_id,
+        "sequence": recipe_step_image_table.c.sequence,
+        "image": deferred(recipe_step_image_table.c.image),
+    })
+
     # C-4 Chunk 6 — structured step rows. Ingredient + tool links are not
     # mapped as SQLAlchemy relationships; the access helper queries the link
     # tables directly when hydrating the DTO (matches the dietary-tag/tool
@@ -1030,6 +1060,7 @@ def configure_mappings(db: SQLAlchemy):
         "_cuisine_id": recipe_table.c.cuisine_id,
         "_category_id": recipe_table.c.category_id,
         "id": recipe_table.c.id,
+        "steps_mode": recipe_table.c.steps_mode,
         # C-cross Chunk 5 / FU-090 — defer the image blob so the list
         # endpoint doesn't load every recipe's image bytes into memory
         # just to compute `has_image`. The detail endpoint (and the

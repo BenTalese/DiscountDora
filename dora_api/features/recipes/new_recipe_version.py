@@ -26,6 +26,10 @@ from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, get_steps_for_recipe, replace_steps_for_recipe,
 )
+from dora_api.features.recipes.recipe_step_image_access import (
+    StepImageWrite, get_step_image_metadata_for_recipe, get_step_image_bytes,
+    replace_step_images_for_recipe,
+)
 from dora_api.features.recipes.recipe_tag_access import (
     get_tag_ids_for_recipe, set_tag_ids_for_recipe,
 )
@@ -110,6 +114,7 @@ class NewRecipeVersionHandler:
             time_of_day=source.time_of_day,
             version_group_id=group_id,
             kcal=source.kcal,
+            steps_mode=source.steps_mode,
         )
         self.repository.add(new_recipe)
         self.repository.save_changes()
@@ -150,6 +155,24 @@ class NewRecipeVersionHandler:
                     tool_ids=list(row["tool_ids"]),
                 ))
             replace_steps_for_recipe(new_recipe.id, step_writes)
+
+        # PROPOSAL_RECIPE_IMAGE_STEPS — clone ordered step images too. We
+        # decode each row's bytes back into the data-URL string and feed
+        # the access helper's write path so encoding stays consistent
+        # across upload sites.
+        source_images = get_step_image_metadata_for_recipe(source_id)
+        if source_images:
+            image_writes: list[StepImageWrite] = []
+            for row in source_images:
+                raw = get_step_image_bytes(source_id, row["id"])
+                if raw is None:
+                    continue
+                image_writes.append(StepImageWrite(
+                    sequence=row["sequence"],
+                    image_data_url=raw.decode("utf-8", "ignore"),
+                ))
+            if image_writes:
+                replace_step_images_for_recipe(new_recipe.id, image_writes)
 
         self.repository.save_changes()
         return NewRecipeVersionResponse(new_recipe_id=new_recipe.id)

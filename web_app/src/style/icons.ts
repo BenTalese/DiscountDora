@@ -254,6 +254,17 @@ export const ICONS = {
     user: 'mdi-account-circle',
     scan: 'mdi-qrcode-scan',
     alert: 'mdi-bell',
+
+    // C-waste — reason tiles on the Mark-as-wasted modal. One per
+    // reason from `WASTE_REASON_*`. Glyphs picked to read at a glance
+    // without leaning on shame iconography (no sad faces, no dollar
+    // signs — anti-shame UX per `PROPOSAL_WASTE_MINIMISATION.md` §5).
+    wasted: 'mdi-delete-outline',
+    wasteExpired: 'mdi-clock-alert-outline',
+    wasteSpoiled: 'mdi-bug-outline',
+    wasteDidNotLike: 'mdi-emoticon-neutral-outline',
+    wasteOverbought: 'mdi-cart-outline',
+    wasteOther: 'mdi-dots-horizontal',
 } as const;
 
 export type IconKey = keyof typeof ICONS;

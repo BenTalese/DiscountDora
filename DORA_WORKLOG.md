@@ -9,6 +9,239 @@ next.
 
 ---
 
+## 2026-06-25 — Recipe "image" steps mode (proposal + implementation)
+
+**Why:** user pitched a third recipe-steps mode in conversation — the
+biggest barrier to seeding the cookbook from a physical source (a book, a
+handwritten card) is retyping steps. Image mode lets the user just upload
+photos; ingredients stay structured so cookability / pantry / shopping
+list still work. Wrote
+`docs/04_proposals/PROPOSAL_RECIPE_IMAGE_STEPS.md`, ran the §5 decisions
+with the user, then built it in one pass per the build-to-plan-verify-later
+memory.
+
+**Resolved §5 decisions (2026-06-25):**
+- **§5.1 Mode-switch semantics** — peer / non-destructive. All three step
+  payloads can coexist; `steps_mode` is just the active render selector.
+- **§5.2 Cook-mode rendering** — vertical scroll gallery of full-width
+  images with tap-to-zoom (no carousel widget).
+- **§5.3 Image storage params** — client-side resize to 1600px long edge
+  at JPEG q=0.85; 20-image soft cap. User also asked for **centralised
+  image-upload logic** (saved as memory
+  `feedback-centralise-image-upload`, R-003 applied).
+- §5.4 / §5.5 proposal defaults stand (hero image stays separate; manual
+  timer affordance stays available in image-mode cook).
+
+**What shipped:**
+- **Backend.**
+  - New entity `RecipeStepImage`; deferred blob mapping in
+    `table_mappings.py` (mirrors `Recipe.image` / `User.image`).
+  - `Recipe.steps_mode` column (`structured` | `freeform` | `image`),
+    `ALLOWED_STEPS_MODES` constant, all `Recipe(...)` construction sites
+    (create / new-version / seed) updated.
+  - Alembic migration
+    `d3a8f1c5e2b9_20260625_recipe_steps_mode.py` — adds the column with
+    server_default `'freeform'`, backfills `'structured'` where
+    `RecipeStep` rows exist, creates `RecipeStepImage` + its FK index.
+    Pre-release clean migration (no idempotent guards) per memory.
+  - Access helper
+    `dora_api/features/recipes/recipe_step_image_access.py` —
+    `StepImageWrite`, `replace_step_images_for_recipe`,
+    `get_step_image_metadata_for_recipe`, `get_step_image_bytes`,
+    `has_step_images*`. `MAX_STEP_IMAGES_PER_RECIPE = 20` lives once
+    here (R-003).
+  - DTOs: `RecipeStepImageDto` (image_id + sequence; bytes never
+    inlined). `RecipeDto.steps_mode`, `has_step_images`, `step_images[]`.
+    List endpoint hydrates `has_step_images`; detail also fills
+    `step_images[]`.
+  - New bytes endpoint
+    `GET /api/recipes/<recipe_id>/step-images/<image_id>` — exact mirror
+    of `/recipes/<id>/image`.
+  - `create_recipe` / `update_recipe` accept `steps_mode` (closed-set
+    validation, R-010) and `step_images[]` (data-URL strings).
+    `new_recipe_version` clones step images along with steps so versions
+    stay equal peers (DEC-2).
+- **Frontend — centralised image processor (§5.3 follow-up).**
+  - Extracted `processImageFile(file, opts)` into
+    `services/files/imageService.ts`: validates MIME (JPEG/PNG/WebP),
+    resizes via `createImageBitmap` + canvas with EXIF orientation
+    honoured, re-encodes to JPEG at the configured quality. Defaults
+    1600px / q=0.85 / 12MB input cap.
+  - `ImageUploadField.vue` migrated to the helper — every single-image
+    upload (avatar, recipe hero, stock item, store) now benefits from
+    client-side resize. R-003 applied to image-upload utilities;
+    fulfils [[feedback-centralise-image-upload]].
+- **Frontend — new components (R-001).**
+  - `RecipeStepImagesEditor.vue` — multi-file picker
+    (`accept="image/*" capture="environment"` for mobile camera) +
+    up/down reorder + remove + soft cap warning. Uses the centralised
+    processor. Types extracted to
+    `recipeStepImageEditorTypes.ts` (mirrors the structured-steps
+    pattern).
+  - `RecipeStepImagesViewer.vue` — read-only thumbnail strip with
+    tap-to-zoom for inline display.
+  - `RecipeCookModeImageView.vue` — full-width scroll gallery with a
+    maximised-dialog zoom on tap.
+- **Frontend — wiring.**
+  - `models/recipe.ts` gains `RecipeStepsMode` union +
+    `RecipeStepImage` metadata + `steps_mode` / `has_step_images` /
+    `step_images[]` on `Recipe`.
+  - `recipeApiService.ts` gains `recipeStepImageUrl()` + the new fields
+    on `CreateRecipeCommand` / `UpdateRecipeCommand`.
+  - `RecipeDetailPage.vue` mode toggle gains the **Image** segment;
+    appropriate editor renders per mode. Save flow: only POST `steps[]`
+    when in structured mode, only POST `step_images[]` when the user
+    actually touched them (`stepImagesDirty`), only POST `steps_mode`
+    when changed. Mode flip alone leaves payloads intact server-side
+    (non-destructive — §5.1). URL importer pre-flips to `freeform`.
+  - `RecipeCookMode.vue` branches on `steps_mode === 'image'` to render
+    the gallery in place of step nav / progress / step card / "All
+    steps" expansion. Ingredients panel + tools list + finish flow +
+    B8 swaps + Sous Chef stay shared. Auto-detect timer card hidden in
+    image mode (no step text to scan); standalone timer commands keep
+    working.
+
+**Engineering-standards close-gate:**
+- **R-001** componentisation: three new components; no inline image-mode
+  markup in the host pages.
+- **R-002** theme tokens: editor/viewer/cook-view use `--c-surface-*`,
+  `--c-line`, `--radius-*`, `--space-*` only; no hex.
+- **R-003** SSoT: `steps_mode` is server-owned (replaces implicit "has
+  rows?" detection); `MAX_STEP_IMAGES_PER_RECIPE` lives once
+  server-side, mirrored as one constant in the editor; image processing
+  centralised in `imageService.processImageFile` so all upload sites
+  share the resize/encode pipeline.
+- **R-005** portable data: bytes-in-db mirrors every other image column;
+  no separate blob store needed.
+- **R-006** clean migration: single Alembic revision, no preserving
+  guards (pre-release).
+- **R-007** scope discipline: no OCR, no captions, no per-image titles,
+  no carousel widget; image mode is the deliberately dumbest mode.
+- **R-010** closed-set validation: `steps_mode` validated against
+  `ALLOWED_STEPS_MODES` at the create/update boundary; data-URL MIME
+  validated against an allow-list in `processImageFile`.
+
+No new ADR-worthy decision emerged — composes existing patterns.
+
+**Verification:** none performed this session (build-to-plan-verify-later
+memory). `vue-tsc --noEmit` is clean. Python interpreter not available
+in this shell, so no Python compile check; the new code follows existing
+patterns verbatim. Browser walk owed — see **FU-303**.
+
+**Cross-checks:**
+- `grep step_images` in `dora_api` → only the new access helper +
+  endpoints + create/update + new_recipe_version.
+- `grep steps_mode` in `web_app/src` → models, api service, detail page,
+  cook mode component.
+- All three `Recipe(...)` constructions (create, version, seed) set
+  `steps_mode=` so `verify_mappings` stays green.
+
+---
+
+## 2026-06-25 — C-waste: execute IMPL_PLAN (W1–W7), `/waste` page gone
+
+**Why:** the user said "lets action them" against the C-waste plans that
+landed yesterday. All seven chunks (W1–W7) executed in this session per
+`docs/04_proposals/IMPL_PLAN_WASTE_MINIMISATION.md`. No new decisions —
+straight implementation against the resolved spec.
+
+**What shipped (per chunk):**
+- **W1 backend slim-down.** `StockItemWasteEvent` lost `quantity`,
+  `estimated_value`, `note`. New Alembic migration
+  `c2d4a9f7b1e8_20260624_drop_waste_event_extras.py` (clean DROP COLUMN,
+  no idempotent guards — pre-release per migrations memory). DELETE
+  endpoint made idempotent (204 even when the event is already gone)
+  for the Undo toast. Insights endpoint reshaped to
+  `{most_wasted, most_recent}`; reason / value breakdowns dropped.
+  Assistant `waste_insights` tool brought in line; `expiry_rescue` left
+  alone (the rescue feed still computes `estimated_value` from
+  shopping-list lines — that field is on the *items DTO*, not the waste
+  event, so it survives).
+- **W2 sort.** `useStockFilters.ts`: dropped `updated_oldest` ("Stalest
+  first"); added `expiry_asc` ("Expires soonest") with a three-tier
+  comparator (expiry asc nulls last → stock_level_last_updated asc →
+  name). No persisted-sort-key migration needed (the ref is
+  in-memory only).
+- **W3 row capture.** New `MarkAsWastedDialog.vue` (tile-grid modal,
+  tile-tap = submit, R-001 carve-out from inline markup). New shared
+  helper `src/helpers/wasteReasons.ts` with the reason vocabulary +
+  `humaniseWasteReason` so the modal and the StockItemDetail history
+  timeline share one source. Wired into `StockItemRow.vue`'s expiry
+  dropdown. Undo toast captures `originalExpiry` into the handler
+  closure (avoids race with row re-renders) and restores both event
+  and expiry.
+- **W4 cookbook filter.** Backend: `RecipeFilters` gained
+  `expiring_within_days`; new helpers `load_expiring_stock_item_ids` +
+  `count_expiring_ingredients_per_recipe` (single source of the
+  predicate, mirrors the rescue feed — R-003). DTO gained
+  `expiring_ingredient_count`, hydrated only when the filter is
+  active. Frontend: new `expiringOnly` FilterChip; when on, the page
+  fires a separate `getAllAsync({ expiring_within_days: 14 })` to
+  build an id→count map, narrows the list to those ids, force-sorts
+  desc, and flips `show-expiring-badge` on RecipeCard.
+- **W5 dashboard cut.** `use_soon` card definition, template block,
+  card-id union entry, `wasteRescue` ref, `loadWasteRescue` function,
+  and the `WasteApiService` import all removed from
+  `DashboardPage.vue`. `dashboardMessages.ts:86` tip rewritten to
+  point at the new "Expires soonest" sort. Verified the
+  Needs-your-attention card already surfaces `expired` +
+  `expiring_soon` alerts (no extension needed).
+- **W6 page demolition.** `WastePage.vue` deleted; `/waste` route
+  removed from `routes.ts`; Waste nav entry removed from
+  `MainLayout.vue` (D11 — no replacement slot). Assistant tool
+  deep-link map: `waste_insights` entry removed entirely (the tool's
+  answer is now self-contained); `expiry_rescue` re-pointed to
+  `/stock`. `frequent_waster` suggestion deep-link re-pointed in W1
+  (saved a re-edit); ditto the `use_soon` suggestion deep-link.
+- **W7 docs.** This worklog entry. CHANGELOG `[Unreleased]` gained
+  Removed + Changed bullets covering all user-visible shifts.
+  `COVERAGE_GAPS.md` line 206 + prompt index were already flipped in
+  yesterday's design session.
+
+**Engineering-standards close-gate:**
+- R-001 (componentisation-first): MarkAsWastedDialog + wasteReasons
+  helper are new components, not inline.
+- R-002 (token-only styling): modal uses `--c-surface-2`/`--c-line`/
+  `--radius-md`/`--space-*` only; no hex.
+- R-003 (state ownership): the cookbook filter predicate lives on the
+  server; the client only renders. The expiring-count map flows from
+  the server fetch into the badge — no client-side cross-entity math.
+- R-007 (scope discipline): drift-checked against
+  `PROPOSAL_WASTE_MINIMISATION.md` §7. Nothing reintroduced.
+- R-018 (no compat shims pre-release): `/waste` 404s with no redirect
+  (D10); migration is a clean DROP COLUMN.
+
+No new ADR-worthy decision emerged.
+
+**Cross-checks:**
+- Grep `/waste` in `web_app/src` after the cut → only `wasteApiService`
+  API paths (correct — backend module preserved).
+- Grep `estimated_value\|quantity\|note` references to
+  `StockItemWasteEvent` → none remain in the codebase (front or back).
+
+**Verification:** none performed this session (build-to-plan, verify
+later memory). The full browser walk is owed:
+- Stock list sort menu shows "Expires soonest"; mixed-expiry items
+  sort correctly; items with no expiry sink.
+- StockItemRow expiry dropdown shows "Mark as wasted"; modal opens;
+  tile-tap clears expiry + fires Undo; Undo restores both event and
+  expiry; the StockItemDetail History tab shows the entry.
+- Cookbook filter chip narrows the list, sorts by expiring count,
+  shows the "Uses N expiring" badge only while on.
+- Dashboard has no "Use soon" card (incl. from the Cards menu); the
+  Needs-your-attention card still flags expiring items.
+- `/waste` URL 404s; no nav entry; Dora's `waste_insights` returns
+  the new `{most_wasted, most_recent}` shape.
+
+**Ledger:** FU-302 (Dora Score reassessment) remains open — that
+reassessment is a charter-level decision deferred to pre-Phase 3, not
+something W1–W7 touched.
+
+**Next:** the user runs the verification walk above; surface anything
+that drifts as a new finding rather than silent-fix.
+
+---
+
 ## 2026-06-24 — C-waste: dissolve `/waste` page (design + impl plan, NO code)
 
 **Why:** the user asked for an honest assessment of `/waste`

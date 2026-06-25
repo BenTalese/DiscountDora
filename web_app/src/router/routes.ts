@@ -133,7 +133,11 @@ const routes: RouteRecordRaw[] = [
             // pages/ShopNowRedirect.vue.
             { path: 'shop-now', component: () => import('pages/ShopNowRedirect.vue'), meta: { title: 'Shop now' } },
             { path: 'reports', component: () => import('pages/ReportsPage.vue'), meta: { title: 'Reports' } },
-            { path: 'waste', component: () => import('pages/WastePage.vue'), meta: { title: 'Waste' } },
+            // C-waste W6 — the standalone /waste page is gone. Capture
+            // moved to a row action on the stock-item expiry dropdown;
+            // expiry rescue surfaces via Needs-your-attention on the
+            // dashboard. Bookmarks 404 by design (no redirect — pre-
+            // release, per PROPOSAL_WASTE_MINIMISATION §2 D10).
             // In-layout error pages (F3). These keep the header/drawer
             // around so the user can navigate away without a full reload.
             // The bare-URL catch-all at the bottom of this file still

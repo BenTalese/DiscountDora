@@ -81,7 +81,18 @@
                 </BaseButton>
             </div>
 
+            <!-- PROPOSAL_RECIPE_IMAGE_STEPS — image-mode replaces the step-
+                 by-step navigation with a scrollable image gallery. The
+                 ingredients panel, finish flow, and substitute swaps still
+                 render below (same as the other modes). -->
+            <RecipeCookModeImageView
+                v-if="isImageMode"
+                :recipe-id="recipe.recipe_id"
+                :images="recipe.step_images ?? []"
+            />
+
             <q-linear-progress
+                v-if="!isImageMode"
                 :value="(currentStepIndex + 1) / steps.length"
                 class="q-mb-md"
                 size="10px"
@@ -89,11 +100,11 @@
                 rounded
             />
 
-            <div class="text-caption q-mb-sm">
+            <div v-if="!isImageMode" class="text-caption q-mb-sm">
                 Step {{ currentStepIndex + 1 }} of {{ steps.length }}
             </div>
 
-            <q-card flat bordered class="step-card q-mb-md">
+            <q-card v-if="!isImageMode" flat bordered class="step-card q-mb-md">
                 <q-card-section>
                     <div class="row items-center q-gutter-xs q-mb-xs">
                         <!-- C-4 Chunk 10 — section header for the current step. -->
@@ -169,7 +180,7 @@
                 </q-card-section>
             </q-card>
 
-            <div class="row q-gutter-sm justify-center q-mb-lg">
+            <div v-if="!isImageMode" class="row q-gutter-sm justify-center q-mb-lg">
                 <q-btn
                     size="lg"
                     :icon="ICONS.arrow_back"
@@ -332,7 +343,7 @@
                 </div>
             </q-expansion-item>
 
-            <q-expansion-item label="All steps" :icon="ICONS.list" header-class="text-subtitle1">
+            <q-expansion-item v-if="!isImageMode" label="All steps" :icon="ICONS.list" header-class="text-subtitle1">
                 <q-list>
                     <q-item
                         v-for="(step, idx) in cookSteps"
@@ -485,6 +496,7 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
@@ -542,6 +554,13 @@
     const recipe = ref<Recipe | null>(null);
     const loading = ref(true);
     const currentStepIndex = ref(0);
+
+    // PROPOSAL_RECIPE_IMAGE_STEPS — image mode swaps the step-by-step
+    // navigation for a scrollable image gallery. Other surfaces
+    // (ingredients, finish flow, B8 swaps, sous-chef speech) stay shared.
+    const isImageMode = computed(
+        () => recipe.value?.steps_mode === 'image',
+    );
 
     // C-3 Chunk 6 / C-5.4 — session-only headcount. Seeds from the user's
     // `household_headcount` (set in onboarding) when present, otherwise the

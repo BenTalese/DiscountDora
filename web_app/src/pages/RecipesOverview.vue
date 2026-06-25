@@ -110,6 +110,13 @@
             <FilterChip v-model="plannedInOnly" :icon="ICONS.calendar_month" active-color="info">
                 Planned
             </FilterChip>
+            <!-- C-waste W4 — surfaces recipes that use at least one
+                 in-stock ingredient expiring within 14 days. While on,
+                 the list is force-sorted by count desc and each card
+                 shows a "Uses N expiring" badge. -->
+            <FilterChip v-model="expiringOnly" :icon="ICONS.wasteExpired" active-color="warning">
+                Uses expiring ingredients
+            </FilterChip>
 
             <q-separator vertical class="q-mx-sm" />
 
@@ -348,8 +355,9 @@
                             class="col-12 col-sm-6 col-md-4 col-lg-3"
                         >
                             <RecipeCard
-                                :recipe="recipe"
+                                :recipe="recipeWithExpiringCount(recipe)"
                                 :highlight-stock-item-ids="usesStockItemIds"
+                                :show-expiring-badge="expiringOnly"
                                 @open="onOpenRecipe"
                                 @cook="onCookClick"
                                 @toggle-favourite="onToggleFavourite"
@@ -483,6 +491,14 @@
     const cookableNowOnly = ref(false);
     const inStockOnly = ref(false);
     const plannedInOnly = ref(false);
+    // C-waste W4 — when on, restricts the list to recipes using ≥1
+    // expiring-within-14-days in-stock ingredient AND force-sorts by
+    // count desc. The id→count map below is populated by a separate
+    // server fetch keyed off this ref's true edge.
+    const expiringOnly = ref(false);
+    const EXPIRING_FILTER_HORIZON_DAYS = 14;
+    const expiringCountByRecipeId = ref<Map<string, number>>(new Map());
+    const expiringFetchInFlight = ref(false);
     // `null` means "no upper bound" — the input clears to null on backspace.
     // Cleared inputs land as NaN via v-model.number; predicates and the
     // hint string both guard on Number.isFinite so "blank == no filter".
@@ -718,6 +734,19 @@
             if (inStockOnly.value && r.available_meals <= 0) return false;
             if (plannedInOnly.value && !plannedRecipeIds.value.has(r.recipe_id)) return false;
 
+            // C-waste W4 — narrow to recipes the server flagged as
+            // using ≥1 expiring-within-horizon ingredient. The map is
+            // populated by a separate API call on the filter's true
+            // edge; while it's loading we don't narrow (the user sees
+            // the unrestricted list rather than an empty flash).
+            if (
+                expiringOnly.value
+                && expiringCountByRecipeId.value.size > 0
+                && !expiringCountByRecipeId.value.has(r.recipe_id)
+            ) {
+                return false;
+            }
+
             if (
                 mealCountMin.value !== null
                 && Number.isFinite(mealCountMin.value)
@@ -826,6 +855,20 @@
     // newest-first. Name is the universal tiebreaker.
     const sortedRecipes = computed<Recipe[]>(() => {
         const arr = [...filteredRecipes.value];
+        // C-waste W4 — while the expiring filter is on, override the
+        // user's sort with "most-expiring-ingredients first" so the
+        // top of the list is the highest-impact rescue. The user's
+        // sort axis + direction are preserved in state for when they
+        // toggle the filter off.
+        if (expiringOnly.value) {
+            const counts = expiringCountByRecipeId.value;
+            return arr.sort((a, b) => {
+                const av = counts.get(a.recipe_id) ?? 0;
+                const bv = counts.get(b.recipe_id) ?? 0;
+                if (av !== bv) return bv - av;
+                return a.name.localeCompare(b.name);
+            });
+        }
         const dirSign = sortDir.value === 'desc' ? -1 : 1;
         const cmp = (a: Recipe, b: Recipe): number => {
             switch (sortBy.value) {
@@ -926,6 +969,7 @@
             || cookableNowOnly.value
             || inStockOnly.value
             || plannedInOnly.value
+            || expiringOnly.value
             || (mealCountMin.value !== null && Number.isFinite(mealCountMin.value))
             || (missingMax.value !== null && Number.isFinite(missingMax.value))
             || (kcalMax.value !== null && Number.isFinite(kcalMax.value))
@@ -952,6 +996,7 @@
         if (cookableNowOnly.value) n++;
         if (inStockOnly.value) n++;
         if (plannedInOnly.value) n++;
+        if (expiringOnly.value) n++;
         if (mealCountMin.value !== null && Number.isFinite(mealCountMin.value)) n++;
         if (missingMax.value !== null && Number.isFinite(missingMax.value)) n++;
         if (kcalMax.value !== null && Number.isFinite(kcalMax.value)) n++;
@@ -1021,12 +1066,57 @@
         if (!on && sortBy.value === 'kcal') sortBy.value = 'name';
     });
 
+    // C-waste W4 — merge the server-fetched expiring count back onto
+    // recipes from the store before passing them to the card. The
+    // store's copies don't carry the count (the default fetch doesn't
+    // ask for it); the filter-on fetch does. Identity-stable in the
+    // off case so Vue's reactivity skips unnecessary card re-renders.
+    function recipeWithExpiringCount(recipe: Recipe): Recipe {
+        if (!expiringOnly.value) return recipe;
+        const count = expiringCountByRecipeId.value.get(recipe.recipe_id) ?? 0;
+        if (count === (recipe.expiring_ingredient_count ?? 0)) return recipe;
+        return { ...recipe, expiring_ingredient_count: count };
+    }
+
+    // Fetch the expiring set whenever the filter is flipped on; clear
+    // it when flipped off so a stale map doesn't leak into a future
+    // session. R-003 — the predicate (which items expire within N days,
+    // which recipes use them) lives entirely on the server.
+    watch(expiringOnly, async (on) => {
+        if (!on) {
+            expiringCountByRecipeId.value = new Map();
+            return;
+        }
+        expiringFetchInFlight.value = true;
+        try {
+            const page = await recipeApi.getAllAsync({
+                expiring_within_days: EXPIRING_FILTER_HORIZON_DAYS,
+            });
+            const next = new Map<string, number>();
+            for (const r of page.items) {
+                next.set(r.recipe_id, r.expiring_ingredient_count ?? 0);
+            }
+            expiringCountByRecipeId.value = next;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not load expiring-ingredient recipes.',
+                caption: describeApiError(err) || '',
+            });
+            expiringOnly.value = false;
+        } finally {
+            expiringFetchInFlight.value = false;
+        }
+    });
+
     function clearFilters() {
         searchText.value = '';
         favouritesOnly.value = false;
         cookableNowOnly.value = false;
         inStockOnly.value = false;
         plannedInOnly.value = false;
+        expiringOnly.value = false;
         mealCountMin.value = null;
         missingMax.value = null;
         kcalMax.value = null;

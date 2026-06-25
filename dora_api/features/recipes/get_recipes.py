@@ -27,6 +27,10 @@ from dora_api.features.recipes.recipe_tool_access import (
 from dora_api.features.recipes.recipe_step_access import (
     get_steps_for_recipe, has_structured_steps_for_recipes,
 )
+from dora_api.features.recipes.recipe_step_image_access import (
+    get_step_image_metadata_for_recipe, has_step_images_for_recipes,
+    get_step_image_bytes,
+)
 from dora_api.features.recipes.recipe_section_access import (
     get_section_count_for_recipes, get_sections_for_recipe,
 )
@@ -224,6 +228,25 @@ class RecipeDto:
     # recipe is flat; ingredients/steps render under no header.
     section_count: int = 0
     sections: List['RecipeSectionDto'] = field(default_factory=list)
+    # C-waste W4 — number of this recipe's ingredients (non-optional) that
+    # are currently in stock and either expired or expiring within the
+    # filter's horizon. Populated only when the request asked for the
+    # filter (`?expiring_within_days=N`); zero otherwise. The cookbook
+    # surfaces a "Uses N expiring" badge from this number.
+    expiring_ingredient_count: int = 0
+    # PROPOSAL_RECIPE_IMAGE_STEPS — which step payload to render. Server-
+    # owned; replaces the implicit "has structured rows?" detection so
+    # 'image' is a first-class peer. Default 'freeform' for new recipes.
+    steps_mode: str = "freeform"
+    # Cheap existence flag mirrored from has_structured_steps. Populated
+    # by the list hydration (`_hydrate_has_step_images`); detail returns
+    # full metadata via `step_images[]` below.
+    has_step_images: bool = False
+    # PROPOSAL_RECIPE_IMAGE_STEPS — ordered image metadata for the detail
+    # endpoint only. The list endpoint leaves this empty; bytes are never
+    # inlined either way (the SPA loads each via the dedicated bytes
+    # endpoint at `/recipes/<id>/step-images/<image_id>`).
+    step_images: List['RecipeStepImageDto'] = field(default_factory=list)
 
     @classmethod
     def from_entity(cls, recipe: Recipe, dietary_tag_ids: list[UUID] | None = None, unallocated_meals: int | None = None) -> 'RecipeDto':
@@ -267,7 +290,17 @@ class RecipeDto:
             # via a bulk SELECT below.
             has_image = False,
             dietary_tag_ids = dietary_tag_ids or [],
+            steps_mode = recipe.steps_mode or "freeform",
         )
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeStepImageDto:
+    """PROPOSAL_RECIPE_IMAGE_STEPS — ordered image metadata. The actual
+    bytes live behind `GET /recipes/<recipe_id>/step-images/<image_id>`
+    (mirrors the dish-image pattern) so DTO payloads stay slim."""
+    image_id: UUID
+    sequence: int
 
 
 _FIELD_MAP: dict[str, EntityField] = {
@@ -292,6 +325,11 @@ class RecipeFilters:
     - max_missing : recipe must have at most this many missing ingredients.
       (State-ownership §3.3 — lets the overview query "Missing ≤ N" instead of
       fetching every recipe + the whole pantry to filter in the browser.)
+    - expiring_within_days : when set, recipe must use at least one
+      in-stock ingredient whose expiry is within the window. The
+      cookbook "Uses expiring ingredients" filter (C-waste W4) sets this
+      to 14; the predicate is pushed to the server so no cross-entity
+      computation lives on the client (R-003).
     """
     tags_include: tuple[str, ...] = ()
     tags_exclude: tuple[str, ...] = ()
@@ -300,6 +338,7 @@ class RecipeFilters:
     ingredient_exclude: tuple[str, ...] = ()
     cookable: bool | None = None
     max_missing: int | None = None
+    expiring_within_days: int | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -311,6 +350,7 @@ class RecipeFilters:
             or self.ingredient_exclude
             or self.cookable is not None
             or self.max_missing is not None
+            or self.expiring_within_days is not None
         )
 
     @property
@@ -329,6 +369,64 @@ class RecipeFilters:
         if self.max_missing is not None and missing > self.max_missing:
             return False
         return True
+
+
+def load_expiring_stock_item_ids(
+    repository, horizon_days: int,
+) -> set[UUID]:
+    """Stock items whose expiry is within the horizon (expired included).
+
+    Reused by the cookbook "Uses expiring ingredients" filter and its
+    DTO hydration. Mirrors the predicate in
+    `GetWasteRescueHandler.handle()` — same definition of "at risk"
+    across the rescue feed and the cookbook surface (R-003).
+    """
+    from datetime import date as _date, timedelta as _timedelta
+    if horizon_days < 0:
+        return set()
+    cutoff = _date.today() + _timedelta(days=horizon_days)
+    items = repository.get(StockItem).all(
+        EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null()
+        & EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(cutoff)
+    )
+    return {i.id for i in items}
+
+
+def count_expiring_ingredients_per_recipe(
+    repository, horizon_days: int,
+) -> tuple[set[UUID], dict[UUID, int]]:
+    """`(at_risk_item_ids, expiring_count_by_recipe_id)` over the horizon.
+
+    The count ignores optional ingredients so the result matches the
+    rescue feed's recipe ranking (cookbook revision §1.9 / R-003).
+    Recipes whose count is zero are omitted from the dict, so callers
+    can `.get(rid, 0)` for hydration and `set(d.keys())` for the
+    restriction filter.
+    """
+    at_risk_ids = load_expiring_stock_item_ids(repository, horizon_days)
+    if not at_risk_ids:
+        return at_risk_ids, {}
+    recipes = (
+        repository
+        .get(Recipe)
+        .include(Recipe.Fields.INGREDIENTS)
+            .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+        .all()
+    )
+    counts: dict[UUID, int] = {}
+    for recipe in recipes:
+        n = 0
+        for ing in (recipe.ingredients or []):
+            item = ing.stock_item
+            if item is None:
+                continue
+            if getattr(ing, "is_optional", False):
+                continue
+            if item.id in at_risk_ids:
+                n += 1
+        if n > 0:
+            counts[recipe.id] = n
+    return at_risk_ids, counts
 
 
 def load_recipe_cookability(repository) -> dict[UUID, tuple[int, int]]:
@@ -357,6 +455,10 @@ def load_recipe_cookability(repository) -> dict[UUID, tuple[int, int]]:
 class GetRecipesHandler:
     def __init__(self):
         self.repository = SqlAlchemyRepository()
+        # Populated by `_restrict_query` when the C-waste cookbook filter
+        # is active; consumed by `_hydrate_expiring_count` so the count
+        # query runs once per request.
+        self._expiring_counts: dict[UUID, int] = {}
 
     def _base_query(self):
         return (
@@ -438,6 +540,17 @@ class GetRecipesHandler:
                 rid for rid in allowed
                 if filters.matches_missing(cookability.get(rid, (0, 0))[0])
             }
+
+        if filters.expiring_within_days is not None and allowed:
+            # C-waste W4 — narrow to recipes that use ≥1 in-stock ingredient
+            # expiring within the horizon. Same predicate the rescue feed
+            # uses (R-003); count cached on the handler so the hydration
+            # step below doesn't recompute it.
+            _, expiring_counts = count_expiring_ingredients_per_recipe(
+                self.repository, filters.expiring_within_days,
+            )
+            self._expiring_counts = expiring_counts
+            allowed &= set(expiring_counts.keys())
 
         if not allowed:
             return query, True
@@ -606,6 +719,35 @@ class GetRecipesHandler:
             for d in dtos
         ]
 
+    def _hydrate_has_step_images(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """List endpoint only — set `has_step_images` via one bulk
+        existence query. Detail endpoint hydrates the full metadata list."""
+        if not dtos:
+            return dtos
+        import dataclasses
+        ids = [d.recipe_id for d in dtos]
+        with_images = has_step_images_for_recipes(ids)
+        return [
+            dataclasses.replace(d, has_step_images=d.recipe_id in with_images)
+            for d in dtos
+        ]
+
+    def _hydrate_expiring_count(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """C-waste W4 — fill `expiring_ingredient_count` from the cache
+        the filter step populated. Skipped (zeros all the way) when the
+        filter wasn't asked for, so the cookbook's default load stays
+        unchanged."""
+        if not dtos or not self._expiring_counts:
+            return dtos
+        import dataclasses
+        return [
+            dataclasses.replace(
+                d,
+                expiring_ingredient_count=self._expiring_counts.get(d.recipe_id, 0),
+            )
+            for d in dtos
+        ]
+
     def _hydrate_tags(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """After paginate returns, bulk-load dietary tag + tool ids and rebuild
         the DTOs with them populated. The DTO is frozen, so we replace rather
@@ -709,7 +851,13 @@ class GetRecipesHandler:
         _Hydrated = self._hydrate_unallocated(
             self._hydrate_has_image(
                 self._hydrate_section_count(
-                    self._hydrate_structured_steps_flag(self._hydrate_tags(page.items))
+                    self._hydrate_structured_steps_flag(
+                        self._hydrate_has_step_images(
+                            self._hydrate_expiring_count(
+                                self._hydrate_tags(page.items)
+                            )
+                        )
+                    )
                 )
             )
         )
@@ -774,6 +922,14 @@ class GetRecipesHandler:
                 if sib.id != recipe_id
             ]
             sibling_dtos.sort(key=lambda s: s.name.lower())
+        step_image_rows = get_step_image_metadata_for_recipe(entity.id)
+        step_image_dtos = [
+            RecipeStepImageDto(
+                image_id=row["id"],
+                sequence=row["sequence"],
+            )
+            for row in step_image_rows
+        ]
         import dataclasses
         _WithAssoc = dataclasses.replace(
             dto,
@@ -786,6 +942,8 @@ class GetRecipesHandler:
             version_siblings=sibling_dtos,
             sections=section_dtos,
             section_count=len(section_dtos),
+            step_images=step_image_dtos,
+            has_step_images=bool(step_image_dtos),
         )
         _Hydrated = self._hydrate_unallocated(
             self._hydrate_has_image([_WithAssoc])
@@ -835,6 +993,19 @@ def _parse_recipe_filters(args) -> RecipeFilters:
         except ValueError:
             max_missing = None
 
+    expiring_within_days: int | None = None
+    raw_expiring = args.get("expiring_within_days")
+    if raw_expiring is not None and raw_expiring.strip():
+        try:
+            parsed_e = int(raw_expiring)
+            # Cap at 60 days — the same ceiling the rescue feed uses
+            # (`_MAX_HORIZON_DAYS` in waste.py). Negative values are
+            # treated as "no constraint".
+            if 0 <= parsed_e <= 60:
+                expiring_within_days = parsed_e
+        except ValueError:
+            expiring_within_days = None
+
     return RecipeFilters(
         tags_include=collect("tags_include"),
         tags_exclude=collect("tags_exclude"),
@@ -843,6 +1014,7 @@ def _parse_recipe_filters(args) -> RecipeFilters:
         ingredient_exclude=collect("ingredient_exclude"),
         cookable=_parse_bool(args.get("cookable")),
         max_missing=max_missing,
+        expiring_within_days=expiring_within_days,
     )
 
 
@@ -881,7 +1053,8 @@ def get_recipes():
         f"(tags_include={_Filters.tags_include}, "
         f"tags_exclude={_Filters.tags_exclude}, "
         f"ingredient_exclude={_Filters.ingredient_exclude}, "
-        f"cookable={_Filters.cookable}, max_missing={_Filters.max_missing})."
+        f"cookable={_Filters.cookable}, max_missing={_Filters.max_missing}, "
+        f"expiring_within_days={_Filters.expiring_within_days})."
     )
     return paginated(_Page.items, _Page.total, _Page.page, _Page.limit)
 
@@ -916,6 +1089,39 @@ def get_recipe_image(recipe_id):
         raw = base64.b64decode(match.group("data"), validate=False)
     except (ValueError, TypeError):
         return not_found(Recipe.__name__, recipe_id)
+    return Response(
+        raw,
+        mimetype=match.group("mime"),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+# ── GET /api/recipes/<id>/step-images/<image_id> ────────────────────────
+# PROPOSAL_RECIPE_IMAGE_STEPS — step images are stored as data-URL bytes on
+# the RecipeStepImage row and served here as raw bytes so the SPA can use a
+# plain <img src>. Mirrors `/recipes/<id>/image` exactly; lives on a child
+# route so the decoder stays a one-liner.
+
+@RECIPE_ROUTER.route("/<recipe_id>/step-images/<image_id>", methods=["GET"])
+def get_recipe_step_image(recipe_id, image_id):
+    import base64
+    import re as _re
+    from flask import Response
+
+    raw_bytes = get_step_image_bytes(UUID(str(recipe_id)), UUID(str(image_id)))
+    if not raw_bytes:
+        return not_found("RecipeStepImage", image_id)
+    data_url = raw_bytes.decode("utf-8", "ignore")
+    match = _re.match(
+        r"^data:(?P<mime>[\w/+.-]+);base64,(?P<data>.+)$",
+        data_url, _re.DOTALL,
+    )
+    if not match:
+        return not_found("RecipeStepImage", image_id)
+    try:
+        raw = base64.b64decode(match.group("data"), validate=False)
+    except (ValueError, TypeError):
+        return not_found("RecipeStepImage", image_id)
     return Response(
         raw,
         mimetype=match.group("mime"),

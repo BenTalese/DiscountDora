@@ -1,19 +1,16 @@
-"""P2-06 — Expiry rescue + waste prevention.
+"""C-waste — Expiry rescue + waste log (slim).
 
-  GET  /api/waste/rescue            — items expiring soon + recipes that
-                                       use the most of them
-  POST /api/waste/events            — log a discarded stock item
-  GET  /api/waste/events?limit=N    — recent waste log
-  GET  /api/waste/insights          — frequency + estimated value wasted
+  GET    /api/waste/rescue            — items expiring soon + recipes that
+                                         use the most of them
+  POST   /api/waste/events            — log a discarded stock item (reason
+                                         only — no quantity/value/note)
+  GET    /api/waste/events?limit=N    — recent waste log
+  DELETE /api/waste/events/{event_id} — idempotent (backs the Undo toast)
+  GET    /api/waste/insights          — {most_wasted, most_recent}
 
-Rescue is *read-only* — it surfaces what's already in the data (expiry
-dates + recipe ingredient links) and ranks recipes by how many of the
-user's at-risk items they'd use. No manual entry required.
-
-Waste events are *opt-in* — the user only writes a row when they tap
-"Log as wasted" on the rescue page. We keep the row even if the stock
-item is later deleted (FK SET NULL + denormalised name), so the
-insights query survives pantry churn.
+Per `PROPOSAL_WASTE_MINIMISATION.md`: the `/waste` page is gone; capture
+lives as a one-tap action on the stock-item row. The signal (events
+themselves) is preserved so the future Dora Score can still read it.
 """
 import logging
 from dataclasses import dataclass
@@ -29,11 +26,9 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import (
-    StockItemWasteEvent, WASTE_REASON_OTHER, WASTE_REASON_VALUES,
+    StockItemWasteEvent, WASTE_REASON_VALUES,
 )
-from dora_api.domain.entities.stock_level import StockLevel
-from dora_api.domain.stock_status import (StockStatus, is_missing,
-                                          level_for_status)
+from dora_api.domain.stock_status import is_missing
 from dora_api.features.routers import WASTE_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import (bad_request, no_content,
@@ -50,8 +45,8 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 _DEFAULT_HORIZON_DAYS = 7
 _MAX_HORIZON_DAYS = 60
 
-# Cap returned rows everywhere — the rescue page is a one-glance UI, not
-# a paginated list. The insights tool ditto.
+# Cap returned rows everywhere — the rescue feed is a one-glance signal,
+# not a paginated list. The insights tool ditto.
 _MAX_ROWS = 25
 
 
@@ -108,9 +103,9 @@ class GetWasteRescueHandler:
 
         # Cheapest-last-paid-price per stock item — pulled from archived
         # shopping list lines (P2-02 capture). Used as the "value at risk"
-        # estimate so the rescue page can put a dollar figure on what's
-        # about to spoil. Lines without a captured price are ignored;
-        # zero is a worse default than "unknown".
+        # estimate on the rescue feed so the assistant can frame
+        # what's-about-to-spoil in dollar terms. The waste *event* itself
+        # no longer stores a value (C-waste slim).
         value_lookup: dict[UUID, float] = {}
         if items:
             item_ids = [i.id for i in items]
@@ -118,11 +113,6 @@ class GetWasteRescueHandler:
                 EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID)
                 .in_(item_ids)
             )
-            # Most recent priced line per item wins (lines aren't dated
-            # individually, but a higher sequence on the same list is
-            # newer enough for this guess). For honest-to-goodness
-            # "last paid", reports/N6 + purchase_price_stats are the
-            # authoritative path.
             for line in sorted(lines, key=lambda l: l.sequence):
                 price = line_paid_unit_price(line)
                 if price is not None:
@@ -214,13 +204,6 @@ class LogWasteEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     stock_item_id: UUID
     reason: str = Field(min_length=1, max_length=32)
-    quantity: int | None = Field(default=None, ge=0)
-    estimated_value: float | None = Field(default=None, ge=0)
-    note: str | None = Field(default=None, max_length=500)
-    # When true, the handler also bumps the stock level to "Out of
-    # Stock" — most "I had to throw it out" cases mean the item is gone
-    # from the pantry too. Defaults False so the caller is explicit.
-    mark_out_of_stock: bool = False
 
 
 @dataclass(slots=True)
@@ -246,24 +229,9 @@ class LogWasteEventHandler:
             stock_item_id=item.id,
             stock_item_name=item.name,
             reason=request.reason,
-            quantity=request.quantity,
-            estimated_value=(
-                float(request.estimated_value)
-                if request.estimated_value is not None else None
-            ),
-            note=request.note,
             occurred_at=datetime.now(timezone.utc),
         )
         self.repository.add(event)
-
-        if request.mark_out_of_stock:
-            out_level = level_for_status(
-                self.repository.get(StockLevel).all(), StockStatus.OUT_OF_STOCK
-            )
-            if out_level is not None:
-                item.stock_level = out_level
-                item.stock_level_last_updated = datetime.now(timezone.utc)
-
         self.repository.save_changes()
         return LogWasteEventResponse(event_id=event.id)
 
@@ -304,9 +272,6 @@ def list_waste_events():
                 "stock_item_id": str(e.stock_item_id) if e.stock_item_id else None,
                 "stock_item_name": e.stock_item_name,
                 "reason": e.reason,
-                "quantity": e.quantity,
-                "estimated_value": e.estimated_value,
-                "note": e.note,
                 "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
             }
             for e in events[:limit]
@@ -314,6 +279,10 @@ def list_waste_events():
     })
 
 
+# Idempotent — the Undo toast may fire a delete for an event that's
+# already gone (double-tap, retry after network blip). Returning 204
+# in both the "deleted now" and "not present" cases keeps the client
+# simple. Only a malformed UUID is a real error.
 @WASTE_ROUTER.route("/events/<event_id>", methods=["DELETE"])
 def delete_waste_event(event_id: str):
     _Logger = logging.getLogger(__name__)
@@ -324,7 +293,8 @@ def delete_waste_event(event_id: str):
     repo = SqlAlchemyRepository()
     event = repo.get(StockItemWasteEvent).by_id(parsed)
     if event is None:
-        return not_found("StockItemWasteEvent", parsed)
+        _Logger.debug("Delete waste event %s: already gone (no-op)", parsed)
+        return no_content()
     repo.remove(event)
     repo.save_changes()
     _Logger.info("Deleted waste event %s", parsed)
@@ -333,65 +303,79 @@ def delete_waste_event(event_id: str):
 
 # ── /api/waste/insights ──────────────────────────────────────────────────
 
+# Slim shape (C-waste): two answers only — what gets wasted often, and
+# what was most recently wasted. Reason breakdowns and value sums are
+# gone because the underlying fields are. The Dora `waste_insights` tool
+# reads the same data.
+_INSIGHTS_WINDOW_DEFAULT_DAYS = 90
+_INSIGHTS_WINDOW_MIN_DAYS = 7
+_INSIGHTS_WINDOW_MAX_DAYS = 365
+_MOST_RECENT_LIMIT = 10
+
+
 @WASTE_ROUTER.route("/insights", methods=["GET"])
 def get_waste_insights():
-    """Grouped-by-item summary plus an overall total. The frontend
-    surfaces the top-wasted items as "buy smaller next time" candidates;
-    the assistant uses the same rows to answer 'what am I wasting often?'.
+    """Returns {most_wasted, most_recent} over the given window.
+
+    `most_wasted` = items grouped by name, sorted by event count desc.
+    `most_recent` = the latest events, newest first, no grouping.
     """
     try:
-        window_days = int(request.args.get("window_days", 90))
+        window_days = int(request.args.get(
+            "window_days", _INSIGHTS_WINDOW_DEFAULT_DAYS,
+        ))
     except (TypeError, ValueError):
-        window_days = 90
-    window_days = max(7, min(window_days, 365))
+        window_days = _INSIGHTS_WINDOW_DEFAULT_DAYS
+    window_days = max(
+        _INSIGHTS_WINDOW_MIN_DAYS,
+        min(window_days, _INSIGHTS_WINDOW_MAX_DAYS),
+    )
     cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
 
     repo = SqlAlchemyRepository()
     events: list[StockItemWasteEvent] = repo.get(StockItemWasteEvent).all(
         EntityField(StockItemWasteEvent, StockItemWasteEvent.Fields.OCCURRED_AT).gte(cutoff)
     )
+    events.sort(key=lambda e: e.occurred_at, reverse=True)
 
-    # Bucket by (stock_item_id, name) — the name is the denormalised
-    # one captured at log time, so renames don't merge buckets and
+    # Group by (stock_item_id, name) — the name is the denormalised
+    # one captured at log time so renames don't merge buckets and
     # deleted items still appear.
     buckets: dict[tuple, dict] = {}
-    total_value = 0.0
     for event in events:
         key = (event.stock_item_id, event.stock_item_name)
         bucket = buckets.setdefault(key, {
             "stock_item_id": str(event.stock_item_id) if event.stock_item_id else None,
             "stock_item_name": event.stock_item_name,
             "event_count": 0,
-            "total_quantity": 0,
-            "estimated_value": 0.0,
-            "reasons": {},
             "last_occurred_at": None,
         })
         bucket["event_count"] += 1
-        if event.quantity:
-            bucket["total_quantity"] += event.quantity
-        if event.estimated_value:
-            bucket["estimated_value"] += float(event.estimated_value)
-            total_value += float(event.estimated_value)
-        bucket["reasons"][event.reason] = bucket["reasons"].get(event.reason, 0) + 1
-        # Track the latest event in the window so the SPA can surface
-        # "last wasted X days ago" without re-querying.
         if (
             bucket["last_occurred_at"] is None
             or event.occurred_at > datetime.fromisoformat(bucket["last_occurred_at"])
         ):
             bucket["last_occurred_at"] = event.occurred_at.isoformat()
 
-    rows = sorted(
+    most_wasted = sorted(
         buckets.values(),
-        key=lambda b: (-b["event_count"], -b["estimated_value"], b["stock_item_name"]),
-    )
-    for row in rows:
-        row["estimated_value"] = round(row["estimated_value"], 2)
+        key=lambda b: (-b["event_count"], b["stock_item_name"]),
+    )[:_MAX_ROWS]
+
+    most_recent = [
+        {
+            "event_id": str(e.id),
+            "stock_item_id": str(e.stock_item_id) if e.stock_item_id else None,
+            "stock_item_name": e.stock_item_name,
+            "reason": e.reason,
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+        }
+        for e in events[:_MOST_RECENT_LIMIT]
+    ]
 
     return ok({
         "window_days": window_days,
         "total_events": len(events),
-        "total_estimated_value": round(total_value, 2),
-        "by_item": rows[:_MAX_ROWS],
+        "most_wasted": most_wasted,
+        "most_recent": most_recent,
     })

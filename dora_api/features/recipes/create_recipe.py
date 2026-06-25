@@ -9,6 +9,7 @@ from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.recipe import (
     ALLOWED_DIFFICULTY_VALUES,
+    ALLOWED_STEPS_MODES,
     Recipe,
 )
 from dora_api.domain.entities.recipe_collection import RecipeCollection
@@ -22,6 +23,9 @@ from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
 from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
+)
+from dora_api.features.recipes.recipe_step_image_access import (
+    StepImageWrite, replace_step_images_for_recipe,
 )
 from dora_api.features.recipes.recipe_section_access import (
     SectionWrite, replace_sections_for_recipe,
@@ -125,6 +129,14 @@ class CreateRecipeRequest(BaseModel):
     # step's `ingredient_client_ids` references its sibling ingredients via
     # the `client_id` field above.
     steps: List[CreateRecipeStepRequest] = Field(default_factory = list)
+    # PROPOSAL_RECIPE_IMAGE_STEPS — explicit step payload selector. Closed
+    # set validated below (R-010). Defaults to 'freeform'; the editor flips
+    # to 'structured'/'image' as the user picks the mode.
+    steps_mode: str = Field(default = "freeform", max_length = 16)
+    # PROPOSAL_RECIPE_IMAGE_STEPS — ordered data-URL strings for the image
+    # mode. Empty list when not in image mode. Cap mirrored from the
+    # access helper.
+    step_images: List[str] = Field(default_factory = list)
     # C-4 Chunk 10 — named sections (optional). When non-empty, the server
     # creates RecipeSection rows; ingredients and steps reference them by
     # `section_client_id`. Unreferenced sections still get created (empty
@@ -251,6 +263,7 @@ class CreateRecipeHandler:
             # is the only path that populates this.
             version_group_id = None,
             kcal = request.kcal,
+            steps_mode = request.steps_mode if request.steps_mode in ALLOWED_STEPS_MODES else "freeform",
         )
 
         self.repository.add(_NewRecipe)
@@ -339,6 +352,23 @@ class CreateRecipeHandler:
                     for step in request.steps
                 ]
                 replace_steps_for_recipe(_NewRecipe.id, _StepWrites)
+            except ValueError as exc:
+                return CreateRecipeResponse(
+                    new_recipe_id=_NewRecipe.id,
+                    invalid_step_message=str(exc),
+                )
+            self.repository.save_changes()
+
+        # PROPOSAL_RECIPE_IMAGE_STEPS — write step images last so the FK to
+        # the just-created recipe is satisfied. The replace helper validates
+        # the data-URL shape and per-recipe cap before any insert.
+        if request.step_images:
+            try:
+                _ImageWrites = [
+                    StepImageWrite(sequence=i, image_data_url=data_url)
+                    for i, data_url in enumerate(request.step_images)
+                ]
+                replace_step_images_for_recipe(_NewRecipe.id, _ImageWrites)
             except ValueError as exc:
                 return CreateRecipeResponse(
                     new_recipe_id=_NewRecipe.id,

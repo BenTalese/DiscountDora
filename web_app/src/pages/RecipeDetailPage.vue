@@ -582,6 +582,7 @@
                                     :options="[
                                         { label: 'Structured', value: 'structured' },
                                         { label: 'Freeform', value: 'freeform' },
+                                        { label: 'Image', value: 'image' },
                                     ]"
                                     flat
                                     dense
@@ -601,13 +602,23 @@
                             />
 
                             <q-input
-                                v-else
+                                v-else-if="form.steps_mode === 'freeform'"
                                 v-model="form.instructions"
                                 outlined
                                 type="textarea"
                                 autogrow
                                 placeholder="One step per line. Cook mode will split on newlines."
                                 @update:model-value="markDirty"
+                            />
+
+                            <!-- PROPOSAL_RECIPE_IMAGE_STEPS — image-mode
+                                 editor. Multi-file picker + drag-reorder;
+                                 the centralised processImageFile resizes
+                                 client-side before save. -->
+                            <RecipeStepImagesEditor
+                                v-else
+                                :model-value="form.step_images"
+                                @update:model-value="onStepImagesChange"
                             />
 
                             <q-expansion-item
@@ -1050,6 +1061,8 @@
     import MealStepper from 'src/components/recipes/MealStepper.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';
+    import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
+    import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
     import type {
         EditableStep as EditableRecipeStep,
         IngredientOption,
@@ -1061,9 +1074,9 @@
     import { useRecipeExport } from 'src/composables/useRecipeExport';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
-    import type { Recipe } from 'src/models/recipe';
+    import type { Recipe, RecipeStepsMode } from 'src/models/recipe';
     import type { Substitute } from 'src/models/stockItemDetail';
-    import RecipeApiService, { recipeImageUrl } from 'src/services/api/recipeApiService';
+    import RecipeApiService, { recipeImageUrl, recipeStepImageUrl } from 'src/services/api/recipeApiService';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
@@ -1180,10 +1193,20 @@
         image: string | null;
         // C-4 Chunk 6 — structured steps editor state.
         steps: EditableRecipeStep[];
-        // Editor mode toggle. Structured ⇒ steps[] is the source of truth and
-        // gets sent on save; freeform ⇒ instructions textarea is the source
-        // and an empty steps[] gets sent to clear server-side structure.
-        steps_mode: 'structured' | 'freeform';
+        // Editor mode toggle. PROPOSAL_RECIPE_IMAGE_STEPS extended this to
+        // a tri-state — `structured` sends `steps[]`, `freeform` sends an
+        // empty `steps[]` so the server clears structure, `image` sends
+        // `step_images[]`. Mode switching is non-destructive: switching
+        // away from a mode does NOT clear its payload on save (the user
+        // can flip back without re-entry).
+        steps_mode: RecipeStepsMode;
+        // PROPOSAL_RECIPE_IMAGE_STEPS — image-mode editor state. Each row
+        // carries its data URL (sent on save) + a preview URL (the same
+        // data URL for freshly-uploaded rows, or the bytes-endpoint URL
+        // for rows hydrated from the server). The dirty flag flips when
+        // the user reorders / adds / removes, so we only POST step_images
+        // when there's been a change.
+        step_images: EditableStepImage[];
         // C-4 Chunk 9 — simple nutrition kcal. Editor input renders only
         // when nutrition is enabled; the form field exists regardless.
         kcal: number | null;
@@ -1236,6 +1259,7 @@
         image: null,
         steps: [],
         steps_mode: 'structured',
+        step_images: [],
         kcal: null,
         sections: [],
     });
@@ -1291,14 +1315,23 @@
             tool_ids: [...(source.tool_ids ?? [])],
             image: null,
             steps,
-            // Default to structured when the recipe already has steps;
-            // otherwise stay on the freeform path so existing imports don't
-            // surprise the user with an empty editor.
-            steps_mode: source.has_structured_steps ? 'structured' : 'freeform',
+            // PROPOSAL_RECIPE_IMAGE_STEPS — trust the server's declared
+            // steps_mode rather than re-deriving from has_structured_steps;
+            // backfill falls through to the old "structured if rows exist,
+            // else freeform" guess for resilience.
+            steps_mode: source.steps_mode
+                ?? (source.has_structured_steps ? 'structured' : 'freeform'),
+            step_images: (source.step_images ?? []).map(img => ({
+                client_id: img.image_id,
+                existing_image_id: img.image_id,
+                preview_url: recipeStepImageUrl(source.recipe_id, img.image_id),
+                data_url: '',
+            })),
             kcal: source.kcal,
             sections,
         });
         imageDirty.value = false;
+        stepImagesDirty.value = false;
         isDirty.value = false;
     }
 
@@ -1308,6 +1341,18 @@
 
     function onStepsChange(next: EditableRecipeStep[]) {
         form.steps = next;
+        markDirty();
+    }
+
+    // PROPOSAL_RECIPE_IMAGE_STEPS — tracks whether the step_images set has
+    // been touched in this edit session. The save flow only POSTs
+    // step_images when this is true so a mode flip alone (without an
+    // upload/remove/reorder) leaves the rows in place.
+    const stepImagesDirty = ref(false);
+
+    function onStepImagesChange(next: EditableStepImage[]) {
+        form.step_images = next;
+        stepImagesDirty.value = true;
         markDirty();
     }
 
@@ -1627,19 +1672,34 @@
             // this save replaces the structured set or clears it (freeform
             // mode sends []). Map the editor's EditableStep shape into the
             // wire RecipeStepCommand.
-            const stepsToSend: RecipeStepCommand[] =
-                form.steps_mode === 'structured'
-                    ? form.steps.map((s) => ({
-                          client_id: s.client_id,
-                          parent_client_id: s.parent_client_id,
-                          sequence: s.sequence,
-                          text: s.text,
-                          hint: s.hint,
-                          ingredient_client_ids: [...s.ingredient_client_ids],
-                          tool_ids: [...s.tool_ids],
-                      }))
-                    : [];
-            command.steps = stepsToSend;
+            // PROPOSAL_RECIPE_IMAGE_STEPS — only replace the structured
+            // step set when the user is *in* structured mode. Image / free
+            // form mode leaves existing structured rows untouched (mode
+            // switch is non-destructive — switching back finds them
+            // intact).
+            if (form.steps_mode === 'structured') {
+                const stepsToSend: RecipeStepCommand[] = form.steps.map((s) => ({
+                    client_id: s.client_id,
+                    parent_client_id: s.parent_client_id,
+                    sequence: s.sequence,
+                    text: s.text,
+                    hint: s.hint,
+                    ingredient_client_ids: [...s.ingredient_client_ids],
+                    tool_ids: [...s.tool_ids],
+                }));
+                command.steps = stepsToSend;
+            }
+            // PROPOSAL_RECIPE_IMAGE_STEPS — flip steps_mode if it changed,
+            // and replace step_images only when the user touched them in
+            // this edit session. A bare mode flip preserves existing rows.
+            if (form.steps_mode !== src.steps_mode) {
+                command.steps_mode = form.steps_mode;
+            }
+            if (stepImagesDirty.value) {
+                command.step_images = form.step_images.map(img =>
+                    img.data_url || '',
+                ).filter(s => s.startsWith('data:image/'));
+            }
             if (form.nutrition !== src.nutrition) command.nutrition = form.nutrition;
             if (form.prep_time_minutes !== src.prep_time_minutes) command.prep_time_minutes = toIntOrNull(form.prep_time_minutes);
             if (form.recipe_collection_id !== src.recipe_collection_id) command.recipe_collection_id = form.recipe_collection_id;
@@ -1861,6 +1921,10 @@
                 // import.
                 is_optional: false,
             }));
+            // Importer never lands a recipe in image mode — image steps
+            // are hand-entered only. Pre-flip back if the user was just
+            // experimenting before kicking off an import.
+            form.steps_mode = 'freeform';
             // C-4 Chunk 6 — adopt parsed structured steps when the source
             // shipped HowToStep / HowToSection. Empty list ⇒ source only had a
             // string, freeform mode stays active.

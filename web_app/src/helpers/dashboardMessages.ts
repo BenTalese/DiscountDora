@@ -83,7 +83,7 @@ export const HINTS: string[] = [
     "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now.",
     "A meal plan entry's servings can exceed the recipe's; quantities scale.",
     "Tap a stock item's level chip to change it without opening the full editor.",
-    "The 'Use soon' card pulls from real expiry dates — keep them current and it stays useful.",
+    "Sort the stock list by 'Expires soonest' to see what to cook first.",
     "Linking a product to a stock item lets me track its price over time.",
     "Your saved products power the 'Best deals' card — save the ones you actually buy.",
     "Set a grocery budget and I'll quietly track spend against it for you.",

@@ -5,7 +5,63 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Recipe "image" steps mode (2026-06-25).** Recipes gain a third step
+  payload alongside structured and freeform: a **scrollable gallery of
+  photos** the user uploads (cookbook spread, handwritten card, printout).
+  Cook mode renders the images full-width with tap-to-zoom; ingredients,
+  finish-cooking, B8 substitute swaps, and Sous Chef all work the same.
+  The mode toggle on the recipe detail page is non-destructive — switching
+  between modes keeps each payload intact so the user can experiment.
+  Client-side resize (1600px / JPEG q=0.85; 20-image soft cap) runs through
+  a new centralised `processImageFile` helper now shared by every upload
+  site in the app (R-003 applied to image upload utilities). Importer never
+  produces image mode (image steps are hand-entered only). See
+  `docs/04_proposals/PROPOSAL_RECIPE_IMAGE_STEPS.md`.
+
+### Removed
+- **`/waste` page (C-waste, 2026-06-25).** The standalone Waste page is
+  gone. Its three jobs moved to lighter, in-context surfaces (see
+  *Changed* below). Bookmarks now 404 by design — pre-release, no
+  redirect. Waste **as data** is preserved end-to-end so the future
+  Dora Score can still read the signal; see
+  `docs/04_proposals/PROPOSAL_WASTE_MINIMISATION.md` for the full
+  decision set. Score-weighting reassessment deferred to **FU-302**.
+- **Dashboard "Use soon" card (C-waste, 2026-06-25).** Removed; the
+  Needs-your-attention card already surfaces `expired` and
+  `expiring_soon` alerts.
+
 ### Changed
+- **Waste capture moved onto the stock-item row (C-waste, 2026-06-25).** The
+  expiry dropdown on each stock item gains a **Mark as wasted** action that
+  opens a tile-grid modal (Expired / Spoiled / Didn't like / Bought too much
+  / Other). Tile-tap = submit; a 5-second **Undo** toast both removes the
+  logged event and restores the cleared expiry. No money field, no note
+  field, no quantity field — anti-shame UX by design.
+- **Stock list "Stalest first" → "Expires soonest" (C-waste, 2026-06-25).**
+  The previous "Stalest first" sort was sorting by last-touched stock
+  level, not by expiry — a long-standing surprise. The new "Expires
+  soonest" sort puts the nearest-expiry items at the top (items without
+  an expiry sink to the bottom). The "Recently updated" sort already
+  covers the "what have I touched lately" question.
+- **Cookbook "Uses expiring ingredients" filter (C-waste, 2026-06-25).**
+  A new filter narrows the cookbook to recipes that use at least one
+  in-stock ingredient expiring within 14 days, ordered by count desc, with
+  a **Uses N expiring** badge on each card while the filter is active.
+  Off-filter, no badge — no noise.
+- **Stock-item history: waste events are reason-only (C-waste, 2026-06-25).**
+  The lifecycle timeline now shows "Wasted: expired" / "Wasted: spoiled"
+  etc. without the old quantity / value / note line. Existing events are
+  unaffected; the dropped fields are not recoverable post-migration.
+- **Dora `waste_insights` tool simplified (C-waste, 2026-06-25).** The tool
+  now returns just `{most_wasted, most_recent}` — what gets wasted often
+  and what was wasted most recently. Reason breakdowns and dollar sums are
+  gone with the underlying fields. `expiry_rescue` is unchanged.
+- **"Frequent waster" suggestion deep-link (C-waste, 2026-06-25).** The
+  suggestion now opens the specific stock-item detail page (where the
+  history tab shows the events) instead of the deleted `/waste` page.
+  Same goes for the dashboard's "Use soon" inbox-style suggestion.
+
 - **Dashboard internals — card shell extracted (2026-06-24).** No behaviour
   change: the dashboard's repeated card markup is now a single reusable
   `DashboardCard` component, so the cards stay visually identical but the page

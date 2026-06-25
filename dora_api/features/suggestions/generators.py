@@ -67,7 +67,7 @@ class Suggestion:
 
 
 # ── 1. Use soon ─────────────────────────────────────────────────────────
-# At-risk items within 3 days. Tighter than the /waste page's default 7
+# At-risk items within 3 days. Tighter than the rescue feed's default 7
 # because the suggestion inbox should only nag about *imminent* stuff.
 
 _USE_SOON_HORIZON_DAYS = 3
@@ -107,7 +107,10 @@ def generate_use_soon(repository: SqlAlchemyRepository) -> list[Suggestion]:
                 f"Its recorded expiry date is {item.expiry_date.isoformat()}, "
                 f"which is within the 3-day rescue horizon."
             ),
-            primary_action={"path": "/waste", "label": "Open rescue ideas"},
+            primary_action={
+                "path": f"/stock/{item.id}",
+                "label": "Open item",
+            },
             payload={"stock_item_id": str(item.id), "item_name": item.name},
         ))
     return out
@@ -249,40 +252,51 @@ def generate_frequent_waster(repository: SqlAlchemyRepository) -> list[Suggestio
     )
     if not events:
         return []
-    counter: dict[str, dict] = {}
+    # Bucket on (stock_item_id, name) so a rename doesn't split history and
+    # so a deleted item (FK set null) still appears under its captured name.
+    # We need the id to deep-link the suggestion at an actual page; events
+    # whose item was deleted (id is None) can't deep-link and are skipped.
+    counter: dict[tuple, dict] = {}
     for event in events:
-        bucket = counter.setdefault(event.stock_item_name, {
+        key = (event.stock_item_id, event.stock_item_name)
+        bucket = counter.setdefault(key, {
             "count": 0,
-            "value": 0.0,
-            "last_occurred_at": None,
+            "stock_item_id": event.stock_item_id,
+            "name": event.stock_item_name,
         })
         bucket["count"] += 1
-        if event.estimated_value:
-            bucket["value"] += float(event.estimated_value)
-        if bucket["last_occurred_at"] is None or event.occurred_at > bucket["last_occurred_at"]:
-            bucket["last_occurred_at"] = event.occurred_at
 
     out: list[Suggestion] = []
-    for name, bucket in counter.items():
+    for bucket in counter.values():
         if bucket["count"] < _FREQUENT_WASTER_MIN_EVENTS:
             continue
+        stock_item_id = bucket["stock_item_id"]
+        if stock_item_id is None:
+            continue
+        name = bucket["name"]
         out.append(Suggestion(
             kind=KIND_FREQUENT_WASTER,
-            dedup_key=name,
+            dedup_key=str(stock_item_id),
             severity=SEVERITY_LOW,
             title=f"Buy less {name}?",
             body=(
                 f"You've logged {bucket['count']} waste events for {name} "
-                f"in the last {_FREQUENT_WASTER_WINDOW_DAYS} days"
-                + (f" — about ${bucket['value']:.2f} of food." if bucket["value"] else ".")
+                f"in the last {_FREQUENT_WASTER_WINDOW_DAYS} days."
             ),
             reason=(
                 f"Over the last {_FREQUENT_WASTER_WINDOW_DAYS} days, {name} "
                 f"has shown up in {bucket['count']} waste events. A smaller "
                 f"pack size or longer gaps between buys may help."
             ),
-            primary_action={"path": "/waste", "label": "See waste insights"},
-            payload={"item_name": name, "events": bucket["count"]},
+            primary_action={
+                "path": f"/stock/{stock_item_id}",
+                "label": "Open item",
+            },
+            payload={
+                "stock_item_id": str(stock_item_id),
+                "item_name": name,
+                "events": bucket["count"],
+            },
         ))
     return out
 

@@ -202,6 +202,15 @@
                         <q-item clickable @click="clearExpiry">
                             <q-item-section class="text-negative">Clear expiry</q-item-section>
                         </q-item>
+                        <q-item clickable @click="openMarkAsWasted">
+                            <q-item-section
+                                avatar
+                                style="min-width: 0; padding-right: 8px"
+                            >
+                                <q-icon :name="ICONS.wasted" size="20px" />
+                            </q-item-section>
+                            <q-item-section>Mark as wasted</q-item-section>
+                        </q-item>
                     </q-list>
                 </q-menu>
             </RowActionButton>
@@ -242,6 +251,16 @@
                 :stock-item-id="item.stock_item_id"
             />
         </q-card-section>
+
+        <!-- C-waste — reason-only capture, fired from the expiry dropdown.
+             Owned by the row so the toast + Undo closure can reach into
+             both the waste API and the row's expiry data. -->
+        <MarkAsWastedDialog
+            v-model="markAsWastedOpen"
+            :item-name="item.name"
+            :subline="markAsWastedSubline"
+            @submit="onMarkAsWasted"
+        />
     </q-card>
 </template>
 
@@ -252,6 +271,9 @@
     import AddToListButton from 'src/components/AddToListButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
+    import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
+    import WasteApiService from 'src/services/api/wasteApiService';
+    import type { WasteReason } from 'src/services/api/wasteApiService';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
@@ -564,6 +586,85 @@
             stock_item_id: props.item.stock_item_id,
             stock_level_id: stockLevelId,
         });
+    }
+
+    // ── Mark as wasted (C-waste) ────────────────────────────────────────
+    // Capture is reason-only (PROPOSAL_WASTE_MINIMISATION §5). Submit
+    // posts the event + clears the row's expiry; a 5s Undo toast reverts
+    // both. The dialog is owned by the row so the Undo closure can
+    // remember the original expiry date independently of any prop
+    // refresh that may overwrite the row during the toast window.
+    const markAsWastedOpen = ref(false);
+    const wasteApi = new WasteApiService();
+    const markAsWastedSubline = computed<string | null>(() => {
+        const parts: string[] = [];
+        if (levelName.value) parts.push(levelName.value);
+        if (locationName.value) parts.push(locationName.value);
+        return parts.length > 0 ? parts.join(' · ') : null;
+    });
+    function openMarkAsWasted() {
+        markAsWastedOpen.value = true;
+    }
+    async function onMarkAsWasted(reason: WasteReason) {
+        // Capture into a local before any await — the row's props may
+        // re-render with stale data while the request is in flight.
+        const stockItemId = props.item.stock_item_id;
+        const itemName = props.item.name;
+        const originalExpiry = props.item.expiry_date ?? null;
+        try {
+            const { event_id } = await wasteApi.logEventAsync({
+                stock_item_id: stockItemId,
+                reason,
+            });
+            if (originalExpiry) {
+                await stockItemStore.updateStockItemAsync({
+                    stock_item_id: stockItemId,
+                    expiry_date: null,
+                });
+            }
+            $q.notify({
+                type: 'info',
+                position: 'bottom-right',
+                message: `Logged "${itemName}" as wasted.`,
+                timeout: 5000,
+                actions: [
+                    {
+                        label: 'Undo',
+                        color: 'white',
+                        handler: async () => {
+                            try {
+                                await wasteApi.deleteEventAsync(event_id);
+                                if (originalExpiry) {
+                                    await stockItemStore.updateStockItemAsync({
+                                        stock_item_id: stockItemId,
+                                        expiry_date: originalExpiry,
+                                    });
+                                }
+                                $q.notify({
+                                    type: 'positive',
+                                    position: 'bottom-right',
+                                    message: 'Undone.',
+                                });
+                            } catch (err) {
+                                $q.notify({
+                                    type: 'negative',
+                                    position: 'bottom-right',
+                                    message: 'Could not undo.',
+                                    caption: describeApiError(err) || '',
+                                });
+                            }
+                        },
+                    },
+                ],
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not log as wasted.',
+                caption: describeApiError(err) || '',
+            });
+        }
     }
 </script>
 

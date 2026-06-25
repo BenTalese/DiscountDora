@@ -112,6 +112,41 @@ export type Recipe = {
      *  `section_count === 0` ⇒ recipe is flat. */
     section_count: number;
     sections: RecipeSection[];
+    /** C-waste W4 — number of this recipe's (non-optional) ingredients
+     *  that are currently in stock and expiring within the cookbook
+     *  filter's horizon. Populated only when the request set
+     *  `?expiring_within_days=N` — zero / absent otherwise. */
+    expiring_ingredient_count?: number;
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — which step payload to render:
+     *  'structured' uses `steps[]`, 'freeform' splits `instructions` on
+     *  newline (today's fallback), 'image' renders `step_images[]` as a
+     *  scrollable gallery. Server-owned; the editor flips it as the user
+     *  changes mode. Mode switching is non-destructive — all three
+     *  payloads can coexist on one recipe. */
+    steps_mode: RecipeStepsMode;
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — cheap existence flag set by the list
+     *  endpoint (mirrors `has_structured_steps`). Detail endpoint also
+     *  hydrates the full `step_images[]` metadata below. */
+    has_step_images: boolean;
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — ordered metadata for image-mode
+     *  rendering. Bytes are NOT inlined; each image is fetched via
+     *  `GET /recipes/<recipe_id>/step-images/<image_id>`. Populated only
+     *  on the detail endpoint. */
+    step_images: RecipeStepImage[];
+};
+
+/** PROPOSAL_RECIPE_IMAGE_STEPS — closed set of recipe step payload modes.
+ *  Kept as a const union (R-010) so a bad write fails at type-check. */
+export type RecipeStepsMode = 'structured' | 'freeform' | 'image';
+
+export const RECIPE_STEPS_MODES: RecipeStepsMode[] = [
+    'structured', 'freeform', 'image',
+];
+
+/** PROPOSAL_RECIPE_IMAGE_STEPS — one ordered photo of a recipe's steps. */
+export type RecipeStepImage = {
+    image_id: string;
+    sequence: number;
 };
 
 /** Lightweight view of another recipe in the same version group —

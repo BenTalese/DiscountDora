@@ -52,6 +52,19 @@ long session summary. Distinct from the other logs:
 
 # Open
 
+## [OPEN] FU-303 — Recipe image-mode steps: browser walk
+- **Raised:** 2026-06-25 (PROPOSAL_RECIPE_IMAGE_STEPS implementation).
+- **Type:** finding (verification debt — built static, no Python interpreter on this host so the migration + endpoints were not exercised this session).
+- **What:** confirm in a browser, end-to-end:
+  - Recipe detail page mode toggle shows the three segments (Structured / Freeform / Image) and the right editor renders for each. Mode flip is non-destructive — switching from structured → image → freeform → structured preserves each payload.
+  - Image-mode editor: pick multiple files from disk; pick via the mobile camera prompt (`accept="image/*" capture="environment"`); reorder with up/down arrows; remove; cap warning at 20.
+  - Saving the recipe with `steps_mode='image'` posts `step_images[]` as data URLs; the `/api/recipes/<id>/step-images/<image_id>` bytes endpoint returns the original image at the right MIME.
+  - Cook mode in image-mode renders the full-width scroll gallery; tap-to-zoom dialog opens; ingredients panel + finish-cooking flow + B8 substitute swaps + Sous Chef all behave as before. Auto-detect timer card hidden; standalone timer affordance still usable (manual via Sous Chef commands).
+  - New-version of an image-mode recipe clones the step images.
+  - The Alembic migration applies cleanly on an existing DB; `steps_mode` is backfilled to `'structured'` only where `RecipeStep` rows exist.
+- **Why deferred:** build-to-plan-verify-later memory + no local Python interpreter on this host for a backend smoke. `vue-tsc` is clean.
+- **Recommended resolution:** confirm in browser (next time the user runs the app).
+
 ## [OPEN] FU-302 — Dora Score reassessment: waste-as-pillar weight
 - **Raised:** 2026-06-24 (C-waste design — `PROPOSAL_WASTE_MINIMISATION.md`).
 - **Type:** finding

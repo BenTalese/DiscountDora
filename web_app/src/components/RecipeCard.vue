@@ -40,6 +40,19 @@
                 >
                     {{ recipe.section_count }} parts
                 </q-chip>
+                <!-- C-waste W4 — surfaced only when the cookbook's
+                     "Uses expiring ingredients" filter is active (the
+                     parent passes `showExpiringBadge`). Off-filter, the
+                     count is meaningless noise; we hide it. -->
+                <q-chip
+                    v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
+                    dense
+                    color="warning"
+                    text-color="white"
+                    :icon="ICONS.wasteExpired"
+                >
+                    Uses {{ recipe.expiring_ingredient_count }} expiring
+                </q-chip>
             </div>
         </q-card-section>
 
@@ -121,9 +134,15 @@
         defineProps<{
             recipe: Recipe;
             highlightStockItemIds?: string[];
+            /** C-waste W4 — when true, render the "Uses N expiring"
+             *  chip if the recipe carries a positive count. Off by
+             *  default; the cookbook flips it on while its filter is
+             *  active so the badge stays scoped to that intent. */
+            showExpiringBadge?: boolean;
         }>(),
         {
             highlightStockItemIds: () => [],
+            showExpiringBadge: false,
         },
     );
 

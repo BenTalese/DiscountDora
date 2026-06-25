@@ -445,6 +445,7 @@ def seed_dev_data():
             time_of_day=kw.get("time_of_day", "Dinner"),
             version_group_id=None,
             kcal=kw.get("kcal"),
+            steps_mode=kw.get("steps_mode", "freeform"),
         )
         repo.add(recipe)
         return recipe

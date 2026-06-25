@@ -42,6 +42,7 @@
     import { computed, ref } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import { processImageFile } from 'src/services/files/imageService';
 
     const props = defineProps<{
         previewUrl: string | null;
@@ -63,9 +64,6 @@
     const fileInput = ref<HTMLInputElement | null>(null);
     const error = ref<string | null>(null);
 
-    // ~4MB raw cap — keeps the stored data URL under the server's 6M char cap.
-    const MAX_BYTES = 4 * 1024 * 1024;
-
     const initial = computed(() => (props.name?.trim()[0] ?? '?').toUpperCase());
     const placeholderStyle = computed(() => {
         let hash = 0;
@@ -83,21 +81,18 @@
         fileInput.value?.click();
     }
 
-    function onFile(ev: Event) {
+    async function onFile(ev: Event) {
         const input = ev.target as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
         if (!file) return;
-        if (file.size > MAX_BYTES) {
-            error.value = 'Image is too large (max 4MB). Pick a smaller one.';
-            return;
+        try {
+            const processed = await processImageFile(file);
+            emit('pick', processed.dataUrl);
         }
-        const reader = new FileReader();
-        reader.onload = () => {
-            if (typeof reader.result === 'string') emit('pick', reader.result);
-        };
-        reader.onerror = () => { error.value = 'Could not read that file.'; };
-        reader.readAsDataURL(file);
+        catch (err) {
+            error.value = err instanceof Error ? err.message : 'Could not read that file.';
+        }
     }
 </script>
 

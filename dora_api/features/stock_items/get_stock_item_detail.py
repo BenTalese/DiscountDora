@@ -85,9 +85,6 @@ class LevelChangeDto:
 class WasteEventDto:
     occurred_at: datetime
     reason: str
-    quantity: int | None
-    estimated_value: float | None
-    note: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,9 +368,6 @@ class GetStockItemDetailHandler:
             WasteEventDto(
                 occurred_at = w.occurred_at,
                 reason = w.reason,
-                quantity = w.quantity,
-                estimated_value = w.estimated_value,
-                note = w.note,
             )
             for w in _Wastes[:20]
         ]

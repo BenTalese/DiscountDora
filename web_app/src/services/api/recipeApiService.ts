@@ -1,4 +1,4 @@
-import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
+import type { Recipe, RecipeStepsMode, RecipeTagCatalogue } from 'src/models/recipe';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
 import { type Page } from './queryStringBuilder';
@@ -9,6 +9,17 @@ export function recipeImageUrl(recipeId: string, version?: number | string): str
     const base = resolveBaseURL();
     const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
     return `${base}/recipes/${recipeId}/image${suffix}`;
+}
+
+/** PROPOSAL_RECIPE_IMAGE_STEPS — URL for a single step image (raw bytes). */
+export function recipeStepImageUrl(
+    recipeId: string,
+    imageId: string,
+    version?: number | string,
+): string {
+    const base = resolveBaseURL();
+    const suffix = version !== undefined ? `?v=${encodeURIComponent(String(version))}` : '';
+    return `${base}/recipes/${recipeId}/step-images/${imageId}${suffix}`;
 }
 
 export type CreateRecipeIngredientCommand = {
@@ -84,6 +95,12 @@ export type CreateRecipeCommand = {
     kcal?: number | null;
     /** C-4 Chunk 10 — named sections. Empty/omitted = flat recipe. */
     sections?: RecipeSectionCommand[];
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — which step payload cook mode and the
+     *  detail page should render. Defaults server-side to 'freeform'. */
+    steps_mode?: RecipeStepsMode;
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — ordered data-URL strings for image
+     *  mode. Omit/empty when not using image mode. */
+    step_images?: string[];
 };
 
 export type UpdateRecipeCommand = {
@@ -120,6 +137,13 @@ export type UpdateRecipeCommand = {
      *  empty list clears all sections and rows fall back to the implicit
      *  "main" group via ON DELETE SET NULL. Omit to leave untouched. */
     sections?: RecipeSectionCommand[];
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — flip which step payload is active.
+     *  Omit to leave untouched. */
+    steps_mode?: RecipeStepsMode;
+    /** PROPOSAL_RECIPE_IMAGE_STEPS — present (even as []) = replace the
+     *  full step image set. Mode flip without this field is
+     *  non-destructive (rows stay in place). */
+    step_images?: string[];
 };
 
 /** P2-08 — query filters for the recipes endpoint. Mirrors the
@@ -136,6 +160,10 @@ export type RecipeFilterArgs = {
      *  `max_missing` keeps recipes with at most N missing ingredients. */
     cookable?: boolean;
     max_missing?: number;
+    /** C-waste W4 — when set, narrow the list to recipes using ≥1
+     *  in-stock ingredient expiring within the horizon, and populate
+     *  `expiring_ingredient_count` on the returned recipes. */
+    expiring_within_days?: number;
 };
 
 export default class RecipeApiService {
@@ -231,6 +259,9 @@ function encodeFilterQueryString(filters?: RecipeFilterArgs): string {
     }
     if (filters.max_missing !== undefined) {
         params.append('max_missing', String(filters.max_missing));
+    }
+    if (filters.expiring_within_days !== undefined) {
+        params.append('expiring_within_days', String(filters.expiring_within_days));
     }
     const out = params.toString();
     return out ? `?${out}` : '';

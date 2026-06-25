@@ -61,6 +61,16 @@ class Recipe(BaseEntity):
     # The freeform `nutrition: str | None` field above stays for
     # backwards compatibility but is no longer rendered/edited.
     kcal: int | None
+    # PROPOSAL_RECIPE_IMAGE_STEPS — explicit declaration of which step
+    # payload cook mode and the detail page render. Replaces the implicit
+    # "does it have RecipeStep rows?" detection so a third mode (image)
+    # can be a first-class peer.
+    #   - 'structured' → RecipeStep rows
+    #   - 'freeform'   → Recipe.instructions text blob (default for new)
+    #   - 'image'      → ordered RecipeStepImage rows
+    # Non-destructive switch: all three payloads can coexist; this field
+    # only declares which is the active render path.
+    steps_mode: str
 
     class Fields(BaseEntity.Fields):
         AVAILABLE_MEALS = "available_meals"
@@ -82,3 +92,7 @@ class Recipe(BaseEntity):
         TIME_OF_DAY = "time_of_day"
         VERSION_GROUP_ID = "version_group_id"
         KCAL = "kcal"
+        STEPS_MODE = "steps_mode"
+
+
+ALLOWED_STEPS_MODES = ("structured", "freeform", "image")

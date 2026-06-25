@@ -9,6 +9,7 @@ from dora_api.domain.entities.category import Category
 from dora_api.domain.entities.cuisine import Cuisine
 from dora_api.domain.entities.recipe import (
     ALLOWED_DIFFICULTY_VALUES,
+    ALLOWED_STEPS_MODES,
     Recipe,
 )
 from dora_api.domain.entities.recipe_collection import RecipeCollection
@@ -20,6 +21,9 @@ from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
 from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
+)
+from dora_api.features.recipes.recipe_step_image_access import (
+    StepImageWrite, replace_step_images_for_recipe,
 )
 from dora_api.features.recipes.recipe_section_access import (
     SectionWrite, replace_sections_for_recipe,
@@ -121,6 +125,14 @@ class UpdateRecipeRequest(BaseModel):
     # implicit "main" group via ON DELETE SET NULL. Omit to leave
     # existing sections untouched.
     sections: List[UpdateRecipeSectionRequest] | None = None
+    # PROPOSAL_RECIPE_IMAGE_STEPS — explicit steps_mode flip. Omit to leave
+    # untouched; closed set validated below.
+    steps_mode: str | None = Field(default = None, max_length = 16)
+    # PROPOSAL_RECIPE_IMAGE_STEPS — present (even as []) = replace the full
+    # step image set. Omit to leave untouched. Mode-switch is
+    # non-destructive: clients toggling away from image mode can leave the
+    # rows in place by omitting the field.
+    step_images: List[str] | None = None
 
 
 @dataclass(slots=True)
@@ -298,6 +310,17 @@ class UpdateRecipeHandler:
         if "image" in _SetFields:
             _Recipe.image = request.image.encode("utf-8") if request.image else None
 
+        # PROPOSAL_RECIPE_IMAGE_STEPS — steps_mode flip. Closed set (R-010).
+        if "steps_mode" in _SetFields and request.steps_mode is not None:
+            if request.steps_mode not in ALLOWED_STEPS_MODES:
+                return UpdateRecipeResponse(
+                    invalid_vocabulary_message=(
+                        f"Invalid steps_mode '{request.steps_mode}'. "
+                        f"Allowed: {', '.join(ALLOWED_STEPS_MODES)}."
+                    ),
+                )
+            _Recipe.steps_mode = request.steps_mode
+
         # C-4 Chunk 2/5 — replace the tag/tool set when explicitly provided.
         # Empty list clears; omitted field leaves untouched.
         if "dietary_tag_ids" in _SetFields and request.dietary_tag_ids is not None:
@@ -342,6 +365,20 @@ class UpdateRecipeHandler:
                     for step in request.steps
                 ]
                 replace_steps_for_recipe(recipe_id, _StepWrites)
+            except ValueError as exc:
+                return UpdateRecipeResponse(invalid_step_message=str(exc))
+
+        # PROPOSAL_RECIPE_IMAGE_STEPS — full-replace semantics matching `steps`
+        # above. Empty list clears all rows; mode flip alone (without
+        # `step_images` in the payload) leaves existing rows in place so the
+        # user can experiment with modes without re-uploading.
+        if "step_images" in _SetFields and request.step_images is not None:
+            try:
+                _ImageWrites = [
+                    StepImageWrite(sequence=i, image_data_url=data_url)
+                    for i, data_url in enumerate(request.step_images)
+                ]
+                replace_step_images_for_recipe(recipe_id, _ImageWrites)
             except ValueError as exc:
                 return UpdateRecipeResponse(invalid_step_message=str(exc))
 

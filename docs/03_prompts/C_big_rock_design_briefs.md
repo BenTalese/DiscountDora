@@ -56,6 +56,45 @@ decisions:** money-flag vs overloaded-NULL; the toggleable-feature set; taxonomy
 edit permission; whether to add a per-user location-detail pref. Written
 2026-06-06.
 
+## C-19 — Shared auth-shell styling → `PROPOSAL_AUTH_SHELL.md`
+The "splash / cannot-connect / login / onboarding" quartet share a moment
+(pre-auth or post-auth-failure context) and should share a visual shell —
+right now only **LoginPage** is designed for it. Read all four surfaces.
+Propose: **one shared auth-shell** that keeps the Dora animation/placement,
+hosts a content slot for each variant (splash gradient, "we can't reach the
+server" copy, login form, onboarding cinematic scenes), and replaces today's
+per-page splash design with a single source of styling.
+
+**Token revisit (folded in from the retired FU-002, 2026-06-04 / DEC-2).**
+`LoginPage.vue` carries a **private `--lp-*` colour ladder** (≈28 raw-hex
+custom properties: deep-midnight bg, magenta/amber/mint blob accents, the
+white-glass card, accent/shadow) deliberately left untouched as an intentional
+splash design — *not* theme drift the general token system should govern.
+This prompt is where to decide the ladder's future:
+
+- **Promote** the lp-* set into the shared auth-shell layer if all four
+  screens use the same palette → name them properly (`--auth-shell-*` or
+  similar), document the splash-decision rationale next to them, and apply
+  through the shell.
+- **Keep private** only if each surface has its own splash treatment
+  (different blobs / palette per screen) — in which case re-confirm DEC-2
+  inline and move on.
+
+Either way, the call gets *made* in this prompt rather than left as a
+floating "revisit later" marker. Compute the ladder's actual usage
+(splash blobs, card glass, accent, shadow) before deciding.
+
+**Open decisions:** does each of the four screens share the same blob
+palette / animation, or does each get its own variant? Whose palette
+wins if they diverge? (Today's lp-* is whatever LoginPage chose.) Does
+"onboarding" mean the **shell** or also the **scene transitions**
+already proposed in `PROPOSAL_ONBOARDING.md` (don't re-litigate scene
+choreography here — that's onboarding's job; this is the shell wrap).
+
+Ripple: `LoginPage.vue` (replace lp-* with shell tokens or document
+keep), splash route, cannot-connect screen, `PROPOSAL_ONBOARDING.md`
+(its shell becomes this shell). No backend.
+
 ## C-locale — Locale & international readiness → `PROPOSAL_LOCALE_I18N.md`
 User-floated (2026-06-06): make Dora usable outside Australia. The companion split
 (Decision 1) solves *product sourcing* (products can be from anywhere via C-10),

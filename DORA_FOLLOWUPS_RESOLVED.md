@@ -10,6 +10,43 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-004 — Collapse `themeService.ts` THEMES dict into CSS-var reads
+- **Raised:** 2026-06-04 (A1b)
+- **Type:** finding
+- **What:** 7 themes still have the dual-source coupling between the `THEMES`
+  palette dict in `themeService.ts` and `themes.scss`. Their values currently
+  match (Pesto / Pesto Dark / Lemon Tart Dark were synced), but it's a latent
+  drift hazard.
+- **Why deferred:** values match today, so it doesn't block anything.
+- **Resolved (2026-06-26):** dropped the `palette: { … }` field from all 10
+  `THEMES` entries in `themeService.ts`. `applyThemeKey` now sets
+  `data-theme="x"` first, then `syncQuasarPaletteFromCssVars()` reads the
+  active values back via `getComputedStyle(documentElement).getPropertyValue`
+  and pushes them into Quasar's `--q-*` palette via `setCssVar`. The
+  bridge map `QUASAR_PALETTE_FROM_CSS_VAR` is the only place the
+  TS→SCSS coupling lives now — and it's by *key name*, not by hex value.
+  Single source of truth = `css/themes.scss`. `ThemePalette` interface kept
+  (used by `helpers/stockLevelLogic.ts` via `nameOf<>` as a compile-time
+  key-set contract). Removed ~140 hex strings from the TS file; vue-tsc +
+  eslint clean. Adding a new theme is now a 1-step change (SCSS block +
+  picker-metadata row in `THEMES`; no palette values).
+
+---
+
+## [RESOLVED] FU-002 — LoginPage `--lp-*` token ladder revisit
+- **Raised:** 2026-06-04 (A1)
+- **Type:** deferred job
+- **What:** `LoginPage.vue`'s private `--lp-*` colour ladder was deliberately left
+  untouched (DEC-2 — intentional splash).
+- **Why deferred:** it's a one-off intentional design, not theme drift.
+- **Resolved (2026-06-26):** folded into the **C-19 (shared auth-shell)**
+  prompt scope in `docs/03_prompts/C_big_rock_design_briefs.md`. The note
+  about the lp-* ladder + the keep/promote decision now lives inside that
+  prompt's body, so whoever runs C-19 sees it without needing a separate FU
+  pointer. No code touched; the ladder stays as-is until C-19 runs.
+
+---
+
 ## [RESOLVED] FU-122 — Browser-verify Stock Overview Chunk 3 (row rebuild + image toggle)
 - **Raised:** 2026-06-12 (Stock Overview Chunk 3 impl; static-only, no env)
 - **Type:** finding / verification

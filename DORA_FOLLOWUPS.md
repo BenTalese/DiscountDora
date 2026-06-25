@@ -4354,17 +4354,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** different component API; not needed for A2.
 - **Recommended resolution:** later — only if a design need arises; not no-regret.
 
-## [OPEN] FU-004 — Collapse `themeService.ts` THEMES dict into CSS-var reads
-- **Raised:** 2026-06-04 (A1b)
-- **Type:** finding
-- **What:** 7 themes still have the dual-source coupling between the `THEMES`
-  palette dict in `themeService.ts` and `themes.scss`. Their values currently
-  match (Pesto / Pesto Dark / Lemon Tart Dark were synced), but it's a latent
-  drift hazard.
-- **Why deferred:** values match today, so it doesn't block anything.
-- **Recommended resolution:** later — a clean-up before commercialise (Phase 4),
-  or when a theme bug points back to the dual source.
-
 ## [OPEN] FU-003 — Other light themes' `--text-muted` contrast nudge
 - **Raised:** 2026-06-04 (A1b)
 - **Type:** follow-up
@@ -4375,11 +4364,3 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later during a dedicated A1b contrast pass, after the
   user has eyeballed the themes.
 
-## [OPEN] FU-002 — LoginPage `--lp-*` token ladder revisit
-- **Raised:** 2026-06-04 (A1)
-- **Type:** deferred job
-- **What:** `LoginPage.vue`'s private `--lp-*` colour ladder was deliberately left
-  untouched (DEC-2 — intentional splash).
-- **Why deferred:** it's a one-off intentional design, not theme drift.
-- **Recommended resolution:** later during **C19** (shared auth-shell) — revisit
-  the whole auth surface together.

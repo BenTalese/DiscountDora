@@ -9,6 +9,73 @@ next.
 
 ---
 
+## 2026-06-25 — Meal planner design critique + rebuild brief (no code)
+
+**Why:** user ran `/design:design-critique` on the meal planner, asking for the
+same treatment Settings and Dashboard got — a deep UX + code critique that
+becomes a phased rebuild brief. Supplied two desktop screenshots of the live
+app (`localhost:5174/#/meal-plans`).
+
+**Decisions resolved with the user (up front):**
+- Deliverable = **critique + phased rebuild brief** (match `IMPL_PLAN_*_REBUILD`).
+- **Equal** mobile/desktop weighting.
+- The **vertical carousel paradigm is on the table** (open to reconsider).
+- Critique from code; user supplied screenshots to ground the visual read.
+
+**What shipped:** `docs/04_proposals/IMPL_PLAN_MEAL_PLANS_REBUILD.md` — a fresh
+re-evaluation of the *shipped* C-2 surface (not a re-spec). Key findings:
+- **Root cause is emergent, not any one feature.** Every F1–F49 idea shipped and
+  was built faithfully; the problems come from combining them: all 5 slots ×
+  7 days render unconditionally (~35 cells, mostly empty "tap to add") +
+  vertical carousel + non-sticky side columns + centre-weighted 3-col grid →
+  a page that reads as *chores*, mostly empty space, with the answer-bearing
+  content (shopping / cook-by) scrolling away first.
+- **3 critical usability findings:** empty-slot sprawl (U1), non-sticky context
+  columns (U2), mobile scroll-pogo for tap-add (U3).
+- **R-001:** 1,222-line single file to decompose. **R-003:** client derivations
+  re-audited (`cookByLabel` borderline-OK, calendar `dayStatus` clean,
+  `needToBuy` clean via composable; cross-ref FU-081).
+- **6 phases**, each independently shippable: Phase 1 (de-sprawl) is the
+  highest-value/lowest-risk and should ship alone.
+- §8 re-grades all 49 feedback bullets (✅/🟡/➖): ~13 regressions/new concerns,
+  almost all tracing to the same root; Phase 1+2 close most.
+
+**Direction resolved with the user (2026-06-25, same session):** **build BOTH
+layouts and keep them live behind a temp desktop toggle** — upgrade the existing
+page to **Direction A** (de-sprawled vertical carousel) and add a **separate
+page** for **Direction B** (desktop week grid). Shared state/logic; pick a winner
+later, then delete the loser + toggle. **Duplicate-timing call: extraction-first**
+(pull a `useMealPlanner()` composable + leaf components out of the current page,
+behaviour-preserving, *before* creating the B page — no 1,222-line twin). Built
+three comparison mockups for the user (A-vs-B; B-with-panels-rehomed; then the
+elevated best-UX week board). Brief updated: **§10** (resolved direction + §10.5
+revised phasing, supersedes §5) + **§11** (round-2 deeper analysis: first-run,
+builder, pool/persona, chip density, templates, a11y) + **§12/§13** (first-
+principles best-UX exploration for the B page + UI craft bar). Key §12 idea:
+**slot-as-tag, not slot-as-scaffold** — meals stack as content-forward cards
+under a day (thumbnail + meta), empty days cost one "+", with an optional "group
+by slot" view; a quiet **fresh/batch posture** hides batch concepts by default.
+Smaller decisions still open: Q2 slot visibility, Q3 pool gating, Q4 mobile
+picker, **Q5 slot-as-tag sign-off** (diverges from F46 — trial on B only),
+Q6 rich-card data path (defaults proposed).
+
+**v2 polish pass (same session):** rewrote the brief end-to-end — fixed the
+broken section order (§9 was stranded at the end), deduped the organic-growth
+overlap, and **grounded every finding in named, citable standards** via a new
+**§3 "design principles applied"** table (NN/g 10 heuristics; Laws of UX —
+Hick/Fitts/Jakob/Tesler/Von Restorff/Doherty/Aesthetic-Usability; progressive
+disclosure; empty-state + skeleton patterns; WCAG 2.2 AA; Gestalt). Findings now
+carry principle ids (e.g. U1 → H8 + Hick; U3 → Fitts + Jakob; U7 → H5 + Fitts).
+Added a document map, a **§14 references** list, and renumbered to a clean
+1→15 order. Content unchanged in substance; the F1–F49 coverage table is intact.
+
+**Next up:** R-Phase 0 (verify-state, incl. FU-179 F34 "needs x" math) →
+R-Phase 1 (extract shared core) → R-Phase 2 (Direction A) → R-Phase 3 (Direction
+B + toggle). Tracked as **FU-304**. This brief partly discharges FU-179 but
+runtime checks still need a live pass — FU-179 kept open.
+
+---
+
 ## 2026-06-25 — Recipe "image" steps mode (proposal + implementation)
 
 **Why:** user pitched a third recipe-steps mode in conversation — the

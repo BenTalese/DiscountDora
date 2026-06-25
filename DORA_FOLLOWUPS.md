@@ -52,7 +52,28 @@ long session summary. Distinct from the other logs:
 
 # Open
 
-## [OPEN] FU-303 — Recipe image-mode steps: browser walk
+## [OPEN] FU-304 — Meal planner rebuild: build both layouts (A + B) behind a toggle
+- **Raised:** 2026-06-25 (`/design-critique` on the meal planner →
+  `docs/04_proposals/IMPL_PLAN_MEAL_PLANS_REBUILD.md`).
+- **Type:** deferred job (rebuild brief authored + direction resolved; no code yet).
+- **What:** the brief diagnoses the planner's emergent sprawl (all-slots ×
+  all-days + vertical carousel + non-sticky columns + centre-weighted grid).
+  **Q1 RESOLVED (2026-06-25):** build **both** directions and keep them live
+  behind a **temp desktop toggle** — upgrade the existing page to **Direction A**
+  (de-sprawled carousel) and add a **separate page** for **Direction B** (desktop
+  week grid). Shared state/logic; pick a winner later, then delete the loser +
+  toggle. Canonical phasing is **§10.5** of the brief.
+- **Sequencing (resolved):** extraction-first — **R-Phase 1** pulls a
+  `useMealPlanner()` composable + leaf components out of the current page
+  (behaviour-preserving R-001) **before** the B page is created, to avoid a
+  1,222-line duplicate that double-maintains mutation logic.
+- **Still open (smaller):** Q2 default slot visibility, Q3 pool-management
+  location/gating, Q4 mobile picker pattern (defaults proposed in the brief).
+- **Recommended resolution:** next session — R-Phase 0 (verify-state, incl.
+  FU-179 F34 "needs x" math) → R-Phase 1 (extract) → R-Phase 2 (Direction A) →
+  R-Phase 3 (Direction B + toggle).
+
+
 - **Raised:** 2026-06-25 (PROPOSAL_RECIPE_IMAGE_STEPS implementation).
 - **Type:** finding (verification debt — built static, no Python interpreter on this host so the migration + endpoints were not exercised this session).
 - **What:** confirm in a browser, end-to-end:

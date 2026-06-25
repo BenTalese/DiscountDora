@@ -90,6 +90,27 @@
                 />
             </SettingsRow>
         </SettingsSection>
+
+        <hr class="settings-divider" />
+
+        <SettingsSection>
+            <template #title>Meal planning</template>
+            <template #description>
+                Cooking style controls what the meal planner shows.
+                <strong>Fresh</strong> keeps the planner pure scheduling.
+                <strong>Batch</strong> adds the cook pool (per-recipe ± /
+                log-cook), the cook-shortfall warning, and the
+                "to cook by" sidebar line.
+            </template>
+
+            <SettingsRow label="Cooking style">
+                <DoraSegmented
+                    :model-value="batchEnabled ? 'batch' : 'fresh'"
+                    :options="cookingStyleOptions"
+                    @update:model-value="onCookingStyleChange"
+                />
+            </SettingsRow>
+        </SettingsSection>
     </div>
 </template>
 
@@ -111,6 +132,7 @@
         type ThemeFamily,
     } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { ref, watch } from 'vue';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -121,6 +143,25 @@
     const $q = useQuasar();
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+    const { batchEnabled, setBatchEnabled } = useBatchEnabled();
+
+    type CookingStyle = 'fresh' | 'batch';
+    const cookingStyleOptions: DoraSegmentedOption<CookingStyle>[] = [
+        { label: 'Fresh', value: 'fresh' },
+        { label: 'Batch', value: 'batch' },
+    ];
+    async function onCookingStyleChange(next: CookingStyle) {
+        try {
+            await setBatchEnabled(next === 'batch');
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not change cooking style.',
+                caption: describeApiError(err) || '',
+            });
+        }
+    }
 
     const themeFamilies = THEME_FAMILIES;
     type ThemeMode = 'system' | 'light' | 'dark';

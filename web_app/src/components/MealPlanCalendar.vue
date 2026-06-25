@@ -13,11 +13,17 @@
         </q-card-section>
         <q-separator />
         <q-card-section class="q-pa-sm column q-gutter-xs">
-            <div
+            <!-- R-Phase 6 §4.6 / 4.1.2 — week row is a real button; status
+                isn't colour-only any more (aria-label spells it out and a
+                tooltip mirrors it for sighted users). -->
+            <button
+                type="button"
                 v-for="week in weeks"
                 :key="week.monday"
                 class="cal-week"
                 :class="{ 'cal-week--focused': week.monday === focusedMonday }"
+                :aria-label="weekAccessibleLabel(week)"
+                :aria-current="week.monday === focusedMonday ? 'true' : undefined"
                 @click="selectWeek(week.monday)"
             >
                 <div
@@ -25,12 +31,13 @@
                     :key="cell.iso"
                     class="cal-day"
                     :class="`cal-day--${cell.status}`"
+                    :title="dayTitle(cell)"
                 >
                     <span v-if="cell.showLabel" class="cal-day__dd">{{ cell.dd }}</span>
                     <span v-if="cell.isToday" class="cal-day__today" />
                 </div>
-                <q-tooltip>Week of {{ formatDate(week.monday) }}</q-tooltip>
-            </div>
+                <q-tooltip>{{ weekTooltip(week) }}</q-tooltip>
+            </button>
         </q-card-section>
     </q-card>
 </template>
@@ -126,6 +133,27 @@
     function formatDate(iso: string): string {
         return new Date(iso).toLocaleDateString();
     }
+
+    // R-Phase 6 §4.6 — text alternatives for the colour-only status (1.4.1).
+    const STATUS_LABEL: Record<DayStatus, string> = {
+        empty: 'no meals planned',
+        planned: 'meals planned',
+        short: 'cook shortfall',
+        consumed: 'all cooked',
+    };
+    function dayTitle(cell: CalCell): string {
+        return `${formatDate(cell.iso)} — ${STATUS_LABEL[cell.status]}`;
+    }
+    function weekAccessibleLabel(week: { monday: string; days: CalCell[] }): string {
+        const plannedDays = week.days.filter((d) => d.status === 'planned' || d.status === 'consumed' || d.status === 'short').length;
+        const summary = plannedDays === 0
+            ? 'no meals planned'
+            : `${plannedDays} day${plannedDays === 1 ? '' : 's'} with meals`;
+        return `Week of ${formatDate(week.monday)}, ${summary}`;
+    }
+    function weekTooltip(week: { monday: string; days: CalCell[] }): string {
+        return weekAccessibleLabel(week);
+    }
 </script>
 
 <style scoped>
@@ -140,9 +168,21 @@
         border: 2px solid transparent;
         cursor: pointer;
         transition: background 0.12s ease;
+        /* Reset the native <button> chrome — the row reads as a calm
+            cell row, not a button. Outline restored on focus-visible. */
+        background: transparent;
+        width: 100%;
+        font: inherit;
+        text-align: left;
+        position: relative;
     }
-    .cal-week:hover {
+    .cal-week:hover,
+    .cal-week:focus-visible {
         background: var(--surface-sunken);
+        outline: none;
+    }
+    .cal-week:focus-visible {
+        border-color: var(--q-primary);
     }
     .cal-week--focused {
         border-color: var(--brand-primary);

@@ -76,6 +76,10 @@ class AuthenticatedUserDto:
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     # Layered with install `money_enabled` via useMoneyEnabled().
     money_features_enabled: bool
+    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+    # posture. Default False ("fresh"); when True the meal-planner reveals
+    # the cook-pool affordances + shortfall warning.
+    batch_features_enabled: bool
     # C-cross Chunk 3 — per-user nutrition mode. `off` | `simple` |
     # `complex` (complex requires admin-configured nutrition source).
     nutrition_mode: str
@@ -133,6 +137,7 @@ class AuthenticatedUserDto:
             voice_engine=user.voice_engine,
             voice_id=user.voice_id,
             money_features_enabled=bool(user.money_features_enabled),
+            batch_features_enabled=bool(user.batch_features_enabled),
             nutrition_mode=user.nutrition_mode,
             show_recipe_images=bool(user.show_recipe_images),
             show_stock_images=bool(user.show_stock_images),

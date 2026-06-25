@@ -55,23 +55,171 @@ long session summary. Distinct from the other logs:
 ## [OPEN] FU-304 — Meal planner rebuild: build both layouts (A + B) behind a toggle
 - **Raised:** 2026-06-25 (`/design-critique` on the meal planner →
   `docs/04_proposals/IMPL_PLAN_MEAL_PLANS_REBUILD.md`).
-- **Type:** deferred job (rebuild brief authored + direction resolved; no code yet).
+- **Type:** deferred job.
 - **What:** the brief diagnoses the planner's emergent sprawl (all-slots ×
   all-days + vertical carousel + non-sticky columns + centre-weighted grid).
   **Q1 RESOLVED (2026-06-25):** build **both** directions and keep them live
   behind a **temp desktop toggle** — upgrade the existing page to **Direction A**
   (de-sprawled carousel) and add a **separate page** for **Direction B** (desktop
   week grid). Shared state/logic; pick a winner later, then delete the loser +
-  toggle. Canonical phasing is **§10.5** of the brief.
+  toggle. Canonical phasing is **§12** of the brief.
+- **Progress (2026-06-25 PM):**
+  - **R-Phase 0 closed** — Q2 (used-slots default), Q3 (gate behind batch
+    posture), Q4 (bottom-sheet picker), Q5 (slot-as-tag, B page only),
+    Q6 (server-enrich `MealPlanEntryDto`) all locked with the recommended
+    option. Brief §11 updated to reflect resolutions. FU-179 still left to
+    user (browser-verify).
+  - **R-Phase 1 landed** — extracted `useMealPlanner()` composable +
+    `MealPlanRecipePicker.vue` + `MealPlanWeekDayCard.vue` +
+    `MealPlanShoppingSummary.vue`. `MealPlansOverview.vue` shrinks
+    1,222 → 304 lines, behaviour-preserving. vue-tsc + eslint clean on the
+    five changed files.
+  - **R-Phase 2 landed (2026-06-25 PM, same session)** — Direction A
+    upgrade: de-sprawled per-day slots (Q2) with calm "+ add a meal" +
+    show-all toggle, sticky context columns, new
+    `MealPlanWeekStatus.vue` strip, `MealPlanFirstRun.vue` hero,
+    empty-week "Plan this week" banner, U7 destructive-button fix. Seven
+    files changed/added; vue-tsc + eslint clean. Browser walk folded into
+    FU-305.
+  - **R-Phase 3 landed (2026-06-25 PM, same session)** — Direction B
+    page + A/B toggle. Q6 server-enriched `MealPlanEntryDto` (4 new
+    display fields + bulk-hydrated `has_image`).
+    `MealPlanRichCard.vue` (slot-as-tag per Q5), `MealPlanWeekBoard.vue`
+    (7-day grid with day-major default + group-by-slot alt view),
+    `MealPlansBoardPage.vue` (top strip + sticky consequences bar +
+    pinnable picker drawer + calendar-as-popover), and the
+    `useMealPlannerView` persistence helper. New route
+    `/meal-plans/board`. List/Grid toggle on both pages (desktop-only).
+    13 files touched; vue-tsc + eslint + AST-parse clean. Browser walk
+    folded into FU-305.
+  - **R-Phase 4 landed (2026-06-25 PM, same session)** — shared mobile
+    single-day focus. `MealPlanMobileFocus.vue` (day-strip + focused-day
+    cards + collapsible week status) and `MealPlanPickerSheet.vue`
+    (bottom-sheet picker). Both pages render the same focus at `lt.md`;
+    A/B toggle gated to desktop only. Slot-as-tag rich card reused on
+    mobile. Drag is force-disabled at the picker level on mobile (H7).
+    vue-tsc + eslint clean.
+  - **R-Phase 5 landed (2026-06-25 PM, same session)** — three cleanups:
+    (a) Q3 batch posture gate end-to-end (User column + migration +
+    `useBatchEnabled` + Settings → Preferences toggle + 5 component
+    gates); (b) sequential builder rebuilt onto the shared picker
+    (multi-select mode) + dead Email button hidden + build decoupled
+    from generate-list; (c) `MealPlanTemplatesDrawer.vue` apply/manage
+    drawer wired into both pages. 14 files touched + new Alembic
+    migration `e4c7a2f9b5d3`. vue-tsc + eslint + AST-parse clean.
+    The migration needs to run on the user's DB before the next
+    backend boot.
+  - **R-Phase 6 landed (2026-06-26)** — hierarchy + a11y + skeletons.
+    Calmer status accents on entry chip + rich card (border + icon +
+    aria-label, not saturated fill). Slot rows / day columns / week
+    rows / calendar weeks promoted to real `<button>` with combined
+    accessible labels. Global ArrowUp/Down nav scoped via
+    `closest('button,a,select,…')` so it doesn't steal focus keys.
+    New `MealPlanSkeleton.vue` (list / grid / mobile variants) +
+    `useMealPlanner.isInitialLoading` ref render layout-shaped
+    placeholders during the ~10 parallel mount loads. Calendar status
+    text alternatives via `title` + aria-label close 1.4.1.
+    9 files touched; vue-tsc + eslint clean.
 - **Sequencing (resolved):** extraction-first — **R-Phase 1** pulls a
   `useMealPlanner()` composable + leaf components out of the current page
   (behaviour-preserving R-001) **before** the B page is created, to avoid a
-  1,222-line duplicate that double-maintains mutation logic.
-- **Still open (smaller):** Q2 default slot visibility, Q3 pool-management
-  location/gating, Q4 mobile picker pattern (defaults proposed in the brief).
-- **Recommended resolution:** next session — R-Phase 0 (verify-state, incl.
-  FU-179 F34 "needs x" math) → R-Phase 1 (extract) → R-Phase 2 (Direction A) →
-  R-Phase 3 (Direction B + toggle).
+  1,222-line duplicate that double-maintains mutation logic. **Done.**
+- **Recommended resolution:** next session — **"pick a winner" cleanup**
+  (live with both layouts; once A or B wins, delete the loser page +
+  `useMealPlannerView` + the A/B toggle + any leaf components unused by
+  the survivor). After that FU-304 itself closes.
+
+## [OPEN] FU-308 — Fold the /meal-plans/templates manager into the drawer (or retire it)
+- **Raised:** 2026-06-25 (R-Phase 5 of the meal planner rebuild).
+- **Type:** follow-up.
+- **What:** R-Phase 5's templates drawer covers the daily Apply / Rename /
+  Delete / Save flow. The dedicated `/meal-plans/templates` page still
+  exists and is reachable via direct URL — it shipped before the drawer
+  and overlaps with the drawer for the basic CRUD. Once browser-verified,
+  either (a) fold any unique-to-page features (e.g. bulk reorder, full
+  description editing) into the drawer and retire the route, or (b) keep
+  the page as the "heavy management" screen and add a clearer entry
+  point on the planner pages (right now neither the A page templates
+  card nor the B page Templates button links to it).
+- **Why deferred:** R-Phase 5 explicitly scoped to the drawer (§9-E);
+  reworking the dedicated page is its own assessment.
+- **Recommended resolution:** opportunistic — at the "pick a winner"
+  cleanup, decide if the manager page survives.
+
+## [OPEN] FU-309 — Run the batch-posture migration before next backend boot
+- **Raised:** 2026-06-25 (R-Phase 5 of the meal planner rebuild).
+- **Type:** finding (operational debt — built static; no Python
+  interpreter on this host).
+- **What:** R-Phase 5 adds `User.batch_features_enabled` as a non-null
+  column (migration `e4c7a2f9b5d3_20260625_user_batch_optin.py`). The
+  GET `/api/users/me` handler reads it through `from_entity`, so a
+  backend boot against an unmigrated DB will 500 on every
+  authenticated call. Run `flask db upgrade` (or your equivalent) on
+  local DBs before restarting the API. Existing users default to
+  False ("fresh"), matching the Charter P10 Anti-creep choice.
+- **Why deferred:** no Python interpreter on the session host;
+  migration is static.
+- **Recommended resolution:** **now**, before the next backend boot
+  on any environment.
+
+## [OPEN] FU-307 — Per-entry cookability on the Direction-B meal card
+- **Raised:** 2026-06-25 (R-Phase 3 of the meal planner rebuild).
+- **Type:** follow-up (enhancement).
+- **What:** the rich meal card on Direction B currently colours the left
+  accent amber when the **recipe is in the cook-shortfall set** (the same
+  signal the existing chip uses). It does **not** yet show "missing 3
+  ingredients" / "ready to cook now" per entry. To do that the meal-plan
+  query would need to include `MealPlanEntry.recipe.ingredients`
+  (selectin-loaded), and the entry DTO would fold `missing_count_for(...)`
+  + `cookable` through. The query expansion is modest but not free.
+- **Why deferred:** §6.5 calls for status accent + tag, which the existing
+  shortfall signal already drives; per-entry "what's missing" is the next
+  precision step rather than a critical part of the card.
+- **Recommended resolution:** opportunistic — when Direction B is named the
+  winner and the cookability detail is wanted on the card. The same enrichment
+  can flow into the A-page chip too (`MealPlanEntryChip.vue`).
+
+## [OPEN] FU-306 — Persist "Show all slots" toggle across reload
+- **Raised:** 2026-06-25 (R-Phase 2 of the meal planner rebuild).
+- **Type:** follow-up (enhancement).
+- **What:** the new "Show all slots" toggle above the meal-plan carousel is
+  currently a session-local `ref` — refreshing the page reverts to the
+  used-slots default. For a household that *does* plan all five slots a day,
+  re-flicking the toggle every visit is friction.
+- **Why deferred:** the default (used-slots) covers the dominant case
+  cleanly. A genuine multi-slot household will tell us; pre-emptively
+  wiring a household preference is small but not free (settings UI + a new
+  pref column).
+- **Recommended resolution:** opportunistic — when adding the next batch of
+  household preferences, lift `showAllSlots` into the household
+  `Preference` table (or a small local-storage cache if the call is "this
+  is purely a per-device view choice").
+
+## [OPEN] FU-305 — Browser-verify the meal planner R-Phase 1 extraction
+- **Raised:** 2026-06-25 (R-Phase 1 of the meal planner rebuild).
+- **Type:** finding (verification debt — extraction built static; no Python
+  interpreter / browser on the session host).
+- **What:** confirm in a browser that **MealPlansOverview** behaves
+  identically after the composable + leaf-component extraction. Walk:
+  - Left palette: search filters trays; click-add into a focused slot;
+    drag-and-drop from a recipe row to a day-slot (mouse only); pool ± / log-cook
+    dialog; "Cancel" clears focused-target banner.
+  - Middle column: ↑/↓ arrow keys, top/bottom arrow buttons, vertical-swipe
+    on mobile, calendar-widget click all move the focused week; URL `?monday=`
+    persists across reload (F28). Per-day slot rows render entries, drop
+    targets accept dragged recipes, the "Other" row appears for
+    off-vocabulary historical entries. Today badge + past-day dim still render.
+    Entry chip view/cook/remove/adjust still wire through. Clear-week + print
+    buttons in the header still work.
+  - Right column: calendar, this-week-shopping count, ingredient list with
+    hover-highlights, AddToList button, cook-by warning, "Full ingredient
+    demand" expansion, generate-list button + the C-7 target picker dialog.
+    Templates card: save / apply / apply-recurring / manage-templates flows.
+  - Sequential-builder dialog opens, lists recipes, builds + generates the list.
+- **Why deferred:** build-to-plan-verify-later memory + no running app on
+  this host. `vue-tsc` + eslint clean.
+- **Recommended resolution:** confirm in browser (next time the user runs
+  the app, ideally alongside FU-179's older parity walk).
 
 
 - **Raised:** 2026-06-25 (PROPOSAL_RECIPE_IMAGE_STEPS implementation).
@@ -2553,45 +2701,6 @@ long session summary. Distinct from the other logs:
   `model-value` uses the configured `mask` — verify both code paths
   actually agree on what "today" means.
 - **Recommended resolution:** now (next session).
-
-## [OPEN] FU-122 — Browser-verify Stock Overview Chunk 3 (row rebuild + image toggle)
-- **Raised:** 2026-06-12 (Stock Overview Chunk 3 impl; static-only, no env)
-- **Type:** finding / verification
-- **What:** Verify, in order:
-  1. **Row layout** reads left→right: bulk-checkbox (when in bulk mode)
-     → coloured level square → name (bold) + zone (inline) → image
-     placeholder (if `show_stock_images` is on) → ... → expiry → #recipes
-     (when >0) → open/in-use → cart.
-  2. **Level button** click opens the picker; selection updates the
-     row's colour immediately (optimistic).
-  3. **Zone** is clickable and filters the list to that location.
-  4. **Status outline:** healthy row has no coloured border; an item
-     expiring within 7 days gets an amber border; "Out of Stock" or
-     expired items get a red border AND dim. Cross-theme check
-     (Pesto light/dark, Cherry Cola dark — colours come from
-     `--q-warning` / `--q-negative`).
-  5. **Selection fills the row** (light primary tint) when bulk-mode
-     selected; the splitter-peek state still draws its own solid
-     outline; focus still draws the dashed accent outline.
-  6. **Image toggle** at the top right flips between image / image-off
-     icon; the row's image slot disappears when off and the row
-     becomes visibly denser; reload-survives (server PATCH /me).
-  7. **No regressions:** chip-shaped StockItemChip is GONE from rows
-     but still renders on shopping-list lines + the stock-item
-     detail page. "On N lists" chip is gone. The cart button still
-     adds the item to the active draft list (C-7 will replace this
-     properly later).
-  8. **Virtualised list** still works after the row-size change — the
-     `VIRTUAL_SCROLL_ITEM_SIZE = 72` constant in StockOverview.vue
-     may need a tweak if rows feel too compact/spacious; q-virtual-
-     scroll self-corrects after the first measure but tune the hint
-     to match what you see.
-- **Why:** static-only impl. Row rebuild is the biggest chunk of the
-  plan; cross-theme + cross-state checks are the highest-risk
-  verification. The image toggle is the FU-106 surface and needs an
-  end-to-end PATCH /me confirmation.
-- **Recommended resolution:** now (next session) — confirm and mark
-  RESOLVED, or log defects.
 
 ## [OPEN] FU-121 — Browser-verify Stock Overview Chunk 2 (top toolbar + filters + footer)
 - **Raised:** 2026-06-12 (Stock Overview Chunk 2 impl; static-only, no env)

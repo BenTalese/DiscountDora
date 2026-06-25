@@ -711,6 +711,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("voice_id", String(32), nullable=False, server_default="amy"),
         # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
         Column("money_features_enabled", Boolean, nullable=False, server_default="0"),
+        # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+        # posture. Default False ("fresh"); when True, the planner reveals
+        # the cook-pool affordances + shortfall warning + "to cook by" line.
+        Column("batch_features_enabled", Boolean, nullable=False, server_default="0"),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
         Column("nutrition_mode", String(16), nullable=False, server_default="off"),
         # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).

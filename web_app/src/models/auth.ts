@@ -87,6 +87,11 @@ export type AuthenticatedUser = {
     // `useMoneyEnabled()`. `budget_amount` above stays the per-user
     // budget — saved value survives toggling this off (data preserved).
     money_features_enabled: boolean;
+    // IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+    // posture. Default false ("fresh"); when true, the meal-planner
+    // reveals cook-pool affordances + shortfall warning. Use
+    // `useBatchEnabled()` to read + write.
+    batch_features_enabled: boolean;
     // C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     // `off` | `simple` | `complex`. Use `useNutritionMode()` to read —
     // the composable layers this with install `features.nutrition`.

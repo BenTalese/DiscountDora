@@ -10,6 +10,49 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-122 — Browser-verify Stock Overview Chunk 3 (row rebuild + image toggle)
+- **Raised:** 2026-06-12 (Stock Overview Chunk 3 impl; static-only, no env)
+- **Type:** finding / verification
+- **What:** Verify, in order:
+  1. **Row layout** reads left→right: bulk-checkbox (when in bulk mode)
+     → coloured level square → name (bold) + zone (inline) → image
+     placeholder (if `show_stock_images` is on) → ... → expiry → #recipes
+     (when >0) → open/in-use → cart.
+  2. **Level button** click opens the picker; selection updates the
+     row's colour immediately (optimistic).
+  3. **Zone** is clickable and filters the list to that location.
+  4. **Status outline:** healthy row has no coloured border; an item
+     expiring within 7 days gets an amber border; "Out of Stock" or
+     expired items get a red border AND dim. Cross-theme check
+     (Pesto light/dark, Cherry Cola dark — colours come from
+     `--q-warning` / `--q-negative`).
+  5. **Selection fills the row** (light primary tint) when bulk-mode
+     selected; the splitter-peek state still draws its own solid
+     outline; focus still draws the dashed accent outline.
+  6. **Image toggle** at the top right flips between image / image-off
+     icon; the row's image slot disappears when off and the row
+     becomes visibly denser; reload-survives (server PATCH /me).
+  7. **No regressions:** chip-shaped StockItemChip is GONE from rows
+     but still renders on shopping-list lines + the stock-item
+     detail page. "On N lists" chip is gone. The cart button still
+     adds the item to the active draft list (C-7 will replace this
+     properly later).
+  8. **Virtualised list** still works after the row-size change — the
+     `VIRTUAL_SCROLL_ITEM_SIZE = 72` constant in StockOverview.vue
+     may need a tweak if rows feel too compact/spacious; q-virtual-
+     scroll self-corrects after the first measure but tune the hint
+     to match what you see.
+- **Why:** static-only impl. Row rebuild is the biggest chunk of the
+  plan; cross-theme + cross-state checks are the highest-risk
+  verification. The image toggle is the FU-106 surface and needs an
+  end-to-end PATCH /me confirmation.
+- **Resolved (2026-06-26):** user confirmed the row layout, level picker,
+  zone filter, status outlines, bulk selection fill, image toggle (incl.
+  PATCH /me persistence), no chip regressions, and virtualised list all
+  behave as specified in the browser. No defects logged.
+
+---
+
 ## [RESOLVED] FU-293 — DashboardPage R-001 de-monolith (DashboardCard extraction)
 - **Raised:** 2026-06-24 (Dashboard rebuild, deferred across Phases 0–7).
 - **Type:** finding (R-001 — componentisation).

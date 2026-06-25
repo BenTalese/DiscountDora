@@ -56,6 +56,9 @@ class UpdateMeRequest(BaseModel):
     voice_id: str | None = None
     # C-cross Chunk 2 — per-user money-features opt-in (proposal §2.2).
     money_features_enabled: bool | None = None
+    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+    # posture. Boolean only.
+    batch_features_enabled: bool | None = None
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # Validated against NUTRITION_MODE_VALUES at the boundary
     # (R-010 carve-out for closed-set sentinels).
@@ -176,6 +179,8 @@ class UpdateMeHandler:
         # saved `budget_amount` survives toggling off (data preserved).
         if "money_features_enabled" in _SetFields and request.money_features_enabled is not None:
             _User.money_features_enabled = request.money_features_enabled
+        if "batch_features_enabled" in _SetFields and request.batch_features_enabled is not None:
+            _User.batch_features_enabled = request.batch_features_enabled
 
         # C-cross Chunk 3 — per-user nutrition mode. R-010 carve-out: a
         # closed-set sentinel validated at this single boundary point

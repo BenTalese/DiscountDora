@@ -5,6 +5,141 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Meal planner — calmer meal cards + keyboard / screen-reader pass
+  (2026-06-26, R-Phase 6 of the rebuild).** Planned meal cards no longer
+  ship as saturated blue or amber fills — both the Direction A chip and
+  the Direction B rich card render as calm content-forward cards with a
+  **restrained left-border accent** (brand-primary for planned, amber
+  for cook-shortfall, neutral for consumed). Status now reads through
+  three channels (border + icon + text alternative) so colour isn't the
+  sole signal. Slot rows on the Direction A day cards, day columns on
+  the Direction B board, and week rows in the calendar widget are now
+  real focusable buttons with full `aria-label`s (e.g. "Add a meal to
+  Thursday 25 June Lunch", "Week of 30 June, 3 days with meals"). The
+  global ArrowUp/Down "change week" shortcut no longer fires while a
+  button has focus, so arrowing through a day's controls doesn't jump
+  the week any more. Initial page load now paints a **layout-shaped
+  skeleton** (3 day cards / 7 grid columns / mobile day strip) so the
+  planner shape is visible instantly while the ~10 parallel store
+  loads complete.
+
+### Added
+- **Cooking style preference + batch-aware meal planner (2026-06-25,
+  R-Phase 5 of the rebuild).** New **Fresh / Batch** toggle in Settings →
+  Preferences (under Typography). **Fresh** (default) keeps the meal
+  planner pure scheduling. **Batch** opts in to the cook-pool
+  affordances — per-recipe ± / log-cook / "n free" caption in the recipe
+  palette, the shortfall ⚠ amber accent on planned-meal cards and chips,
+  and the "to cook by DATE" warning on the week status + shopping
+  summary. Existing households default to fresh; flipping to batch
+  restores the previous behaviour. Migration:
+  `e4c7a2f9b5d3_20260625_user_batch_optin.py`.
+- **Meal planner — unified Templates drawer (2026-06-25, R-Phase 5 of
+  the rebuild).** Templates work used to span four entry points: a rail
+  card, a `$q.dialog` radio list to apply, a separate "Apply recurring"
+  dialog, and a navigation hop to `/meal-plans/templates` for editing.
+  Browsing, applying, renaming, and deleting now happens in a single
+  in-place drawer ("Browse + apply templates…") — a right-side panel on
+  desktop, a bottom-sheet on mobile. Rename is inline; delete asks for
+  confirmation; **Apply** runs the existing "replace planned meals?"
+  guard before forking. The dedicated `/meal-plans/templates` page stays
+  for now as the heavy-management screen.
+
+### Changed
+- **Plan step-by-step builder rebuilt onto the shared recipe picker
+  (2026-06-25, R-Phase 5 of the rebuild).** The first step of the
+  step-by-step builder used to be a flat checkbox list of every recipe
+  with no search. It's now the same picker the meal-planner rail uses:
+  favourites tray, "haven't had in a while", "frequently planned", and
+  search across the full cookbook. The disabled "Email" placeholder is
+  gone. Building a plan no longer auto-generates the shopping list —
+  the done step offers an explicit **Generate shopping list** button so
+  users who only wanted to plan can stop there.
+
+### Added
+- **Meal planner — shared mobile single-day focus (2026-06-25, R-Phase 4
+  of the rebuild).** On phones and portrait tablets both meal-planner
+  pages (`/meal-plans` and `/meal-plans/board`) now render the **same**
+  single-day focused view instead of the desktop carousel/grid. The day
+  strip across the top shows seven small chips (today rimmed, focused
+  day filled, a dot on days with planned meals); tapping a chip switches
+  focus, the long-form date label heads the day's section, and the day's
+  meals stack as the same content-forward cards used on Direction B (so
+  the slot is a tag on each card, not five empty rows). Empty days show
+  one calm "Plan {Day}" pill; past days read "Past day — read-only."
+  Adding a meal opens a **bottom-sheet slot picker**, then a **bottom-sheet
+  recipe picker** (auto-closes after a pick). A collapsible "This week"
+  section at the bottom holds the same week-status summary + Generate
+  shopping list CTA the desktop layouts surface, so consequences are
+  always reachable. The A/B toggle is desktop-only — the carousel-vs-
+  grid experiment doesn't apply when only one day is on-screen.
+- **Meal planner Direction B — content-forward week board (2026-06-25,
+  R-Phase 3 of the rebuild).** A second meal-planner layout now lives at
+  **`/meal-plans/board`** alongside the existing vertical-carousel page
+  at `/meal-plans`. Both views are switchable from a small **List / Grid**
+  toggle in each page's header (desktop only); the choice persists across
+  reload via `localStorage` and can be pinned by a `?view=` URL param.
+  - **The board.** Seven day columns; each holds **0..n meal cards that
+    stack** — slot is rendered as a small tag on the card, not a
+    pre-printed empty row. Today's column carries a primary border so the
+    eye lands on "now" first. Empty days collapse to a single ghost
+    "+ add a meal" affordance. An optional **"Group by slot"** toggle
+    flips to a slot-major / day-minor grid for the F46 "time of day as
+    rows" view, on demand instead of as the default.
+  - **Rich meal cards.** Thumbnail (or category-tinted monogram fallback
+    when the recipe has no image), name, slot tag, ×servings, and
+    cook-time when known. A restrained left-border accent calls out
+    pool-shortfall (amber) or consumed (neutral); planned-and-cookable
+    stay on the calm brand-primary border.
+  - **Sticky consequences bar.** A summary strip — *N planned · N to cook
+    by DATE · N to buy* — pins to the top of the working area as the
+    board scrolls, with an inline "Generate shopping list" button when
+    there's anything to buy. The shopping summary is always visible, not
+    a card that scrolls away.
+  - **Pinnable recipe drawer.** A right-side recipe drawer hosts the same
+    search + trays + pool ± + log-cook controls as the existing palette.
+    A pin toggle keeps it open during drag/add sprints; otherwise it
+    auto-closes after each pick. Tapping a day's `+` opens a slot picker,
+    then auto-surfaces the drawer so the user can pick a recipe in one
+    flow.
+  - **Calendar as a popover.** The minimalist calendar widget is
+    available from a button in the top strip as a month-jump popover;
+    behaviour is identical to the rail-hosted widget on the List page.
+  - The board is a desktop-first experiment; narrow viewports continue to
+    use the List page until the shared single-day focus lands. The whole
+    A/B experiment is explicitly temporary — once a winner is picked, the
+    losing page and the toggle are deleted.
+  - Server-side, the meal-plan entry DTO is enriched with the display
+    fields the card needs (cook-time, category name, cuisine name,
+    has-image flag), keeping the client free of cross-joins to the
+    recipes store.
+
+### Changed
+- **Meal planner Direction A upgrade (2026-06-25, R-Phase 2 of the rebuild).**
+  The vertical-carousel planner is calmer and more glanceable without changing
+  its shape. Notable shifts:
+  - **De-sprawled days (Q2).** Each day card now renders only the slots that
+    actually have a meal planned; instead of 5 italic "tap to add" rows, there
+    is **one quiet "+ add a meal" affordance per day** that opens a slot picker
+    menu. Households that prefer the old behaviour can flip a **"Show all
+    slots"** toggle above the carousel.
+  - **Sticky context columns.** On desktop the left palette and the right
+    calendar + shopping rail stay pinned in view as the week scrolls — the
+    answer-bearing summary no longer scrolls away first (U2).
+  - **Promoted week status.** A small summary strip at the top of the working
+    column reads "N planned · N to cook (by DATE) · N to buy" at a glance,
+    always above the day cards.
+  - **Calm empty states (R-014).** First run (no recipes yet) replaces the
+    empty 3-column layout with a single hero pointing to the Cookbook. An
+    empty week (recipes exist) gets a single "Plan this week" banner instead
+    of seven days of "tap to add" sprawl.
+  - **Safer Clear-week button (U7).** The destructive clear-week action is no
+    longer an icon-only sibling of "Print"; it's a labelled button with the
+    negative colour. Confirmation dialog unchanged.
+  See `docs/04_proposals/IMPL_PLAN_MEAL_PLANS_REBUILD.md` for the full rebuild
+  brief; FU-304 tracks the multi-phase work.
+
 ### Added
 - **Recipe "image" steps mode (2026-06-25).** Recipes gain a third step
   payload alongside structured and freeform: a **scrollable gallery of

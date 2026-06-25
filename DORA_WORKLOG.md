@@ -9,6 +9,617 @@ next.
 
 ---
 
+## 2026-06-26 — Meal planner R-Phase 6 (hierarchy + a11y + skeletons)
+
+**Why:** continuing FU-304. Final polish phase of the rebuild — §7 craft
+bar, §4.6 + §9-J accessibility, §9-I skeleton screens. After this the
+only remaining piece is the "pick a winner" cleanup (delete the loser
+page + A/B toggle).
+
+**What shipped:**
+
+### 1. Colour discipline (§7) — calmer status accents
+
+- **`MealPlanEntryChip.vue`** rebuilt — was a saturated `q-chip` full-fill
+  (primary blue or warning amber depending on shortfall). It's now a
+  card-like button matching the rich card: calm `--surface-elevated`
+  background, restrained `--brand-primary` **left-border** as the
+  "planned" accent, **warning** left-border on shortfall, **separator**
+  border + 0.55 opacity for consumed. Status reads through three
+  channels — border + icon + aria-label text — so colour isn't the only
+  signal (WCAG 1.4.1).
+- **`MealPlanRichCard.vue`** promoted from `<div role="button">` to a
+  real `<button>`, picking up native Enter/Space activation for the
+  q-menu and disabled-state for consumed cards.
+
+### 2. A11y — real buttons + aria-labels (§4.6 + §9-J)
+
+- **`MealPlanWeekDayCard.vue`** slot rows are now `<component is="button">`
+  (with `<div>` on past days where no action is possible). Each carries a
+  full `aria-label="Add a meal to Thursday 25 June Lunch"`, replacing the
+  unstyled `<div>@click` pattern. Focus-visible adds a primary outline.
+- **`MealPlanWeekBoard.vue`** day columns get `role="group"` +
+  `aria-label="Friday 26 June, 2 meals planned"`. The "+ add a meal"
+  button inside also carries a per-day aria-label.
+- **`MealPlanEntryChip` + `MealPlanRichCard`** both expose a combined
+  accessible label so AT users hear name + slot + servings + status as
+  one phrase instead of four siblings.
+- **`MealPlanCalendar.vue`** week rows are real buttons with
+  `aria-label="Week of 30 June, 3 days with meals"` and
+  `aria-current="true"` on the focused week. Each day cell carries a
+  `title` text alternative for its colour-only status (planned /
+  shortfall / consumed / empty). Per-day status is no longer
+  colour-only — closes 1.4.1 on the calendar surface.
+
+### 3. ArrowUp/Down scoping (§9-J)
+
+- `useMealPlanner.onKeydown` previously only ignored INPUT/TEXTAREA.
+  Now it also bails when `document.activeElement.closest('button, a,
+  select, [role="button"], [role="menuitem"], [role="tab"]')` resolves —
+  so arrowing off a focused slot button or recipe-row chip no longer
+  jumps the week. Reduces unexpected nav for keyboard users.
+
+### 4. Skeleton screens (§9-I)
+
+- New **`MealPlanSkeleton.vue`** (~85 lines) — three variants matching
+  the planner's three layouts: `list` (3 stacked day cards), `grid`
+  (7-column board), `mobile` (day strip + focused day + entries). Uses
+  Quasar `q-skeleton` so motion respects the global reduced-motion
+  kill-switch.
+- New `useMealPlanner.isInitialLoading` ref — true while the ~10
+  parallel `onMounted` store hydrations are in flight, false in the
+  `finally`. Both pages render the skeleton when true; the first-run
+  guard + the real layout swap in once it flips false. Layout-shaped
+  skeletons reduce CLS to near zero (Doherty).
+
+**Decisions taken inline (no re-open with user):**
+- **Slot rows = `<component :is>`** instead of two separate templates.
+  Picks the right tag (button vs div) per `isPast` without duplicating
+  the slot/entry markup. Vue handles `:type="undefined"` on a div fine.
+- **Calendar text alternative = native `title` + aria-label.** A
+  `q-tooltip` per cell would be 42 extra tooltips per week-grid; `title`
+  is cheap and covers screen readers + colour-blind users without the
+  popup churn.
+- **No new "Mode" affordance on the planner itself.** The brief calls
+  for one accent + one attention colour; with R-Phase 5's batch posture
+  already gating chef-hat amber, the chip rework here is the last
+  remaining colour overload. Resolves the spirit of F41.
+
+**Standards close-gate:**
+- **R-001** — chip kept ~190 lines (was 127, gained an accessible-label
+  computed + button reset CSS). Skeleton is its own leaf. No page bloat.
+- **R-002** — token-only styles. New CSS uses
+  `--surface-elevated`/`--surface-sunken`/`--separator`/`--brand-primary`/
+  `--q-primary`/`--q-warning`/`--text-primary`/`--text-secondary`/
+  `--text-muted`. Zero raw hex / `grey-*`.
+- **R-003** — server-side authority unchanged (shortfall, cookability,
+  status all server-owned). The calendar's `dayStatus` derivation is
+  still presentation-only (it just labels server facts).
+- **R-005** — no auth/config drift.
+- **R-014** — calendar's empty cells get `STATUS_LABEL.empty = 'no meals
+  planned'` as their announced text; skeleton has `aria-label="Loading
+  meal plan…"` with `role="status" aria-live="polite"` so AT users hear
+  the load instead of suspecting a frozen page.
+- **ADR evaluation:** no new recurring decision today. The "real button
+  + reset CSS + aria-label" pattern recurs at every clickable cell in
+  this surface — if a third surface adopts it (cookbook tiles?
+  shopping-list rows?), promote to an `R-0NN` then.
+
+**Verification:** `vue-tsc --noEmit` clean; eslint clean on the nine
+changed/added files. No browser pass on this host — folded into FU-305
+alongside R-Phase 1–5.
+
+**Next up:** **the "pick a winner" cleanup.** Live-with-both for a bit,
+pick A or B, delete the loser page + `useMealPlannerView` + the toggle
++ the unused leaf components. Closes FU-304.
+
+---
+
+## 2026-06-25 — Meal planner R-Phase 5 (persona + flow cleanups)
+
+**Why:** continuing FU-304. R-Phase 5 closes the three brief-listed cleanups:
+- **Q3 batch-posture gate (§6.6 / §9-C/G)** — hide batch-cooker affordances
+  from fresh households.
+- **§9-B sequential-builder cleanup** — replace flat checkbox list with the
+  shared picker, hide the dead Email button, decouple build from generate-list.
+- **§9-E templates apply/manage drawer** — unify three entry points + a
+  page hop into one in-place drawer.
+
+**What shipped:**
+
+### 1. Batch posture (Q3) — end-to-end
+
+- **Backend.**
+  - New `User.batch_features_enabled: bool = False` column (entity + Fields
+    enum + table_mappings).
+  - Alembic migration `e4c7a2f9b5d3_20260625_user_batch_optin.py` — mirrors
+    the money-opt-in migration shape (server_default `'0'`, no idempotent
+    guards per memory).
+  - `AuthenticatedUserDto` carries the new flag; `UpdateMe` accepts it.
+- **Frontend.**
+  - `AuthenticatedUser` TS type + `UpdateMeCommand` updated.
+  - New `useBatchEnabled()` composable (mirrors `useMoneyEnabled` shape —
+    server-owned per-user pref, optimistically PATCHed via authStore).
+  - Settings → Preferences gains a **Meal planning** section with a
+    Fresh / Batch segmented control.
+  - **Gated surfaces** (each calls `useBatchEnabled` directly to avoid
+    prop-drilling through 5 layers):
+    - `MealPlanRecipePicker` — hides per-recipe pool ± / log-cook /
+      "n free" caption when fresh.
+    - `MealPlanWeekStatus` — hides the cook-by line when fresh.
+    - `MealPlanShoppingSummary` — hides the cook-by warning when fresh.
+    - `MealPlanRichCard` — drops the amber shortfall border + chef-hat
+      status icon when fresh.
+    - `MealPlanEntryChip` — drops the warning fill + ⚠ icon when fresh.
+- **Default = fresh** — Charter P10 Anti-creep. Existing households see
+  the planner go calmer on their next visit (cook pool is gone) unless
+  they flip the toggle. The shortfall data + cook-pool data are still
+  server-tracked — only the UI surface changes.
+
+### 2. Sequential builder unification (§9-B)
+
+- **`SequentialBuilderDialog.vue` rebuilt** onto the shared
+  `MealPlanRecipePicker` (new `selection-mode="multi-select"` variant).
+  Same favourites / haven't-had / frequently-planned / all-recipes trays
+  the rail picker uses, with a leading checkbox per row. Search works the
+  same as the picker.
+- **Dead "Email" button gone** — no longer a placeholder waiting on
+  FU-181. When real emailing lands, that's its own UI work.
+- **Build decoupled from generate-list.** The composable's
+  `builderBuildPlan` no longer auto-calls `generateListForWeek`. The
+  builder's "done" step now shows two explicit buttons: **Generate
+  shopping list** (primary) and **Print this week** (outline). Users can
+  build a plan without committing to a list, and the success state is
+  cleaner.
+- The picker gains a `selectionMode: 'click-add' | 'multi-select'` prop +
+  `selectedIds` v-model. Drag, log-cook, pool ± are all suppressed in
+  multi-select (orthogonal to the row's primary purpose).
+
+### 3. Templates apply/manage drawer (§9-E)
+
+- **New `MealPlanTemplatesDrawer.vue`** — one in-place drawer replacing
+  three entry points and a page hop. Lists templates with **Apply /
+  Rename / Delete** actions inline; renaming is in-row (no second
+  dialog). Hosts a "Save this week as a template" CTA and an "Apply
+  recurring…" trigger (the dialog itself is page-owned for now). On
+  desktop the drawer slides in from the right; on `lt.md` it slides up
+  as a bottom-sheet with rounded top corners.
+- **Both pages migrated.** The A page's rail templates card collapsed
+  from four buttons to a single "Browse + apply templates…" trigger.
+  The B page's top-strip Templates ▾ dropdown is now a single button
+  that opens the drawer. The `/meal-plans/templates` route stays in
+  the codebase for now — the drawer doesn't fully replace bulk
+  management of every template attribute (e.g. editing the templated
+  entries themselves) — but the everyday Apply/Rename/Delete flow
+  no longer leaves the planner.
+- **Composable simplification.** `promptAndApplyTemplate` (the old
+  `$q.dialog` radio-list flow) is gone. A new
+  `warnBeforeReplaceWeek()` helper is exposed so any apply-template
+  entry point can run the "this week has N planned meals — replace?"
+  guard before calling `applyTemplate`.
+
+**Decisions taken inline (no re-open with user):**
+- **Setting lives in Preferences, not Money.** The toggle controls a UX
+  posture, not a feature with cost ($-style). Preferences is the right
+  bucket. The composable lives in `composables/` mirroring
+  `useMoneyEnabled` / `useImagePrefs`.
+- **Default = Fresh.** Existing batch users will see the cook pool
+  disappear until they flip the toggle. The brief explicitly resolved
+  Q3 as gate-behind-posture with Charter P10 Anti-creep as the
+  rationale, so a one-off opt-in friction is the right shape.
+- **`/meal-plans/templates` route stays.** It's the existing dedicated
+  manager (with reorder, full edit, etc.); replacing every flow with the
+  drawer is out of scope for this phase. The drawer is the daily-use
+  shortcut; the page is the heavy-management screen.
+
+**Standards close-gate:**
+- **R-001** — drawer (~210 lines), builder dialog rebuild (~210 lines),
+  composable +30 lines, picker +30 lines. Nothing over threshold.
+- **R-002** — token-only styling. No raw hex / `grey-*`.
+- **R-003** — `batch_features_enabled` is a server-owned per-user pref;
+  cookability and shortfall data continue to come from the server. The
+  composable centralises the read so the rule lives once.
+- **R-005** — pref persists across SQLite + Postgres (Boolean,
+  nullable=False, server_default '0'); no install-tenant assumptions.
+- **R-014** — drawer's empty state ("No templates yet. Save a planned
+  week to start a library.") is designed, not the raw empty list.
+- **R-007 (scope discipline)** — kept tight to the three brief items.
+  Did not refactor the `/meal-plans/templates` page even though it
+  partially overlaps; logged as **FU-308**.
+- **ADR evaluation:** no new recurring decision today. The
+  desktop-drawer + mobile-bottom-sheet duality (used here, by the
+  picker sheet, and by the picker drawer on B) is a candidate `R-0NN`
+  if the project does it again outside the planner.
+
+**Verification:** `vue-tsc --noEmit` clean; eslint clean on the 14
+changed/added files; `ast.parse` clean on the five touched Python
+files. **The Alembic migration is not run on this host** (no Python
+interpreter) — the user needs to run `flask db upgrade` against their
+local DB to pick up the new column. The DTO defaults to False so
+old user rows still authenticate fine pre-migration (the column
+read would 500 — `flask db upgrade` is required before the next
+backend boot serves `/api/users/me`). No browser pass on this host;
+folded into FU-305.
+
+**Next up:** **R-Phase 6 — hierarchy + colour discipline + a11y +
+tokens + skeletons** (§7, §4.6, §9-I/J). After that, the "pick a
+winner" cleanup deletes the loser page + A/B toggle.
+
+---
+
+## 2026-06-25 — Meal planner R-Phase 4 (shared mobile single-day focus + bottom-sheet)
+
+**Why:** continuing FU-304 — R-Phase 3 left mobile as the same desktop
+layout but stacked (a vertical wall of all 7 days plus a non-pinnable
+picker side-by-side). The brief (§8.2) says the A/B experiment is
+desktop-only and both pages should render the **same** mobile single-day
+focus. R-Phase 4 lands that, and closes **Q4** in code with a bottom-sheet
+picker.
+
+**What shipped:**
+- **`MealPlanPickerSheet.vue`** (~70 lines) — `q-dialog position="bottom"`
+  with 80vh content height and rounded top corners; wraps the existing
+  `MealPlanRecipePicker` (search + trays + log-cook dialog), but with drag
+  forcibly disabled (`drag-allowed=false` — drag is a desktop accelerator
+  only). Auto-closes after a pick (Tesler — no pin needed on phone).
+- **`MealPlanMobileFocus.vue`** (~250 lines) — single-day focused view
+  shared by A and B. Top row: prev/next-week arrows + week range. Day strip:
+  7 day-chip buttons (mon-letter + day-of-month) with today rimmed in
+  primary and a dot for "has meals"; the focused chip carries the
+  primary-fill. Focused-day section: long-form date label + entry count,
+  then a stack of `MealPlanRichCard`s (slot-as-tag — the §6.5 card model)
+  and a calm "+ add a meal" pill (or "Plan {Day}" when empty). Past days
+  read "Past day — read-only" instead of an add affordance. A collapsible
+  `MealPlanWeekStatus` lives at the bottom with inline "Generate shopping
+  list" so the consequences of the planned week are still one tap away
+  on mobile.
+- **Mobile add-flow.** Tap the "+ add a meal" → in-component slot-picker
+  bottom-sheet → emit `addToSlot(dayIso, slot)`. The page handler
+  (`onMobileAddToSlot`) calls `planner.selectSlot(...)` (which checks
+  past-day) and then opens `MealPlanPickerSheet`. Picking a recipe runs
+  `planner.pickRecipe` (closes the sheet via its own auto-close).
+- **Both pages wire the same shared widgets.**
+  - `MealPlansOverview.vue` (Direction A): when `$q.screen.lt.md`, the
+    entire desktop block (3-col grid + A/B toggle + Plan-step-by-step
+    header row) is suppressed in favour of `MealPlanMobileFocus`.
+  - `MealPlansBoardPage.vue` (Direction B): the top strip + sticky
+    consequences bar + week board are similarly suppressed under
+    `lt.md`. The desktop right-side `pickerOpen` drawer is gated — the
+    auto-open `watch` early-returns under `lt.md` so the desktop dialog
+    can't double-open alongside the bottom-sheet.
+  - Bottom-sheet picker is rendered once per page under `v-if="$q.screen.lt.md"`.
+- **A page A/B toggle was previously gated `gt-xs`** (>=sm, 600px+) — now
+  it lives inside the desktop `<template v-else>` branch entirely, which
+  means it only renders at >=md (1024px+). Consistent with §8.2's
+  "toggle is desktop-only".
+
+**Decisions taken inside the phase (none re-opened with user):**
+- **Breakpoint = `$q.screen.lt.md` (< 1024px).** Both phones and portrait
+  tablets land on the single-day focus. The B-page grid and the A-page
+  carousel are uncomfortable below 1024 with 7 days visible; the focus is
+  better at every size below that. Matches the existing project
+  convention (`MainLayout`, `StockOverview`, etc. all use `lt.md`).
+- **Focused-day initial = today-in-week, else first day.** When the user
+  navigates to a different week (where today is not present), focus jumps
+  to the first day rather than keeping the same weekday — feels more
+  predictable than continuing a stale weekday into a future Monday.
+- **Mobile card model = slot-as-tag** (the B-page rich card). On phones,
+  vertical space is the constraint; slot-as-rows would print 5 empty rows
+  per day. The slot-as-tag content-forward card scales much better and
+  matches the rebuild's overall direction. Note this means the mobile
+  experience is implicitly closer to Direction B even on a Direction A
+  desktop session — accepted because mobile is a shared surface anyway.
+- **Drag is force-disabled on mobile** (the picker passes
+  `drag-allowed=false` through). Touch drag isn't ergonomic and the brief
+  explicitly limits drag to a desktop accelerator (H7 from §3).
+
+**Standards close-gate:**
+- **R-001** — two new leaf components (~70 + ~250 lines), no page bloat.
+  Both pages grow ~30 lines each for the mobile wiring; both still under
+  threshold.
+- **R-002** — token-only styles. `--surface-elevated`, `--surface-sunken`,
+  `--separator`, `--q-primary`, `--text-secondary`, `--text-muted`. No raw
+  hex / `grey-*`.
+- **R-003** — no new client derivations. The mobile focus reads computed
+  values from the composable that already exist (`weekDays`, `dayEntries`,
+  `shortfallRecipeIds`, `needToBuy`, `cookByLabel`). One presentational
+  thing — the focused-day long-label uses
+  `toLocaleDateString({ weekday, day, month })` for human-readable label.
+  That's display, not domain rule.
+- **R-005** — distribution untouched.
+- **R-014** — empty-state "Past day — read-only." and the calm
+  "Plan {Day}" pill keep the rule's tradition on the new surface.
+- **ADR evaluation:** no new recurring decision. The mobile-focus pattern
+  is a candidate `R-0NN` if other multi-paradigm desktop surfaces want a
+  shared narrow-viewport view (one occurrence isn't enough yet).
+
+**Verification:** `vue-tsc --noEmit` clean; eslint clean on the four
+changed/added files in this phase. No runtime pass on this host. Browser
+walk on phone + tablet remains folded into FU-305.
+
+**Next up:** **R-Phase 5 — persona + flow cleanups.** Gate batch
+affordances behind the fresh/batch posture (§6.6, Q3), unify the
+sequential builder onto the shared picker + hide the dead "Email" button
+(§9-B / FU-181 cross-ref), unify templates apply/manage into one in-place
+drawer (§9-E). After that, R-Phase 6 (hierarchy + colour discipline +
+skeletons), then the "pick a winner" cleanup.
+
+---
+
+## 2026-06-25 — Meal planner R-Phase 3 (Direction B + A/B toggle)
+
+**Why:** continuing FU-304 in the same session — R-Phase 2 landed Direction A
+in place. R-Phase 3 builds Direction B (content-forward week board, §6.4) as
+a second page and wires the temporary A/B toggle (§8.2) so both layouts live
+side-by-side until a winner is picked.
+
+**What shipped:**
+- **Q6 — server-enriched `MealPlanEntryDto`.**
+  `dora_api/features/meal_plans/get_meal_plans.py` now exposes
+  `cook_time_minutes`, `category_name`, `cuisine_name` (pulled from the
+  already-loaded `entry.recipe`), and `has_image` (bulk-hydrated through one
+  SQL pass — mirrors `get_recipes._hydrate_has_image` / FU-090 so the
+  deferred image bytes column is never loaded just to set a flag). The
+  frontend `MealPlanEntry` TS type gains the four new fields. No schema
+  change, no Alembic migration required. R-003 clean — the rich card now
+  consumes server-side display fields instead of cross-joining the recipes
+  store.
+- **`MealPlanRichCard.vue`** (~200 lines) — content-forward meal card for
+  Direction B (§6.5). Thumbnail (or category-tinted monogram fallback) +
+  name (primary) + slot **tag** + ×servings + cook-time meta + restrained
+  left-border accent for status (brand-primary normally, amber on
+  shortfall, neutral when consumed). Tap opens the same servings±/view/cook/
+  remove menu the existing chip exposes — same actions, fresh visual.
+  Slot-as-tag (Q5) realised on the card.
+- **`MealPlanWeekBoard.vue`** (~270 lines) — the 7-day grid (§6.4). Day-
+  major default: each day is a column, rich cards stack inside, drop targets
+  highlight on drag-over, today column carries a primary border (Von
+  Restorff), empty day collapses to a single ghost "+ add meal". A
+  `group-by-slot` mode flips to a slot-major / day-minor grid (slot label
+  left, 7 day cells across) — that's the F46 intent preserved as a view,
+  not as the default scaffold (Q5 sign-off honoured).
+- **`MealPlansBoardPage.vue`** (~350 lines) — Direction B host. Top strip
+  hosts week nav (prev/range/next + Today), calendar widget as a month-jump
+  popover (§8.1), Templates ▾ menu (save / apply / recurring / manage —
+  all reuse the composable), Plan-step-by-step builder, Recipes drawer
+  trigger, the group-by-slot toggle, and the A/B toggle. **Sticky
+  consequences bar** (`position: sticky; top: 0`) wraps `MealPlanWeekStatus`
+  + an inline "Generate shopping list" CTA — H1, the answer-bearing
+  summary never scrolls away. **Pinnable picker drawer** (`q-dialog
+  position="right"`) — pin/unpin toggles `seamless` + `persistent`, and
+  picking a recipe auto-closes the drawer when unpinned (Tesler). The
+  drawer auto-opens when the user taps a day → the slot picker resolves a
+  slot → focused-target is set → drawer surfaces so the user can pick a
+  recipe without hunting. Drag-to-day defaults the recipe into the
+  household's first configured slot (re-tag from the card if wrong).
+- **`MealPlanWeekStatus.vue`** rendered in both pages — the same component
+  reused on B's sticky bar with a class override to flatten the panel
+  background.
+- **`useMealPlannerView.ts`** — small persistence utility (~50 lines).
+  `?view=` query > `localStorage` > page default. Both pages call
+  `resolvePlannerView` on mount and `router.replace` to bounce to the
+  user's preferred page — refresh keeps the choice without a flicker on
+  return visits. Module is explicitly slated for deletion when the winner
+  is picked.
+- **A page A/B toggle.** Top-right of the A page now hosts the same
+  `q-btn-toggle` as B (gated `gt-xs` — desktop-only per §8.2; mobile stays
+  on the A page until R-Phase 4 unifies single-day focus).
+- **New route.** `/meal-plans/board` mounts the B page; the existing
+  `/meal-plans` keeps Direction A. Templates page is unchanged.
+
+**Decisions taken inside the phase (none re-opened with user):**
+- **Picker drawer = `q-dialog position="right"`** with a pin toggle, rather
+  than a `q-drawer` (which requires a `q-layout` ancestor that this page
+  doesn't own) or a custom fixed panel (more code, less standard). Mobile
+  ergonomics come in R-Phase 4 (bottom-sheet from cell `+`); this is the
+  desktop-first answer.
+- **Day-drop default slot = household's first slot.** The card surfaces the
+  slot as a tag so a wrong assumption is visible and one-tap to re-tag —
+  cheaper than a slot-picker on every drop (Fitts). Tap-to-add still goes
+  through the explicit slot picker because the user hasn't picked a recipe
+  yet, so there's no fast-recovery affordance to lean on.
+- **Cookability per-entry was NOT added to the DTO this phase.** It would
+  require including `MealPlanEntry.recipe.ingredients` in the meal-plan
+  query and folding `missing_count_for` through every entry. The existing
+  `shortfall.recipe_ids` set already drives the card's amber accent for
+  pool-short recipes, which is the user-facing signal §6.5 calls for.
+  Logged as **FU-307** if it turns out per-entry "missing 3 ingredients"
+  is wanted on the card.
+
+**Standards close-gate:**
+- **R-001** — page split clean: B page ~350 lines, board ~270, card ~200,
+  each leaf reusable; nothing over the threshold.
+- **R-002** — only existing CSS custom properties (`--surface-elevated`,
+  `--surface-sunken`, `--separator`, `--text-secondary`, `--text-muted`,
+  `--q-primary`, `--q-warning`, `--brand-primary`) and Quasar colour names.
+  No raw hex, no `grey-*`.
+- **R-003** — Q6's whole point is to land R-003 on this surface: rich card
+  reads from the server-enriched DTO instead of cross-joining the recipes
+  store. `cookByLabel`/`needToBuy`/`shortfall` continue to come from the
+  server.
+- **R-005** — distribution untouched.
+- **R-014** — first-run + empty-week states reuse the A-page components;
+  the empty-day affordance on the grid is its own calm dashed "+ add meal".
+- **ADR evaluation:** the "two pages, shared composable, A/B toggle with
+  localStorage + URL-query override" pattern is a candidate `R-0NN` if it
+  recurs (e.g. another large surface gets a parallel redesign). One
+  occurrence isn't enough; revisit if R-Phase 5 produces a second instance.
+
+**Verification:** `vue-tsc --noEmit` clean across the full app; eslint clean
+on the 13 changed/added files; `ast.parse` clean on the modified backend
+file. No runtime pass on this host. Browser walk folded into FU-305.
+
+**Next up:** **R-Phase 4 — Shared mobile single-day focus + bottom-sheet
+picker.** Both pages drop to the same single-day focused view at
+`< sm` (or `< md` — call to make at start of the phase). Tap a `+` →
+Quasar bottom-sheet hosts the shared `RecipePicker`. Closes Q4 in code.
+
+---
+
+## 2026-06-25 — Meal planner R-Phase 2 (Direction A upgrade)
+
+**Why:** continuing FU-304 in the same session — R-Phase 1's extraction left
+the page behaviour-identical; R-Phase 2 lands the first user-visible upgrade
+to Direction A (the de-sprawled vertical carousel). Mobile bottom-sheet
+(R-Phase 4), persona posture (R-Phase 5) and the hierarchy/colour pass
+(R-Phase 6) stay deferred.
+
+**What shipped (all six R-Phase 2 items):**
+- **Q2 — de-sprawl.** `MealPlanWeekDayCard.vue` now filters out empty slot
+  rows by default. The "tap to add" italic on every empty slot is replaced
+  with **one calm "+ add a meal" affordance per day** that opens a
+  `q-menu` of the household's unused slots; clicking a slot sets the
+  focused-target (existing tap-to-add flow continues from there). When the
+  day has zero entries the affordance becomes a full-width "Plan {Day}"
+  outline button so the empty-day state is designed, not raw whitespace.
+  A new `showAllSlots: boolean` prop preserves the legacy behaviour for any
+  household that genuinely plans all five slots per day.
+- **Show-all toggle.** `MealPlansOverview.vue` exposes a small `q-toggle`
+  ("Show all slots") above the carousel that flips that prop.
+- **Promoted week status (U2 + H1).** New `MealPlanWeekStatus.vue` strip
+  above the carousel — `**N** planned · 🍳 N to cook (by DATE) · 🛒 N to
+  buy` (or `fully stocked`). Empty week reads a muted "No meals planned
+  for this week yet." The component is reusable from the upcoming
+  Direction-B page.
+- **Sticky context columns (U2).** Left palette and right calendar+shopping
+  rail are `position: sticky; top: 16px` on `>= 1024px`, with `align-self:
+  flex-start` so flex stretching doesn't defeat sticky. Each side is also
+  given a `max-height: calc(100vh - 32px)` with internal scrolling so very
+  tall content doesn't clip the layout. (Same pattern Settings already uses.)
+- **Calm empty states (R-014).**
+  - **First run** (no recipes at all): the 3-column layout is suppressed
+    entirely. A new `MealPlanFirstRun.vue` hero card renders a single
+    "Add recipes to start planning" CTA → `/cookbook`. Closes §6.7's
+    biggest beat.
+  - **Empty week** (recipes exist, focused week is empty): a new
+    `q-card` banner above the carousel reads "Plan this week" with a
+    primary "Plan step-by-step" CTA that opens the existing builder. The
+    day cards underneath still render (each in their own calm empty
+    state) so the user can also tap any day directly.
+- **U7 — destructive button.** `Clear week` is no longer an icon-only
+  twin of `Print`. It's now a labelled `q-btn` (`color="negative"`,
+  `icon=delete_outline`, label "Clear week"), so it can't be misfired in
+  passing. The confirm dialog is unchanged.
+
+**Decisions deferred to user-visible behaviour:**
+- Per-day "+ add a meal" defaults to opening a **slot picker menu**, not
+  defaulting to a specific slot. Rationale: the household's slot vocabulary
+  is configurable; auto-picking "Dinner" assumes a slot may not exist.
+  Explicit pick is one extra tap but consistent across households.
+- "Show all slots" is **session-local** (a `ref`), not a stored preference,
+  in this phase. If users ask for it to remember across reload, the toggle
+  can graduate to a household pref in a small follow-up (logged below as
+  **FU-306**).
+
+**Standards close-gate:**
+- **R-001** — improvement: kept the per-component cap. Page is now ~370
+  lines; each new leaf component (`WeekStatus` 60, `FirstRun` 37, day-card
+  delta +30) sits comfortably under threshold.
+- **R-002** — uses existing CSS custom properties (`--surface-sunken`,
+  `--separator`, `--text-secondary`, `--text-muted`, `--q-primary`). One
+  new `.add-meal-button` style uses tokens only; no raw hex / `grey-*`.
+- **R-003** — server-side derivations untouched. `plannedCount` in the
+  page is a thin client-side count of `focusedPlan.entries` (display, not
+  domain rule). No new threshold or constant duplicated across languages.
+- **R-005** — distribution/auth untouched.
+- **R-014** — first-run and empty-week states are now designed (the rule's
+  exact subject). The per-day "Plan {Day}" / "Add a meal" pill is the
+  third designed empty state in this surface.
+- **ADR evaluation:** no new recurring decision today. The sticky-column
+  pattern is already established (Settings). The "used-default + opt-in
+  show-all" pattern may be promotable to an `R-0NN` if it recurs (lists
+  with optional axis columns), but one occurrence isn't enough yet.
+
+**Verification:** `vue-tsc --noEmit` clean; eslint clean on the seven
+changed/new files. No browser pass on this host — folded into the existing
+**FU-305** (R-Phase 1 browser walk) so they verify together when the user
+walks the live app.
+
+**Next up:** **R-Phase 3 — Direction B + A/B toggle.** Build a new page
+that renders the week as a content-forward 7-day grid (§6.4), wire the
+A/B toggle, share the composable + leaf components, with Q5 (slot-as-tag
+on B) and Q6 (server-side enrich) feeding into card design.
+
+---
+
+## 2026-06-25 — Meal planner R-Phase 0 + R-Phase 1 (decisions locked + extraction)
+
+**Why:** picking up from the rebuild brief authored earlier the same day
+(`IMPL_PLAN_MEAL_PLANS_REBUILD.md`, FU-304). R-Phase 0 closes the open decisions
+so R-Phase 1 (behaviour-preserving extraction) can land; both A and B phases
+later consume the shared core.
+
+**R-Phase 0 — decisions resolved with the user (recommended option in each
+case; brief §11 updated):**
+- **Q2** Default slot visibility → **used slots + "add slot"**, with
+  "show all slots" as opt-in toggle.
+- **Q3** Pool/batch affordances → **gate behind the batch posture** (§6.6).
+- **Q4** Mobile picker → **bottom-sheet from cell `+`**.
+- **Q5** Slot model → **slot-as-tag on Direction B only** (A keeps
+  slot-as-rows). Highest leverage; lowest risk because the A/B toggle stays.
+- **Q6** Rich-card data path → **enrich `MealPlanEntryDto` server-side**.
+
+FU-179 browser verification (esp. F34 "needs x" math) is left to the user —
+no Python interpreter or running app on this session host. FU-179 stays open.
+
+**R-Phase 1 — extraction (behaviour-preserving R-001/R-003):**
+- New `src/composables/useMealPlanner.ts` (765 lines) — single shared core for
+  Direction A and the upcoming Direction B. Owns: store wiring, focused week
+  state + URL sync, slot-vocabulary lookups, shortfall + cook-by label,
+  recipe trays, tap-to-add + drag/drop hooks, swipe + keyboard nav, mutations
+  (add/adjust/remove/clear), ingredient loading, generate-list flow with the
+  C-7 target picker, palette pool ± / log-cook, template save/apply/recurring,
+  sequential builder helper, print-week. Initial `onMounted` data load +
+  keydown listener live here too.
+- New `src/components/MealPlanRecipePicker.vue` (197 lines) — left palette
+  (search + trays + drag source + pool ± + log-cook dialog). Self-contained
+  log-cook dialog; high-level emits (`recipePick`, `paletteMealAdjust`,
+  `cancelTarget`, drag events). Re-host-ready for the rail / drawer /
+  bottom-sheet patterns the B page needs.
+- New `src/components/MealPlanWeekDayCard.vue` (138 lines) — one day card
+  with slots + entries + drop target + "Other" off-vocabulary row. Pure
+  presentational; emits `selectSlot`, `dropOnSlot`, `entryView/Cook/Remove/Adjust`.
+- New `src/components/MealPlanShoppingSummary.vue` (108 lines) — right-rail
+  card with need-to-buy count, ingredient list (with `AddToListButton`),
+  cook-by warning, "Full ingredient demand" expansion, generate button.
+- `src/pages/MealPlansOverview.vue` shrinks from **1,222 → 304 lines**
+  (about a 75% reduction). What remains is the page layout + page-local
+  dialog state (save-template, recurring, sequential builder open).
+- One incidental cleanup: the page previously inlined a one-shot
+  `matchMedia('(prefers-reduced-motion: reduce)')` read on mount; the
+  composable now uses the existing `useReducedMotion()` composable which is
+  reactive (responds to OS toggles live). No user-visible regression — a
+  small consistency win and one fewer ad-hoc DOM read.
+
+**Standards close-gate:**
+- **R-001** — improvement: the 1,222-line page is gone; new files all under
+  the page-level threshold (composable is data-layer + mutations and that's
+  expected to be the largest, single-responsibility unit).
+- **R-002** — no new raw `grey-*`/hex; existing tokens preserved verbatim.
+- **R-003** — server-side derivations unchanged (`cookByLabel`, `needToBuy`,
+  shortfall still source-of-truthed server-side and only formatted client-side).
+  The composable centralises the client-side formatting in one place; cross-ref
+  FU-081 stands (recipe-store planned-in filter still client-side, untouched).
+- **R-005** — repository-routed access untouched; no auth/config drift.
+- **R-014** — empty states unchanged in R-Phase 1 (R-Phase 2 owns the calm
+  per-day empty state).
+- **ADR evaluation:** no new recurring decision to promote — the per-surface
+  "composable + leaf components" extraction pattern is already R-001's expression.
+
+**Verification:** `vue-tsc --noEmit` clean; eslint clean on the five changed
+files. The one lint error on `StockItemRow.vue:634` is pre-existing on main
+(unrelated to this work). No browser/runtime pass on this host — the user
+walks parity locally as the R-Phase 1 close; any defect found there folds
+back as its own follow-up.
+
+**Next up:** **R-Phase 2 — upgrade the existing page to Direction A.** Pulls
+in Q2 (used-slots default + opt-in show-all), sticky context columns, the
+calm per-day empty state (R-014), the promoted week-status header, and the
+first-run path (brief §6.7). FU-304 remains the umbrella; new findings spawn
+their own FUs.
+
+---
+
 ## 2026-06-25 — Meal planner design critique + rebuild brief (no code)
 
 **Why:** user ran `/design:design-critique` on the meal planner, asking for the

@@ -430,19 +430,28 @@ then delete the loser + the toggle.
 
 ## 11. Open decisions
 
+All resolved 2026-06-25 with the recommended option in each case.
+
 - **Q1 — Direction. ✅ RESOLVED → build BOTH** (A upgraded + B new, temp toggle;
   §8).
-- **Q2 — Default slot visibility.** "Used slots + add" default, "show all slots"
-  opt-in — confirm. Any household that genuinely plans all 5 slots daily?
-- **Q3 — Pool/batch location.** Gate batch affordances behind the posture (§6.6)
-  vs keep in the palette — recommend gate; confirm.
-- **Q4 — Mobile picker.** Bottom-sheet from cell `+` (recommended) vs sticky
-  mini-search.
-- **Q5 — Slot-as-tag vs slot-as-rows (highest leverage).** Adopt cards-stack +
-  tag + "group by slot" (diverges from F46; §6.2) — needs sign-off before
-  R-Phase 3. Low-risk: B page only.
-- **Q6 — Rich-card data path.** Enrich `MealPlanEntryDto` server-side vs client
-  join to `recipeStore` — recommend server; confirm scope.
+- **Q2 — Default slot visibility. ✅ RESOLVED → used slots + "add slot"** as the
+  default; "show all slots" is an opt-in toggle. Collapses the empty-cell sprawl
+  (U1) without removing access to the full slot vocabulary (F49).
+- **Q3 — Pool/batch location. ✅ RESOLVED → gate behind batch posture** (§6.6).
+  Free-pool / log-cook / shortfall / cook-by all live behind the fresh/batch
+  posture; fresh households see a clean planner, batch households opt in.
+- **Q4 — Mobile picker. ✅ RESOLVED → bottom-sheet from cell `+`**. Tapping a
+  day/slot `+` opens a Quasar bottom-sheet hosting the shared `RecipePicker`
+  (search + trays). Fixes U3 (scroll-pogo) and aligns with Material patterns.
+- **Q5 — Slot-as-tag vs slot-as-rows. ✅ RESOLVED → slot-as-tag, Direction B
+  only**. On B, meals stack as content-forward cards under each day with the slot
+  rendered as a small tag; optional "group by slot" view. Direction A keeps
+  slot-as-rows (faithful F46). Low-risk because the A/B toggle lets us live with
+  both before picking a winner.
+- **Q6 — Rich-card data path. ✅ RESOLVED → enrich `MealPlanEntryDto`
+  server-side**. Server returns the fields the card needs (recipe name,
+  thumbnail URL, cook time, cookability flag). R-003 clean — client doesn't
+  cross-join the recipes store for display.
 
 ---
 
@@ -453,7 +462,9 @@ entry + the engineering-standards close-gate. (Supersedes the earlier
 single-direction phasing.)
 
 - **R-Phase 0 — Verify-state + remaining decisions.** Browser-verify FU-179 (esp.
-  F34 "needs x" math); confirm Q2–Q6. No code.
+  F34 "needs x" math); confirm Q2–Q6. No code. *Status (2026-06-25):* Q2–Q6 all
+  resolved with the recommended options (see §11); FU-179 browser pass left to
+  the user (no Python/browser on the session host).
 - **R-Phase 1 — Extract shared core (R-001, behaviour-preserving).** Pull
   `useMealPlanner()` + leaf components out of the current page; it keeps working,
   just thinner. *Before duplicating* — extraction-first beats a literal 1,222-line

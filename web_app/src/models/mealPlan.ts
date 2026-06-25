@@ -6,6 +6,13 @@ export type MealPlanEntry = {
     servings: number;
     slot: string;
     consumed_at: string | null;
+    // IMPL_PLAN_MEAL_PLANS_REBUILD §6.5 / Q6 — display fields for the rich
+    // meal card (Direction B). Server-derived so the client doesn't
+    // cross-join the recipes store (R-003).
+    cook_time_minutes: number | null;
+    category_name: string | null;
+    cuisine_name: string | null;
+    has_image: boolean;
 };
 
 export type MealPlan = {

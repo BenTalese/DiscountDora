@@ -191,6 +191,13 @@ class User(BaseEntity):
     # budget controls — they only become editable when this is True,
     # but the saved value survives a toggle round-trip.
     money_features_enabled: bool = False
+    # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+    # posture. Default False ("fresh") — Charter P10 Anti-creep. When
+    # True ("batch"), the meal-planner reveals the cook-pool affordances
+    # (per-recipe ± / log-cook / "n free"), the shortfall warning, and the
+    # "to cook by" sidebar line. Fresh households see a pure scheduling
+    # surface; batch households opt in to the extra layer.
+    batch_features_enabled: bool = False
     # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
     # `off` | `simple` | `complex`; default `off`. `complex` is a
     # reserved seam (validated against `AppSetting.nutrition_db_source`
@@ -260,6 +267,7 @@ class User(BaseEntity):
         VOICE_ENGINE = "voice_engine"
         VOICE_ID = "voice_id"
         MONEY_FEATURES_ENABLED = "money_features_enabled"
+        BATCH_FEATURES_ENABLED = "batch_features_enabled"
         NUTRITION_MODE = "nutrition_mode"
         SHOW_RECIPE_IMAGES = "show_recipe_images"
         SHOW_STOCK_IMAGES = "show_stock_images"

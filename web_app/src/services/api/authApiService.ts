@@ -48,6 +48,10 @@ export type UpdateMeCommand = {
     /** C-cross Chunk 2 — per-user money-features opt-in. Layered with the
      *  install-wide `money_enabled` flag via `useMoneyEnabled()`. */
     money_features_enabled?: boolean;
+    /** IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
+     *  posture. Default off ("fresh"); when on, the meal-planner reveals
+     *  cook-pool affordances + shortfall warning. */
+    batch_features_enabled?: boolean;
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';

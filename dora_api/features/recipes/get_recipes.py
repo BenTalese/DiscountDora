@@ -182,6 +182,11 @@ class RecipeDto:
     # client gates the render on the C-cross nutrition opt-in. NULL when
     # the user hasn't typed one.
     kcal: int | None
+    # FU-082 — when the recipe was added to this household. Drives the
+    # cookbook "Recently added" sort axis. Never null on a row that came
+    # through the create handlers (which stamp it) or through the
+    # backfill migration f9d3a7c2b5e8.
+    created_at: datetime | None
     ingredients: List[RecipeIngredientDto]
     # Server-owned cookability — computed once from the already-loaded
     # ingredient tree (§3.2 state-ownership refactor).
@@ -280,6 +285,7 @@ class RecipeDto:
             time_of_day = recipe.time_of_day,
             version_group_id = recipe.version_group_id,
             kcal = recipe.kcal,
+            created_at = recipe.created_at,
             ingredients = _IngDtos,
             missing_count = _Missing,
             cookable = _Missing == 0,
@@ -306,6 +312,11 @@ class RecipeStepImageDto:
 _FIELD_MAP: dict[str, EntityField] = {
     "recipe_id": EntityField(Recipe, "id"),
     "recipe_collection_id": EntityField(Recipe, "_recipe_collection_id"),
+    # FU-082 — exposed so the cookbook can sort/filter by "Recently added"
+    # via the standard `sort=created_at:desc` query string if it ever moves
+    # off the client-side sort. The client sort uses the DTO field
+    # directly; this entry lets API consumers do the same server-side.
+    "created_at": EntityField(Recipe, Recipe.Fields.CREATED_AT),
 }
 
 
@@ -591,7 +602,7 @@ class GetRecipesHandler:
             'JOIN "Product" p ON p.id = sip.product_id '
             'JOIN "ProductOffer" po ON po.product_id = p.id '
             'WHERE sip.stock_item_id IN :ids '
-            '  AND p.is_active = 1 '
+            '  AND p.is_active '
             '  AND po.price_now IS NOT NULL '
             'GROUP BY sip.stock_item_id, p.size_value'
         ).bindparams(bindparam("ids", expanding=True))

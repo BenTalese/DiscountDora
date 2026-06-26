@@ -27,7 +27,7 @@ depends_on = None
 def upgrade():
     with op.batch_alter_table('StockItem') as batch:
         batch.add_column(sa.Column(
-            'is_open', sa.Boolean(), nullable=False, server_default=sa.text('0')
+            'is_open', sa.Boolean(), nullable=False, server_default=sa.false()
         ))
         batch.add_column(sa.Column('opened_on', sa.Date(), nullable=True))
 

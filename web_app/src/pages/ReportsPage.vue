@@ -36,7 +36,7 @@
                     </span>
                 </header>
                 <div v-if="loading.stockValue" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <v-chart
                     v-else-if="(stockValue?.points.length ?? 0) > 0"
@@ -57,7 +57,7 @@
                     <h3 class="report-card-title">Spend by store</h3>
                 </header>
                 <div v-if="loading.storeSpend" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <div v-else-if="(storeSpend?.rows.length ?? 0) > 0" class="store-row">
                     <v-chart
@@ -87,7 +87,7 @@
                     <h3 class="report-card-title">Top 10 most-bought</h3>
                 </header>
                 <div v-if="loading.mostBought" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <ul v-else-if="(mostBought?.rows.length ?? 0) > 0" class="report-list">
                     <li v-for="row in mostBought!.rows" :key="row.stock_item_id">
@@ -118,7 +118,7 @@
                     />
                 </header>
                 <div v-if="loading.keepsOut" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <ul v-else-if="(keepsOut?.rows.length ?? 0) > 0" class="report-list">
                     <li v-for="row in keepsOut!.rows" :key="row.stock_item_id">
@@ -140,7 +140,7 @@
                     <h3 class="report-card-title">Savings captured</h3>
                 </header>
                 <div v-if="loading.savings" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <div v-else-if="savings && savings.total_spent > 0" class="savings-body">
                     <div class="savings-number">
@@ -190,7 +190,7 @@
                     />
                 </div>
                 <div v-if="loading.priceTrends" class="report-card-loading">
-                    <q-spinner size="32px" color="primary" />
+                    <AppSpinner size="32px" />
                 </div>
                 <v-chart
                     v-else-if="(priceTrends?.series.length ?? 0) > 0 && priceTrendsHasPoints"
@@ -207,6 +207,7 @@
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';

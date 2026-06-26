@@ -74,10 +74,8 @@
                  slot collapses out of the layout when off. Sits next
                  to the search input so it's reachable without
                  expanding filters. -->
-            <q-btn
-                flat
-                dense
-                round
+            <BaseButton
+                variant="icon"
                 :icon="showStockImages ? ICONS.image : ICONS.image_not_supported"
                 :color="showStockImages ? 'primary' : undefined"
                 :aria-label="showStockImages ? 'Hide row images' : 'Show row images'"
@@ -87,7 +85,7 @@
                 <q-tooltip>
                     {{ showStockImages ? 'Hide row images (denser rows)' : 'Show row images' }}
                 </q-tooltip>
-            </q-btn>
+            </BaseButton>
             <q-input
                 ref="searchInputRef"
                 v-model="filters.searchText.value"
@@ -660,7 +658,14 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            for (const id of bulkSelection.value) await actions.addToList(id);
+            // FU-018: pass silent so per-item toasts don't storm; one summary at the end.
+            const ids = [...bulkSelection.value];
+            for (const id of ids) await actions.addToList(id, null, { silent: true });
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Added ${ids.length} item${ids.length === 1 ? '' : 's'} to your list.`,
+            });
             cancelBulk();
         } finally {
             bulkBusy.value = false;
@@ -671,7 +676,14 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            for (const id of bulkSelection.value) await actions.markRestocked(id);
+            // FU-018: silent per-item, one summary toast.
+            const ids = [...bulkSelection.value];
+            for (const id of ids) await actions.markRestocked(id, { silent: true });
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: `Marked ${ids.length} item${ids.length === 1 ? '' : 's'} restocked.`,
+            });
             cancelBulk();
         } finally {
             bulkBusy.value = false;
@@ -929,47 +941,18 @@
 </script>
 
 <style scoped>
-    /* Round-15: shared "sub-toolbar" treatment used by the bulk-select
-       banner and (via :deep) the FilterBar's filter panel. Soft
-       surface-elevated card with a tint border so both areas read as a
-       distinct sub-zone of the page.
-
-       Two subtle traps `q-slide-transition` lays:
-       1. A real `border` on the transition host renders even at height 0
-          (1px top + 1px bottom → 2px sliver). We use `inset box-shadow`
-          instead — it paints inside the box without contributing to its
-          size and disappears cleanly when the box has 0 height.
-       2. Putting `border-radius` on an inner wrapper clips it against
-          the host's straight edges during the height animation, so the
-          rounded corners pop in only when the transition releases. We
-          keep the radius on the OUTER host so the card grows rounded
-          from the start.
-       Result: smooth open/close, no snap, rounded from frame one. */
-    /* Both sub-bars share an identical 3-level structure that we got
-       wrong twice; the values below match the FilterBar panel verbatim.
-       Outer (.dora-subbar / .filter-bar__panel) — q-slide-transition host,
-       carries chrome (background + inset shadow border + border-radius).
-       Inner (__inner) — padding box (12px 16px).
-       Content row inside the inner — flex layout (q-gutter-sm, etc). */
-    .dora-subbar,
-    :deep(.filter-bar__panel) {
-        background: var(--surface-elevated);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 10%, transparent);
-        border-radius: 8px;
+    /* FU-012: bulk-select banner pairs with the FilterBar panel — both
+       use the sunken-well treatment now. FilterBar owns its own styling
+       (in the component); this matches it so the two sub-bars still
+       read as siblings. `q-slide-transition` quirks: keep chrome on the
+       outer host (radius from frame one) and avoid a real border (would
+       render a 2px sliver at height 0) — neither matters with the new
+       borderless sunken treatment, but the pattern is worth remembering. */
+    .dora-subbar {
+        background: var(--surface-sunken);
+        border-radius: 6px;
     }
-    :deep(.filter-bar__panel) { margin-top: 4px; }
-    /* Round-16: FilterBar's default q-py-md (16px top + 16px bottom)
-       stacked with the bulk wrapper's padding adds up to ~32px of empty
-       space between them. Override here so the filter section's own
-       outer padding shrinks to 4px (matching bulk-bar's q-py-xs). The
-       slide's smoothness comes from the inner buffer, not the magnitude
-       of the outer padding — small is enough. */
-    :deep(.filter-bar) {
-        padding-top: 4px;
-        padding-bottom: 4px;
-    }
-    .dora-subbar__inner,
-    :deep(.filter-bar__panel-inner) {
+    .dora-subbar__inner {
         padding: 12px 16px;
     }
     .stock-splitter {

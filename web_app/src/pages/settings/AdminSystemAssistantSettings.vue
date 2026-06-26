@@ -11,7 +11,7 @@
         </q-banner>
 
         <div v-else-if="loading" class="row justify-center q-py-md">
-            <q-spinner-dots size="28px" color="primary" />
+            <AppSpinner size="28px" />
         </div>
 
         <template v-else>
@@ -49,6 +49,7 @@
                             :disable="saving || !enabledDraft"
                             @blur="onBaseUrlBlur"
                         />
+                        <!-- FU-006: ambiguous — outline with Quasar palette color="secondary" (not the BaseButton "secondary" variant). Left as raw q-btn for review. -->
                         <q-btn
                             color="secondary"
                             no-caps
@@ -176,6 +177,7 @@
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

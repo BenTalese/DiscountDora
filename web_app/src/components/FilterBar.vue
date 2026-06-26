@@ -98,3 +98,30 @@
         expanded.value = false;
     }
 </script>
+
+<style scoped lang="scss">
+    /* FU-012 — calmer "sunken well" panel treatment, standardised across
+       every page that uses FilterBar. The collapsible panel reads as a
+       recessed tool tray tucked under the toolbar, not another card on
+       top of an already-card-heavy page.
+
+       Panel chrome stays on the OUTER `.filter-bar__panel` (the
+       q-slide-transition host) so the rounded corners are present from
+       frame one of the open animation. Padding lives on `__panel-inner`.
+
+       Outer `.filter-bar` padding is shrunk from the template's q-py-md
+       (16px) to 4px so the panel doesn't double-space against the
+       toolbar above. */
+    .filter-bar {
+        padding-top: 4px;
+        padding-bottom: 4px;
+    }
+    .filter-bar__panel {
+        background: var(--surface-sunken);
+        border-radius: 6px;
+        margin-top: 4px;
+    }
+    .filter-bar__panel-inner {
+        padding: 12px 16px;
+    }
+</style>

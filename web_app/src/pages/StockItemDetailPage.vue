@@ -833,7 +833,7 @@
                         <q-item v-for="si in substituteCandidates" :key="si.stock_item_id" clickable @click="onAddSubstitute(si.stock_item_id)">
                             <q-item-section avatar><q-icon name="inventory_2" /></q-item-section>
                             <q-item-section>{{ si.name }}</q-item-section>
-                            <q-item-section side><q-btn flat round dense :icon="ICONS.add" color="primary" /></q-item-section>
+                            <q-item-section side><BaseButton variant="icon" :icon="ICONS.add" color="primary" /></q-item-section>
                         </q-item>
                         <q-item v-if="substituteCandidates.length === 0">
                             <q-item-section class="dora-text-muted">No matching items.</q-item-section>

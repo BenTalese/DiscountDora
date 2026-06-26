@@ -3763,12 +3763,26 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — when the next selectin-vs-noload call comes up.
 - **State note:** open.
 
-## [OPEN] FU-082 — Add `created_at` to Recipe DTO so "Recently added" sort axis can land
-- **Raised:** 2026-06-09 (Cookbook Chunk 1; IMPL plan called for the axis)
-- **Type:** finding / Phase-2
-- **What:** `IMPL_PLAN_COOKBOOK.md` Chunk 1 listed five sort axes including `created-at`. Recipe DTO has no created timestamp today, so Chunk 1 shipped four (`name`, `last_made`, `meal_count`, `total_time`). Adding it is mechanical: a `created_at` column already exists on most domain tables; expose it through `table_mappings.py` and the recipe DTO + SORT_OPTIONS const in `RecipesOverview.vue`.
-- **Recommended resolution:** Phase 2 (ingestion API) or when Cookbook Chunk 4 (detail cleanup) is touched — that's the chunk likely to touch the recipe DTO anyway.
-- **State note:** open.
+## [OPEN] FU-310 — Four pre-existing e2e failures on `prototype/claude-upgrades`
+- **Raised:** 2026-06-26 (surfaced during FU-082 test sweep)
+- **Type:** finding (pre-existing test rot)
+- **What:** Four `tests/e2e/dora_api` failures show up against the current
+  branch HEAD (`37608e4`), independent of FU-082 — confirmed by stashing
+  the FU-082 changes and re-running the same tests:
+  - `test_auth_flows.py::test__profile_picture__set_fetch_and_clear`
+  - `test_auth_flows.py::test__profile_picture__rejects_oversize_data_url`
+  - `test_auth_flows.py::test__dashboard_layout__set_and_clear`
+  - `test_user_router.py::test__get_users__GettingUsers__GetsAllExpectedAttributes`
+  First failure is a `KeyError: 'has_image'` on `POST /api/auth/register`
+  response — likely the register handler stopped returning `has_image`
+  but the test still asserts on it. The other three share the auth/user
+  surface and are probably the same root cause.
+- **Why deferred:** unrelated to FU-082's scope; same 4 failures on a
+  clean stash.
+- **Recommended resolution:** opportunistic — fold into the next auth/user
+  surface work, or treat as a quick standalone fix. Root cause is in
+  either `register_user.py` (response missing `has_image`) or the test
+  assertion itself (stale shape).
 
 ## [OPEN] FU-081 — Move "Planned in" filter from client-side to server-derived Recipe.is_planned
 - **Raised:** 2026-06-09 (Cookbook Chunk 1)
@@ -3798,13 +3812,6 @@ long session summary. Distinct from the other logs:
 - **What:** Apply migration `e1a4c7b2f9d0` to the test DB, then `pytest tests/e2e/dora_api/test_shopping_list_planned_shop_date.py -v`. Four cases (create-with-date, create-without, PATCH set-and-clear-with-null, PATCH preserves the date when not sent).
 - **Why deferred:** no live server in the implementation session; py_compile is not a runtime check.
 - **Recommended resolution:** now, with FU-076.
-
-## [OPEN] FU-074 — Wire planned-shop-day into the real alert pipeline (C-9)
-- **Raised:** 2026-06-08 (Chunk 7 impl)
-- **Type:** finding (deferred-by-design)
-- **What:** Chunk 7 surfaces planned-shop-day as a banner on the list detail. The IMPL plan says it "feeds C-9's new alert types" — the actual alert pipeline (alerts bell badge, suggestion-feed insertions, optional push) belongs to the C-9 prompt's surface. When C-9 runs, register a new `shopping_day_today` / `shopping_day_overdue` alert type that fires on the same condition as the banner, and de-dupe so the banner stays the in-page hint while the alerts list / bell badge handle global notification.
-- **Why deferred:** alert types + their dedupe semantics live in C-9, not in P6-01 Chunk 7.
-- **Recommended resolution:** when C-9 (alerts) executes.
 
 ## [OPEN] FU-073 — P6-01 Chunk 6 browser smoke
 - **Raised:** 2026-06-08 (Chunk 6 impl)
@@ -3841,13 +3848,6 @@ long session summary. Distinct from the other logs:
   9. Mobile width: the dropdown is still usable (the proposal eventually wants a dedicated mobile dropdown surface — see FU-071).
 - **Why deferred:** vue-tsc clean is not a UX test; no dev server in this session.
 - **Recommended resolution:** now (alongside FU-066/FU-068).
-
-## [OPEN] FU-071 — Desktop right-panel + mobile-top-dropdown list selector
-- **Raised:** 2026-06-08 (Chunk 5 impl)
-- **Type:** finding (UX polish per proposal §2.3 / feedback L405-L406)
-- **What:** Proposal calls for a desktop **right panel** (always visible) and a mobile **top dropdown**. Chunk 5 ships a single `q-btn-dropdown` shared across viewports as a viable interim. The dedicated right-panel layout (always visible on >=md, the dropdown collapses below that) is the next step.
-- **Why deferred:** would have nearly doubled Chunk 5's edit surface; the dropdown is the same UX *capability* on both viewports, just less ambient on desktop.
-- **Recommended resolution:** opportunistic — pair with Chunk 7 (planned shop day + cleanup) or as standalone polish.
 
 ## [OPEN] FU-068 — P6-01 Chunk 4 browser smoke
 - **Raised:** 2026-06-08 (Chunk 4 impl)
@@ -4029,27 +4029,6 @@ long session summary. Distinct from the other logs:
   cookable-chip `positive/grey` pattern (RecipeCard + MealPlansOverview) is the most
   common regression shape — worth a shared neutral-chip approach.
 
-## [OPEN] FU-045 — Migrate to Postgres as the standard datastore (SQLite kept for lightweight self-host)
-- **Raised:** 2026-06-06 (distribution posture — Decision 5 / §7.5)
-- **Type:** deferred job
-- **What:** Make **Postgres the standard datastore** for dev + hosted; SQLite stays
-  supported as the zero-dependency lightweight self-host option (user decision:
-  Postgres-default, *not* Postgres-only — retiring SQLite would raise the self-host
-  bar). Motivation: SQLite feels too unstable for the long term. Scope when done:
-  local Postgres dev setup (docker-compose or similar), confirm Alembic migrations
-  run clean on both engines, keep the dev reset flow (`drop_all` /
-  `DORA_ALLOW_DESTRUCTIVE` — see memory) working on Postgres, and re-check the
-  UUID/`text()` binding sharp edge (Postgres has native UUID, so the raw-`text()`
-  workaround likely simplifies — verify both inbound and outbound). Keep the
-  ORM/migration layer portable both ways per discipline #2.
-- **Why deferred:** posture recorded now; the actual migration is real engineering,
-  best done as its own focused unit rather than mid-stream. No urgency — SQLite works
-  today.
-- **Recommended resolution:** **later — fold into Phase 4 productionize**
-  (`RECONCILED_FINISHING_PLAN.md §5`, which already lists "Postgres/gunicorn/Redis"),
-  OR opportunistically sooner if the user wants to dev against Postgres before then.
-  Not a blocker for Phase 0/1.
-
 ## [OPEN] FU-044 — C-help opt-in help-overlay brief written; awaiting approval + per-surface hint rollout
 - **Raised:** 2026-06-06 (user-floated idea → `PROPOSAL_HELP_OVERLAY.md`)
 - **Type:** deferred job (design brief done; implementation pending approval)
@@ -4215,21 +4194,6 @@ long session summary. Distinct from the other logs:
   text-scale var. Deliberately-fixed-px carve-outs (ScanOverlay camera UI,
   PriceHistoryChart SVG labels, Dashboard 3px/7.5px micro-gauge) stay.
 
-## [OPEN] FU-023 — A5 leftover: spinners not yet migrated on deferred surfaces
-- **Raised:** 2026-06-05 (A5)
-- **Type:** leftover
-- **What:** A5 unified loading on the active app pages, but left raw `q-spinner`
-  on the **deferred surfaces** (Reports, Data→Export/Print, Settings sub-pages —
-  per the prompt-pack "deferred" list) and on **DoraChat's typing dots** (a
-  deliberate `q-spinner-dots` indicator). Also: overview pages got `AppSpinner`
-  rather than list-skeletons — fine, but list-skeletons would be a nicer touch.
-- **Why deferred:** those pages are flagged "do not design yet"; a spinner swap
-  is harmless but low-value there, and DoraChat's dots are an intentional style.
-- **Recommended resolution:** opportunistic — migrate the deferred-page spinners
-  to `AppSpinner` whenever those pages are next worked on. Decide DoraChat dots
-  separately (keep as a typing indicator, or switch to AppSpinner). Consider
-  list-skeletons for the big overviews during the FU-010 holistic look pass.
-
 ## [OPEN] FU-020 — Recipe-detail substitute swap affordance (cook-mode-only for now?)
 - **Raised:** 2026-06-05 (B8)
 - **Type:** finding / open question
@@ -4243,19 +4207,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** now-ish — quick user call. If "yes", design where it
   applies (a swap that's still non-destructive to the saved recipe — likely a
   "pre-stage this swap for the next cook" rather than editing the recipe).
-
-## [OPEN] FU-018 — B7: wider sweep for "store mutation + page toast" double-emits
-- **Raised:** 2026-06-05 (Wave-B self-audit)
-- **Type:** finding
-- **What:** B7's "no other double-toast patterns" verdict only walked
-  `useShoppingListActions.addItems` callers. Same pattern could exist
-  for any store mutation that toasts internally and a page handler that
-  toasts on success after. Worth grepping for `$q.notify` and
-  `notifyOk` calls inside store/composable methods, then cross-checking
-  every caller for a follow-up notify.
-- **Why deferred:** out of B7's original scope; opportunistic cleanup.
-- **Recommended resolution:** opportunistic — fold into the next polish
-  pass.
 
 ## [OPEN] FU-016 — Audit other "frontend cache vs backend mutation" guard races
 - **Raised:** 2026-06-05 (B5 follow-up)
@@ -4272,29 +4223,6 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** out of B5's bug-fix scope; cross-cutting audit.
 - **Recommended resolution:** opportunistic — fold into a Wave-A or polish
   pass once one obvious symptom shows up; not worth a dedicated session.
-
-## [OPEN] FU-012 — FilterBar panel has no visual container
-- **Raised:** 2026-06-05 (A4)
-- **Type:** finding
-- **What:** `FilterBar`'s collapsible panel is a plain div. `ProductSearch`
-  previously wrapped its filters in a bordered `q-card`; that border is now gone
-  (so all four pages match the borderless inline style the others always used).
-- **Why deferred:** consistency was the goal; the other 3 pages never had a card.
-  Whether the panel wants subtle containment (border/elevation) is a design call.
-- **Recommended resolution:** fold into the FU-010 holistic look review, or a
-  quick tweak to `FilterBar.vue` if the panel reads as too bare in the browser.
-
-## [OPEN] FU-011 — AuditLogSettings filtering not standardised
-- **Raised:** 2026-06-05 (A4)
-- **Type:** finding
-- **What:** `settings/AuditLogSettings.vue` has ~9 filter fields with its own
-  apply/clear UX. A4 deliberately did not touch it (the prompt scoped A4 to the
-  four data-list pages and excluded the deferred/settings pages); its filtering
-  is also server-side (sends a query), not the client-predicate pattern FilterBar
-  assumes.
-- **Why deferred:** out of A4's defined scope; different (server-side) mechanism.
-- **Recommended resolution:** later — only if settings/admin gets a dedicated
-  polish pass; low priority.
 
 ## [OPEN] FU-010 — Late-game holistic theme / colour / overall-look review
 - **Raised:** 2026-06-05 (user request)
@@ -4320,7 +4248,16 @@ long session summary. Distinct from the other logs:
   (deps installed) and ideally a side-by-side across all themes.
 
 ## [OPEN] FU-006 — Migrate the remaining ~289 `q-btn` to BaseButton
-- **Raised:** 2026-06-04 (A2 Phase 2); rescoped 2026-06-05
+- **Raised:** 2026-06-04 (A2 Phase 2); rescoped 2026-06-05; resumed 2026-06-26
+- **Progress (2026-06-26):** count drained from ~289 → **49 raw q-btn**, of
+  which only **9 are migratable but flagged** for a design call. The rest
+  are explicit exclusions (3 wrappers, 17 MyProductsPage, 14 DoraChat, 5
+  q-input #append, 1 dead CardComponent). Flagged sites carry an inline
+  `// FU-006:` comment and use a palette tone BaseButton doesn't model
+  (`warning`, `accent`, `grey`, Quasar palette `secondary`), a dynamic
+  colour binding (`RecipeCard` chef-hat, `ShoppingListDetail` shop-day
+  tone), or `type="a"`. Resolution is now opportunistic — decide per site
+  whether to extend BaseButton or accept the raw usage.
 - **Type:** deferred job
 - **What:** A2 took the app from 399 → ~304 `q-btn`; it currently sits at **~289
   plain `q-btn`** (+ 4 `q-btn-dropdown`, 6 `q-btn-toggle`) across ~40 files. This

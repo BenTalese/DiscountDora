@@ -49,10 +49,14 @@ def startup(is_test_env: bool = False):
 
     # D2: legacy-path migrations run *before* init_db so a relocated
     # DB file is in its new home by the time SQLAlchemy opens it.
+    # FU-045: the legacy-DB migration is a SQLite-only file move; skip it
+    # when running on Postgres (no file to relocate).
     from dora_api.infrastructure.path_migration import (
         migrate_legacy_db, migrate_legacy_uploads,
     )
-    migrate_legacy_db(Path(DORA_CONFIG.get_db_connection_string().removeprefix("sqlite:///")))
+    _db_url = DORA_CONFIG.get_db_connection_string()
+    if _db_url.startswith("sqlite:///"):
+        migrate_legacy_db(Path(_db_url.removeprefix("sqlite:///")))
     migrate_legacy_uploads(DORA_CONFIG.get_uploads_dir())
 
     init_db(is_test_env)

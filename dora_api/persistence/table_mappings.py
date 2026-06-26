@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, false, true
 from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
@@ -82,13 +82,13 @@ def configure_mappings(db: SQLAlchemy):
         Column("llm_enabled", Boolean, nullable=False),
         Column("llm_base_url", String(500), nullable=False),
         Column("llm_model", String(255), nullable=False),
-        Column("scanning_enabled", Boolean, nullable=False, server_default="0"),
+        Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
-        Column("meal_planning_enabled", Boolean, nullable=False, server_default="1"),
-        Column("money_enabled", Boolean, nullable=False, server_default="0"),
-        Column("nutrition_enabled", Boolean, nullable=False, server_default="0"),
-        Column("companion_ingestion_enabled", Boolean, nullable=False, server_default="0"),
-        Column("deals_email_enabled", Boolean, nullable=False, server_default="0"),
+        Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
+        Column("money_enabled", Boolean, nullable=False, server_default=false()),
+        Column("nutrition_enabled", Boolean, nullable=False, server_default=false()),
+        Column("companion_ingestion_enabled", Boolean, nullable=False, server_default=false()),
+        Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
         # FU-209: `products_enabled` column dropped (migration f1a2b3c4d5e6) —
         # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).
         # C-cross Chunk 3 — reserved seam for nutrition complex-mode.
@@ -178,10 +178,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("days_until_stocktake_alert", Integer),
         Column("expiry_date", Date, nullable=True),
         Column("image", LargeBinary, nullable=True),
-        Column("is_flagged", Boolean, nullable=False, server_default="0"),
-        Column("is_open", Boolean, nullable=False, server_default="0"),
+        Column("is_flagged", Boolean, nullable=False, server_default=false()),
+        Column("is_open", Boolean, nullable=False, server_default=false()),
         Column("opened_on", Date, nullable=True),
-        Column("auto_add_when_low", Boolean, nullable=False, server_default="0"),
+        Column("auto_add_when_low", Boolean, nullable=False, server_default=false()),
         Column("name", String(255)),
         Column("notes", String(255), nullable=True),
         Column("stock_group_id", UUIDType, ForeignKey("StockGroup.id", ondelete="SET NULL"), nullable=True),
@@ -264,7 +264,7 @@ def configure_mappings(db: SQLAlchemy):
             name="ck_shopping_list_line_anchor",
         ),
         Column("quantity", Integer, nullable=True),
-        Column("is_ticked", Boolean, nullable=False, server_default="0"),
+        Column("is_ticked", Boolean, nullable=False, server_default=false()),
         Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         Column("sequence", Integer, nullable=False, server_default="0"),
         Column("added_via", String(32), nullable=False, server_default="manual"),
@@ -426,7 +426,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("id", UUIDType, primary_key=True),
         Column("user_id", UUIDType, nullable=False),
         Column("kind", String(64), nullable=False),
-        Column("enabled", Boolean, nullable=False, server_default="1"),
+        Column("enabled", Boolean, nullable=False, server_default=true()),
         Column("tier_override", String(16), nullable=True),
     )
 
@@ -525,6 +525,12 @@ def configure_mappings(db: SQLAlchemy):
         # so new recipes start in the dumbest mode; backfill migration
         # promotes existing recipes with RecipeStep rows to 'structured'.
         Column("steps_mode", String(16), nullable=False, server_default="freeform"),
+        # FU-082 — when the recipe row was added to this household. Powers
+        # the cookbook "Recently added" sort axis (IMPL_PLAN_COOKBOOK
+        # Chunk 1's missing fifth axis). The create handlers stamp this at
+        # write time; historical rows were backfilled from last_made_on
+        # (else now()) by migration f9d3a7c2b5e8.
+        Column("created_at", DateTime(timezone=True), nullable=False),
     )
 
     # C-4 Chunk 2 — recipe → dietary-tag association. The tag vocabulary is
@@ -570,7 +576,7 @@ def configure_mappings(db: SQLAlchemy):
         # Cookbook revision §1.9 — optional ingredients are ignored by the
         # cookability rule (no second cookable value). Server-default `0`
         # keeps existing rows valid through the migration.
-        Column("is_optional", Boolean, nullable=False, server_default="0"),
+        Column("is_optional", Boolean, nullable=False, server_default=false()),
     )
 
     # C-4 Chunk 6 — structured recipe steps. Self-referential `parent_step_id`
@@ -687,46 +693,46 @@ def configure_mappings(db: SQLAlchemy):
         Column("password_hash", String(255), nullable=True),
         Column("send_deals_on_day", Integer),
         Column("username", String(255), nullable=False, unique=True),
-        Column("is_admin", Boolean, nullable=False, default=False, server_default="0"),
-        Column("deals_email_enabled", Boolean, nullable=False, server_default="1"),
-        Column("deals_email_compact", Boolean, nullable=False, server_default="0"),
+        Column("is_admin", Boolean, nullable=False, default=False, server_default=false()),
+        Column("deals_email_enabled", Boolean, nullable=False, server_default=true()),
+        Column("deals_email_compact", Boolean, nullable=False, server_default=false()),
         Column("theme", String(20), nullable=False, server_default="system"),
         Column("font_family", String(20), nullable=False, server_default="default"),
         Column("font_size", String(2), nullable=False, server_default="md"),
         Column("onboarding_completed_at", DateTime, nullable=True),
         Column("last_backup_at", DateTime(timezone=True), nullable=True),
-        Column("email_verified", Boolean, nullable=False, server_default="0"),
+        Column("email_verified", Boolean, nullable=False, server_default=false()),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),
         # P2-05 — grocery budget. NULL amount = feature off.
         Column("budget_amount", Float, nullable=True),
         Column("budget_period", String(16), nullable=False, server_default="weekly"),
         # P2-13 — voice opt-ins. Off by default; SPA seeds the in-page
         # toggles from these and the user can override per session.
-        Column("voice_input_enabled", Boolean, nullable=False, server_default="0"),
-        Column("voice_output_enabled", Boolean, nullable=False, server_default="0"),
+        Column("voice_input_enabled", Boolean, nullable=False, server_default=false()),
+        Column("voice_output_enabled", Boolean, nullable=False, server_default=false()),
         # Voice engine ('browser' | 'piper') + Piper voice id. Default piper/amy
         # — Dora uses the bundled neural voice when available, browser fallback
         # otherwise (resolved client-side).
         Column("voice_engine", String(16), nullable=False, server_default="piper"),
         Column("voice_id", String(32), nullable=False, server_default="amy"),
         # C-cross Chunk 2 — per-user money opt-in (proposal §2.2).
-        Column("money_features_enabled", Boolean, nullable=False, server_default="0"),
+        Column("money_features_enabled", Boolean, nullable=False, server_default=false()),
         # IMPL_PLAN_MEAL_PLANS_REBUILD §6.6 / Q3 — per-user batch-cooking
         # posture. Default False ("fresh"); when True, the planner reveals
         # the cook-pool affordances + shortfall warning + "to cook by" line.
-        Column("batch_features_enabled", Boolean, nullable=False, server_default="0"),
+        Column("batch_features_enabled", Boolean, nullable=False, server_default=false()),
         # C-cross Chunk 3 — per-user nutrition mode (proposal §2.3).
         Column("nutrition_mode", String(16), nullable=False, server_default="off"),
         # C-cross Chunk 5 — per-user image-display opt-ins (proposal §2.8).
         # Default True (visual richness on by default; users opt out).
-        Column("show_recipe_images", Boolean, nullable=False, server_default="1"),
-        Column("show_stock_images", Boolean, nullable=False, server_default="1"),
+        Column("show_recipe_images", Boolean, nullable=False, server_default=true()),
+        Column("show_stock_images", Boolean, nullable=False, server_default=true()),
         # Onboarding C-5.4 — household cooking headcount (NULL = not set).
         Column("household_headcount", Integer, nullable=True),
         # C-9.7 — alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).
         # Off by default; cadence values 'off' | 'daily' | 'weekly'; day is
         # the weekly send day Mon=0…Sun=6 (ignored on the daily cadence).
-        Column("alerts_email_enabled", Boolean, nullable=False, server_default="0"),
+        Column("alerts_email_enabled", Boolean, nullable=False, server_default=false()),
         Column("alerts_email_cadence", String(16), nullable=False, server_default="off"),
         Column("alerts_email_day", Integer, nullable=False, server_default="0"),
         # Settings rebuild Phase 4 — profile picture blob, deferred below.
@@ -749,7 +755,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("id", UUIDType, primary_key=True),
         Column("label", String(255), nullable=False),
         Column("key_hash", String(64), nullable=False, unique=True),
-        Column("enabled", Boolean, nullable=False, server_default="1"),
+        Column("enabled", Boolean, nullable=False, server_default=true()),
         Column("trust", String(16), nullable=False, server_default="high"),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("last_used_at", DateTime(timezone=True), nullable=True),

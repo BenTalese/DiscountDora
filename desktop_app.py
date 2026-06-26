@@ -60,6 +60,14 @@ def _bootstrap_paths() -> None:
     _set_default_env("DORA_CACHE_DIR", str(cache))
     _set_default_env("DORA_LOG_DIR", str(logs))
 
+    # FU-045: the bundled desktop install is the canonical lightweight
+    # self-host — pin it to SQLite under the per-user data dir. The
+    # config layer would otherwise default to Postgres (the standard
+    # for dev/hosted), which obviously isn't available on a freshly
+    # installed end-user machine. `.as_posix()` normalises Windows
+    # backslashes so the URL parses on every platform.
+    _set_default_env("DORA_DB_URL", f"sqlite:///{(data / 'dora.data.db').as_posix()}")
+
     # Production profile + skip the required-vars gate (no public
     # CORS host, no bootstrap-admin email needed on a single-user
     # desktop install).

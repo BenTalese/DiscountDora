@@ -32,17 +32,15 @@
                     <span v-else>Point at a barcode or QR</span>
                 </div>
                 <div class="scan-actions">
-                    <q-btn
+                    <BaseButton
                         v-if="torchSupported"
-                        flat
-                        round
+                        variant="icon"
                         :icon="torchOn ? 'flashlight_on' : 'flashlight_off'"
                         color="white"
                         @click="toggleTorch"
                     />
-                    <q-btn
-                        flat
-                        round
+                    <BaseButton
+                        variant="icon"
                         :icon="ICONS.close"
                         color="white"
                         @click="onClose"
@@ -79,6 +77,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
     import { ref, watch, onBeforeUnmount, computed } from 'vue';

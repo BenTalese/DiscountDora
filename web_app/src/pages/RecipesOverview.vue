@@ -532,6 +532,7 @@
     type SortKey =
         | 'name'
         | 'last_made'
+        | 'created_at'
         | 'meal_count'
         | 'total_time'
         | 'kcal'
@@ -554,6 +555,9 @@
     const STATIC_SORT_OPTIONS: { label: string; value: SortKey }[] = [
         { label: 'Name', value: 'name' },
         { label: 'Recently made', value: 'last_made' },
+        // FU-082 — Recently added is the fifth IMPL_PLAN_COOKBOOK Chunk 1
+        // axis; landed once Recipe.created_at became available on the DTO.
+        { label: 'Recently added', value: 'created_at' },
         { label: 'Meals in pool', value: 'meal_count' },
         { label: 'Prep + cook time', value: 'total_time' },
         // FU-149 — sort by ingredient count (fewer ingredients first
@@ -878,6 +882,13 @@
                     if (bv === null) return -1;
                     return av.localeCompare(bv) * dirSign;
                 }
+                case 'created_at': {
+                    // FU-082 — never null on rows from the API (DTO field
+                    // is always populated post-backfill); ISO-8601 strings
+                    // sort lexicographically. Tie-break alphabetical.
+                    const c = a.created_at.localeCompare(b.created_at);
+                    return c !== 0 ? c * dirSign : a.name.localeCompare(b.name);
+                }
                 case 'meal_count': {
                     const d = (a.available_meals - b.available_meals) * dirSign;
                     return d !== 0 ? d : a.name.localeCompare(b.name);
@@ -1023,6 +1034,8 @@
         const asc = sortDir.value === 'asc';
         switch (sortBy.value) {
             case 'last_made':
+                return asc ? 'Oldest first' : 'Most recent first';
+            case 'created_at':
                 return asc ? 'Oldest first' : 'Most recent first';
             case 'meal_count':
                 return asc ? 'Fewest meals first' : 'Most meals first';

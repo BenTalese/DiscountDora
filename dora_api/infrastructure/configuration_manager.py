@@ -76,16 +76,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _resolve_db_path() -> Path:
-    """DORA_DB_PATH wins when set (absolute or relative); otherwise
-    fall back to `<DORA_DATA_DIR or 'data'>/dora.data.db`. The two-tier
-    layout means deployments can either pin the file directly or just
-    tell the app where its data directory lives."""
-    explicit = _env("DORA_DB_PATH")
-    if explicit:
-        return Path(explicit).expanduser().resolve()
-    data_dir = _env("DORA_DATA_DIR", "data")
-    return (Path(data_dir).expanduser().resolve()) / "dora.data.db"
+def _default_postgres_url() -> str:
+    """Default Postgres URL matches the bundled docker-compose service.
+    Override every component (or the whole URL) via env vars for any
+    other deployment."""
+    host = _env("DORA_DB_HOST", "localhost") or "localhost"
+    port = _env("DORA_DB_PORT", "5432") or "5432"
+    name = _env("DORA_DB_NAME", "dora") or "dora"
+    user = _env("DORA_DB_USER", "dora") or "dora"
+    password = _env("DORA_DB_PASSWORD", "dora") or "dora"
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
 def _resolve_config_path() -> Path:
@@ -143,9 +143,25 @@ class DoraConfig:
         return _env_int("DORA_API_PORT", self._config.API_PORT)
 
     def get_db_connection_string(self) -> str:
-        path = _resolve_db_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return f"sqlite:///{path}"
+        # FU-045 — Postgres is the standard datastore (Decision 5,
+        # RECONCILED_FINISHING_PLAN.md §7.5). Resolution order:
+        #   1. `DORA_DB_URL` if set — full override, any SQLAlchemy URL.
+        #      Pass `sqlite:///path/to/dora.db` to run on SQLite (lightweight
+        #      self-host) or a Postgres URL to point at any instance.
+        #   2. Per-component env vars (`DORA_DB_HOST`, `DORA_DB_PORT`,
+        #      `DORA_DB_NAME`, `DORA_DB_USER`, `DORA_DB_PASSWORD`) — useful
+        #      when secrets come from the environment but the shape is fixed.
+        #   3. Default: localhost:5432 / user `dora` / db `dora` — matches
+        #      the bundled `docker-compose.yml`.
+        explicit_url = _env("DORA_DB_URL")
+        if explicit_url:
+            if explicit_url.startswith("sqlite:///"):
+                # Ensure the parent directory exists for file-backed SQLite,
+                # mirroring the legacy behaviour.
+                path = Path(explicit_url.removeprefix("sqlite:///")).expanduser().resolve()
+                path.parent.mkdir(parents=True, exist_ok=True)
+            return explicit_url
+        return _default_postgres_url()
 
     def get_log_level(self) -> int:
         # D3: layered resolution — env > JSON > profile default. JSON

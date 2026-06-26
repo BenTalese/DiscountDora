@@ -39,7 +39,16 @@ export function useStockItemActions() {
      *  Chunk 2: handles the discriminated `QuickAddResult` — `no_draft` opens
      *  the lists overview to create one; `ambiguous` prompts the user to pick
      *  from the candidate drafts (and remembers the pick in sessionStorage). */
-    async function addToList(stockItemId: string, listId?: string | null) {
+    async function addToList(
+        stockItemId: string,
+        listId?: string | null,
+        options?: { silent?: boolean },
+    ) {
+        // FU-018: callers running this in a bulk loop pass silent:true and
+        // emit one summary toast themselves instead of N per-item ones.
+        const silent = options?.silent ?? false;
+        const ok = (msg: string) => { if (!silent) notifyOk(msg); };
+        const err = (msg: string, caption?: string) => { if (!silent) notifyErr(msg, caption); };
         const pick = useQuickAddTargetPick();
         try {
             if (listId) {
@@ -47,7 +56,7 @@ export function useStockItemActions() {
                     stock_item_id: stockItemId,
                 });
                 await shoppingListStore.refreshAsync();
-                notifyOk(result.already_on_list ? 'Already on that list.' : 'Added to list.');
+                ok(result.already_on_list ? 'Already on that list.' : 'Added to list.');
                 return;
             }
             const remembered = pick.load();
@@ -100,36 +109,37 @@ export function useStockItemActions() {
                 pick.save(choice);
                 outcome = await shoppingListApi.quickAddToPrimaryAsync(stockItemId, choice);
                 if (outcome.result !== 'added') {
-                    notifyErr('Could not add to the chosen list.');
+                    err('Could not add to the chosen list.');
                     return;
                 }
             }
             await shoppingListStore.refreshAsync();
             if (outcome.result === 'added') {
-                notifyOk(
+                ok(
                     outcome.already_on_list
                         ? 'Already on your list.'
                         : 'Added to your list.',
                 );
             }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
             if (message === 'hint_invalid') {
                 // The remembered pick no longer applies — clear and retry once
                 // fresh so the resolver re-evaluates from scratch.
                 pick.clear();
-                await addToList(stockItemId, listId);
+                await addToList(stockItemId, listId, options);
                 return;
             }
-            notifyErr('Could not add to list.', String(err));
+            err('Could not add to list.', String(e));
         }
     }
 
     /** Bump the level back to the most-stocked level (lowest sequence). */
-    async function markRestocked(stockItemId: string) {
+    async function markRestocked(stockItemId: string, options?: { silent?: boolean }) {
+        const silent = options?.silent ?? false;
         const top = stockLevels.value[0];
         if (!top) {
-            notifyErr('No stock levels configured.');
+            if (!silent) notifyErr('No stock levels configured.');
             return;
         }
         try {
@@ -137,9 +147,9 @@ export function useStockItemActions() {
                 stock_item_id: stockItemId,
                 stock_level_id: top.stock_level_id,
             });
-            notifyOk('Marked restocked.');
+            if (!silent) notifyOk('Marked restocked.');
         } catch (err) {
-            notifyErr('Could not restock.', String(err));
+            if (!silent) notifyErr('Could not restock.', String(err));
         }
     }
 

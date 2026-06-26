@@ -9,6 +9,481 @@ next.
 
 ---
 
+## 2026-06-26 — FU-082 closed (Recipe.created_at + "Recently added" sort axis)
+
+**Why:** IMPL_PLAN_COOKBOOK Chunk 1 listed five sort axes; only four
+shipped because the Recipe DTO had no created timestamp. FU-082 was the
+plumbing to land the fifth axis.
+
+**What shipped (end-to-end):**
+- **Migration `f9d3a7c2b5e8`** — adds `Recipe.created_at:
+  DateTime(timezone=True)` as nullable, backfills via
+  `COALESCE(last_made_on, CURRENT_TIMESTAMP)` (one portable UPDATE),
+  tightens to NOT NULL. Legacy rows with `last_made_on` keep their
+  relative order; un-cooked legacy rows anchor at "now" and newer real
+  creates sort above them — matches the axis's intent.
+- **Schema:** `table_mappings.py` Recipe table gets the column;
+  `domain/entities/recipe.py` adds `created_at: datetime` +
+  `Recipe.Fields.CREATED_AT`.
+- **Write paths:** `create_recipe.py` and `new_recipe_version.py` stamp
+  `datetime.now(timezone.utc)` at construction. A new version is
+  intentionally stamped fresh — not carried from the source — so the
+  axis surfaces it when it landed in this household. `seed.py` accepts
+  a `created_at` kwarg, defaulting to `now()`.
+- **DTO:** `RecipeDto.created_at` is a positional field (always
+  populated post-backfill); `_FIELD_MAP['created_at']` exposes it for
+  the standard `?sort=created_at:desc` query string.
+- **Frontend:** `models/recipe.ts` adds `created_at: string`;
+  `RecipesOverview.vue` adds the `'created_at'` SortKey, the
+  STATIC_SORT_OPTIONS entry ("Recently added"), the comparator (ISO-8601
+  lexicographic + name tie-break), and the asc/desc tooltip phrasing.
+  Default-direction watch picks `desc` by exclusion (newest first),
+  matching the other temporal axes.
+
+**Test infrastructure:**
+- `tests/conftest.py` (new) — top-level pytest conftest pins
+  `DORA_DB_URL` to a SQLite temp file. Without it, unit tests at
+  `tests/test_*.py` (which import `dora_api.app` transitively) tried
+  psycopg under FU-045's new Postgres default and failed at collection.
+  The e2e suite has its own conftest under `tests/e2e/dora_api/`; the
+  new top-level conftest is the unit-test counterpart.
+- `tests/test_recipe_cookability.py` stub was missing **`steps_mode`**
+  (pre-existing rot — broken before FU-082) and needed
+  **`created_at`** (mine). Added both.
+
+**Pre-existing 4-test failure surfaced and logged separately as
+**FU-310** — see `DORA_FOLLOWUPS.md`. Not caused by FU-082 (confirmed
+by stashing my changes and re-running the same tests — same 4 fail on
+`37608e4`). Auth/user surface; `has_image` missing from the register
+response.
+
+**Standards close-gate:**
+- **R-003 (single source of truth)** — `created_at` lives once on the
+  entity; client comparator + server `_FIELD_MAP` both read the same
+  field, no duplicate constant.
+- **R-005 (portable data access)** — migration uses
+  `CURRENT_TIMESTAMP` (portable); column type `DateTime(timezone=True)`
+  is SQLAlchemy-portable.
+- **R-006 (clean migrations)** — non-idempotent add-backfill-tighten,
+  forward-only, no idempotent guards. The intermediate nullable state
+  is contained to the migration body.
+- **R-007 (scope discipline)** — touched only what was required: the
+  one column, the write paths, the DTO, the frontend sort. Logged
+  pre-existing failures rather than fixing-then-also.
+- **ADR evaluation:** no new rule. "Add column nullable → backfill →
+  tighten to NOT NULL" is already standard Alembic shape.
+
+**Verification:**
+- All py_compile clean.
+- `tests/test_recipe_cookability.py` + `tests/test_recipe_filters.py` —
+  **22/22 passing.**
+- Full `tests/e2e/dora_api` — **403 passing**, 4 pre-existing failures
+  (FU-310, unrelated).
+- `vue-tsc --noEmit` — clean.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-074 closed (shopping-day alert pipeline + overdue gap)
+
+**Why:** user asked to action FU-074 (wire planned-shop-day into the
+real alert pipeline / C-9).
+
+**Found already shipped:** C-9.4 had already registered the
+`shopping_day` kind (`alert_kinds.py`, FYI tier) and the emitter
+(`get_alerts.py::_shopping_day_alerts`) for upcoming planned dates with
+`list_alert_key`-based dedupe and close-on-done semantics. Cleaner
+than the FU's originally-proposed two-kind split.
+
+**Real gap filled:** the existing emitter used `between(today, horizon)`
+and silently dropped overdue lists — even though the in-page banner
+tints overdue, the bell/list never showed it.
+- **`get_alerts.py::_shopping_day_alerts`** widened to `<= horizon`;
+  added an `if days < 0` branch that emits with severity `medium`
+  (stays in FYI tier so the bell badge isn't inflated — just sorts
+  above plain upcoming nudges in the FYI list), distinct overdue
+  message ("Shopping day was yesterday: …" / "Shopping day was N days
+  ago: …", detail "Mark it done or move the date."). Same
+  `list_alert_key` so the user's snooze/dismiss decisions persist as
+  the date rolls past.
+
+**Tests:** new
+`test__alerts__shopping_day_overdue_fires_and_escalates_severity`
+covers the overdue emission (severity, message, tier) and confirms
+finishing the list clears it. Full `test_alerts.py` suite: 24/24
+passing.
+
+**FU-045 conftest fix shipped alongside:** the FU-045 conftest pinned
+tests to `sqlite:///data/dora.test.db` (relative), which Flask resolves
+against its instance dir → `OperationalError`. Switched to an absolute
+path derived from the repo root + `as_posix()` so the e2e suite runs
+without an explicit `DORA_DB_URL` override.
+
+**Standards close-gate:**
+- **R-003 (single source of truth)** — kind registry stays the single
+  source for tier defaults; the new overdue branch only varies severity
+  (per-instance) and message, not the kind. One alert per list across
+  the entire lifecycle keeps the user-decision ledger consistent.
+- **R-005 (portable data access)** — only ORM/`EntityField` predicates;
+  no engine-specific SQL.
+- **R-006/R-007** — no new migration; sweep stayed inside FU-074's
+  defined frame.
+- **ADR evaluation:** no new rule. The "single kind, severity reflects
+  lifecycle state" pattern is a reasonable specialization of
+  `alert_kinds.py`'s registry; not yet a repeating decision.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-071 closed (already implemented; ledger flip)
+
+**Why:** user asked to action FU-071 (desktop right-panel + mobile top
+dropdown list selector for the shopping-list detail page).
+
+**Outcome:** no code change needed — the work landed in commit `d9ca58e`
+("Fable 5 — shopping list rework") which introduced
+`ShoppingListRailItem.vue` and the `.sld-rail` layout, but FU-071 was
+never moved to resolved. `ShoppingListDetail.vue` now carries both
+surfaces, mutually exclusive via viewport classes:
+- Desktop right rail (`.gt-sm .sld-rail`) — always-visible
+  `q-virtual-scroll` of every list, auto-scrolls to active selection.
+- Mobile top dropdown (`.lt-md`) — `BaseDropdown` hosting the same
+  `railEntries` continuum, virtualized.
+
+Ledger move only.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-045 post-close review fixes
+
+**Why:** self-review pass over the FU-045 work caught two integration-edge
+misses that the original sweep didn't address — both real bugs.
+
+**Bug 1: compose file collision + dangling env var.**
+- I shipped `docker-compose.yml` alongside the existing `compose.yml`
+  (production self-host monolith). Docker Compose v2 auto-picks
+  `compose.yml` first, so `docker compose up -d postgres` would have
+  silently failed (no postgres service there).
+- `compose.yml` still referenced `DORA_DB_PATH`, which I removed.
+- **Fix:** renamed dev compose to `compose.dev.yml` so it's invoked
+  explicitly (`docker compose -f compose.dev.yml up -d postgres`); README
+  updated. `compose.yml` now defaults `DORA_DB_URL` to
+  `sqlite:////app/data/dora.data.db` (4 slashes = absolute), preserving
+  the production self-host monolith's SQLite-by-default story.
+
+**Bug 2: bundled desktop installer broken.**
+- `desktop_app.py` (PyInstaller native installer) sets
+  `DORA_DATA_DIR`/`_CACHE_DIR`/`_LOG_DIR` before booting Flask, but
+  never set `DORA_DB_URL`. With FU-045's Postgres default, the bundled
+  Windows/macOS/Linux installer would try to connect to a Postgres that
+  isn't on the user's machine.
+- **Fix:** `desktop_app.py` now pins
+  `DORA_DB_URL=sqlite:///<user_data_dir>/dora.data.db` via `.as_posix()`
+  for cross-platform path safety. The bundled desktop install is the
+  canonical lightweight self-host shape — SQLite is correct here.
+
+**Lesson logged for next time:** when changing a config default, audit
+every entry point that bootstraps the app (web container, desktop bundle,
+CLI scripts) and every sibling deploy file — not just the code paths.
+
+**Standards note:** the "audit every entry point + sibling deploy file
+when changing a config default" rule is implicit in R-005 (portable data
+access) + R-007 (scope discipline). Not a new R-0NN — the review caught
+it because the existing rules' violation signals were specific enough.
+
+**Verification:** all touched files py_compile clean. SQLite end-to-end
+re-verified with the new defaults — `drop_all` + `create_all` clean,
+introspected DDL confirms boolean server-defaults render correctly.
+
+**Next up:** unblocked. Live PG run still pending user-side confirmation.
+
+---
+
+## 2026-06-26 — FU-045 closed (Postgres as standard datastore; SQLite still supported)
+
+**Why:** the Phase 4 productionize step from Decision 5 /
+`RECONCILED_FINISHING_PLAN.md §7.5`. User picked "full switch now":
+Postgres becomes the default, SQLite stays available as the lightweight
+self-host option via `DORA_DB_URL=sqlite:///...`.
+
+**What shipped:**
+- **Driver:** added `psycopg[binary]==3.2.3` to `requirements.txt`
+  (self-contained — no libpq install needed).
+- **Local Postgres:** new `docker-compose.yml` at repo root with a
+  `postgres:16-alpine` service on `localhost:5432` (user/pass/db all
+  `dora`), healthcheck wired, volume `dora_pgdata`. App default config
+  matches it out of the box.
+- **`configuration_manager.py`:** rewrote `get_db_connection_string()`.
+  Resolution order: `DORA_DB_URL` → per-component env vars
+  (`DORA_DB_HOST/_PORT/_NAME/_USER/_PASSWORD`) → default to
+  docker-compose Postgres. Removed `_resolve_db_path` + the `DORA_DB_PATH`
+  env var (pre-release scope discipline — no compat shim;
+  `DORA_DB_URL=sqlite:///...` replaces both).
+- **`startup.py`:** legacy SQLite file-relocation (`migrate_legacy_db`)
+  only runs when the resolved URL starts with `sqlite:///`. PG path
+  skips cleanly.
+- **Portable boolean defaults (the big sweep):**
+  - `table_mappings.py` × 24 — `Boolean, server_default="0"/"1"` →
+    `server_default=false()`/`true()` (imported `false, true` from
+    `sqlalchemy`).
+  - 8 migration files × 12 sites — `sa.text('0')`/`sa.text('1')` →
+    `sa.false()`/`sa.true()`. Renders `0`/`1` on SQLite and
+    `false`/`true` on PG. Existing SQLite DBs unaffected (same DDL).
+- **Raw-SQL fix** (`get_recipes.py:594`): `AND p.is_active = 1` →
+  `AND p.is_active`. PG rejects `boolean = integer`; the bare predicate
+  works on both.
+- **Tests** (`tests/e2e/dora_api/conftest.py`): pin to a SQLite temp
+  file via `os.environ.setdefault("DORA_DB_URL",
+  "sqlite:///data/dora.test.db")` at module top, **before** the
+  `dora_api.app` import (the URL is read at import time). E2e suite
+  stays zero-dependency.
+- **Docs:** `README.md` quickstart now leads with
+  `docker compose up -d postgres`; SQLite fallback documented.
+  `path_migration.py` docstring updated.
+
+**Standards close-gate:**
+- **R-005 (portable data access)** — this *is* the rule's implementation
+  for the boolean-default trap. Added the trap as an explicit violation
+  signal in `ENGINEERING_STANDARDS.md` so future migrations don't
+  reintroduce `sa.text('0')`. Source line credits FU-045.
+- **R-006 (clean migrations)** — followed; edited applied migrations in
+  place (no idempotent guards added), since their previous form rendered
+  the same DDL on SQLite. No new migration generated.
+- **R-007 (scope discipline)** — stayed inside FU-045's frame; didn't
+  audit raw `text()` UUID binds beyond confirming the existing
+  `str()`-in / `_coerce_uuid`-out pattern is already portable.
+- **ADR evaluation:** the "use `sa.false()`/`sa.true()`, never
+  `sa.text('0'/'1')` for Boolean defaults" pattern was promoted into
+  R-005 as a violation signal (not a brand-new R-0NN — it's a portable-
+  data-access specialization).
+
+**Verification:**
+- `py_compile` clean on all touched migration files + core changes.
+- Sanity boot: `DORA_DB_URL=sqlite:///$(pwd)/data/dora.test.db python
+  -c "from dora_api.app import app, db; app.app_context().push();
+  db.drop_all(); db.create_all()"` — clean. Introspected DDL confirms
+  defaults render correctly (`is_admin: 0`, `deals_email_enabled: 1`,
+  `show_recipe_images: 1`).
+- **Not verified on this host:** live Postgres run + Alembic upgrade.
+  Needs the user to `docker compose up -d postgres && flask
+  --app dora_api.app db upgrade` and confirm the full schema applies.
+  Browser smoke after.
+
+**Next up:** unblocked once the live PG run is confirmed. If the user
+wants a CI lane that exercises both engines, spin a new FU.
+
+---
+
+## 2026-06-26 — FU-023 closed (deferred-surface spinners → AppSpinner)
+
+**Why:** A5's loading-indicator unification skipped the deferred surfaces
+(Reports, Data→Export/Print, settings sub-pages). With those surfaces now
+touched by recent work and the settings rebuild long shipped, the leftover
+raw `q-spinner` calls are just drift.
+
+**Migrated to `AppSpinner` (11 files, 17 sites):**
+- Settings sub-pages: `RecipeDietaryTagsSettings`, `StockLocationsSettings`,
+  `StockGroupsSettings`, `UsersAdminSettings`, `ApiAccessSettings`,
+  `AdminSystemAssistantSettings` (all `<q-spinner color="primary"
+  size="48px" />` inside `q-inner-loading`, plus the AdminSystemAssistant
+  `q-spinner-dots` for A5 consistency).
+- Settings components: `VocabListEditor` (48px), `VoicePicker` (14px
+  inline + 16px downloading state).
+- Reports: `ReportsPage` ×6 chart-card loaders (32px).
+- Data → Export/Print: `ExportPrint` ×2 (20px inline with caption).
+- Dora: `PriceHistoryBottomSheet` (28px chart load).
+
+**Kept as-is:**
+- `DoraChat.vue:270` — `q-spinner-dots` typing indicator, intentional per
+  the FU note (typing dots ≠ generic loading spinner).
+
+**Final inventory** (`grep -rn "<q-spinner"` in `web_app/src`): only the
+`<q-spinner>` *inside* `AppSpinner.vue` (which IS the canonical wrap) and
+the one DoraChat dots.
+
+**Standards close-gate:**
+- **R-001** — used the canonical `AppSpinner` wrapper everywhere; no
+  bespoke per-page spinners.
+- **R-002** — `AppSpinner`'s default colour `'primary'` is the theme
+  token; the migration dropped explicit `color="primary"` on the migrated
+  sites (it's the default) and kept theme-tokens-only.
+- **R-003 / R-005** — N/A.
+- **Scope:** stayed inside FU-023's defined target. The FU's secondary
+  suggestion (list-skeletons on big overviews) is explicitly left for
+  the FU-010 holistic look pass — not a new follow-up; that's the
+  designated home for it.
+- **ADR evaluation:** no new recurring rule; "use `AppSpinner` not raw
+  `q-spinner`" is already established as the A5 convention.
+
+**Verification:** `vue-tsc --noEmit` clean.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-018 closed (toast double-emit sweep + bulk toast-storm fix)
+
+**Why:** the B7 self-audit only walked one composable's callers; FU-018
+asked for a wider sweep across every store/composable that toasts.
+
+**Sweep result — no double-emits.** Composables that toast internally:
+`useStockItemActions`, `useShoppingListActions`, `useMealPlanner` (~17
+sites), `useRecipeExport`, `useStockOverviewExport`, `useNetworkStatus`,
+`useOfflineQueue`, `usePwaLifecycle`. Pinia stores: zero internal
+notifies. Walked every caller of every notifying composable — not one
+adds its own success toast after a composable success notify. B7's worry
+doesn't recur.
+
+**Adjacent fix shipped:** `StockOverview.bulkAddToPrimary` and
+`bulkRestock` looped `for…await` over the single-item composable methods,
+so a bulk selection of N items fired N "Added to list." / "Marked
+restocked." toasts. Not the audited double-emit pattern per se, but
+same family.
+- **`useStockItemActions.ts`** — added optional `{ silent?: boolean }`
+  flag to `addToList` and `markRestocked`. When silent, both per-item
+  success and per-item error toasts are suppressed (the bulk caller owns
+  the summary).
+- **`StockOverview.vue`** — both bulk handlers pass `silent: true`, then
+  emit one summary toast ("Added N items to your list.", "Marked N
+  items restocked."). Same `cancelBulk()` flow.
+
+**Standards close-gate:**
+- **R-001/R-002/R-003** — N/A (caller-side composable signature tweak +
+  toast aggregation; no token/state-ownership shifts).
+- **R-007 (scope discipline)** — stayed within FU-018's "sweep + fix
+  what's adjacent"; didn't extend `silent` to `pushExpiry` (no bulk
+  caller) or touch the other composables (no double-emit found).
+- **ADR evaluation:** the "composable notify + optional `silent:` for
+  bulk callers" pattern *may* recur — if `useShoppingListActions`,
+  `useMealPlanner`, etc. ever grow bulk callers that storm, the same
+  fix shape applies. Not yet a rule; promote to an `R-0NN` if it shows
+  up in a third place.
+
+**Verification:** `vue-tsc --noEmit` clean.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-012 closed (FilterBar panel standardised onto sunken well)
+
+**Why:** StockOverview had grown a page-scoped FilterBar panel skin
+(elevated card + 1px inset border + 8px radius) to pair with its bulk
+banner, but RecipesOverview and MyProductsPage rendered the panel bare.
+User wanted the styling copied across and asked for alternatives — chose
+"sunken well" so the panel reads as a recessed tool tray, not another
+card on a card-heavy page.
+
+**What shipped:**
+- **`FilterBar.vue`** — added scoped styles. `.filter-bar__panel` now uses
+  `background: var(--surface-sunken)` + 6px radius + 4px top margin. No
+  border (the `q-slide-transition` border-sliver-at-height-0 trap is
+  moot with no border). Outer `.filter-bar` padding shrunk from `q-py-md`
+  (16px) to 4px so it doesn't double-space against the toolbar above.
+  Inner padding `12px 16px`. All three pages (Stock, Recipes,
+  MyProducts) pick this up automatically.
+- **`StockOverview.vue`** — removed the page-scoped
+  `:deep(.filter-bar__panel)`, `:deep(.filter-bar__panel-inner)`,
+  `:deep(.filter-bar)` and `margin-top` overrides (now lives on the
+  component). Re-tuned `.dora-subbar` (the bulk-select banner) to the
+  same sunken treatment so the two sub-bars on this page still read as
+  siblings.
+
+**Standards close-gate:**
+- **R-001** — styling moved into the right home (the component), not
+  spread across three pages.
+- **R-002** — token-only: `var(--surface-sunken)`, no hex/grey-N.
+- **R-003 / R-005** — N/A (visual-only).
+- **ADR evaluation:** no new recurring decision. The pattern "styling
+  for shared component skins belongs on the component, not duplicated
+  via `:deep` on every consumer page" is already implicit in R-001 +
+  scoped-style discipline; no new rule needed.
+
+**Verification:** `vue-tsc --noEmit` clean. No browser pass on this
+host — folds into the next browser walk.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-011 closed (AuditLogSettings standardisation)
+
+**Why:** user asked whether the settings rebuild had handled FU-011.
+**Outcome:** yes — moved to `DORA_FOLLOWUPS_RESOLVED.md` with rationale.
+The A4 "FilterBar" target no longer exists as a component
+(`web_app/src/components/filters/` only holds `TriStateFilter.vue`), and
+`AuditLogSettings.vue` already rides the standardised settings shell
+(SettingsPageHeader, BaseButton, BaseDialog, settings-page layout, theme
+tokens). The page's server-side Apply/Clear filter UX was always the
+correct shape; the original FU note flagged this as the reason for
+deferral, and it now resolves the FU outright.
+
+**No code change.** Ledger move only.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-006 second-pass q-btn → BaseButton sweep (resumed)
+
+**Why:** previous session was rate-limited mid-sweep after extending
+BaseButton with `danger-icon` + `positive` variants. Resumed the second
+pass to drain the remaining migratable sites.
+
+**What shipped:**
+- **17 sites migrated** to `BaseButton` across 14 files: `AlertRow.vue`
+  (×2), `PageErrorState.vue`, `ScanOverlay.vue` (×2), `stock/StockItemRow.vue`,
+  `RecipeCookMode.vue` (×2), `StocktakeRunner.vue`, `StockOverview.vue`,
+  `StockItemDetailPage.vue`, `settings/AuditLogSettings.vue`,
+  `settings/AboutSettings.vue`, `MealPlansBoardPage.vue`,
+  `ErrorNotFound.vue`, `layouts/MainLayout.vue`. Mostly outline →
+  `secondary`, flat-round → `icon`, and unelevated → default `primary`.
+- **10 sites flagged in place** with a `// FU-006:` inline comment — left
+  as raw `q-btn` because they use a palette tone BaseButton has no variant
+  for (`warning`, `accent`, `grey`, Quasar palette `secondary`) or a
+  dynamic colour binding (`RecipeCard` chef-hat, `ShoppingListDetail`
+  shop-day tone) or `type="a"` (HelpPage release-notes anchor).
+- **No new variants added.** Adding `warning` / `accent` / `grey` would
+  bloat the variant set for one-off uses; the flagged comment is a
+  cheaper signal that those sites want a design call, not a mechanical
+  swap.
+
+**Final raw-`q-btn` count: 49.** Breakdown — 3 wrappers (BaseButton,
+BaseDropdown, BaseSegmented), 17 MyProductsPage (excluded — companion-
+app surface), 14 DoraChat (excluded), 5 q-input #append slots (excluded
+per FU-006), 1 CardComponent (dead/broken file, see spinoff), 9 flagged
+ambiguous sites awaiting a design call.
+
+**Standards close-gate:**
+- **R-001/R-002** — no new abstractions; existing tokens only.
+- **R-003** — no client/server state moves.
+- **R-007 (scope discipline)** — stayed inside FU-006's scoped exclusions
+  (products, DoraChat, q-input appends, dropdowns/toggles). Ambiguities
+  flagged in place rather than coerced to a wrong variant.
+- **ADR evaluation** — no new recurring decision; the "leave raw q-btn +
+  inline `// FU-006:` comment when palette tone is one-off" practice is
+  itself the recurring pattern, but it's documented in the FU-006 entry
+  already; no need to promote.
+
+**Verification:** `vue-tsc --noEmit` clean. No browser pass.
+
+**Follow-ups updated:**
+- FU-006 marked **largely drained** but stays `[OPEN]` — the 9 flagged
+  ambiguous sites are the only remaining migratable work, each carrying
+  a `// FU-006:` inline marker. Resolution: opportunistic design call on
+  palette tones, or a small BaseButton extension if the pattern recurs.
+- New FU spun off for CardComponent.vue (dead/broken — see spawn).
+
+**Next up:** unblocked. The FU-006 close depends on design calls on the
+flagged tones, which is the right kind of "do it when the surface is
+open for other work" — not a sweep.
+
+---
+
 MANUAL ENTRY FROM USER: Work was in progress but abruptly haulted in an unfinished state. See chat log:
 User message: lets resolve FU-005, then FU-006
 

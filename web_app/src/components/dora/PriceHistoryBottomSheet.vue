@@ -21,7 +21,7 @@
     >
         <q-card-section ref="bodyRef">
             <div v-if="loading" class="row justify-center q-pa-lg">
-                <q-spinner size="28px" color="primary" />
+                <AppSpinner size="28px" />
             </div>
 
             <template v-else-if="hasPoints">
@@ -69,6 +69,7 @@
 
 <script lang="ts" setup>
     import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';

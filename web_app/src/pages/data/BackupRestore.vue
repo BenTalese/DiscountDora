@@ -208,6 +208,7 @@
 
             <q-card-actions align="right">
                 <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
+                <!-- FU-006: ambiguous — color="grey"; no BaseButton variant maps to greyscale. Left as raw q-btn for review. -->
                 <q-btn
                     color="grey"
                     :icon="ICONS.done_all"

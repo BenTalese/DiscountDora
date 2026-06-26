@@ -133,9 +133,15 @@ exceptions, which still must be commented) · **Source** (where it was establish
   where SQLite forces a wrinkle (e.g. the UUID/`text()` binding), but keep both
   working.
 - **Violation signal:** raw SQL bypassing the repository layer; an engine-specific
-  feature with no portable fallback; a `tenant_id` added speculatively.
+  feature with no portable fallback; a `tenant_id` added speculatively;
+  `server_default=sa.text('0')` / `sa.text('1')` on Boolean columns (SQLite-only
+  literal, breaks on Postgres) — use `sa.false()` / `sa.true()` instead, which
+  render portably to `0`/`1` on SQLite and `false`/`true` on Postgres; raw-SQL
+  boolean comparisons of the form `WHERE flag = 1` (use the bare column —
+  `WHERE flag` — or `= TRUE`).
 - **Carve-outs:** documented in §7.5 / Decision 5.
-- **Source:** `RECONCILED_FINISHING_PLAN.md` Decision 5 + §7.5; `CLAUDE.md`.
+- **Source:** `RECONCILED_FINISHING_PLAN.md` Decision 5 + §7.5; `CLAUDE.md`; FU-045
+  (Postgres-default switch landed 2026-06-26).
 
 ### R-006 — Clean migrations & explicit dev resets
 - **Rule:** Alembic migrations are clean and forward-only — **no idempotent

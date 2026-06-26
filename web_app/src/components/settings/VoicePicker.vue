@@ -36,7 +36,7 @@
                     :aria-label="`Preview ${voice.label}`"
                     @click.stop="onPreview(voice)"
                 >
-                    <q-spinner v-if="loadingId === voice.id" size="14px" />
+                    <AppSpinner v-if="loadingId === voice.id" size="14px" />
                     <q-icon v-else :name="ICONS.play_arrow" size="16px" />
                     <span>{{ playingId === voice.id ? 'Playing…' : 'Preview' }}</span>
                     <q-tooltip v-if="!piperAvailable">
@@ -61,7 +61,7 @@
 
             <!-- Downloading: spinner -->
             <div v-else-if="voice.status === 'downloading'" class="voice-card__actions voice-card__actions--muted">
-                <q-spinner size="16px" />
+                <AppSpinner size="16px" />
                 <span>Downloading… ({{ sizeMb(voice.size_bytes) }})</span>
             </div>
 
@@ -86,6 +86,7 @@
 <script lang="ts" setup>
     import { onBeforeUnmount, ref } from 'vue';
     import { useQuasar } from 'quasar';
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';

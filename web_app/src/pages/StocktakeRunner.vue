@@ -2,7 +2,7 @@
     <div class="runner-shell">
         <!-- ── Top progress strip ──────────────────────────────────── -->
         <div class="runner-topbar">
-            <q-btn flat round :icon="ICONS.close" color="white" :to="'/stocktake'" />
+            <BaseButton variant="icon" :icon="ICONS.close" color="white" :to="'/stocktake'" />
             <q-linear-progress
                 :value="progress"
                 rounded

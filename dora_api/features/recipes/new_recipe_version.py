@@ -15,6 +15,7 @@ scheduling a meal-plan entry); no version-aware allocation logic.
 """
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -115,6 +116,11 @@ class NewRecipeVersionHandler:
             version_group_id=group_id,
             kcal=source.kcal,
             steps_mode=source.steps_mode,
+            # FU-082 — a new version is a fresh row in the household; stamp
+            # at write time rather than carrying the source's created_at,
+            # so the "Recently added" axis surfaces the version when it
+            # was actually added here.
+            created_at=datetime.now(timezone.utc),
         )
         self.repository.add(new_recipe)
         self.repository.save_changes()

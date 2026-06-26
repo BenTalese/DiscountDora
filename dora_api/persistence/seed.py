@@ -446,6 +446,10 @@ def seed_dev_data():
             version_group_id=None,
             kcal=kw.get("kcal"),
             steps_mode=kw.get("steps_mode", "freeform"),
+            # FU-082 — seed recipes get the same now() stamp the real
+            # create handlers use; the "Recently added" axis sorts them
+            # by name within the same tick.
+            created_at=kw.get("created_at", datetime.now(UTC)),
         )
         repo.add(recipe)
         return recipe

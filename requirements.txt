@@ -30,6 +30,12 @@ Requests==2.31.0
 rich==13.7.0
 SQLAlchemy_Utils==0.41.1
 SQLAlchemy==2.0.25
+# FU-045 — Postgres is the standard datastore for dev + hosted (Decision 5,
+# RECONCILED_FINISHING_PLAN.md §7.5). SQLite is still supported as the
+# lightweight self-host option via `DORA_DB_URL=sqlite:///path/to/dora.db`.
+# psycopg v3 (`psycopg[binary]`) ships a self-contained driver — no system
+# libpq required.
+psycopg[binary]==3.2.3
 typing_extensions==4.9.0
 # zoneinfo named-zone data. The stdlib `zoneinfo` falls back to the OS tz
 # database, which Windows (incl. the bundled desktop build) doesn't ship —

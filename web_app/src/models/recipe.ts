@@ -62,6 +62,10 @@ export type Recipe = {
     instructions: string | null;
     is_favourite: boolean;
     last_made_on: string | null;
+    /** FU-082 — when the recipe was added to this household. Drives the
+     *  cookbook "Recently added" sort axis. Always present on rows from
+     *  the API (backfilled by migration f9d3a7c2b5e8 for legacy rows). */
+    created_at: string;
     nutrition: string | null;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;

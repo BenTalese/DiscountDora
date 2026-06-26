@@ -210,7 +210,7 @@
         </q-list>
 
         <q-inner-loading :showing="loading && sources.length === 0">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </q-inner-loading>
 
         <!-- Create dialog ─────────────────────────────────────────── -->
@@ -314,6 +314,7 @@
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';

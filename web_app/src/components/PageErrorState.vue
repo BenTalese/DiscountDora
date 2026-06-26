@@ -19,10 +19,9 @@
                 label="Reload page"
                 @click="onReload"
             />
-            <q-btn
+            <BaseButton
                 v-if="showDashboard"
-                outline
-                no-caps
+                variant="secondary"
                 :icon="ICONS.home"
                 label="Go to dashboard"
                 to="/"

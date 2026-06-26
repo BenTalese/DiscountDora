@@ -6,9 +6,8 @@
             :icon="ICONS.fact_check"
         >
             <template #actions>
-                <q-btn
-                    outline
-                    no-caps
+                <BaseButton
+                    variant="secondary"
                     :icon="ICONS.file_download"
                     label="Export CSV"
                     :disable="rows.length === 0"

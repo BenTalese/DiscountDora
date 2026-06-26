@@ -26,7 +26,7 @@
             </q-card-section>
             <q-separator />
             <q-card-section v-if="loadingLists" class="row items-center q-gutter-sm">
-                <q-spinner size="20px" />
+                <AppSpinner size="20px" />
                 <div class="text-caption dora-text-muted">Loading lists…</div>
             </q-card-section>
             <q-card-section
@@ -103,7 +103,7 @@
             </q-card-section>
             <q-separator />
             <q-card-section v-if="loadingRecipes" class="row items-center q-gutter-sm">
-                <q-spinner size="20px" />
+                <AppSpinner size="20px" />
                 <div class="text-caption dora-text-muted">Loading recipes…</div>
             </q-card-section>
             <q-card-section
@@ -242,6 +242,7 @@
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';

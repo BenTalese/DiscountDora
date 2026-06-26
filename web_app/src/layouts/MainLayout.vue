@@ -25,12 +25,9 @@
 
                 <AlertsBell v-if="currentUser" class="q-mr-sm" />
 
-                <q-btn
+                <BaseButton
                     v-if="currentUser"
-                    flat
-                    no-caps
-                    round
-                    dense
+                    variant="icon"
                     aria-label="Account menu"
                 >
                     <!-- Settings rebuild Phase 4: profile picture when set,
@@ -77,7 +74,7 @@
                             </q-item>
                         </q-list>
                     </q-menu>
-                </q-btn>
+                </BaseButton>
             </q-toolbar>
         </q-header>
 
@@ -123,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

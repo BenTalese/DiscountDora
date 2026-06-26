@@ -42,12 +42,13 @@
         </q-list>
 
         <q-inner-loading :showing="loading && tree.length === 0">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </q-inner-loading>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';

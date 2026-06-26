@@ -270,6 +270,7 @@
                             <!-- S14: a proper button, not a text link.
                                  Overdue/today fold into the button tone —
                                  one signal instead of button + banner. -->
+                            <!-- FU-006: ambiguous — dynamic color (positive/warning/undefined) with outline; no BaseButton variant covers all tones. Left as raw q-btn for review. -->
                             <q-btn
                                 outline
                                 no-caps
@@ -623,6 +624,7 @@
                                         </div>
                                         <!-- S17: a real outlined button with a
                                              caret so it reads as clickable. -->
+                                        <!-- FU-006: ambiguous — outline with conditional primary/undefined color; left as raw q-btn for review. -->
                                         <q-btn
                                             outline
                                             dense

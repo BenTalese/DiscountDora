@@ -77,9 +77,8 @@
 
             <SettingsRow stacked>
                 <div>
-                    <q-btn
-                        outline
-                        no-caps
+                    <BaseButton
+                        variant="secondary"
                         :icon="ICONS.restart_alt"
                         label="Restart onboarding"
                         :loading="restartingOnboarding"
@@ -98,6 +97,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import PwaInstallPrompt from 'src/components/PwaInstallPrompt.vue';

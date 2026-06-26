@@ -38,20 +38,21 @@
             </q-card-section>
 
             <q-card-section class="text-center q-pt-none">
-                <q-btn
+                <BaseButton
                     class="lost-submit"
                     size="lg"
-                    unelevated
+                    variant="primary"
                     to="/"
                     label="Take me home"
-                    no-caps
                 />
             </q-card-section>
         </q-card>
     </div>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
+</script>
 
 <style scoped>
     /* Mirrors `LoginPage.vue`'s locally-scoped token block. 404 can

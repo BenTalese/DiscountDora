@@ -7,8 +7,10 @@ alone (operators may have intentionally repopulated it). Source files
 move (not copy) so duplicates don't leak.
 
 What it covers:
-  - Legacy `./data/dora.data.db` when the user sets DORA_DB_PATH or
-    DORA_DATA_DIR to a different location — files migrate once.
+  - Legacy `./data/dora.data.db` when the user sets
+    `DORA_DB_URL=sqlite:///<elsewhere>` or `DORA_DATA_DIR` to a
+    different location — files migrate once. Only called when the
+    resolved DB URL is SQLite; Postgres has nothing to relocate.
   - Legacy `./data/uploads/*` → `<DATA_DIR>/uploads/*`.
 """
 import logging
@@ -20,8 +22,9 @@ _Logger = logging.getLogger(__name__)
 
 def migrate_legacy_db(target_db: Path) -> bool:
     """Move a `./data/dora.data.db` from the working dir into the new
-    target location when the operator has pointed DORA_DB_PATH /
-    DORA_DATA_DIR elsewhere. Returns True if a move happened."""
+    target location when the operator has pointed `DORA_DB_URL` (a
+    SQLite URL) or `DORA_DATA_DIR` elsewhere. Returns True if a move
+    happened."""
     legacy = Path.cwd() / "data" / "dora.data.db"
     if not legacy.is_file():
         return False

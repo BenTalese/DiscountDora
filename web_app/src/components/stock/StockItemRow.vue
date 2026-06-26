@@ -73,8 +73,8 @@
                  Replaces both the chip avatar and the old right-side
                  dropdown — one focus action for "what level is this".
             ────────────────────────────────────────────────────────── -->
-            <q-btn
-                flat
+            <BaseButton
+                variant="ghost"
                 dense
                 :class="['stock-row__level-btn', levelButtonClass]"
                 :style="levelButtonStyle"
@@ -107,7 +107,7 @@
                         </q-item>
                     </q-list>
                 </q-menu>
-            </q-btn>
+            </BaseButton>
 
             <!-- ──────────────────────────────────────────────────────
                  Name (emphasised) + main zone (L79 / L81).

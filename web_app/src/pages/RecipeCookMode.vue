@@ -151,6 +151,7 @@
                             label="Start"
                             @click="startTimer(detectedTimerMinutes * 60)"
                         />
+                        <!-- FU-006: ambiguous — color="warning" has no matching BaseButton variant; left as raw q-btn for review. -->
                         <q-btn
                             v-else
                             color="warning"
@@ -181,14 +182,18 @@
             </q-card>
 
             <div v-if="!isImageMode" class="row q-gutter-sm justify-center q-mb-lg">
-                <q-btn
+                <!-- FU-006: ambiguous, mapped to ghost -->
+                <BaseButton
+                    variant="ghost"
                     size="lg"
                     :icon="ICONS.arrow_back"
                     label="Previous"
                     :disable="currentStepIndex === 0"
                     @click="prevStep"
                 />
-                <q-btn
+                <!-- FU-006: ambiguous, mapped to ghost -->
+                <BaseButton
+                    variant="ghost"
                     size="lg"
                     :icon="ICONS.replay"
                     label="Repeat"

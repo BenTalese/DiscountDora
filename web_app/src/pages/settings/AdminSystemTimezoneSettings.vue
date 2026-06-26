@@ -29,6 +29,7 @@
                         @filter="onTimezoneFilter"
                         @update:model-value="onSaveTimezone"
                     />
+                    <!-- FU-006: ambiguous — outline with Quasar palette color="secondary" (not the BaseButton "secondary" variant which is primary outline). Left as raw q-btn for review. -->
                     <q-btn
                         color="secondary"
                         no-caps

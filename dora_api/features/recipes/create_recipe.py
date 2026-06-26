@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
@@ -264,6 +265,9 @@ class CreateRecipeHandler:
             version_group_id = None,
             kcal = request.kcal,
             steps_mode = request.steps_mode if request.steps_mode in ALLOWED_STEPS_MODES else "freeform",
+            # FU-082 — stamp at write time so the cookbook "Recently
+            # added" sort axis has a stable, recipe-owned timestamp.
+            created_at = datetime.now(timezone.utc),
         )
 
         self.repository.add(_NewRecipe)

@@ -98,6 +98,16 @@ cp web_app/.env.example web_app/.env
 
 ### 2 — Backend (Python / Flask)
 
+**Start Postgres first** (the standard datastore — see Decision 5 in `docs/01_charter/RECONCILED_FINISHING_PLAN.md`):
+
+```bash
+docker compose -f compose.dev.yml up -d postgres
+```
+
+> The `-f compose.dev.yml` is deliberate — the dev Postgres lives in its own
+> compose file so it doesn't collide with the production self-host stack in
+> `compose.yml`.
+
 **Windows (PowerShell):**
 ```powershell
 python -m venv .venv
@@ -118,8 +128,10 @@ python -m dora_api.startup
 
 The API listens on **http://localhost:5170**.
 
-> **First run:** `flask db upgrade` creates the SQLite database at `data/dora.data.db`.
+> **First run:** `flask db upgrade` creates the Dora schema in the Postgres instance from `compose.dev.yml` (`postgres://dora:dora@localhost:5432/dora`).
 > If you want a fresh database on every startup (dev only), set `DORA_ALLOW_DESTRUCTIVE=true` in `.env`.
+>
+> **Lightweight self-host on SQLite:** set `DORA_DB_URL=sqlite:///./data/dora.data.db` (or any path) and skip the `docker compose` step. Postgres is the standard target but SQLite is still supported for zero-dependency installs.
 
 ---
 

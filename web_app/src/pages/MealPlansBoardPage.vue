@@ -74,8 +74,8 @@
                     :icon="ICONS.lightbulb" label="Plan step-by-step"
                     @click="builderOpen = true"
                 />
-                <q-btn
-                    no-caps outline class="q-ml-sm"
+                <BaseButton
+                    variant="secondary" class="q-ml-sm"
                     :icon="ICONS.search" label="Recipes"
                     @click="pickerOpen = true"
                 />

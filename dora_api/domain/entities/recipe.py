@@ -71,6 +71,10 @@ class Recipe(BaseEntity):
     # Non-destructive switch: all three payloads can coexist; this field
     # only declares which is the active render path.
     steps_mode: str
+    # FU-082 — when the recipe row was added to this household. Powers the
+    # cookbook "Recently added" sort axis. Stamped by the create handlers
+    # at write time.
+    created_at: datetime
 
     class Fields(BaseEntity.Fields):
         AVAILABLE_MEALS = "available_meals"
@@ -93,6 +97,7 @@ class Recipe(BaseEntity):
         VERSION_GROUP_ID = "version_group_id"
         KCAL = "kcal"
         STEPS_MODE = "steps_mode"
+        CREATED_AT = "created_at"
 
 
 ALLOWED_STEPS_MODES = ("structured", "freeform", "image")

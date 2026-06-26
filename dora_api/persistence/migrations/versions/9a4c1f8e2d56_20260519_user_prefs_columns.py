@@ -22,10 +22,10 @@ depends_on = None
 def upgrade():
     with op.batch_alter_table('User') as batch:
         batch.add_column(sa.Column(
-            'deals_email_enabled', sa.Boolean(), nullable=False, server_default=sa.text('1')
+            'deals_email_enabled', sa.Boolean(), nullable=False, server_default=sa.true()
         ))
         batch.add_column(sa.Column(
-            'deals_email_compact', sa.Boolean(), nullable=False, server_default=sa.text('0')
+            'deals_email_compact', sa.Boolean(), nullable=False, server_default=sa.false()
         ))
         batch.add_column(sa.Column(
             'theme', sa.String(length=20), nullable=False, server_default='system'

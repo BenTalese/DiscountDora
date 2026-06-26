@@ -71,12 +71,13 @@
         </q-list>
 
         <q-inner-loading :showing="loading && groups.length === 0">
-            <q-spinner color="primary" size="48px" />
+            <AppSpinner size="48px" />
         </q-inner-loading>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';

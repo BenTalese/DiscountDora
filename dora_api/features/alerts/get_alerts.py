@@ -389,31 +389,50 @@ class GetAlertsHandler:
         )]
 
     def _shopping_day_alerts(self, today: date) -> List[AlertDto]:
-        """One FYI nudge per not-yet-done list whose planned shop date falls in
-        the next `SHOPPING_DAY_WINDOW_DAYS` (today inclusive). Reads the existing
-        `planned_shop_date` (P6-01) — no schema. Clears when the list is done or
-        the day passes."""
+        """One FYI nudge per not-yet-done list whose planned shop date is
+        within reach. Upcoming window is the next `SHOPPING_DAY_WINDOW_DAYS`
+        (today inclusive); overdue (planned date already passed, list still
+        not done) also alerts so the bell mirrors the in-page banner's
+        "today / tomorrow / overdue" tinting (FU-074). Reads the existing
+        `planned_shop_date` (P6-01) — no schema. Clears when the list flips
+        to done. One alert per list, keyed by `list_alert_key` — the same
+        key is reused whether the list is upcoming or overdue, so user
+        snooze/dismiss decisions persist as the date rolls past."""
         horizon = today + timedelta(days=SHOPPING_DAY_WINDOW_DAYS)
         lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.PLANNED_SHOP_DATE)
-            .between(today, horizon)
+            .lte(horizon)
             & EntityField(ShoppingList, ShoppingList.Fields.STATUS)
             .ne(SHOPPING_LIST_STATUS_DONE)
         )
         out: List[AlertDto] = []
         for lst in lists:
             days = (lst.planned_shop_date - today).days
-            when = (
-                "today" if days == 0
-                else "tomorrow" if days == 1
-                else f"in {days} days"
-            )
+            if days < 0:
+                # Overdue: planned shop day already passed and the list still
+                # isn't done. Bump severity so it sorts above plain upcoming
+                # nudges; tier stays FYI (per kind default), so the bell badge
+                # isn't inflated by what's still a soft nudge.
+                overdue = -days
+                when = "yesterday" if overdue == 1 else f"{overdue} days ago"
+                message = f"Shopping day was {when}: {lst.display_name}"
+                detail = "Mark it done or move the date."
+                severity = SEVERITY_MEDIUM
+            else:
+                when = (
+                    "today" if days == 0
+                    else "tomorrow" if days == 1
+                    else f"in {days} days"
+                )
+                message = f"Shopping day {when}: {lst.display_name}"
+                detail = "Open the list to get ready."
+                severity = SEVERITY_LOW
             out.append(AlertDto(
                 alert_id = list_alert_key(lst.id, "shopping_day"),
                 kind = "shopping_day",
-                severity = SEVERITY_LOW,
-                message = f"Shopping day {when}: {lst.display_name}",
-                detail = "Open the list to get ready.",
+                severity = severity,
+                message = message,
+                detail = detail,
                 target_id = str(lst.id),
                 related_date = lst.planned_shop_date.isoformat(),
             ))

@@ -1,0 +1,39 @@
+# FU-045 — local Postgres for dev. Postgres is the standard datastore per
+# RECONCILED_FINISHING_PLAN.md §7.5 (Decision 5); SQLite stays supported as
+# the lightweight self-host option but is no longer the default.
+#
+# **Why this file is named `compose.dev.yml`, not `docker-compose.yml`:**
+# the production self-host monolith lives in `compose.yml` (auto-picked
+# by `docker compose`). To avoid precedence conflicts and signal intent,
+# the dev-only Postgres service stays in this separate file and you
+# invoke it explicitly:
+#
+#   Bring up:        docker compose -f compose.dev.yml up -d postgres
+#   Tear down:       docker compose -f compose.dev.yml down
+#   Wipe data:       docker compose -f compose.dev.yml down -v
+#   Apply schema:    flask --app dora_api.app db upgrade
+#
+# The app reads `DORA_DB_URL`. With the values below, the default in
+# configuration_manager.py resolves to this instance automatically.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dora-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dora
+      POSTGRES_PASSWORD: dora
+      POSTGRES_DB: dora
+    ports:
+      - "5432:5432"
+    volumes:
+      - dora_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dora -d dora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dora_pgdata:

@@ -10,6 +10,7 @@ counts as "have it".
 Decision (Chunk 2 / Q2): presence only, not quantity-aware — matches the
 existing client behaviour; quantity-awareness is explicitly deferred.
 """
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -64,6 +65,11 @@ def _recipe(*ingredient_args):
         time_of_day=None,
         version_group_id=None,
         kcal=None,
+        # `steps_mode` was missing from the stub (pre-existing rot);
+        # `created_at` is the FU-082 addition. Both are required by
+        # RecipeDto.from_entity so the stub mirrors the real entity.
+        steps_mode="freeform",
+        created_at=datetime.now(timezone.utc),
         ingredients=list(ingredient_args),
     )
 

@@ -26,24 +26,22 @@
             <!-- Action bar. `@click.stop` so tapping an action doesn't also
                  fire the row's open/navigate. -->
             <div class="row q-gutter-xs q-mt-xs items-center wrap" @click.stop>
-                <q-btn
+                <BaseButton
                     v-for="action in inlineActions"
                     :key="action.action"
+                    variant="secondary"
                     size="sm"
                     dense
-                    outline
-                    no-caps
                     :icon="action.icon"
                     :label="action.label"
                     :loading="busy"
                     @click="emit('action', action.action)"
                 />
                 <template v-if="!slim">
-                    <q-btn
+                    <BaseButton
+                        variant="secondary"
                         size="sm"
                         dense
-                        outline
-                        no-caps
                         :icon="ICONS.filter_list"
                         label="View in context"
                         @click="emit('view-in-context')"

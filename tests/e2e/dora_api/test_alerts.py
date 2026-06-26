@@ -364,6 +364,37 @@ def test__alerts__shopping_day_silent_outside_window(api):
         requests.delete(f"{SHOPPING_LISTS}/{list_id}")
 
 
+def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
+    # FU-074 — a not-yet-done list whose planned shop date has already
+    # passed should keep nudging (mirrors the in-page banner's overdue
+    # state). Severity bumps from low → medium so it sorts above plain
+    # upcoming nudges; tier stays FYI (the kind default).
+    today = _household_today()
+    created = requests.post(SHOPPING_LISTS, json={
+        "name": f"shopping-day-overdue-{uuid.uuid4().hex[:8]}",
+        "planned_shop_date": (today - timedelta(days=2)).isoformat(),
+    })
+    assert created.status_code == 201, created.text
+    list_id = created.json()["shopping_list_id"]
+    try:
+        alert = _find_kind(_alerts(), "shopping_day", target_id=list_id)
+        assert alert is not None, "an overdue shop day should still nudge"
+        assert alert["alert_id"] == f"list:{list_id}:shopping_day"
+        assert alert["tier"] == "fyi"
+        assert alert["severity"] == "medium", \
+            "overdue bumps the severity from low to medium so it sorts above upcoming"
+        assert "2 days ago" in alert["message"], alert["message"]
+
+        # Finishing the list clears it (same close condition as the
+        # upcoming case — only status, not the date passing).
+        assert requests.post(f"{SHOPPING_LISTS}/{list_id}/start").status_code == 204
+        assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
+        assert _find_kind(_alerts(), "shopping_day", target_id=list_id) is None, \
+            "an overdue list still clears the nudge once it's marked done"
+    finally:
+        requests.delete(f"{SHOPPING_LISTS}/{list_id}")
+
+
 def test__alert_prefs__exposes_the_new_c94_kinds_as_fyi(api):
     prefs = _prefs()
     for kind in ("no_planned_meals", "shopping_day"):

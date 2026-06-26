@@ -33,7 +33,7 @@ def upgrade():
     with op.batch_alter_table('StockItem') as batch:
         batch.add_column(sa.Column('expiry_date', sa.Date(), nullable=True))
         batch.add_column(sa.Column(
-            'is_flagged', sa.Boolean(), nullable=False, server_default=sa.text('0')
+            'is_flagged', sa.Boolean(), nullable=False, server_default=sa.false()
         ))
 
     op.drop_table('StockLocation')

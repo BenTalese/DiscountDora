@@ -29,7 +29,7 @@ def upgrade():
     op.create_table(
         'AppSetting',
         sa.Column('id', sqlalchemy_utils.types.uuid.UUIDType(), nullable=False),
-        sa.Column('llm_enabled', sa.Boolean(), nullable=False, server_default=sa.text('0')),
+        sa.Column('llm_enabled', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('llm_base_url', sa.String(length=500), nullable=False, server_default=''),
         sa.Column('llm_model', sa.String(length=255), nullable=False, server_default=''),
         sa.PrimaryKeyConstraint('id'),

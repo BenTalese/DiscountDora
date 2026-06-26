@@ -9,9 +9,8 @@
                     Sentient burger robot. Your in-app pantry buddy. Slightly chaotic.
                 </div>
             </div>
-            <q-btn
-                flat
-                no-caps
+            <BaseButton
+                variant="ghost"
                 :icon="ICONS.arrow_back"
                 label="Back to Help"
                 :to="{ path: '/help' }"
@@ -194,6 +193,7 @@
     // page (rather than driven off the intent registry) because the prose
     // wants to be edited freely — a generated table would be drier than the
     // assistant itself, which would be a real shame.
+    import BaseButton from 'src/components/BaseButton.vue';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import type { DoraMood } from 'src/components/dora/doraTypes';
 

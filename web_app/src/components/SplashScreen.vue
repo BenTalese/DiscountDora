@@ -24,10 +24,8 @@
             </p>
         </div>
 
-        <q-btn
+        <BaseButton
             v-if="error"
-            unelevated
-            color="primary"
             label="Try again"
             class="splash-retry"
             @click="emit('retry')"
@@ -36,6 +34,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
     import logoSrc from 'src/assets/logo-mascot.png';
     import offlineSrc from 'src/assets/dora/dorabot-fatal-error-or-offline.png';
     import { onBeforeUnmount, ref, watch } from 'vue';

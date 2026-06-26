@@ -49,9 +49,7 @@
             </q-list>
 
             <q-card-actions v-if="focusedPlan">
-                <q-btn
-                    color="primary"
-                    no-caps
+                <BaseButton
                     class="full-width"
                     :icon="ICONS.shopping_cart"
                     label="Generate shopping list for this week"
@@ -84,6 +82,7 @@
 
 <script lang="ts" setup>
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlan, MealPlanIngredient } from 'src/models/mealPlan';

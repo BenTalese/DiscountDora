@@ -1,9 +1,9 @@
 <template>
     <div class="q-pa-md column q-gutter-md page">
         <div class="row items-center">
-            <q-btn flat dense round :icon="ICONS.chevron_left" @click="goToPlanner">
+            <BaseButton variant="icon" :icon="ICONS.chevron_left" @click="goToPlanner">
                 <q-tooltip>Back to the planner</q-tooltip>
-            </q-btn>
+            </BaseButton>
             <div class="text-h6 q-ml-sm">Meal plan templates</div>
         </div>
 
@@ -27,13 +27,13 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row items-center q-gutter-xs">
-                            <q-btn flat dense round :icon="ICONS.edit" @click="renameTemplate(t)">
+                            <BaseButton variant="icon" :icon="ICONS.edit" @click="renameTemplate(t)">
                                 <q-tooltip>Rename</q-tooltip>
-                            </q-btn>
-                            <q-btn flat dense no-caps label="Clone" @click="cloneTemplate(t)" />
-                            <q-btn flat dense round :icon="ICONS.delete" @click="deleteTemplate(t)">
+                            </BaseButton>
+                            <BaseButton variant="ghost" dense label="Clone" @click="cloneTemplate(t)" />
+                            <BaseButton variant="icon" :icon="ICONS.delete" @click="deleteTemplate(t)">
                                 <q-tooltip>Delete</q-tooltip>
-                            </q-btn>
+                            </BaseButton>
                         </div>
                     </q-item-section>
                 </q-item>
@@ -55,8 +55,8 @@
                     </div>
                 </div>
                 <q-space />
-                <q-btn
-                    no-caps color="primary" :icon="ICONS.add" label="New set"
+                <BaseButton
+                    variant="primary" :icon="ICONS.add" label="New set"
                     :disable="templates.length === 0"
                     @click="openSetEditor(null)"
                 />
@@ -70,12 +70,12 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row items-center q-gutter-xs">
-                            <q-btn flat dense round :icon="ICONS.edit" @click="openSetEditor(s.meal_plan_template_set_id)">
+                            <BaseButton variant="icon" :icon="ICONS.edit" @click="openSetEditor(s.meal_plan_template_set_id)">
                                 <q-tooltip>Edit</q-tooltip>
-                            </q-btn>
-                            <q-btn flat dense round :icon="ICONS.delete" @click="deleteSet(s)">
+                            </BaseButton>
+                            <BaseButton variant="icon" :icon="ICONS.delete" @click="deleteSet(s)">
                                 <q-tooltip>Delete</q-tooltip>
-                            </q-btn>
+                            </BaseButton>
                         </div>
                     </q-item-section>
                 </q-item>
@@ -104,9 +104,9 @@
                         </q-item-section>
                         <q-item-section side>
                             <div class="row items-center no-wrap">
-                                <q-btn flat dense round size="sm" :icon="ICONS.arrow_upward" :disable="idx === 0" @click="moveItem(idx, -1)" />
-                                <q-btn flat dense round size="sm" :icon="ICONS.arrow_downward" :disable="idx === setTemplateIds.length - 1" @click="moveItem(idx, 1)" />
-                                <q-btn flat dense round size="sm" :icon="ICONS.close" @click="removeItem(idx)" />
+                                <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_upward" :disable="idx === 0" @click="moveItem(idx, -1)" />
+                                <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_downward" :disable="idx === setTemplateIds.length - 1" @click="moveItem(idx, 1)" />
+                                <BaseButton variant="icon" size="sm" :icon="ICONS.close" @click="removeItem(idx)" />
                             </div>
                         </q-item-section>
                     </q-item>
@@ -125,9 +125,9 @@
                 />
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary" no-caps label="Save set"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary" label="Save set"
                     :loading="savingSet"
                     :disable="!setName.trim() || setTemplateIds.length === 0"
                     @click="saveSet"
@@ -139,6 +139,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

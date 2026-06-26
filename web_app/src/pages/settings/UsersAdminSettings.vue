@@ -6,16 +6,14 @@
             :icon="ICONS.group"
         >
             <template #actions>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.refresh"
                     :loading="loading"
                     @click="loadUsers"
                 >
                     <q-tooltip>Refresh user list</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </template>
         </SettingsPageHeader>
 
@@ -85,18 +83,16 @@
                             :disable="togglingId === user.user_id"
                             @update:model-value="onToggleDeals(user, $event)"
                         />
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             :icon="ICONS.edit"
                             label="Edit"
                             @click="onEdit(user)"
                         />
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             :icon="ICONS.lock_reset"
                             label="Reset pwd"
                             :loading="resettingId === user.user_id"
@@ -137,9 +133,7 @@
                 </q-card-section>
                 <template #actions>
                     <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <q-btn
-                        color="primary"
-                        no-caps
+                    <BaseButton
                         label="Save"
                         :loading="savingEdit"
                         :disable="!editingUsername.trim()"

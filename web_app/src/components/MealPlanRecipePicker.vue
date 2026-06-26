@@ -18,7 +18,7 @@
                     {{ formatDate(focusedTarget.dayIso) }} — pick a recipe.
                 </div>
                 <template #action>
-                    <q-btn flat dense no-caps label="Cancel" @click="emit('cancelTarget')" />
+                    <BaseButton variant="ghost" dense label="Cancel" @click="emit('cancelTarget')" />
                 </template>
             </q-banner>
         </q-card-section>
@@ -61,29 +61,32 @@
                         </q-item-section>
                         <q-item-section v-if="batchEnabled && !isMultiSelect" side>
                             <div class="row items-center no-wrap">
-                                <q-btn
-                                    dense round flat size="sm"
+                                <BaseButton
+                                    variant="icon"
+                                    size="sm"
                                     :icon="ICONS.remove"
                                     :disable="recipe.available_meals <= 0"
                                     @click="emit('paletteMealAdjust', recipe.recipe_id, -1)"
                                 >
                                     <q-tooltip>One fewer cooked</q-tooltip>
-                                </q-btn>
+                                </BaseButton>
                                 <span class="recipe-row__pool">{{ recipe.available_meals }}</span>
-                                <q-btn
-                                    dense round flat size="sm"
+                                <BaseButton
+                                    variant="icon"
+                                    size="sm"
                                     :icon="ICONS.add"
                                     @click="emit('paletteMealAdjust', recipe.recipe_id, 1)"
                                 >
                                     <q-tooltip>One more cooked</q-tooltip>
-                                </q-btn>
-                                <q-btn
-                                    dense round flat size="sm"
+                                </BaseButton>
+                                <BaseButton
+                                    variant="icon"
+                                    size="sm"
                                     :icon="ICONS.restaurant"
                                     @click="openPaletteLogCook(recipe.recipe_id)"
                                 >
                                     <q-tooltip>Log a cook…</q-tooltip>
-                                </q-btn>
+                                </BaseButton>
                             </div>
                         </q-item-section>
                     </q-item>
@@ -116,10 +119,9 @@
                 />
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary"
-                    no-caps
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
                     label="Log"
                     :loading="logging"
                     :disable="!(logCookCount > 0)"
@@ -132,6 +134,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';
     import type { Recipe } from 'src/models/recipe';

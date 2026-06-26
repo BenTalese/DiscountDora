@@ -176,7 +176,7 @@
                         @update:model-value="onPickExpiryDate"
                     >
                         <div class="row items-center justify-end q-gutter-sm">
-                            <q-btn flat no-caps label="Cancel" v-close-popup />
+                            <BaseButton variant="ghost" label="Cancel" v-close-popup />
                         </div>
                     </q-date>
                 </q-popup-proxy>
@@ -269,6 +269,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';

@@ -150,10 +150,9 @@
                                                  trigger and the menu rows
                                                  render the colour the same
                                                  way. -->
-                                            <q-btn-dropdown
+                                            <BaseDropdown
                                                 flat
                                                 dense
-                                                no-caps
                                                 class="dora-level-picker"
                                             >
                                                 <template #label>
@@ -178,7 +177,7 @@
                                                         <q-item-section>{{ level.name }}</q-item-section>
                                                     </q-item>
                                                 </q-list>
-                                            </q-btn-dropdown>
+                                            </BaseDropdown>
                                             <q-space />
                                             <span class="dora-text-secondary text-caption">
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
@@ -260,28 +259,25 @@
                                                 {{ detail.expiry_date || '—' }}
                                             </span>
                                             <q-space />
-                                            <q-btn flat dense no-caps size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
-                                            <q-btn flat dense no-caps size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
-                                            <q-btn flat dense no-caps size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
+                                            <BaseButton variant="ghost" dense size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
+                                            <BaseButton variant="ghost" dense size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
+                                            <BaseButton variant="ghost" dense size="sm" label="+14d" :disable="busy" @click="shiftExpiry(14)" />
                                             <!-- Feedback 2026-06-18: the calendar-only icon
                                                  button picks up the "Set" label that used to
                                                  live in the top toolbar. -->
-                                            <q-btn flat dense no-caps size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
+                                            <BaseButton variant="ghost" dense size="sm" :icon="ICONS.event" label="Set" @click="expiryDialogOpen = true">
                                                 <q-tooltip>Pick a date</q-tooltip>
-                                            </q-btn>
-                                            <q-btn
+                                            </BaseButton>
+                                            <BaseButton
                                                 v-if="detail.expiry_date"
-                                                flat
-                                                dense
-                                                round
+                                                variant="danger-icon"
                                                 size="sm"
                                                 :icon="ICONS.close"
-                                                color="negative"
                                                 :disable="busy"
                                                 @click="clearExpiry"
                                             >
                                                 <q-tooltip>Clear expiry</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </div>
                                     </q-item-section>
                                 </q-item>
@@ -434,22 +430,22 @@
                                     </q-item-section>
                                     <q-item-section side>
                                         <div class="row items-center no-wrap">
-                                            <q-btn
-                                                flat dense round
+                                            <BaseButton
+                                                variant="icon"
                                                 :icon="ICONS.edit"
                                                 :disable="busy"
                                                 @click="startBuyRename(pb)"
                                             >
                                                 <q-tooltip>Rename</q-tooltip>
-                                            </q-btn>
-                                            <q-btn
-                                                flat dense round
+                                            </BaseButton>
+                                            <BaseButton
+                                                variant="icon"
                                                 :icon="ICONS.delete_outline"
                                                 :disable="busy"
                                                 @click="deleteBuy(pb)"
                                             >
                                                 <q-tooltip>Remove</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </div>
                                     </q-item-section>
                                 </q-item>
@@ -464,10 +460,8 @@
                                     placeholder="Add a preferred buy"
                                     @keydown.enter.prevent="addBuy"
                                 />
-                                <q-btn
-                                    unelevated
-                                    color="primary"
-                                    no-caps
+                                <BaseButton
+                                    variant="primary"
                                     :icon="ICONS.add"
                                     label="Add"
                                     :disable="!newBuyLabel.trim() || busy"
@@ -513,14 +507,14 @@
                                             </q-item-label>
                                         </q-item-section>
                                         <q-item-section side>
-                                            <q-btn
-                                                flat dense round
+                                            <BaseButton
+                                                variant="icon"
                                                 :icon="ICONS.delete_outline"
                                                 :disable="busy"
                                                 @click="deleteObservation(obs)"
                                             >
                                                 <q-tooltip>Remove</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </q-item-section>
                                     </q-item>
                                 </q-list>
@@ -631,28 +625,24 @@
 
                                 <q-separator />
                                 <q-card-actions align="right">
-                                    <q-btn
-                                        flat
+                                    <BaseButton
+                                        variant="ghost"
                                         dense
-                                        no-caps
                                         :icon="ICONS.add_shopping_cart"
                                         label="Add to list"
-                                        color="primary"
                                         :loading="busy"
                                         @click="onAddProductToList(prod.product_id)"
                                     />
-                                    <q-btn
+                                    <BaseButton
                                         v-if="prod.web_url"
-                                        flat
-                                        dense
-                                        round
+                                        variant="icon"
                                         :icon="ICONS.open_in_new"
                                         :href="prod.web_url"
                                         target="_blank"
                                         rel="noopener"
                                     >
                                         <q-tooltip>Open on {{ prod.store_name }}</q-tooltip>
-                                    </q-btn>
+                                    </BaseButton>
                                     <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onUnlink(prod.product_id)">
                                         <q-tooltip>Unlink</q-tooltip>
                                     </BaseButton>
@@ -707,7 +697,7 @@
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Substitutes</div>
                         <q-space />
-                        <q-btn color="primary" dense no-caps :icon="ICONS.add" label="Add substitute" @click="openSubstitutePicker" />
+                        <BaseButton variant="primary" dense :icon="ICONS.add" label="Add substitute" @click="openSubstitutePicker" />
                     </div>
 
                     <div v-if="detail.substitutes.length === 0" class="dora-text-muted text-caption q-pa-md">
@@ -826,8 +816,8 @@
                 </q-card-section>
                 <template #actions>
                     <BaseButton variant="danger-ghost" label="Clear" @click="onSetExpiry(null)" />
-                    <q-btn flat no-caps label="Cancel" v-close-popup />
-                    <q-btn color="primary" no-caps label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
+                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                    <BaseButton variant="primary" label="Save" :loading="busy" @click="onSetExpiry(expiryDraft)" />
                 </template>
         </BaseDialog>
 
@@ -859,6 +849,7 @@
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseDropdown from 'src/components/BaseDropdown.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';

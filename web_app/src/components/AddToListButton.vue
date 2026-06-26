@@ -22,11 +22,10 @@
          C-7 Chunk 3 — anchored on `productId` rather than `stockItemId`;
          used on the My Products row so unlinked products can be added
          to a draft list as their own product-only line. -->
-    <q-btn
+    <BaseButton
         v-if="variant === 'inline-product'"
-        flat
+        variant="ghost"
         dense
-        no-caps
         size="sm"
         :icon="ICONS.add_shopping_cart"
         :label="label ?? 'Add as product'"
@@ -35,16 +34,15 @@
         @click.stop="onInlineProductClick"
     >
         <q-tooltip>Add a product-only line to a draft list</q-tooltip>
-    </q-btn>
+    </BaseButton>
 
     <!-- ── Bulk variant ─────────────────────────────────────────────────
          Resolves the target ONCE for the whole batch via the existing
          pick flow (sessionStorage-remembered), adds everything, surfaces
          one summary toast. -->
-    <q-btn
+    <BaseButton
         v-else-if="variant === 'bulk'"
-        flat
-        no-caps
+        variant="ghost"
         :icon="ICONS.add_shopping_cart"
         :label="bulkLabel"
         :loading="busy"

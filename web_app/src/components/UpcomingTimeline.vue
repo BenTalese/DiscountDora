@@ -9,7 +9,7 @@
                     and planned meals.
                 </div>
             </div>
-            <q-btn flat round dense :icon="ICONS.refresh" :loading="loading" @click="refresh" />
+            <BaseButton variant="icon" :icon="ICONS.refresh" :loading="loading" @click="refresh" />
         </q-card-section>
 
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-ma-md" dense rounded>
@@ -125,6 +125,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { mondayOf, shiftDays } from 'src/helpers/weekDates';
     import AlertApiService from 'src/services/api/alertApiService';

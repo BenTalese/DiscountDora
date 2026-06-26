@@ -8,15 +8,13 @@
                     history, and tracked store prices.
                 </p>
             </div>
-            <q-btn-toggle
+            <BaseSegmented
                 v-model="range"
                 :options="RANGE_OPTIONS"
-                no-caps
                 rounded
                 dense
                 color="grey"
                 text-color="white"
-                toggle-color="primary"
                 toggle-text-color="white"
                 @update:model-value="loadAll"
             />
@@ -109,11 +107,10 @@
                 <header class="report-card-head">
                     <q-icon :name="ICONS.warning_amber" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">You keep running out of these</h3>
-                    <q-btn
+                    <BaseButton
                         v-if="(keepsOut?.rows.length ?? 0) > 0"
-                        flat
+                        variant="ghost"
                         dense
-                        no-caps
                         size="sm"
                         :icon="ICONS.bookmark"
                         label="Mark all essential"
@@ -211,6 +208,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import { LineChart, PieChart } from 'echarts/charts';
     import {
         GridComponent,

@@ -34,9 +34,8 @@
                         label="Confirm new password"
                         autocomplete="new-password"
                     />
-                    <q-btn
+                    <BaseButton
                         type="submit"
-                        color="primary"
                         size="lg"
                         class="full-width"
                         :loading="submitting"
@@ -55,10 +54,8 @@
                 </q-banner>
             </q-card-section>
             <q-card-actions align="center">
-                <q-btn
+                <BaseButton
                     v-if="done"
-                    color="primary"
-                    no-caps
                     label="Continue to sign in"
                     to="/login"
                 />

@@ -2,10 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader :title="title" :description="rolledDescription">
             <template #actions>
-                <q-btn
-                    color="primary"
-                    no-caps
-                    unelevated
+                <BaseButton
                     :icon="ICONS.add"
                     :label="`New ${noun}`"
                     :loading="busy"
@@ -39,33 +36,29 @@
                 <q-item-section side>
                     <div class="row q-gutter-xs items-center">
                         <template v-if="reorderable">
-                            <q-btn
-                                flat
-                                dense
-                                round
+                            <BaseButton
+                                variant="icon"
                                 :icon="ICONS.arrow_upward"
                                 :disable="index === 0"
                                 @click="emit('reorder', item.id, 'up')"
                             >
                                 <q-tooltip>Move up</q-tooltip>
-                            </q-btn>
-                            <q-btn
-                                flat
-                                dense
-                                round
+                            </BaseButton>
+                            <BaseButton
+                                variant="icon"
                                 :icon="ICONS.arrow_downward"
                                 :disable="index === items.length - 1"
                                 @click="emit('reorder', item.id, 'down')"
                             >
                                 <q-tooltip>Move down</q-tooltip>
-                            </q-btn>
+                            </BaseButton>
                         </template>
-                        <q-btn flat dense round :icon="ICONS.edit" @click="startRename(item)">
+                        <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(item)">
                             <q-tooltip>Rename</q-tooltip>
-                        </q-btn>
-                        <q-btn flat dense round :icon="ICONS.delete_outline" @click="onDelete(item)">
+                        </BaseButton>
+                        <BaseButton variant="icon" :icon="ICONS.delete_outline" @click="onDelete(item)">
                             <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                     </div>
                 </q-item-section>
             </q-item>
@@ -83,6 +76,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { computed, ref } from 'vue';

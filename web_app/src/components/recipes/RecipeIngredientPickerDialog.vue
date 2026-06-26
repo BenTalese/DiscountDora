@@ -26,18 +26,16 @@
                     {{ checkedCount }} of {{ pickableCount }} selected
                 </div>
                 <div class="row q-gutter-xs">
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         size="sm"
                         label="Select all"
                         @click="selectAll"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         size="sm"
                         label="Select missing"
                         @click="selectMissing"
@@ -116,11 +114,8 @@
         </q-card-section>
 
         <template #actions>
-            <q-btn flat no-caps label="Cancel" v-close-popup />
-            <q-btn
-                unelevated
-                color="primary"
-                no-caps
+            <BaseButton variant="ghost" label="Cancel" v-close-popup />
+            <BaseButton
                 label="Add"
                 :loading="busy"
                 :disable="checkedCount === 0 || !targetListId"
@@ -131,6 +126,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import type { Recipe } from 'src/models/recipe';

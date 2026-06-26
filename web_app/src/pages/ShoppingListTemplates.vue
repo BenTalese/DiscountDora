@@ -1,7 +1,7 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <q-btn flat round dense :icon="ICONS.arrow_back" @click="goBack" />
+            <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <div class="q-ml-sm col text-caption dora-text-muted">
                 Saved list shapes you can drop into a new shop in one click.
                 {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
@@ -59,7 +59,7 @@
                                 · updated {{ formatDate(template.updated_at) }}
                             </div>
                         </div>
-                        <q-btn flat round dense :icon="ICONS.more_vert">
+                        <BaseButton variant="icon" :icon="ICONS.more_vert">
                             <q-menu transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
                                     <q-item
@@ -110,7 +110,7 @@
                                     </q-item>
                                 </q-list>
                             </q-menu>
-                        </q-btn>
+                        </BaseButton>
                     </q-card-section>
                 </q-card>
             </div>
@@ -159,10 +159,8 @@
                             </q-item-section>
                             <q-item-section side style="min-width: 130px">
                                 <div class="row items-center q-gutter-xs no-wrap">
-                                    <q-btn
-                                        flat
-                                        round
-                                        dense
+                                    <BaseButton
+                                        variant="icon"
                                         size="sm"
                                         :icon="ICONS.remove"
                                         :disable="(line.quantity ?? 0) <= 0"
@@ -182,10 +180,8 @@
                                             ($event.target as HTMLInputElement).blur()
                                         "
                                     />
-                                    <q-btn
-                                        flat
-                                        round
-                                        dense
+                                    <BaseButton
+                                        variant="icon"
                                         size="sm"
                                         :icon="ICONS.add"
                                         @click="adjustLineQuantity(line, 1)"
@@ -193,10 +189,8 @@
                                 </div>
                             </q-item-section>
                             <q-item-section side>
-                                <q-btn
-                                    flat
-                                    round
-                                    dense
+                                <BaseButton
+                                    variant="icon"
                                     :icon="ICONS.delete_outline"
                                     @click="onRemoveLine(line.line_id)"
                                 />
@@ -211,7 +205,7 @@
                 </q-card-section>
 
                 <template #actions>
-                    <q-btn flat no-caps label="Done" v-close-popup />
+                    <BaseButton variant="ghost" label="Done" v-close-popup />
                 </template>
         </BaseDialog>
     </q-page>

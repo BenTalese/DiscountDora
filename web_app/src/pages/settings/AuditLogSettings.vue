@@ -104,18 +104,15 @@
                 />
             </div>
             <div class="row q-mt-sm q-gutter-sm">
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.search"
                     label="Apply filters"
                     :loading="loading"
                     @click="reload(1)"
                 />
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     label="Clear"
                     @click="clearFilters"
                 />
@@ -162,24 +159,22 @@
         </q-table>
 
         <div class="row items-center q-gutter-sm q-mt-md">
-            <q-btn
-                flat
+            <BaseButton
+                variant="ghost"
                 dense
                 :icon="ICONS.chevron_left"
                 label="Previous"
-                no-caps
                 :disable="page <= 1 || loading"
                 @click="reload(page - 1)"
             />
             <div class="text-caption dora-text-muted">
                 Page {{ page }} of {{ pageCount }} ({{ total.toLocaleString() }} event(s))
             </div>
-            <q-btn
-                flat
+            <BaseButton
+                variant="ghost"
                 dense
                 icon-right="chevron_right"
                 label="Next"
-                no-caps
                 :disable="page >= pageCount || loading"
                 @click="reload(page + 1)"
             />
@@ -235,11 +230,9 @@
                     <pre class="audit-payload">{{ formatPayload(detail.payload) }}</pre>
                 </q-card-section>
                 <template #actions>
-                    <q-btn
+                    <BaseButton
                         v-if="detail?.request_id"
-                        flat
-                        no-caps
-                        color="primary"
+                        variant="ghost"
                         :icon="ICONS.link"
                         label="Find related"
                         @click="findRelated(detail.request_id)"

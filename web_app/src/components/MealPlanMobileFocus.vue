@@ -2,13 +2,13 @@
     <div class="mobile-focus">
         <!-- Week nav -->
         <div class="mobile-focus__weeknav">
-            <q-btn flat round dense :icon="ICONS.arrow_back" @click="goPrevWeek">
+            <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goPrevWeek">
                 <q-tooltip>Previous week</q-tooltip>
-            </q-btn>
+            </BaseButton>
             <div class="mobile-focus__weeknav-label">{{ weekRangeLabel }}</div>
-            <q-btn flat round dense :icon="ICONS.arrow_forward" @click="goNextWeek">
+            <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
                 <q-tooltip>Next week</q-tooltip>
-            </q-btn>
+            </BaseButton>
         </div>
 
         <!-- Day strip — 7 day buttons across the top. Today is highlighted;
@@ -103,10 +103,9 @@
                         :need-to-buy-count="needToBuyCount"
                         :cook-by-label="cookByLabel"
                     />
-                    <q-btn
+                    <BaseButton
                         v-if="needToBuyCount > 0"
-                        no-caps
-                        color="primary"
+                        variant="primary"
                         class="full-width q-mt-sm"
                         :icon="ICONS.shopping_cart"
                         label="Generate shopping list"
@@ -129,7 +128,7 @@
                 <q-card-section class="row items-center q-py-sm">
                     <div class="text-subtitle1">Which slot?</div>
                     <q-space />
-                    <q-btn flat round dense :icon="ICONS.close" @click="slotSheetOpen = false" />
+                    <BaseButton variant="icon" :icon="ICONS.close" @click="slotSheetOpen = false" />
                 </q-card-section>
                 <q-separator />
                 <q-list separator>
@@ -148,6 +147,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import { ICONS } from 'src/style/icons';

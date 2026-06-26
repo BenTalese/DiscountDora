@@ -12,9 +12,8 @@
                 <q-toolbar-title class="welcome-title">
                     Dashy Dora
                 </q-toolbar-title>
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     dense
                     :icon="ICONS.logout"
                     label="Sign out"
@@ -36,6 +35,7 @@
 
 <script setup lang="ts">
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import OfflineBanner from 'src/components/OfflineBanner.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useAuthStore } from 'src/stores/authStore';

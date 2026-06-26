@@ -77,10 +77,8 @@
         <q-space />
         <q-separator />
         <q-card-actions class="row items-center no-wrap q-px-sm">
-            <q-btn
-                flat
-                round
-                dense
+            <BaseButton
+                variant="icon"
                 :icon="recipe.is_favourite ? ICONS.favorite : ICONS.favorite_border"
                 :color="recipe.is_favourite ? 'red' : undefined"
                 @click.stop="emit('toggle-favourite', recipe.recipe_id)"
@@ -88,7 +86,7 @@
                 <q-tooltip>
                     {{ recipe.is_favourite ? 'Remove from favourites' : 'Mark favourite' }}
                 </q-tooltip>
-            </q-btn>
+            </BaseButton>
             <q-btn
                 unelevated
                 round
@@ -102,10 +100,8 @@
                 </q-tooltip>
             </q-btn>
             <q-space />
-            <q-btn
-                flat
-                round
-                dense
+            <BaseButton
+                variant="icon"
                 :icon="cookable ? ICONS.add_shopping_cart : ICONS.remove_shopping_cart"
                 :color="cookable ? undefined : 'warning'"
                 :disable="recipe.ingredients.length === 0"
@@ -116,12 +112,13 @@
                         ? 'Add ingredients to a list'
                         : `Add ${missingIds.length} missing to a list` }}
                 </q-tooltip>
-            </q-btn>
+            </BaseButton>
         </q-card-actions>
     </q-card>
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';

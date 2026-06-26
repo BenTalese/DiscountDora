@@ -20,7 +20,15 @@
 <script setup lang="ts">
     import { computed } from 'vue';
 
-    type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'icon';
+    type Variant =
+        | 'primary'
+        | 'secondary'
+        | 'ghost'
+        | 'danger'
+        | 'danger-ghost'
+        | 'icon'
+        | 'danger-icon'
+        | 'positive';
 
     const props = withDefaults(
         defineProps<{
@@ -68,6 +76,10 @@
                 return { flat: true, color: 'negative' };
             case 'icon':
                 return { flat: true, round: true, dense: true };
+            case 'danger-icon':
+                return { flat: true, round: true, dense: true, color: 'negative' };
+            case 'positive':
+                return { unelevated: true, color: 'positive' };
             default:
                 return { unelevated: true, color: 'primary' };
         }
@@ -85,7 +97,8 @@
             box-shadow var(--motion-normal, 200ms) ease,
             background-color var(--motion-normal, 200ms) ease;
     }
-    .dora-btn--icon {
+    .dora-btn--icon,
+    .dora-btn--danger-icon {
         min-height: 36px;
         min-width: 36px;
         border-radius: var(--radius-full);

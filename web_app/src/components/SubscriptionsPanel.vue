@@ -12,7 +12,7 @@
                     <router-link to="/price-history">price-history explorer</router-link>.
                 </div>
             </div>
-            <q-btn flat round dense :icon="ICONS.refresh" :loading="loading" @click="refresh" />
+            <BaseButton variant="icon" :icon="ICONS.refresh" :loading="loading" @click="refresh" />
         </q-card-section>
 
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-ma-md" dense rounded>
@@ -40,21 +40,18 @@
                         </q-item-label>
                     </q-item-section>
                     <q-item-section side class="row items-center no-wrap q-gutter-x-xs">
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             size="sm"
                             :icon="ICONS.open_in_new"
                             label="View"
                             @click="openExplorer(alert)"
                         />
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="danger-ghost"
                             dense
-                            no-caps
                             size="sm"
-                            color="negative"
                             :icon="ICONS.delete"
                             label="Remove"
                             :loading="removing === alert.price_alert_id"
@@ -80,6 +77,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { onMounted, ref } from 'vue';

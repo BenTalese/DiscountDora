@@ -13,10 +13,8 @@
             <code>{{ correlationId }}</code>
         </div>
         <div class="q-mt-lg row q-gutter-sm justify-center wrap">
-            <q-btn
+            <BaseButton
                 v-if="showReload"
-                color="primary"
-                no-caps
                 :icon="ICONS.refresh"
                 label="Reload page"
                 @click="onReload"
@@ -40,6 +38,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
 

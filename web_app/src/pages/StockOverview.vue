@@ -228,57 +228,51 @@
                     <q-icon :name="ICONS.checklist" />
                     <span class="text-weight-medium">{{ bulkSelection.size }} selected</span>
                     <q-space />
-                    <q-btn flat dense no-caps label="Select visible" @click="selectVisible" />
-                    <q-btn
-                        flat
+                    <BaseButton variant="ghost" dense label="Select visible" @click="selectVisible" />
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         label="Deselect all"
                         :disable="bulkSelection.size === 0"
                         @click="deselectAll"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         :icon="ICONS.add_shopping_cart"
                         label="Add to list…"
                         :loading="bulkBusy"
                         :disable="bulkSelection.size === 0"
                         @click="bulkAddToListPrompt"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         :icon="ICONS.remove_shopping_cart"
                         label="Remove from list…"
                         :loading="bulkBusy"
                         :disable="bulkSelection.size === 0"
                         @click="bulkRemoveFromListPrompt"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         label="Move location"
                         :disable="bulkSelection.size === 0"
                         @click="openMoveDialog"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
-                        no-caps
                         label="Restock"
                         :loading="bulkBusy"
                         :disable="bulkSelection.size === 0"
                         @click="bulkRestock"
                     />
-                    <q-btn
+                    <BaseButton
                         v-if="scanningEnabled"
-                        flat
+                        variant="ghost"
                         dense
-                        no-caps
                         icon="qr_code_2"
                         label="Print QRs"
                         :disable="bulkSelection.size === 0"
@@ -369,18 +363,14 @@
                             </div>
                             <div class="q-gutter-sm">
                                 <BaseButton variant="primary" :icon="ICONS.add" label="New item" @click="onCreateClick" />
-                                <q-btn
-                                    outline
-                                    color="primary"
-                                    no-caps
+                                <BaseButton
+                                    variant="secondary"
                                     :icon="ICONS.menu_book"
                                     label="Create from a recipe's ingredients"
                                     @click="goToRecipes"
                                 />
-                                <q-btn
-                                    outline
-                                    color="primary"
-                                    no-caps
+                                <BaseButton
+                                    variant="secondary"
                                     :icon="ICONS.shopping_cart"
                                     label="Import from a shopping list"
                                     @click="goToLists"
@@ -389,7 +379,7 @@
                         </template>
                         <template v-else>
                             No items match the current filters.
-                            <q-btn flat dense no-caps label="Clear" @click="filters.clearFilters" />
+                            <BaseButton variant="ghost" dense label="Clear" @click="filters.clearFilters" />
                         </template>
                     </q-banner>
                 </div>

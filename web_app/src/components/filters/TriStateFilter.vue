@@ -20,11 +20,10 @@
         now a thin wrapper around this one (kept for API stability at
         call sites; new uses should consume `TriStateFilter` directly).
     -->
-    <q-btn-dropdown
+    <BaseDropdown
         :label="buttonLabel"
         :icon="ICONS.tune"
         outline
-        no-caps
         dense
         :color="activeCount > 0 ? 'primary' : undefined"
     >
@@ -53,11 +52,10 @@
                 class="tri-state-filter__sort row items-center q-px-sm q-py-xs q-gutter-sm"
             >
                 <span class="text-caption dora-text-muted">Sort by</span>
-                <q-btn-toggle
+                <BaseSegmented
                     v-model="activeSort"
                     :options="sortToggleOptions"
                     flat
-                    no-caps
                     class="tri-state-filter__sort-toggle"
                 />
             </div>
@@ -112,12 +110,14 @@
                 </q-item>
             </q-list>
         </div>
-    </q-btn-dropdown>
+    </BaseDropdown>
 </template>
 
 <script setup lang="ts">
     import { computed, ref } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
 
     import type {
         TriStateOption,

@@ -6,10 +6,7 @@
             :icon="ICONS.place"
         >
             <template #actions>
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                <BaseButton
                     :icon="ICONS.add"
                     label="New zone"
                     @click="onAddChild(null, 'zone')"
@@ -57,6 +54,7 @@
     import type { LocationKind, LocationNode } from 'src/models/location';
     import { useLocationStore } from 'src/stores/locationStore';
     import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import BaseButton from 'src/components/BaseButton.vue';
     import LocationRow from 'src/components/settings/LocationRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 

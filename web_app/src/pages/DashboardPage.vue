@@ -19,7 +19,7 @@
                      `onMounted(loadAll)` already refreshes on every navigation
                      to the dashboard, so the button earned nothing. `loadAll`
                      itself stays (alert actions re-fetch through it). -->
-                <q-btn flat dense no-caps :icon="ICONS.tune" label="Cards">
+                <BaseButton variant="ghost" dense :icon="ICONS.tune" label="Cards">
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 300px">
                             <q-item-label header>Show & order cards</q-item-label>
@@ -37,28 +37,24 @@
                                     <q-item-section>{{ card.label }}</q-item-section>
                                     <q-item-section side>
                                         <div class="row items-center no-wrap">
-                                            <q-btn
-                                                flat
-                                                dense
-                                                round
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.arrow_upward"
                                                 :disable="!canMove(card.id, 'up')"
                                                 @click="moveCard(card.id, 'up')"
                                             >
                                                 <q-tooltip>Move up</q-tooltip>
-                                            </q-btn>
-                                            <q-btn
-                                                flat
-                                                dense
-                                                round
+                                            </BaseButton>
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.arrow_downward"
                                                 :disable="!canMove(card.id, 'down')"
                                                 @click="moveCard(card.id, 'down')"
                                             >
                                                 <q-tooltip>Move down</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                             <q-toggle
                                                 :model-value="isCardVisible(card.id)"
                                                 @update:model-value="toggleCard(card.id)"
@@ -69,7 +65,7 @@
                             </template>
                         </q-list>
                     </q-menu>
-                </q-btn>
+                </BaseButton>
             </div>
         </section>
 
@@ -78,20 +74,16 @@
              CreateStockItemDialog; Add to list pops the global QuickAddSheet.
              No navigation. (Log-price is a future add — needs a product target.) -->
         <div class="dora-quick-actions">
-            <q-btn
-                outline
-                no-caps
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.add"
                 label="Add item"
-                color="primary"
                 @click="showCreateStockItem = true"
             />
-            <q-btn
-                outline
-                no-caps
+            <BaseButton
+                variant="secondary"
                 :icon="ICONS.shopping_cart"
                 label="Add to list"
-                color="primary"
                 @click="openQuickAdd()"
             />
         </div>
@@ -122,19 +114,17 @@
                         Finish in two minutes whenever you're ready.
                     </div>
                     <div class="dora-welcome-actions">
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             :icon="ICONS.east"
                             label="Continue"
                             :loading="continuingOnboarding"
                             @click="onContinueOnboarding"
                         />
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
-                            no-caps
                             :icon="ICONS.close"
                             label="Hide"
                             @click="dismissSkipReminder"
@@ -160,16 +150,14 @@
                     </div>
                     <div class="dora-welcome-hint">{{ welcomeHint }}</div>
                 </div>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     size="sm"
                     :icon="ICONS.close"
                     @click="welcomeDismissed = true"
                 >
                     <q-tooltip>Hide for today</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </aside>
         </transition>
 
@@ -278,13 +266,12 @@
                                 </router-link>
                                 <span v-else class="dora-attn-msg">{{ p.alert.message }}</span>
                                 <span class="dora-attn-actions">
-                                    <q-btn
+                                    <BaseButton
                                         v-for="a in alertActionsFor(p.alert.kind)"
                                         :key="a.action"
-                                        flat
+                                        variant="ghost"
                                         dense
                                         size="sm"
-                                        no-caps
                                         :icon="a.icon"
                                         :label="a.label"
                                         @click="applyAlertAction(p.alert, a.action)"
@@ -462,22 +449,18 @@
                                 {{ suggestion.body }}
                             </div>
                             <div class="row q-gutter-xs q-mt-xs">
-                                <q-btn
+                                <BaseButton
                                     v-if="suggestion.primary_action"
+                                    variant="primary"
                                     dense
-                                    no-caps
                                     size="sm"
-                                    unelevated
-                                    color="primary"
                                     :label="suggestion.primary_action.label"
                                     @click="acceptSuggestion(suggestion)"
                                 />
-                                <q-btn
+                                <BaseButton
+                                    variant="ghost"
                                     dense
-                                    no-caps
                                     size="sm"
-                                    flat
-                                    color="grey"
                                     label="Dismiss"
                                     @click="dismissSuggestion(suggestion)"
                                 />
@@ -541,14 +524,12 @@
                                     · serves {{ r.servings }}
                                 </span>
                             </span>
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 size="sm"
                                 :icon="ICONS.restaurant"
                                 label="Cook"
-                                color="primary"
                                 @click="goTo(`/cookbook/${r.recipe_id}/cook`)"
                             />
                         </li>
@@ -840,14 +821,12 @@
                                 {{ item.name }}
                             </router-link>
                             <span class="dora-cook-meta">ran out {{ item.times_out_when_added }}×</span>
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 size="sm"
                                 :icon="ICONS.shopping_cart"
                                 label="Add"
-                                color="primary"
                                 @click="addRestockToList(item.stock_item_id)"
                             />
                         </li>
@@ -984,6 +963,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import AnimatedNumber from 'src/components/AnimatedNumber.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import { storeToRefs } from 'pinia';
     import {

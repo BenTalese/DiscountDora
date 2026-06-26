@@ -16,13 +16,12 @@
                     <q-icon :name="ICONS.shopping_cart" size="24px" class="text-primary" />
                     <div class="text-h6">Shopping lists</div>
                 </div>
-                <q-btn-toggle
+                <BaseSegmented
                     v-model="listFilter"
                     :options="listFilterOptions"
                     dense
                     flat
                     color="grey"
-                    toggle-color="primary"
                 />
             </q-card-section>
             <q-separator />
@@ -70,13 +69,11 @@
                     <q-item-section side>
                         <!-- UX-v2 §12 Q1: shopping-list CSV export removed
                              app-wide — print is the only list export. -->
-                        <q-btn
-                            flat
+                        <BaseButton
+                            variant="ghost"
                             dense
                             :icon="ICONS.print"
                             label="Print"
-                            no-caps
-                            color="primary"
                             @click="shoppingExport.openPrintView(list.shopping_list_id)"
                         />
                     </q-item-section>
@@ -149,21 +146,18 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row q-gutter-xs">
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
                                 :icon="ICONS.file_download"
                                 label="CSV"
-                                no-caps
                                 @click="recipeExport.downloadCsv(recipe.recipe_id)"
                             />
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
                                 :icon="ICONS.print"
                                 label="Print"
-                                no-caps
-                                color="primary"
                                 @click="recipeExport.openPrintView(recipe.recipe_id)"
                             />
                         </div>
@@ -186,21 +180,18 @@
                     </div>
                 </div>
                 <div class="row q-gutter-xs">
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
                         :icon="ICONS.file_download"
                         label="CSV"
-                        no-caps
                         @click="overviewExport.downloadCsv()"
                     />
-                    <q-btn
-                        flat
+                    <BaseButton
+                        variant="ghost"
                         dense
                         :icon="ICONS.print"
                         label="Print"
-                        no-caps
-                        color="primary"
                         @click="overviewExport.openPrintView()"
                     />
                 </div>
@@ -235,13 +226,11 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row q-gutter-xs">
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
                                 :icon="ICONS.print"
                                 label="Print"
-                                no-caps
-                                color="primary"
                                 @click="mealPlanExport.openPrintView(plan.meal_plan_id)"
                             />
                         </div>
@@ -254,6 +243,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import { computed, onMounted, ref } from 'vue';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { useRecipeStore } from 'src/stores/recipeStore';

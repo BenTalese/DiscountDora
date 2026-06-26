@@ -20,10 +20,8 @@
                     <strong>Hi! I'm Dora.</strong>
                     Click me whenever you're lost or want a tip.
                 </div>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     size="sm"
                     :icon="ICONS.close"
                     @click.stop="dismissHint"
@@ -85,6 +83,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
+    import BaseButton from 'src/components/BaseButton.vue';
     import DoraChat from 'src/components/dora/DoraChat.vue';
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import {

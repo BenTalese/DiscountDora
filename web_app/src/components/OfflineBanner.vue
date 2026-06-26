@@ -18,10 +18,8 @@
                 </span>
             </span>
             <q-space />
-            <q-btn
-                flat
-                dense
-                no-caps
+            <BaseButton
+                variant="ghost"
                 size="sm"
                 class="dora-text-on-primary"
                 :icon="reconnecting ? 'sync' : 'refresh'"
@@ -34,6 +32,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { useNetworkStatus } from 'src/composables/useNetworkStatus';
     import { useOfflineQueue } from 'src/composables/useOfflineQueue';
     import { computed } from 'vue';

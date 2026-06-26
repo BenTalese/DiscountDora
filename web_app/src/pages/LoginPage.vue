@@ -80,22 +80,20 @@
 
                     <FormErrorSummary :message="generalError" />
 
-                    <q-btn
+                    <BaseButton
                         type="submit"
                         size="lg"
                         class="full-width login-submit"
                         :loading="submitting"
                         :label="mode === 'login' ? 'Sign In' : 'Create Account'"
-                        unelevated
                     />
                 </q-form>
             </q-card-section>
 
             <q-card-section class="text-center q-pt-none">
-                <q-btn
-                    flat
+                <BaseButton
+                    variant="ghost"
                     dense
-                    no-caps
                     size="sm"
                     class="login-link-btn"
                     :label="mode === 'login' ? 'Need an account? Register' : 'Have an account? Sign in'"
@@ -117,6 +115,7 @@
 
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
+    import BaseButton from 'src/components/BaseButton.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';

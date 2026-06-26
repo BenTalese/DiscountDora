@@ -316,10 +316,9 @@
                                 </span>
                             </div>
                             <q-space />
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 :icon="ICONS.add"
                                 label="Add section"
                                 @click="addSection"
@@ -340,22 +339,21 @@
                                 </q-item-section>
                                 <q-item-section side>
                                     <div class="row q-gutter-xs">
-                                        <q-btn
-                                            flat round dense
+                                        <BaseButton
+                                            variant="icon"
                                             icon="arrow_upward"
                                             :disable="sIdx === 0"
                                             @click="moveSection(sIdx, -1)"
                                         />
-                                        <q-btn
-                                            flat round dense
+                                        <BaseButton
+                                            variant="icon"
                                             icon="arrow_downward"
                                             :disable="sIdx === form.sections.length - 1"
                                             @click="moveSection(sIdx, 1)"
                                         />
-                                        <q-btn
-                                            flat round dense
+                                        <BaseButton
+                                            variant="danger-icon"
                                             :icon="ICONS.delete"
-                                            color="negative"
                                             @click="removeSection(sIdx)"
                                         />
                                     </div>
@@ -379,10 +377,9 @@
                                 </span>
                             </div>
                             <q-space />
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 :icon="ICONS.add"
                                 label="Add ingredient"
                                 @click="addIngredient"
@@ -545,12 +542,9 @@
                                             variant="row"
                                             :stock-item-id="ing.stock_item_id"
                                         />
-                                        <q-btn
-                                            flat
-                                            round
-                                            dense
+                                        <BaseButton
+                                            variant="danger-icon"
                                             :icon="ICONS.delete"
-                                            color="negative"
                                             @click="removeIngredient(idx)"
                                         />
                                     </div>
@@ -577,7 +571,7 @@
                             <div class="row items-center q-mb-sm">
                                 <div class="text-subtitle1">Instructions</div>
                                 <q-space />
-                                <q-btn-toggle
+                                <BaseSegmented
                                     v-model="form.steps_mode"
                                     :options="[
                                         { label: 'Structured', value: 'structured' },
@@ -586,9 +580,7 @@
                                     ]"
                                     flat
                                     dense
-                                    no-caps
                                     spread
-                                    toggle-color="primary"
                                     @update:model-value="markDirty"
                                 />
                             </div>
@@ -1058,6 +1050,7 @@
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';

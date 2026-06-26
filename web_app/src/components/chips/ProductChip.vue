@@ -45,10 +45,8 @@
             {{ priceLabel }}
         </q-badge>
 
-        <q-btn
-            flat
-            round
-            dense
+        <BaseButton
+            variant="icon"
             size="xs"
             :icon="ICONS.more_vert"
             class="q-ml-xs"
@@ -70,12 +68,13 @@
                     </q-item>
                 </q-list>
             </q-menu>
-        </q-btn>
+        </BaseButton>
     </q-chip>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { computed } from 'vue';
 

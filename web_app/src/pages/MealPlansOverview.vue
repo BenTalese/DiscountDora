@@ -47,19 +47,18 @@
                 <!-- A/B toggle (desktop-only; temp, §8.2) — flips the user to
                     the Direction B board page. View choice persists across
                     reload via localStorage. -->
-                <q-btn-toggle
+                <BaseSegmented
                     :model-value="'list'"
                     @update:model-value="onViewToggle"
                     class="q-mr-md"
-                    dense no-caps unelevated
-                    toggle-color="primary"
+                    dense unelevated
                     :options="[
                         { label: 'List', value: 'list' },
                         { label: 'Grid', value: 'grid' },
                     ]"
                 />
-                <q-btn
-                    no-caps outline color="primary"
+                <BaseButton
+                    variant="secondary"
                     :icon="ICONS.lightbulb"
                     label="Plan step-by-step"
                     @click="builderOpen = true"
@@ -91,25 +90,25 @@
                 <!-- ── Main: vertical week carousel ───────────────────────── -->
                 <div class="col-12 col-md-6">
                     <div class="row items-center q-mb-xs">
-                        <q-btn flat round dense :icon="ICONS.arrow_upward" @click="planner.goPrevWeek">
+                        <BaseButton variant="icon" :icon="ICONS.arrow_upward" @click="planner.goPrevWeek">
                             <q-tooltip>Previous week</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                         <div class="text-subtitle2 q-ml-sm">{{ planner.weekRangeLabel.value }}</div>
                         <q-space />
-                        <q-btn
+                        <BaseButton
                             v-if="planner.focusedPlan.value"
-                            flat dense round
+                            variant="icon"
                             :icon="ICONS.print"
                             @click="planner.printFocusedWeek"
                         >
                             <q-tooltip>Print this week</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                         <!-- U7 — destructive action is labelled, not an icon-only
                             sibling of "print". Confirm dialog is unchanged. -->
-                        <q-btn
+                        <BaseButton
                             v-if="planner.focusedPlan.value"
-                            no-caps flat dense
-                            color="negative"
+                            variant="danger-ghost"
+                            dense
                             :icon="ICONS.delete_outline"
                             label="Clear week"
                             class="q-ml-sm"
@@ -157,8 +156,8 @@
                                 </div>
                             </div>
                             <q-space />
-                            <q-btn
-                                no-caps color="primary"
+                            <BaseButton
+                                variant="primary"
                                 :icon="ICONS.lightbulb"
                                 label="Plan step-by-step"
                                 @click="builderOpen = true"
@@ -197,9 +196,9 @@
                     </transition>
 
                     <div class="row items-center justify-center q-mt-xs">
-                        <q-btn flat round dense :icon="ICONS.arrow_downward" @click="planner.goNextWeek">
+                        <BaseButton variant="icon" :icon="ICONS.arrow_downward" @click="planner.goNextWeek">
                             <q-tooltip>Next week</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                     </div>
                 </div>
 
@@ -233,8 +232,8 @@
                                 </div>
                             </q-card-section>
                             <q-card-actions class="column items-stretch q-gutter-xs">
-                                <q-btn
-                                    no-caps outline color="primary"
+                                <BaseButton
+                                    variant="secondary"
                                     :icon="ICONS.event_repeat"
                                     label="Browse + apply templates…"
                                     @click="templatesDrawerOpen = true"
@@ -288,9 +287,9 @@
                 />
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary" no-caps label="Save template"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary" label="Save template"
                     :loading="savingTemplate"
                     :disable="!templateName.trim()"
                     @click="confirmSaveTemplate"
@@ -329,9 +328,9 @@
                 </div>
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary" no-caps label="Apply"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary" label="Apply"
                     :loading="recurringApplying"
                     :disable="!recurringSource || !recurringStart || !recurringEnd"
                     @click="confirmRecurring"
@@ -343,7 +342,9 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MealPlanCalendar from 'components/MealPlanCalendar.vue';
     import MealPlanFirstRun from 'src/components/MealPlanFirstRun.vue';
     import MealPlanMobileFocus from 'src/components/MealPlanMobileFocus.vue';

@@ -45,16 +45,16 @@
                             header-class="q-px-none"
                         >
                             <div class="row items-center q-gutter-x-sm q-mb-xs">
-                                <q-btn
+                                <BaseButton
+                                    variant="ghost"
                                     dense
-                                    flat
                                     size="sm"
                                     label="All"
                                     @click="toggleGroup(group, true)"
                                 />
-                                <q-btn
+                                <BaseButton
+                                    variant="ghost"
                                     dense
-                                    flat
                                     size="sm"
                                     label="None"
                                     @click="toggleGroup(group, false)"
@@ -71,13 +71,11 @@
                         </q-expansion-item>
                     </q-card-section>
                     <q-card-section>
-                        <q-btn
-                            color="primary"
+                        <BaseButton
                             :icon="ICONS.download"
                             label="Download backup"
                             :loading="downloading"
                             :disable="downloading || selectedBackupKeys.length === 0"
-                            unelevated
                             @click="onDownload"
                         />
                     </q-card-section>
@@ -218,8 +216,7 @@
                     :disable="restoring"
                     @click="onRestoreAll"
                 />
-                <q-btn
-                    color="primary"
+                <BaseButton
                     :icon="ICONS.check"
                     label="Restore selection"
                     :loading="restoring"
@@ -277,9 +274,8 @@
                 </q-card-section>
                 <template #actions>
                     <BaseButton variant="ghost" label="Close" @click="reportOpen = false" />
-                    <q-btn
+                    <BaseButton
                         v-if="report?.ok"
-                        color="primary"
                         :icon="ICONS.refresh"
                         label="Reload now"
                         @click="reloadNow"

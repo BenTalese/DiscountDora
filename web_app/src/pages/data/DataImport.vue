@@ -187,8 +187,8 @@
             <q-separator />
             <q-card-actions align="right">
                 <BaseButton variant="ghost" label="Cancel" @click="onClearPick" />
-                <q-btn
-                    color="primary"
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.check"
                     label="Import"
                     :loading="committing"
@@ -250,9 +250,9 @@
                     </q-virtual-scroll>
                 </q-card-section>
                 <template #actions>
-                    <q-btn
+                    <BaseButton
                         v-if="errorRows.length"
-                        flat
+                        variant="ghost"
                         label="Download error rows (CSV)"
                         :icon="ICONS.download"
                         @click="downloadErrorRows"

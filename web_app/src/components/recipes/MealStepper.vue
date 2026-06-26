@@ -5,10 +5,8 @@
         passes `busy`. Reused by RecipeCard and RecipeDetailPage (R-001).
     -->
     <div class="meal-stepper row items-center no-wrap q-gutter-xs">
-        <q-btn
-            round
-            dense
-            flat
+        <BaseButton
+            variant="icon"
             :icon="ICONS.remove"
             :disable="busy || available <= (min ?? 0)"
             aria-label="Remove one meal"
@@ -17,10 +15,8 @@
         <div class="meal-stepper__count text-weight-medium" :class="sizeClass">
             {{ available }}
         </div>
-        <q-btn
-            round
-            dense
-            flat
+        <BaseButton
+            variant="icon"
             :icon="ICONS.add"
             :disable="busy"
             aria-label="Add one meal"
@@ -31,6 +27,7 @@
 
 <script setup lang="ts">
     import { computed } from 'vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
 
     const props = withDefaults(

@@ -6,20 +6,16 @@
             :icon="ICONS.key"
         >
             <template #actions>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.refresh"
                     :loading="loading"
                     @click="loadSources"
                 >
                     <q-tooltip>Refresh</q-tooltip>
-                </q-btn>
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                </BaseButton>
+                <BaseButton
+                    variant="primary"
                     :icon="ICONS.add"
                     label="New key"
                     @click="openCreate"
@@ -92,28 +88,24 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row q-gutter-xs items-center" @click.stop>
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 :icon="src.enabled ? ICONS.lock : ICONS.lock_open"
                                 :label="src.enabled ? 'Disable' : 'Enable'"
                                 :loading="togglingId === src.id"
                                 @click="onToggle(src)"
                             />
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="ghost"
                                 dense
-                                no-caps
                                 :icon="ICONS.edit"
                                 label="Rename"
                                 @click="openRename(src)"
                             />
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="danger-ghost"
                                 dense
-                                no-caps
-                                color="negative"
                                 :icon="ICONS.delete"
                                 label="Revoke"
                                 :loading="revokingId === src.id"
@@ -181,16 +173,14 @@
                                             style="min-width: 200px"
                                             @update:model-value="(value: string | null) => onAssign(src.id, m, value)"
                                         />
-                                        <q-btn
-                                            flat
+                                        <BaseButton
+                                            variant="danger-icon"
                                             dense
-                                            round
-                                            color="negative"
                                             :icon="ICONS.delete"
                                             @click="onDeleteMapping(src.id, m)"
                                         >
                                             <q-tooltip>Drop this mapping entirely</q-tooltip>
-                                        </q-btn>
+                                        </BaseButton>
                                     </div>
                                 </q-item-section>
                             </q-item>
@@ -246,9 +236,8 @@
             </q-card-section>
             <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary"
-                    no-caps
+                <BaseButton
+                    variant="primary"
                     label="Create"
                     :loading="creating"
                     :disable="!newLabel.trim()"
@@ -312,9 +301,8 @@
             </q-card-section>
             <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary"
-                    no-caps
+                <BaseButton
+                    variant="primary"
                     label="Save"
                     :loading="renaming"
                     :disable="!renameValue.trim()"

@@ -11,10 +11,8 @@
         via the standard q-menu pattern by nesting a q-menu / q-popup-proxy
         inside the default slot if a menu is needed.
     -->
-    <q-btn
-        flat
-        dense
-        round
+    <BaseButton
+        variant="icon"
         size="md"
         :icon="icon"
         :color="color"
@@ -24,10 +22,12 @@
         @click.stop="onClick"
     >
         <slot />
-    </q-btn>
+    </BaseButton>
 </template>
 
 <script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
+
     withDefaults(
         defineProps<{
             icon: string;

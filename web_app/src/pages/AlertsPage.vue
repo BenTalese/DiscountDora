@@ -12,10 +12,9 @@
                     </span>
                 </div>
             </div>
-            <q-btn
+            <BaseButton
                 v-if="totalCount > 0"
-                flat
-                no-caps
+                variant="ghost"
                 dense
                 :icon="ICONS.done_all"
                 label="Mark all read"
@@ -140,14 +139,12 @@
                     <q-item-section>
                         <q-item-label>{{ kindTheme(pref.kind) }}</q-item-label>
                         <q-item-label caption class="row items-center q-gutter-x-sm q-mt-xs">
-                            <q-btn-toggle
+                            <BaseSegmented
                                 :model-value="pref.effective_tier"
                                 :options="tierOptions"
                                 size="sm"
                                 dense
                                 unelevated
-                                no-caps
-                                toggle-color="primary"
                                 :disable="!pref.enabled || prefBusy.has(pref.kind)"
                                 @update:model-value="(t) => onSetTier(pref, t as AlertTier)"
                             />
@@ -210,6 +207,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import AlertList from 'src/components/AlertList.vue';
     import SubscriptionsPanel from 'src/components/SubscriptionsPanel.vue';
     import UpcomingTimeline from 'src/components/UpcomingTimeline.vue';

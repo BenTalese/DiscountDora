@@ -20,7 +20,7 @@
             <strong>Couldn't load your shopping lists.</strong>
             {{ loadError }}
             <template #action>
-                <q-btn flat no-caps label="Retry" @click="retryLoad" />
+                <BaseButton variant="ghost" label="Retry" @click="retryLoad" />
             </template>
         </q-banner>
 
@@ -35,9 +35,7 @@
                 template, or auto-filled from your stock.
             </div>
             <div class="q-mt-md">
-                <q-btn
-                    color="primary"
-                    no-caps
+                <BaseButton
                     :icon="ICONS.add"
                     label="New list"
                     @click="newListOpen = true"
@@ -55,6 +53,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, ref } from 'vue';

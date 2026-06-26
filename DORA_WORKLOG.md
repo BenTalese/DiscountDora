@@ -9,6 +9,56 @@ next.
 
 ---
 
+MANUAL ENTRY FROM USER: Work was in progress but abruptly haulted in an unfinished state. See chat log:
+User message: lets resolve FU-005, then FU-006
+
+Read 4 files, searched code, found files, ran 8 commands, used a tool
+I'll set up the work plan and dive in. Heads up: FU-006 is the larger piece — ~289 plain q-btn after the documented exclusions (products surface, q-input append slots, DoraChat, dropdown/toggle variants). Doing it as a single sweep.
+
+Used 4 tools
+Let me check engineering standards and existing patterns before I write wrappers.
+
+Ran a command, read 4 files
+Now I have what I need. Let me look at the remaining toggle sites to confirm the variant set, then build the wrappers.
+
+Read 4 files, used a tool
+Now I'll build the two wrappers. Going minimal — Vue's default inheritAttrs passes everything through.
+
+Created 2 files, ran a command
+Now I'll migrate the call sites. Starting with the toggles.
+
+Read 9 files, ran 2 commands, edited 9 files
+Now the dropdowns and TriStateFilter.
+
+Edited a file, used 2 tools
+Now the q-btn-dropdown migrations in ShoppingListDetail and StockItemDetailPage.
+
+Edited 2 files, ran a command
+All 14 call sites migrated; only the two wrappers retain the raw Quasar tags. Let me run typecheck before moving on.
+
+Ran 8 commands, created a file, edited a file
+Typecheck clean. FU-005 fully resolved.
+
+Used 2 tools
+Now to FU-006 — the sweep. Given the scope (~285 buttons after exclusions across ~45 files), I'll dispatch parallel agents to handle batches of files. Each agent gets a clear migration rubric and an exclusion list.
+
+Ran 2 commands
+Dispatching parallel agents to handle the bulk migration. Each one gets the same rubric.
+
+Ran 4 agents
+The agents reported clean migrations but a recurring set of ambiguous patterns. Two are common enough to close with new variants. Let me check the current state and extend BaseButton.
+
+Ran
+Inventory remaining q-btn after batch sweep
+Big reduction (331 → 90). Now extending BaseButton with two variants to close the most-common ambiguous patterns.
+
+Edited a file, read a file
+Now a second pass with the new variants. Dispatching one focused agent.
+
+Ran an agent
+Server is temporarily limiting requests
+Too many requests right now — try again in a moment.
+
 ## 2026-06-26 — Meal planner R-Phase 6 (hierarchy + a11y + skeletons)
 
 **Why:** continuing FU-304. Final polish phase of the rebuild — §7 craft

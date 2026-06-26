@@ -1,15 +1,15 @@
 <template>
     <q-card flat bordered>
         <q-card-section class="row items-center q-py-xs no-wrap">
-            <q-btn flat round dense size="sm" :icon="ICONS.arrow_upward" @click="pageWindow(-WINDOW_WEEKS)">
+            <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_upward" @click="pageWindow(-WINDOW_WEEKS)">
                 <q-tooltip>Earlier weeks</q-tooltip>
-            </q-btn>
+            </BaseButton>
             <q-space />
             <div class="text-subtitle2 text-weight-bold cal__month">{{ monthBanner }}</div>
             <q-space />
-            <q-btn flat round dense size="sm" :icon="ICONS.arrow_downward" @click="pageWindow(WINDOW_WEEKS)">
+            <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_downward" @click="pageWindow(WINDOW_WEEKS)">
                 <q-tooltip>Later weeks</q-tooltip>
-            </q-btn>
+            </BaseButton>
         </q-card-section>
         <q-separator />
         <q-card-section class="q-pa-sm column q-gutter-xs">
@@ -44,6 +44,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { storeToRefs } from 'pinia';
     import { isoDate, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
     import type { MealPlanEntry } from 'src/models/mealPlan';

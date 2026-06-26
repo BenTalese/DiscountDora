@@ -75,14 +75,13 @@
                     <div v-else class="column q-gutter-sm items-start">
                         <div class="text-subtitle2">All set — {{ selectedIds.length }} meal(s) planned.</div>
                         <div class="row q-gutter-sm">
-                            <q-btn
-                                no-caps color="primary"
+                            <BaseButton
                                 :icon="ICONS.shopping_cart"
                                 label="Generate shopping list"
                                 :loading="generatingList"
                                 @click="onGenerateList"
                             />
-                            <q-btn no-caps outline color="primary" :icon="ICONS.print" label="Print this week" @click="printWeek" />
+                            <BaseButton variant="secondary" :icon="ICONS.print" label="Print this week" @click="printWeek" />
                         </div>
                     </div>
                 </q-step>
@@ -90,24 +89,25 @@
         </q-card-section>
 
         <template #actions>
-            <q-btn v-if="!doneState" flat no-caps label="Cancel" v-close-popup />
+            <BaseButton v-if="!doneState" variant="ghost" label="Cancel" v-close-popup />
             <q-space />
-            <q-btn v-if="step > 1 && !doneState" flat no-caps label="Back" @click="step = step - 1" />
-            <q-btn v-if="step === 1" color="primary" no-caps label="Next" :disable="selectedIds.length === 0" @click="goToPreview" />
-            <q-btn v-if="step === 2" color="primary" no-caps label="Next" @click="step = 3" />
-            <q-btn
+            <BaseButton v-if="step > 1 && !doneState" variant="ghost" label="Back" @click="step = step - 1" />
+            <BaseButton v-if="step === 1" label="Next" :disable="selectedIds.length === 0" @click="goToPreview" />
+            <BaseButton v-if="step === 2" label="Next" @click="step = 3" />
+            <BaseButton
                 v-if="step === 3 && !doneState"
-                color="primary" no-caps label="Build plan"
+                label="Build plan"
                 :loading="building"
                 @click="onBuild"
             />
-            <q-btn v-if="doneState" color="primary" no-caps label="Done" v-close-popup />
+            <BaseButton v-if="doneState" label="Done" v-close-popup />
         </template>
     </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import type { RecipeTray } from 'src/composables/useMealPlanner';

@@ -38,31 +38,27 @@
                     </div>
                 </q-card-section>
                 <q-card-section class="q-gutter-sm">
-                    <q-btn
-                        color="positive"
+                    <BaseButton
+                        variant="positive"
                         size="lg"
                         class="full-width"
-                        no-caps
                         :icon="ICONS.check"
                         label="Still correct (1)"
                         :loading="busy"
                         @click="onStillCorrect"
                     />
-                    <q-btn
-                        color="primary"
+                    <BaseButton
                         size="lg"
                         class="full-width"
-                        no-caps
                         :icon="ICONS.tune"
                         label="Change level (2)"
                         :loading="busy"
                         @click="changeOpen = true"
                     />
-                    <q-btn
-                        color="negative"
+                    <BaseButton
+                        variant="danger"
                         size="lg"
                         class="full-width"
-                        no-caps
                         :icon="ICONS.remove_shopping_cart"
                         label="Out of stock (3)"
                         :loading="busy"
@@ -70,11 +66,9 @@
                     />
                 </q-card-section>
                 <q-card-actions align="between">
-                    <q-btn flat no-caps class="dora-text-secondary" label="Skip (s)" @click="onSkip" />
-                    <q-btn
-                        flat
-                        no-caps
-                        color="primary"
+                    <BaseButton variant="ghost" class="dora-text-secondary" label="Skip (s)" @click="onSkip" />
+                    <BaseButton
+                        variant="ghost"
                         :icon="ICONS.add_shopping_cart"
                         label="Add to list"
                         @click="onAddToList"
@@ -96,7 +90,7 @@
                     </div>
                 </q-card-section>
                 <q-card-actions align="center">
-                    <q-btn color="primary" no-caps label="Done" :to="'/stocktake'" />
+                    <BaseButton label="Done" :to="'/stocktake'" />
                 </q-card-actions>
             </q-card>
         </div>
@@ -122,6 +116,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';

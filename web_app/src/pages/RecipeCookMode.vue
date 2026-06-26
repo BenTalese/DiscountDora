@@ -144,9 +144,9 @@
                             {{ formatTimer(timerRemaining ?? detectedTimerMinutes * 60) }}
                         </div>
                         <q-space />
-                        <q-btn
+                        <BaseButton
                             v-if="!timerRunning"
-                            color="primary"
+                            variant="primary"
                             :icon="ICONS.play_arrow"
                             label="Start"
                             @click="startTimer(detectedTimerMinutes * 60)"
@@ -195,9 +195,9 @@
                     @click="speakCurrent"
                     :disable="!speechEnabled"
                 />
-                <q-btn
+                <BaseButton
                     size="lg"
-                    color="primary"
+                    variant="primary"
                     :icon-right="currentStepIndex === steps.length - 1 ? 'check' : 'arrow_forward'"
                     :label="currentStepIndex === steps.length - 1 ? 'Finish' : 'Next'"
                     @click="nextStep"
@@ -265,16 +265,14 @@
                                             <span class="text-caption dora-text-muted">
                                                 instead of {{ row.ingredient.stock_item_name }}
                                             </span>
-                                            <q-btn
-                                                flat
-                                                dense
-                                                round
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.undo"
                                                 @click="clearSwap(row.ingredient.stock_item_id)"
                                             >
                                                 <q-tooltip>Undo substitute</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </template>
                                         <template v-else>
                                             <span class="ingredient-name">{{ row.ingredient.stock_item_name }}</span>
@@ -284,16 +282,14 @@
                                             >
                                                 (optional)
                                             </span>
-                                            <q-btn
-                                                flat
-                                                dense
-                                                round
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.swap_horiz"
                                                 @click="openSwapPicker(row.ingredient.stock_item_id, row.ingredient.stock_item_name)"
                                             >
                                                 <q-tooltip>Use a substitute for this cook</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </template>
                                     </div>
                                     <q-item-label
@@ -432,7 +428,7 @@
                                 </div>
                             </q-item-label>
                             <q-item-label caption>
-                                <q-btn-toggle
+                                <BaseSegmented
                                     v-model="row.action"
                                     :options="[
                                         { label: 'Down one', value: 'down_one' },
@@ -441,9 +437,7 @@
                                     ]"
                                     flat
                                     dense
-                                    no-caps
                                     spread
-                                    toggle-color="primary"
                                     class="q-mt-xs"
                                 />
                                 <div class="row items-center q-gutter-sm q-mt-xs">
@@ -495,6 +489,7 @@
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
     import { storeToRefs } from 'pinia';

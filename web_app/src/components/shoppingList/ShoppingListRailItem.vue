@@ -27,7 +27,7 @@
             </q-item-label>
         </q-item-section>
         <q-item-section side @click.stop>
-            <q-btn flat round dense size="sm" :icon="ICONS.more_vert" aria-label="List actions">
+            <BaseButton variant="icon" size="sm" :icon="ICONS.more_vert" aria-label="List actions">
                 <q-menu auto-close anchor="bottom right" self="top right">
                     <q-list dense style="min-width: 200px">
                         <q-item
@@ -53,7 +53,7 @@
                         </q-item>
                     </q-list>
                 </q-menu>
-            </q-btn>
+            </BaseButton>
         </q-item-section>
     </q-item>
 </template>
@@ -67,6 +67,7 @@
      * deliberately — lists are finished or deleted (§12 Q2).
      */
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import type { ShoppingListSummary } from 'src/models/shoppingList';
     import { computed } from 'vue';
 

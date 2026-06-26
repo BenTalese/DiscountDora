@@ -33,10 +33,9 @@
                         <span v-else>· never checked</span>
                     </div>
                 </div>
-                <q-btn
-                    color="primary"
+                <BaseButton
+                    variant="primary"
                     size="lg"
-                    no-caps
                     :icon="ICONS.play_arrow"
                     label="Start review"
                     :disable="overdueCount === 0 || loading"

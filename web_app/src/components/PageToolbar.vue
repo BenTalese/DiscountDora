@@ -1,10 +1,8 @@
 <template>
     <div class="row items-center q-mb-md page-toolbar">
-        <q-btn
+        <BaseButton
             v-if="backTo"
-            flat
-            round
-            dense
+            variant="icon"
             class="q-mr-sm dora-text-secondary"
             :icon="ICONS.arrow_back"
             :to="backTo"
@@ -23,6 +21,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
 
     defineProps<{

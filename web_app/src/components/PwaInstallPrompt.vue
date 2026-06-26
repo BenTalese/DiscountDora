@@ -5,11 +5,8 @@
             Dora is installed on this device.
         </q-item-label>
     </div>
-    <q-btn
+    <BaseButton
         v-else-if="available"
-        unelevated
-        color="primary"
-        no-caps
         :icon="ICONS.install_desktop"
         label="Install Dora as an app"
         @click="onInstall"
@@ -35,6 +32,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import {

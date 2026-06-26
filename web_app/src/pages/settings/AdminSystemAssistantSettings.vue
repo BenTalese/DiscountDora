@@ -125,10 +125,7 @@
 
                 <SettingsRow stacked>
                     <div>
-                        <q-btn
-                            color="primary"
-                            unelevated
-                            no-caps
+                        <BaseButton
                             :icon="ICONS.save"
                             label="Save AI settings"
                             :loading="saving"
@@ -189,6 +186,7 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());

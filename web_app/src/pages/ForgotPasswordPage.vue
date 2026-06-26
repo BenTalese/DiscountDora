@@ -19,9 +19,9 @@
                         autocomplete="email"
                         :rules="[(v: string) => !!v || 'Email is required']"
                     />
-                    <q-btn
+                    <BaseButton
                         type="submit"
-                        color="primary"
+                        variant="primary"
                         size="lg"
                         class="full-width"
                         :loading="submitting"

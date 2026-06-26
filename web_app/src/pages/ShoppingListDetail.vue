@@ -19,12 +19,10 @@
                         >
                             <q-tooltip>Search every stock item and drop it onto this list</q-tooltip>
                         </BaseButton>
-                        <q-btn-toggle
+                        <BaseSegmented
                             v-model="groupBy"
-                            no-caps
                             dense
                             unelevated
-                            toggle-color="primary"
                             class="sld-group-toggle"
                             :options="[
                                 { label: 'No grouping', value: 'none' },
@@ -50,9 +48,8 @@
                         >
                             <q-tooltip>Tick or untick a bunch at once</q-tooltip>
                         </BaseButton>
-                        <q-btn-dropdown
+                        <BaseDropdown
                             flat
-                            no-caps
                             dense
                             :disable="!detail"
                             label="More"
@@ -125,7 +122,7 @@
                                     <q-item-section class="text-negative">Delete list</q-item-section>
                                 </q-item>
                             </q-list>
-                        </q-btn-dropdown>
+                        </BaseDropdown>
                         <!-- One primary action per lifecycle phase (UX-v2:
                              no Pause, no separate shop page — Start flips
                              the page itself into shopping state). -->
@@ -140,11 +137,9 @@
                         >
                             <q-tooltip>Tick items off as you grab them — prices you enter become the receipt</q-tooltip>
                         </BaseButton>
-                        <q-btn
+                        <BaseButton
                             v-else-if="detail && detail.status === 'shopping'"
-                            unelevated
-                            no-caps
-                            color="positive"
+                            variant="positive"
                             :icon="ICONS.check"
                             label="Finish & restock"
                             :loading="finishing"
@@ -163,10 +158,9 @@
                 <!-- Mobile list switcher (UX-v2 §3.2): same date-ordered
                      continuum as the desktop rail, as a dropdown at the top
                      of the page. -->
-                <q-btn-dropdown
+                <BaseDropdown
                     class="lt-md full-width q-mb-md"
                     outline
-                    no-caps
                     :icon="ICONS.list_alt"
                     :label="detail?.display_name ?? 'Pick a list'"
                 >
@@ -199,13 +193,13 @@
                             <q-item-section>Manage templates…</q-item-section>
                         </q-item>
                     </q-list>
-                </q-btn-dropdown>
+                </BaseDropdown>
 
                 <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
                     <strong>Couldn't load this list.</strong>
                     {{ loadError }}
                     <template #action>
-                        <q-btn flat no-caps label="Retry" @click="load" />
+                        <BaseButton variant="ghost" label="Retry" @click="load" />
                     </template>
                 </q-banner>
 
@@ -333,26 +327,24 @@
                         </template>
                         {{ bulkSelection.size }} selected
                         <template #action>
-                            <q-btn flat no-caps label="Select all" @click="selectAllLines" />
-                            <q-btn
-                                flat
-                                no-caps
+                            <BaseButton variant="ghost" label="Select all" @click="selectAllLines" />
+                            <BaseButton
+                                variant="ghost"
                                 :icon="ICONS.check_box"
                                 label="Tick selected"
                                 :disable="bulkSelection.size === 0"
                                 :loading="bulkBusy"
                                 @click="onBulkTick(true)"
                             />
-                            <q-btn
-                                flat
-                                no-caps
+                            <BaseButton
+                                variant="ghost"
                                 :icon="ICONS.check_box_outline_blank"
                                 label="Untick"
                                 :disable="bulkSelection.size === 0"
                                 :loading="bulkBusy"
                                 @click="onBulkTick(false)"
                             />
-                            <q-btn flat no-caps label="Done" @click="exitBulkMode" />
+                            <BaseButton variant="ghost" label="Done" @click="exitBulkMode" />
                         </template>
                     </q-banner>
 
@@ -561,10 +553,9 @@
                                             v-if="line.preferred_buys && line.preferred_buys.length"
                                             class="row items-center q-mt-xs"
                                         >
-                                            <q-btn-dropdown
+                                            <BaseDropdown
                                                 flat
                                                 dense
-                                                no-caps
                                                 size="sm"
                                                 :icon="ICONS.lightbulb"
                                                 :label="buyHintLabel(line) || 'Add a buy hint'"
@@ -594,16 +585,14 @@
                                                         </q-item>
                                                     </template>
                                                 </q-list>
-                                            </q-btn-dropdown>
+                                            </BaseDropdown>
                                         </div>
                                     </q-item-section>
 
                                     <q-item-section side style="min-width: 150px">
                                         <div class="row items-center q-gutter-xs no-wrap">
-                                            <q-btn
-                                                flat
-                                                round
-                                                dense
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.remove"
                                                 :disable="detail.status === 'done' || (line.quantity ?? 0) <= 0"
@@ -624,10 +613,8 @@
                                                     ($event.target as HTMLInputElement).blur()
                                                 "
                                             />
-                                            <q-btn
-                                                flat
-                                                round
-                                                dense
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.add"
                                                 :disable="detail.status === 'done'"
@@ -711,25 +698,20 @@
                                                         />
                                                     </q-card-section>
                                                     <q-card-actions align="right">
-                                                        <q-btn
+                                                        <BaseButton
                                                             v-if="line.actual_unit_price != null"
-                                                            flat
-                                                            no-caps
-                                                            color="negative"
+                                                            variant="danger-ghost"
                                                             label="Clear"
                                                             v-close-popup
                                                             @click="clearPriceOverride(line)"
                                                         />
-                                                        <q-btn
-                                                            flat
-                                                            no-caps
+                                                        <BaseButton
+                                                            variant="ghost"
                                                             label="Cancel"
                                                             v-close-popup
                                                         />
-                                                        <q-btn
-                                                            unelevated
-                                                            no-caps
-                                                            color="primary"
+                                                        <BaseButton
+                                                            variant="primary"
                                                             label="Save"
                                                             v-close-popup
                                                             @click="savePriceEditor(line)"
@@ -765,29 +747,24 @@
                                          (§12 Q2) — remove + re-add covers it. -->
                                     <q-item-section side>
                                         <div class="column items-center q-gutter-xs">
-                                            <q-btn
-                                                flat
-                                                round
-                                                dense
+                                            <BaseButton
+                                                variant="icon"
                                                 size="sm"
                                                 :icon="ICONS.swap_horiz"
                                                 :disable="detail.status === 'done' || !line.stock_item_id"
                                                 @click="onSwapSubstitute(line)"
                                             >
                                                 <q-tooltip>Swap with substitute</q-tooltip>
-                                            </q-btn>
-                                            <q-btn
-                                                flat
-                                                round
-                                                dense
+                                            </BaseButton>
+                                            <BaseButton
+                                                variant="danger-icon"
                                                 size="sm"
                                                 :icon="ICONS.delete_outline"
-                                                color="negative"
                                                 :disable="detail.status === 'done'"
                                                 @click="onRemoveLine(line.line_id)"
                                             >
                                                 <q-tooltip>Remove from list</q-tooltip>
-                                            </q-btn>
+                                            </BaseButton>
                                         </div>
                                     </q-item-section>
                                 </q-item>
@@ -817,10 +794,8 @@
                             </div>
                         </div>
                         <q-space />
-                        <q-btn
-                            unelevated
-                            no-caps
-                            color="positive"
+                        <BaseButton
+                            variant="positive"
                             :icon="ICONS.check"
                             :label="untickedCount > 0 ? 'Finish early & restock' : 'Finish & restock'"
                             :loading="finishing"
@@ -840,9 +815,8 @@
                         Pick another list from the panel, or create a new one.
                     </div>
                     <div class="q-mt-md">
-                        <q-btn
-                            color="primary"
-                            no-caps
+                        <BaseButton
+                            variant="primary"
                             :icon="ICONS.add"
                             label="New list"
                             @click="newListOpen = true"
@@ -988,10 +962,8 @@
             </q-card-section>
             <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <q-btn
-                    unelevated
-                    no-caps
-                    color="positive"
+                <BaseButton
+                    variant="positive"
                     :icon="ICONS.check"
                     label="Restock & finish"
                     :loading="finishing"
@@ -1006,6 +978,8 @@
     import { ICONS } from 'src/style/icons';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';

@@ -124,12 +124,9 @@
             />
         </q-card-section>
         <template #actions>
-            <q-btn flat label="Cancel" no-caps v-close-popup />
-            <q-btn
-                no-caps
-                unelevated
+            <BaseButton variant="ghost" label="Cancel" v-close-popup />
+            <BaseButton
                 :label="form.targetMode === 'new' ? 'Create list' : 'Top up list'"
-                color="primary"
                 :disable="!canSubmit"
                 :loading="creating || autogenerating"
                 @click="submit"
@@ -139,6 +136,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

@@ -6,20 +6,15 @@
             :icon="ICONS.store"
         >
             <template #actions>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.refresh"
                     :loading="loading"
                     @click="reload"
                 >
                     <q-tooltip>Refresh</q-tooltip>
-                </q-btn>
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                </BaseButton>
+                <BaseButton
                     :icon="ICONS.add"
                     label="Add store"
                     @click="openCreate"
@@ -121,12 +116,10 @@
                             <q-icon :name="ICONS.upload" />
                         </template>
                     </q-file>
-                    <q-btn
+                    <BaseButton
                         v-if="editing?.has_image && !clearImage && !draft.image"
-                        flat
+                        variant="danger-ghost"
                         dense
-                        no-caps
-                        color="negative"
                         label="Remove existing logo"
                         @click="clearImage = true"
                     />
@@ -134,11 +127,8 @@
             </div>
         </template>
         <template #actions>
-            <q-btn flat no-caps label="Cancel" @click="dialogOpen = false" />
-            <q-btn
-                unelevated
-                color="primary"
-                no-caps
+            <BaseButton variant="ghost" label="Cancel" @click="dialogOpen = false" />
+            <BaseButton
                 :label="editing ? 'Save' : 'Add'"
                 :loading="saving"
                 :disable="!draft.name || draft.name.trim().length === 0"

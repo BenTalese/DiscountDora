@@ -63,12 +63,12 @@
              server-side (`count × per_pack_size`) and persists pack_count so
              the obs list can later render "4 × 125g". -->
         <div v-if="mode === 'shelf'">
-            <q-btn
+            <BaseButton
                 v-if="!packCountVisible"
-                flat dense no-caps size="sm"
+                variant="ghost"
+                dense size="sm"
                 :icon="ICONS.add"
                 label="Add pack count (multipack)"
-                color="primary"
                 @click="packCountVisible = true"
             />
             <div v-else class="row q-gutter-sm items-start">
@@ -81,8 +81,8 @@
                     :rules="[(v) => v == null || v > 0 || 'Must be > 0']"
                     hide-bottom-space
                 />
-                <q-btn
-                    flat dense round
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.close"
                     aria-label="Clear pack count"
                     @click="clearPackCount"

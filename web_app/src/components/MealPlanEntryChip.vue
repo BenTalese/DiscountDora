@@ -42,15 +42,15 @@
                     <q-item-section>Servings</q-item-section>
                     <q-item-section side>
                         <div class="row items-center no-wrap q-gutter-xs">
-                            <q-btn dense round flat :icon="ICONS.remove" @click.stop="emit('adjust', -1)">
+                            <BaseButton variant="icon" :icon="ICONS.remove" @click.stop="emit('adjust', -1)">
                                 <q-tooltip>One fewer (removes the entry at 0)</q-tooltip>
-                            </q-btn>
+                            </BaseButton>
                             <span class="text-weight-medium" style="min-width: 1.2rem; text-align: center">
                                 {{ entry.servings }}
                             </span>
-                            <q-btn dense round flat :icon="ICONS.add" @click.stop="emit('adjust', 1)">
+                            <BaseButton variant="icon" :icon="ICONS.add" @click.stop="emit('adjust', 1)">
                                 <q-tooltip>One more</q-tooltip>
-                            </q-btn>
+                            </BaseButton>
                         </div>
                     </q-item-section>
                 </q-item>
@@ -75,6 +75,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';

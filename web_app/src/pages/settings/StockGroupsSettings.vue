@@ -6,10 +6,7 @@
             :icon="ICONS.label"
         >
             <template #actions>
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                <BaseButton
                     :icon="ICONS.add"
                     label="New group"
                     :loading="creating"
@@ -49,24 +46,20 @@
                 </q-item-section>
                 <q-item-section side>
                     <div class="row q-gutter-xs">
-                        <q-btn
-                            flat
-                            dense
-                            round
+                        <BaseButton
+                            variant="icon"
                             :icon="ICONS.edit"
                             @click="startRename(group)"
                         >
                             <q-tooltip>Rename</q-tooltip>
-                        </q-btn>
-                        <q-btn
-                            flat
-                            dense
-                            round
+                        </BaseButton>
+                        <BaseButton
+                            variant="icon"
                             :icon="ICONS.delete_outline"
                             @click="onDelete(group)"
                         >
                             <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                     </div>
                 </q-item-section>
             </q-item>
@@ -84,6 +77,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import type { StockGroup } from 'src/models/stockGroup';

@@ -10,10 +10,7 @@
             :icon="ICONS.label"
         >
             <template #actions>
-                <q-btn
-                    color="primary"
-                    unelevated
-                    no-caps
+                <BaseButton
                     :icon="ICONS.add"
                     label="New tag"
                     :loading="busy"
@@ -34,12 +31,12 @@
                 </q-item-section>
                 <q-item-section side>
                     <div class="row q-gutter-xs">
-                        <q-btn flat dense round :icon="ICONS.edit" @click="onRenameDietaryTag(tag)">
+                        <BaseButton variant="icon" :icon="ICONS.edit" @click="onRenameDietaryTag(tag)">
                             <q-tooltip>Rename</q-tooltip>
-                        </q-btn>
-                        <q-btn flat dense round :icon="ICONS.delete_outline" @click="onDeleteDietaryTag(tag)">
+                        </BaseButton>
+                        <BaseButton variant="icon" :icon="ICONS.delete_outline" @click="onDeleteDietaryTag(tag)">
                             <q-tooltip>Delete</q-tooltip>
-                        </q-btn>
+                        </BaseButton>
                     </div>
                 </q-item-section>
             </q-item>
@@ -64,6 +61,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import DietaryTagFormDialog from 'src/components/settings/DietaryTagFormDialog.vue';

@@ -48,11 +48,10 @@
                     </q-card-section>
                     <q-separator />
                     <q-card-section>
-                        <q-btn
-                            color="primary"
+                        <BaseButton
+                            variant="primary"
                             :icon="ICONS.photo_camera"
                             label="Open camera"
-                            unelevated
                             @click="scanOpen = true"
                         />
                     </q-card-section>
@@ -94,17 +93,15 @@
                                 class="col-12 col-sm-4"
                             />
                             <div class="col-auto">
-                                <q-btn
-                                    flat
+                                <BaseButton
+                                    variant="ghost"
                                     dense
-                                    no-caps
                                     label="All"
                                     @click="onSelectAllVisible"
                                 />
-                                <q-btn
-                                    flat
+                                <BaseButton
+                                    variant="ghost"
                                     dense
-                                    no-caps
                                     label="None"
                                     @click="selectedItemIds = []"
                                 />
@@ -138,16 +135,14 @@
                     </q-card-section>
                     <q-separator />
                     <q-card-actions align="right">
-                        <q-btn
-                            flat
-                            no-caps
+                        <BaseButton
+                            variant="ghost"
                             label="Print all items"
                             :icon="ICONS.print"
                             @click="openSheet({ allItems: true })"
                         />
-                        <q-btn
-                            color="primary"
-                            no-caps
+                        <BaseButton
+                            variant="primary"
                             :icon="ICONS.picture_as_pdf"
                             :label="`Open sheet (${selectedItemIds.length})`"
                             :disable="selectedItemIds.length === 0"
@@ -187,13 +182,11 @@
                 </q-card-section>
                 <template #actions>
                     <BaseButton variant="ghost" label="Close" v-close-popup />
-                    <q-btn
+                    <BaseButton
                         v-if="matchedItem"
-                        flat
-                        no-caps
+                        variant="ghost"
                         :icon="ICONS.open_in_new"
                         label="Open detail"
-                        color="primary"
                         @click="openDetail(matchedItem.stock_item_id)"
                     />
                 </template>

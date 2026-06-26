@@ -10,17 +10,17 @@
             <q-card-section class="row items-center q-pb-sm">
                 <div class="text-subtitle1">Templates</div>
                 <q-space />
-                <q-btn flat round dense :icon="ICONS.close" @click="emit('update:modelValue', false)">
+                <BaseButton variant="icon" :icon="ICONS.close" @click="emit('update:modelValue', false)">
                     <q-tooltip>Close</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </q-card-section>
             <q-separator />
 
             <q-card-section class="col q-pa-none templates-drawer__body">
                 <!-- Save current week ───────────────────────────────────── -->
                 <div class="q-pa-md">
-                    <q-btn
-                        no-caps outline color="primary"
+                    <BaseButton
+                        variant="secondary"
                         :disable="!canSaveCurrentWeek"
                         :icon="ICONS.add"
                         label="Save this week as a template"
@@ -30,9 +30,9 @@
                         <q-tooltip v-if="!canSaveCurrentWeek">
                             Add some meals to this week first.
                         </q-tooltip>
-                    </q-btn>
-                    <q-btn
-                        no-caps outline color="primary"
+                    </BaseButton>
+                    <BaseButton
+                        variant="secondary"
                         :icon="ICONS.event_repeat"
                         label="Apply recurring…"
                         class="full-width q-mt-sm"
@@ -82,26 +82,27 @@
                         <q-item-section side>
                             <div class="row items-center no-wrap q-gutter-xs">
                                 <template v-if="renamingId === t.meal_plan_template_id">
-                                    <q-btn
-                                        flat dense no-caps
-                                        color="primary" label="Save"
+                                    <BaseButton
+                                        variant="ghost"
+                                        dense
+                                        label="Save"
                                         :loading="saving"
                                         :disable="!renameDraft.trim()"
                                         @click="confirmRename(t.meal_plan_template_id)"
                                     />
-                                    <q-btn flat dense no-caps label="Cancel" @click="cancelRename" />
+                                    <BaseButton variant="ghost" dense label="Cancel" @click="cancelRename" />
                                 </template>
                                 <template v-else>
-                                    <q-btn
-                                        no-caps dense outline color="primary" label="Apply"
+                                    <BaseButton
+                                        variant="secondary" dense label="Apply"
                                         @click="onApply(t)"
                                     />
-                                    <q-btn flat round dense :icon="ICONS.edit" @click="startRename(t)">
+                                    <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(t)">
                                         <q-tooltip>Rename</q-tooltip>
-                                    </q-btn>
-                                    <q-btn flat round dense :icon="ICONS.delete_outline" color="negative" @click="confirmDelete(t)">
+                                    </BaseButton>
+                                    <BaseButton variant="danger-ghost" :icon="ICONS.delete_outline" round dense @click="confirmDelete(t)">
                                         <q-tooltip>Delete</q-tooltip>
-                                    </q-btn>
+                                    </BaseButton>
                                 </template>
                             </div>
                         </q-item-section>
@@ -114,6 +115,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';
     import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
     import { useQuasar } from 'quasar';

@@ -76,7 +76,7 @@
                 <!-- Step 2: pick quantity + store offer -->
                 <template v-else>
                     <div class="row items-center q-mb-sm">
-                        <q-btn flat dense round :icon="ICONS.arrow_back" @click="clearSelection" />
+                        <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="clearSelection" />
                         <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
                     </div>
 
@@ -108,11 +108,8 @@
             </q-card-section>
 
             <template v-if="selectedItem" #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    unelevated
-                    color="primary"
-                    no-caps
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
                     label="Add"
                     :loading="adding"
                     :disable="!targetListId"
@@ -123,6 +120,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { storeToRefs } from 'pinia';

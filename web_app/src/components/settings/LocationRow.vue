@@ -1,11 +1,9 @@
 <template>
     <q-item class="q-py-sm" :style="{ paddingLeft: `${16 + depth * 24}px` }">
         <q-item-section avatar style="min-width: 32px">
-            <q-btn
+            <BaseButton
                 v-if="canHaveChildren"
-                flat
-                dense
-                round
+                variant="icon"
                 size="sm"
                 :icon="isExpanded ? ICONS.expand_more : ICONS.chevron_right"
                 @click="$emit('toggle', node.location_id)"
@@ -39,34 +37,28 @@
 
         <q-item-section side>
             <div class="row q-gutter-xs">
-                <q-btn
+                <BaseButton
                     v-if="childKind"
-                    flat
-                    dense
-                    round
+                    variant="icon"
                     :icon="ICONS.add"
                     @click="$emit('addChild', node)"
                 >
                     <q-tooltip>Add {{ childKind }}</q-tooltip>
-                </q-btn>
-                <q-btn
-                    flat
-                    dense
-                    round
+                </BaseButton>
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.edit"
                     @click="$emit('startRename', node)"
                 >
                     <q-tooltip>Rename</q-tooltip>
-                </q-btn>
-                <q-btn
-                    flat
-                    dense
-                    round
+                </BaseButton>
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.delete_outline"
                     @click="$emit('delete', node)"
                 >
                     <q-tooltip>Delete</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </div>
         </q-item-section>
     </q-item>
@@ -92,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
     import type { LocationKind, LocationNode } from 'src/models/location';

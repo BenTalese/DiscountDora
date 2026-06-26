@@ -56,16 +56,14 @@
                     <div class="text-caption dora-text-muted">Food fact</div>
                     <div>{{ foodFact }}</div>
                 </div>
-                <q-btn
-                    flat
-                    round
-                    dense
+                <BaseButton
+                    variant="icon"
                     :icon="ICONS.refresh"
                     :loading="loadingFact"
                     @click="loadFoodFact"
                 >
                     <q-tooltip>Another, please</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </q-card-section>
         </q-card>
 
@@ -207,6 +205,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import AttentionRulesDialog from 'src/components/help/AttentionRulesDialog.vue';

@@ -1,6 +1,6 @@
 <template>
     <div>
-        <q-btn flat round dense :icon="bellIcon" :color="bellColor" @click="open = true">
+        <BaseButton variant="icon" :icon="bellIcon" :color="bellColor" @click="open = true">
             <q-badge v-if="badgeCount > 0" floating color="negative" text-color="white" rounded>
                 {{ badgeCount }}
             </q-badge>
@@ -11,7 +11,7 @@
                         : `${totalCount} thing${totalCount === 1 ? '' : 's'} need attention`
                 }}
             </q-tooltip>
-        </q-btn>
+        </BaseButton>
 
         <q-dialog v-model="open" position="right" full-height seamless>
             <q-card class="alerts-panel column no-wrap" flat>
@@ -30,8 +30,8 @@
                             </span>
                         </div>
                     </div>
-                    <q-btn flat round dense :icon="ICONS.refresh" :loading="loading" @click="refresh" />
-                    <q-btn flat round dense :icon="ICONS.close" @click="open = false" />
+                    <BaseButton variant="icon" :icon="ICONS.refresh" :loading="loading" @click="refresh" />
+                    <BaseButton variant="icon" :icon="ICONS.close" @click="open = false" />
                 </q-card-section>
 
                 <q-separator class="q-mt-sm" />
@@ -70,11 +70,8 @@
                 <!-- ── Footer: bulk shortcut + jump to the hub ───────────── -->
                 <q-separator />
                 <q-card-section class="dora-bg-elevated q-py-sm column q-gutter-sm">
-                    <q-btn
+                    <BaseButton
                         v-if="lowOrOutStockItemIds.length > 0"
-                        unelevated
-                        color="primary"
-                        no-caps
                         :icon="ICONS.add_shopping_cart"
                         :label="`Add ${lowOrOutStockItemIds.length} low/out item${
                             lowOrOutStockItemIds.length === 1 ? '' : 's'
@@ -83,10 +80,8 @@
                         :loading="addingAll"
                         @click="addAllLowOrOutToPrimary"
                     />
-                    <q-btn
-                        outline
-                        color="primary"
-                        no-caps
+                    <BaseButton
+                        variant="secondary"
                         :icon="ICONS.open_in_new"
                         label="Open Alerts"
                         class="full-width"
@@ -99,6 +94,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';

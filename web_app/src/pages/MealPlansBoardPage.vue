@@ -41,36 +41,36 @@
             <template v-else>
             <!-- ── Top strip (§6.4) ─────────────────────────────────────── -->
             <div class="board-top-strip">
-                <q-btn flat dense round :icon="ICONS.arrow_back" @click="planner.goPrevWeek">
+                <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="planner.goPrevWeek">
                     <q-tooltip>Previous week</q-tooltip>
-                </q-btn>
+                </BaseButton>
                 <div class="board-top-strip__range">{{ planner.weekRangeLabel.value }}</div>
-                <q-btn flat dense round :icon="ICONS.arrow_forward" @click="planner.goNextWeek">
+                <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="planner.goNextWeek">
                     <q-tooltip>Next week</q-tooltip>
-                </q-btn>
-                <q-btn flat no-caps dense :label="todayLabel" class="q-ml-sm" @click="goToToday">
+                </BaseButton>
+                <BaseButton variant="ghost" dense :label="todayLabel" class="q-ml-sm" @click="goToToday">
                     <q-tooltip>Jump to this week</q-tooltip>
-                </q-btn>
+                </BaseButton>
                 <!-- Calendar widget — now a month-jump popover (§8.1). -->
-                <q-btn flat dense round :icon="ICONS.calendar_month" class="q-ml-sm">
+                <BaseButton variant="icon" :icon="ICONS.calendar_month" class="q-ml-sm">
                     <q-tooltip>Pick a week</q-tooltip>
                     <q-menu fit anchor="bottom right" self="top right">
                         <div style="min-width: 260px; padding: 8px">
                             <MealPlanCalendar v-model:focused-monday="planner.focusedMonday.value" />
                         </div>
                     </q-menu>
-                </q-btn>
+                </BaseButton>
 
                 <q-space />
 
-                <q-btn
-                    flat no-caps
+                <BaseButton
+                    variant="ghost"
                     :icon="ICONS.event_repeat" label="Templates"
                     @click="templatesDrawerOpen = true"
                 />
 
-                <q-btn
-                    no-caps outline color="primary" class="q-ml-sm"
+                <BaseButton
+                    variant="secondary" class="q-ml-sm"
                     :icon="ICONS.lightbulb" label="Plan step-by-step"
                     @click="builderOpen = true"
                 />
@@ -88,12 +88,11 @@
                 />
 
                 <!-- A/B toggle (desktop, temp; §8.2) -->
-                <q-btn-toggle
+                <BaseSegmented
                     :model-value="'grid'"
                     @update:model-value="onViewToggle"
                     class="q-ml-md board-view-toggle"
-                    dense no-caps unelevated
-                    toggle-color="primary"
+                    dense unelevated
                     :options="[
                         { label: 'List', value: 'list' },
                         { label: 'Grid', value: 'grid' },
@@ -109,9 +108,9 @@
                     :need-to-buy-count="planner.needToBuy.value.length"
                     :cook-by-label="planner.cookByLabel.value"
                 />
-                <q-btn
+                <BaseButton
                     v-if="planner.focusedPlan.value && planner.needToBuy.value.length"
-                    no-caps color="primary" :icon="ICONS.shopping_cart"
+                    variant="primary" :icon="ICONS.shopping_cart"
                     label="Generate shopping list"
                     :loading="planner.generating.value"
                     @click="planner.generateListForWeek"
@@ -132,8 +131,8 @@
                         </div>
                     </div>
                     <q-space />
-                    <q-btn
-                        no-caps color="primary" :icon="ICONS.lightbulb"
+                    <BaseButton
+                        variant="primary" :icon="ICONS.lightbulb"
                         label="Plan step-by-step"
                         @click="builderOpen = true"
                     />
@@ -205,16 +204,16 @@
                 <q-card-section class="row items-center q-pb-none">
                     <div class="text-subtitle1">Recipes</div>
                     <q-space />
-                    <q-btn
-                        flat round dense
+                    <BaseButton
+                        variant="icon"
                         :icon="pickerPinned ? ICONS.lock : ICONS.lock_open"
                         @click="pickerPinned = !pickerPinned"
                     >
                         <q-tooltip>{{ pickerPinned ? 'Unpin' : 'Pin open' }}</q-tooltip>
-                    </q-btn>
-                    <q-btn flat round dense :icon="ICONS.close" @click="pickerOpen = false">
+                    </BaseButton>
+                    <BaseButton variant="icon" :icon="ICONS.close" @click="pickerOpen = false">
                         <q-tooltip>Close</q-tooltip>
-                    </q-btn>
+                    </BaseButton>
                 </q-card-section>
                 <q-card-section class="col q-pa-sm">
                     <MealPlanRecipePicker
@@ -262,9 +261,9 @@
                 />
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary" no-caps label="Save template"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary" label="Save template"
                     :loading="savingTemplate"
                     :disable="!templateName.trim()"
                     @click="confirmSaveTemplate"
@@ -301,9 +300,9 @@
                 </div>
             </q-card-section>
             <template #actions>
-                <q-btn flat no-caps label="Cancel" v-close-popup />
-                <q-btn
-                    color="primary" no-caps label="Apply"
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary" label="Apply"
                     :loading="recurringApplying"
                     :disable="!recurringSource || !recurringStart || !recurringEnd"
                     @click="confirmRecurring"
@@ -315,7 +314,9 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MealPlanCalendar from 'components/MealPlanCalendar.vue';
     import MealPlanFirstRun from 'src/components/MealPlanFirstRun.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';

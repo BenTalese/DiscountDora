@@ -63,10 +63,7 @@
                         :disable="saving"
                         autocomplete="username"
                     />
-                    <q-btn
-                        color="primary"
-                        unelevated
-                        no-caps
+                    <BaseButton
                         :icon="ICONS.save"
                         label="Save"
                         :loading="savingUsername"
@@ -92,10 +89,7 @@
                         :disable="saving"
                         autocomplete="email"
                     />
-                    <q-btn
-                        color="primary"
-                        unelevated
-                        no-caps
+                    <BaseButton
                         :icon="ICONS.save"
                         label="Save"
                         :loading="savingEmail"
@@ -146,10 +140,7 @@
                     />
                 </div>
                 <div class="q-mt-sm">
-                    <q-btn
-                        color="primary"
-                        unelevated
-                        no-caps
+                    <BaseButton
                         :icon="ICONS.lock_reset"
                         label="Change password"
                         :loading="savingPassword"
@@ -171,10 +162,8 @@
 
             <SettingsRow stacked>
                 <div>
-                    <q-btn
-                        color="negative"
-                        unelevated
-                        no-caps
+                    <BaseButton
+                        variant="danger"
                         :icon="ICONS.logout"
                         label="Sign out"
                         :loading="signingOut"
@@ -187,6 +176,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

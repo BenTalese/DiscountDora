@@ -10,9 +10,9 @@
             <q-card-section class="row items-center q-py-sm">
                 <div class="text-subtitle1">Pick a recipe</div>
                 <q-space />
-                <q-btn flat round dense :icon="ICONS.close" @click="emit('update:modelValue', false)">
+                <BaseButton variant="icon" :icon="ICONS.close" @click="emit('update:modelValue', false)">
                     <q-tooltip>Close</q-tooltip>
-                </q-btn>
+                </BaseButton>
             </q-card-section>
             <q-separator />
             <q-card-section class="col q-pa-sm picker-sheet__body">
@@ -35,6 +35,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';

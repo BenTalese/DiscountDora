@@ -7,9 +7,7 @@
                 Meal plans build a week from recipes in your cookbook. Add a few
                 recipes first — then come back here to plan them.
             </div>
-            <q-btn
-                color="primary"
-                no-caps
+            <BaseButton
                 :icon="ICONS.add"
                 label="Go to Cookbook"
                 @click="goToCookbook"
@@ -19,6 +17,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useRouter } from 'vue-router';
 

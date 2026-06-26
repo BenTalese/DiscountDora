@@ -48,34 +48,31 @@
                         label="View in context"
                         @click="emit('view-in-context')"
                     />
-                    <q-btn
+                    <BaseButton
+                        variant="ghost"
                         size="sm"
                         dense
-                        flat
-                        no-caps
                         :icon="ICONS.snooze"
                         label="Snooze 7d"
                         @click="emit('snooze')"
                     >
                         <q-tooltip>Hide for 7 days.</q-tooltip>
-                    </q-btn>
-                    <q-btn
+                    </BaseButton>
+                    <BaseButton
+                        variant="ghost"
                         size="sm"
                         dense
-                        flat
-                        no-caps
                         :icon="ICONS.close"
                         label="Dismiss"
                         @click="emit('dismiss')"
                     >
                         <q-tooltip>Hide until it re-fires.</q-tooltip>
-                    </q-btn>
+                    </BaseButton>
                 </template>
-                <q-btn
+                <BaseButton
+                    variant="ghost"
                     size="sm"
                     dense
-                    flat
-                    no-caps
                     :icon="alert.read ? ICONS.undo : ICONS.mark_email_read"
                     :label="alert.read ? 'Unread' : 'Mark read'"
                     @click="emit('toggle-read', !alert.read)"
@@ -86,6 +83,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { actionsFor, colorFor, iconFor, type Alert, type AlertAction } from 'src/models/alert';
     import { computed } from 'vue';

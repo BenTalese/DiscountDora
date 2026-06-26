@@ -315,11 +315,9 @@
             >
                 <q-icon :name="ICONS.menu_book" size="60px" class="q-mb-sm" />
                 <div>No recipes match the current filters.</div>
-                <q-btn
+                <BaseButton
                     v-if="hasAnyFilter"
-                    flat
-                    no-caps
-                    color="primary"
+                    variant="ghost"
                     label="Clear filters"
                     class="q-mt-sm"
                     @click="clearFilters"

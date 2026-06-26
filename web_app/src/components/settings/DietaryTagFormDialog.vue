@@ -35,10 +35,8 @@
         </q-card-section>
 
         <template #actions="{ cancel }">
-            <q-btn flat no-caps label="Cancel" :disable="busy" @click="cancel" />
-            <q-btn
-                color="primary"
-                no-caps
+            <BaseButton variant="ghost" label="Cancel" :disable="busy" @click="cancel" />
+            <BaseButton
                 :label="tag ? 'Save' : 'Create'"
                 :loading="busy"
                 :disable="!canSubmit"
@@ -49,6 +47,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import type { DietaryTag } from 'src/models/recipeVocab';
     import { computed, ref, watch } from 'vue';

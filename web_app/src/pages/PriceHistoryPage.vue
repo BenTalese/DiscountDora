@@ -85,18 +85,15 @@
             <div class="row items-center q-mb-sm">
                 <div class="text-h5">Price history</div>
                 <q-space />
-                <q-btn-toggle
+                <BaseSegmented
                     v-model="range"
                     :options="rangeOptions"
                     dense
                     flat
-                    no-caps
                     color="grey"
-                    toggle-color="primary"
                 />
-                <q-btn
-                    flat
-                    no-caps
+                <BaseButton
+                    variant="ghost"
                     :icon="ICONS.notifications"
                     label="Manage alerts"
                     class="q-ml-md"
@@ -194,9 +191,8 @@
                                     label="Notify me below ($)"
                                     class="col"
                                 />
-                                <q-btn
-                                    color="primary"
-                                    no-caps
+                                <BaseButton
+                                    variant="primary"
                                     :icon="ICONS.notifications_active"
                                     label="Set alert"
                                     :disable="!alertInputs[s.product_id] || alertInputs[s.product_id]! <= 0"
@@ -225,12 +221,10 @@
                             </q-item-label>
                         </q-item-section>
                         <q-item-section side>
-                            <q-btn
-                                flat
+                            <BaseButton
+                                variant="danger-ghost"
                                 dense
                                 :icon="ICONS.delete"
-                                color="negative"
-                                no-caps
                                 label="Remove"
                                 @click="onDeleteAlert(a.price_alert_id)"
                             />
@@ -243,6 +237,8 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import { useQuasar } from 'quasar';
     import { computed, onBeforeUnmount, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';

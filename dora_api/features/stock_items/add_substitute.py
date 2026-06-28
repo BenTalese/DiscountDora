@@ -3,13 +3,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from dora_api.app import db
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain import units
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.substitutes.canonical import canonical_pair
+from dora_api.features.substitutes.metadata import (
+    SubstituteMetadata, build_metadata, validate_metadata,
+)
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   entity_existence_failure,
                                                   no_content, not_found)
@@ -23,6 +27,16 @@ class AddSubstituteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     substitute_id: UUID
+    # FU-034 — free-text hint + optional structured ratio. Both default to
+    # None for backward compatibility with callers that don't care. The
+    # ratio direction (in/out) is *from the perspective of stock_item_id*;
+    # the handler reorients it into the canonical pair direction before
+    # persisting.
+    notes: str | None = Field(default=None, max_length=255)
+    ratio_quantity_in: float | None = None
+    ratio_unit_in: str | None = Field(default=None, max_length=32)
+    ratio_quantity_out: float | None = None
+    ratio_unit_out: str | None = Field(default=None, max_length=32)
 
 
 @dataclass(slots=True)
@@ -31,6 +45,9 @@ class AddSubstituteResponse:
     substitute_not_found: bool = False
     is_self: bool = False
     already_linked: bool = False
+    # FU-034 — ratio validation failure (a single message; the API layer
+    # turns it into a business-rule-violation response).
+    invalid_ratio: str | None = None
 
 
 class AddSubstituteHandler:
@@ -46,6 +63,19 @@ class AddSubstituteHandler:
         if not self.repository.get(StockItem).exists(request.substitute_id):
             return AddSubstituteResponse(substitute_not_found=True)
 
+        # FU-034 — validate the requested metadata (all-or-none ratio,
+        # positive quantities, units in the canonical catalogue).
+        _Meta = SubstituteMetadata(
+            notes=request.notes,
+            ratio_quantity_in=request.ratio_quantity_in,
+            ratio_unit_in=request.ratio_unit_in,
+            ratio_quantity_out=request.ratio_quantity_out,
+            ratio_unit_out=request.ratio_unit_out,
+        )
+        _Error = validate_metadata(_Meta)
+        if _Error is not None:
+            return AddSubstituteResponse(invalid_ratio=_Error)
+
         # Undirected pair stored canonically (a_id < b_id). Idempotent: a
         # duplicate is reported as already-linked rather than an error.
         a_id, b_id = canonical_pair(stock_item_id, request.substitute_id)
@@ -59,11 +89,22 @@ class AddSubstituteHandler:
         if _Existing is not None:
             return AddSubstituteResponse(already_linked=True)
 
+        # FU-034 — flip the ratio in/out to the canonical A→B direction
+        # if the caller passed it the B→A way round.
+        _Persisted = build_metadata(
+            meta=_Meta,
+            from_id=stock_item_id,
+            canonical_a_id=a_id,
+        )
         db.session.execute(
             _Assoc.insert().values(
                 stock_item_a_id=a_id,
                 stock_item_b_id=b_id,
-                notes=None,
+                notes=_Persisted.notes,
+                ratio_quantity_in=_Persisted.ratio_quantity_in,
+                ratio_unit_in=_Persisted.ratio_unit_in,
+                ratio_quantity_out=_Persisted.ratio_quantity_out,
+                ratio_unit_out=_Persisted.ratio_unit_out,
                 created_at=datetime.now(timezone.utc),
             )
         )
@@ -89,6 +130,8 @@ def add_substitute(stock_item_id: UUID):
             field_of(AddSubstituteRequest, "substitute_id"),
             _Request.substitute_id,
         )
+    if _Response.invalid_ratio is not None:
+        return business_rule_violation(_Response.invalid_ratio)
 
     _Logger.info(
         "Added substitute %s to stock item %s%s",

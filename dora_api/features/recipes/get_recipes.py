@@ -155,6 +155,13 @@ class RecipeDto:
     # the window + the count (R-003); the client just renders the trays.
     not_made_recently: bool
     plan_count: int
+    # FU-081 — true iff at least one MealPlanEntry for this recipe is
+    # scheduled today or later AND not yet consumed. Server-owned (R-003)
+    # so the cookbook's "Planned" / "Not planned" filter doesn't need to
+    # walk every meal plan client-side. Hydrated alongside the existing
+    # `committed_meals` derivation in `_hydrate_unallocated` (same query
+    # — zero extra round-trip).
+    is_planned: bool
     # C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
     # edit-form selects + client filters; the name is carried for cheap
     # display (card subtitle, search, export) without a client-side join.
@@ -167,7 +174,6 @@ class RecipeDto:
     instructions: str | None
     is_favourite: bool
     last_made_on: datetime | None
-    nutrition: str | None
     prep_time_minutes: int | None
     recipe_collection_id: UUID | None
     servings: int | None
@@ -268,6 +274,7 @@ class RecipeDto:
             committed_meals = 0,
             not_made_recently = False,
             plan_count = 0,
+            is_planned = False,
             cuisine_id = recipe.cuisine.id if recipe.cuisine else None,
             cuisine_name = recipe.cuisine.name if recipe.cuisine else None,
             category_id = recipe.category.id if recipe.category else None,
@@ -277,7 +284,6 @@ class RecipeDto:
             instructions = recipe.instructions,
             is_favourite = recipe.is_favourite,
             last_made_on = recipe.last_made_on,
-            nutrition = recipe.nutrition,
             prep_time_minutes = recipe.prep_time_minutes,
             recipe_collection_id = recipe.recipe_collection.id if recipe.recipe_collection else None,
             servings = recipe.servings,
@@ -782,13 +788,21 @@ class GetRecipesHandler:
     def _hydrate_unallocated(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
         """Subtract the sum of future, un-consumed servings per recipe
         from `available_meals` to derive the unallocated pool. One
-        GROUP BY query keeps this O(1) regardless of list size."""
+        GROUP BY query keeps this O(1) regardless of list size.
+
+        FU-081 — switched from raw `text()` to ORM `select()` against
+        the mapped table. The text-form bound stringified UUIDs against
+        the `UUIDType` BLOB columns on SQLite (string-vs-BLOB never
+        matches), which silently kept `committed_meals` at 0 whenever
+        future entries existed. The ORM form lets SQLAlchemy apply the
+        UUIDType bind-processor and is portable across SQLite + Postgres.
+        Same row set now also stamps `is_planned` (FU-081 derivation)."""
         if not dtos:
             return dtos
         import dataclasses
         from datetime import timedelta
 
-        from sqlalchemy import bindparam, text
+        from sqlalchemy import func, select
 
         from dora_api.app import db
         from dora_api.features.app_settings.clock import household_today
@@ -796,25 +810,27 @@ class GetRecipesHandler:
         # "Today" in the household timezone (C-2.K), consistent with the
         # meal-plan rules — not server-local.
         _Today = household_today(self.repository)
-        _Ids = [str(d.recipe_id) for d in dtos]
+        _Ids = [d.recipe_id for d in dtos]
 
-        _Stmt = text(
-            "SELECT recipe_id, SUM(servings) "
-            'FROM "MealPlanEntry" '
-            "WHERE consumed_at IS NULL AND scheduled_for >= :today "
-            "  AND recipe_id IN :ids "
-            "GROUP BY recipe_id"
-        ).bindparams(bindparam("ids", expanding=True))
-        # SQLite's driver can't bind raw UUID objects through text(); stringify.
-        _Rows = db.session.execute(_Stmt, {"today": _Today, "ids": _Ids}).all()
+        _Mpe = db.metadata.tables["MealPlanEntry"]
+
+        _Stmt = (
+            select(_Mpe.c.recipe_id, func.sum(_Mpe.c.servings))
+            .where(_Mpe.c.consumed_at.is_(None))
+            .where(_Mpe.c.scheduled_for >= _Today)
+            .where(_Mpe.c.recipe_id.in_(_Ids))
+            .group_by(_Mpe.c.recipe_id)
+        )
+        _Rows = db.session.execute(_Stmt).all()
 
         # C-2.I — how often each recipe appears across *all* meal plans (the
         # "frequently planned" tray): a plain all-time entry count.
-        _CountStmt = text(
-            'SELECT recipe_id, COUNT(*) FROM "MealPlanEntry" '
-            "WHERE recipe_id IN :ids GROUP BY recipe_id"
-        ).bindparams(bindparam("ids", expanding=True))
-        _CountRows = db.session.execute(_CountStmt, {"ids": _Ids}).all()
+        _CountStmt = (
+            select(_Mpe.c.recipe_id, func.count())
+            .where(_Mpe.c.recipe_id.in_(_Ids))
+            .group_by(_Mpe.c.recipe_id)
+        )
+        _CountRows = db.session.execute(_CountStmt).all()
 
         # UUIDType columns are 16-byte BLOBs in SQLite; text() reads bring them
         # back as bytes. Normalise to a stable str key.
@@ -841,6 +857,10 @@ class GetRecipesHandler:
                 unallocated_meals = max(d.available_meals - _Committed.get(str(d.recipe_id), 0), 0),
                 plan_count = _PlanCount.get(str(d.recipe_id), 0),
                 not_made_recently = _stale(d),
+                # FU-081 — same query already filtered to future-unconsumed
+                # entries; any presence in _Committed means at least one
+                # such row exists.
+                is_planned = _Committed.get(str(d.recipe_id), 0) > 0,
             )
             for d in dtos
         ]

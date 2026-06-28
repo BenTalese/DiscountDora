@@ -53,41 +53,13 @@
             />
         </div>
 
-        <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe surface. -->
-        <BaseDialog v-model="importOpen" title="Import from URL" closable card-style="min-width: 460px; max-width: 600px">
-            <q-card-section>
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    Works on recipe sites that publish
-                    <strong>schema.org Recipe JSON-LD</strong> — the format
-                    most blogs, BBC Good Food, NYT Cooking, Serious Eats,
-                    AllRecipes, and similar publishers use. Other URLs still
-                    import: we'll pull the page title and text into
-                    Instructions so you can clean it up.
-                </div>
-            </q-card-section>
-            <q-card-section class="q-pt-none">
-                <q-input
-                    v-model="importUrl"
-                    outlined
-                    dense
-                    label="Recipe URL"
-                    placeholder="https://example.com/recipes/lasagne"
-                    :error="!!importError"
-                    :error-message="importError ?? ''"
-                    @keydown.enter.prevent="onConfirmImport"
-                />
-            </q-card-section>
-            <template #actions>
-                <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <BaseButton
-                    variant="primary"
-                    label="Import"
-                    :loading="importing"
-                    :disable="importUrl.trim().length === 0"
-                    @click="onConfirmImport"
-                />
-            </template>
-        </BaseDialog>
+        <!-- C-4 Chunk 7 — Import-from-URL on the overview's New-Recipe
+             surface. FU-102: dialog chrome extracted to a shared component;
+             this page wires the imported DTO to `createAsync` + nav. -->
+        <RecipeImportDialog
+            v-model="importOpen"
+            @imported="onRecipeImported"
+        />
 
         <!-- ── Filter bar ─ standardised via FilterBar (A4) ───────── -->
         <FilterBar
@@ -107,9 +79,18 @@
             <FilterChip v-model="inStockOnly" :icon="ICONS.inventory_2" active-color="primary">
                 Have meals in pool
             </FilterChip>
-            <FilterChip v-model="plannedInOnly" :icon="ICONS.calendar_month" active-color="info">
-                Planned
-            </FilterChip>
+            <!-- FU-081 — tri-state: click 1 = Planned only, click 2 = Not
+                 planned only, click 3 = off. Single chip cycles through; the
+                 active filter count + Clear filters cover both modes. -->
+            <TriStateFilterChip
+                v-model="plannedFilterState"
+                include-label="Planned"
+                exclude-label="Not planned"
+                :include-icon="ICONS.calendar_month"
+                :exclude-icon="ICONS.calendar_month"
+                include-color="info"
+                exclude-color="warning"
+            />
             <!-- C-waste W4 — surfaces recipes that use at least one
                  in-stock ingredient expiring within 14 days. While on,
                  the list is force-sorted by count desc and each card
@@ -394,10 +375,10 @@
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseDialog from 'src/components/BaseDialog.vue';
     import FilterBar from 'src/components/FilterBar.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
+    import TriStateFilterChip, { type TriState } from 'src/components/chips/TriStateFilterChip.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
@@ -413,14 +394,14 @@
     } from 'src/components/filters/triStateFilterTypes';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
-    import RecipeApiService from 'src/services/api/recipeApiService';
-    import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
+    import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import {
         DEFAULT_MEAL_SLOTS,
         DIFFICULTY_RANK,
@@ -439,7 +420,9 @@
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
     const shoppingListStore = useShoppingListStore();
-    const mealPlanStore = useMealPlanStore();
+    // FU-081 — meal-plan store dependency dropped: `is_planned` is
+    // server-derived now, and the page never read the cache otherwise.
+    // Saves one round-trip on cookbook overview load.
     const recipeVocabStore = useRecipeVocabStore();
     const mealSlotStore = useMealSlotStore();
     const recipeApi = new RecipeApiService();
@@ -447,7 +430,6 @@
 
     const { recipes, recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
-    const { mealPlans } = storeToRefs(mealPlanStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     // C-cross Chunk 5 — image-display opt-in for recipe surfaces.
@@ -488,7 +470,10 @@
     const favouritesOnly = ref(false);
     const cookableNowOnly = ref(false);
     const inStockOnly = ref(false);
-    const plannedInOnly = ref(false);
+    // FU-081 — tri-state: 'off' = no constraint; 'include' = only planned
+    // recipes (any future un-consumed MealPlanEntry); 'exclude' = only
+    // un-planned recipes. Cycles via TriStateFilterChip.
+    const plannedFilterState = ref<TriState>('off');
     // C-waste W4 — when on, restricts the list to recipes using ≥1
     // expiring-within-14-days in-stock ingredient AND force-sorts by
     // count desc. The id→count map below is populated by a separate
@@ -612,49 +597,12 @@
         return (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
     }
 
-    function stockLevelColourFor(name: string | null | undefined): string {
-        return name ? getStockLevelColour(name) : 'grey';
-    }
 
-    // Recipe ids planned in any meal-plan entry from today onward. FU-083
-    // feedback: previous string-compare on `scheduled_for` was meant to
-    // work for ISO date strings but yesterday's entries were surviving
-    // for some users. This version parses YYYY-MM-DD explicitly and
-    // compares against today at local midnight via `Date.getTime()` —
-    // robust to a time component on the wire and to time-zone edge
-    // cases. The `consumed_at` skip was removed: a *planned* entry
-    // remains planned even if the user marked it cooked early.
-    // FU-049 still applies — should ideally be server-derived once
-    // meal-plan ownership moves; the client compute keeps Chunk 1 self-
-    // contained.
-    const plannedRecipeIds = computed(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayMs = today.getTime();
-        const ids = new Set<string>();
-        for (const plan of mealPlans.value) {
-            for (const entry of plan.entries ?? []) {
-                const raw = entry.scheduled_for;
-                if (!raw) continue;
-                const parsed = new Date(raw);
-                if (Number.isNaN(parsed.getTime())) continue;
-                // Flask serialises Python `date` as RFC 2822 with a GMT
-                // suffix ("Wed, 10 Jun 2026 00:00:00 GMT") — calendar-only
-                // semantics, but parsed as UTC midnight. Rebuild a
-                // *local*-midnight Date from the UTC calendar parts so
-                // the comparison is day-to-day across any timezone
-                // (otherwise a UTC midnight that's actually "yesterday
-                // local" in a negative-offset zone gets miscategorised).
-                const entryLocal = new Date(
-                    parsed.getUTCFullYear(),
-                    parsed.getUTCMonth(),
-                    parsed.getUTCDate(),
-                );
-                if (entryLocal.getTime() >= todayMs) ids.add(entry.recipe_id);
-            }
-        }
-        return ids;
-    });
+    // FU-081 — `is_planned` is now server-owned (RecipeDto field,
+    // derived from MealPlanEntry rows in the same query that fills
+    // `committed_meals`). The client predicate reads it directly; the
+    // old client-side walk of `mealPlanStore.mealPlans[].entries[]`
+    // with timezone-juggling on `scheduled_for` is retired.
 
     // FU-083 — hint computeds removed (the input labels carry the meaning;
     // the hint-under-input text was just inflating the filter row).
@@ -697,7 +645,10 @@
         stockItems.value.map((si) => ({
             value: si.stock_item_id,
             label: si.name,
-            dotColour: stockLevelColourFor(si.stock_level_name ?? null),
+            // FU-050 — sequence-keyed (R-003). `si.stock_level_sequence`
+            // is null on untracked items → null dotColour, which the
+            // TriStateFilter renders as a muted dot.
+            dotColour: colourForSequence(si.stock_level_sequence ?? null),
             meta: { levelSequence: si.stock_level_sequence ?? null },
         })),
     );
@@ -734,7 +685,10 @@
             if (favouritesOnly.value && !r.is_favourite) return false;
             if (cookableNowOnly.value && !r.cookable) return false;
             if (inStockOnly.value && r.available_meals <= 0) return false;
-            if (plannedInOnly.value && !plannedRecipeIds.value.has(r.recipe_id)) return false;
+            // FU-081 — tri-state: include keeps only planned; exclude keeps
+            // only un-planned; off is no constraint.
+            if (plannedFilterState.value === 'include' && !r.is_planned) return false;
+            if (plannedFilterState.value === 'exclude' && r.is_planned) return false;
 
             // C-waste W4 — narrow to recipes the server flagged as
             // using ≥1 expiring-within-horizon ingredient. The map is
@@ -977,7 +931,7 @@
             || favouritesOnly.value
             || cookableNowOnly.value
             || inStockOnly.value
-            || plannedInOnly.value
+            || plannedFilterState.value !== 'off'
             || expiringOnly.value
             || (mealCountMin.value !== null && Number.isFinite(mealCountMin.value))
             || (missingMax.value !== null && Number.isFinite(missingMax.value))
@@ -1004,7 +958,7 @@
         if (favouritesOnly.value) n++;
         if (cookableNowOnly.value) n++;
         if (inStockOnly.value) n++;
-        if (plannedInOnly.value) n++;
+        if (plannedFilterState.value !== 'off') n++;
         if (expiringOnly.value) n++;
         if (mealCountMin.value !== null && Number.isFinite(mealCountMin.value)) n++;
         if (missingMax.value !== null && Number.isFinite(missingMax.value)) n++;
@@ -1126,7 +1080,7 @@
         favouritesOnly.value = false;
         cookableNowOnly.value = false;
         inStockOnly.value = false;
-        plannedInOnly.value = false;
+        plannedFilterState.value = 'off';
         expiringOnly.value = false;
         mealCountMin.value = null;
         missingMax.value = null;
@@ -1161,24 +1115,18 @@
     // fuzzy-matched to a stock item are skipped server-side (the create
     // endpoint requires a stock_item_id per ingredient); we surface the
     // count in the success toast so the user knows to add them manually.
+    // FU-102 — the dialog (RecipeImportDialog) owns url/error/loading
+    // state and the `importFromUrlAsync` call. This page only opens it
+    // and handles what to do with the result: build a create payload,
+    // POST it, navigate to the new recipe, and toast.
     const importOpen = ref(false);
-    const importUrl = ref('');
-    const importing = ref(false);
-    const importError = ref<string | null>(null);
 
     function onImportClick() {
-        importUrl.value = '';
-        importError.value = null;
         importOpen.value = true;
     }
 
-    async function onConfirmImport() {
-        const url = importUrl.value.trim();
-        if (!url) return;
-        importError.value = null;
-        importing.value = true;
+    async function onRecipeImported(imported: ImportedRecipe) {
         try {
-            const imported = await recipeApi.importFromUrlAsync(url);
             // Only ingredients with a fuzzy-matched stock_item_id can ship
             // through create (FK constraint). The rest stay as a counter in
             // the toast.
@@ -1213,7 +1161,6 @@
                 cuisine_id: imported.cuisine_id,
                 difficulty: imported.difficulty,
                 instructions: imported.instructions,
-                nutrition: imported.nutrition,
                 prep_time_minutes: imported.prep_time_minutes,
                 recipe_collection_id: null,
                 servings: imported.servings,
@@ -1254,10 +1201,12 @@
             }
             if (newId) void router.push(`/cookbook/${newId}`);
         } catch (err) {
-            importError.value = 'Could not import. The URL might not publish structured recipe data.';
-            console.warn('Import failed', err);
-        } finally {
-            importing.value = false;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not create the imported recipe.',
+                caption: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 
@@ -1385,9 +1334,10 @@
                 recipeStore.getRecipeCollectionsAsync(),
                 stockItemStore.getStockItemsAsync(),
                 shoppingListStore.refreshAsync(),
-                // Meal plans drive the "planned in" filter (client-side
-                // derivation; future Phase-2 work moves this server-side).
-                mealPlanStore.getMealPlansAsync(),
+                // FU-081 — `is_planned` is now server-derived (RecipeDto
+                // field), so this page no longer needs to fetch meal plans
+                // for the "Planned" filter. The store hydration is left to
+                // other surfaces that genuinely need it.
                 // C-4 Chunk 2 — vocabularies for the cuisine/category/dietary
                 // filters (sourced from the editable settings tables).
                 recipeVocabStore.getAllAsync(),

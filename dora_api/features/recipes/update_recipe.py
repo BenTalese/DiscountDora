@@ -99,7 +99,6 @@ class UpdateRecipeRequest(BaseModel):
     difficulty: str | None = None
     instructions: str | None = None
     is_favourite: bool | None = None
-    nutrition: str | None = None
     prep_time_minutes: int | None = None
     recipe_collection_id: UUID | None = None
     servings: int | None = None
@@ -156,7 +155,7 @@ class UpdateRecipeResponse:
 # are FK relationships resolved separately below.
 _NULLABLE_PLAIN_ATTRS = (
     "cook_time_minutes", "difficulty",
-    "instructions", "nutrition", "prep_time_minutes",
+    "instructions", "prep_time_minutes",
     "servings", "source", "time_of_day", "kcal",
 )
 

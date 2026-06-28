@@ -228,8 +228,9 @@
                                 <q-chip
                                     dense
                                     size="sm"
-                                    :color="rowChipColour(item.status)"
-                                    text-color="white"
+                                    :color="rowChipColour(item.status) ?? undefined"
+                                    :text-color="rowChipColour(item.status) ? 'white' : undefined"
+                                    :class="{ 'dora-bg-sunken dora-text-secondary': !rowChipColour(item.status) }"
                                 >
                                     {{ rowChipLabel(item.status) }}
                                 </q-chip>
@@ -542,9 +543,11 @@
         }
     }
 
-    function rowChipColour(status: RowReport['status']): string {
+    // R-002: neutral "skipped" routes through `dora-bg-sunken` /
+    // `dora-text-secondary` (see template), not a `grey-N` literal.
+    function rowChipColour(status: RowReport['status']): string | null {
         if (status === 'created') return 'positive';
-        if (status === 'skipped_duplicate') return 'grey-7';
+        if (status === 'skipped_duplicate') return null;
         return 'negative';
     }
     function rowChipLabel(status: RowReport['status']): string {

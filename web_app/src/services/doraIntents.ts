@@ -16,6 +16,7 @@
 // narrower intents must come before broader ones (e.g. `convert` before
 // `find_recipe`, since both could contain food words).
 import type { DoraMood } from 'src/components/dora/doraTypes';
+import { LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE } from 'src/helpers/stockStatus';
 
 export type DoraIntentId =
     | 'greet'
@@ -297,8 +298,9 @@ const FALLBACK_REPLIES = [
 
 // ── Local helpers for data intents ─────────────────────────────────────
 
-const LOW_STOCK_SEQUENCE = 2;   // "Low Stock" and worse
-const OUT_OF_STOCK_SEQUENCE = 3;
+// FU-050 — sequence constants live in `helpers/stockStatus.ts` (R-003).
+// The duplicates that previously sat here had drifted off the canonical
+// source and would have silently broken if either side changed.
 const EXPIRY_HORIZON_DAYS = 7;
 
 function daysUntil(iso: string | null): number | null {

@@ -107,7 +107,6 @@ class NewRecipeVersionHandler:
             is_favourite=False,
             last_made_on=None,
             name=copy_name,
-            nutrition=source.nutrition,
             prep_time_minutes=source.prep_time_minutes,
             recipe_collection=source.recipe_collection,
             servings=source.servings,

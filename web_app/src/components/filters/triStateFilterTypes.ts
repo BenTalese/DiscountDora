@@ -8,8 +8,10 @@ export type TriStateOption = {
     label: string;
     category?: string;
     /** Quasar colour name; renders a 10px dot next to the +/- icon.
-     *  Use for at-a-glance signals like stock level. */
-    dotColour?: string;
+     *  Use for at-a-glance signals like stock level. Pass `null` to
+     *  render a muted (theme-token) dot for the neutral branch
+     *  (R-002 — neutral state never uses a `grey-N` literal). */
+    dotColour?: string | null;
     /** Opaque metadata blob the caller's sort compares can read.
      *  Not used by the component itself. */
     meta?: Record<string, unknown>;

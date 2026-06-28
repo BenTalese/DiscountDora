@@ -11,14 +11,16 @@
             :row="row"
             :ingredient-options="ingredientOptions"
             :tool-options="toolOptions"
-            :can-move-up="canMoveUp(row)"
-            :can-move-down="canMoveDown(row)"
+            :section-options="sectionOptions ?? []"
             :can-add-sub-step="row.parent_client_id === null"
+            :dragging-client-id="draggingClientId"
+            :dragging-parent-id="draggingParentId"
             @update="onRowUpdate"
             @add-sub="onAddSubStep(row.client_id)"
             @remove="onRemove(row.client_id)"
-            @move-up="onMove(row.client_id, -1)"
-            @move-down="onMove(row.client_id, +1)"
+            @drag-start="onDragStart"
+            @drag-end="onDragEnd"
+            @drop-on-row="onDropOnRow"
         />
 
         <BaseButton
@@ -32,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-    import { computed } from 'vue';
+    import { computed, ref } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import DraggableStepRow from 'src/components/recipes/RecipeStepRow.vue';
@@ -41,12 +43,18 @@
         StepRowView,
         IngredientOption,
         ToolOption,
+        SectionOption,
     } from 'src/components/recipes/recipeStepEditorTypes';
 
     const props = defineProps<{
         steps: EditableStep[];
         ingredientOptions: IngredientOption[];
         toolOptions: ToolOption[];
+        // FU-117 — section choices for the top-level step picker. Defaults
+        // to `[]` so callers without named sections (or that haven't wired
+        // the prop yet) get the same behaviour as before: no picker
+        // rendered, steps stay unsectioned.
+        sectionOptions?: SectionOption[];
     }>();
 
     const emit = defineEmits<{
@@ -92,13 +100,6 @@
         return rows;
     });
 
-    function canMoveUp(row: StepRowView): boolean {
-        return row.sibling_index > 0;
-    }
-    function canMoveDown(row: StepRowView): boolean {
-        return row.sibling_index < row.sibling_total - 1;
-    }
-
     function onRowUpdate(updated: EditableStep) {
         emit(
             'update:steps',
@@ -116,6 +117,7 @@
             hint: null,
             ingredient_client_ids: [],
             tool_ids: [],
+            section_client_id: null,
         };
         emit('update:steps', [...props.steps, next]);
     }
@@ -130,6 +132,10 @@
             hint: null,
             ingredient_client_ids: [],
             tool_ids: [],
+            // FU-117 — sub-steps inherit their parent's section visually
+            // on the read path (server flattens cook-mode by section_id of
+            // the top-level row). Keep null here; the picker isn't shown.
+            section_client_id: null,
         };
         emit('update:steps', [...props.steps, next]);
     }
@@ -143,22 +149,55 @@
         emit('update:steps', repackSequences(remaining));
     }
 
-    function onMove(clientId: string, delta: -1 | 1) {
-        const target = props.steps.find((s) => s.client_id === clientId);
-        if (!target) return;
+    // ── FU-094: drag-and-drop reorder (siblings only) ────────────────────
+    // Drag state is owned here so every row can render its drop-target
+    // affordance against the active drag. Rows emit `drag-start` /
+    // `drag-end` / `drop-on-row`; this component computes the new order.
+    const draggingClientId = ref<string | null>(null);
+    const draggingParentId = ref<string | null>(null);
+
+    function onDragStart(clientId: string, parentClientId: string | null) {
+        draggingClientId.value = clientId;
+        draggingParentId.value = parentClientId;
+    }
+    function onDragEnd() {
+        draggingClientId.value = null;
+        draggingParentId.value = null;
+    }
+    function onDropOnRow(targetClientId: string) {
+        const sourceId = draggingClientId.value;
+        draggingClientId.value = null;
+        draggingParentId.value = null;
+        if (!sourceId || sourceId === targetClientId) return;
+
+        const source = props.steps.find((s) => s.client_id === sourceId);
+        const target = props.steps.find((s) => s.client_id === targetClientId);
+        if (!source || !target) return;
+        // Siblings-only is also validated on the row's dragover — re-check
+        // here as a belt-and-braces against a stale drag.
+        if (source.parent_client_id !== target.parent_client_id) return;
+
+        // Reorder within the sibling group using the same "insert at the
+        // target's slot" pattern as ShoppingListDetail.onLineDrop —
+        // matches the user's mental model ("the dropped row lands where I
+        // dragged it onto"). Other steps (sub-steps, opposite-parent
+        // children) are untouched.
         const siblings = props.steps
-            .filter((s) => s.parent_client_id === target.parent_client_id)
+            .filter((s) => s.parent_client_id === source.parent_client_id)
             .sort((a, b) => a.sequence - b.sequence);
-        const idx = siblings.indexOf(target);
-        const swapIdx = idx + delta;
-        if (swapIdx < 0 || swapIdx >= siblings.length) return;
-        const swap = siblings[swapIdx];
-        if (!swap) return;
-        const updated = props.steps.map((s) => {
-            if (s.client_id === target.client_id) return { ...s, sequence: swap.sequence };
-            if (s.client_id === swap.client_id) return { ...s, sequence: target.sequence };
-            return s;
-        });
+        const ids = siblings.map((s) => s.client_id);
+        const fromIdx = ids.indexOf(sourceId);
+        const toIdx = ids.indexOf(targetClientId);
+        if (fromIdx < 0 || toIdx < 0) return;
+        ids.splice(fromIdx, 1);
+        ids.splice(toIdx, 0, sourceId);
+        // Stamp new sibling sequences.
+        const newSeqById = new Map<string, number>(ids.map((id, i) => [id, i]));
+        const updated = props.steps.map((s) =>
+            newSeqById.has(s.client_id)
+                ? { ...s, sequence: newSeqById.get(s.client_id)! }
+                : s,
+        );
         emit('update:steps', repackSequences(updated));
     }
 

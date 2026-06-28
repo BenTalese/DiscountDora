@@ -384,18 +384,37 @@
                 <div class="text-caption dora-text-muted q-mb-sm">
                     Just for this cook — your saved recipe won't change.
                 </div>
-                <div class="row q-gutter-xs">
-                    <q-chip
+                <!-- FU-034 — when the substitute carries a note or ratio,
+                     surface it next to the chip so the cook has the hint
+                     in front of them at swap time. Mirrors the detail-page
+                     layout so the same shape reads the same in both
+                     places. Ratios are shown as "1 tsp → 1 tsp"; the
+                     "from" side is the recipe's ingredient. -->
+                <q-list separator>
+                    <q-item
                         v-for="opt in swapOptions"
                         :key="opt.stock_item_id"
                         clickable
-                        color="primary"
-                        text-color="white"
                         @click="applySwap(opt.stock_item_id, opt.name)"
                     >
-                        {{ opt.name }}
-                    </q-chip>
-                </div>
+                        <q-item-section>
+                            <q-item-label>{{ opt.name }}</q-item-label>
+                            <q-item-label
+                                v-if="substituteRatioText(opt)"
+                                caption
+                                class="dora-text-secondary"
+                            >
+                                {{ substituteRatioText(opt) }}
+                            </q-item-label>
+                            <q-item-label v-if="opt.notes" caption class="dora-text-muted">
+                                {{ opt.notes }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                            <q-icon :name="ICONS.arrow_forward" class="dora-text-muted" />
+                        </q-item-section>
+                    </q-item>
+                </q-list>
             </q-card-section>
             <template #actions>
                 <BaseButton variant="ghost" label="Close" v-close-popup />
@@ -878,6 +897,17 @@
     const swapForName = ref('');
     const swapOptions = ref<Substitute[]>([]);
     const loadingSwapOptions = ref(false);
+
+    /** FU-034 — compact "1 tsp → 1 tsp" caption for a substitute in the
+     *  swap picker. Same shape as the stock-item detail page's substitute
+     *  list so the user reads the swap the same way in both places. */
+    function substituteRatioText(sub: Substitute): string | null {
+        if (sub.ratio_quantity_in == null || sub.ratio_unit_in == null
+            || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
+            return null;
+        }
+        return `${sub.ratio_quantity_in} ${sub.ratio_unit_in} → ${sub.ratio_quantity_out} ${sub.ratio_unit_out}`;
+    }
 
     async function openSwapPicker(stockItemId: string, name: string) {
         swapForId.value = stockItemId;

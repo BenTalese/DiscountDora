@@ -64,9 +64,9 @@ def _bootstrap_paths() -> None:
     # self-host — pin it to SQLite under the per-user data dir. The
     # config layer would otherwise default to Postgres (the standard
     # for dev/hosted), which obviously isn't available on a freshly
-    # installed end-user machine. `.as_posix()` normalises Windows
-    # backslashes so the URL parses on every platform.
-    _set_default_env("DORA_DB_URL", f"sqlite:///{(data / 'dora.data.db').as_posix()}")
+    # installed end-user machine. `DORA_DB_PATH` is the SQLite shortcut
+    # (plain filesystem path; the config layer builds the URL).
+    _set_default_env("DORA_DB_PATH", str(data / "dora.data.db"))
 
     # Production profile + skip the required-vars gate (no public
     # CORS host, no bootstrap-admin email needed on a single-user

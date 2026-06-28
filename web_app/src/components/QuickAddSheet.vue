@@ -34,8 +34,9 @@
                         >
                             <q-item-section avatar>
                                 <q-avatar
-                                    :color="levelColour(item.stock_level_id)"
-                                    text-color="white"
+                                    :color="levelColour(item.stock_level_id) ?? undefined"
+                                    :class="{ 'dora-bg-sunken dora-text-secondary': !levelColour(item.stock_level_id) }"
+                                    :text-color="levelColour(item.stock_level_id) ? 'white' : undefined"
                                     size="28px"
                                 >
                                     <q-icon name="inventory_2" size="16px" />
@@ -127,7 +128,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LinkedProduct } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ShoppingListApiService, {
@@ -182,9 +183,10 @@
     function levelSequence(id: string | null) {
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? -1;
     }
-    function levelColour(id: string | null) {
-        const name = stockLevels.value.find((l) => l.stock_level_id === id)?.name;
-        return name ? getStockLevelColour(name) : 'grey';
+    function levelColour(id: string | null): string | null {
+        // FU-050 — key off sequence (R-003); names can drift.
+        const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
+        return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
 
     // Cached on each sheet-open: stock items the user has historically added

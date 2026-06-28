@@ -57,7 +57,6 @@ def _recipe(*ingredient_args):
         instructions=None,
         is_favourite=False,
         last_made_on=None,
-        nutrition=None,
         prep_time_minutes=None,
         recipe_collection=None,
         servings=None,

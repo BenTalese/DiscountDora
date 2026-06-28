@@ -538,7 +538,7 @@ def test__recipe_print_view__returns_html_with_recipe_name(api):
 # ── Barcodes & QR (N5) ─────────────────────────────────────────────────
 
 LOOKUP_URL = "http://localhost:5170/api/data/barcodes/lookup"
-REGISTER_PRODUCT_BARCODE_URL = "http://localhost:5170/api/data/barcodes/register-against-product"
+REGISTER_URL = "http://localhost:5170/api/data/barcodes"
 PRODUCTS_URL = "http://localhost:5170/api/products"
 STOCK_ITEMS_URL = "http://localhost:5170/api/stock-items"
 
@@ -572,6 +572,29 @@ def _first_product_id() -> str:
     return products[0]["product_id"]
 
 
+# FU-056 — per-test product index so each barcode-register test gets a
+# fresh unbarcoded Product. The new `one Product = one EAN` rule means
+# any test that registers against `products[0]` blocks the next from
+# doing the same. Tests increment this counter at call sites.
+_PRODUCT_INDEX = [0]
+
+
+def _next_unused_product_id() -> str:
+    """Yield product_ids round-robin from the seed so each barcode test
+    starts with a Product that has no barcode registered yet. Each call
+    advances by one regardless of seed size; consumers must take the
+    head of the list slice they need."""
+    products = requests.get(PRODUCTS_URL).json().get("items") or []
+    assert products, "seed data has no products"
+    idx = _PRODUCT_INDEX[0]
+    _PRODUCT_INDEX[0] = idx + 1
+    assert idx < len(products), (
+        f"barcode tests need more seed products (asked for #{idx}, have "
+        f"{len(products)}). Bump the seed or release a product."
+    )
+    return products[idx]["product_id"]
+
+
 def test__dora_link_lookup__resolves_stock_item(api):
     # A real-world barcode identifies a Product, not a stock item. The only
     # path that resolves directly to a stock item is Dora's own QR link.
@@ -585,41 +608,127 @@ def test__dora_link_lookup__resolves_stock_item(api):
     assert body["id"] == item_id
 
 
-def test__register_product_barcode__happy_path__and_lookup(api):
-    product_id = _first_product_id()
+def test__register_barcode__against_product__lookup_traverses_via_product(api):
+    """FU-056 — registering against a Product that's linked to a StockItem
+    yields the `stock_item_via_product` lookup kind (the catalogue case).
+    `product_no_link` only fires when the Product has zero linked items."""
+    product_id = _next_unused_product_id()
     barcode = f"TEST-{uuid.uuid4().hex[:10]}"
 
-    register = requests.post(
-        REGISTER_PRODUCT_BARCODE_URL,
-        json={"product_id": product_id, "barcode": barcode},
-    )
+    register = requests.post(REGISTER_URL, json={
+        "product_id": product_id,
+        "barcode": barcode,
+    })
     assert register.status_code == 200, register.text
     body = register.json()
     assert body["barcode"] == barcode
     assert body["product_id"] == product_id
+    assert body["stock_item_id"] is None
+    barcode_id = body["barcode_id"]
 
     lookup = requests.get(f"{LOOKUP_URL}?value={barcode}")
     assert lookup.status_code == 200, lookup.text
     lookup_body = lookup.json()
-    assert lookup_body["kind"] == "product"
-    assert lookup_body["id"] == product_id
+    # `UNIQUE(StockItemProduct.product_id)` guarantees that any linked
+    # Product reaches exactly one StockItem — so the only possible
+    # outcomes are `stock_item_via_product` (linked, the seed shape)
+    # or `product_no_link` (Product has no StockItem).
+    assert lookup_body["kind"] == "stock_item_via_product", lookup_body
+    assert lookup_body["product_id"] == product_id
+    assert lookup_body["barcode_id"] == barcode_id
 
 
-def test__register_product_barcode__collision__is_409(api):
-    product_id = _first_product_id()
+def test__register_barcode__same_barcode_twice__is_409(api):
+    """Barcode UNIQUE constraint — same value can't be registered twice."""
+    product_id = _next_unused_product_id()
     barcode = f"TEST-{uuid.uuid4().hex[:10]}"
 
-    register_first = requests.post(
-        REGISTER_PRODUCT_BARCODE_URL,
-        json={"product_id": product_id, "barcode": barcode},
-    )
+    register_first = requests.post(REGISTER_URL, json={
+        "product_id": product_id,
+        "barcode": barcode,
+    })
     assert register_first.status_code == 200, register_first.text
 
-    register_dup = requests.post(
-        REGISTER_PRODUCT_BARCODE_URL,
-        json={"product_id": product_id, "barcode": barcode},
-    )
+    register_dup = requests.post(REGISTER_URL, json={
+        "product_id": product_id,
+        "barcode": barcode,
+    })
     assert register_dup.status_code == 409, register_dup.text
+
+
+def test__register_barcode__direct_stock_item__lookup_resolves_to_stock_item(api):
+    """FU-056 — registering directly against a stock item (no product)
+    returns the `stock_item` kind on lookup. The 'lightweight install' path."""
+    stock_item_id = requests.get(
+        'http://localhost:5170/api/stock-items?limit=1'
+    ).json()['items'][0]['stock_item_id']
+    barcode = f"DIR-{uuid.uuid4().hex[:10]}"
+
+    register = requests.post(REGISTER_URL, json={
+        "stock_item_id": stock_item_id,
+        "barcode": barcode,
+    })
+    assert register.status_code == 200, register.text
+    body = register.json()
+    assert body["stock_item_id"] == stock_item_id
+    assert body["product_id"] is None
+
+    lookup = requests.get(f"{LOOKUP_URL}?value={barcode}")
+    assert lookup.status_code == 200, lookup.text
+    lookup_body = lookup.json()
+    assert lookup_body["kind"] == "stock_item"
+    assert lookup_body["id"] == stock_item_id
+    # The flat product_id field is None for direct-only registrations.
+    assert lookup_body["product_id"] is None
+
+
+def test__register_barcode__second_against_same_product__is_409(api):
+    """FU-056 — one Product = one barcode (per-product UNIQUE)."""
+    product_id = _next_unused_product_id()
+    barcode_a = f"PROD-A-{uuid.uuid4().hex[:8]}"
+    barcode_b = f"PROD-B-{uuid.uuid4().hex[:8]}"
+
+    first = requests.post(REGISTER_URL, json={
+        "product_id": product_id,
+        "barcode": barcode_a,
+    })
+    assert first.status_code == 200, first.text
+
+    second = requests.post(REGISTER_URL, json={
+        "product_id": product_id,
+        "barcode": barcode_b,
+    })
+    # The per-product UNIQUE constraint fires here (different barcode but
+    # same product_id → can't have a second).
+    assert second.status_code == 409, second.text
+
+
+def test__register_barcode__neither_target__is_400(api):
+    """FU-056 — model validator: at least one of product_id / stock_item_id
+    must be set."""
+    response = requests.post(REGISTER_URL, json={"barcode": "ORPHAN-12345"})
+    assert response.status_code == 400, response.text
+
+
+def test__delete_barcode__round_trip(api):
+    """FU-056 — DELETE removes the registration; subsequent lookup is unknown."""
+    stock_item_id = requests.get(
+        'http://localhost:5170/api/stock-items?limit=1'
+    ).json()['items'][0]['stock_item_id']
+    barcode = f"DEL-{uuid.uuid4().hex[:10]}"
+
+    register = requests.post(REGISTER_URL, json={
+        "stock_item_id": stock_item_id,
+        "barcode": barcode,
+    })
+    assert register.status_code == 200, register.text
+    barcode_id = register.json()["barcode_id"]
+
+    delete = requests.delete(f"{REGISTER_URL}/{barcode_id}")
+    assert delete.status_code == 204, delete.text
+
+    lookup = requests.get(f"{LOOKUP_URL}?value={barcode}")
+    assert lookup.json()["kind"] == "unknown"
 
 
 def test__barcode_lookup__unknown_value__is_unknown(api):

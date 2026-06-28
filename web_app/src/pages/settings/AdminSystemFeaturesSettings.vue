@@ -41,7 +41,13 @@
 
             <hr class="settings-divider" />
 
-            <SettingsSection>
+            <!-- FU-209: Product search URL is part of the products overlay,
+                 so it follows the same data-presence gate as the rest of the
+                 surface — hidden entirely until at least one Product row
+                 exists. Operators on a fresh install won't see a setting for
+                 a feature they can't yet use; once products land, this row
+                 appears automatically alongside the My Products nav. -->
+            <SettingsSection v-if="productsEnabled">
                 <template #title>Product search</template>
                 <template #description>
                     A URL the "Product Search" nav entry opens in a new tab.
@@ -84,7 +90,7 @@
     // C-cross Chunk 1 — when the admin flips a flag, refresh the cached
     // `/api/health features.*` answer so every consumer composable picks
     // up the new value without a page reload.
-    const { refresh: featureFlags$refresh } = useFeatureFlags();
+    const { refresh: featureFlags$refresh, products: productsEnabled } = useFeatureFlags();
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());

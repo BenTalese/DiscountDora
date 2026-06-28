@@ -39,7 +39,12 @@
                     </q-item-section>
                     <q-item-section side>
                         <div class="row items-center no-wrap q-gutter-xs">
-                            <q-chip dense :color="stockStatusColour(ing.stock_item_id)" text-color="white">
+                            <q-chip
+                                dense
+                                :color="stockStatusColour(ing.stock_item_id) ?? undefined"
+                                :text-color="stockStatusColour(ing.stock_item_id) ? 'white' : undefined"
+                                :class="{ 'dora-bg-sunken dora-text-secondary': !stockStatusColour(ing.stock_item_id) }"
+                            >
                                 {{ stockStatusLabel(ing.stock_item_id) }}
                             </q-chip>
                             <AddToListButton variant="row" :stock-item-id="ing.stock_item_id" />
@@ -70,7 +75,12 @@
                 <q-item v-for="ing in ingredients" :key="ing.stock_item_id">
                     <q-item-section>{{ ing.stock_item_name }}</q-item-section>
                     <q-item-section side>
-                        <q-chip dense :color="stockStatusColour(ing.stock_item_id)" text-color="white">
+                        <q-chip
+                            dense
+                            :color="stockStatusColour(ing.stock_item_id) ?? undefined"
+                            :text-color="stockStatusColour(ing.stock_item_id) ? 'white' : undefined"
+                            :class="{ 'dora-bg-sunken dora-text-secondary': !stockStatusColour(ing.stock_item_id) }"
+                        >
                             {{ stockStatusLabel(ing.stock_item_id) }}
                         </q-chip>
                     </q-item-section>
@@ -99,7 +109,7 @@
         generating: boolean;
         listStatusLabel: (stockItemId: string) => string;
         stockStatusLabel: (stockItemId: string) => string;
-        stockStatusColour: (stockItemId: string) => string;
+        stockStatusColour: (stockItemId: string) => string | null;
     }>();
 
     const emit = defineEmits<{

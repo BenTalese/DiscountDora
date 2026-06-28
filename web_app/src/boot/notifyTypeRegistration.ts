@@ -20,7 +20,7 @@ Notify.registerType('info', {
 });
 
 Notify.registerType('oopsie', {
-    color: 'red-5',
+    color: 'negative',
     message: 'Oops, something went wrong...',
     icon: ICONS.error,
     iconColor: 'white',

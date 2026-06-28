@@ -487,6 +487,72 @@ exceptions, which still must be commented) · **Source** (where it was establish
   the dev env. The user asked for this to be a standing rule across every
   prompt, and chunk 8 promotes it here.
 
+### R-019 — No magic: explicit, verbose, consistent
+- **Rule:** Prefer **explicit, verbose, locally-readable** code over clever,
+  implicit, or auto-discovered behaviour. A reader walking a file top-to-bottom
+  must be able to see *what runs and in what order* without consulting a
+  separate convention, framework annotation, or "everyone knows we do it this
+  way" tribal rule. And when the codebase already has an established pattern
+  for a problem, **follow it** — don't introduce a parallel approach in one
+  spot "because it felt right here". One pattern, applied consistently, even
+  when a one-off variant looks marginally tidier in isolation.
+- **Why:** Magic — auto-mappers, decorator chains that mutate behaviour,
+  convention-over-configuration past what the framework requires, "smart"
+  defaults that vary per-entity, conditional loading that's invisible at the
+  call site — moves understanding *away* from the code and into the reader's
+  head. The reader has to remember the convention; if they're wrong, the bug
+  is silent. The user has named this as a top-line value ("this is exactly why
+  I absolutely hate AutoMapper in C# code") — the AutoMapper shape is the
+  archetype: a field maps because the names happen to align, and a rename
+  three files away silently breaks the mapping with no compile error and no
+  obvious site to grep. Inconsistent local patterns ("most of the codebase
+  does X but here we did Y because it felt right") force every future reader
+  to memorise the exception list — the *consistency* is the value, even when
+  the alternative is marginally nicer.
+- **Apply:**
+  - **Write explicit mappers** between layers (entity ↔ DTO, request ↔
+    handler input). One named function per direction; every field listed.
+    Verbose, greppable, type-checked end-to-end. No reflection, no name-based
+    auto-population, no "*Mapper" libraries.
+  - **Avoid decorator/metaclass magic** that hides what runs. A decorator
+    that *only* annotates is fine; one that mutates behaviour, rewrites
+    signatures, or pulls in side-effects belongs in framework code, not in
+    feature code we own.
+  - **Don't lean on "convention over configuration"** past what the
+    framework already requires. If the framework needs a filename pattern
+    or attribute name, fine — that's the framework's contract. Don't invent
+    new conventions on top.
+  - **Match the codebase's established pattern** for the problem you're
+    solving. If 90% of the handlers spell out the entity assignment field
+    by field, the 91st does too — even if `dataclasses.replace(...)` or a
+    dict-spread would save four lines. Consistency > local cleverness.
+  - **No implicit eager-load shortcuts.** When a relationship needs to be
+    loaded, the *call site* declares it (`.include(...)` /
+    `selectinload(...)` per query) rather than the entity quietly
+    auto-loading it. The relationship's default loading stays the
+    codebase-wide default (currently `noload`).
+- **Violation signal:** auto-mapping libraries (`automapper`,
+  reflection-based field copy, `**dataclass_dict`-shaped converters
+  between layers); decorators that wrap business logic (`@retry`-style
+  decorators that change control flow); per-entity SQLAlchemy
+  `lazy="..."` overrides that opt one relationship into a different
+  loading strategy than the codebase default; a function that
+  short-circuits or transforms based on a name-string match
+  ("if it's called 'special_*' then …"); two handlers in the same
+  feature folder solving the same shape two different ways; a
+  comment of the form "*usually we do X, but here we do Y because …*"
+  that isn't documenting a rule's carve-out.
+- **Carve-outs:**
+  - The framework's *own* idiomatic patterns (R-011) are not magic — using
+    `@RECIPE_ROUTER.route(...)`, `@dataclass`, or Vue's `<script setup>` is
+    using the framework as documented.
+  - A genuinely one-off real-world constraint (a third-party API quirk,
+    a regulatory exception) may require a local divergence — explain it in
+    place with a comment naming this rule and the reason, *not* just
+    "felt right".
+- **Source:** ADR-014; user message 2026-06-28 promoting FU-084 from a
+  narrow "selectin loading" recommendation into this broader rule.
+
 ### R-018 — Optional engines degrade gracefully and never hard-block install or boot
 - **Rule:** any feature backed by an **optional external/native engine** — a
   separate binary, a bring-your-own service, or a platform-specific native
@@ -891,6 +957,49 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   download adds a one-time per-voice fetch + a checksum/atomic-rename path to
   get right (a partial download must never read as "ready").
 - **Promotes rule:** R-018.
+
+### ADR-014 — No magic: explicit, verbose, consistent
+- **Date / task:** 2026-06-28 (user message promoting FU-084 from its
+  original narrow scope into a top-line engineering value).
+- **Status:** accepted
+- **Context:** FU-084 originally proposed promoting the SQLAlchemy
+  `lazy="selectin"` shortcut (added on `Recipe.cuisine`/`.category` so the
+  ~10 read sites didn't each need an explicit `.include()`) into a
+  standing rule for "small always-wanted lookups". The user pushed back
+  on the *meta*-shape rather than the specifics: that kind of "this
+  relationship loads itself, but only because we picked it; the others
+  don't" is exactly the **magic** they want the codebase to avoid. They
+  reframed it as a broader rule: prefer **verbose, explicit code** with
+  **no guess-work**; reject "*most times it's done this way, but in
+  these few places we decided to do it another way because it felt
+  right*" inconsistency; explicitly cited C# AutoMapper as the
+  archetypal misfeature.
+- **Decision:** Adopt R-019. Explicit, verbose, locally-readable code
+  beats clever / implicit / auto-discovered behaviour. When the codebase
+  has an established pattern for a problem, *follow it* — don't introduce
+  a parallel approach in one spot because the alternative looks tidier
+  in isolation. Auto-mapping libraries (AutoMapper-shaped reflection
+  between layers) are banned; mappers are hand-written, one named
+  function per direction, every field listed. Decorator/metaclass magic
+  that *mutates* behaviour stays in framework code, not feature code we
+  own. SQLAlchemy relationship loading defaults stay codebase-wide
+  (`noload`); per-entity `lazy="selectin"` overrides are themselves a
+  flavour of magic (the read site no longer reflects what it loads) and
+  should be retired in favour of explicit `.include()` / `selectinload()`
+  at the call site. Existing per-entity `selectin` opt-ins from before
+  this rule (`Recipe.cuisine`, `.category`) are grandfathered for
+  R-007's scope-discipline reasons — flagged as a follow-up cleanup,
+  not refactored this session.
+- **Consequences:** New mapper code is more verbose (one named function
+  per direction, every field listed) — that verbosity *is* the value:
+  greppable, type-checked end-to-end, no silent breakage when a field
+  is renamed three files away. New SQLAlchemy queries always declare
+  what they load at the call site; the entity stays a passive shape.
+  Reviewers can read a diff and check rule-fit with no convention to
+  consult. Cost: short-term, more lines for hand-written mappers + a
+  recurring nag against the temptation to reach for a "smart" decorator
+  / convention / auto-loader.
+- **Promotes rule:** R-019.
 
 ---
 

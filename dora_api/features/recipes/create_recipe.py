@@ -105,7 +105,6 @@ class CreateRecipeRequest(BaseModel):
     cuisine_id: UUID | None = None
     difficulty: str | None = Field(default = None, max_length = 50)
     instructions: str | None = None
-    nutrition: str | None = None
     prep_time_minutes: int | None = Field(default = None, ge = 0)
     recipe_collection_id: UUID | None = None
     servings: int | None = Field(default = None, ge = 1)
@@ -254,7 +253,6 @@ class CreateRecipeHandler:
             is_favourite = False,
             last_made_on = None,
             name = request.name,
-            nutrition = request.nutrition,
             prep_time_minutes = request.prep_time_minutes,
             recipe_collection = _Collection,
             servings = request.servings,

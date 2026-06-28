@@ -108,14 +108,6 @@
                         v-model="form.instructions"
                     />
 
-                    <q-input
-                        outlined
-                        type="textarea"
-                        label="Nutrition (optional, freeform)"
-                        autogrow
-                        v-model="form.nutrition"
-                    />
-
                     <!-- C-4 Chunk 2 — dietary tag editor. Multi-select chips
                          drawn from the editable DietaryTag vocabulary
                          (option value = tag id). Disclaimer keeps the framing
@@ -283,7 +275,6 @@
         cuisine_id: string | null;
         difficulty: string | null;
         instructions: string | null;
-        nutrition: string | null;
         prep_time_minutes: number | null;
         recipe_collection_id: string | null;
         servings: number | null;
@@ -301,7 +292,6 @@
         cuisine_id: null,
         difficulty: null,
         instructions: null,
-        nutrition: null,
         prep_time_minutes: null,
         recipe_collection_id: null,
         servings: null,
@@ -381,7 +371,6 @@
                 form.cuisine_id = props.recipe.cuisine_id;
                 form.difficulty = props.recipe.difficulty;
                 form.instructions = props.recipe.instructions;
-                form.nutrition = props.recipe.nutrition;
                 form.prep_time_minutes = props.recipe.prep_time_minutes;
                 form.recipe_collection_id = props.recipe.recipe_collection_id;
                 form.servings = props.recipe.servings;
@@ -431,7 +420,6 @@
                     cuisine_id: form.cuisine_id,
                     difficulty: form.difficulty,
                     instructions: form.instructions,
-                    nutrition: form.nutrition,
                     prep_time_minutes: form.prep_time_minutes,
                     recipe_collection_id: form.recipe_collection_id,
                     servings: form.servings,
@@ -449,7 +437,6 @@
                     cuisine_id: form.cuisine_id,
                     difficulty: form.difficulty,
                     instructions: form.instructions,
-                    nutrition: form.nutrition,
                     prep_time_minutes: form.prep_time_minutes,
                     recipe_collection_id: form.recipe_collection_id,
                     servings: form.servings,

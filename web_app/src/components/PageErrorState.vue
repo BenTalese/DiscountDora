@@ -1,6 +1,11 @@
 <template>
     <div class="page-error-state column items-center justify-center q-pa-xl">
-        <q-icon :name="icon" :color="iconColor" size="72px" class="q-mb-md" />
+        <q-icon
+            :name="icon"
+            :color="iconColor ?? undefined"
+            :class="['q-mb-md', { 'dora-text-muted': !iconColor }]"
+            size="72px"
+        />
         <div class="text-h5 q-mb-sm text-center">{{ title }}</div>
         <div class="text-body2 dora-text-muted text-center" style="max-width: 480px">
             {{ description }}
@@ -113,16 +118,18 @@
         }
     });
 
-    const iconColor = computed(() => {
+    // R-002: neutral states return null so the template applies
+    // `dora-text-muted` rather than a `grey-N` palette literal.
+    const iconColor = computed<string | null>(() => {
         switch (props.variant) {
             case 'not_found':
-                return 'grey-7';
+                return null;
             case 'render':
                 return 'negative';
             case 'server':
                 return 'warning';
             default:
-                return 'grey-7';
+                return null;
         }
     });
 

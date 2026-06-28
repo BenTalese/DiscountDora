@@ -418,7 +418,11 @@
     }
 
     function historyChipColor(state: AlertHistoryState): string {
-        if (state === 'dismissed') return 'grey-7';
+        // R-002: dismissed routes through the theme-bound `info`
+        // semantic; the saturated `orange-7` / `blue-grey-5` cases for
+        // snoozed / read are part of a graded severity ladder and
+        // are flagged for the FU-313 designed-token-ladder work.
+        if (state === 'dismissed') return 'info';
         if (state === 'snoozed') return 'orange-7';
         return 'blue-grey-5';
     }

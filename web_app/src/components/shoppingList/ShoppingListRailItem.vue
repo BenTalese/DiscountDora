@@ -8,7 +8,11 @@
         @click="emit('select')"
     >
         <q-item-section avatar>
-            <q-icon :name="statusIcon" :color="statusColour" />
+            <q-icon
+                :name="statusIcon"
+                :color="statusColour ?? undefined"
+                :class="{ 'dora-text-muted': !statusColour }"
+            />
         </q-item-section>
         <q-item-section>
             <q-item-label class="row items-center q-gutter-x-xs no-wrap">
@@ -92,12 +96,14 @@
                 return ICONS.list;
         }
     });
-    const statusColour = computed(() => {
+    // R-002: "done" is the neutral / finished state — null lets the
+    // template apply `dora-text-muted` rather than a `grey-N` literal.
+    const statusColour = computed<string | null>(() => {
         switch (props.summary.status) {
             case 'shopping':
                 return 'positive';
             case 'done':
-                return 'grey-6';
+                return null;
             default:
                 return 'primary';
         }

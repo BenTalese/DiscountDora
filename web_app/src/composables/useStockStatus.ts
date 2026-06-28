@@ -32,7 +32,7 @@ export function useStockStatus() {
         return stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name ?? 'Not tracked';
     }
 
-    function stockStatusColour(stockItemId: string): string {
+    function stockStatusColour(stockItemId: string): string | null {
         return colourForSequence(levelSequenceForItem(stockItemId));
     }
 

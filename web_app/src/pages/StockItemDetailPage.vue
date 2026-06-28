@@ -157,9 +157,9 @@
                                             >
                                                 <template #label>
                                                     <q-avatar
-                                                        :color="getStockLevelColour(detail.stock_level_name ?? 'Well-Stocked')"
+                                                        :color="detailLevelColour ?? undefined"
+                                                        :class="['q-mr-sm', { 'dora-bg-sunken': !detailLevelColour }]"
                                                         size="16px"
-                                                        class="q-mr-sm"
                                                     />
                                                     {{ detail.stock_level_name ?? '—' }}
                                                 </template>
@@ -172,7 +172,11 @@
                                                         @click="onChangeStockLevel(level.stock_level_id)"
                                                     >
                                                         <q-item-section avatar>
-                                                            <q-avatar :color="getStockLevelColour(level.name)" size="16px" />
+                                                            <q-avatar
+                                                                :color="colourForSequence(level.sequence) ?? undefined"
+                                                                :class="{ 'dora-bg-sunken': !colourForSequence(level.sequence) }"
+                                                                size="16px"
+                                                            />
                                                         </q-item-section>
                                                         <q-item-section>{{ level.name }}</q-item-section>
                                                     </q-item>
@@ -715,24 +719,168 @@
                                 <q-icon
                                     name="circle"
                                     size="12px"
-                                    :color="colourForSequence(stockItemFor(sub).stock_level_sequence ?? null)"
+                                    :color="colourForSequence(stockItemFor(sub).stock_level_sequence ?? null) ?? undefined"
+                                    :class="{ 'dora-text-muted': !colourForSequence(stockItemFor(sub).stock_level_sequence ?? null) }"
                                 />
                             </q-item-section>
                             <q-item-section>
-                                {{ stockItemFor(sub).name }}
+                                <q-item-label>{{ stockItemFor(sub).name }}</q-item-label>
+                                <!-- FU-034 — optional ratio shown above
+                                     notes; cook-mode picker mirrors this
+                                     same layout so the user reads the
+                                     swap the same way in both places. -->
+                                <q-item-label v-if="substituteRatioText(sub)" caption class="dora-text-secondary">
+                                    {{ substituteRatioText(sub) }}
+                                </q-item-label>
+                                <q-item-label v-if="sub.notes" caption class="dora-text-muted">
+                                    {{ sub.notes }}
+                                </q-item-label>
                             </q-item-section>
                             <q-item-section side>
-                                <BaseButton
-                                    variant="icon"
-                                    :icon="ICONS.link_off"
-                                    class="text-negative"
-                                    @click.stop="onRemoveSubstitute(sub.stock_item_id)"
-                                >
-                                    <q-tooltip>Remove substitute</q-tooltip>
-                                </BaseButton>
+                                <!-- FU-034 — pencil icon opens the metadata
+                                     edit dialog (notes + ratio). Sits next
+                                     to the unlink action so the substitute
+                                     row carries both lifecycle controls
+                                     without the row getting cluttered. -->
+                                <div class="row no-wrap items-center">
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.edit"
+                                        @click.stop="onEditSubstituteMetadata(sub)"
+                                    >
+                                        <q-tooltip>Edit note / ratio</q-tooltip>
+                                    </BaseButton>
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.link_off"
+                                        class="text-negative"
+                                        @click.stop="onRemoveSubstitute(sub.stock_item_id)"
+                                    >
+                                        <q-tooltip>Remove substitute</q-tooltip>
+                                    </BaseButton>
+                                </div>
                             </q-item-section>
                         </q-item>
                     </q-list>
+
+                    <!-- FU-034 — metadata edit dialog. v-model-controlled
+                         open state + a snapshot of the substitute being
+                         edited (driven by `onEditSubstituteMetadata`). -->
+                    <SubstituteMetadataDialog
+                        v-if="editingSubstitute"
+                        v-model="substituteMetadataOpen"
+                        :from-name="detail.name"
+                        :to-name="editingSubstitute.name"
+                        :initial-notes="editingSubstitute.notes"
+                        :initial-ratio-quantity-in="editingSubstitute.ratio_quantity_in"
+                        :initial-ratio-unit-in="editingSubstitute.ratio_unit_in"
+                        :initial-ratio-quantity-out="editingSubstitute.ratio_quantity_out"
+                        :initial-ratio-unit-out="editingSubstitute.ratio_unit_out"
+                        :saving="substituteMetadataSaving"
+                        @save="onSaveSubstituteMetadata"
+                    />
+
+                    <!-- FU-056 — Barcodes section. Gated on the install-wide
+                         scanning flag (R-014: when off, the surface stays
+                         hidden — scanning isn't an active capability on this
+                         install). Shows direct registrations + via-Product
+                         derivations; Add/Remove available for direct rows
+                         only (via-Product live on the Product). -->
+                    <div v-if="scanningEnabled" class="q-mt-lg">
+                        <div class="row items-center q-mb-sm">
+                            <div class="text-subtitle1">Barcodes</div>
+                            <q-space />
+                            <BaseButton
+                                variant="primary"
+                                dense
+                                :icon="ICONS.add"
+                                label="Add barcode"
+                                @click="onAddBarcodeClick"
+                            />
+                        </div>
+                        <div
+                            v-if="detail.barcodes.length === 0"
+                            class="dora-text-muted text-caption q-pa-md"
+                        >
+                            No barcodes yet. Add an EAN/UPC to make this item
+                            open when you scan that code.
+                        </div>
+                        <q-list v-else separator>
+                            <q-item
+                                v-for="bc in detail.barcodes"
+                                :key="bc.barcode_id"
+                            >
+                                <q-item-section>
+                                    <q-item-label class="dora-text-monospace">
+                                        {{ bc.barcode }}
+                                    </q-item-label>
+                                    <q-item-label
+                                        v-if="bc.source === 'via_product'"
+                                        caption
+                                        class="dora-text-muted"
+                                    >
+                                        via product · {{ bc.product_name ?? '—' }}
+                                    </q-item-label>
+                                    <q-item-label
+                                        v-else
+                                        caption
+                                        class="dora-text-muted"
+                                    >
+                                        direct
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <BaseButton
+                                        v-if="bc.source === 'direct'"
+                                        variant="icon"
+                                        :icon="ICONS.delete"
+                                        class="text-negative"
+                                        @click="onRemoveBarcode(bc.barcode_id)"
+                                    >
+                                        <q-tooltip>Remove barcode</q-tooltip>
+                                    </BaseButton>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+
+                        <!-- FU-056 — Add-barcode dialog. Textbox by default;
+                             a future polish slot could add a "scan" button
+                             when the camera is available. -->
+                        <BaseDialog
+                            v-model="addBarcodeOpen"
+                            title="Add a barcode"
+                            closable
+                            card-style="min-width: 320px; max-width: 420px"
+                        >
+                            <q-card-section>
+                                <div class="text-caption dora-text-muted q-mb-sm">
+                                    Scanning this code will open
+                                    <strong>{{ detail.name }}</strong>.
+                                </div>
+                                <q-input
+                                    v-model="addBarcodeValue"
+                                    outlined
+                                    dense
+                                    autofocus
+                                    placeholder="e.g. 9300675001120"
+                                    label="Barcode (EAN / UPC)"
+                                    :error="!!addBarcodeError"
+                                    :error-message="addBarcodeError ?? undefined"
+                                    @keydown.enter.prevent="onConfirmAddBarcode"
+                                />
+                            </q-card-section>
+                            <template #actions>
+                                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                                <BaseButton
+                                    variant="primary"
+                                    label="Add"
+                                    :loading="addBarcodeSaving"
+                                    :disable="addBarcodeValue.trim().length === 0"
+                                    @click="onConfirmAddBarcode"
+                                />
+                            </template>
+                        </BaseDialog>
+                    </div>
                 </q-tab-panel>
 
                 <!-- ── On shopping lists ──────────────────────────────────
@@ -850,6 +998,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
@@ -867,7 +1016,7 @@
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
-    import { colourForSequence, getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LocationNode } from 'src/models/location';
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
@@ -877,6 +1026,7 @@
     import ProductApiService from 'src/services/api/productApiService';
     import { resolveBaseURL, NormalisedApiError } from 'src/services/api/axiosHttpClient';
     import StockItemApiService, { stockItemImageUrl } from 'src/services/api/stockItemApiService';
+    import BarcodeApiService from 'src/services/api/barcodeApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
@@ -903,6 +1053,7 @@
     const $q = useQuasar();
 
     const stockItemApi = new StockItemApiService();
+    const barcodeApi = new BarcodeApiService();
     const productApi = new ProductApiService();
     const stockGroupApi = new StockGroupApiService();
 
@@ -1048,6 +1199,16 @@
     // form's Save button. Cache-bust is owned by the store now (FU-125
     // `imageVersionOf`) so a save here reactively refreshes every row /
     // surface displaying the same item, not just this detail page.
+    // FU-050 — resolve the level-dot colour from the level's *sequence*,
+    // not by name-matching. Untracked items (no level_id) get null →
+    // muted bg via the `dora-bg-sunken` fallback in the template.
+    const detailLevelColour = computed<string | null>(() => {
+        const levelId = detail.value?.stock_level_id;
+        if (!levelId) return null;
+        const seq = stockLevelStore.stockLevels.find((l) => l.stock_level_id === levelId)?.sequence;
+        return typeof seq === 'number' ? colourForSequence(seq) : null;
+    });
+
     const pendingImage = ref<string | null>(null);
     const imageCleared = ref(false);
     const imagePreviewUrl = computed<string | null>(() => {
@@ -1492,6 +1653,101 @@
     }
     async function onRemoveSubstitute(substituteId: string) {
         await withBusyReload(() => stockItemApi.removeSubstituteAsync(stockItemId.value, substituteId));
+    }
+
+    // ── FU-034: substitute metadata edit dialog ─────────────────────────
+    const substituteMetadataOpen = ref(false);
+    const substituteMetadataSaving = ref(false);
+    const editingSubstitute = ref<Substitute | null>(null);
+
+    function onEditSubstituteMetadata(sub: Substitute) {
+        editingSubstitute.value = sub;
+        substituteMetadataOpen.value = true;
+    }
+    async function onSaveSubstituteMetadata(payload: {
+        notes: string | null;
+        ratio_quantity_in: number | null;
+        ratio_unit_in: string | null;
+        ratio_quantity_out: number | null;
+        ratio_unit_out: string | null;
+    }) {
+        const sub = editingSubstitute.value;
+        if (!sub) return;
+        substituteMetadataSaving.value = true;
+        try {
+            await withBusyReload(() =>
+                stockItemApi.updateSubstituteAsync(
+                    stockItemId.value,
+                    sub.stock_item_id,
+                    payload,
+                ),
+            );
+            substituteMetadataOpen.value = false;
+            editingSubstitute.value = null;
+        } finally {
+            substituteMetadataSaving.value = false;
+        }
+    }
+    /** FU-034 — compact "1 tsp → 1 tsp" caption for the substitute list.
+     *  Mirrors the cook-mode swap picker's layout so the user reads the
+     *  same shape in both places. Returns null when no ratio is set. */
+    function substituteRatioText(sub: Substitute): string | null {
+        if (sub.ratio_quantity_in == null || sub.ratio_unit_in == null
+            || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
+            return null;
+        }
+        return `${sub.ratio_quantity_in} ${sub.ratio_unit_in} → ${sub.ratio_quantity_out} ${sub.ratio_unit_out}`;
+    }
+
+    // ── FU-056: barcode add / remove ────────────────────────────────────
+    const addBarcodeOpen = ref(false);
+    const addBarcodeValue = ref('');
+    const addBarcodeError = ref<string | null>(null);
+    const addBarcodeSaving = ref(false);
+
+    function onAddBarcodeClick() {
+        addBarcodeValue.value = '';
+        addBarcodeError.value = null;
+        addBarcodeOpen.value = true;
+    }
+    async function onConfirmAddBarcode() {
+        const raw = addBarcodeValue.value.trim();
+        if (!raw) return;
+        addBarcodeError.value = null;
+        addBarcodeSaving.value = true;
+        try {
+            await withBusyReload(() => barcodeApi.registerAsync({
+                barcode: raw,
+                stock_item_id: stockItemId.value,
+            }).then(() => undefined));
+            addBarcodeOpen.value = false;
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Barcode added.',
+            });
+        } catch (err) {
+            addBarcodeError.value = describeApiError(err) || 'Could not add barcode.';
+        } finally {
+            addBarcodeSaving.value = false;
+        }
+    }
+    async function onRemoveBarcode(barcodeId: string) {
+        try {
+            await withBusyReload(() => barcodeApi.deleteAsync(barcodeId));
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Barcode removed.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not remove barcode.',
+                caption: describeApiError(err) || '',
+            });
+        }
     }
     /** Click on a substitute row. When the detail page is hosted inside
      *  the splitter peek (embedded mode), emit up so the parent can flip

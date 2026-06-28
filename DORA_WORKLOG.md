@@ -9,6 +9,1387 @@ next.
 
 ---
 
+## 2026-06-28 — FU-092 closed (magic-behaviour audit)
+
+**Why:** user said "FU-092 lets do a proper investigation and report on
+this one, ask me to answer each finding and provide a recommendation
+for each".
+
+**What shipped:**
+- `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` — full audit doc.
+  18 behaviours catalogued (the FU's listed candidates plus a few I
+  found via grep: `is_open` auto-stamps `opened_on`; `added_via`
+  flip-on-edit; offer-price snapshot; finish-modal default-to-Well-
+  Stocked). Each entry: location, current surface, surprise-risk read,
+  recommended verdict, references to source code with `file:line`
+  links.
+- Per-finding verdicts gathered in three rounds of AskUserQuestion
+  (4 + 4 + 3 questions). Results table appended to the audit doc.
+- 5 follow-ups spun off:
+  - **FU-315** — verify the SPA's auto-add-when-low toast names the
+    list + the line `added_via` chip is visible at normal density.
+  - **FU-316** — F3 remembered-list combo: per-add toast must name
+    the destination, plus a new per-user "Always ask which list" setting
+    (default off — current behaviour preserved).
+  - **FU-317** — **plan-first.** Proposal for a manual meal-plan
+    reconcile feature (stocktake-mode-for-meals: dedicated page,
+    alert, indication of what should have been consumed) **plus**
+    an opt-in for the existing auto-drain. **No code touches
+    `reconcile_consumed_meals.py` or the `before_request` hook in
+    `startup.py:150` until that proposal lands.**
+  - **FU-318** — "cheapest" chip on shopping-list lines using the
+    auto-picked offer (no `selected_product_id` set).
+  - **FU-319** — toast "Added <name> to your pantry" on the recipe
+    ingredient picker's inline-create path.
+
+**Decisions made:**
+- **13 of 18 behaviours marked (a) keep silent / already correct.**
+  The audit's most useful outcome — confirms that alerts, suggestions,
+  the finish modal, the `added_via` chip, onboarding seed, the inline
+  cook endpoint, etc. are visible-by-design surfaces, not hidden
+  magic. The FU-092 worry resolves into a narrow list of UI surfacing
+  tasks plus one proposal.
+- **F5 past-day auto-drain is plan-first.** User explicitly rejected
+  the audit-style verdicts here and reframed it as a feature design
+  question. Captured the exact requirements (auto-drain off-by-default
+  opt-in vs a new manual-reconcile surface modelled on stocktake; the
+  user wants to see *what should have been consumed* before committing).
+- **F4 silent-create-on-0-drafts wasn't real.** The FU listed this as
+  a worry; current code (`AddToListButton.onInlineProductClick`) toasts
+  "No draft list yet. Create one first" instead. Audit closes that
+  specific concern.
+
+**Files touched:**
+- `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md` (new)
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:** audit is a read-only investigation; no behaviour
+changed this session. Each finding's `file:line` pointer was read
+directly during the investigation. Verdict capture went through
+AskUserQuestion so the user owns each answer.
+
+**Engineering-standards close-gate:** clean — this *is* an
+engineering-standards adjacent activity. No new ADR (R-019 / ADR-014,
+the no-magic rule, landed the same day and is the conceptual frame
+for this audit).
+
+**Next up:**
+- FU-317 (the meal-plan reconcile proposal) is the highest-priority
+  follow-up — blocks any future touch on `reconcile_consumed_meals`.
+- The other four (FU-315 / FU-316 / FU-318 / FU-319) are
+  opportunistic UI surfacing tasks; fold into the next relevant
+  surface touch.
+
+**Open questions for user:** none — every verdict was captured.
+
+---
+
+## 2026-06-28 — FU-160 closed (already shipped — closing stale entry)
+
+**Why:** user said "FU-160 do it (if possible)". The FU asked for an
+alert when a shopping list's `planned_shop_date` is today / imminent.
+
+**What I found:** the feature is already wired end-to-end and
+shipping. The FU never got closed.
+- Server: `dora_api/features/alerts/get_alerts.py:391`
+  (`_shopping_day_alerts`) generates the alerts off the existing
+  `planned_shop_date` column. 3-day upcoming window via
+  `SHOPPING_DAY_WINDOW_DAYS`; overdue lists bump severity to
+  `SEVERITY_MEDIUM` with "Shopping day was yesterday / N days ago"
+  wording; upcoming use `SEVERITY_LOW` with
+  "today" / "tomorrow" / "in N days". Kind `shopping_day` is
+  registered at `TIER_FYI` in `alert_kinds.py:30`. Per-list dedupe
+  + snooze persistence via `list_alert_key(...)` (so the same key
+  is reused as a list slides from upcoming to overdue and the
+  user's dismiss survives).
+- Frontend: `web_app/src/models/alert.ts` carries `shopping_day` in
+  the kind union (L19) plus the icon/label/route switches at L138 /
+  168 / 190 / 222 / 237 — bell deep-links to the shopping list.
+  `AlertsPage.vue` filters/deep-links it at L265 / L302.
+
+**What shipped:** nothing in code. Moved FU-160 from
+`DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with a note
+documenting the state I observed.
+
+**Files touched:** `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:** read the alert generator, the kind registration,
+and the SPA's alert mapping. Three independent surfaces all
+acknowledge the kind. No browser pass — this is a "did it ship"
+audit, not a behaviour change.
+
+**Engineering-standards close-gate:** no rule violations
+introduced. No new ADR.
+
+**Next up:** resume whichever task the user redirects to.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-084 promoted to R-019 / ADR-014 ("no magic")
+
+**Why:** user message: *"FU-084 i feel like it should be a rule to
+avoid 'magic' in the code. I prefer verbose code so there's no
+guess-work. I also prefer not having 'most times it's done this way,
+but in these few places we decided to do it another way just
+because it felt right'. Removes the guess-work out of the code.
+This should be an engineering rule. No magic! (e.g. this is exactly
+why i absolutely hate automapper in C# code)"*. FU-084 originally
+asked whether to promote the `lazy="selectin"` shortcut into a
+standing rule for "small always-wanted lookups"; user re-scoped it
+the other way — selectin opt-ins are themselves magic; the rule
+should be *no* magic.
+
+**What shipped:**
+- `docs/01_charter/ENGINEERING_STANDARDS.md`:
+  - **New R-019 — No magic: explicit, verbose, consistent.** Rule
+    body lists the four shapes to reject (auto-mapping libraries,
+    behaviour-mutating decorators, convention-over-configuration
+    past framework requirements, per-entity loading-strategy
+    overrides) and explicitly calls out the inconsistent-local-
+    patterns failure mode. Carve-outs: framework-idiomatic patterns
+    (R-011) are *not* magic; genuinely one-off external constraints
+    can deviate locally with an explain-in-place comment naming
+    the rule.
+  - **New ADR-014** captures the FU-084 reframing, names AutoMapper
+    as the archetypal misfeature per the user's wording, and
+    grandfathers the existing `Recipe.cuisine`/`.category`
+    `lazy="selectin"` overrides under R-007 with a follow-up.
+- `DORA_FOLLOWUPS.md` / `DORA_FOLLOWUPS_RESOLVED.md`:
+  - FU-084 moved to RESOLVED with a note explaining the promotion.
+  - New **FU-314** opened for retiring the grandfathered selectin
+    overrides — flip `Recipe.cuisine`/`.category` to the codebase
+    default (`noload`), add explicit `.include()`/`selectinload()`
+    at every read site, pair with a query-count guard (FU-138
+    pattern).
+- `~/.claude/projects/.../memory/feedback_no_magic.md` (new) — saved
+  this preference as a feedback memory keyed off the FU-084 → R-019
+  promotion. Indexed in `MEMORY.md`.
+- `CHANGELOG.md` — "Changed" entry under Unreleased.
+
+**Decisions made:**
+- **Reframed FU-084 in the opposite direction from its raise.** The
+  original recommendation (promote selectin) would have *added*
+  magic to the standards; the user's wording is unambiguous that
+  this is the *anti*-pattern. R-019 says so directly and
+  grandfathers the existing overrides rather than refactoring them
+  this session (R-007 — flag, don't drift).
+- **Don't refactor the grandfathered spots now.** That's a real
+  cleanup chunk: it touches every recipe read site and wants a
+  query-count guard before/after to confirm we don't trade one
+  selectin for ten lazy loads. Logged as FU-314.
+- **Memory entry, not just doc.** R-019 is the kind of preference
+  that should land into a long-lived memory so future sessions
+  catch it before reaching for a decorator / convention / mapper
+  shortcut, not only at the close-gate doc read.
+
+**Files touched:**
+- `docs/01_charter/ENGINEERING_STANDARDS.md` (R-019 + ADR-014)
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`
+- `~/.claude/projects/-home-benny-Repos-DiscountDora/memory/`:
+  new `feedback_no_magic.md` + `MEMORY.md` index entry.
+
+**Verification:** docs-only change; no code edits, nothing to run.
+Read back the inserted R-019 + ADR-014 sections to confirm they
+slot between R-018 and ADR-013 cleanly and the cross-refs
+(carve-outs to R-007 / R-011, grandfathered FU-314) line up.
+
+**Engineering-standards close-gate:** trivially clean — this *is*
+the engineering-standards change for the session.
+
+**Next up:** resume whichever task the user redirects to. FU-314
+sits in the open ledger for a future cookbook / recipe-query
+touch.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-140 closed (nullable `stock_item_id` sweep — clean)
+
+**Why:** user said "FU-140 do it / resolve". The FU asked for an
+audit of `ShoppingListLine.stock_item_id` consumers after Cart
+Button Chunk 3 made the column nullable; the worry was that TS
+only flags those sites when another change forces a re-check.
+
+**What I did:**
+- Ran `npx vue-tsc --noEmit` from `web_app/` under
+  `exactOptionalPropertyTypes`. Exits 0 with no output.
+- Hand-audited every `.stock_item_id` reader on a
+  `ShoppingListLine` (greps + read-through of the suspect
+  blocks): `ShoppingListDetail.vue` `openFinishReview` /
+  `confirmFinish` / `onSwapSubstitute` / `onRemoveLine` /
+  template, `NewListDialog.vue` lines 284 / 374 / 396,
+  `StockOverview.vue:759`. Every one already handles the nullable
+  case — typed `.filter` predicates, runtime guards, or `v-if`.
+- Two collateral TS errors from my FU-117 step-editor work showed
+  up in the typecheck and were fixed in the same pass:
+  `RecipeDetailPage.vue:1914` (import-recipe step factory now
+  sets `section_client_id: null`), `RecipeStepsEditor.vue:8`
+  (forwards `sectionOptions ?? []` so the optional prop doesn't
+  leak `undefined` to `RecipeStepRow`).
+
+**Decisions made:**
+- **Fix the collateral inline, not via a new FU.** Both were
+  trivial type-only edits, caused by my own previous-session
+  work, and would otherwise block the FU-140 audit's typecheck.
+  Cleaner to flush them than to spin off paperwork.
+- **No code edits on the FU's main scope.** The Chunk 3 nullable
+  worry didn't reproduce; every consumer is already null-safe.
+
+**Files touched:**
+- `web_app/src/pages/RecipeDetailPage.vue` (import-recipe step
+  factory)
+- `web_app/src/components/recipes/RecipeStepsEditor.vue`
+  (`section-options` pass-through)
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:** `npx vue-tsc --noEmit` clean (`rc=0`, no output)
+after the two collateral fixes. Hand-walked the named call sites;
+every one narrows or guards before using the id as a non-null
+string.
+
+**Engineering-standards close-gate:** no rule violations. The two
+collateral edits keep the optional-prop pattern consistent with
+R-004 (state-ownership / shape discipline) — neither widens the
+type contract, they just stop the optional bleeding through.
+
+**Next up:** resume whichever task the user redirects to.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-139 closed (already shipped — closing stale entry)
+
+**Why:** user said "FU-139 do it". The FU lists six display-only
+surfaces still using the legacy name-keyed `getStockLevelColour`.
+
+**What I found:** the migration was already completed in a later
+session that didn't close the entry. `web_app/src/helpers/stockLevelLogic.ts`
+only exports `colourForSequence`; a repo-wide
+`grep -r getStockLevelColour web_app/src` returns just the
+historical reference inside the new helper's doc-comment. Every
+named call site (`StockItemDetailPage.vue`, `RecipesOverview.vue`,
+`RecipeDetailPage.vue`, `QuickAddSheet.vue`,
+`CreateStockItemDialog.vue`, `MyProductsPage.vue`) routes through
+the sequence-keyed entry point.
+
+**What shipped:** nothing in code. Moved the FU from
+`DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with a note
+documenting the state I observed.
+
+**Files touched:** `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:** repo-wide grep for `getStockLevelColour` returned
+one hit (the doc-comment); grep for `colourForSequence` at each
+named call site confirms the new helper is in use. No browser pass
+needed — the legacy function is physically gone.
+
+**Engineering-standards close-gate:** no rule violations
+introduced. No new ADR.
+
+**Next up:** resume whichever task the user redirects to.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-138 closed (query-count test for `GET /recipes`)
+
+**Why:** user said "FU-138 do it". State-ownership Chunks 2/3
+landed batched aggregations on the cookbook hot endpoint; the
+plan's §3 perf risk asked for a runtime guard against silently
+regressing into N+1 lazy loads.
+
+**What shipped:**
+- `tests/e2e/dora_api/_query_counter.py` — tiny `SelectCounter`
+  context manager that subscribes to
+  `Engine.before_cursor_execute` and records every SELECT during
+  its scope. ~50 LOC, single class, leading-underscore filename so
+  pytest doesn't auto-collect it.
+- `tests/e2e/dora_api/test_recipes_query_count.py` — ratio test:
+  baseline `GET /recipes?limit=500`, POST 10 throw-away probe
+  recipes (`_fu138_probe_<i>`), re-hit the list endpoint, assert
+  `(loaded_selects - baseline_selects) < 10 × 0.5`. Cleanup
+  DELETEs the probes in a `finally` so the test doesn't leak rows.
+
+**Decisions made:**
+- **Ratio test, not hard ceiling.** Pinning an exact count would
+  be brittle as new batched lookups get added; the *shape* we
+  care about is "scales with row count or not". 0.5/recipe is
+  generous enough that a benign batched-query shift doesn't flake
+  but tight enough that any per-recipe loop screams.
+- **Don't grow the harness yet.** The FU's raise note explicitly
+  said "no precedent, building scaffolding belongs with the next
+  hot endpoint". Kept `SelectCounter` minimal — single class, no
+  decorators, no fixture, no thresholds-config. Promote when a
+  second consumer needs it.
+- **Probe recipes via the real API.** Could have inserted rows
+  through the repository, but going through `POST /api/recipes`
+  matches the user-facing wire shape and exercises the same
+  vocabulary validation as the prod path. Minimum payload is
+  `{"name": ..., "ingredients": []}`.
+
+**Files touched:**
+- `tests/e2e/dora_api/_query_counter.py` (new)
+- `tests/e2e/dora_api/test_recipes_query_count.py` (new)
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:**
+- Ran `./.venv/bin/pytest
+  tests/e2e/dora_api/test_recipes_query_count.py -xvs` → **passed
+  in 2.14s**. Delta on the current handler is 0 SELECTs (well under
+  the 5-budget), confirming the batched aggregations don't shift
+  per recipe.
+- Confirmed the cleanup DELETEs ran in the test log — no probe
+  rows leaked.
+
+**Engineering-standards close-gate:** no rule violations
+introduced. The new harness is a thin SQLAlchemy event listener;
+no domain code touched. No new ADR — the harness is a one-off
+sized for its single consumer; we'll promote it if/when a second
+endpoint needs the same guard.
+
+**Next up:** resume whichever task the user redirects to.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-131 closed (Cart Button Chunk 3 backup/restore + audit of already-shipped UI)
+
+**Why:** user said "FU-131 do it". The FU listed four pieces of
+remaining work from Cart Button Chunk 3's deliberate scope-down.
+
+**What I found on inspection:**
+- Three of the four pieces were already shipped (likely in an
+  earlier session that didn't close the FU): rule-4 confirm modal
+  in `ShoppingListDetail.onRemoveLine`, `AddToListButton
+  variant="inline-product"` + `productId` anchor (wired into
+  `MyProductsPage` as "Add as product"), and nested display
+  (`nestedLinesFor` / `isNestedChild` / `isProductOnly` driving
+  the shopping-bag chip + tinted background).
+- The fourth piece — **backup/restore round-trip** — was an actual
+  open bug. `restore_shared.py` predates Chunk 3 and treated the
+  new nullable `ShoppingListLine.product_id` column as
+  uninteresting. Partial restores that included shopping lists but
+  not `saved_products` would null `product_id` on every line,
+  dropping product-only rows on the new `ck_shopping_list_line_anchor`
+  CHECK and degrading nested children to plain stock-item lines.
+
+**What shipped:**
+- `dora_api/features/data/restore_shared.py`:
+  - Added `("shopping_list_items", "product_id"): "saved_products"`
+    to `HARD_FK_PULL_IN` so the referenced Product is auto-included
+    in the restore selection — matches the existing pattern for
+    `recipes.cuisine_id` / `category_id`.
+  - Added `("shopping_list_items", "product_id")` to `REQUIRED_FKS`
+    so if the Product is genuinely missing (user opted
+    `saved_products` out), the line is dropped with a warning
+    rather than silently nulled (which would crash the CHECK on
+    product-only rows or silently mutate nested children into
+    parents).
+  - Annotated the existing `("shopping_list_items", "stock_item_id")`
+    REQUIRED entry to make the now-nullable semantics explicit
+    (REQUIRED here means "if non-null, target must resolve"; the
+    decoder skips the FK check entirely when the column is null).
+- No FE work needed — verified the three UI pieces in code.
+
+**Decisions made:**
+- **Don't re-implement what already shipped.** Confirmed by reading
+  the call sites + greps for "rule 4", "isProductOnly",
+  "inline-product", "Also remove the stock item". All three pieces
+  are present and look load-bearing in the SPA.
+- **Drop missing-Product lines rather than degrade.** A nested
+  child without its Product is technically rescuable (null
+  `product_id`, keep `stock_item_id`), but the same code path
+  handles product-only lines where degrade isn't possible. Single
+  policy (drop with warning) keeps the restore semantics
+  predictable and the CHECK happy.
+
+**Files touched:**
+- `dora_api/features/data/restore_shared.py`
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:**
+- Reread `restore_backup.py` decoder (lines 310–355) to confirm:
+  the FK check is gated on `value is not None`, so the new
+  `REQUIRED_FKS` entry for `product_id` is also "if set, must
+  resolve". A null `product_id` (a stock-item-only line) passes
+  through untouched.
+- Confirmed `saved_products` (Product) precedes `shopping_list_items`
+  in `SECTIONS`, so the pull-in fixed-point already iterates in
+  the right order.
+- *Not verified* by running an actual backup → restore cycle. Worth
+  one as part of the broader [[FU-145]] browser pass.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+The restore_shared classification is the right home for this
+metadata (R-005 portable-data-access spirit — declarative tables,
+not in-decoder branches).
+
+**Next up:** resume whichever task the user redirects to. The
+browser-verify follow-on for the Chunk 3 UI is still tracked as
+[[FU-145]] and the product-anchored cart-state extension as
+[[FU-144]] — both unchanged by this session.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-117 closed (section picker on `RecipeStepsEditor`)
+
+**Why:** Chunk 10 wired `RecipeStep.section_id` end-to-end but the
+editor never surfaced a picker, so hand-entered steps shipped
+unsectioned. User asked to do it now.
+
+**What shipped:**
+- `recipeStepEditorTypes.ts` — added `section_client_id: string | null`
+  to `EditableStep` and a new `SectionOption` type.
+- `RecipeStepsEditor.vue` — optional `sectionOptions` prop forwarded
+  to each row; both new-step factories (`onAddTopStep`,
+  `onAddSubStep`) initialise `section_client_id: null`.
+- `RecipeStepRow.vue` — new optional `sectionOptions` prop. Renders a
+  compact `q-select` in the row header **only** when
+  `row.depth === 0` and the option list has more than one entry
+  (i.e. there's at least one named section beyond the implicit
+  `(Main)`). `sectionModel` patches `section_client_id`.
+- `RecipeDetailPage.vue`:
+  - Passes the existing `sectionOptions` computed to
+    `RecipeStepsEditor`.
+  - Hydrates `section_client_id: s.section_id` from the loaded
+    recipe.
+  - Includes `section_client_id` in `stepsToSend`, clamping
+    sub-steps to `null` (server flattens by parent).
+  - `removeSection` now also detaches step references, mirroring
+    the existing ingredient cleanup.
+
+**Decisions made:**
+- **Top-level only.** Matched the FU's "sub-steps inherit visually"
+  guidance. Wire still carries `section_client_id` on sub-steps but
+  the page coerces them to null on save.
+- **Picker hides when there's no point.** Only rendered when more
+  than one option exists (i.e. the recipe has named sections beyond
+  `(Main)`) — same gate the ingredient row uses, no extra UI noise
+  on simple recipes.
+- **Importer untouched.** The URL importer's `HowToSection` handling
+  is a separate concern; not pulled into scope.
+
+**Files touched:**
+- `web_app/src/components/recipes/recipeStepEditorTypes.ts`
+- `web_app/src/components/recipes/RecipeStepsEditor.vue`
+- `web_app/src/components/recipes/RecipeStepRow.vue`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:**
+- Grepped `EditableStep` / `EditableRecipeStep` across `web_app/src`:
+  the only construction sites are the two editor factories (both
+  updated) and the hydrate path on the detail page (updated). No
+  other component instantiates `EditableStep`.
+- *Not verified* in a browser. Worth a smoke pass: open a recipe
+  with sections + structured steps → confirm the picker appears
+  next to the move/sub-step/remove controls on each top-level row,
+  pick a section, save, reload — assignment persists. Then delete
+  a section and confirm steps that pointed at it fall back to
+  `(Main)`.
+
+**Engineering-standards close-gate:** no rule violations introduced.
+R-001 didn't trigger (only one editor surface). No new ADR needed.
+
+**Next up:** resume whichever task the user redirects to.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-28 — FU-115 closed (dropped freeform `Recipe.nutrition` column)
+
+**Why:** user called it: pre-release, no production data to preserve,
+so the FU's "audit-first" caution doesn't apply. Just axe it.
+
+**What shipped:**
+- Migration `b7e2d9a4c1f5_20260628_drop_recipe_nutrition.py` —
+  `drop_column('nutrition')` inside a `batch_alter_table` (SQLite-
+  portable). Down adds it back nullable for symmetry.
+- API surface scrub: removed the field from
+  `domain/entities/recipe.py` (incl. `Fields.NUTRITION`),
+  `persistence/table_mappings.py`, `features/recipes/create_recipe.py`
+  + `update_recipe.py` (request models + entity assignment +
+  `_NULLABLE_PLAIN_ATTRS`), `features/recipes/get_recipes.py`
+  (`RecipeDto` + assignment), `features/recipes/new_recipe_version.py`
+  (version clone), `features/recipes/import_recipe_from_url.py`
+  (`ImportedRecipeDto` field, the `_coerce_nutrition` helper, both
+  degraded + JSON-LD assignments), `features/data/export_recipe.py`
+  (Jinja block), `persistence/seed.py` (factory kwarg), and
+  `tests/test_recipe_cookability.py` stub.
+- SPA scrub: removed the field from `web_app/src/models/recipe.ts`,
+  `services/api/recipeApiService.ts` (Create + Update commands +
+  `ImportedRecipe`), `pages/RecipeDetailPage.vue` (form type +
+  `emptyForm` + hydrate + save-diff + import paths),
+  `pages/RecipesOverview.vue` (import → create payload), and
+  `components/RecipeEditDialog.vue` (template input, form type,
+  `emptyForm`, hydrate, create + update payloads).
+
+**Decisions made:**
+- Pre-release ⇒ no audit, no compat shim — straight column drop.
+- Kept the unrelated `nutrition_enabled` / `nutrition_mode` /
+  `nutrition_db_source` columns and the `features.nutrition` flag —
+  those drive the C-cross Chunk 3 opt-in, not the dropped freeform
+  field.
+
+**Files touched:**
+- New: `dora_api/persistence/migrations/versions/b7e2d9a4c1f5_20260628_drop_recipe_nutrition.py`.
+- Edited: `dora_api/domain/entities/recipe.py`,
+  `dora_api/persistence/table_mappings.py`,
+  `dora_api/features/recipes/{get_recipes,create_recipe,update_recipe,new_recipe_version,import_recipe_from_url}.py`,
+  `dora_api/features/data/export_recipe.py`,
+  `dora_api/persistence/seed.py`,
+  `tests/test_recipe_cookability.py`,
+  `web_app/src/models/recipe.ts`,
+  `web_app/src/services/api/recipeApiService.ts`,
+  `web_app/src/pages/{RecipeDetailPage,RecipesOverview}.vue`,
+  `web_app/src/components/RecipeEditDialog.vue`,
+  `CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Verification:**
+- Grepped `\bnutrition\b` across `dora_api`, `web_app/src`, `tests`
+  after the sweep — remaining hits are all C-cross Chunk 3 mode/flag
+  refs or the unrelated kJ unit comment in `domain/units.py`. No
+  code references to the dropped column remain.
+- *Not verified* by booting the app or running the migration on a
+  live DB — pre-release static cleanup. Worth a `alembic upgrade
+  head` + cookbook smoke-test on next browser pass.
+
+**Next up:**
+- Browser-verify the migration applies clean and the recipe detail /
+  import paths still load and save without the field.
+- Resume whichever task the user redirects to.
+
+**Open questions for user:** none — discrete cleanup, scope locked.
+
+**Engineering-standards close-gate:** no rule violations introduced
+(R-008 scope discipline kept tight — only `nutrition` field touched,
+no opportunistic refactors). No new ADR warranted.
+
+---
+
+## 2026-06-28 — FU-102 closed (extracted `RecipeImportDialog` shared component)
+
+**Why:** the import-from-URL dialog had been duplicated across the
+cookbook overview (creates new) and the recipe detail page (overwrites
+form). R-001 threshold was already at 2 surfaces with non-trivial
+shared chrome + behaviour.
+
+**What shipped:**
+- **New `web_app/src/components/recipes/RecipeImportDialog.vue`** —
+  owns dialog chrome, URL input, error display, loading state, and
+  the `importFromUrlAsync` call. Resets draft state on every open via
+  a `watch` on the v-model so a cancelled attempt doesn't leak. Emits
+  `@imported(dto)` on success; doesn't auto-close, the caller owns
+  v-model. Single optional `degraded-hint` prop lets the detail
+  surface append "Your existing recipe will be overwritten…" without
+  forking the dialog.
+- **Events over `mode` prop:** picked from the two design options the
+  FU offered. The dialog stays unaware of `form`, `createAsync`,
+  navigation, `markDirty` — those live at the call site where they
+  belong.
+- **`RecipesOverview.vue`** — `onRecipeImported` handler now just
+  builds the create payload, POSTs, navigates, and toasts. Dropped
+  local `importUrl` / `importError` / `importing` refs and an unused
+  `BaseDialog` import.
+- **`RecipeDetailPage.vue`** — `onRecipeImported` handles
+  confirm-overwrite (`$q.dialog`), patches the form, and toasts.
+  Same local-state cleanup. Side-fix: cancelling the confirm-overwrite
+  now closes the import dialog (previously left it open — a minor
+  pre-existing bug).
+
+**Verification:** `vue-tsc` clean. Full suite **442/442 passing.**
+
+**Standards close-gate:**
+- **R-001** — Componentisation: the recurring chrome (≈30 lines of
+  template + 4 reactive refs) is now in one place. The diverging
+  what-happens-next stays where it knows the local context.
+- **R-007** — scope discipline: kept the dialog dumb; didn't push
+  shared "what to do with the imported DTO" code in just because it
+  existed at both call sites with different bodies.
+- **ADR evaluation:** no new rule; R-001's "two surfaces with a
+  divergent post-step → extract chrome, emit a result event" is the
+  shape here. Worth keeping in mind as a pattern next time a similar
+  shared-chrome / diverging-tail dialog shows up.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-28 — FU-094 closed (steps editor drag-and-drop reorder, siblings-only)
+
+**Why:** the Cookbook Chunk 6 steps editor was meant to use a drag-handle
+reorder pattern but shipped with up/down arrow buttons. Replace.
+
+**What shipped:**
+- **`RecipeStepRow.vue`** — added a drag handle (`drag_indicator` icon)
+  that's the only `draggable="true"` element on the row, so textareas
+  and selects stay normally clickable / selectable. The whole row is
+  the drop target; `setDragImage` points at the row's outer div so the
+  visual preview is the whole row. Up/down arrow buttons removed.
+- **`RecipeStepsEditor.vue`** — owns the drag state
+  (`draggingClientId` + `draggingParentId`) so every row decides
+  whether it is a valid drop target. Reorder logic mirrors
+  `ShoppingListDetail.onLineDrop`'s "insert at the target's slot"
+  pattern; sequences re-packed through the existing `repackSequences`.
+- **Siblings-only constraint** (per the FU): `dragover` only allows
+  `preventDefault` when source.parent_client_id matches target's. A
+  top-step can't become a sub-step via drag and vice versa — that's
+  out of scope. Validation re-checked at drop time as a belt-and-
+  braces.
+- **Visual feedback** — dragging row gets `opacity: 0.5`; the hovered
+  valid drop target gets a 2px `var(--brand-primary)` outline. Handle
+  has `cursor: grab` / `grabbing`. Token-only colours (R-002).
+- **No backend change.** The persisted shape (parent + sequence) is
+  exactly what the editor already emitted.
+
+**Verification:** `vue-tsc` clean. Full suite **442/442 passing** —
+acts as a regression guard on surrounding code (drag-and-drop itself
+is a browser-level concern).
+
+**Standards close-gate:**
+- **R-001** — drag state lives at the parent editor; rows are dumb-ish
+  presentational + emit events.
+- **R-002** — outline + handle colours use tokens.
+- **R-007** — limited to swapping the reorder mechanism; nesting
+  promotion/demotion via drag is deliberately out of scope.
+- **ADR evaluation:** the "handle = only draggable element; whole row
+  = drop target; setDragImage points at row outer" pattern now appears
+  in two places (shopping-list lines + recipe steps). Worth promoting
+  to an R-0NN if a third surface adopts it; for now the inline FU-094
+  comment + ShoppingListDetail's prior comment are the documentation.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-28 — FU-081 closed: server-derived `is_planned` + tri-state filter chip + buried text() UUID bug
+
+**Why:** finish FU-081 (move cookbook "Planned" filter server-side) AND
+the user's adjacent ask — make the filter a tri-state cycle: click 1
+"Planned only", click 2 "Not planned only", click 3 off. Same trip, the
+predicate plumbing overlaps.
+
+**What shipped:**
+- **Backend:** `RecipeDto.is_planned: bool` derived in
+  `_hydrate_unallocated` from the already-running future-unconsumed
+  query — no extra round-trip.
+- **Pre-existing bug surfaced and fixed:** raw `text()` in
+  `_hydrate_unallocated` was binding stringified UUIDs against the
+  `UUIDType` BLOB columns on SQLite. String vs BLOB never matched, so
+  `committed_meals` / `unallocated_meals` / `plan_count` had been
+  silently 0 for any future-planned recipe. The seed has no future
+  entries so it never tripped a test; today's `is_planned` test forced
+  one and surfaced it. Rewrote the derivation to ORM `select()` against
+  the mapped table so SQLAlchemy applies the UUIDType bind-processor;
+  portable across SQLite + Postgres.
+- **Frontend:** `Recipe.is_planned: boolean` model field; new
+  `components/chips/TriStateFilterChip.vue` (cycles
+  `off → include → exclude → off`, swappable label/icon/colour per
+  state). `RecipesOverview.vue` swaps `plannedInOnly: boolean` for
+  `plannedFilterState: TriState` and binds the new chip — "Planned" →
+  click → "Not planned" → click → off. The whole client-side walk of
+  `mealPlanStore.mealPlans[].entries[]` (with its timezone-juggling on
+  `scheduled_for`) is retired.
+- **Round-trip eliminated:** the page no longer fetches meal plans on
+  mount (only reason it did was the now-server-derived filter). One
+  less network call per cookbook visit. `mealPlanStore` import gone
+  from this page.
+- **Tests:** new `test_recipe_is_planned.py` (3 cases). Full e2e + unit
+  **442/442 passing**, `vue-tsc` clean.
+
+**Standards close-gate:**
+- **R-003** — cross-entity rule moved to server. Same query already
+  running covers it; client predicate is one line per branch of the
+  tri-state.
+- **R-005** — fixed the SQLite-only string-vs-BLOB bug by switching to
+  ORM `select()`. Portable across both engines.
+- **R-007** — the underlying-bug fix was discovered by FU-081's test
+  and is in the same file/function; folded in rather than spun out.
+- **ADR evaluation:** *"prefer ORM `select()` over raw `text()` when
+  binding UUIDType-keyed columns"* is a real recurring trap (memory
+  note `project_sqlite_uuid_text_binding` already half-flagged it).
+  Worth a new R-0NN if a third instance shows up; for now the inline
+  `# FU-081` comment + the memory note are the documentation.
+
+**Lesson logged:** when a derivation should produce non-zero values on
+real data but tests always see zero, ask whether the SQL is
+*structurally* able to match. Schema-level mismatches (string vs BLOB,
+text vs UUID) are invisible at syntax level and survive happily on seed
+data that never exercises the filter.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-28 — FU-075 closed (planned-shop-date e2e — verified, 4/4)
+
+**Why:** pure verification gap from Chunk 7's impl session (no live env
+there to actually run the new test file).
+
+**Ran** `pytest tests/e2e/dora_api/test_shopping_list_planned_shop_date.py -v`
+on this session's working venv with migration `e1a4c7b2f9d0` (and
+everything since) applied. **4/4 passing** — the planned-shop-date
+wire-up survives every later schema and DTO change unchanged.
+
+No code change. Ledger flip only.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-28 — FU-056 slice 1b: dropped `product_multi_linked` (asymmetric m:n)
+
+**Why:** user pushed back on the `product_multi_linked` lookup kind I'd
+shipped in slice 1. Their argument was honest and right: a specific
+Product SKU semantically satisfies one pantry slot, not many. "Vitasoy
+Oat Milky is for milk, not for peanuts." The `m:n` shape allowed nonsense
+configurations.
+
+**Asymmetric truth locked in:**
+- Many Products → one StockItem ✅ (Coles + Pauls + Vitasoy → "Milk")
+- One Product → one StockItem ✅ (Vitasoy Oat Milky → "Milk", exclusively)
+- One Product → many StockItems ❌ (was structurally possible, now blocked)
+
+**What shipped:**
+- Migration `c4a8e2b9d7f5` — `UNIQUE(product_id)` on
+  `StockItemProduct`. Verified seed conformed before adding (0 products
+  linked to >1 stock items), so no backfill.
+- `barcode_lookup` collapsed from 5 lookup kinds to 4. Removed
+  `product_multi_linked`. The traversal `Product → StockItem` returns at
+  most one row; `.first()` is the natural shape.
+- Frontend `BarcodeLookupResult` type, `BarcodesQR.vue` dialog branches,
+  `StockOverview.vue` scan handler, and one e2e expectation all updated.
+
+**Tests:** Full suite **439/439**. `vue-tsc` clean.
+
+**Lesson logged:** when an m:n relation has an asymmetric semantic truth,
+encode it. The "safe" symmetric m:n shape silently allowed the lookup
+ambiguity I'd been working around with `product_multi_linked` — the
+constraint was the better fix than the defensive UI branch.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-28 — FU-056 (slice 1) closed — Hybrid Barcode model end-to-end
+
+**Why:** user pushed back on the P6-02 proposal — the EAN-only-on-Product
+model broke scanning for lightweight installs (no Products data). They
+also surfaced the constraint *"a stock item can have as many barcodes as
+it has products; a product can have only one barcode"* which crystallises
+the right shape.
+
+**Design landed:** `Barcode` (renamed from `ProductBarcode`) with
+nullable `product_id` (UNIQUE — one Product = one EAN) and nullable
+`stock_item_id` (not unique — a stock item carries many direct EANs).
+CHECK enforces "at least one set". Both can be set together when an EAN
+is both a Product's catalogue code AND the user explicitly tied it to
+their pantry slot.
+
+**What shipped (slice 1):**
+- **Migration `b7f3a2c8d5e1`** — add cols, relax/unique product_id,
+  CHECK, rename to `Barcode`. Backup/restore wiring updated.
+- **`features/data/barcodes.py`** — new lookup precedence (direct
+  stock-item wins, then Product traversal returning one of five
+  kinds); new `POST /api/data/barcodes` (replaces
+  `/register-against-product`); new `DELETE /api/data/barcodes/<id>`.
+- **`get_stock_item_detail.py`** — new `StockItemBarcodeDto` + server
+  derivation that splits direct vs via-Product rows.
+- **Frontend models / API service** updated to the five-kind shape.
+- **`StockItemDetailPage.vue`** — new **Barcodes** section under
+  Substitutes, gated on `features.scanning`. Lists direct + via-Product
+  with an "+ Add barcode" dialog (textbox). Direct rows have remove;
+  via-Product rows are read-only (edit on the Product when that UI
+  ships).
+- **`BarcodesQR.vue`** — scan-result dialog handles all five kinds.
+  On `unknown`, a register-now branch with a stock-item picker calls
+  the new endpoint and closes.
+- **`StockOverview.vue`** scan integration — single-target kinds route
+  directly; multi-linked / no-link / unknown surface a descriptive
+  toast.
+- **Tests** — 6 new e2e cases (lookup traversal, same-barcode 409,
+  direct stock-item lookup, per-product UNIQUE 409, neither-target 400,
+  delete round-trip). New `_next_unused_product_id()` fixture so each
+  per-product test gets a fresh Product.
+- **Full suite: 439/439 passing.** `vue-tsc` clean.
+
+**Stays in FU-056 as Phase-2 work:**
+- Ingestion EAN auto-populate (just calls the new endpoint with
+  `product_id` set; blocked on ingestion API).
+- Product-detail EAN input (slot into Products UI when touched).
+
+**Standards close-gate:**
+- **R-003** — `Barcode` table is the single source for EAN→target
+  rules; lookup precedence is server-owned.
+- **R-005** — migration portable (CHECK + UNIQUE-with-NULLs both
+  supported by SQLite + PG via SQLAlchemy).
+- **R-007** — Phase-2 ingestion bits explicitly deferred; this slice
+  is fully self-contained.
+- **R-014 (reveal-and-disable)** — the Barcodes section is gated on
+  `features.scanning`; when off the surface stays hidden (scanning
+  isn't an active capability on the install).
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-27 — FU-050 closed (retired `getStockLevelColour` + dedup sequence consts)
+
+**Why:** finish off the name-match smell beyond the 7 cookability
+copies Chunk 3 had already removed.
+
+**Investigation:** the specific call sites the FU originally flagged
+(`needToBuy`, restock sources, cook-mode availability) had already
+migrated to sequence-keyed predicates (`useStockStatus().needsBuying`,
+`OUT_OF_STOCK_SEQUENCE` constants). The **real surviving smell** was
+the legacy name-keyed `getStockLevelColour(name)` helper — 16 callers
+across 6 files using it instead of the sequence-keyed
+`colourForSequence`.
+
+**Fixes:**
+- Migrated all 16 call sites in `CreateStockItemDialog.vue`,
+  `QuickAddSheet.vue`, `StockItemDetailPage.vue` (incl. a new
+  `detailLevelColour` computed), `MyProductsPage.vue`,
+  `RecipeDetailPage.vue`, `RecipesOverview.vue` — each now passes a
+  sequence (from the StockItem model's `stock_level_sequence` or the
+  level-store lookup) to `colourForSequence`.
+- **Retired** the legacy `getStockLevelColour` function in
+  `helpers/stockLevelLogic.ts`; its docstring already marked it for
+  removal once the surface-by-surface sweep finished. Today's sweep
+  finished it.
+- Killed a suspicious `?? 'Well-Stocked'` fallback in
+  `StockItemDetailPage.vue` that was rendering untracked items in the
+  success-green tone — wrong default; should be null/muted.
+
+**Bonus R-003 fix:** `services/doraIntents.ts` was carrying its **own
+copies** of `LOW_STOCK_SEQUENCE = 2` and `OUT_OF_STOCK_SEQUENCE = 3`,
+duplicated from `helpers/stockStatus.ts`. Deleted the duplicates and
+imported the shared ones; killed a textbook drift bug before it bit.
+
+**Verification:**
+- `vue-tsc --noEmit` clean.
+- Full e2e + unit suite **435/435 — zero failures.**
+- Final grep — every remaining `'Out of Stock'` / `'Low Stock'`
+  literal in the codebase is in a comment / docstring describing the
+  vocabulary; **zero name-match code paths remain.**
+
+**Standards close-gate:**
+- **R-003** reinforced — sequence-keyed throughout, no more name
+  duplication of the level vocabulary, no duplicated sequence
+  constants.
+- **R-007** — limited to the one surviving smell + its adjacent dedup
+  fix; didn't sweep comments or the documented carve-outs.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-27 — FU-049 closed (sidebar cookability — accepted; save reloads)
+
+**Why:** user accepted the existing post-Chunk-3 behaviour on the
+condition that the sidebar refreshes after save. Verified.
+
+**Verified:**
+- `onSave()` (RecipeDetailPage.vue:1703-1704) — `updateRecipeAsync` →
+  `await loadRecipe()`.
+- `loadRecipe()` (line 1601) — re-fetches the server's `RecipeDto` so
+  `missing_count`, `cookable`, `missing_stock_item_names` come back
+  fresh.
+- Same `loadRecipe()` runs after toggle-favourite (line 1729) +
+  ingredient ops at 1984/2004/2028/2144.
+
+Live-while-editing remains the deliberate Chunk-3 trade-off — avoids
+the client-recomputed stock-join duplication R-003 removed. Per-row
+editor badges still update live off the stock store. No code change.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-27 — FU-310 closed (register response + 2 stale test assertions)
+
+**Why:** user asked to resolve the 4 leftover pre-existing failures that
+had been blocking a clean suite all session.
+
+**Root cause** — surfaced one real bug + two stale tests:
+- **Real bug:** `POST /api/auth/register` returned an ad-hoc 6-field
+  dict instead of the full `AuthenticatedUserDto` that `/login` and
+  `/me` both return. The SPA's `registerAsync` already typed the
+  response as `AuthenticatedUser`, so since the Settings rebuild Phase 4
+  + Dashboard rebuild Phase 2 added `has_image` and `dashboard_layout`,
+  the auth store had been hydrated with `undefined` for every missing
+  field on registration. Vue's permissiveness masked the breakage.
+- **Stale test 1:** `test__get_users__GettingUsers__GetsAllExpectedAttributes`
+  was asserting the `UserDto` key set without the `has_image` field
+  added in Settings rebuild Phase 4 (`_stamp_has_image`).
+- **Stale test 2:** `test__profile_picture__rejects_oversize_data_url`
+  expected 422 on pydantic ValidationError, but the codebase's
+  `middleware.deserialise_web_request` returns 400 (matched by 84 other
+  tests; the 422 expectation was the lone outlier).
+
+**Fixes:**
+- `dora_api/features/auth/register_user.py` — the route now builds the
+  response from `AuthenticatedUserDto.from_entity` (parity with /login
+  + /me) plus a `verification_sent` extra.
+- `tests/e2e/dora_api/test_user_router.py` — added `'has_image'` to
+  the expected key set with an inline citation.
+- `tests/e2e/dora_api/test_auth_flows.py` — `assert status == 400`
+  with a docstring noting the codebase convention.
+
+**Verification:** the 4 originally-failing tests pass. **Full e2e + unit
+suite: 435/435 — zero failures.** Frontend `vue-tsc` clean.
+
+**Standards close-gate:**
+- **R-003 (single source)** — register now uses the same DTO factory
+  the other two auth endpoints use; no more drift surface between
+  three near-identical responses.
+
+**Next up:** unblocked, clean suite.
+
+---
+
+## 2026-06-27 — FU-034 closed (substitute notes + optional structured ratio)
+
+**Why:** user asked to discuss + resolve. Chose **hybrid** (free text +
+optional structured ratio) over pure free-text and pure structured —
+non-breaking to upgrade later, covers all four real-world note shapes
+(ratio, process change, equivalence, pitfall).
+
+**Backend:**
+- Migration `a1c5e7d4f2b9` — adds 4 ratio columns + all-or-none CHECK
+  constraint on `StockItemSubstitute`.
+- New `dora_api/features/substitutes/metadata.py` — owns validation +
+  direction-flip in one place (R-003). Pairs stored canonically
+  (`a < b`); callers always think "this → that"; helper flips at
+  persist/read.
+- `add_substitute` extended; new `PATCH /stock-items/<id>/substitutes/<sub_id>`
+  via `update_substitute.py`; `SubstituteDto` carries notes + ratio
+  oriented from the viewer's POV.
+- Validation: all-or-none ratio, qty > 0, units present in `UNIT_TABLE`,
+  unit strings canonicalised on save.
+
+**Frontend:**
+- `Substitute` model + 5 new fields.
+- New `SubstituteMetadataDialog.vue` — textarea + "Add a ratio" toggle
+  with qty+unit pickers on each side, labelled "of {fromName}" / "of
+  {toName}". Unit autocomplete via UNIT_TABLE aliases.
+- `StockItemDetailPage` substitute tab — pencil icon next to unlink;
+  inline ratio + note captions under each substitute name.
+- `RecipeCookMode` swap picker — chips swapped for a `q-list` so each
+  substitute row carries its ratio + note caption below the name. Same
+  layout as the detail-page list so the user reads the swap the same
+  way in both places. Cook mode does NOT auto-compute swap quantities
+  (deliberate Anti-creep — the hint is enough today).
+
+**Tests:**
+- New `test_substitute_metadata.py` (6 cases): notes round-trip, ratio
+  round-trip + direction inversion verified, update-clears-on-empty,
+  half-filled rejected, qty=0 rejected, unknown unit rejected. **6/6
+  pass.**
+- Full e2e: **431/435** (the 4 leftover failures are pre-existing
+  FU-310 auth/user issues, unrelated).
+- `vue-tsc` clean.
+
+**CHANGELOG:** [Unreleased] / Added entry written.
+
+**Standards close-gate:**
+- **R-001** — new dialog is its own component (~250 lines); detail
+  page didn't bloat.
+- **R-003** — `metadata.py` is the single source for validation + flip;
+  both POST and PATCH call it.
+- **R-005/R-006** — migration portable + clean, no idempotent guards.
+
+**Deliberately deferred (captured in resolved entry):**
+- Auto-compute swap quantity at cook time using ratio +
+  `UNIT_TABLE`'s conversion factors. Future-phase, revisit on usage
+  signal.
+- Cross-dimension density-table conversions (`1 cup butter ≈ 226g
+  coconut oil`). Currently allowed at input; not auto-converted.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-046 closed (A1c theme-token regression re-sweep)
+
+**Why:** user asked to investigate, fix, and resolve. Palette literals
+had crept back across 12+ surfaces after the original A1 chunks were
+declared done. Dispatched a focused agent for the bulk migration with a
+clear R-002 rubric.
+
+**Surfaces fixed (16+):**
+- **Helpers / composables retyped to `string | null`** —
+  `stockLevelLogic.ts`, `useStockStatus.ts`, plus per-page colour
+  computeds in `RecipesOverview`, `MyProductsPage`,
+  `MealPlanShoppingSummary`, `SequentialBuilderDialog`,
+  `PageErrorState`, `ShoppingListRailItem`, `ShoppingListDetail`,
+  `DataImport`, `TriStateFilter`. Neutral/out-of-stock branches
+  return `null`; templates drop `:color` and add `class="dora-text-muted"`
+  (q-icon) or `class="dora-bg-sunken dora-text-secondary"` (q-chip /
+  q-avatar).
+- **Clean semantic swaps:**
+  - `notifyTypeRegistration.ts` `'red-5'` → `'negative'`
+  - `StockItemRow` expiry `'soon'` `'orange-9'` → `'warning'`
+  - `AlertsPage` `dismissed`, `AuditLogSettings` `info`/`debug` → `'info'`
+  - `DoraChat` inactive tab `grey-4`/`grey-9` → `dora-bg-sunken` +
+    `dora-text-secondary` classes
+- **Dropped redundant props** — `ShoppingListDetail` two
+  `track-color="grey-4"` `q-linear-progress` props removed (Quasar
+  default track is theme-acceptable).
+
+**Carve-outs preserved** — `ScanOverlay.vue:59 grey-4` (DEC-4 camera
+rings) intentionally left.
+
+**Deferred to FU-313** (new follow-up logged) — graduated severity /
+heatmap palettes that need a designed token ladder, not a swap:
+`models/alert.ts` (severity → red/orange/amber gradient),
+`models/location.ts` (heatmap green→red ladder), `AlertsPage` snoozed/
+read state colours, `AddToListButton` + `StockItemDetailPage` `amber-9`
+"attention" tones. FU-313 recommends `--severity-N` /
+`--heatmap-N` token ladders in `tokens.scss`/`themes.scss` so the
+gradient becomes theme-aware.
+
+**Final inventory:** 21 palette literals remain — 1 carve-out
+(ScanOverlay), 20 deferred to FU-313. **Zero unaccounted regressions.**
+
+**Standards close-gate:**
+- **R-002 reinforced** — the sweep applied the rule's own "apply"
+  recipe verbatim (`dora-text-muted` / `dora-bg-sunken` for neutrals,
+  semantic palette for saturated). Carve-outs respected.
+- **R-007 (scope discipline)** — graduated palettes correctly carved
+  out into FU-313 rather than swept with the wrong tool.
+- **ADR evaluation:** no new R-0NN. R-002 already names the pattern;
+  the lesson here is the failure mode (drift after "done") which R-002
+  itself documents in its "Why" line ("regressed *repeatedly* after each
+  paint pass (see FU-046)") — meta-validates the rule.
+
+**Verification:**
+- `vue-tsc --noEmit` clean
+- `eslint` — one error in `StockItemRow.vue:644` (pre-existing FU-312
+  `no-misused-promises` on the waste-undo handler, not from this sweep)
+
+**Lesson logged in resolved entry:** the recurring "A1 chunk re-regressed"
+pattern is exactly what R-002 was written to prevent. The sweep itself
+is mechanical; the prevention is the ongoing close-gate check
+("did your change reintroduce a palette literal?"). FU-313 + the
+existing R-002 violation-signal grep are the two backstops.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-042 closed (badge=list invariant locked by passing e2e)
+
+**Why:** user asked to discuss/resolve FU-042. The bug fix landed in
+C-9.1 (2026-06-15); the FU sat open only for a browser smoke confirm.
+On inspection that smoke is redundant — the exact invariant is asserted
+by a passing e2e.
+
+**Static contract verified today:**
+- Server-derived single count: `actionable_count` returned by
+  `get_alerts.py` per request.
+- Client badge reads it directly:
+  `badgeCount = computed(() => data.value.actionable_count)` in
+  `alertStore.ts:32`. Zero client recompute.
+- Snooze + dismiss are server-owned (`AlertInteraction`) and applied to
+  every bucket pre-payload, so badge and list can't drift.
+
+**Tests re-run today:**
+- `test__alerts__actionable_count_equals_high_plus_medium_in_items` ✓
+- `test__alerts__snooze_moves_out_of_active_then_clear_restores` ✓
+- Full e2e suite earlier: 425/429 (4 = FU-310 pre-existing, unrelated).
+
+**Lesson logged in the resolved entry:** a "kept open for browser smoke"
+gate that's already enforced by a passing e2e on the exact invariant is
+a stale gate.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-020 closed (cook-mode-only swap is the chosen model)
+
+**Why:** user asked what FU-020 was about. Open question from B8: should
+the recipe-detail page also let you swap a substitute, or is cook-mode-
+only the intended flow? User confirmed cook-mode-only.
+
+**Decision** — keep current behaviour. No code change.
+- Recipe detail's "Find substitutes" dialog stays read-only (already has
+  copy pointing users to cook mode for the actual swap).
+- Cook mode remains the sole swap surface; swaps stay session-scoped
+  and never mutate the saved recipe.
+- Rationale: Charter tiebreak (Effortless + Anti-creep) — one swap
+  mechanism, clean ownership (detail = canonical, cook = session).
+- If "plan ahead" ever becomes a real ask, the right home is per-
+  ingredient swap on a scheduled `MealPlanEntry`, not the bare recipe
+  page. Captured in the resolved entry for future reference.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-005 + FU-006 ledger flip (left open in error)
+
+**Why:** the user noticed both were still `[OPEN]` even though their
+code work had landed. Commit `37608e4` was titled "Partial resolution of
+FU-005 and FU-006" — partial because FU-006 had remaining sites; FU-005
+was actually complete at that commit.
+
+**FU-005 (split-button wrappers):** `BaseDropdown.vue` +
+`BaseSegmented.vue` shipped in `37608e4`; every call site migrated. The
+only raw `q-btn-dropdown` / `q-btn-toggle` left in the repo is inside
+the two wrappers themselves. Done.
+
+**FU-006 (q-btn → BaseButton sweep):** continued today's first-turn
+sweep, drained to 48 raw `q-btn`. All remaining matches the FU's own
+explicit exclusion list:
+- 3 wrappers (BaseButton + BaseDropdown + BaseSegmented)
+- 17 MyProductsPage (companion-bound — Decision 1)
+- 14 DoraChat (its own component)
+- 5 q-input #append slots (search-clear / copy popouts)
+- 9 flagged ambiguous sites with inline `// FU-006:` markers awaiting
+  per-site design calls (palette tone or `type="a"`)
+
+CardComponent (the 49th from earlier today's count) was deleted under
+FU-311; the count is now 48.
+
+The FU itself described its disposition as "Not no-regret; not urgent —
+opportunistic". The current state matches. Closing.
+
+**Standards close-gate:** none new. The `// FU-006:` inline markers
+stay as locatable decision points if someone touches those surfaces.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-189c + FU-223 closed (pytest verification gaps cleared)
+
+**Why:** both were "verification gap" follow-ups left open because the
+original sessions ran on a Python-stub dev box that couldn't execute
+pytest. This session's working venv lets us close both at once.
+
+**FU-189c (Merchant → Store rename):**
+- Full e2e suite **425/429** passing (`tests/e2e/dora_api` + the two
+  unit test files). 4 remaining failures = FU-310 (auth/user
+  `has_image` issue, confirmed pre-existing on prior turns).
+- Rename-surface focus run — `test_store_router`, `test_product_router`,
+  `test_ingestion_sources`, `test_ingestion_store_mappings`,
+  `test_ingest_batch` — **80/80 green**.
+- Stale `Merchant` references in code: none. Remaining "merchant"
+  mentions are domain-concept copy in docstrings + Dora chat tool
+  descriptions (describing what a Store holds, not stale entity
+  references). The commented-out `service_wiring.py` registration is
+  dead config.
+
+**FU-223 (stock-location / stock-group clear-flag):**
+- `test_stock_item_router.py` — **42/42 passing.** No regressions on
+  the clear path; the FK-write fix held without needing test updates.
+
+**Standards close-gate:** none new — these are verification closes, no
+code change. The "Reveal-and-disable" lesson from FU-189c's runbook is
+already in R-014.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — Fix: top-strip disabled tooltip swallowed by `pointer-events: none`
+
+**Why:** user reported the disabled-state Product Search tooltip wasn't
+firing on the top-strip variant (`MainMenuButton`), even though the
+side menu showed it correctly.
+
+**Root cause:** `MainMenuButton.vue:147` had `pointer-events: none` on
+the `.dora-mainMenuButton-disabled` style. That kills hover events at
+the DOM level, and `q-tooltip` needs hover to fire — so the tooltip
+was nested correctly in the template (line 14) but never got a chance
+to render. SideMenuButton uses opacity-only, which is why the tooltip
+worked there.
+
+**Fix:** removed `pointer-events: none` from the disabled style. Quasar's
+`:disable="true"` on the `<q-item>` already prevents click events, so
+the pointer-events block was redundant and was the actual bug.
+
+**Standards close-gate:** none new. Inline comment added explaining why
+`pointer-events` is intentionally *not* set, so the next person doesn't
+re-add it.
+
+**Verification:** `vue-tsc` clean. Hover the top-strip Product Search
+on a products-on / URL-empty install — tooltip should now appear.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — Product Search disabled-state tooltip polished (R-014)
+
+**Why:** user asked for the disabled Product Search nav entry to "tell
+you what to do to enable it." The wiring was already there
+(`SideMenuButton.vue:17` + `MainMenuButton.vue:14` both render the
+`disabledTooltip` prop on hover, and the side menu also renders it
+inline as a `<q-item-label caption>`), but the text — "Set the Product
+search URL in admin System settings." — pointed at a vague area instead
+of the exact route.
+
+**What shipped:**
+- `MainLayout.vue` — destructured `isAdmin` from the auth store; the
+  `productSearchEntry` disabled-tooltip now names the precise settings
+  path and varies by role:
+  - admins: *"Not set up yet — set the Product search URL in Settings
+    → System → Features."*
+  - non-admins: *"Not set up yet — ask an admin to set the Product
+    search URL in System → Features."*
+- Inline comment cross-references R-014 ("path to enable it") so the
+  pattern is discoverable next time someone gates a feature.
+
+**Why not click-through-to-settings:** considered routing the disabled
+entry to `/settings/admin/system/features` on click (R-014 "path to
+enable it"). Rejected because `MainMenuButton` (top strip) doesn't
+render the `caption` field — only `SideMenuButton` does — so the same
+entry would behave inconsistently across viewports. The disabled +
+tooltip-with-exact-path pattern reads identically on both.
+
+**Standards close-gate:** R-014 reinforced (hint is actionable, names
+the exact route). No new rule.
+
+**Verification:** `vue-tsc` clean.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-209 closed (products data-presence gate + two leak fixes)
+
+**Why:** previous session had FU-209's Phase-A static work landed but
+needed browser verification before flipping. User ran the browser
+checklist; found two real leaks the static read missed.
+
+**Static state confirmed unrotted:**
+- `tests/e2e/dora_api/test_onboarding_flags.py` — 10/10 passing
+- Single Alembic head `f9d3a7c2b5e8`
+- `vue-tsc` clean
+- `health_check.py:122` derives `features.products` from
+  `repo.get(Product).count() > 0`
+
+**Two leak fixes today:**
+1. **`MainLayout.vue:213-235`** — Product Search nav was gated, but the
+   `base.push({ label: 'My Products', ... })` two lines down wasn't. The
+   nav advertised the surface on a products-empty install. Fixed: wrapped
+   the push in `if (features.products.value)`.
+2. **`AdminSystemFeaturesSettings.vue:44-66`** — the "Product search"
+   URL input section rendered unconditionally. It's part of the products
+   overlay, so it follows the same gate. Fixed: `v-if="productsEnabled"`
+   on the `<SettingsSection>`, added `productsEnabled` to the
+   `useFeatureFlags` destructure.
+
+**Full products-surface inventory verified gated** (after fixes):
+- MainLayout: Product Search nav, My Products nav
+- DashboardPage: `best_deals` card (via `isCardVisible` → `gate: 'products'`)
+- StockItemDetailPage: Products tab header + tab panel
+- AdminSystemFeaturesSettings: Product search URL section
+
+**Carry-over (not in FU-209's scope):**
+- `/my-products` route has no router guard — direct URL still loads
+  `MyProductsPage.vue` on a products-empty install. Proposal §2 said
+  "keep every v-if gate — only the boolean's source changes"; route-
+  locking is a separate hardening pass if desired.
+- `doraContextualActions.ts:154` — "Hunt for fresh deals" contextual
+  action keyed to `/my-products` — unreachable on products-off, harmless.
+
+**Standards close-gate:**
+- **R-003** — `features.products` is the single server-derived fact;
+  every consumer reads it via `useFeatureFlags` / `_feature_flags()`.
+- **R-005/R-006** — migration `f1d5b8a2c4e6` is clean, no idempotent
+  guards, portable.
+- **ADR evaluation:** "data-presence-gated surfaces" could become an
+  `R-0NN` if a second feature adopts the pattern. Holding for now —
+  one instance isn't a rule.
+
+**Lesson logged:** when a feature is gated across N nav surfaces,
+search the codebase for every literal navigation push, not just the
+ones near a `useFeatureFlags` call. The leak was 8 lines below a
+correctly-gated entry — easy to miss in a static read.
+
+**Verification:** `vue-tsc` clean; browser confirms My Products hidden
+on products-empty, appears once a product is added; admin section now
+hidden too.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — FU-045 UX polish: `DORA_DB_PATH` shortcut for SQLite
+
+**Why:** user feedback — having only `DORA_DB_URL` meant SQLite users
+had to write `sqlite:///<path>` and guess the slash count (3 = relative,
+4 = absolute; the relative form gets reinterpreted by Flask against its
+instance dir, so it silently broke). That was bad UX for the most-common
+non-default case.
+
+**What shipped:**
+- **`configuration_manager.py`** — added `_sqlite_url_from_path()`
+  (resolves to an absolute path + emits the 4-slash form via
+  `as_posix()` for Windows safety) and a new resolution rung in
+  `get_db_connection_string()`:
+  1. `DORA_DB_URL` — full SQLAlchemy URL (escape hatch: remote Postgres,
+     custom driver, `:memory:`).
+  2. `DORA_DB_PATH` — **plain filesystem path**, the friendly SQLite
+     shortcut. The app builds the correct URL.
+  3. Per-component PG env vars.
+  4. Default PG (matches `compose.dev.yml`).
+- **Callers switched to the friendly form:**
+  - `desktop_app.py` — `DORA_DB_PATH = <user_data_dir>/dora.data.db`.
+  - `compose.yml` — `DORA_DB_PATH=/app/data/dora.data.db` (with
+    `DORA_DB_URL` available as an unset escape hatch).
+  - `tests/conftest.py` + `tests/e2e/dora_api/conftest.py` —
+    `DORA_DB_PATH = <repo>/data/dora.test.db`.
+- **`README.md`** — quickstart's SQLite fallback note now says "set
+  `DORA_DB_PATH=./data/dora.data.db` (any filesystem path will do)"
+  with `DORA_DB_URL` documented as the escape hatch.
+
+**Verification:** smoke run with `DORA_DB_PATH=./data/dora.smoke.db`
+resolves to `sqlite:////home/benny/.../data/dora.smoke.db`
+(absolute, 4-slash) automatically. Unit + alerts e2e suites:
+**46/46 passing.**
+
+**Standards close-gate:** R-005 (portable data access) reinforced —
+the friendly env knob lives at the config layer, not duplicated at
+every callsite. No new rule.
+
+**Next up:** unblocked.
+
+---
+
+## 2026-06-26 — Deleted dead `CardComponent.vue` (FU-311)
+
+**Why:** flagged during FU-006's q-btn sweep — appeared in the
+unmigrated raw-q-btn inventory but turned out to be a dead component:
+no callers (`grep -rn "CardComponent" web_app/src` found only
+self-references) and the q-btn inside was syntactically broken
+(`::icon` typo, `ICONS.icon` doesn't exist, stray `fab` prop).
+
+**Action:** removed `web_app/src/components/CardComponent.vue`.
+`vue-tsc --noEmit` clean post-removal.
+
+**Standards close-gate:** R-007 (scope discipline) — deletion-only;
+no other touched code. No new rule needed.
+
+**Next up:** unblocked.
+
+---
+
 ## 2026-06-26 — FU-082 closed (Recipe.created_at + "Recently added" sort axis)
 
 **Why:** IMPL_PLAN_COOKBOOK Chunk 1 listed five sort axes; only four

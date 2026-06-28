@@ -75,7 +75,6 @@ export type CreateRecipeCommand = {
     cuisine_id: string | null;
     difficulty: string | null;
     instructions: string | null;
-    nutrition: string | null;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;
     servings: number | null;
@@ -112,7 +111,6 @@ export type UpdateRecipeCommand = {
     difficulty?: string | null;
     instructions?: string | null;
     is_favourite?: boolean;
-    nutrition?: string | null;
     prep_time_minutes?: number | null;
     recipe_collection_id?: string | null;
     servings?: number | null;
@@ -280,7 +278,6 @@ export type ImportedRecipe = {
     prep_time_minutes: number | null;
     cook_time_minutes: number | null;
     instructions: string | null;
-    nutrition: string | null;
     source_url: string;
     ingredients: ImportedIngredient[];
     /** C-4 Chunk 6 — schema.org HowToStep / HowToSection parsed into

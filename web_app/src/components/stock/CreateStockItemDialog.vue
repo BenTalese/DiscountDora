@@ -39,7 +39,8 @@
                             <q-item v-bind="scope.itemProps">
                                 <q-item-section avatar>
                                     <q-avatar
-                                        :color="getStockLevelColour(scope.opt.name)"
+                                        :color="colourForSequence(scope.opt.sequence) ?? undefined"
+                                        :class="{ 'dora-bg-sunken': !colourForSequence(scope.opt.sequence) }"
                                         size="16px"
                                     />
                                 </q-item-section>
@@ -85,7 +86,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';

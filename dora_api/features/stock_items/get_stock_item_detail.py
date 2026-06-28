@@ -62,11 +62,44 @@ class LinkedRecipeDto:
 
 
 @dataclass(frozen=True, slots=True)
+class StockItemBarcodeDto:
+    """FU-056 — one row in the stock-item-detail Barcodes section.
+
+    `source` distinguishes two origins of the same lookup result:
+
+    * `direct` — the user explicitly registered this EAN against this
+      stock item (the Barcode row's `stock_item_id` points here).
+    * `via_product` — the EAN is a linked Product's catalogue code,
+      reaching this stock item through `StockItemProduct`. The SPA
+      renders these read-only on the stock-item surface; editing
+      lives on the Product.
+
+    `product_id` / `product_name` are set only for `via_product` rows.
+    """
+    barcode_id: UUID
+    barcode: str
+    source: str   # 'direct' | 'via_product'
+    product_id: UUID | None
+    product_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SubstituteDto:
     stock_item_id: UUID
     name: str
     stock_level_id: UUID | None
     stock_level_name: str | None
+    # FU-034 — free-text hint. NULL when the user didn't set one.
+    notes: str | None
+    # FU-034 — optional structured ratio "qty_in of THIS item → qty_out of
+    # the substitute". The four fields are stored in the canonical pair's
+    # A→B direction; the handler inverts here so consumers always see the
+    # ratio from the viewing item's perspective. All four are None or all
+    # four are set (DB CHECK enforces it).
+    ratio_quantity_in: float | None
+    ratio_unit_in: str | None
+    ratio_quantity_out: float | None
+    ratio_unit_out: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +249,11 @@ class StockItemDetailDto:
     # FU-227 chunk 3 placeholder (chunk 4 fills it for real). Until chunk 4,
     # the widget reads None and renders the "Not enough price data yet" state.
     your_prices: YourPricesDto | None = None
+    # FU-056 — every barcode that resolves to this stock item, whether
+    # registered directly (source=='direct') or via a linked Product
+    # (source=='via_product'). Always present; the SPA gates the surface
+    # on `features.scanning`.
+    barcodes: List['StockItemBarcodeDto'] = field(default_factory=list)
     # Last-checked timestamp — surfaced as a synthetic "Checked" entry in
     # the timeline whenever it differs from the most recent level change.
     last_checked_at: datetime | None = None
@@ -317,15 +355,46 @@ class GetStockItemDetailHandler:
         # lookup so we avoid a join.
         _LevelLookup = {lvl.id: lvl.name for lvl in self.repository.get(StockLevel).all()}
         # Undirected pairs: the "other side" is whichever column is *not*
-        # the current item. We fetch each direction separately and union.
+        # the current item. FU-034: we now also need the per-pair `notes`
+        # and ratio columns, and the ratio must be **inverted** when we're
+        # viewing the pair from the B side so the consumer always sees
+        # `qty_in/unit_in` as "this item" and `qty_out/unit_out` as "the
+        # substitute".
         _Assoc = db.metadata.tables["StockItemSubstitute"]
-        _SubIds = set(_Session.execute(
-            select(_Assoc.c.stock_item_b_id).where(_Assoc.c.stock_item_a_id == stock_item_id)
-        ).scalars())
-        _SubIds.update(_Session.execute(
-            select(_Assoc.c.stock_item_a_id).where(_Assoc.c.stock_item_b_id == stock_item_id)
-        ).scalars())
-        _SubIds = list(_SubIds)
+        _AsA = _Session.execute(
+            select(
+                _Assoc.c.stock_item_b_id,
+                _Assoc.c.notes,
+                _Assoc.c.ratio_quantity_in,
+                _Assoc.c.ratio_unit_in,
+                _Assoc.c.ratio_quantity_out,
+                _Assoc.c.ratio_unit_out,
+            ).where(_Assoc.c.stock_item_a_id == stock_item_id)
+        ).all()
+        _AsB = _Session.execute(
+            select(
+                _Assoc.c.stock_item_a_id,
+                _Assoc.c.notes,
+                # Swap the in/out pair so we display from B's side.
+                _Assoc.c.ratio_quantity_out.label("ratio_quantity_in"),
+                _Assoc.c.ratio_unit_out.label("ratio_unit_in"),
+                _Assoc.c.ratio_quantity_in.label("ratio_quantity_out"),
+                _Assoc.c.ratio_unit_in.label("ratio_unit_out"),
+            ).where(_Assoc.c.stock_item_b_id == stock_item_id)
+        ).all()
+        # other_id → metadata. If both directions returned the same row
+        # (shouldn't happen with canonical storage), the later wins; both
+        # are equivalent semantically.
+        _MetaByOther: dict = {}
+        for row in list(_AsA) + list(_AsB):
+            _MetaByOther[row[0]] = {
+                "notes": row[1],
+                "ratio_quantity_in": row[2],
+                "ratio_unit_in": row[3],
+                "ratio_quantity_out": row[4],
+                "ratio_unit_out": row[5],
+            }
+        _SubIds = list(_MetaByOther.keys())
         _Substitutes: List[SubstituteDto] = []
         if _SubIds:
             _SubItems = list(_Session.execute(
@@ -338,6 +407,11 @@ class GetStockItemDetailHandler:
                         name = s.name,
                         stock_level_id = s._stock_level_id,
                         stock_level_name = _LevelLookup.get(s._stock_level_id),
+                        notes = _MetaByOther[s.id]["notes"],
+                        ratio_quantity_in = _MetaByOther[s.id]["ratio_quantity_in"],
+                        ratio_unit_in = _MetaByOther[s.id]["ratio_unit_in"],
+                        ratio_quantity_out = _MetaByOther[s.id]["ratio_quantity_out"],
+                        ratio_unit_out = _MetaByOther[s.id]["ratio_unit_out"],
                     )
                     for s in _SubItems
                 ),
@@ -532,6 +606,41 @@ class GetStockItemDetailHandler:
         _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
         _Reasons = reasons_for_item(_StockItem, expiring_soon_window=_Window)
 
+        # FU-056 — gather every barcode that resolves to this stock item.
+        # Two sources, merged + sorted by created_at descending:
+        #   1. Direct registrations (Barcode.stock_item_id == this id)
+        #   2. Indirect via a linked Product (StockItemProduct → Product
+        #      → Barcode.product_id). Read-only on this surface; editing
+        #      lives on the Product when the Products UI ships it.
+        from dora_api.domain.entities.barcode import Barcode
+        _Barcodes: List[StockItemBarcodeDto] = []
+        _AllBarcodes = self.repository.get(Barcode).all()
+        # _StockItem.products is a list of `Product` entities (m2m
+        # selectin-loaded), so key off the entity id, not a "product_id"
+        # field — that attribute lives on the StockItemProduct join row.
+        _LinkedProductIds = {p.id for p in _StockItem.products or []}
+        _ProductNamesById: dict = {
+            p.id: getattr(p, "name", None) for p in (_StockItem.products or [])
+        }
+        for _Bc in _AllBarcodes:
+            if _Bc.stock_item_id == stock_item_id:
+                _Barcodes.append(StockItemBarcodeDto(
+                    barcode_id=_Bc.id,
+                    barcode=_Bc.barcode,
+                    source="direct",
+                    product_id=_Bc.product_id,
+                    product_name=_ProductNamesById.get(_Bc.product_id),
+                ))
+            elif _Bc.product_id is not None and _Bc.product_id in _LinkedProductIds:
+                _Barcodes.append(StockItemBarcodeDto(
+                    barcode_id=_Bc.id,
+                    barcode=_Bc.barcode,
+                    source="via_product",
+                    product_id=_Bc.product_id,
+                    product_name=_ProductNamesById.get(_Bc.product_id),
+                ))
+        _Barcodes.sort(key=lambda b: (b.source != "direct", b.barcode))
+
         return StockItemDetailDto(
             stock_item_id = _StockItem.id,
             name = _StockItem.name,
@@ -565,6 +674,7 @@ class GetStockItemDetailHandler:
             unit_cost = _UnitCost,
             price_entry_prefill = _Prefill,
             your_prices = _YourPrices,
+            barcodes = _Barcodes,
 
             last_checked_at = _StockItem.last_checked_at,
             level_history = _LevelHistory,

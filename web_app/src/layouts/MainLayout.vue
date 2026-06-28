@@ -148,7 +148,7 @@
     const route = useRoute();
     const router = useRouter();
     const authStore = useAuthStore();
-    const { currentUser } = storeToRefs(authStore);
+    const { currentUser, isAdmin } = storeToRefs(authStore);
 
     // ── Global keyboard shortcuts (S5) ──────────────────────────────────
     const { openCheatsheet } = useShortcutRegistry();
@@ -182,8 +182,10 @@
 
     // Phase D / FU-186 — the "Product Search" entry:
     //   - hidden when products is off (no product data ⇒ no search surface)
-    //   - visible-but-disabled with a "Set up in Settings" hint when products
-    //     is on but no `product_search_url` is configured (R-014)
+    //   - visible-but-disabled with a "set up in Settings" hint when products
+    //     is on but no `product_search_url` is configured (R-014). The hint
+    //     names the exact settings path so the user knows where to go without
+    //     having to dig through the admin nav.
     //   - external link (new tab) when both flags are good. The destination
     //     (a sibling companion / a static page / whatever the operator runs)
     //     is **never named** here — it's just "Product Search".
@@ -199,7 +201,13 @@
                 icon: ICONS.search,
                 link: '',
                 disabled: true,
-                disabledTooltip: 'Set the Product search URL in admin System settings.'
+                // R-014 "path to enable it" — name the exact settings route
+                // so the hint is actionable, not just informative. Hover →
+                // q-tooltip; side-menu also renders this as a caption under
+                // the label (SideMenuButton.vue:14).
+                disabledTooltip: isAdmin.value
+                    ? 'Not set up yet — set the Product search URL in Settings → System → Features.'
+                    : 'Not set up yet — ask an admin to set the Product search URL in System → Features.',
             };
         }
         return {
@@ -217,8 +225,16 @@
         if (productSearchEntry.value) {
             base.push(productSearchEntry.value);
         }
+        // FU-209: My Products is gated on the same data-presence flag
+        // as the rest of the products overlay — hide it entirely when
+        // no products exist. Previously this entry slipped through
+        // (productSearchEntry above was gated but the push below wasn't),
+        // so the nav still advertised the surface on a products-empty
+        // install.
+        if (features.products.value) {
+            base.push({ label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' });
+        }
         base.push(
-            { label: 'My Products', icon: ICONS.shopping_bag, link: '/my-products' },
             { label: 'Cookbook', icon: ICONS.menu_book, link: '/cookbook' },
             { label: 'Meal Plans', icon: ICONS.calendar_month, link: '/meal-plans' },
             { label: 'Shopping Lists', icon: ICONS.shopping_cart, link: '/shopping-lists' },

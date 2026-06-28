@@ -232,8 +232,8 @@
                                 <template v-if="!editingName">
                                     <span class="text-h4 sld-title ellipsis">{{ detail.display_name }}</span>
                                     <q-badge
-                                        class="sld-status-badge"
-                                        :color="statusBadgeColour"
+                                        :class="['sld-status-badge', { 'dora-bg-sunken dora-text-secondary': !statusBadgeColour }]"
+                                        :color="statusBadgeColour ?? undefined"
                                         :label="statusBadgeLabel"
                                     />
                                     <BaseButton
@@ -294,7 +294,6 @@
                                 size="76px"
                                 :thickness="0.18"
                                 color="positive"
-                                track-color="grey-4"
                                 class="text-weight-medium"
                             >
                                 {{ tickedCount }}/{{ detail.lines.length }}
@@ -785,7 +784,6 @@
                             size="40px"
                             :thickness="0.22"
                             color="positive"
-                            track-color="grey-4"
                         />
                         <div>
                             <div class="text-body2 text-weight-medium">
@@ -1454,12 +1452,14 @@
                 return 'Draft';
         }
     });
-    const statusBadgeColour = computed(() => {
+    // R-002: "done" routes through the neutral chip class (template
+    // binding below), not a `grey-N` literal.
+    const statusBadgeColour = computed<string | null>(() => {
         switch (detail.value?.status) {
             case 'shopping':
                 return 'positive';
             case 'done':
-                return 'grey-7';
+                return null;
             default:
                 return 'primary';
         }

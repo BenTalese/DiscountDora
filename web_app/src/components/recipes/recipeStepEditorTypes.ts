@@ -11,6 +11,12 @@ export type EditableStep = {
     hint: string | null;
     ingredient_client_ids: string[];
     tool_ids: string[];
+    /** FU-117 — section grouping for top-level steps. References one of
+     *  the sibling sections by `client_id` (or its real UUID when
+     *  sections aren't being replaced), or null for the implicit "main"
+     *  group. Sub-steps inherit visually from their parent — the editor
+     *  doesn't expose a picker on depth-1 rows. */
+    section_client_id: string | null;
 };
 
 /** Display row enriched with the sibling index + depth, so the row
@@ -33,5 +39,12 @@ export type IngredientOption = {
 
 export type ToolOption = {
     value: string;
+    label: string;
+};
+
+/** FU-117 — section options for the top-level step picker. `null` value =
+ *  the implicit "main" group (no named section). */
+export type SectionOption = {
+    value: string | null;
     label: string;
 };

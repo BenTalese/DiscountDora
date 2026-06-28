@@ -852,23 +852,22 @@
     async function onOverviewScanDecoded(value: string) {
         try {
             const result = await barcodeApi.lookupAsync(value);
-            if (result.kind === 'stock_item') {
+            // FU-056 — both stock-item kinds route directly. `UNIQUE` on
+            // StockItemProduct.product_id guarantees there's no multi-link
+            // ambiguity to handle.
+            if (result.kind === 'stock_item' || result.kind === 'stock_item_via_product') {
                 overviewScanOpen.value = false;
                 void router.push(`/stock/${result.id}`);
                 return;
             }
-            if (result.kind === 'product' && result.stock_item_id) {
-                overviewScanOpen.value = false;
-                void router.push(`/stock/${result.stock_item_id}`);
-                return;
-            }
+            const message
+                = result.kind === 'product_no_link'
+                    ? 'This barcode matches a product, but it isn\'t linked to a stock item yet.'
+                : "Unknown barcode — not registered yet.";
             $q.notify({
                 type: 'warning',
                 position: 'bottom-right',
-                message:
-                    result.kind === 'product'
-                        ? 'Product barcode not yet linked to a stock item.'
-                        : "Unknown barcode — not linked to a product yet.",
+                message,
             });
         } catch (err) {
             $q.notify({

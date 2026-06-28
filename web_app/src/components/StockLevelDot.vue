@@ -2,7 +2,8 @@
     <span class="stock-level-dot row inline items-center no-wrap">
         <q-icon
             name="circle"
-            :color="hasAlert ? 'negative' : levelColour"
+            :color="hasAlert ? 'negative' : (levelColour ?? undefined)"
+            :class="{ 'dora-text-muted': !hasAlert && !levelColour }"
             :size="hasAlert ? '11px' : '9px'"
         />
         <span

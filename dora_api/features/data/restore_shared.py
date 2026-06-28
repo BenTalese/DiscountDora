@@ -119,11 +119,11 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "product_historic_offers", "ProductHistoricOffer", "Historic product offers", "Optional", False,
     ),
-    # Barcodes attached to store-curated products (N5). On by default — small
-    # table, useful to round-trip alongside saved_products so a restored
-    # install can still resolve scanned codes.
+    # Real-world barcodes (FU-056 hybrid — can attach to a Product, a
+    # StockItem, or both). On by default; small table, useful to round-trip
+    # so a restored install can still resolve scanned codes.
     Section(
-        "product_barcodes", "ProductBarcode", "Product barcodes", "Core data", True,
+        "barcodes", "Barcode", "Barcodes", "Core data", True,
     ),
 )
 
@@ -153,6 +153,11 @@ HARD_FK_PULL_IN: dict[tuple[str, str], str] = {
     # recipe references it.
     ("recipes", "cuisine_id"): "cuisines",
     ("recipes", "category_id"): "categories",
+    # C-7 Chunk 3 — product-only / nested product lines carry a hard
+    # `product_id`; the line's CHECK constraint requires either anchor.
+    # Pull the referenced Product into the selection so the line survives
+    # a "shopping list only" partial restore.
+    ("shopping_list_items", "product_id"): "saved_products",
 }
 
 # Soft FKs (nullable in schema): if the target is missing at insert time and
@@ -166,7 +171,19 @@ SOFT_FK_NULLABLE: set[tuple[str, str]] = {
 REQUIRED_FKS: set[tuple[str, str]] = {
     ("saved_products", "store_id"),
     ("shopping_list_items", "shopping_list_id"),
+    # C-7 Chunk 3 — `stock_item_id` is now NULLABLE (product-only lines
+    # leave it null). Only enforced as required when the source row carries
+    # a non-null value: the restore decoder skips the FK check entirely
+    # when the column is null, so this entry behaves as "if set, must
+    # resolve" rather than "must be set".
     ("shopping_list_items", "stock_item_id"),
+    # C-7 Chunk 3 — `product_id` is also NULLABLE. When set, the target
+    # Product must resolve; otherwise drop the row rather than silently
+    # nulling the column (a product-only line with both anchors null
+    # would violate the CHECK constraint on insert). HARD_FK_PULL_IN
+    # above usually drags the Product in; this is the belt-and-braces
+    # for the "user opted out of saved_products" partial restore.
+    ("shopping_list_items", "product_id"),
     ("shopping_list_template_lines", "template_id"),
     ("shopping_list_template_lines", "stock_item_id"),
     ("recipe_ingredients", "recipe_id"),
@@ -189,7 +206,8 @@ REQUIRED_FKS: set[tuple[str, str]] = {
     ("meal_recipes", "meal_id"),
     ("meal_recipes", "recipe_id"),
     ("product_historic_offers", "product_id"),
-    ("product_barcodes", "product_id"),
+    ("barcodes", "product_id"),
+    ("barcodes", "stock_item_id"),
 }
 
 # Children that ride along when their parent is selected (partial mode UX).
@@ -200,7 +218,7 @@ CHILD_AUTO_INCLUDE: tuple[tuple[str, str, str], ...] = (
     ("recipes", "recipe_steps", "recipe_id"),
     ("meal_plans", "meal_plan_entries", "meal_plan_id"),
     ("saved_products", "product_historic_offers", "product_id"),
-    ("saved_products", "product_barcodes", "product_id"),
+    ("saved_products", "barcodes", "product_id"),
 )
 
 

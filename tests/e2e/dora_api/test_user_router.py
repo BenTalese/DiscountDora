@@ -34,7 +34,9 @@ def test__get_users__GettingUsers__GetsAllExpectedAttributes(api):
         'username',
         'user_id',
         'is_admin',
-        'deals_email_enabled'
+        'deals_email_enabled',
+        # Settings rebuild Phase 4 — bulk-stamped via _stamp_has_image.
+        'has_image',
     }
 
 

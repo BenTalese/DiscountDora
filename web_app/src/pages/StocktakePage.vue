@@ -62,8 +62,9 @@
                             <q-chip
                                 dense
                                 size="sm"
-                                :color="item.overdue_days < 0 ? 'grey-7' : 'warning'"
-                                text-color="white"
+                                :color="item.overdue_days < 0 ? undefined : 'warning'"
+                                :text-color="item.overdue_days < 0 ? undefined : 'white'"
+                                :class="{ 'dora-bg-sunken dora-text-secondary': item.overdue_days < 0 }"
                             >
                                 {{ item.overdue_days < 0
                                     ? 'never checked'

@@ -1,42 +1,46 @@
 """Barcode + QR endpoints.
 
-  GET    /api/stock-items/<id>/qr                       — PNG of the item's dora:// QR
-  GET    /api/stock-items/qr/sheet                      — HTML print-sheet of many QRs
-  GET    /api/barcodes/lookup?value=...                 — disambiguate a scanned value
-  POST   /api/barcodes/register-against-product         — link a real barcode to a Product
+  GET    /api/stock-items/<id>/qr                — PNG of the item's dora:// QR
+  GET    /api/stock-items/qr/sheet               — HTML print-sheet of many QRs
+  GET    /api/data/barcodes/lookup?value=...     — disambiguate a scanned value
+  POST   /api/data/barcodes                      — register a real barcode (FU-056)
+  DELETE /api/data/barcodes/<id>                 — remove a registration
 
 QR generation uses `qrcode[pil]` (pure Python + Pillow). The sheet
 endpoint is HTML so the user can print or Save-as-PDF — consistent
 with the no-server-PDF call we made in N4.
 
-Model note (P6-02): a real-world barcode (EAN/UPC) identifies a *Product*, not
-a stock item, so it lives in `ProductBarcode`. There is deliberately no
-`StockItem.barcode` — lookup resolves a real barcode to its Product, then to a
-linked stock item. Scanning is a navigation aid only; it never does live deal
-lookup.
+Model note (FU-056 hybrid): a real-world EAN can attach to a *Product* (1:1,
+the catalogue case) AND/OR a *StockItem* (m:n, the lightweight-install +
+direct-registration case). Both linkages coexist when present. Lookup
+precedence prefers the most specific signal — direct stock-item linkage
+wins over a Product traversal. Scanning is a navigation aid only; it never
+does live deal lookup.
 """
 import io
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Iterable
 from urllib.parse import urlparse
 from uuid import UUID
 
 import qrcode
 from flask import Response, render_template_string, request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 
+from dora_api.app import db
+from dora_api.domain.entities.barcode import Barcode
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.product_barcode import ProductBarcode
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.data.export_shared import PRINT_CSS, PRINT_TOOLBAR
 from dora_api.features.routers import (
     DATA_ROUTER, STOCK_ITEM_ROUTER,
 )
 from dora_api.infrastructure.api_response import (
-    bad_request, not_found, ok,
+    bad_request, no_content, not_found, ok,
     unprocessable_entity, ProblemDetails,
 )
 from dora_api.infrastructure.decorators import has_request_body
@@ -293,10 +297,23 @@ def _conflict(message: str) -> Response:
     return response
 
 
-# ── GET /api/barcodes/lookup?value=... ─────────────────────────────────
+# ── GET /api/data/barcodes/lookup?value=... ────────────────────────────
 
 @DATA_ROUTER.route("/barcodes/lookup", methods=["GET"])
 def barcode_lookup():
+    """Resolve a scanned value to one of four kinds (FU-056):
+
+    * `stock_item`              — dora:// QR, or a `Barcode` row whose
+                                   `stock_item_id` is set (direct registration
+                                   wins as the most specific signal).
+    * `stock_item_via_product`  — `Barcode` matches a Product that's linked
+                                   to a StockItem via StockItemProduct.
+                                   `StockItemProduct.UNIQUE(product_id)`
+                                   guarantees at most one linked stock
+                                   item.
+    * `product_no_link`         — `Barcode` matches a Product the user has,
+                                   but no linked StockItem.
+    * `unknown`                 — nothing matched."""
     raw = (request.args.get("value") or "").strip()
     if not raw:
         return bad_request("value query parameter is required.")
@@ -311,76 +328,139 @@ def barcode_lookup():
             return ok({"kind": "stock_item", "id": str(item.id)})
         return ok({"kind": "unknown", "value": raw})
 
-    # 2. ProductBarcode hit → resolve linked stock item (if any). Real-world
-    #    barcodes identify a Product, never a stock item directly.
-    product_match: ProductBarcode | None = repo.get(ProductBarcode).one(
-        EntityField(ProductBarcode, "barcode").eq(raw)
+    # 2. Real EAN — look up the Barcode row.
+    match: Barcode | None = repo.get(Barcode).one(
+        EntityField(Barcode, "barcode").eq(raw)
     )
-    if product_match is not None:
-        # Any stock item with this product in its m2m. The repository doesn't
-        # expose secondary-table queries cleanly, so we touch SQLAlchemy
-        # directly for the lookup.
-        from sqlalchemy import select
-        from dora_api.app import db
-        assoc = db.metadata.tables["StockItemProduct"]
-        row = db.session.execute(
-            select(assoc.c.stock_item_id).where(assoc.c.product_id == product_match.product_id)
-        ).first()
-        linked_stock_item_id = str(row[0]) if row else None
+    if match is None:
+        return ok({"kind": "unknown", "value": raw})
 
+    # Direct stock-item linkage wins (the user explicitly tied this barcode
+    # to a specific pantry slot; honour their intent).
+    if match.stock_item_id is not None:
         return ok({
-            "kind": "product",
-            "id": str(product_match.product_id),
-            "stock_item_id": linked_stock_item_id,
+            "kind": "stock_item",
+            "id": str(match.stock_item_id),
+            "barcode_id": str(match.id),
+            "product_id": str(match.product_id) if match.product_id else None,
         })
 
-    return ok({"kind": "unknown", "value": raw})
+    # Else traverse Product → linked stock item. `UNIQUE(product_id)`
+    # on StockItemProduct (migration c4a8e2b9d7f5) guarantees at most
+    # one linked row, so `.first()` is the natural shape — no caller
+    # disambiguation needed.
+    from sqlalchemy import select
+    assoc = db.metadata.tables["StockItemProduct"]
+    linked = db.session.execute(
+        select(assoc.c.stock_item_id).where(assoc.c.product_id == match.product_id)
+    ).first()
+    if linked is not None:
+        return ok({
+            "kind": "stock_item_via_product",
+            "id": str(linked[0]),
+            "product_id": str(match.product_id),
+            "barcode_id": str(match.id),
+        })
+    return ok({
+        "kind": "product_no_link",
+        "product_id": str(match.product_id),
+        "barcode_id": str(match.id),
+    })
 
 
-# ── POST /api/barcodes/register-against-product ────────────────────────
+# ── POST /api/data/barcodes ────────────────────────────────────────────
 
-class RegisterProductBarcodeRequest(BaseModel):
+class RegisterBarcodeRequest(BaseModel):
+    """Register a real-world EAN. Provide at least one of
+    `product_id` or `stock_item_id`. Both is allowed (the user is saying
+    the EAN is a Product's catalogue code *and* tied to their pantry slot).
+    """
     model_config = ConfigDict(extra="forbid")
-    product_id: UUID
     barcode: str = Field(min_length=1, max_length=255)
+    product_id: UUID | None = None
+    stock_item_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_target(self) -> "RegisterBarcodeRequest":
+        if self.product_id is None and self.stock_item_id is None:
+            raise ValueError(
+                "Provide product_id, stock_item_id, or both."
+            )
+        return self
 
 
-@DATA_ROUTER.route("/barcodes/register-against-product", methods=["POST"])
-@has_request_body(RegisterProductBarcodeRequest)
-def register_product_barcode():
+@DATA_ROUTER.route("/barcodes", methods=["POST"])
+@has_request_body(RegisterBarcodeRequest)
+def register_barcode():
     _Logger = logging.getLogger(__name__)
-    _Request: RegisterProductBarcodeRequest = get_request_body()
-    barcode = _Request.barcode.strip()
-    if not barcode:
+    _Request: RegisterBarcodeRequest = get_request_body()
+    raw = _Request.barcode.strip()
+    if not raw:
         return bad_request("barcode cannot be blank.")
 
     repo = SqlAlchemyRepository()
-    product = repo.get(Product).by_id(_Request.product_id)
-    if product is None:
-        return not_found("Product", _Request.product_id)
 
-    existing: ProductBarcode | None = repo.get(ProductBarcode).one(
-        EntityField(ProductBarcode, "barcode").eq(barcode)
+    # Target entity existence checks — fail fast with clear messages.
+    if _Request.product_id is not None:
+        if repo.get(Product).by_id(_Request.product_id) is None:
+            return not_found("Product", _Request.product_id)
+    if _Request.stock_item_id is not None:
+        if repo.get(StockItem).by_id(_Request.stock_item_id) is None:
+            return not_found("StockItem", _Request.stock_item_id)
+
+    # Pre-flight unique check on the barcode value (the DB UNIQUE constraint
+    # is the real backstop, but this gives the caller a friendlier message).
+    existing: Barcode | None = repo.get(Barcode).one(
+        EntityField(Barcode, "barcode").eq(raw)
     )
     if existing is not None:
-        return _conflict(
-            f"Barcode '{barcode}' is already registered against another product."
-        )
+        return _conflict(f"Barcode '{raw}' is already registered.")
 
-    row = ProductBarcode(product_id=product.id, barcode=barcode)
+    row = Barcode(
+        barcode=raw,
+        product_id=_Request.product_id,
+        stock_item_id=_Request.stock_item_id,
+        created_at=datetime.now(timezone.utc),
+    )
     repo.add(row)
     try:
         repo.save_changes()
     except IntegrityError as exc:
         repo.session.rollback()
-        _Logger.warning("Product barcode unique-constraint conflict: %s", exc)
-        return _conflict(f"Barcode '{barcode}' is already in use.")
+        # Could be barcode-uniqueness (race) or product_id-uniqueness
+        # (this Product already has a barcode). Inspect the message to
+        # disambiguate; default to the broader "already in use".
+        message = str(exc).lower()
+        if "uq_barcode_product_id" in message or "product_id" in message:
+            _Logger.warning("Per-product barcode unique conflict: %s", exc)
+            return _conflict(
+                "That product already has a barcode registered."
+            )
+        _Logger.warning("Barcode unique-constraint conflict: %s", exc)
+        return _conflict(f"Barcode '{raw}' is already registered.")
 
     _Logger.info(
-        "Registered barcode %s against product %s", barcode, _Request.product_id,
+        "Registered barcode %s (product_id=%s, stock_item_id=%s)",
+        raw, _Request.product_id, _Request.stock_item_id,
     )
     return ok({
-        "product_barcode_id": str(row.id),
-        "product_id": str(product.id),
-        "barcode": barcode,
+        "barcode_id": str(row.id),
+        "barcode": raw,
+        "product_id": str(_Request.product_id) if _Request.product_id else None,
+        "stock_item_id": str(_Request.stock_item_id) if _Request.stock_item_id else None,
     })
+
+
+# ── DELETE /api/data/barcodes/<id> ─────────────────────────────────────
+
+@DATA_ROUTER.route("/barcodes/<barcode_id>", methods=["DELETE"])
+def delete_barcode(barcode_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    repo = SqlAlchemyRepository()
+    row = repo.get(Barcode).by_id(barcode_id)
+    if row is None:
+        return not_found("Barcode", barcode_id)
+    repo.remove(row)
+    repo.save_changes()
+    _Logger.info("Deleted barcode %s (%s)", row.barcode, barcode_id)
+    return no_content()

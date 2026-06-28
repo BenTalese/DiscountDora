@@ -131,7 +131,7 @@ The API listens on **http://localhost:5170**.
 > **First run:** `flask db upgrade` creates the Dora schema in the Postgres instance from `compose.dev.yml` (`postgres://dora:dora@localhost:5432/dora`).
 > If you want a fresh database on every startup (dev only), set `DORA_ALLOW_DESTRUCTIVE=true` in `.env`.
 >
-> **Lightweight self-host on SQLite:** set `DORA_DB_URL=sqlite:///./data/dora.data.db` (or any path) and skip the `docker compose` step. Postgres is the standard target but SQLite is still supported for zero-dependency installs.
+> **Lightweight self-host on SQLite:** set `DORA_DB_PATH=./data/dora.data.db` (any filesystem path will do — the app builds the SQLite URL for you) and skip the `docker compose` step. Postgres is the standard target but SQLite is still supported for zero-dependency installs. For non-default cases (remote Postgres, in-memory SQLite, custom driver) use `DORA_DB_URL` with a full SQLAlchemy URL — it overrides `DORA_DB_PATH`.
 
 ---
 

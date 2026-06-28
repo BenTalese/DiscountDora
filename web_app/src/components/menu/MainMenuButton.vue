@@ -144,7 +144,11 @@
     .dora-mainMenuButton-disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        pointer-events: none;
+        /* No `pointer-events: none` — that would kill hover, and with it
+           the q-tooltip on the disabled state (e.g. Product Search's
+           "Not set up yet — set the URL in Settings → System → Features"
+           hint). Quasar's `:disable="true"` on the q-item already blocks
+           click events, so we don't need to also block pointer events. */
     }
 
     // Hover tint on inactive buttons — previews the active accent colour,

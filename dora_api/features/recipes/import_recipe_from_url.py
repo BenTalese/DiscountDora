@@ -108,7 +108,6 @@ class ImportedRecipeDto:
     prep_time_minutes: int | None
     cook_time_minutes: int | None
     instructions: str | None
-    nutrition: str | None
     source_url: str
     ingredients: List[ImportedIngredientDto] = field(default_factory=list)
     # C-4 Chunk 6 — structured steps parsed from schema.org/Recipe
@@ -216,7 +215,6 @@ def _degraded_import(html: str, url: str) -> "ImportedRecipeDto":
         prep_time_minutes=None,
         cook_time_minutes=None,
         instructions=body_text or None,
-        nutrition=None,
         source_url=url,
         ingredients=[],
         steps=[],
@@ -359,7 +357,6 @@ class ImportRecipeFromUrlHandler:
         raw_instructions = recipe.get("recipeInstructions")
         instructions = _coerce_instructions(raw_instructions)
         steps = _coerce_structured_steps(raw_instructions)
-        nutrition = _coerce_nutrition(recipe.get("nutrition"))
 
         # Stock items for fuzzy-match lookup. Load once; the match list is
         # the user's tracked-items namespace, not the full product catalog.
@@ -408,7 +405,6 @@ class ImportRecipeFromUrlHandler:
             prep_time_minutes = prep,
             cook_time_minutes = cook,
             instructions = instructions,
-            nutrition = nutrition,
             source_url = url,
             ingredients = ingredient_dtos,
             steps = steps,
@@ -570,23 +566,6 @@ def _coerce_structured_steps(value: Any) -> List["ImportedStepDto"]:
         top_seq += 1
 
     return steps
-
-
-def _coerce_nutrition(value: Any) -> str | None:
-    """schema.org nutrition is a dict; render it as a compact freeform string."""
-    if not isinstance(value, dict):
-        return None
-    fields = []
-    for key in (
-        "calories", "fatContent", "saturatedFatContent",
-        "carbohydrateContent", "sugarContent", "proteinContent",
-        "fiberContent", "sodiumContent",
-    ):
-        text = _first_string(value.get(key))
-        if text:
-            label = re.sub(r"Content$", "", key).replace("_", " ").title()
-            fields.append(f"{label}: {text}")
-    return " · ".join(fields) or None
 
 
 @RECIPE_ROUTER.route("import-from-url", methods=["POST"])

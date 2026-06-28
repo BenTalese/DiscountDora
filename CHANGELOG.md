@@ -6,6 +6,105 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Magic-behaviour audit complete (FU-092, 2026-06-28).** 18 implicit
+  / automatic behaviours catalogued and given per-finding verdicts.
+  Audit at `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md`. 13 of
+  18 already in the right shape (alerts, suggestions, finish modal,
+  added_via chip, etc.) — no action. 4 small UX surfacing follow-ups
+  spun off (FU-315 / FU-316 / FU-318 / FU-319). 1 plan-first
+  follow-up: past-day meal-plan auto-drain (FU-317) wants a
+  designed manual-reconcile feature + opt-in setting before any code
+  touches the reconcile path.
+- **New engineering rule: R-019 — No magic: explicit, verbose,
+  consistent (FU-084 promoted, 2026-06-28).** User-elevated to a
+  top-line value: prefer verbose explicit code over clever / implicit /
+  auto-discovered behaviour; reject AutoMapper-shaped reflection
+  between layers, decorator behaviour-mutation, convention-over-
+  configuration past what the framework requires, and per-entity
+  SQLAlchemy `lazy="..."` overrides. Follow the codebase's established
+  pattern when one exists; don't introduce parallel approaches because
+  one "felt right". Documented as R-019 in
+  `docs/01_charter/ENGINEERING_STANDARDS.md` with ADR-014; existing
+  `Recipe.cuisine`/`.category` selectin overrides grandfathered as
+  FU-314 for a focused cleanup.
+
+### Fixed
+- **Recipe step editor type leaks under `exactOptionalPropertyTypes`
+  (collateral from FU-117, surfaced during the FU-140 audit,
+  2026-06-28).** The import-recipe step factory in
+  `RecipeDetailPage.vue` now initialises `section_client_id: null`
+  on parsed steps, and `RecipeStepsEditor.vue` forwards
+  `sectionOptions ?? []` so the optional prop never leaks
+  `undefined` to `RecipeStepRow`. No behaviour change.
+
+### Added
+- **Query-count regression test for `GET /recipes` (FU-138,
+  2026-06-28).** New `SelectCounter` e2e harness and a ratio test
+  that inserts 10 throw-away recipes and asserts the SELECT count
+  doesn't scale with row count. Guards the batched
+  cookability/ingredients/tags/tools/sections/plan-rollups path
+  on the cookbook hot endpoint from regressing into per-recipe
+  lazy loads.
+
+### Fixed
+- **Backup/restore round-trip preserves product-only and nested
+  product shopping-list lines (FU-131, 2026-06-28).**
+  Cart Button Chunk 3 added a nullable `product_id` to
+  `ShoppingListLine` and a CHECK that requires at least one anchor.
+  The restore decoder wasn't aware of the new column: a partial
+  restore that selected shopping lists but skipped `saved_products`
+  silently nulled `product_id` on every line, dropping product-only
+  rows (CHECK violation) and degrading nested children to plain
+  stock-item lines. Restores now pull the referenced `Product` in
+  automatically and drop a line cleanly (with a warning) when the
+  Product is genuinely missing instead of mangling it.
+
+### Added
+- **Section picker on the structured steps editor (FU-117,
+  2026-06-28).** When a recipe has named sections, each top-level
+  step row in `RecipeStepsEditor` now surfaces a small `Section`
+  select (with `(Main)` as the implicit default) so multi-part
+  recipes can be grouped end-to-end without leaning on the URL
+  importer. Sub-steps inherit their parent's section visually — no
+  picker is rendered on depth-1 rows. Removing a section detaches
+  any step that pointed at it (parity with the existing ingredient
+  picker).
+
+### Removed
+- **Freeform `Recipe.nutrition` text column (FU-115, 2026-06-28).**
+  Superseded by the structured `kcal` field (C-4 Chunk 9). Pre-release,
+  so the column was dropped outright via migration
+  `b7e2d9a4c1f5_20260628_drop_recipe_nutrition` rather than audited
+  first. All API request/response models, import/export paths, seed
+  factory, and SPA editors no longer carry the field.
+
+### Added
+- **Hybrid barcode model: register an EAN against a stock item, a
+  product, or both (FU-056 slice 1, 2026-06-28).** Real-world barcodes
+  no longer require the Products overlay — lightweight installs can
+  register an EAN straight to a stock item (`barcode → stock_item`),
+  and catalogued installs still get the SKU coalescing via Product. New
+  **Barcodes** section on the stock-item detail page (gated on
+  `features.scanning`) shows direct registrations + via-Product
+  derivations with add/remove. Scanning an unknown barcode now offers
+  an in-place register flow. The per-Product UNIQUE rule (*one
+  Product = one EAN*) is enforced server-side. Ingestion EAN auto-
+  populate stays Phase-2 deferred.
+
+- **Substitute notes + optional structured ratio (FU-034, 2026-06-27).**
+  Each stock-item substitute pair can now carry a free-text hint
+  ("1:1 in soups, but not in baking") and an **optional** structured
+  ratio like *1 tsp olive oil → 1 tsp butter*. The note and ratio show
+  on the substitute list on the stock-item detail page, and again in the
+  cook-mode swap picker so the cook has the hint front-and-centre when
+  swapping. Edit dialog: pencil icon next to the unlink button → textarea
+  + "Add a ratio" toggle revealing qty + unit pickers on each side
+  (units autocomplete against the canonical UNIT_TABLE; aliases like
+  "tablespoons" resolve to "tbsp" on save). Cook mode does not yet
+  auto-compute swap quantities — it surfaces the hint and the cook
+  applies it; auto-compute is a future-phase call per Anti-creep.
+
+### Changed
 - **Meal planner — calmer meal cards + keyboard / screen-reader pass
   (2026-06-26, R-Phase 6 of the rebuild).** Planned meal cards no longer
   ship as saturated blue or amber fills — both the Direction A chip and

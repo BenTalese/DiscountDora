@@ -45,7 +45,12 @@
                                     </q-item-label>
                                 </q-item-section>
                                 <q-item-section side>
-                                    <q-chip dense :color="stockStatusColour(ing.stock_item_id)" text-color="white">
+                                    <q-chip
+                                        dense
+                                        :color="stockStatusColour(ing.stock_item_id) ?? undefined"
+                                        :text-color="stockStatusColour(ing.stock_item_id) ? 'white' : undefined"
+                                        :class="{ 'dora-bg-sunken dora-text-secondary': !stockStatusColour(ing.stock_item_id) }"
+                                    >
                                         {{ stockStatusLabel(ing.stock_item_id) }}
                                     </q-chip>
                                 </q-item-section>

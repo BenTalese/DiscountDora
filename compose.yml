@@ -48,16 +48,16 @@ services:
       - DORA_LOG_DIR=${DORA_LOG_DIR:-/app/logs}
 
       # ── Database (FU-045) ───────────────────────────────────────────
-      # The self-host monolith defaults to **SQLite** to stay
-      # zero-dependency — `DORA_DB_URL` defaults to the bundled SQLite
-      # file under DORA_DATA_DIR. To point at an external Postgres
-      # instead, set:
+      # The self-host monolith defaults to **SQLite** to stay zero-
+      # dependency. `DORA_DB_PATH` is the friendly SQLite shortcut:
+      # just a filesystem path inside the container, no URL syntax to
+      # remember. To point at an external Postgres instead, leave
+      # DORA_DB_PATH unset and provide a full URL:
       #   DORA_DB_URL=postgresql+psycopg://user:pass@host:5432/dbname
       # Dev workstations use Postgres via `compose.dev.yml`; this
       # production compose is the lightweight SQLite path on purpose.
-      # 4 slashes = absolute path in SQLAlchemy SQLite URLs; 3 slashes
-      # would be CWD-relative and break under different working dirs.
-      - DORA_DB_URL=${DORA_DB_URL:-sqlite:////app/data/dora.data.db}
+      - DORA_DB_PATH=${DORA_DB_PATH:-/app/data/dora.data.db}
+      - DORA_DB_URL=${DORA_DB_URL:-}
 
       # ── API tuning (optional; defaults baked into appsettings) ─────
       - DORA_API_PORT=${DORA_API_PORT:-5170}

@@ -51,6 +51,10 @@ export type Recipe = {
      *  often the recipe appears across all meal plans. */
     not_made_recently: boolean;
     plan_count: number;
+    /** FU-081 — true iff at least one future un-consumed MealPlanEntry
+     *  exists for this recipe. Server-owned; the cookbook "Planned" /
+     *  "Not planned" tri-state filter reads this directly. */
+    is_planned: boolean;
     // C-4 Chunk 2: cuisine + category are FK vocabularies. The id drives the
     // edit-form selects + filters; the name is carried for display.
     cuisine_id: string | null;
@@ -66,7 +70,6 @@ export type Recipe = {
      *  cookbook "Recently added" sort axis. Always present on rows from
      *  the API (backfilled by migration f9d3a7c2b5e8 for legacy rows). */
     created_at: string;
-    nutrition: string | null;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;
     servings: number | null;

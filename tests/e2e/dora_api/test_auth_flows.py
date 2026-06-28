@@ -134,13 +134,15 @@ def test__profile_picture__set_fetch_and_clear(api):
 
 def test__profile_picture__rejects_oversize_data_url(api):
     """The ~4.5 MB base64 cap (max_length=6_000_000) rejects a huge payload
-    with a 422 rather than letting a 50 MB selfie through."""
+    rather than letting a 50 MB selfie through. The middleware emits 400 on
+    pydantic ValidationError (codebase convention; see
+    infrastructure/middleware.deserialise_web_request)."""
     s = _fresh_session()
     username = f"big-{uuid.uuid4().hex[:8]}"
     assert _register(s, username, "Abcdefghij1", f"{username}@example.com").status_code == 200
     oversize = "data:image/png;base64," + ("A" * 6_000_001)
     resp = s.patch(f"{BASE}/me", json={"image": oversize})
-    assert resp.status_code == 422, resp.status_code
+    assert resp.status_code == 400, resp.status_code
 
 
 def test__dashboard_layout__set_and_clear(api):

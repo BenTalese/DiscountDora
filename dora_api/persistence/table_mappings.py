@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, false, true
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Table, Text, UniqueConstraint, false, true
 from sqlalchemy.orm import deferred, registry as SARegistry, relationship
 from sqlalchemy_utils import UUIDType
 
@@ -23,7 +23,7 @@ from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.price_alert import PriceAlert
 from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.product_barcode import ProductBarcode
+from dora_api.domain.entities.barcode import Barcode
 from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
@@ -195,15 +195,31 @@ def configure_mappings(db: SQLAlchemy):
         Column("usual_store_id", UUIDType, ForeignKey("Store.id", ondelete="SET NULL"), nullable=True),
     )
 
-    product_barcode_table = Table(
-        "ProductBarcode", metadata,
+    # FU-056 — hybrid `Barcode` table: real EANs can attach to a Product
+    # (1:1, the catalogue case) AND/OR a StockItem (m:n, the
+    # lightweight-install + direct-registration case). At least one of the
+    # two FKs must be set; both being set is fine and useful (the same
+    # row carries both linkages). See `domain/entities/barcode.py` for
+    # the full semantics. Replaces the old Product-only `ProductBarcode`.
+    barcode_table = Table(
+        "Barcode", metadata,
         Column("id", UUIDType, primary_key=True),
+        Column("barcode", String(255), nullable=False, unique=True),
         Column(
             "product_id", UUIDType,
             ForeignKey("Product.id", ondelete="CASCADE"),
-            nullable=False,
+            nullable=True, unique=True,
         ),
-        Column("barcode", String(255), nullable=False, unique=True),
+        Column(
+            "stock_item_id", UUIDType,
+            ForeignKey("StockItem.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        CheckConstraint(
+            "product_id IS NOT NULL OR stock_item_id IS NOT NULL",
+            name="ck_barcode_target_at_least_one",
+        ),
     )
 
     price_alert_table = Table(
@@ -304,10 +320,17 @@ def configure_mappings(db: SQLAlchemy):
         Column("sequence", Integer, nullable=False, server_default="0"),
     )
 
+    # FU-056 — the m:n relation is asymmetric: many Products can satisfy
+    # one StockItem (e.g. Coles + Pauls + Vitasoy all linked to "Milk"),
+    # but a Product satisfies exactly one StockItem (a specific SKU has a
+    # specific pantry purpose). `UNIQUE(product_id)` enforces the second
+    # half. Drops the lookup ambiguity that `product_multi_linked` was
+    # papering over: barcode → Product → at most one StockItem.
     stock_item_product_table = Table(
         "StockItemProduct", metadata,
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
         Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), primary_key=True),
+        UniqueConstraint("product_id", name="uq_stock_item_product_product_id"),
     )
 
     # Self-referential m2m: a stock item's substitutes. Undirected — pairs
@@ -319,9 +342,26 @@ def configure_mappings(db: SQLAlchemy):
         "StockItemSubstitute", metadata,
         Column("stock_item_a_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
         Column("stock_item_b_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), primary_key=True),
+        # FU-034 — free-text hint ("don't use in baking", "1:1 in soups", …).
+        # Bounded to 255 chars at the API layer; column stays untyped-length
+        # because the original migration set it that way.
         Column("notes", String, nullable=True),
+        # FU-034 — optional structured ratio, all-or-none (DB CHECK + API
+        # validation). Stored in the canonical A→B direction; readers (e.g.
+        # get_stock_item_detail) invert when displaying from B's side.
+        Column("ratio_quantity_in", Float, nullable=True),
+        Column("ratio_unit_in", String(32), nullable=True),
+        Column("ratio_quantity_out", Float, nullable=True),
+        Column("ratio_unit_out", String(32), nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
         CheckConstraint("stock_item_a_id < stock_item_b_id", name="ck_substitute_canonical"),
+        CheckConstraint(
+            "(ratio_quantity_in IS NULL AND ratio_unit_in IS NULL "
+            " AND ratio_quantity_out IS NULL AND ratio_unit_out IS NULL) "
+            "OR (ratio_quantity_in IS NOT NULL AND ratio_unit_in IS NOT NULL "
+            " AND ratio_quantity_out IS NOT NULL AND ratio_unit_out IS NOT NULL)",
+            name="ck_substitute_ratio_all_or_none",
+        ),
     )
 
     stock_level_change_table = Table(
@@ -508,7 +548,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("is_favourite", Boolean, nullable=False),
         Column("last_made_on", DateTime(timezone=True), nullable=True),
         Column("name", String(255), nullable=False),
-        Column("nutrition", String, nullable=True),
         Column("prep_time_minutes", Integer, nullable=True),
         Column("recipe_collection_id", UUIDType, ForeignKey("RecipeCollection.id", ondelete="SET NULL"), nullable=True),
         Column("servings", Integer, nullable=True),
@@ -943,9 +982,9 @@ def configure_mappings(db: SQLAlchemy):
         "id": push_subscription_table.c.id,
     })
 
-    _mapper_registry.map_imperatively(ProductBarcode, product_barcode_table, properties={
-        "_id_col": product_barcode_table.c.id,
-        "id": product_barcode_table.c.id,
+    _mapper_registry.map_imperatively(Barcode, barcode_table, properties={
+        "_id_col": barcode_table.c.id,
+        "id": barcode_table.c.id,
     })
 
     _mapper_registry.map_imperatively(AuditEvent, audit_event_table, properties={

@@ -5,6 +5,18 @@ import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient, { resolveBaseURL } from './axiosHttpClient';
 import { createQueryString, FilterOperator, type Page } from './queryStringBuilder';
 
+/** FU-034 — wire-level body for substitute notes + optional ratio. All
+ *  fields are optional; sending nothing clears the metadata. Direction
+ *  (`*_in` = THIS item, `*_out` = the substitute) is from the perspective
+ *  of the caller; the server flips into canonical storage. */
+export interface SubstituteMetadataInput {
+    notes?: string | null;
+    ratio_quantity_in?: number | null;
+    ratio_unit_in?: string | null;
+    ratio_quantity_out?: number | null;
+    ratio_unit_out?: string | null;
+}
+
 /** C-1 Chunk 6 / FU-033 — URL for a stock item's image (served as raw
  *  bytes; falls back to a linked product's image server-side). Pass a
  *  `version` (e.g. a counter bumped after upload) to bust the
@@ -96,14 +108,33 @@ export default class StockItemApiService {
             destination_location_id: destinationLocationId
         });
 
-    addSubstituteAsync = async (stockItemID: string, substituteID: string): Promise<void> =>
+    addSubstituteAsync = async (
+        stockItemID: string,
+        substituteID: string,
+        metadata?: SubstituteMetadataInput,
+    ): Promise<void> =>
         await this.httpClient.post<void>(`/stock-items/${stockItemID}/substitutes`, {
-            substitute_id: substituteID
+            substitute_id: substituteID,
+            ...(metadata ?? {}),
         });
 
     removeSubstituteAsync = async (stockItemID: string, substituteID: string): Promise<void> =>
         await this.httpClient.delete<void>(
             `/stock-items/${stockItemID}/substitutes/${substituteID}`
+        );
+
+    /** FU-034 — edit the notes / structured ratio on an existing substitute
+     *  pair. Direction is from THIS stock item's perspective; the server
+     *  flips it into canonical storage. Sending an empty body clears the
+     *  metadata (notes → null, ratio fields → null). */
+    updateSubstituteAsync = async (
+        stockItemID: string,
+        substituteID: string,
+        metadata: SubstituteMetadataInput,
+    ): Promise<void> =>
+        await this.httpClient.patch<void>(
+            `/stock-items/${stockItemID}/substitutes/${substituteID}`,
+            metadata,
         );
 
     // FU-211 — preferred buys (free-text reminders on a stock item).

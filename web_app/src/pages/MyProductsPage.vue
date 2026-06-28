@@ -476,7 +476,12 @@
                             :key="item.stock_item_id"
                         >
                             <q-item-section avatar>
-                                <q-avatar :color="levelColourFor(item)" text-color="white" size="32px">
+                                <q-avatar
+                                    :color="levelColourFor(item) ?? undefined"
+                                    :text-color="levelColourFor(item) ? 'white' : undefined"
+                                    :class="{ 'dora-bg-sunken dora-text-secondary': !levelColourFor(item) }"
+                                    size="32px"
+                                >
                                     <q-icon name="inventory_2" size="16px" />
                                 </q-avatar>
                             </q-item-section>
@@ -566,7 +571,7 @@
     import { useQuasar } from 'quasar';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
@@ -1051,9 +1056,10 @@
             ?? null
         );
     }
-    function levelColourFor(item: StockItem): string {
-        const name = levelNameFor(item);
-        return name ? getStockLevelColour(name) : 'grey';
+    function levelColourFor(item: StockItem): string | null {
+        // FU-050 — sequence-keyed, not name-keyed (R-003).
+        const seq = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence;
+        return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
 
     function searchForOrphan(item: StockItem) {

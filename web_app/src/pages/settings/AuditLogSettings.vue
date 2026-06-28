@@ -297,8 +297,10 @@
         if (sev === 'error') return 'negative';
         if (sev === 'warn') return 'warning';
         if (sev === 'audit') return 'primary';
-        if (sev === 'info') return 'grey-7';
-        return 'grey-5';
+        // R-002: info / debug routed through the theme-bound `info`
+        // semantic (chip background) rather than `grey-N` literals.
+        if (sev === 'info') return 'info';
+        return 'info';
     }
 
     function formatWhen(iso: string): string {

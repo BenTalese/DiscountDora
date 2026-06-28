@@ -9,6 +9,7 @@ Strengthened in A1 to:
   - Stamp `password_changed_at` for the session-staleness check.
   - Audit + rate limit.
 """
+import dataclasses
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -290,14 +291,17 @@ def register_user():
     )
 
     _Logger.info(f"Registered user {request_body.username} ({response.new_user_id})")
-    return ok({
-        "user_id": str(response.new_user_id),
-        "username": request_body.username,
-        "email": normalise_email(request_body.email),
-        "is_admin": response.is_admin,
-        "email_verified": response.is_first_user,
-        "verification_sent": bool(response.verify_token),
-    })
+    # FU-310 — return the full AuthenticatedUserDto so the SPA can hydrate
+    # the auth store from a single call (parity with /login and /me). The
+    # old ad-hoc dict had drifted: `has_image` and `dashboard_layout` were
+    # missing, and a stale `verification_sent` flag rode alongside. Keep
+    # the verification flag as an extra alongside the DTO so the SPA can
+    # decide whether to surface a "check your email" toast.
+    new_user = SqlAlchemyRepository().get(User).by_id(response.new_user_id)
+    body = dataclasses.asdict(AuthenticatedUserDto.from_entity(new_user))
+    body["user_id"] = str(body["user_id"])
+    body["verification_sent"] = bool(response.verify_token)
+    return ok(body)
 
 
 def _too_many_requests(retry_after: int):

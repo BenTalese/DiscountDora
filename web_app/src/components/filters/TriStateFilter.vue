@@ -79,10 +79,11 @@
                         <q-item-section avatar>
                             <div class="row items-center q-gutter-xs no-wrap">
                                 <q-icon
-                                    v-if="opt.dotColour"
+                                    v-if="opt.dotColour !== undefined"
                                     name="circle"
                                     size="10px"
-                                    :color="opt.dotColour"
+                                    :color="opt.dotColour ?? undefined"
+                                    :class="{ 'dora-text-muted': !opt.dotColour }"
                                 />
                                 <q-icon
                                     :name="stateIcon(opt.value)"

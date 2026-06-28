@@ -5,15 +5,15 @@ from urllib.parse import urlsplit
 
 # FU-045: pin the e2e suite to a SQLite temp database. Postgres is the
 # standard datastore for dev + prod (Decision 5), but tests want zero
-# external dependencies and per-process isolation. Set before importing
-# `dora_api.app` — the app reads `DORA_DB_URL` at module import time via
-# DoraConfig.get_db_connection_string(). Absolute path (4 slashes) so
-# Flask doesn't resolve the relative form against its instance dir.
+# external dependencies and per-process isolation. `DORA_DB_PATH` is the
+# friendly SQLite shortcut — plain filesystem path; the config layer
+# builds the URL. Set before importing `dora_api.app` so the env is in
+# place when `DoraConfig.get_db_connection_string()` runs at import.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 (_REPO_ROOT / "data").mkdir(parents=True, exist_ok=True)
 os.environ.setdefault(
-    "DORA_DB_URL",
-    f"sqlite:///{(_REPO_ROOT / 'data' / 'dora.test.db').as_posix()}",
+    "DORA_DB_PATH",
+    str(_REPO_ROOT / "data" / "dora.test.db"),
 )
 
 import pytest

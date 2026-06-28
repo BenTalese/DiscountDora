@@ -15,6 +15,6 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 (_REPO_ROOT / "data").mkdir(parents=True, exist_ok=True)
 os.environ.setdefault(
-    "DORA_DB_URL",
-    f"sqlite:///{(_REPO_ROOT / 'data' / 'dora.test.db').as_posix()}",
+    "DORA_DB_PATH",
+    str(_REPO_ROOT / "data" / "dora.test.db"),
 )

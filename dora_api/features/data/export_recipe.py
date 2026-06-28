@@ -96,10 +96,6 @@ _PRINT_TEMPLATE = """<!doctype html>
       <div class="instructions">{{ recipe.instructions }}</div>
     {% endif %}
 
-    {% if recipe.nutrition %}
-      <h2>Nutrition</h2>
-      <div class="instructions">{{ recipe.nutrition }}</div>
-    {% endif %}
   </div>
 </body>
 </html>

@@ -96,7 +96,8 @@
                         >
                             <q-item-section avatar>
                                 <q-avatar
-                                    :color="colourForSequence(level.sequence)"
+                                    :color="colourForSequence(level.sequence) ?? undefined"
+                                    :class="{ 'dora-bg-sunken': !colourForSequence(level.sequence) }"
                                     size="14px"
                                 />
                             </q-item-section>
@@ -155,7 +156,8 @@
             ────────────────────────────────────────────────────────── -->
             <RowActionButton
                 :icon="expiry.icon"
-                :color="expiry.colour"
+                :color="expiry.colour ?? undefined"
+                :class="expiry.cssClass ?? undefined"
                 :aria-label="expiry.tooltip"
                 @click.stop
             >
@@ -345,20 +347,17 @@
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? null;
     });
     // The level button is text-less but coloured by the stock level.
-    // Round-12: switched from `:style="background: var(--q-${colour})"` to
-    // a `bg-*` UTILITY CLASS — Quasar only exposes brand semantics
-    // (`--q-primary`, `--q-positive`, etc.) as CSS variables. Numbered
-    // palette shades like `grey-4` exist only as utility classes; the
-    // CSS-variable lookup silently failed and the button fell through to
-    // its underlying near-black q-btn background. The class approach
-    // works for both the brand semantics AND the palette shades because
-    // Quasar generates `bg-positive`, `bg-warning`, `bg-negative`,
-    // `bg-grey-4` … as utility classes from the same palette the
-    // dropdown swatches use.
+    // Saturated branches (well/sufficient/low) ride Quasar's brand
+    // semantics via the `bg-{positive|warning|negative}` utility class
+    // — those are theme-tokenised. The neutral / out-of-stock branch
+    // routes through `dora-bg-sunken` per R-002 (the previous
+    // `bg-grey-5` was a hardcoded palette literal and broke dark
+    // themes).
     const levelButtonClass = computed<string>(() => {
         const seq = levelSequence.value;
-        const colour = seq !== null ? colourForSequence(seq) : null;
-        return colour ? `bg-${colour}` : '';
+        if (seq === null) return '';
+        const colour = colourForSequence(seq);
+        return colour ? `bg-${colour}` : 'dora-bg-sunken';
     });
     const levelButtonStyle = computed(() => {
         // Empty-level fallback — dashed outline + page surface so the
@@ -399,22 +398,32 @@
         if ((ms - Date.now()) / 86_400_000 <= 7) return 'soon';
         return 'ok';
     });
-    const expiry = computed(() => {
+    // R-002: neutral "no expiry" routes through `dora-text-muted` (no
+    // colour prop); saturated branches stay on Quasar semantics.
+    // `colour: null` signals "no Quasar colour — use cssClass for the
+    // muted look".
+    const expiry = computed<{
+        icon: string;
+        colour: string | null;
+        cssClass: string | null;
+        tooltip: string;
+    }>(() => {
         const date = props.item.expiry_date;
         switch (expiryTone.value) {
             case 'none':
                 return {
                     icon: ICONS.event_available,
-                    colour: 'grey-5',
+                    colour: null,
+                    cssClass: 'dora-text-muted',
                     tooltip: 'No expiry set — click to push or set one',
                 };
             case 'expired':
-                return { icon: ICONS.error, colour: 'negative', tooltip: `Expired ${date}` };
+                return { icon: ICONS.error, colour: 'negative', cssClass: null, tooltip: `Expired ${date}` };
             case 'soon':
-                return { icon: ICONS.event_busy, colour: 'orange-9', tooltip: `Expires ${date}` };
+                return { icon: ICONS.event_busy, colour: 'warning', cssClass: null, tooltip: `Expires ${date}` };
             case 'ok':
             default:
-                return { icon: ICONS.event_available, colour: 'positive', tooltip: `Expires ${date}` };
+                return { icon: ICONS.event_available, colour: 'positive', cssClass: null, tooltip: `Expires ${date}` };
         }
     });
 

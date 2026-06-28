@@ -590,6 +590,7 @@
                                 :steps="form.steps"
                                 :ingredient-options="stepIngredientOptions"
                                 :tool-options="stepToolOptions"
+                                :section-options="sectionOptions"
                                 @update:steps="onStepsChange"
                             />
 
@@ -931,42 +932,14 @@
         </BaseDialog>
 
         <!-- â”€â”€ Import-from-URL dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="importOpen" title="Import from URL" closable card-style="min-width: 460px; max-width: 600px">
-                <q-card-section>
-                    <div class="text-caption dora-text-muted q-mt-xs">
-                        Works on recipe sites that publish
-                        <strong>schema.org Recipe JSON-LD</strong> — the
-                        format most blogs, BBC Good Food, NYT Cooking,
-                        Serious Eats, AllRecipes, and similar publishers
-                        use. Other URLs still import: we'll pull the page
-                        title and text into Instructions so you can clean
-                        it up. Your existing recipe will be overwritten
-                        with the imported fields.
-                    </div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
-                    <q-input
-                        v-model="importUrl"
-                        outlined
-                        dense
-                        label="Recipe URL"
-                        placeholder="https://example.com/recipes/lasagne"
-                        :error="!!importError"
-                        :error-message="importError ?? ''"
-                        @keydown.enter.prevent="onConfirmImport"
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Import"
-                        :loading="importing"
-                        :disable="importUrl.trim().length === 0"
-                        @click="onConfirmImport"
-                    />
-                </template>
-        </BaseDialog>
+        <!-- FU-102 — shared dialog. The detail surface adds the
+             "overwrite" caption sentence via :degraded-hint and handles
+             the confirm-then-patch flow on `@imported`. -->
+        <RecipeImportDialog
+            v-model="importOpen"
+            degraded-hint="Your existing recipe will be overwritten with the imported fields."
+            @imported="onRecipeImported"
+        />
 
         <!-- ── Per-ingredient picker (Chunk B §1.4) ──────────────── -->
         <RecipeIngredientPickerDialog
@@ -1066,10 +1039,11 @@
     import { useQuasar } from 'quasar';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { getStockLevelColour } from 'src/helpers/stockLevelLogic';
+    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Recipe, RecipeStepsMode } from 'src/models/recipe';
     import type { Substitute } from 'src/models/stockItemDetail';
-    import RecipeApiService, { recipeImageUrl, recipeStepImageUrl } from 'src/services/api/recipeApiService';
+    import RecipeApiService, { recipeImageUrl, recipeStepImageUrl, type ImportedRecipe } from 'src/services/api/recipeApiService';
+    import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
@@ -1171,7 +1145,6 @@
         cuisine_id: string | null;
         difficulty: string | null;
         instructions: string | null;
-        nutrition: string | null;
         prep_time_minutes: number | null;
         recipe_collection_id: string | null;
         servings: number | null;
@@ -1240,7 +1213,6 @@
         cuisine_id: null,
         difficulty: null,
         instructions: null,
-        nutrition: null,
         prep_time_minutes: null,
         recipe_collection_id: null,
         servings: null,
@@ -1289,6 +1261,10 @@
             hint: s.hint,
             ingredient_client_ids: [...s.ingredient_ids],
             tool_ids: [...s.tool_ids],
+            // FU-117 — round-trip the section grouping so editing
+            // existing recipes preserves the importer's HowToSection
+            // assignments (and any subsequent picks).
+            section_client_id: s.section_id,
         }));
         Object.assign(form, {
             name: source.name,
@@ -1297,7 +1273,6 @@
             cuisine_id: source.cuisine_id,
             difficulty: source.difficulty,
             instructions: source.instructions,
-            nutrition: source.nutrition,
             prep_time_minutes: source.prep_time_minutes,
             recipe_collection_id: source.recipe_collection_id,
             servings: source.servings,
@@ -1374,8 +1349,14 @@
         return level?.name ?? null;
     }
     function levelColourFor(stockItemId: string): string | null {
-        const name = levelNameFor(stockItemId);
-        return name ? getStockLevelColour(name) : null;
+        // FU-050 — sequence-keyed (R-003). The item's own
+        // `stock_level_sequence` is populated by the server; fall back to a
+        // store lookup if absent (older cached items).
+        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
+        if (!item) return null;
+        const seq = item.stock_level_sequence
+            ?? stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence;
+        return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
     // Per-ingredient "missing" badge in the live editor. Reads the stock item's
     // server-derived `is_out_of_stock` boolean (Â§3.1) rather than matching a
@@ -1512,6 +1493,12 @@
         for (const ing of form.ingredients) {
             if (ing.section_client_id === removed.client_id) {
                 ing.section_client_id = null;
+            }
+        }
+        // FU-117 — detach any top-level steps that pointed at it too.
+        for (const step of form.steps) {
+            if (step.section_client_id === removed.client_id) {
+                step.section_client_id = null;
             }
         }
         markDirty();
@@ -1679,6 +1666,12 @@
                     hint: s.hint,
                     ingredient_client_ids: [...s.ingredient_client_ids],
                     tool_ids: [...s.tool_ids],
+                    // FU-117 — round-trip the section grouping. Sub-steps
+                    // stay null (the editor doesn't expose a picker on
+                    // depth-1 rows); server flattens by parent.
+                    section_client_id: s.parent_client_id === null
+                        ? s.section_client_id
+                        : null,
                 }));
                 command.steps = stepsToSend;
             }
@@ -1693,7 +1686,6 @@
                     img.data_url || '',
                 ).filter(s => s.startsWith('data:image/'));
             }
-            if (form.nutrition !== src.nutrition) command.nutrition = form.nutrition;
             if (form.prep_time_minutes !== src.prep_time_minutes) command.prep_time_minutes = toIntOrNull(form.prep_time_minutes);
             if (form.recipe_collection_id !== src.recipe_collection_id) command.recipe_collection_id = form.recipe_collection_id;
             if (form.servings !== src.servings) command.servings = toIntOrNull(form.servings);
@@ -1842,131 +1834,121 @@
         }
     }
 
-    // â”€â”€ Import from URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Import from URL ─────────────────────────────────────────────────
+    // FU-102 — the dialog (RecipeImportDialog) owns URL input, error
+    // display, loading state, and the `importFromUrlAsync` call. This
+    // page opens it via v-model and handles the result: confirm-overwrite
+    // → patch form fields → close + toast.
     const importOpen = ref(false);
-    const importUrl = ref('');
-    const importError = ref<string | null>(null);
-    const importing = ref(false);
 
     function onImportFromUrl() {
-        importUrl.value = '';
-        importError.value = null;
         importOpen.value = true;
     }
 
-    async function onConfirmImport() {
-        const url = importUrl.value.trim();
-        if (!url) return;
-        importing.value = true;
-        importError.value = null;
-        try {
-            const imported = await recipeApi.importFromUrlAsync(url);
-            // Confirm overwrite â€” the imported result might wipe out
-            // careful local edits if we just clobber the form.
-            const proceed = await new Promise<boolean>((resolve) => {
-                $q.dialog({
-                    title: `Import "${imported.name}"?`,
-                    message:
-                        `Found ${imported.ingredients.length} ingredient${
-                            imported.ingredients.length === 1 ? '' : 's'
-                        }. ${
-                            imported.ingredients.filter((i) => i.stock_item_id).length
-                        } matched existing stock items.${
-                            isDirty.value
-                                ? ' Your unsaved edits to this recipe will be discarded.'
-                                : ''
-                        }`,
-                    ok: { label: 'Replace fields', color: 'primary', noCaps: true },
-                    cancel: { noCaps: true },
-                })
-                    .onOk(() => resolve(true))
-                    .onCancel(() => resolve(false))
-                    .onDismiss(() => resolve(false));
-            });
-            if (!proceed) return;
-
-            form.name = imported.name;
-            // Importer resolves scraped names to vocab ids when it can; null
-            // id (no match) leaves the select empty for the user to pick.
-            form.cuisine_id = imported.cuisine_id;
-            form.category_id = imported.category_id;
-            form.difficulty = imported.difficulty;
-            form.servings = imported.servings;
-            form.prep_time_minutes = imported.prep_time_minutes;
-            form.cook_time_minutes = imported.cook_time_minutes;
-            // C-4 Chunk 7 — `source` is its own field now; stop appending
-            // "Source: <url>" to the instructions blob.
-            form.instructions = imported.instructions || null;
-            form.source = imported.source_url || null;
-            form.nutrition = imported.nutrition;
-            form.ingredients = imported.ingredients.map((i) => ({
-                stock_item_id: i.stock_item_id ?? '',
-                quantity: i.quantity,
-                unit: i.unit,
-                notes:
-                    i.stock_item_id
-                        ? i.notes ?? null
-                        : `Raw: ${i.raw_text}` + (i.notes ? ` (${i.notes})` : ''),
-                client_id: newClientId(),
-                // Cookbook revision §1.9 — importer v1 makes no attempt to
-                // detect optional from the source text (parsing "or to
-                // taste" / parens is brittle). User toggles per-row after
-                // import.
-                is_optional: false,
-            }));
-            // Importer never lands a recipe in image mode — image steps
-            // are hand-entered only. Pre-flip back if the user was just
-            // experimenting before kicking off an import.
-            form.steps_mode = 'freeform';
-            // C-4 Chunk 6 — adopt parsed structured steps when the source
-            // shipped HowToStep / HowToSection. Empty list ⇒ source only had a
-            // string, freeform mode stays active.
-            if (imported.steps && imported.steps.length > 0) {
-                form.steps = imported.steps.map((s) => ({
-                    client_id: s.client_id,
-                    parent_client_id: s.parent_client_id,
-                    sequence: s.sequence,
-                    text: s.text,
-                    hint: s.hint,
-                    ingredient_client_ids: [],
-                    tool_ids: [],
-                }));
-                form.steps_mode = 'structured';
-            } else {
-                form.steps = [];
-                form.steps_mode = 'freeform';
-            }
-            markDirty();
+    async function onRecipeImported(imported: ImportedRecipe) {
+        // Confirm overwrite — the imported result might wipe out careful
+        // local edits if we just clobber the form.
+        const proceed = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: `Import "${imported.name}"?`,
+                message:
+                    `Found ${imported.ingredients.length} ingredient${
+                        imported.ingredients.length === 1 ? '' : 's'
+                    }. ${
+                        imported.ingredients.filter((i) => i.stock_item_id).length
+                    } matched existing stock items.${
+                        isDirty.value
+                            ? ' Your unsaved edits to this recipe will be discarded.'
+                            : ''
+                    }`,
+                ok: { label: 'Replace fields', color: 'primary', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!proceed) {
+            // User backed out — close the import dialog so we don't leave
+            // a stale URL on screen.
             importOpen.value = false;
-            // C-4 Chunk 7 — distinct toast when we fell back to scraping
-            // raw page text (no JSON-LD found). The user knows to clean
-            // up rather than assume the structured fields are accurate.
-            if (imported.is_degraded) {
-                $q.notify({
-                    type: 'warning',
-                    position: 'bottom-right',
-                    timeout: 6000,
-                    message: 'Couldn’t auto-structure that page',
-                    caption:
-                        'Pulled the page text into Instructions and saved the URL. ' +
-                        'Review and edit to clean it up.',
-                });
-            } else {
-                $q.notify({
-                    type: 'positive',
-                    position: 'bottom-right',
-                    message:
-                        `Imported "${imported.name}". ` +
-                        `${imported.ingredients.filter((i) => !i.stock_item_id).length} ingredients need a stock-item match.`,
-                });
-            }
-        } catch (err) {
-            importError.value =
-                'Could not import. The URL might not publish structured recipe data.';
-             
-            console.warn('Import failed', err);
-        } finally {
-            importing.value = false;
+            return;
+        }
+
+        form.name = imported.name;
+        // Importer resolves scraped names to vocab ids when it can; null
+        // id (no match) leaves the select empty for the user to pick.
+        form.cuisine_id = imported.cuisine_id;
+        form.category_id = imported.category_id;
+        form.difficulty = imported.difficulty;
+        form.servings = imported.servings;
+        form.prep_time_minutes = imported.prep_time_minutes;
+        form.cook_time_minutes = imported.cook_time_minutes;
+        // C-4 Chunk 7 — `source` is its own field now; stop appending
+        // "Source: <url>" to the instructions blob.
+        form.instructions = imported.instructions || null;
+        form.source = imported.source_url || null;
+        form.ingredients = imported.ingredients.map((i) => ({
+            stock_item_id: i.stock_item_id ?? '',
+            quantity: i.quantity,
+            unit: i.unit,
+            notes:
+                i.stock_item_id
+                    ? i.notes ?? null
+                    : `Raw: ${i.raw_text}` + (i.notes ? ` (${i.notes})` : ''),
+            client_id: newClientId(),
+            // Cookbook revision §1.9 — importer v1 makes no attempt to
+            // detect optional from the source text (parsing "or to
+            // taste" / parens is brittle). User toggles per-row after
+            // import.
+            is_optional: false,
+        }));
+        // Importer never lands a recipe in image mode — image steps
+        // are hand-entered only. Pre-flip back if the user was just
+        // experimenting before kicking off an import.
+        form.steps_mode = 'freeform';
+        // C-4 Chunk 6 — adopt parsed structured steps when the source
+        // shipped HowToStep / HowToSection. Empty list ⇒ source only had a
+        // string, freeform mode stays active.
+        if (imported.steps && imported.steps.length > 0) {
+            form.steps = imported.steps.map((s) => ({
+                client_id: s.client_id,
+                parent_client_id: s.parent_client_id,
+                sequence: s.sequence,
+                text: s.text,
+                hint: s.hint,
+                ingredient_client_ids: [],
+                tool_ids: [],
+                section_client_id: null,
+            }));
+            form.steps_mode = 'structured';
+        } else {
+            form.steps = [];
+            form.steps_mode = 'freeform';
+        }
+        markDirty();
+        importOpen.value = false;
+        // C-4 Chunk 7 — distinct toast when we fell back to scraping
+        // raw page text (no JSON-LD found). The user knows to clean
+        // up rather than assume the structured fields are accurate.
+        if (imported.is_degraded) {
+            $q.notify({
+                type: 'warning',
+                position: 'bottom-right',
+                timeout: 6000,
+                message: 'Couldn’t auto-structure that page',
+                caption:
+                    'Pulled the page text into Instructions and saved the URL. ' +
+                    'Review and edit to clean it up.',
+            });
+        } else {
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message:
+                    `Imported "${imported.name}". ` +
+                    `${imported.ingredients.filter((i) => !i.stock_item_id).length} ingredients need a stock-item match.`,
+            });
         }
     }
 

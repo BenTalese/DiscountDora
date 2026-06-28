@@ -8,9 +8,10 @@
                     dense
                     size="sm"
                     class="q-ml-sm dora-mode-chip"
+                    :class="{ 'dora-bg-sunken dora-text-secondary': !aiActive }"
                     :icon="aiActive ? 'auto_awesome' : 'chat_bubble_outline'"
-                    :color="aiActive ? 'primary' : 'grey-4'"
-                    :text-color="aiActive ? 'white' : 'grey-9'"
+                    :color="aiActive ? 'primary' : undefined"
+                    :text-color="aiActive ? 'white' : undefined"
                 >
                     {{ aiActive ? 'AI' : 'Basic' }}
                     <q-tooltip>

@@ -17,11 +17,35 @@ export type LinkedRecipe = {
     name: string;
 };
 
+/** FU-056 — one barcode that resolves to this stock item. Surface gated on
+ *  `features.scanning`. */
+export type StockItemBarcode = {
+    barcode_id: string;
+    barcode: string;
+    /** 'direct' — registered against this stock item. Editable on this
+     *  surface. 'via_product' — reaches this item via a linked Product;
+     *  read-only here (edit on the Product). */
+    source: 'direct' | 'via_product';
+    product_id: string | null;
+    product_name: string | null;
+};
+
 export type Substitute = {
     stock_item_id: string;
     name: string;
     stock_level_id: string | null;
     stock_level_name: string | null;
+    /** FU-034 — free-text hint shown in the substitute list and in the
+     *  cook-mode swap picker. Null when the user didn't set one. */
+    notes: string | null;
+    /** FU-034 — optional structured ratio. Always returned from the API
+     *  oriented "this item → substitute" — the server inverts canonical
+     *  storage so the consumer never has to think about direction. All
+     *  four fields are null, or all four are set. */
+    ratio_quantity_in: number | null;
+    ratio_unit_in: string | null;
+    ratio_quantity_out: number | null;
+    ratio_unit_out: string | null;
 };
 
 export type LevelChange = {
@@ -145,6 +169,9 @@ export type StockItemDetail = {
     products: LinkedProduct[];
     recipes: LinkedRecipe[];
     substitutes: Substitute[];
+    /** FU-056 — barcodes (direct + via-Product). Empty when scanning is off
+     *  or none are registered. */
+    barcodes: StockItemBarcode[];
     level_history: LevelChange[];
     /** C-1b.5 / INV-7 — append-only waste log entries for this item,
      *  newest first, capped on the server. Empty when nothing thrown

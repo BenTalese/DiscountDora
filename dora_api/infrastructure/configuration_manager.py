@@ -88,6 +88,18 @@ def _default_postgres_url() -> str:
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
+def _sqlite_url_from_path(raw: str) -> str:
+    """Build a SQLAlchemy SQLite URL from a plain filesystem path.
+
+    Friendlier than asking the user to remember that `sqlite:///` takes
+    three slashes for a relative path and four for an absolute one. We
+    resolve to an absolute path and always emit the four-slash form so
+    Flask doesn't reinterpret it against its instance dir.
+    `Path.as_posix()` normalises Windows backslashes so the URL parses
+    on every platform."""
+    return f"sqlite:///{Path(raw).expanduser().resolve().as_posix()}"
+
+
 def _resolve_config_path() -> Path:
     """D3: appsettings.json lives under <DATA_DIR>/config/ so the
     operator's persistent overrides ride the data volume. The legacy
@@ -146,13 +158,19 @@ class DoraConfig:
         # FU-045 — Postgres is the standard datastore (Decision 5,
         # RECONCILED_FINISHING_PLAN.md §7.5). Resolution order:
         #   1. `DORA_DB_URL` if set — full override, any SQLAlchemy URL.
-        #      Pass `sqlite:///path/to/dora.db` to run on SQLite (lightweight
-        #      self-host) or a Postgres URL to point at any instance.
-        #   2. Per-component env vars (`DORA_DB_HOST`, `DORA_DB_PORT`,
-        #      `DORA_DB_NAME`, `DORA_DB_USER`, `DORA_DB_PASSWORD`) — useful
-        #      when secrets come from the environment but the shape is fixed.
-        #   3. Default: localhost:5432 / user `dora` / db `dora` — matches
-        #      the bundled `docker-compose.yml`.
+        #      Use this when pointing at a remote Postgres, a custom
+        #      driver, an in-memory SQLite, anything non-standard.
+        #   2. `DORA_DB_PATH` if set — SQLite shortcut. Just a filesystem
+        #      path (e.g. `./data/dora.data.db` or `/var/lib/dora/db`);
+        #      the app builds the correct `sqlite:///<abs>` URL so the
+        #      user doesn't have to remember the slash-count quirk. This
+        #      is the simplest way to run on SQLite for lightweight
+        #      self-host.
+        #   3. Per-component Postgres env vars (`DORA_DB_HOST`, `_PORT`,
+        #      `_NAME`, `_USER`, `_PASSWORD`) — useful when secrets come
+        #      from the environment but the shape is fixed.
+        #   4. Default: localhost:5432 / user `dora` / db `dora` — matches
+        #      the bundled `compose.dev.yml` Postgres service.
         explicit_url = _env("DORA_DB_URL")
         if explicit_url:
             if explicit_url.startswith("sqlite:///"):
@@ -161,6 +179,12 @@ class DoraConfig:
                 path = Path(explicit_url.removeprefix("sqlite:///")).expanduser().resolve()
                 path.parent.mkdir(parents=True, exist_ok=True)
             return explicit_url
+        sqlite_path = _env("DORA_DB_PATH")
+        if sqlite_path:
+            url = _sqlite_url_from_path(sqlite_path)
+            # Ensure the parent dir exists so a fresh install can write.
+            Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+            return url
         return _default_postgres_url()
 
     def get_log_level(self) -> int:

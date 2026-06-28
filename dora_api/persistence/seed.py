@@ -437,7 +437,6 @@ def seed_dev_data():
             is_favourite=kw.get("favourite", False),
             last_made_on=kw.get("last_made"),
             name=name,
-            nutrition=kw.get("nutrition"),
             prep_time_minutes=kw.get("prep", 10),
             recipe_collection=collection,
             servings=kw.get("servings", 2),

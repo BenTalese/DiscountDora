@@ -40,7 +40,6 @@ class Recipe(BaseEntity):
     is_favourite: bool
     last_made_on: datetime | None
     name: str
-    nutrition: str | None
     prep_time_minutes: int | None
     recipe_collection: RecipeCollection | None
     servings: int | None
@@ -58,8 +57,6 @@ class Recipe(BaseEntity):
     version_group_id: UUID | None
     # C-4 Chunk 9 — simple nutrition (kcal). Typed by the user when the
     # nutrition opt-in is `simple` (C-cross). NULL means no value set.
-    # The freeform `nutrition: str | None` field above stays for
-    # backwards compatibility but is no longer rendered/edited.
     kcal: int | None
     # PROPOSAL_RECIPE_IMAGE_STEPS — explicit declaration of which step
     # payload cook mode and the detail page render. Replaces the implicit
@@ -88,7 +85,6 @@ class Recipe(BaseEntity):
         IS_FAVOURITE = "is_favourite"
         LAST_MADE_ON = "last_made_on"
         NAME = "name"
-        NUTRITION = "nutrition"
         PREP_TIME_MINUTES = "prep_time_minutes"
         RECIPE_COLLECTION = "recipe_collection"
         SERVINGS = "servings"

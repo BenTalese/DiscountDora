@@ -166,19 +166,36 @@
                         {{ matchedItem.stock_level_name ?? '—' }}
                     </div>
                 </q-card-section>
-                <q-card-section v-else-if="resultKind === 'product'">
+                <q-card-section v-else-if="resultKind === 'product_no_link'">
                     <div class="text-h6">Product not linked</div>
                     <div class="text-caption dora-text-muted">
-                        This barcode is linked to a product, but that product isn't
-                        attached to any stock item yet.
+                        This barcode is registered to a product, but that product
+                        isn't linked to any stock item yet.
                     </div>
                 </q-card-section>
                 <q-card-section v-else>
                     <div class="text-h6">No match</div>
                     <div class="text-caption dora-text-muted">
-                        <code>{{ lastScannedValue }}</code> isn't linked to a product
-                        yet.
+                        <code>{{ lastScannedValue }}</code> isn't registered yet.
                     </div>
+                    <!-- FU-056 — register-now: pick the stock item this barcode
+                         should open from next time. Stock item is the default
+                         (and only) target on this surface; Product registration
+                         lives on the Product UI when that ships. -->
+                    <q-select
+                        v-model="registerStockItemId"
+                        :options="stockItemPickerOptions"
+                        outlined
+                        dense
+                        emit-value
+                        map-options
+                        use-input
+                        input-debounce="0"
+                        clearable
+                        label="Stock item to open when scanned"
+                        @filter="onFilterStockItems"
+                        class="q-mt-md"
+                    />
                 </q-card-section>
                 <template #actions>
                     <BaseButton variant="ghost" label="Close" v-close-popup />
@@ -188,6 +205,15 @@
                         :icon="ICONS.open_in_new"
                         label="Open detail"
                         @click="openDetail(matchedItem.stock_item_id)"
+                    />
+                    <BaseButton
+                        v-if="resultKind === 'unknown'"
+                        variant="primary"
+                        :icon="ICONS.add"
+                        label="Register"
+                        :loading="registerSaving"
+                        :disable="!registerStockItemId"
+                        @click="onConfirmRegister"
                     />
                 </template>
             </BaseDialog>
@@ -224,9 +250,59 @@
     // ── Scan ──────────────────────────────────────────────────────────
     const scanOpen = ref(false);
     const resultOpen = ref(false);
-    const resultKind = ref<'stock_item' | 'product' | 'unknown' | null>(null);
+    const resultKind = ref<
+        | 'stock_item'
+        | 'stock_item_via_product'
+        | 'product_no_link'
+        | 'unknown'
+        | null
+    >(null);
     const lastScannedValue = ref('');
     const matchedItem = ref<StockItem | null>(null);
+
+    // FU-056 — register-now flow on unknown scans. Picker is q-select with
+    // use-input filtering against the loaded stock-item list.
+    const registerStockItemId = ref<string | null>(null);
+    const registerSaving = ref(false);
+    const stockItemPickerOptions = ref<{ label: string; value: string }[]>([]);
+    function onFilterStockItems(query: string, update: (cb: () => void) => void): void {
+        update(() => {
+            const q = query.trim().toLowerCase();
+            const all = stockItemStore.stockItems.map((s) => ({
+                label: s.name,
+                value: s.stock_item_id,
+            }));
+            stockItemPickerOptions.value = q
+                ? all.filter((o) => o.label.toLowerCase().includes(q))
+                : all;
+        });
+    }
+    async function onConfirmRegister(): Promise<void> {
+        if (!registerStockItemId.value || !lastScannedValue.value) return;
+        registerSaving.value = true;
+        try {
+            await barcodeApi.registerAsync({
+                barcode: lastScannedValue.value,
+                stock_item_id: registerStockItemId.value,
+            });
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'Barcode registered.',
+            });
+            resultOpen.value = false;
+            registerStockItemId.value = null;
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not register barcode.',
+                caption: err instanceof Error ? err.message : String(err),
+            });
+        } finally {
+            registerSaving.value = false;
+        }
+    }
 
     async function onScanDecoded(value: string) {
         lastScannedValue.value = value;
@@ -237,11 +313,15 @@
                 matchedItem.value =
                     stockItemStore.stockItems.find((s) => s.stock_item_id === result.id)
                     ?? await stockItemApi.getAsync(result.id);
-            } else if (result.kind === 'product') {
-                matchedItem.value = result.stock_item_id
-                    ? stockItemStore.stockItems.find((s) => s.stock_item_id === result.stock_item_id) ?? null
-                    : null;
+            } else if (result.kind === 'stock_item_via_product') {
+                // FU-056 — barcode → Product → exactly one linked stock item.
+                matchedItem.value =
+                    stockItemStore.stockItems.find((s) => s.stock_item_id === result.id)
+                    ?? await stockItemApi.getAsync(result.id);
             } else {
+                // product_multi_linked / product_no_link / unknown — no
+                // single-stock-item answer; the dialog renders the explanatory
+                // branch for the user's next action.
                 matchedItem.value = null;
             }
             resultOpen.value = true;

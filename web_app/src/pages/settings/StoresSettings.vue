@@ -143,7 +143,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useQuasar } from 'quasar';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useStoresStore } from 'src/stores/storesStore';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
@@ -177,7 +177,7 @@
         storesStore
             .listAsync()
             .catch((e) => {
-                loadError.value = describeApiError(e);
+                loadError.value = toastCaption(e);
             })
             .finally(() => {
                 loading.value = false;
@@ -191,7 +191,7 @@
         storesStore
             .ensureLoadedAsync()
             .catch((e) => {
-                loadError.value = describeApiError(e);
+                loadError.value = toastCaption(e);
             })
             .finally(() => {
                 loading.value = false;
@@ -272,7 +272,11 @@
             dialogOpen.value = false;
             resetDraft();
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({
+                type: 'negative',
+                message: editing.value ? "Couldn't update the store." : "Couldn't add the store.",
+                caption: toastCaption(e),
+            });
         } finally {
             saving.value = false;
         }
@@ -299,7 +303,11 @@
                     });
                 })
                 .catch((e) => {
-                    $q.notify({ type: 'negative', message: describeApiError(e) });
+                    $q.notify({
+                        type: 'negative',
+                        message: `Couldn't delete ${store.name}.`,
+                        caption: toastCaption(e),
+                    });
                 });
         });
     }

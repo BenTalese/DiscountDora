@@ -26,6 +26,7 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -74,7 +75,8 @@ _USE_SOON_HORIZON_DAYS = 3
 
 
 def generate_use_soon(repository: SqlAlchemyRepository) -> list[Suggestion]:
-    today = date.today()
+    # R-021 — household-tz "today" for the use-soon horizon.
+    today = household_today(repository)
     cutoff = today + timedelta(days=_USE_SOON_HORIZON_DAYS)
     items: list[StockItem] = repository.get(StockItem).all(
         EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null()
@@ -192,7 +194,8 @@ def generate_likely_due(repository: SqlAlchemyRepository) -> list[Suggestion]:
         for it in repository.get(StockItem).all(EntityField(StockItem, "id").in_(item_ids)):
             items_by_id[it.id] = it
 
-    today = date.today()
+    # R-021 — anchor "due today" against household-tz today.
+    today = household_today(repository)
     out: list[Suggestion] = []
     for item_id, dates in by_item.items():
         unique_sorted = sorted(set(dates))

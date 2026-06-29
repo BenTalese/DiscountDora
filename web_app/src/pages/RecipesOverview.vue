@@ -335,7 +335,6 @@
                         >
                             <RecipeCard
                                 :recipe="recipeWithExpiringCount(recipe)"
-                                :highlight-stock-item-ids="usesStockItemIds"
                                 :show-expiring-badge="expiringOnly"
                                 @open="onOpenRecipe"
                                 @cook="onCookClick"
@@ -410,7 +409,7 @@
     } from 'src/helpers/recipeVocabulary';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
 
@@ -457,7 +456,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save preference.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1067,7 +1066,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load expiring-ingredient recipes.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             expiringOnly.value = false;
         } finally {

@@ -14,6 +14,7 @@ from dora_api.domain.entities.app_setting import AppSetting
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.stock_status import effective_expiring_soon_window
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.locations.attention import (AttentionReasons,
                                                    reasons_for_item)
 from dora_api.features.routers import LOCATION_ROUTER
@@ -66,6 +67,8 @@ class GetLocationTreeHandler:
         # (same source as the alerts list, R-003), falling back to the default.
         _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
         _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
+        # R-021 — heatmap calendar boundary uses household-tz today.
+        _Today = household_today(self.repository)
 
         # Bucket items by their location_id (None = unassigned, surfaced
         # separately in the UI).
@@ -85,7 +88,7 @@ class GetLocationTreeHandler:
             node_reasons = AttentionReasons()
             item_dtos: List[LocationItemDto] = []
             for item in direct_items:
-                ir = reasons_for_item(item, expiring_soon_window=_Window)
+                ir = reasons_for_item(item, today=_Today, expiring_soon_window=_Window)
                 node_reasons = node_reasons.merge(ir)
                 item_dtos.append(LocationItemDto(
                     stock_item_id = item.id,

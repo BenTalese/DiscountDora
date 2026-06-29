@@ -284,7 +284,7 @@
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import { isLowStockSequence, isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useStockLocationStore } from 'src/stores/stockLocationStore';
@@ -501,7 +501,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not set expiry.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -518,7 +518,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear expiry.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -548,7 +548,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             flagBusy.value = false;
@@ -577,7 +577,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             openBusy.value = false;
@@ -660,7 +660,7 @@
                                     type: 'negative',
                                     position: 'bottom-right',
                                     message: 'Could not undo.',
-                                    caption: describeApiError(err) || '',
+                                    caption: toastCaption(err),
                                 });
                             }
                         },
@@ -672,7 +672,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not log as wasted.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

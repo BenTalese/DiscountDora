@@ -190,7 +190,7 @@
     import UserAvatar from 'src/components/UserAvatar.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const api = new UserAdminApiService();
@@ -239,7 +239,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Update failed.',
-                caption: describeApiError(err) || ''
+                caption: toastCaption(err)
             });
             return false;
         } finally {
@@ -298,7 +298,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Reset failed.',
-                caption: describeApiError(err) || ''
+                caption: toastCaption(err)
             });
         } finally {
             resettingId.value = null;
@@ -318,7 +318,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy.',
-                caption: describeApiError(err) || ''
+                caption: toastCaption(err)
             });
         }
     }

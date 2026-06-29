@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -38,7 +38,7 @@ class Recipe(BaseEntity):
     ingredients: List[RecipeIngredient]
     instructions: str | None
     is_favourite: bool
-    last_made_on: datetime | None
+    last_made_on: date | None
     name: str
     prep_time_minutes: int | None
     recipe_collection: RecipeCollection | None

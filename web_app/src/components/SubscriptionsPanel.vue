@@ -83,7 +83,7 @@
     import { onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
     import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     // C-9.5 — the subscriptions tier on the Alerts hub. Surfaces + manages the
     // user's armed `PriceAlert`s; set-point creation stays on the price-history
@@ -132,7 +132,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             removing.value = null;

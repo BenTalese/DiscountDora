@@ -232,7 +232,7 @@
     import RecipeApiService, {
         type CreateRecipeIngredientCommand,
     } from 'src/services/api/recipeApiService';
-    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFormErrors } from 'src/composables/useFormErrors';
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
@@ -304,8 +304,8 @@
 
     const form = reactive<RecipeForm>(emptyForm());
     const saving = ref(false);
-    const generalError = ref<string | null>(null);
-    const fieldErrors = ref<Record<string, string>>({});
+    // FU-099 — R-001 form-error plumbing.
+    const { fieldErrors, generalError, handleSaveError, reset: resetFormErrors } = useFormErrors();
 
     function clearField(field: string) {
         if (fieldErrors.value[field]) {
@@ -362,8 +362,7 @@
         (open) => {
             if (!open) return;
             Object.assign(form, emptyForm());
-            generalError.value = null;
-            fieldErrors.value = {};
+            resetFormErrors();
             if (props.recipe) {
                 form.name = props.recipe.name;
                 form.category_id = props.recipe.category_id;
@@ -407,8 +406,7 @@
 
     async function onSubmit() {
         saving.value = true;
-        generalError.value = null;
-        fieldErrors.value = {};
+        resetFormErrors();
         try {
             const ingredients = form.ingredients.filter((i) => !!i.stock_item_id);
             if (props.recipe) {
@@ -449,10 +447,7 @@
             }
             emit('saved');
         } catch (err) {
-            const extracted = extractFieldErrors(err);
-            fieldErrors.value = extracted.fieldErrors;
-            generalError.value =
-                extracted.generalError ?? 'Could not save the recipe. Please review the form.';
+            handleSaveError(err, 'Could not save the recipe. Please review the form.');
         } finally {
             saving.value = false;
         }

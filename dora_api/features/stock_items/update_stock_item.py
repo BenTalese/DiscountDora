@@ -206,8 +206,9 @@ class UpdateStockItemHandler:
             previous_open = bool(_StockItem.is_open)
             _StockItem.is_open = request.is_open
             if request.is_open and not previous_open:
-                from datetime import date as _date
-                _StockItem.opened_on = _date.today()
+                # R-021 — "opened on" stamps the household calendar day.
+                from dora_api.features.app_settings.clock import household_today
+                _StockItem.opened_on = household_today(self.repository)
             elif not request.is_open:
                 _StockItem.opened_on = None
 

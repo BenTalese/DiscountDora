@@ -676,12 +676,13 @@
                                  on this surface. -->
                             <RecipeCard
                                 :recipe="r"
-                                :highlight-stock-item-ids="[detail.stock_item_id]"
+                                :show-filter-by-ingredients="true"
                                 @open="goToRecipe"
                                 @cook="goToCook"
                                 @toggle-favourite="onToggleFavourite"
                                 @add-missing="onAddMissing"
                                 @add-all-to-list="onAddAllToList"
+                                @filter-by-ingredients="onFilterStockByRecipe"
                             />
                         </div>
                     </div>
@@ -1008,6 +1009,7 @@
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import TrendSparkline from 'src/components/TrendSparkline.vue';
     import YourPricesWidget from 'src/components/dora/YourPricesWidget.vue';
+    import { formatQuantity } from 'src/helpers/formatQuantity';
     import { relativeTime } from 'src/helpers/relativeTime';
     import { humaniseWasteReason } from 'src/helpers/wasteReasons';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
@@ -1035,7 +1037,7 @@
     import { useStoresStore } from 'src/stores/storesStore';
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{ idOverride?: string; embedded?: boolean }>();
     const emit = defineEmits<{
@@ -1176,6 +1178,7 @@
             (form.notes ?? '') !== (detail.value.notes ?? '')
         );
     });
+    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
     useUnsavedChangesGuard(isDirty);
 
     // Stock groups — loaded once for the inline picker. (Owned locally
@@ -1587,6 +1590,14 @@
             busy.value = false;
         }
     }
+    // Jump back to the stock overview pre-filtered to the recipe's
+    // ingredient set. The query param is read by StockOverview on mount;
+    // the filter chip surfaces a removable "Ingredients of: <recipe>"
+    // pill so the user can clear it without round-tripping.
+    function onFilterStockByRecipe(recipeId: string) {
+        void router.push({ path: '/stock', query: { recipe: recipeId } });
+    }
+
     // C-1b.4 / FU-185 — B8 residue: the favourite toggle on this surface
     // was wired to a dead listener. Mirror RecipesOverview's handler shape
     // (toggle on the recipe store; the card re-renders via the store).
@@ -1696,7 +1707,9 @@
             || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
             return null;
         }
-        return `${sub.ratio_quantity_in} ${sub.ratio_unit_in} → ${sub.ratio_quantity_out} ${sub.ratio_unit_out}`;
+        const from = formatQuantity(sub.ratio_quantity_in, sub.ratio_unit_in);
+        const to = formatQuantity(sub.ratio_quantity_out, sub.ratio_unit_out);
+        return `${from} → ${to}`;
     }
 
     // ── FU-056: barcode add / remove ────────────────────────────────────
@@ -1745,7 +1758,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove barcode.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1967,7 +1980,7 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────
     function notifyErr(message: string, err: unknown) {
-        $q.notify({ type: 'negative', position: 'bottom-right', message, caption: describeApiError(err) || '' });
+        $q.notify({ type: 'negative', position: 'bottom-right', message, caption: toastCaption(err) });
     }
     function formatDateTime(iso: string): string {
         if (!iso) return '';

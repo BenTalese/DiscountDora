@@ -80,13 +80,14 @@ class AttentionReasons:
 
 def reasons_for_item(
     item: StockItem,
-    today: date | None = None,
+    today: date,
     expiring_soon_window: int = EXPIRING_SOON_WINDOW_DAYS,
 ) -> AttentionReasons:
-    # `expiring_soon_window` defaults to the constant but callers thread the
-    # household-configured value (AppSetting, C-9.2) so the heatmap re-derives
-    # consistently with the alerts list when an admin changes it (R-003).
-    today = today or date.today()
+    # R-021 — `today` is required (caller passes `household_today(repository)`)
+    # so the heatmap evaluates against the household's calendar boundary, not
+    # the server's. `expiring_soon_window` defaults to the seeded constant but
+    # callers thread the household-configured value (AppSetting, C-9.2) so the
+    # heatmap re-derives consistently with the alerts list (R-003).
     r = AttentionReasons()
 
     if item.expiry_date is not None:
@@ -121,7 +122,7 @@ def reasons_for_item(
 
 def reasons_for_items(
     items: Iterable[StockItem],
-    today: date | None = None,
+    today: date,
     expiring_soon_window: int = EXPIRING_SOON_WINDOW_DAYS,
 ) -> AttentionReasons:
     total = AttentionReasons()

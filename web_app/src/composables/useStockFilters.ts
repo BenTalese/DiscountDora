@@ -65,6 +65,10 @@ export function useStockFilters(sources: {
     // as its own chip so users can audit / find auto-add-prone items.
     const autoAddOnly = ref(false);
     const cartFilter = ref<StockCartFilter>('all');
+    // Narrow the list to the ingredient set of a single recipe. Set via
+    // deep-link from the stock-item detail page's "Recipes using this"
+    // tab; surfaced in the UI as a removable chip on the filter bar.
+    const recipeFilter = ref<string | null>(null);
     const sortBy = ref<StockSortKey>('name_asc');
 
     // ── Lookup maps ─────────────────────────────────────────────────────
@@ -150,6 +154,22 @@ export function useStockFilters(sources: {
         })),
     );
 
+    // Resolve the active recipe filter into a (recipe-name, ingredient-id-set)
+    // pair. Returns null when nothing's filtered, or the recipe can't be found
+    // — the predicate below treats null as "off" so an orphaned id silently
+    // disables the filter rather than emptying the list.
+    const recipeFilterContext = computed<{ name: string; ids: Set<string> } | null>(() => {
+        const id = recipeFilter.value;
+        if (!id) return null;
+        const recipe = sources.recipes().find((r) => r.recipe_id === id);
+        if (!recipe) return null;
+        const ids = new Set<string>();
+        for (const ing of recipe.ingredients) {
+            if (ing.stock_item_id) ids.add(ing.stock_item_id);
+        }
+        return { name: recipe.name, ids };
+    });
+
     // ── Summary counts (header banner) ──────────────────────────────────
     const summaryCounts = computed(() => {
         let low = 0;
@@ -202,6 +222,8 @@ export function useStockFilters(sources: {
                 const haystack = item.name.toLowerCase();
                 if (!tokens.some((t) => haystack.includes(t))) return false;
             }
+            if (recipeFilterContext.value && !recipeFilterContext.value.ids.has(item.stock_item_id))
+                return false;
             if (cartFilter.value !== 'all') {
                 const state = cartStateById.value.get(item.stock_item_id) ?? 'none';
                 const onList = state !== 'none';
@@ -275,6 +297,7 @@ export function useStockFilters(sources: {
         if (openOnly.value) n++;
         if (hasAlertOnly.value) n++;
         if (cartFilter.value !== 'all') n++;
+        if (recipeFilter.value !== null) n++;
         return n;
     });
 
@@ -376,6 +399,7 @@ export function useStockFilters(sources: {
         openOnly.value = false;
         hasAlertOnly.value = false;
         cartFilter.value = 'all';
+        recipeFilter.value = null;
     }
 
     return {
@@ -389,6 +413,8 @@ export function useStockFilters(sources: {
         openOnly,
         hasAlertOnly,
         cartFilter,
+        recipeFilter,
+        recipeFilterContext,
         sortBy,
         // option lists
         locationOptions,

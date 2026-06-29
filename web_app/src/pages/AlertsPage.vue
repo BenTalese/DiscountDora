@@ -229,7 +229,7 @@
     import AlertApiService from 'src/services/api/alertApiService';
     import { useAlertStore } from 'src/stores/alertStore';
     import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { computed, onMounted, ref } from 'vue';
     import { useQuasar } from 'quasar';
@@ -316,7 +316,7 @@
         } catch (err) {
             $q.notify({
                 type: 'negative', position: 'bottom-right',
-                message: 'Could not apply.', caption: describeApiError(err) || '',
+                message: 'Could not apply.', caption: toastCaption(err),
             });
         } finally {
             busy.value = null;
@@ -375,7 +375,7 @@
             await alertPrefsStore.setEnabled(pref.kind, enabled);
             await alertStore.refreshAsync();
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: describeApiError(err) || '' });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: toastCaption(err) });
         } finally {
             setPrefBusy(pref.kind, false);
         }
@@ -389,7 +389,7 @@
             await alertPrefsStore.setTierOverride(pref.kind, tier === pref.default_tier ? null : tier);
             await alertStore.refreshAsync();
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: describeApiError(err) || '' });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not save.', caption: toastCaption(err) });
         } finally {
             setPrefBusy(pref.kind, false);
         }
@@ -407,7 +407,7 @@
             history.value = (await api.getHistoryAsync()).entries;
             historyLoaded.value = true;
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not load history.', caption: describeApiError(err) || '' });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not load history.', caption: toastCaption(err) });
         } finally {
             historyLoading.value = false;
         }

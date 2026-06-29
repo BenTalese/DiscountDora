@@ -6,6 +6,7 @@ from dora_api.features.stock_locations.create_stock_location import \
     CreateStockLocationRequest
 from dora_api.features.stock_locations.update_stock_location import \
     UpdateStockLocationRequest
+from tests.e2e.dora_api._error_assertions import domain_err, validation_err
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -44,7 +45,7 @@ def test__create_stock_location__StockLocationAlreadyExists__IsBusinessRuleViola
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A stock location with the name 'CeLLar' already exists."],
+            '': [domain_err("A stock location with the name 'CeLLar' already exists.")],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -60,7 +61,7 @@ def test__create_stock_location__EmptyRequest__IsRequiredInputsValidationFailure
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'name': ["Field required"]
+            'name': [validation_err("missing", "Field required")]
         },
        'status': 400,
        'title': 'Malformed request.',
@@ -309,7 +310,7 @@ def test__update_stock_location__OtherStockLocationHasSameName__CannotUpdateToDu
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            '': ["A stock location with the name 'freeZER' already exists."]
+            '': [domain_err("A stock location with the name 'freeZER' already exists.")]
         },
         "status": 422,
         "title": "Business rule violation.",

@@ -95,7 +95,7 @@
     import { useSpeechOutput } from 'src/composables/useSpeechOutput';
     import { useVoiceInput } from 'src/composables/useVoiceInput';
     import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import type { VoiceEngine } from 'src/models/auth';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
@@ -134,7 +134,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || ''
+            caption: toastCaption(err)
         });
     }
 

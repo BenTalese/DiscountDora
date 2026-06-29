@@ -64,6 +64,12 @@ To keep handoffs clean:
    work around an open item that's relevant to what you're doing. Resolved
    items live in a separate archive (`DORA_FOLLOWUPS_RESOLVED.md`) — only
    consult that if you need history on a specific FU id.
+6. **Do NOT pre-scan `DORA_VERIFY.md`** at session start. It is the user's
+   personal browser-verify checklist — they walk it on their own time. Only
+   read it if (a) the user explicitly references a verify item, or (b) the
+   current task touches the same surface and you want to fold a new verify
+   step into an existing section. Never list verify items as "open work" in
+   your start-of-session summary; that's not the file's purpose.
 
 ## On ending a work unit — ALWAYS
 
@@ -71,23 +77,43 @@ Append a new entry to `DORA_WORKLOG.md` using the template at the top of that
 file. Do this even if the unit was partial or blocked — the next session needs
 to know where you stopped and why.
 
-**Also update the follow-ups ledger** with anything the current job spun off:
-follow-ups, deferred jobs, leftovers, or findings worth investigating later. The
-user may not catch these from the response alone, so they must live somewhere
-durable and stateful. The ledger is split across **two files** — keep them
-disciplined:
+**Also update the follow-ups ledger** with anything the current job spun off.
+**There are two separate ledgers — pick the right one for each item:**
 
-- `DORA_FOLLOWUPS.md` holds **only `[OPEN]` items**. New follow-ups go at the
-  top, each with a **recommended resolution point** (e.g. "now", "later during
-  Phase X / prompt Y", "when <trigger>", or "opportunistic").
-- `DORA_FOLLOWUPS_RESOLVED.md` is the **archive of `[RESOLVED]` items**. When
-  you resolve an open item this session, **move the entry** from
-  `DORA_FOLLOWUPS.md` to the top of `DORA_FOLLOWUPS_RESOLVED.md`, flip
-  `[OPEN]` → `[RESOLVED]`, and append a one-line state note on how it was
-  resolved (date + brief mechanism). Don't leave resolved items in the open
-  file, and don't delete them — the trail matters.
+- **`DORA_VERIFY.md`** — the **browser-verify checklist**. If your only
+  outstanding work on something is "look at it in the running app and confirm
+  it behaves" (no design call, no further code), it goes here. Append a tight
+  checklist under the relevant surface heading (Cookbook / Cook mode /
+  Meal plans / Shopping lists / Stock / Dashboard / Alerts / Settings /
+  Onboarding / Build / Cross-cutting). One verb-first checkbox per check;
+  end the heading with `— origin FU-NNN` (or omit if not spun from an FU).
+  Prefix the heading with `⚠️` only if the verify blocks other work.
+  **Do not open a new FU-NNN for pure browser-verify** — those clutter the
+  followups ledger and the user manages this file by deleting items as he
+  walks through them. No archive needed; no two-way links.
+- **`DORA_FOLLOWUPS.md`** — everything else: deferred jobs, leftovers, design
+  questions, findings, real bugs that need a fix, decisions that need a
+  call. `[OPEN]` items only, newest at the top, each with a **recommended
+  resolution point** ("now", "later during Phase X / prompt Y",
+  "when <trigger>", or "opportunistic").
+- **`DORA_FOLLOWUPS_RESOLVED.md`** — archive of `[RESOLVED]` items. When you
+  resolve an open follow-up this session, **move the entry** from
+  `DORA_FOLLOWUPS.md` to the top of this file, flip `[OPEN]` → `[RESOLVED]`,
+  and append a one-line state note (date + brief mechanism). Don't leave
+  resolved items in the open file; don't delete them — the trail matters.
 
-If the unit produced no new loops and resolved none, no edit is needed.
+**Picking the right ledger — quick rule:**
+- "Verify the friendly error toast renders with a ref-id suffix." →
+  **DORA_VERIFY** (pure browser observation).
+- "Friendly error rollout missed the inline-product Axis-B picker." →
+  **DORA_FOLLOWUPS** (real bug, needs a fix).
+- "Reported defect that didn't reproduce in static read; confirm in
+  browser it's actually fixed." → **DORA_FOLLOWUPS** as `type=finding`
+  (see the mandatory reported-defect rule below). The verify *itself* can
+  also be added to DORA_VERIFY for clean tracking, but the FU stays as
+  the stateful record until the bug is confirmed gone.
+
+If the unit produced no new loops and no new verify checks, no edit is needed.
 
 **MANDATORY — reported defects you conclude are "non-issues" still get a
 follow-up.** When a prompt (or the user) reports a bug and your investigation
@@ -120,6 +146,10 @@ The logs, each with one purpose — keep them separate:
   point. The session-start scan reads from here.
 - **`DORA_FOLLOWUPS_RESOLVED.md`** = archive of resolved items moved out of
   the open ledger. Audit trail only — not part of the session-start scan.
+- **`DORA_VERIFY.md`** = the user's browser-verify checklist, grouped by
+  surface. The user walks it and deletes items as he confirms them — there
+  is no archive. **Not** scanned at session start. New verify checks land
+  here, not in `DORA_FOLLOWUPS.md`.
 
 ## Governing documents (read on demand, not every session)
 

@@ -389,10 +389,33 @@
                         <q-list separator>
                             <q-item
                                 v-for="(ing, idx) in form.ingredients"
-                                :key="idx"
+                                :key="ing.client_id ?? idx"
                                 class="ingredient-row"
-                                :class="{ 'ingredient-row--missing': ing.stock_item_id && isMissingItem(ing.stock_item_id) }"
+                                :class="{
+                                    'ingredient-row--missing': ing.stock_item_id && isMissingItem(ing.stock_item_id),
+                                    ...ingredientDnd.bind(ing).rowClass,
+                                }"
+                                v-bind="ingredientDnd.bind(ing).rowProps"
                             >
+                                <!-- FU-118 / R-022 — drag handle via
+                                     `useDragDropList`. Only this icon is
+                                     draggable; the row body keeps default
+                                     cursor so the selects/inputs stay
+                                     normally interactive. Dropping onto
+                                     another row both reorders AND copies
+                                     the target's section_client_id, so
+                                     cross-section reassignment is a
+                                     single gesture. -->
+                                <q-item-section side style="min-width: 28px; padding-right: 4px">
+                                    <div
+                                        class="dora-dnd-handle dora-text-muted"
+                                        aria-label="Drag to reorder or move section"
+                                        v-bind="ingredientDnd.bind(ing).handleProps"
+                                    >
+                                        <q-icon :name="ICONS.drag_indicator" />
+                                        <q-tooltip>Drag to reorder; drop onto a row in another section to move it there</q-tooltip>
+                                    </div>
+                                </q-item-section>
                                 <q-item-section style="min-width: 240px">
                                     <!-- Stock-item autocomplete with inline create. The
                                          picker shows existing tracked items, and offers
@@ -1045,6 +1068,7 @@
     import RecipeApiService, { recipeImageUrl, recipeStepImageUrl, type ImportedRecipe } from 'src/services/api/recipeApiService';
     import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useImagePrefs } from 'src/composables/useImagePrefs';
+    import { useDragDropList } from 'src/composables/useDragDropList';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
@@ -1068,7 +1092,7 @@
 
     const difficultyOptions = [...DIFFICULTY_VALUES];
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const route = useRoute();
     const router = useRouter();
@@ -1126,8 +1150,8 @@
     // <img> cache after a save so the new image shows.
     const imageDirty = ref(false);
     const imageVersion = ref(0);
-    // FU-156 — guard *every* nav surface (sidebar, router-link, back,
-    // refresh) against unsaved field OR image changes.
+    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
+    // Dirty iff any field edit OR an image pick/clear is pending save.
     useUnsavedChangesGuard(computed(() => isDirty.value || imageDirty.value));
 
     function onNameInput() {
@@ -1453,7 +1477,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create stock item.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1521,6 +1545,35 @@
             label: s.name.trim() || '(Unnamed section)',
         })),
     ]);
+    // ── FU-118 / R-022 — ingredient DnD reorder + cross-section move ───
+    // `useDragDropList` owns the drag state machine + the dragover/leave/
+    // drop wiring. We supply the per-drop effect: re-insert source at the
+    // target's slot AND copy the target's `section_client_id` to source,
+    // so reorder-within-section and move-between-sections are one gesture.
+    // Empty sections still need the per-row Section picker (you can't
+    // drop onto something that doesn't exist).
+    const ingredientDnd = useDragDropList<IngredientForm>({
+        mime: 'application/x-dora-recipe-ingredient',
+        getId: (ing) => ing.client_id ?? null,
+        onDrop: ({ item: source }, { item: target }) => {
+            const fromIdx = form.ingredients.indexOf(source);
+            if (fromIdx < 0) return;
+            form.ingredients.splice(fromIdx, 1);
+            const toIdx = form.ingredients.indexOf(target);
+            if (toIdx < 0) {
+                // Target vanished between dragstart and drop (very rare).
+                form.ingredients.splice(fromIdx, 0, source);
+                return;
+            }
+            // `section_client_id` is optional on the command type but always
+            // present in form rows (null = unsectioned). Normalise so the
+            // assignment stays well-typed under exactOptionalPropertyTypes.
+            source.section_client_id = target.section_client_id ?? null;
+            form.ingredients.splice(toIdx, 0, source);
+            markDirty();
+        },
+    });
+
     function removeIngredient(idx: number) {
         const removed = form.ingredients[idx];
         form.ingredients.splice(idx, 1);
@@ -1706,7 +1759,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save recipe.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             saving.value = false;
@@ -1724,7 +1777,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not toggle favourite.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1826,7 +1879,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load substitutes.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             substitutesOpen.value = false;
         } finally {
@@ -1969,7 +2022,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update meals.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             adjusting.value = false;
@@ -1994,7 +2047,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not mark cooked.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             adjusting.value = false;
@@ -2020,7 +2073,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not log cook.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             logging.value = false;
@@ -2054,7 +2107,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create version.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             newVersionLoading.value = false;
@@ -2101,7 +2154,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2145,6 +2198,10 @@
     .ingredient-row--missing {
         background: color-mix(in srgb, var(--q-negative) 9%, transparent);
     }
+    /* FU-118 / R-022 — drag affordances live in src/css/dnd.scss
+       (.dora-dnd-row / .dora-dnd-handle); the composable applies the
+       classes via `rowClass`, the template uses .dora-dnd-handle on
+       the handle wrapper. */
     /* L308 — keep the action toolbar reachable at the top on every width. */
     .recipe-toolbar {
         position: sticky;

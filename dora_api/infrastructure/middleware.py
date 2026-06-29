@@ -5,11 +5,12 @@ from uuid import uuid4
 from flask import Blueprint, g, request, session
 from pydantic import ValidationError
 
-from dora_api.infrastructure.api_response import (bad_request,
+from dora_api.infrastructure.api_response import (ErrorEntry, bad_request,
                                                   endpoint_not_found,
                                                   unauthorized)
 from dora_api.infrastructure.audit import auto_audit_after_request
 from dora_api.infrastructure.decorators import REQUEST_BODYS_BY_ENDPOINT
+from dora_api.infrastructure.error_translation import translate_pydantic_error
 from dora_api.infrastructure.log_context import (reset_context, set_request_id,
                                                  set_user_id)
 
@@ -153,10 +154,19 @@ def deserialise_web_request(request_endpoint: str):
     try:
         _Parsed = _RequestBodySchema.model_validate(request.get_json(silent=True) or {})
     except ValidationError as e:
-        _Errors = {
-            ".".join(str(loc) for loc in err["loc"]): [err["msg"]]
-            for err in e.errors()
-        }
-        return bad_request("Malformed request.", errors = _Errors)
+        # FU-099 — each Pydantic error is lifted into an ErrorEntry carrying
+        # the friendly translation (msg), the structured code (Pydantic's
+        # err["type"]), and the raw developer-facing string (raw). The client
+        # renders msg; devs see code + raw in console.warn.
+        _Errors: dict[str, list[ErrorEntry]] = {}
+        for err in e.errors():
+            field = ".".join(str(loc) for loc in err["loc"])
+            code = err["type"]
+            _Errors.setdefault(field, []).append(ErrorEntry(
+                msg=translate_pydantic_error(code),
+                code=code,
+                raw=err["msg"],
+            ))
+        return bad_request("Malformed request.", errors=_Errors)
 
     setattr(request, "request_body", _Parsed)

@@ -588,6 +588,213 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `piper-tts` and breaking the Windows install; generalised from the existing
   BYO-LLM posture. Promotes ADR-013.
 
+### R-021 — Calendar-day logic runs in the household timezone
+- **Rule:** Any code that decides "what calendar day is it" — "today",
+  "tomorrow", "N days ago / until", a date-boundary window — MUST evaluate
+  in the **household timezone** (`AppSetting.timezone`, IANA) on the server,
+  via `dora_api.features.app_settings.clock.household_today(repository)`.
+  **Never `date.today()`** in feature code: that returns the server-local
+  date, which has nothing to do with the household and silently desyncs by
+  ±1 day for any household whose offset crosses midnight relative to the
+  server. Wall-clock events (created_at, audit log, last_login) stay UTC
+  via `datetime.now(UTC)`; **calendar boundaries** route through
+  `household_today`. The two are different concerns; mixing them is the
+  bug.
+- **Why:** The product is a household pantry — every "today" the user sees
+  is *their* today, not the server's. Once we run on Postgres in
+  Frankfurt (or a managed single-tenant deploy anywhere), every
+  `date.today()` quietly becomes wrong. The mechanism (household
+  timezone in `AppSetting`, `clock.py` helpers) shipped with C-2.K for
+  the meal-plan boundary; FU-174 was the followup to spread it
+  everywhere. Without the rule, the next feature touches `date.today()`
+  again because that's what Python developers reach for. The rule pins
+  the convention: there's exactly one entry point for "what day is it"
+  and it always knows the timezone.
+- **Apply:**
+  - **Server, calendar boundary:** `today = household_today(repository)`.
+    Repository plumbing is already on every feature handler; pass it
+    through.
+  - **Server, wall-clock event:** `datetime.now(UTC)` (Python 3.12+
+    canonical form). Storage: `DateTime(timezone=True)` column.
+  - **Calendar columns** stay `Date` (no time, no tz). The day this
+    expires / was opened / was scheduled is a calendar concept; tz
+    semantics live in the *boundary check*, not in the value.
+  - **Client:** the server is authoritative for "today". The client
+    fetches the boundary (e.g. `mealPlanStore.todayIso`,
+    `meal-plans/today`); never computes it from `new Date()` for any
+    decision that affects state. A *display-only* fallback before the
+    server response arrives (e.g. `localTodayIso()` to seed the calendar
+    cursor for a frame) is allowed when commented as such — the data
+    binding flips the moment the server response lands.
+  - **Display path:** absolute datetimes still render via
+    `toLocaleDateString()` (browser-local) — that's user-friendly for
+    "when did this happen". Calendar dates (Date type) render as the
+    day they represent, no timezone conversion (their semantics are
+    timezone-free; `new Date("2026-07-01").toLocaleDateString()` parses
+    to local midnight which is fine for read-only display).
+- **Violation signal:**
+  - `from datetime import date` followed by `date.today()` anywhere in
+    `dora_api/features/` or `dora_api/domain/` (other than seed data).
+  - `datetime.now()` with no `tz=` argument in feature/domain code.
+  - Client `new Date()` / `Date.now()` used to build a date string that
+    drives state (route filter, calendar navigation that's persisted,
+    server payload). Display-only diffs (`relativeTime`) are OK.
+  - A handler that needs a household date but doesn't take a repository
+    argument — plumb the repository instead of falling back to
+    `date.today()`.
+- **Carve-outs (must be commented):**
+  - **Seed data / fixtures** — `tests/`, `dora_api/persistence/seed.py`
+    — `date.today()` is acceptable; the test environment owns its own
+    notion of "now" and there's no household to respect.
+  - **Pre-server-response display fallback** — a client-side
+    `localTodayIso()` used purely to seed a cursor or highlight a cell
+    on the first paint, before the server's boundary value arrives.
+    Comment naming this rule.
+- **Source:** ADR-016; FU-174 (raised 2026-06-14 during C-2.K design;
+  swept 2026-06-29). The C-2.K work introduced
+  `AppSetting.timezone` + `clock.household_today` for the meal-plan
+  past-day rule; FU-174 extended the rule app-wide and promoted it
+  here.
+
+### R-020 — Deferred-save surfaces wire the unsaved-changes guard
+- **Rule:** **Any page** that lets the user accumulate edits in local state
+  and only persists them when a **dedicated Save action** is invoked **MUST**
+  wire `useUnsavedChangesGuard(isDirtyRef)`
+  (`web_app/src/composables/useUnsavedChangesGuard.ts`) so that any
+  navigation away (router push, sidebar link, browser back, refresh, close)
+  prompts to confirm discard while edits are pending. Equivalently: if the
+  page has a Save / Update / Apply button gated by an `unchanged` or
+  `isDirty` computed, it has a draft window — and that draft window must
+  be guarded.
+- **Why:** Silent discard of typed edits is a top-tier UX failure — the
+  user did the work, the work disappeared, and there was no warning. The
+  guard composable exists (one place, one confirm-dialog policy, covers
+  `onBeforeRouteLeave` + `onBeforeRouteUpdate` + `beforeunload` at once);
+  the only failure mode left is **forgetting to wire it on a new editor
+  page**. The pattern recurred during FU-098: even after the composable
+  shipped via FU-156 wired into the two large editor pages, the audit
+  found two settings pages still silently discarding (account
+  username/email, install AI-config). The rule prevents the third recurrence.
+- **Apply:**
+  - Build a `Ref<boolean>` / `ComputedRef<boolean>` that is `true` iff any
+    draft on the page diverges from its last-persisted value. For
+    multi-field pages, combine the per-field `unchanged` computeds:
+    `computed(() => !aUnchanged.value || !bUnchanged.value)`.
+  - Call `useUnsavedChangesGuard(isDirtyRef)` once near the top of
+    `<script setup>`. The save path doesn't need any extra wiring — just
+    flip the underlying drafts to match `saved.value` on successful save
+    and the next nav passes through.
+  - The standard discard-dialog copy ("Discard unsaved changes? — Your
+    edits will be lost." + Cancel / Discard) lives inside the composable.
+    Do **not** re-implement the prompt per-page; do **not** wire a
+    page-specific `onBack` handler that bypasses the route-level guard
+    (FU-156's exact root cause).
+- **What does NOT need the guard (with reasons, so the audit is repeatable):**
+  - **Inline / auto-save surfaces** — every edit fires the API on
+    `@blur` / `@update:model-value` / toggle. No draft window exists.
+    Examples: `ShoppingListDetail` line edits, every settings page that
+    saves-on-change (theme, notifications, alert thresholds, timezone,
+    money, voice, etc.).
+  - **Real-time session state with no Save action** — a "Done" / "Finish"
+    action that persists *derived* facts (not raw drafts). Cook mode is
+    the canonical example: ticked-off ingredients aren't a draft; they're
+    transient session state the user expects to lose on reload.
+  - **Save buttons inside dialogs / drawers / popovers** — dialog state
+    is intentionally transient (Cancel closes; route nav closes the
+    parent and the dialog goes with it). Modal-close is not the same
+    risk as silent discard on full-page nav. (If a future report says
+    otherwise, a dialog-level guard is its own follow-up.)
+  - **Password fields** — browsers expect typed passwords to be lost on
+    nav; guarding here works against user expectation.
+- **Violation signal:**
+  - A page-level form with a `label="Save"` (or "Update"/"Apply") button
+    + an `unchanged` / `isDirty` computed and no `useUnsavedChangesGuard`
+    call in the same `<script setup>`.
+  - A page-specific `onBack` / `confirmLeave` handler reimplementing the
+    dialog locally (route-level guard not wired, only the back button
+    is protected — FU-156's exact bug).
+- **Carve-outs (must be commented):** the four categories above are
+  the standing exclusions — if you're skipping the guard, the comment
+  should name the category ("save-on-blur", "real-time session",
+  "dialog-only", "password field") so the next audit can ratify or
+  reject quickly.
+- **Source:** ADR-015; FU-098 (2026-06-29) — sweep that promoted the
+  pattern after FU-156 (2026-06-12) shipped the composable and wired
+  the first two pages. Recurrence (recipe + stock-item detail in
+  FU-156, then account + assistant settings in FU-098) is the
+  rule-worthy signal.
+
+### R-022 — DnD reorderable lists go through `useDragDropList`
+- **Rule:** Any list whose rows are HTML5 drag-and-drop reorderable
+  **MUST** plumb through the shared
+  `web_app/src/composables/useDragDropList.ts` composable and the
+  shared affordance classes in `web_app/src/css/dnd.scss`. Don't
+  hand-roll `@dragstart` / `@dragover` / `@drop` listeners on a new
+  surface, don't reinvent the dragging-row dim / drop-target ring
+  CSS, and don't copy the state-machine pattern from another DnD
+  surface into a fresh one.
+- **Why:** Three DnD surfaces (shopping-list lines, recipe steps,
+  recipe ingredients) independently grew ~80 lines of nearly-identical
+  drag state + CSS, each diverging slightly on affordance details
+  (outline vs box-shadow; opacity 0.4 vs 0.5; bespoke handle styles).
+  Two of those used a sibling-only constraint; one used a cross-
+  section reassignment effect; the *shape* of "guard the drag, light
+  the drop target, dim the source, persist on drop" was the same in
+  every case. Centralising the state machine + affordances behind
+  the composable means a new DnD surface is ~10 lines, every list
+  feels the same to the user, and accessibility/keyboard improvements
+  land everywhere at once.
+- **Apply:**
+  - Import the composable:
+    `import { useDragDropList } from 'src/composables/useDragDropList';`.
+  - Construct one per list, supplying:
+    - `mime` — a unique payload type (`application/x-dora-<thing>`)
+      so a drag in this list never satisfies a drop check in another.
+    - `getId(item)` — stable per-row id (UUID, `client_id`, etc.).
+      Return null/undefined to mark the row non-draggable.
+    - `onDrop({ id, item }, { id, item })` — the per-drop effect.
+      The composable has already cleared its drag state by the time
+      this fires.
+    - **Optional:** `canDragStart(item)` (per-row drag gate; also
+      use for a global "is reorder allowed at all?" predicate that
+      reads a captured ref), `canDropOn(source, target)` (per-pair
+      drop-target gate — defaults to "anything but self"; layer
+      siblings-only / type-compat rules here).
+  - In the template, spread `bind(item).rowProps` on the row body
+    (drop target), `bind(item).handleProps` on the drag handle (icon
+    button) **OR** the row body itself for whole-row mode (rows
+    without inline editors). Apply `bind(item).rowClass` to the row.
+  - Use `class="dora-dnd-handle"` on the handle wrapper to inherit
+    the grab/grabbing cursor + sunken hover treatment.
+- **What does NOT use this (with reasons, so the audit is
+  repeatable):**
+  - **Reordering via up/down arrow buttons.** Buttons are fine — DnD
+    is the affordance upgrade, not the only valid pattern. The
+    rule is "*if* the list uses HTML5 DnD, use the composable", not
+    "every reorderable list must be DnD."
+  - **External-drop targets (file uploads, image drops from outside
+    the page).** Those use the platform's native `File` /
+    `DataTransfer` paths, not the row-to-row reorder shape this
+    composable solves.
+- **Violation signal:**
+  - A `.vue` file with a top-level `@dragstart` / `@dragover` /
+    `@drop` listener and no `useDragDropList` import.
+  - A component-scoped CSS rule that defines `opacity: 0.5` on a
+    `*--dragging` class, or an outline / box-shadow on a
+    `*--drop-over` class — the shared `.dora-dnd-row--dragging` /
+    `.dora-dnd-row--drop-over` rules already do this.
+  - A hardcoded `application/x-dora-…` MIME string outside the
+    composable.
+- **Carve-outs (must be commented):** none expected. If a new
+  surface genuinely needs a different drag model (multi-row drag,
+  reorder *and* nesting in one gesture, off-row drop zones for
+  empty buckets), that's its own ADR — extend the composable
+  rather than re-rolling state in the consumer.
+- **Source:** ADR-018; FU-326 (2026-06-29) — extraction once three
+  hand-rolled DnD surfaces (shopping-list lines [P6-01 Chunk 6],
+  recipe steps [FU-094], recipe ingredients [FU-118]) made the
+  duplication obvious.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1000,6 +1207,138 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   recurring nag against the temptation to reach for a "smart" decorator
   / convention / auto-loader.
 - **Promotes rule:** R-019.
+
+### ADR-018 — DnD reorderable lists go through `useDragDropList`
+- **Date / task:** 2026-06-29 (FU-326 extraction).
+- **Status:** accepted
+- **Context:** Three reorderable-list surfaces in the web app
+  (shopping-list lines [P6-01 Chunk 6], structured recipe steps
+  [FU-094], recipe ingredients [FU-118]) had each grown its own
+  hand-rolled HTML5 DnD plumbing: `dragLineId` / `draggingClientId` /
+  `draggingIngredientClientId` refs that all meant the same thing;
+  near-identical `@dragstart` / `@dragover` / `@dragleave` / `@drop`
+  handlers; and three slightly-different CSS treatments for "source
+  being dragged" (opacity 0.4 vs 0.5) and "active drop target"
+  (outline-dashed vs box-shadow ring). The shape was always: guard
+  the drag with a MIME token, light the drop target, dim the source,
+  call a per-list "insert source at target's slot" effect on drop.
+  Only two things genuinely differed: the drop-target predicate
+  (anything / siblings-only / per-row guarded) and the per-drop
+  effect (server reorder API / local reorder / local reorder +
+  section reassignment). The shared surface area is exactly what
+  an abstraction should own.
+- **Decision:** Extract `web_app/src/composables/useDragDropList.ts`
+  (state machine + per-row bindings) and `web_app/src/css/dnd.scss`
+  (`.dora-dnd-row` / `--dragging` / `--drop-over` / `.dora-dnd-handle`).
+  All three existing surfaces refactor onto it. New DnD lists go
+  through it from day one. Two row shapes are supported:
+  **handle mode** (small drag-grip icon is the only draggable
+  element; row body keeps default cursor so inline editors stay
+  interactive — used by both recipe editors) and **whole-row mode**
+  (the whole row is grabbable — used by shopping-list lines where
+  rows have no inline editors). The composable doesn't care which;
+  it's a matter of where the consumer spreads `handleProps`.
+- **Consequences:**
+  - **Removed code** (~190 lines net): ~50-line drag block in
+    `RecipeStepsEditor.vue` + ~50-line block in `RecipeStepRow.vue`,
+    ~75-line block in `RecipeDetailPage.vue`, ~70-line block in
+    `ShoppingListDetail.vue`, plus three near-duplicate CSS rule
+    sets — replaced by one composable (~190 lines incl. JSDoc) and
+    one shared stylesheet (~50 lines). The composable is bigger
+    than any single removed block, but the *aggregate* shrinks and
+    every future DnD surface is ~10 lines.
+  - **Visual consistency**: source dim, drop-target ring, and
+    handle treatment now identical app-wide (one shared `--motion-
+    fast` transition, `--brand-primary` ring, 0.5 opacity). A user
+    who learns one DnD list reads the next correctly.
+  - **One MIME convention**: `application/x-dora-<thing>` enforced
+    by the composable's `mime` option, so cross-list drops can
+    never accidentally satisfy a dragover check.
+  - **Plumbing cost**: the composable's `bind(item)` returns
+    fresh closure objects on each call, so calling it 3× per row
+    in a template (rowClass, rowProps, handleProps) re-allocates
+    on every render. For the lists we have (10-50 rows) this is
+    negligible; if a much larger DnD list ever ships, the obvious
+    optimization is a memoizing wrapper keyed on the item id.
+  - **Future**: multi-row drag, drop into off-row zones (e.g.
+    "drop here to put into an empty section"), and keyboard
+    reordering for accessibility are all extensions to this one
+    composable rather than three parallel implementations.
+- **Promotes rule:** R-022.
+
+### ADR-016 — Calendar-day boundaries run in the household timezone
+- **Date / task:** 2026-06-29 (FU-174 close-out sweep; mechanism shipped
+  with C-2.K on 2026-06-14).
+- **Status:** accepted
+- **Context:** Python's `date.today()` returns the server-local date.
+  For a self-hostable household app (R-005 distribution posture), the
+  server can be anywhere — a managed deploy in Frankfurt with a
+  Sydney household crosses midnight by 9–11 hours, and every
+  "expiring today" / "next 7 days" / "scheduled for today" decision
+  silently desyncs ±1 day. The meal-plan past-day-drop bug (F29 from
+  the feedback round) was the surface — fixed locally in C-2.K with
+  `AppSetting.timezone` (IANA string), `clock.resolve_timezone`, and
+  `household_today(repository)`. The FU-174 audit found 15+ other
+  `date.today()` sites in alerts / dashboard / suggestions /
+  assistant tools / budget / waste / location attention / shopping
+  lists / recipes / stock items, each one a latent F29-shape bug.
+- **Decision:** Adopt R-021. `clock.household_today(repository)` is
+  the single entry point for "what calendar day is it". Every
+  feature handler that gates on "today" uses it; `date.today()` is
+  reserved for seeds/fixtures. Wall-clock events keep
+  `datetime.now(UTC)` (different concern: when, not which day).
+  Storage stays mixed by intent — `DateTime(timezone=True)` for
+  events, `Date` for calendar values — and the boundary check is
+  where the timezone lives, not the value.
+- **Consequences:** Every new feature with a date boundary now
+  has one canonical path and reviewers have a one-line grep target
+  (`date.today()` in feature code = violation). The household
+  timezone lives in one column, set once per install; changing it
+  cascades through the app correctly. Cost: handlers that compute
+  "today" must take a repository argument so the helper can read
+  `AppSetting`. The few that didn't have one already (a handful in
+  budget / waste / location attention) gain one — minor plumbing.
+  The client is intentionally not authoritative: it reads
+  `mealPlanStore.todayIso` (or the equivalent server-fetched
+  boundary); any client-side "today" computation is a display
+  fallback, never a decision.
+- **Promotes rule:** R-021.
+
+### ADR-015 — Deferred-save surfaces must wire the unsaved-changes guard
+- **Date / task:** 2026-06-29 (FU-098 close-out sweep).
+- **Status:** accepted
+- **Context:** `useUnsavedChangesGuard` shipped on 2026-06-12 (FU-156)
+  after the user repro'd silently-discarded recipe edits — root cause
+  was a per-handler `onBack` confirm that didn't fire on sidebar
+  navigation. The composable wraps `onBeforeRouteLeave` +
+  `onBeforeRouteUpdate` + `beforeunload` and was wired into
+  `RecipeDetailPage` + `StockItemDetailPage` at that time. FU-098 then
+  asked for the broader sweep. The audit found exactly two additional
+  pages that fit the shape (account settings, install AI-config
+  settings) and ~22 surfaces that *looked* like candidates but
+  legitimately don't need the guard (save-on-blur settings, dialog
+  Saves, cook-mode session state, etc.). The recurrence — two
+  separate "we built another deferred-save page and forgot the
+  guard" events six weeks apart — is the rule-worthy signal: without
+  a standing rule, the audit will need to run again every time
+  another draft-state page lands.
+- **Decision:** Adopt R-020. Every page with a dedicated Save action
+  and locally-mutable draft state wires `useUnsavedChangesGuard` with
+  a dirty predicate derived from the same `unchanged` / `isDirty`
+  computed that gates the Save button itself. The four exclusion
+  categories (inline-save, real-time session, dialog-only, password
+  fields) are documented in the rule so future audits can ratify or
+  reject quickly. No reinvention of the discard-prompt copy or the
+  route-level wiring — both live in the composable.
+- **Consequences:** New editor pages cost one additional one-line
+  call (`useUnsavedChangesGuard(...)`) plus the dirty-predicate
+  expression they already need for the Save button's `:disable`.
+  Reviewers can grep for "Save" + missing `useUnsavedChangesGuard` to
+  catch the violation in a diff. The rule's exclusion list doubles
+  as an audit checklist — re-running the FU-098 sweep on a new
+  candidate page is now a five-minute "which category does this fit?"
+  check, not a 30-minute file-by-file read.
+- **Promotes rule:** R-020.
 
 ---
 

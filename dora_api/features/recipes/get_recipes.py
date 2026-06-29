@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
@@ -101,7 +101,7 @@ class RecipeVersionSiblingDto:
     card row (name + last-made + meals-on-hand)."""
     recipe_id: UUID
     name: str
-    last_made_on: datetime | None
+    last_made_on: date | None
     available_meals: int
 
 
@@ -173,7 +173,7 @@ class RecipeDto:
     difficulty: str | None
     instructions: str | None
     is_favourite: bool
-    last_made_on: datetime | None
+    last_made_on: date | None
     prep_time_minutes: int | None
     recipe_collection_id: UUID | None
     servings: int | None
@@ -398,10 +398,12 @@ def load_expiring_stock_item_ids(
     `GetWasteRescueHandler.handle()` — same definition of "at risk"
     across the rescue feed and the cookbook surface (R-003).
     """
-    from datetime import date as _date, timedelta as _timedelta
+    from datetime import timedelta as _timedelta
+    from dora_api.features.app_settings.clock import household_today as _household_today
     if horizon_days < 0:
         return set()
-    cutoff = _date.today() + _timedelta(days=horizon_days)
+    # R-021 — at-risk horizon uses household-tz today.
+    cutoff = _household_today(repository) + _timedelta(days=horizon_days)
     items = repository.get(StockItem).all(
         EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null()
         & EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(cutoff)
@@ -848,7 +850,8 @@ class GetRecipesHandler:
         _StaleCutoff = _Today - timedelta(days=21)
 
         def _stale(d: RecipeDto) -> bool:
-            return d.last_made_on is None or d.last_made_on.date() < _StaleCutoff
+            # R-021 — `last_made_on` is a date now; compare directly.
+            return d.last_made_on is None or d.last_made_on < _StaleCutoff
 
         return [
             dataclasses.replace(

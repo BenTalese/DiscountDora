@@ -581,7 +581,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -882,7 +882,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not unlink everything.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             bulkBusy.value = false;
@@ -922,7 +922,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             bulkBusy.value = false;
@@ -948,7 +948,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not unlink.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -965,7 +965,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1031,7 +1031,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not link the product.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             linkBusy.value = false;

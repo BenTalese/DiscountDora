@@ -183,13 +183,14 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import { userImageUrl } from 'src/services/api/authApiService';
+    import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -247,6 +248,14 @@
     const emailUnchanged = computed(
         () => (currentUser.value?.email ?? '') === emailDraft.value
     );
+    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
+    // Only the two draft fields (username + email) drive the predicate:
+    // profile picture saves immediately on pick/clear (no draft window) and
+    // password fields are the rule's documented "password field" exclusion
+    // (browsers expect typed passwords to be lost on nav).
+    useUnsavedChangesGuard(computed(
+        () => !usernameUnchanged.value || !emailUnchanged.value,
+    ));
     const canChangePassword = computed(
         () =>
             currentPassword.value.length > 0 &&
@@ -262,7 +271,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || ''
+            caption: toastCaption(err)
         });
     }
 

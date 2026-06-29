@@ -9,7 +9,7 @@ import type { MealPlan, MealPlanEntry, MealPlanIngredient } from 'src/models/mea
 import type { Recipe } from 'src/models/recipe';
 import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
-import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 import { useMealPlanStore } from 'src/stores/mealPlanStore';
 import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
 import { useMealPlanTemplateSetStore } from 'src/stores/mealPlanTemplateSetStore';
@@ -71,6 +71,9 @@ export function useMealPlanner() {
     // cards arriving.
     const isInitialLoading = ref(true);
 
+    // R-021 carve-out — server-owned `today` (household timezone) is the
+    // authoritative boundary; `localTodayIso()` is a display-only pre-load
+    // fallback that flips the moment `today.value` arrives from the store.
     const currentDayIso = computed(() => today.value ?? localTodayIso());
     function isPastDay(iso: string): boolean {
         return iso < currentDayIso.value;
@@ -373,7 +376,7 @@ export function useMealPlanner() {
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update meals.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -460,7 +463,7 @@ export function useMealPlanner() {
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not generate the list.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             generating.value = false;
@@ -510,7 +513,7 @@ export function useMealPlanner() {
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not save the template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             return false;
         }
@@ -562,7 +565,7 @@ export function useMealPlanner() {
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not apply the template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -605,7 +608,7 @@ export function useMealPlanner() {
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not apply the recurring plan.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             return false;
         }

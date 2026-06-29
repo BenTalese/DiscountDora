@@ -906,7 +906,9 @@
             || sub.ratio_quantity_out == null || sub.ratio_unit_out == null) {
             return null;
         }
-        return `${sub.ratio_quantity_in} ${sub.ratio_unit_in} → ${sub.ratio_quantity_out} ${sub.ratio_unit_out}`;
+        const from = formatQuantity(sub.ratio_quantity_in, sub.ratio_unit_in);
+        const to = formatQuantity(sub.ratio_quantity_out, sub.ratio_unit_out);
+        return `${from} → ${to}`;
     }
 
     async function openSwapPicker(stockItemId: string, name: string) {

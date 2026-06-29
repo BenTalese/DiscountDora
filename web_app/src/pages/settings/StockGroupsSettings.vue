@@ -84,7 +84,7 @@
     import type { StockGroup } from 'src/models/stockGroup';
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import { onMounted, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
     const $q = useQuasar();
@@ -132,7 +132,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             creating.value = false;
@@ -158,7 +158,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             editingId.value = null;
@@ -191,7 +191,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

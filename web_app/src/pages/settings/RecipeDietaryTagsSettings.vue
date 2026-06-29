@@ -68,7 +68,7 @@
     import DietaryTagFormDialog from 'src/components/settings/DietaryTagFormDialog.vue';
     import type { DietaryTag } from 'src/models/recipeVocab';
     import DietaryTagApiService from 'src/services/api/dietaryTagApiService';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { onMounted, ref } from 'vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
@@ -88,7 +88,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || '',
+            caption: toastCaption(err),
         });
     }
 

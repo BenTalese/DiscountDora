@@ -90,7 +90,7 @@
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemCommand } from 'src/services/api/stockItemApiService';
-    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFormErrors } from 'src/composables/useFormErrors';
     import { useLocationStore } from 'src/stores/locationStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -142,13 +142,12 @@
 
     const form: CreateStockItemCommand = reactive(defaultForm());
     const saving = ref(false);
-    const generalError = ref<string | null>(null);
-    const fieldErrors = ref<Record<string, string>>({});
+    // FU-099 — R-001 form-error plumbing.
+    const { fieldErrors, generalError, handleSaveError, reset: resetFormErrors } = useFormErrors();
 
     function resetForm() {
         Object.assign(form, defaultForm());
-        generalError.value = null;
-        fieldErrors.value = {};
+        resetFormErrors();
     }
 
     function clearField(field: string) {
@@ -182,8 +181,7 @@
 
     async function onSubmit() {
         saving.value = true;
-        generalError.value = null;
-        fieldErrors.value = {};
+        resetFormErrors();
         try {
             await stockItemStore.createStockItemAsync({
                 name: form.name,
@@ -193,10 +191,7 @@
             emit('created');
             emit('update:modelValue', false);
         } catch (err) {
-            const extracted = extractFieldErrors(err);
-            fieldErrors.value = extracted.fieldErrors;
-            generalError.value =
-                extracted.generalError ?? 'Could not add the item. Please review the form.';
+            handleSaveError(err, 'Could not add the item. Please review the form.');
         } finally {
             saving.value = false;
         }

@@ -41,7 +41,7 @@
                                 <q-item-section>
                                     <q-item-label>{{ ing.stock_item_name }}</q-item-label>
                                     <q-item-label caption v-if="ing.total_quantity !== null">
-                                        needs {{ round(ing.total_quantity) }} {{ ing.unit ?? '' }}
+                                        needs {{ formatQuantity(round(ing.total_quantity), ing.unit) }}
                                     </q-item-label>
                                 </q-item-section>
                                 <q-item-section side>
@@ -120,6 +120,7 @@
     import type { MealPlanIngredient } from 'src/models/mealPlan';
     import type { Recipe } from 'src/models/recipe';
     import MealPlanApiService from 'src/services/api/mealPlanApiService';
+    import { formatQuantity } from 'src/helpers/formatQuantity';
     import { computed, ref, watch } from 'vue';
 
     const props = defineProps<{

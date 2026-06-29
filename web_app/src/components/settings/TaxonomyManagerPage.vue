@@ -27,7 +27,7 @@
 <script lang="ts" setup>
     import { useQuasar } from 'quasar';
     import VocabListEditor from 'src/components/settings/VocabListEditor.vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { onMounted, ref } from 'vue';
 
     export type VocabItem = { id: string; name: string; recipe_count?: number };
@@ -66,7 +66,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || '',
+            caption: toastCaption(err),
         });
     }
 

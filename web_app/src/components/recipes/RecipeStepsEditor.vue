@@ -13,14 +13,10 @@
             :tool-options="toolOptions"
             :section-options="sectionOptions ?? []"
             :can-add-sub-step="row.parent_client_id === null"
-            :dragging-client-id="draggingClientId"
-            :dragging-parent-id="draggingParentId"
+            :drag-bindings="dnd.bind(row)"
             @update="onRowUpdate"
             @add-sub="onAddSubStep(row.client_id)"
             @remove="onRemove(row.client_id)"
-            @drag-start="onDragStart"
-            @drag-end="onDragEnd"
-            @drop-on-row="onDropOnRow"
         />
 
         <BaseButton
@@ -34,10 +30,11 @@
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from 'vue';
+    import { computed } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import DraggableStepRow from 'src/components/recipes/RecipeStepRow.vue';
+    import { useDragDropList } from 'src/composables/useDragDropList';
     import type {
         EditableStep,
         StepRowView,
@@ -149,57 +146,38 @@
         emit('update:steps', repackSequences(remaining));
     }
 
-    // ── FU-094: drag-and-drop reorder (siblings only) ────────────────────
-    // Drag state is owned here so every row can render its drop-target
-    // affordance against the active drag. Rows emit `drag-start` /
-    // `drag-end` / `drop-on-row`; this component computes the new order.
-    const draggingClientId = ref<string | null>(null);
-    const draggingParentId = ref<string | null>(null);
-
-    function onDragStart(clientId: string, parentClientId: string | null) {
-        draggingClientId.value = clientId;
-        draggingParentId.value = parentClientId;
-    }
-    function onDragEnd() {
-        draggingClientId.value = null;
-        draggingParentId.value = null;
-    }
-    function onDropOnRow(targetClientId: string) {
-        const sourceId = draggingClientId.value;
-        draggingClientId.value = null;
-        draggingParentId.value = null;
-        if (!sourceId || sourceId === targetClientId) return;
-
-        const source = props.steps.find((s) => s.client_id === sourceId);
-        const target = props.steps.find((s) => s.client_id === targetClientId);
-        if (!source || !target) return;
-        // Siblings-only is also validated on the row's dragover — re-check
-        // here as a belt-and-braces against a stale drag.
-        if (source.parent_client_id !== target.parent_client_id) return;
-
-        // Reorder within the sibling group using the same "insert at the
-        // target's slot" pattern as ShoppingListDetail.onLineDrop —
-        // matches the user's mental model ("the dropped row lands where I
-        // dragged it onto"). Other steps (sub-steps, opposite-parent
-        // children) are untouched.
-        const siblings = props.steps
-            .filter((s) => s.parent_client_id === source.parent_client_id)
-            .sort((a, b) => a.sequence - b.sequence);
-        const ids = siblings.map((s) => s.client_id);
-        const fromIdx = ids.indexOf(sourceId);
-        const toIdx = ids.indexOf(targetClientId);
-        if (fromIdx < 0 || toIdx < 0) return;
-        ids.splice(fromIdx, 1);
-        ids.splice(toIdx, 0, sourceId);
-        // Stamp new sibling sequences.
-        const newSeqById = new Map<string, number>(ids.map((id, i) => [id, i]));
-        const updated = props.steps.map((s) =>
-            newSeqById.has(s.client_id)
-                ? { ...s, sequence: newSeqById.get(s.client_id)! }
-                : s,
-        );
-        emit('update:steps', repackSequences(updated));
-    }
+    // ── FU-094 / R-022: drag-and-drop reorder (siblings only) ──────────
+    // `useDragDropList` owns the drag state machine + the dragover/leave/
+    // drop wiring. We supply the siblings-only predicate (`canDropOn`)
+    // and the per-drop effect (`onDrop`). The "insert at the target's
+    // slot" reorder logic matches the other DnD surfaces in the app
+    // (shopping-list lines, recipe ingredients) so the user's mental
+    // model stays consistent: the dropped row lands where it was let go.
+    const dnd = useDragDropList<EditableStep>({
+        mime: 'application/x-dora-recipe-step',
+        getId: (s) => s.client_id,
+        canDropOn: (source, target) => source.parent_client_id === target.parent_client_id,
+        onDrop: ({ id: sourceId, item: source }, { id: targetId }) => {
+            // canDropOn already guaranteed same parent_client_id, so we
+            // can use the source's parent to find the sibling group.
+            const siblings = props.steps
+                .filter((s) => s.parent_client_id === source.parent_client_id)
+                .sort((a, b) => a.sequence - b.sequence);
+            const ids = siblings.map((s) => s.client_id);
+            const fromIdx = ids.indexOf(sourceId);
+            const toIdx = ids.indexOf(targetId);
+            if (fromIdx < 0 || toIdx < 0) return;
+            ids.splice(fromIdx, 1);
+            ids.splice(toIdx, 0, sourceId);
+            const newSeqById = new Map<string, number>(ids.map((id, i) => [id, i]));
+            const updated = props.steps.map((s) =>
+                newSeqById.has(s.client_id)
+                    ? { ...s, sequence: newSeqById.get(s.client_id)! }
+                    : s,
+            );
+            emit('update:steps', repackSequences(updated));
+        },
+    });
 
     /** Force sibling `sequence` values to be 0..N-1 so removals/moves don't
      *  leave gaps that mis-render after a round-trip through the server. */

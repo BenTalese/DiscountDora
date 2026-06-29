@@ -31,6 +31,7 @@ from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.stock_status import (effective_expiring_soon_window,
                                           get_stock_item_unit_cost_at)
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.locations.attention import reasons_for_item
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.your_prices import build_your_prices_for_item
@@ -604,7 +605,8 @@ class GetStockItemDetailHandler:
         # list + heatmap (R-003), falling back to the default.
         _Settings: List[AppSetting] = self.repository.get(AppSetting).all()
         _Window = effective_expiring_soon_window(_Settings[0] if _Settings else None)
-        _Reasons = reasons_for_item(_StockItem, expiring_soon_window=_Window)
+        # R-021 — calendar boundary uses household-tz today.
+        _Reasons = reasons_for_item(_StockItem, today=household_today(self.repository), expiring_soon_window=_Window)
 
         # FU-056 — gather every barcode that resolves to this stock item.
         # Two sources, merged + sorted by created_at descending:

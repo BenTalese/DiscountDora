@@ -5,7 +5,107 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed (engineering / no user-visible behaviour change)
+- **All three drag-and-drop lists now share one composable + stylesheet
+  — FU-326 / R-022 / ADR-018 (2026-06-29).** Shopping-list line reorder,
+  structured-step reorder, and ingredient reorder all routed onto the
+  new `useDragDropList` composable + `src/css/dnd.scss`. Visual
+  affordance (handle grip, source-dim, drop-target ring) is now
+  identical across the three surfaces (it was three slightly-different
+  treatments before). No user-facing behaviour change.
+
+### Added
+- **Drag-and-drop ingredients between sections — FU-118 (2026-06-29).**
+  The recipe editor's ingredient list now has a drag handle on each row
+  (mirroring the structured-steps DnD pattern). Drop an ingredient onto
+  another row to both reorder it *and* move it to the target's section in
+  one gesture — the per-row Section picker stays for assigning into an
+  empty section. Same stock item across different sections (olive oil in
+  both Sauce and Garnish, etc.) was already supported and remains
+  unrestricted; see the FU-118 resolution note in
+  `DORA_FOLLOWUPS_RESOLVED.md` for the full duplicate-ingredient
+  assessment.
+
+- **Jump from a recipe card to "all the stock items it uses" (2026-06-29).**
+  On a stock item's "Recipes using this" tab, each recipe card now carries a
+  filter icon — click it to land on Stock Overview pre-filtered to that
+  recipe's ingredient set. A removable chip ("Ingredients of: &lt;recipe&gt;")
+  sits in the filter bar so it's discoverable + dismissable; the deep-link
+  `?recipe=&lt;id&gt;` is stripped on clear so back/refresh won't reinstate it.
+
 ### Changed
+- **Recipe-card dim removed for good — FU-109 resolved (2026-06-29).** The
+  "would-be-cookable" opacity treatment was already gone from both surfaces
+  (cookbook overview + stock-item detail); we dropped the now-unused
+  `highlightStockItemIds` prop on `RecipeCard` and its only binding on
+  StockItemDetailPage. The "Missing N ingredients" copy on the card face
+  remains the single signal.
+
+### Changed (process / non-product)
+- **Verify checklist split out of the followups ledger (2026-06-29).** All
+  pure "browser-verify X" entries moved from `DORA_FOLLOWUPS.md` to a new
+  `DORA_VERIFY.md` — grouped by app surface, verb-first checkboxes, designed
+  to be walked end-to-end. 38 verify FUs drained, `DORA_FOLLOWUPS.md`
+  shrinks ~42% to its actual job ("open loops with state"). No-archive
+  workflow: delete items as you confirm them; the pre-release systems test
+  catches anything that slips. `CLAUDE.md` updated: session-start does NOT
+  pre-scan the verify file; session-end routes new verify checks to
+  `DORA_VERIFY.md`, not to `DORA_FOLLOWUPS.md`.
+
+### Changed
+- **All dates now respect your household timezone (FU-107 + FU-174,
+  2026-06-29).** Every "what day is it today" decision the app makes —
+  expiry alerts, dashboard "next 7 days", the assistant's "what's
+  expiring", waste-rescue, budget periods, recipe "last made", location
+  heatmap, the assistant's "push expiry", and the timestamp on
+  downloaded files — now evaluates against the household timezone you
+  set in Settings, not the server's local clock. Self-hosting Dora in
+  one country with a household in another no longer drifts your alerts
+  ±1 day around midnight. `Recipe.last_made_on` is now stored as a
+  date (it always meant "which day", never "which moment"); the
+  on-the-wire format was already ISO 8601 (ADR-007). No user action
+  needed; if you've changed your household timezone, every surface
+  picks it up automatically.
+
+- **API-access + Stores settings errors carry the request ref too
+  (FU-323, 2026-06-29).** The 10 toast / banner sites in those two
+  pages that the FU-099 sweep deliberately deferred now match the rest
+  of the app — toast lead = the action that failed, caption = the
+  friendly cause + `ref: <id>`. Inline banners (load failures) carry
+  the ref too. No user-visible behaviour change beyond consistency.
+
+- **Error messages now read like English (FU-099, 2026-06-29).** Form
+  saves that fail server validation no longer show developer prose like
+  *"Input should be a valid integer, unable to parse string as an
+  integer"* or *"Extra inputs not allowed"* — those are translated to
+  friendly per-field copy ("Must be a whole number.", "This field isn't
+  supported here.") rendered inline next to the offending input. The
+  save toast is now a short *"Couldn't save — check the highlighted
+  fields."* with a `· ref: <8-char>` suffix that ties the error to the
+  request line in the server log. Every API failure (4xx + 5xx +
+  network) also logs to the browser console with the same correlation
+  id, so pasting a toast caption into a bug report is enough for a dev
+  to find the failing request.
+
+- **Unsaved-changes guard now covers Account + Assistant settings
+  (FU-098, 2026-06-29).** Editing your username, email, or the
+  install-wide AI assistant config (enable / base URL / model) and
+  then trying to navigate away — sidebar link, refresh, close — now
+  prompts before discarding your edits, matching the existing
+  behaviour on the recipe and stock-item detail pages. Settings that
+  save on every change (theme, notifications, money, alert
+  thresholds) are unchanged — they have no draft window to guard.
+
+- **Quantity-spacing sweep (FU-097, 2026-06-29).** All remaining
+  `qty + unit` display sites now go through the central spacing helper —
+  meal-plan "This week's shopping", the sequential builder preview,
+  both substitute-ratio captions (cook-mode + stock-item detail) and
+  the server-side recipe print template. Added a Python mirror
+  `format_quantity` in `dora_api/domain/units.py` so the print view
+  and the SPA can never disagree on spacing. No user-visible change
+  for units that were already spaced correctly; "250 g" → "250g" /
+  "1 ml" → "1ml" on the touched surfaces.
+
 - **Magic-behaviour audit complete (FU-092, 2026-06-28).** 18 implicit
   / automatic behaviours catalogued and given per-finding verdicts.
   Audit at `docs/05_investigations/MAGIC_BEHAVIOUR_AUDIT.md`. 13 of

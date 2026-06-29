@@ -253,14 +253,21 @@ export default class AxiosHttpClient implements HttpClient {
                         : {}),
                     timeout: 5000,
                 });
-                 
-                console.warn(
-                    `[api] ${method} ${path} → ${status} ${code} (${correlationId})`,
-                    details,
-                );
             } catch {
                 // Notify isn't available during boot — ignore.
             }
+        }
+
+        // FU-099 — every failed API call lands in DevTools with the same
+        // shape (method, path, status, code, correlation id, details).
+        // The 5xx path used to log; lifted to all non-2xx so a user
+        // pasting a toast caption ("ref: 4f8c0312") into a bug report
+        // gives a dev one grep to find the request.
+        if (status > 0 || isNetworkError) {
+            console.warn(
+                `[api] ${method} ${path} → ${status || 'network'} ${code} (${correlationId})`,
+                details,
+            );
         }
 
         return Promise.reject(

@@ -1,0 +1,53 @@
+/* Shared drag-and-drop affordances for reorderable lists.
+ *
+ * Owned by the `useDragDropList` composable (R-022 / ADR-018). Three
+ * editor surfaces (shopping-list lines, recipe steps, recipe
+ * ingredients) used to hand-roll near-identical styles for the source-
+ * while-dragging dim and the drop-target ring; this file collapses
+ * them so the affordance is visually consistent everywhere, and a new
+ * DnD surface just spreads the composable's bindings + uses these
+ * class names.
+ *
+ * The composable applies these classes via `rowClass`; consumers don't
+ * type them by hand.
+ */
+
+.dora-dnd-row {
+    /* Reserve the outline slot so the drop-target ring doesn't shift
+       the row 2px when it lights up. `outline-offset: -2px` paints
+       the ring just inside the row's edge so q-item-style separators
+       stay aligned. */
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    transition: outline-color var(--motion-fast) var(--motion-ease),
+        opacity var(--motion-fast) var(--motion-ease);
+}
+
+.dora-dnd-row--dragging {
+    opacity: 0.5;
+}
+
+.dora-dnd-row--drop-over {
+    outline-color: var(--brand-primary);
+}
+
+/* The drag-handle grip — `useDragDropList` doesn't render this for
+   you (consumers own the row template), but every handle-mode surface
+   in the app wants the same grab cursor + sunken hover so this class
+   lets them opt in with one token. Spread on the small wrapper around
+   the `drag_indicator` icon. */
+.dora-dnd-handle {
+    cursor: grab;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm, 4px);
+    display: inline-flex;
+    align-items: center;
+}
+
+.dora-dnd-handle:hover {
+    background: var(--surface-sunken);
+}
+
+.dora-dnd-handle:active {
+    cursor: grabbing;
+}

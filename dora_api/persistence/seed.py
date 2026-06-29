@@ -471,7 +471,7 @@ def seed_dev_data():
     # Missing an ingredient (Parmesan is Out).
     simple_pasta = make_recipe(
         name="Tomato Pasta", collection=weeknight, cuisine="Italian", category="Pasta",
-        cook=20, prep=10, servings=2, last_made=now - timedelta(days=4),
+        cook=20, prep=10, servings=2, last_made=(now - timedelta(days=4)).date(),
         ingredients=[
             ingredient(pasta, 250, "g"),
             ingredient(tomatoes, 1, "can"),

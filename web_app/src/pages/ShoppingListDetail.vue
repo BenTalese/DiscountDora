@@ -383,24 +383,26 @@
                                     :key="line.line_id"
                                     :class="{
                                         'shopping-line-ticked': line.is_ticked,
-                                        'shopping-line-dragging': dragLineId === line.line_id,
-                                        'shopping-line-drop-over': dragOverLineId === line.line_id,
                                         'shopping-line-focused': focusedLineId === line.line_id,
                                         'shopping-line-nested': isNestedChild(line),
                                         'shopping-line-product-only': isProductOnly(line),
+                                        ...lineDnd.bind(line).rowClass,
                                     }"
-                                    :draggable="canReorder"
-                                    @dragstart="onLineDragStart($event, line.line_id)"
-                                    @dragend="onLineDragEnd"
-                                    @dragover.prevent="onLineDragOver($event, line.line_id)"
-                                    @dragleave="onLineDragLeave($event, line.line_id)"
-                                    @drop="onLineDrop($event, line.line_id)"
+                                    v-bind="{
+                                        ...lineDnd.bind(line).handleProps,
+                                        ...lineDnd.bind(line).rowProps,
+                                    }"
                                 >
+                                    <!-- Decorative grip — whole-row mode, the
+                                         row itself is the draggable element;
+                                         this icon section just signals "you
+                                         can grab here" via the shared handle
+                                         class (grab cursor + sunken hover). -->
                                     <q-item-section
                                         v-if="canReorder"
                                         side
                                         top
-                                        class="shopping-line-drag-handle"
+                                        class="dora-dnd-handle"
                                     >
                                         <q-icon :name="ICONS.drag_indicator" class="dora-text-muted" />
                                         <q-tooltip>Drag to reorder</q-tooltip>
@@ -988,6 +990,7 @@
     import StockLevelDot from 'src/components/StockLevelDot.vue';
     import { useQuasar, type QVirtualScroll } from 'quasar';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useDragDropList } from 'src/composables/useDragDropList';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
@@ -1015,7 +1018,7 @@
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { formatLocation, locationHasDetail } from 'src/helpers/locationDisplay';
 
     const route = useRoute();
@@ -1068,7 +1071,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not start shopping.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             togglingProgress.value = false;
@@ -1157,7 +1160,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not finish shopping.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             finishing.value = false;
@@ -1210,7 +1213,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Bulk update failed.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             bulkBusy.value = false;
@@ -1230,75 +1233,52 @@
             && !bulkMode.value
     );
 
-    const dragLineId = ref<string | null>(null);
-    const dragOverLineId = ref<string | null>(null);
-    const DRAG_MIME = 'application/x-dora-shopping-line';
+    // R-022 — whole-row DnD via `useDragDropList`. `canDragStart` is gated
+    // on `canReorder` (list not done/shopping, no grouping, not in bulk
+    // mode), so the `draggable` attribute reactively turns off the
+    // browser's drag affordance when reorder isn't allowed. The drop
+    // effect mirrors the historical insert-at-target's-slot pattern
+    // (fixed the off-by-one in P6-01 Chunk 6 / feedback L414).
+    const lineDnd = useDragDropList<ShoppingListLine>({
+        mime: 'application/x-dora-shopping-line',
+        getId: (line) => line.line_id,
+        canDragStart: () => canReorder.value,
+        onDrop: async ({ id: draggedId }, { id: targetLineId }) => {
+            if (!detail.value) return;
+            const lines = detail.value.lines;
+            const ids = lines.map((l) => l.line_id);
+            const fromIdx = ids.indexOf(draggedId);
+            const toIdx = ids.indexOf(targetLineId);
+            if (fromIdx < 0 || toIdx < 0) return;
+            ids.splice(fromIdx, 1);
+            ids.splice(toIdx, 0, draggedId);
 
-    function onLineDragStart(event: DragEvent, lineId: string) {
-        if (!event.dataTransfer) return;
-        event.dataTransfer.setData(DRAG_MIME, lineId);
-        event.dataTransfer.effectAllowed = 'move';
-        dragLineId.value = lineId;
-    }
-    function onLineDragEnd() {
-        dragLineId.value = null;
-        dragOverLineId.value = null;
-    }
-    function onLineDragOver(event: DragEvent, lineId: string) {
-        if (!event.dataTransfer?.types.includes(DRAG_MIME)) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        dragOverLineId.value = lineId;
-    }
-    function onLineDragLeave(_event: DragEvent, lineId: string) {
-        if (dragOverLineId.value === lineId) dragOverLineId.value = null;
-    }
-    async function onLineDrop(event: DragEvent, targetLineId: string) {
-        dragOverLineId.value = null;
-        const draggedId = event.dataTransfer?.getData(DRAG_MIME);
-        if (!draggedId || draggedId === targetLineId || !detail.value) return;
-        event.preventDefault();
+            // Optimistic local update so the UI reflects the move
+            // immediately; if the server call fails we reload.
+            const lookup = new Map(lines.map((l) => [l.line_id, l]));
+            const reordered = ids
+                .map((id, idx) => {
+                    const line = lookup.get(id);
+                    if (!line) return null;
+                    line.sequence = idx;
+                    return line;
+                })
+                .filter((l): l is NonNullable<typeof l> => l !== null);
+            detail.value.lines = reordered;
 
-        // Build the new ordering. P6-01 Chunk 6 / feedback L414 — the old
-        // logic subtracted 1 when dragging down, which left the dropped
-        // line one row *before* the drag-over target (the "off-by-one"
-        // bug). The user's mental model is: the dropped line lands at the
-        // visual slot of the row they dragged over. Achieve that by
-        // inserting at `toIdx` (the target's original DOM index) in every
-        // case — for downward drags the target shifts up to make room,
-        // for upward drags the target shifts down.
-        const lines = detail.value.lines;
-        const ids = lines.map((l) => l.line_id);
-        const fromIdx = ids.indexOf(draggedId);
-        const toIdx = ids.indexOf(targetLineId);
-        if (fromIdx < 0 || toIdx < 0) return;
-        ids.splice(fromIdx, 1);
-        ids.splice(toIdx, 0, draggedId);
-
-        // Optimistic local update so the UI reflects the move immediately.
-        const lookup = new Map(lines.map((l) => [l.line_id, l]));
-        const reordered = ids
-            .map((id, idx) => {
-                const line = lookup.get(id);
-                if (!line) return null;
-                line.sequence = idx;
-                return line;
-            })
-            .filter((l): l is NonNullable<typeof l> => l !== null);
-        detail.value.lines = reordered;
-
-        try {
-            await api.reorderLinesAsync(listId.value, ids);
-        } catch (err) {
-            await load();
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not reorder.',
-                caption: describeApiError(err) || '',
-            });
-        }
-    }
+            try {
+                await api.reorderLinesAsync(listId.value, ids);
+            } catch (err) {
+                await load();
+                $q.notify({
+                    type: 'negative',
+                    position: 'bottom-right',
+                    message: 'Could not reorder.',
+                    caption: toastCaption(err),
+                });
+            }
+        },
+    });
 
     // ── Line grouping ────────────────────────────────────────────────
     // One flat list, or one bucket per stock location, or one bucket per
@@ -1544,7 +1524,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save shop day.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1560,7 +1540,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear shop day.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1630,7 +1610,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1654,7 +1634,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1719,7 +1699,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             editingName.value = false;
@@ -1800,7 +1780,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load substitutes.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             return;
         }
@@ -1869,7 +1849,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not swap.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1903,7 +1883,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update line.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -1981,7 +1961,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save the price.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2007,7 +1987,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear the price.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2024,7 +2004,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update quantity.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2087,7 +2067,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not set the hint.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2121,7 +2101,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not set offer.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2190,7 +2170,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove line.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2243,7 +2223,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not refresh deals.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2282,7 +2262,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not clear.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2350,7 +2330,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2400,7 +2380,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move items.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2417,7 +2397,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not copy.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -2490,19 +2470,10 @@
         outline: 2px dashed var(--q-accent);
         outline-offset: -2px;
     }
-    .shopping-line-dragging {
-        opacity: 0.4;
-    }
-    .shopping-line-drop-over {
-        outline: 2px dashed var(--q-primary);
-        outline-offset: -2px;
-    }
-    .shopping-line-drag-handle {
-        cursor: grab;
-    }
-    .shopping-line-drag-handle:active {
-        cursor: grabbing;
-    }
+    /* R-022 — DnD affordances live in src/css/dnd.scss
+       (.dora-dnd-row / --dragging / --drop-over). The decorative
+       handle icon-section is non-interactive (whole-row mode), so
+       the grab/grabbing cursors aren't needed here. */
     .bulk-bar {
         background: var(--overlay-hover);
     }

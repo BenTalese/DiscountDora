@@ -157,7 +157,8 @@ class GetAlertsHandler:
             .include(StockItem.Fields.STOCK_LEVEL)
             .all()
         )
-        today = date.today()
+        # R-021 — calendar boundaries evaluate in the household timezone.
+        today = household_today(self.repository)
         now = datetime.now(timezone.utc)
 
         # Household-wide threshold (C-9.2): the expiring-soon window resolves
@@ -276,12 +277,10 @@ class GetAlertsHandler:
                     ))
 
         # ── Forward-looking nudges (C-9.4) ─────────────────────────────
-        # Not per-item, so they sit outside the loop. Both read the household
-        # "today" boundary so the week / day maths is correct regardless of
-        # where the server is hosted (R-003 — same boundary as meal plans).
-        household_now = household_today(self.repository)
-        raw.extend(self._no_planned_meals_alerts(household_now))
-        raw.extend(self._shopping_day_alerts(household_now))
+        # Not per-item, so they sit outside the loop. R-021 — `today` is
+        # the household-tz boundary built once at the top of `handle()`.
+        raw.extend(self._no_planned_meals_alerts(today))
+        raw.extend(self._shopping_day_alerts(today))
 
         # ── Per-user overlay (C-9.1 interactions + C-9.2 preferences) ───
         # One bounded fetch each of this user's interactions + preferences,

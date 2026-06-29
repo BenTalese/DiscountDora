@@ -36,6 +36,7 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
+from dora_api.features.app_settings.clock import household_today
 from dora_api.domain.entities.user import (BUDGET_PERIOD_MONTHLY,
                                            BUDGET_PERIOD_WEEKLY, User)
 from dora_api.features.routers import BUDGET_ROUTER
@@ -122,8 +123,9 @@ class GetBudgetStatusHandler:
 
         # Compute boundaries even when the feature is off — the dashboard
         # surfaces "this week's spend" as a passive figure for users who
-        # haven't opted in.
-        today = date.today()
+        # haven't opted in. R-021 — week/month windows align to the
+        # household calendar boundary, not server-local.
+        today = household_today(self.repository)
         period = user.budget_period or BUDGET_PERIOD_WEEKLY
         start, end = _period_bounds(today, period)
         start_dt = _as_utc_datetime(start)
@@ -259,7 +261,8 @@ class GetBudgetHistoryHandler:
         if user is None:
             return None
 
-        today = date.today()
+        # R-021 — current period anchored on household-tz today.
+        today = household_today(self.repository)
         period = user.budget_period or BUDGET_PERIOD_WEEKLY
         amount = (
             float(user.budget_amount)

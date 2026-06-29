@@ -105,7 +105,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { computed, onMounted, onUnmounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     // The bell is a fast PEEK + jump (C-9.3): the top few rows + the bulk
     // shortcut, then "Open Alerts" → the hub page, which owns the rich
@@ -183,7 +183,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not apply.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             busy.value = null;

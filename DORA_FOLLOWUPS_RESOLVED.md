@@ -10,6 +10,513 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-326 — Extract a shared `useDragDropList` composable + affordance stylesheet
+- **Raised:** 2026-06-29 (immediately on FU-118 close — three DnD
+  surfaces with hand-rolled state had crossed the rule-of-three line).
+- **Type:** finding / R-001 evolution.
+- **Resolution (2026-06-29):** done same day.
+  - **New `web_app/src/composables/useDragDropList.ts`** owns the
+    state machine (`draggingId`, `dragOverId` + private `sourceItem`
+    lookup so drop can resolve the source even if the array index
+    moved between dragstart and drop), the `dragstart` / `dragover` /
+    `dragleave` / `drop` listeners, and per-row binding objects.
+    Options: `mime` (unique MIME per logical list — convention
+    `application/x-dora-<thing>`), `getId(item)` (stable per-row id;
+    return null to mark a row non-draggable), `onDrop(source, target)`
+    (per-list effect), and optional `canDragStart(item)` (per-row /
+    global drag gate, reactively reflected in `draggable=`) and
+    `canDropOn(source, target)` (per-pair drop-target predicate;
+    defaults to "not the same row"). Returns `bind(item)` → `{
+    handleProps, rowProps, rowClass, isDragging, isDropOver }`.
+  - **New `web_app/src/css/dnd.scss`** owns the affordance treatment:
+    `.dora-dnd-row` (outline reservation + transitions), `--dragging`
+    (opacity 0.5), `--drop-over` (`--brand-primary` outline ring),
+    and `.dora-dnd-handle` (grab/grabbing cursors + sunken hover).
+    Wired into `quasar.config.ts` after `colours.scss` so the
+    cascade picks up the theme tokens.
+  - **Two row shapes supported.** *Handle mode* (recipe step rows,
+    recipe ingredient rows): the small grip icon is the only
+    draggable element, so the row body's inline editors stay
+    clickable. *Whole-row mode* (shopping-list lines): no inline
+    editors on the row, so the user can grab anywhere — spread both
+    `handleProps` and `rowProps` on the same `q-item`.
+  - **All three existing surfaces refactored:**
+    - `RecipeStepsEditor.vue` + `RecipeStepRow.vue` — siblings-only
+      preserved via `canDropOn`. Three `defineEmits` events
+      (`drag-start` / `drag-end` / `drop-on-row`) gone; per-component
+      DnD CSS gone. RecipeStepRow now accepts a single
+      `dragBindings: DragDropRowBindings` prop and spreads it.
+    - `RecipeDetailPage.vue` ingredient list — drop effect kept its
+      "reinsert at target's slot AND copy `section_client_id`"
+      semantics. Local drag state + handlers gone (~75 lines);
+      per-row affordance CSS gone.
+    - `ShoppingListDetail.vue` lines — `canDragStart` gates on the
+      existing `canReorder` computed (covers list-done /
+      mid-shopping / grouped / bulk-mode states), so the browser's
+      drag affordance disappears when reorder isn't allowed. Drop
+      effect (optimistic local reorder + API persist + reload on
+      failure) preserved. ~70 lines of plumbing gone.
+  - **Promoted to R-022 + ADR-018** in
+    `docs/01_charter/ENGINEERING_STANDARDS.md`. The R rule names
+    the violation signals (top-level `@dragstart` listener with no
+    `useDragDropList` import; hand-rolled `--dragging` opacity or
+    `--drop-over` outline; raw `application/x-dora-…` MIME outside
+    the composable) so the next sweep can find drift in one grep.
+- **What's notably absent on purpose:** keyboard-reorder support
+  (Tab to handle, Space to pick up, arrows to move) — every existing
+  surface omits this and it'd be an accessibility upgrade landed
+  once, in the composable, the next time a11y work touches DnD.
+  Multi-row drag and off-row drop zones (e.g. "drop into empty
+  section") would extend the composable rather than re-roll state.
+
+---
+
+## [RESOLVED] FU-118 — Drag-and-drop for moving ingredients between sections
+- **Raised:** 2026-06-12 (Chunk 10 deliberate scope-down — paired with FU-094 steps DnD, now also resolved).
+- **Type:** enhancement.
+- **Resolution (2026-06-29):** mirrored the FU-094 steps DnD pattern on
+  `RecipeDetailPage.vue`'s ingredient list. The drag handle (`drag_indicator`)
+  is the only draggable element on the row; the whole row is the drop target.
+  Drop semantics differ from steps: dropping ingredient A onto ingredient B
+  *reinserts A at B's slot in the flat list AND copies B's
+  `section_client_id` to A in the same gesture* — so reorder-within-section
+  and move-between-sections collapse into one operation. (Steps used a
+  siblings-only rule because of the parent/child step nesting; ingredients
+  have no nesting, only the section dimension, so cross-section IS the
+  goal.) Empty sections still rely on the per-row Section picker — you
+  can't drop onto something that doesn't exist. Drag affordances reuse
+  the same CSS shapes as `RecipeStepRow` (grab/grabbing cursors, 0.5
+  opacity on the source, `--brand-primary` outline ring on the active
+  drop target). The "would-be-cookable" dim history is unrelated — it
+  was FU-109 (also closed today). No server changes required.
+- **Duplicate-ingredient assessment** (the user asked for this alongside
+  the FU close): **same stock item across different sections is a real
+  use case and should remain allowed.** Common cookbook patterns —
+  "olive oil" in Sauce + Garnish with different quantities/notes, "flour"
+  in Cake + Frosting + Dusting — only render correctly as separate rows.
+  The data model already supports this freely (no `UniqueConstraint` on
+  `(recipe_id, stock_item_id)` or `(recipe_id, section_id, stock_item_id)`
+  in `persistence/table_mappings.py:607-622`; create + update handlers
+  accept duplicates without dedup). Downstream consumers that *want* a
+  unique view already dedup on `stock_item_id`: cookability calc
+  (`RecipeCard.vue:173` Set), shopping-list picker
+  (`RecipeIngredientPickerDialog.vue:187-194` `Map<stock_item_id>`,
+  collapsing optional/required across occurrences correctly), the
+  ingredient-filter set added in the FU-109 close-out, and
+  `RecipesOverview.vue:800`. Same-section duplicates are a different
+  question — they're almost always a data-entry mistake ("3 tbsp oil,
+  divided" is the standard cookbook idiom, not two rows). But the cost
+  of *enforcing* uniqueness (UX friction; one-off legit splits like
+  "1 tbsp to fry / 1 tbsp to drizzle"; legacy data) outweighs the
+  benefit (the user can see two identical rows on the page and merge
+  them themselves). **Decision: don't enforce uniqueness at any level.**
+  Status quo wins. If the user later finds same-section duplicates
+  genuinely confusing, the cheapest reversible step would be an inline
+  "Duplicate of row N" caption on the matching row — pure client-side
+  hint, no schema change — but it's not worth doing pre-emptively.
+
+---
+
+## [RESOLVED] FU-109 — Decide whether to re-add the RecipeCard "would-be-cookable" dim
+- **Raised:** 2026-06-10 (FU-083 follow-up; user wanted a real decision later).
+- **Type:** open product / UX decision.
+- **Resolution (2026-06-29):** user picked **option 1 — keep the dim
+  removed everywhere.** The "Missing N ingredients" copy on the card face
+  is the single signal for "this isn't cookable yet"; no legend, no
+  opacity. The now-unused `highlightStockItemIds` prop on `RecipeCard.vue`
+  was dropped (along with its only binding on `StockItemDetailPage.vue`'s
+  Recipes-using-this tab). Same turn the user asked for a new affordance
+  on those cards — a filter icon that jumps back to Stock Overview
+  pre-filtered to the recipe's ingredient set (deep-link
+  `/stock?recipe=<id>` → chip "Ingredients of: <recipe>"); that piece
+  ships in the same commit, not as a follow-up.
+
+---
+
+## [RESOLVED] FU-174 — App-wide datetime / timezone correctness sweep (household tz)
+- **Raised:** 2026-06-14 (IMPL_PLAN_MEAL_PLANS C-2.K review).
+- **Type:** deferred job (large).
+- **Resolution (2026-06-29):** swept every `date.today()` in feature
+  code to `household_today(repository)`. 15 server sites + 1 naive
+  `datetime.now()` migrated; 2 schema columns realigned; one Alembic
+  migration written. The household-tz rule promoted to **R-021**
+  + **ADR-016** in `docs/01_charter/ENGINEERING_STANDARDS.md`
+  (the FU's explicit ask: "Promote the household-tz date rule into
+  an ADR + a new R-0NN").
+- **Server sweeps** (each handler now anchors `today` on the
+  configured household timezone — F29-class bugs closed):
+  - `features/alerts/get_alerts.py` — expiry math + stocktake +
+    forward-looking nudges all share one household-tz `today`.
+  - `features/dashboard/get_dashboard_summary.py` — the "next 7
+    days" meal-plan window.
+  - `features/assistant/tools.py` — 9 sites:
+    `search_stock` (expiring filter), `whats_expiring`,
+    `pantry_health`, `meal_plan_for_date`, `where_is_this`
+    (urgency), `_resolve_month` (fallback), `purchase_price_stats`
+    (days-since-last-purchase).
+  - `features/waste/waste.py` — rescue horizon.
+  - `features/budget/budget.py` — period bounds (status + history).
+  - `features/locations/attention.py` — `reasons_for_item` /
+    `reasons_for_items` now require `today: date` (no default
+    fallback). Callers `features/locations/get_location_tree.py`
+    and `features/stock_items/get_stock_item_detail.py` updated
+    to pass `household_today(self.repository)`.
+  - `features/recipes/get_recipes.py` — at-risk-ingredient horizon.
+  - `features/suggestions/generators.py` — use-soon + likely-due
+    horizons (2 sites).
+  - `features/alerts/act_on_alert.py` — "extend expiry by 7" base.
+  - `features/assistant/confirm_actions.py` — push-expiry fallback
+    base.
+  - `features/stock_items/update_stock_item.py` — `opened_on`
+    auto-stamp.
+  - `features/stock_items/create_stock_item.py` — `opened_on`
+    auto-stamp + a naive `datetime.now()` for
+    `stock_level_last_updated` flipped to `datetime.now(UTC)`.
+  - `features/data/export_shared.py` — `export_filename`
+    timestamp now follows the household calendar day.
+  - `features/recipes/cook_recipe.py` — `last_made_on` write
+    follows the household calendar (paired with the schema
+    change below).
+- **Documented carve-out:**
+  `domain/entities/shopping_list.py:format_list_date` keeps its
+  server-local fallback (called from `ShoppingList.display_name`,
+  a `@property` with no repository access). Pure display formatter,
+  only affects whether a year is appended in the rendered label.
+  Worst case: a once-a-year, hours-long boundary edge case. Comment
+  names the carve-out and the rule.
+- **Schema cleanup** (migration `d2f7a9c4b1e8`):
+  - `Recipe.last_made_on`: `DateTime(timezone=True)` → `Date`.
+    Always semantically a calendar day; the time portion was
+    meaningless. Entity / DTO / call-site types lifted to `date`;
+    `cook_recipe.py` now writes `household_today(...)` not
+    `datetime.now(UTC)`; `get_recipes._stale()` drops the
+    obsolete `.date()` cast.
+  - `User.onboarding_completed_at`: `DateTime` →
+    `DateTime(timezone=True)`. Aligns with every other wall-clock
+    column. Stored values were already naive UTC; the flag makes
+    the schema match reality.
+  - Migration is also the **merge** for the two then-open heads
+    (`b7e2d9a4c1f5` + `c4a8e2b9d7f5`, both 2026-06-28).
+- **Client annotation:** `localTodayIso()` in
+  `web_app/src/helpers/weekDates.ts` and its use in
+  `useMealPlanner.ts:74` now carry inline comments naming
+  R-021 — the function is a display-only pre-load fallback for
+  the very first paint; the server's household `today` is
+  authoritative the moment it arrives. State / persistence /
+  payload code never goes through this fallback.
+- **Tests:** new `tests/e2e/dora_api/test_household_tz_boundaries.py`
+  (4 cases) pins the contract end-to-end — sets
+  `AppSetting.timezone = Pacific/Kiritimati` (UTC+14) and asserts
+  `/meal-plans/today`, the alerts handler, the dashboard summary,
+  and the waste-rescue feed all evaluate boundaries against the
+  household zone, not server-local. Each test brackets its zone
+  change in a `try/finally` so a failure doesn't leak.
+- **Standards close-gate:** clean. New **R-021 + ADR-016** promoted
+  per the FU's instruction. R-001 / R-003 already covered: the
+  single-source helper (`household_today`) was already in place;
+  this is the rollout.
+- **Verification:** `vue-tsc --noEmit` clean. Server tests not run
+  (no Python in env); the new boundary tests + the existing alert
+  / meal-plan-today tests pin the behaviour and will catch
+  regressions on first run. Browser-verify of `last_made_on` now
+  rendering as a date string (vs. datetime) in cookbook surfaces
+  folds into [[FU-099-V]] / [[FU-321]] verify pass.
+- **Carry-over:** none in scope. Cross-references:
+  - **FU-107** (RFC 2822 → ISO 8601 wire format) — already
+    delivered by ADR-007 + `DoraJSONProvider`; closing in the
+    same session for tidiness (its only remaining bullet point
+    was "Recipe.last_made_on (DateTime)" which this sweep also
+    converts).
+
+## [RESOLVED] FU-107 — Standardise API date serialisation on ISO 8601 (drop RFC 2822 default)
+- **Raised:** 2026-06-10 (FU-083 "Planned" filter follow-up — RFC vs ISO
+  parse bug).
+- **Type:** finding / cross-cutting cleanup.
+- **Resolution (already shipped 2026-06-12; closed for the record
+  2026-06-29 during the FU-174 sweep):** delivered by **ADR-007** —
+  `dora_api/app.py:DoraJSONProvider` serialises `datetime` → ISO 8601
+  with offset (`Z` for naive, which the docstring explains is the
+  SQLite-strip-tz workaround) and `date` → `YYYY-MM-DD`. Every
+  date/datetime in every response went through the new provider; the
+  RFC-aware workarounds in SPA models (`plannedRecipeIds` in
+  RecipesOverview etc.) had already been dropped when the provider
+  landed. The FU's residual bullet — "Recipe.last_made_on (DateTime)"
+  — was independently resolved by the FU-174 sweep (the field is now
+  a `Date` column, which also fixes the JS `new Date(rfc)`
+  midnight-UTC drift that bullet flagged). Cross-ref ADR-007 for
+  the wire-format decision; R-021 / ADR-016 for the calendar-day
+  boundary rule.
+
+## [RESOLVED] FU-323 — Convert remaining `message: describeApiError(e)` toasts to message + caption + ref
+- **Raised:** 2026-06-29 (FU-099 close-out).
+- **Type:** polish.
+- **Resolution (2026-06-29):** the 10 stragglers identified during the
+  FU-099 sweep migrated to the standard `message: '<action context>',`
+  + `caption: toastCaption(e)` shape.
+  - **ApiAccessSettings.vue (8 sites)** — load mappings / load stores /
+    create / rename / toggle / revoke / upsert mapping / drop mapping.
+    Each toast now leads with a one-line action context ("Couldn't
+    create the API key.", "Couldn't toggle the API key.", …) and the
+    error detail + ref-id flow through `toastCaption(e)` in the
+    caption. The inline `loadError.value` banner for the source-list
+    fetch also routed through `toastCaption(e)` so the banner carries
+    a `ref:` suffix too.
+  - **StoresSettings.vue (2 toast sites + 2 inline banner sites)** —
+    save (insert/update branch decided by `editing.value`) and delete
+    each get an action-specific lead message; both inline `loadError`
+    banners (listAsync + ensureLoadedAsync) routed through
+    `toastCaption(e)` to match.
+  - Imports cleaned in both files (`describeApiError` removed,
+    `toastCaption` added).
+- **Standards close-gate:** clean — single source remains
+  `toastCaption`, no new code shape. R-001 / R-003 already covered
+  the principle; nothing new to promote.
+- **Verification:** `vue-tsc --noEmit` clean. Browser-verify of the
+  toasts (each shows the action message + the friendly cause + the
+  ref) folds into [[FU-099-V]] — same verify pass.
+
+## [RESOLVED] FU-099 — Raw backend / Pydantic error strings leak into user-facing toasts → design pass + fix
+- **Raised:** 2026-06-09 (user, after the recipe-save Pydantic error).
+- **Type:** cross-cutting UX gap + structured-error design.
+- **Resolution (2026-06-29):** full design discussion + implementation
+  per `docs/04_proposals/IMPL_PLAN_ERROR_HANDLING.md`. Seven decisions
+  settled with the user (server-side friendly translation, inline +
+  brief generic toast, ~15 Pydantic codes + fallback, 4xx
+  console.warn, `{msg, code, raw}` wire shape, keep current
+  network/5xx copy + ref, sweep every catch block in one PR).
+- **Server changes:**
+  - New `dora_api/infrastructure/error_translation.py` —
+    `PYDANTIC_FRIENDLY` map (~30 codes incl. missing / extra_forbidden /
+    int_parsing / string_too_short / uuid_parsing / greater_than / …)
+    + `FRIENDLY_FALLBACK = "This value isn't valid."` for unknown
+    codes. The single source of truth (R-003) for translating
+    Pydantic prose to user copy.
+  - New `ErrorEntry` dataclass in `api_response.py` —
+    `{ msg, code, raw }`. Replaces the bare `str` that used to live
+    inside `ProblemDetails.errors[field]`. Domain helpers
+    (`bad_request`, `business_rule_violation`,
+    `entity_existence_failure`) keep their plain-string signatures;
+    a new `_lift_errors` helper folds each string into
+    `ErrorEntry(code="domain", raw=None)` so 50+ existing call sites
+    don't need per-site edits.
+  - `middleware.py` — `ValidationError` handler now emits one
+    `ErrorEntry` per Pydantic error carrying the friendly translation
+    + the raw `err["type"]` code + the raw `err["msg"]` for dev
+    inspection. Wire shape: `errors: { field: [{msg, code, raw}, …] }`.
+  - Updated 45 existing assertion sites across
+    `test_product_router`, `test_stock_item_router`,
+    `test_stock_location_router` to the new shape, via new helpers
+    `validation_err(code, raw)` / `domain_err(msg)` in
+    `tests/e2e/dora_api/_error_assertions.py` (single-source — a
+    future change to `PYDANTIC_FRIENDLY` only touches the table, not
+    every test).
+  - New `tests/e2e/dora_api/test_error_translation.py` — 6 e2e tests
+    pinning the wire-shape contract: friendly msg + code + raw on
+    Pydantic errors; missing / extra_forbidden codes; unknown code
+    falls back to `FRIENDLY_FALLBACK`; domain BRV + entity-existence
+    lift plain strings into the new shape.
+- **Client changes:**
+  - `apiErrorHandler.ts` — `ApiErrorEntry` type matches the server's
+    wire shape. `extractFieldErrors` now handles both the new
+    structured shape and (transitionally) the old string-array shape,
+    extracting the friendly `msg` for inline rendering.
+  - `describeApiError` — when field-keyed errors are present, returns
+    the generic *"Couldn't save — check the highlighted fields."*
+    instead of pasting the raw field strings into the caption. The
+    field copy now belongs inline on the offending input, not in
+    the toast caption.
+  - New `correlationSuffix(err)` — builds `" · ref: <8-char id>"` from
+    the X-Request-Id round-tripped by the server.
+  - New `toastCaption(err)` — combines `describeApiError` +
+    `correlationSuffix` into one drop-in for the old
+    `describeApiError(err) || ''` idiom; every negative toast now
+    carries the ref by default.
+  - `axiosHttpClient.handleError` — `console.warn` now fires on
+    *every* failed call (4xx + 5xx + network), not just 5xx. Same
+    shape: `[api] METHOD path → status code (correlation-id)` with
+    structured `details` blob. Pasting a toast caption's ref into a
+    bug report now gives a dev one grep to find the request line.
+  - New composable `useFormErrors()` (`web_app/src/composables/`) —
+    one place owns the `fieldErrors` / `generalError` /
+    `handleSaveError` / `reset` plumbing every form was hand-rolling.
+- **Migrations:**
+  - **Shape C (4 sites):** `RecipeEditDialog`, `CreateStockItemDialog`,
+    `LoginPage` migrated to `useFormErrors()`. `WelcomeWizard`
+    deliberately kept its direct `extractFieldErrors` call
+    (custom routing of `username` → its own `displayNameError` slot,
+    not a fit for the simple composable).
+  - **Shape B sweep (95 substitutions across 33 files):** every
+    `caption: describeApiError(err) || ''` rewritten to
+    `caption: toastCaption(err)` via a one-shot Node script,
+    with imports auto-updated (`describeApiError` removed where
+    no longer used, `toastCaption` added). Files: AlertsPage,
+    AlertsBell, ShoppingListDetail (23!), ShoppingListTemplates,
+    StockItemRow, StockOverview, RecipeDetailPage, RecipesOverview,
+    MyProductsPage, MealPlanTemplatesPage, MealPlanTemplatesDrawer,
+    MealPlanRecipePicker, useMealPlanner, NewListDialog,
+    StockGroupsSettings, StockLocationsSettings, UsersAdminSettings,
+    AdminSystemFeaturesSettings, PreferencesSettings,
+    AdminSystemAssistantSettings, AccountSettings (+ ~12 more).
+- **Standards close-gate:**
+  - **R-001 (componentisation):** `useFormErrors()` lifts the
+    recurring catch-block plumbing into a single composable. The
+    error-translation table is its own module. The toast-caption
+    builder is its own helper. No hand-rolled five-liners remain
+    across the migrated surfaces.
+  - **R-003 (single source):** `PYDANTIC_FRIENDLY` is the sole code
+    → copy map. `correlationSuffix` is the sole ref-id format.
+    `toastCaption` is the sole toast-caption builder. The
+    translation table is mirrored in test assertions through the
+    `validation_err` helper, not duplicated.
+  - **R-007 (scope discipline):** inclusion list is the ~30 codes
+    our schemas actually emit; unknown codes fall back. No
+    pre-built per-field bespoke copy.
+- **Verification:** `vue-tsc --noEmit` clean. No Python interpreter
+  in this session's env — server-side test suite not run; the new
+  e2e tests pin the contract and the existing 45 assertions were
+  updated to match. Browser-verify of the full pipeline logged as
+  **[[FU-099-V]]**.
+- **Carry-over (deliberately not in scope):**
+  - **[[FU-323]]** — 10 surviving `message: describeApiError(e)`
+    toasts in `ApiAccessSettings` + `StoresSettings` (different
+    shape — friendly text in `message`, no `caption`/ref). They
+    work correctly post-FU-099 (friendly copy renders, console.warn
+    logs the ref); migrating to message + caption + ref is polish,
+    not a real defect.
+
+## [RESOLVED] FU-098 — Unsaved-changes guard on navigation (app-wide)
+- **Raised:** 2026-06-09 (user, after cook-mode batch).
+- **Type:** finding / cross-cutting UX gap.
+- **Resolution (2026-06-29):** exhaustive sweep for "Save button +
+  locally-deferred state" surfaces. The composable
+  `useUnsavedChangesGuard` already exists (shipped with FU-156 on
+  2026-06-12) and was wired into the two large editor pages;
+  remaining gaps were:
+  - **`AccountSettings.vue`** — `usernameDraft` + `emailDraft` each
+    have their own Save button + `unchanged` computed. Guard wired
+    on `!usernameUnchanged || !emailUnchanged`. Profile-picture
+    upload and password change are deliberately excluded (both save
+    immediately on action — no draft window; and browsers expect
+    typed passwords to be lost on nav for security reasons).
+  - **`AdminSystemAssistantSettings.vue`** — three drafts
+    (`enabledDraft` / `baseUrlDraft` / `modelDraft`) + Save button
+    + `unchanged` computed. Guard wired on `!unchanged`.
+- **Audited and deliberately NOT guarded (with reason):**
+  - `RecipeCookMode.vue` — session state (ticks, swaps,
+    cookingFor) is real-time and transient, not a save-button form.
+    The "Done" button persists stock-level changes via the explicit
+    finish dialog; there's no notion of "draft progress" to warn
+    about. Cooking is expected to be uninterruptible — flagging
+    every nav would be noise.
+  - `ShoppingListDetail.vue` — every line edit (quantity, name,
+    status) saves immediately via `@blur` / `@update:model-value`.
+    No locally-held dirty state on the page; the two `label="Save"`
+    buttons live inside `q-menu` popovers (price editor + planned-
+    date editor) where state is intentionally transient.
+  - Settings pages that save-on-blur or save-on-change:
+    `AdminSystemAlertsSettings` (blur), `AdminSystemFeaturesSettings`
+    (toggle/blur), `AdminSystemTimezoneSettings` (change),
+    `MoneySettings`, `NotificationsSettings`, `PreferencesSettings`
+    (theme — live-applied + persisted), `NutritionSettings`,
+    `VoiceSettings` — no Save button, no draft window.
+  - Settings pages whose only `label="Save"` is inside an
+    add/edit/rename `BaseDialog`: `StoresSettings`,
+    `StockGroupsSettings`, `StockLocationsSettings`,
+    `RecipeCategoriesSettings`, `RecipeCuisinesSettings`,
+    `RecipeDietaryTagsSettings`, `RecipeMealSlotsSettings`,
+    `RecipeToolsSettings`, `UsersAdminSettings`,
+    `ApiAccessSettings`. Dialog state is intentionally transient —
+    cancelling closes; route nav would close the parent component
+    and lose the dialog along with it, but that's modal-close,
+    not "discard your half-typed essay" territory. Out of scope
+    for this FU.
+  - `MealPlansBoardPage.vue`, `MealPlansOverview.vue`,
+    `MealPlanTemplatesPage.vue` — no page-level draft (board
+    mutations write immediately; the `label="Save template"`
+    button on each is inside a `v-close-popup` dialog).
+  - `RecipeEditDialog.vue`, `SubstituteMetadataDialog.vue`,
+    `MealPlanTemplatesDrawer.vue` — dialogs/drawers, not pages.
+- **Standards close-gate:** clean.
+  - **R-001 (componentisation):** no new components — the existing
+    `useUnsavedChangesGuard` was reused with no copy-paste.
+  - **R-003 (single source):** the guard's policy (the confirm
+    dialog copy, the `beforeunload` shape, the
+    `onBeforeRouteLeave`/`onBeforeRouteUpdate` pair) lives in one
+    file; each call site only supplies the dirty predicate.
+  - **New rule promoted:** **R-020 + ADR-015** — "Deferred-save
+    surfaces wire the unsaved-changes guard." Two events in six
+    weeks (FU-156 + this sweep) where a new editor page forgot the
+    guard is rule-worthy recurrence; the rule pins the predicate
+    shape, names the four standing exclusion categories (inline
+    save, real-time session, dialog-only, password field), and
+    gives reviewers a one-line grep target for new diffs. Comments
+    on the four already-wired sites updated to reference `R-020`
+    so the rule's discoverable from the call site.
+- **Verification:** `vue-tsc --noEmit` clean. Browser verify (the
+  two new sites' nav prompts fire when dirty, suppress when clean)
+  logged as **[[FU-322]]** for the next verify-pass.
+- **Carry-over:** none in scope. Cook-mode session-state guarding
+  was considered and rejected as out-of-scope for this FU (rationale
+  above) — if a future user report flags lost cook sessions on
+  accidental nav, that becomes its own follow-up.
+
+## [RESOLVED] FU-097 — Roll out `formatQuantity()` to recipes/shopping-list surfaces
+- **Raised:** 2026-06-09 (Cook Mode Chunk 2)
+- **Type:** finding / R-001 + R-003 cleanup
+- **Resolution (2026-06-29):** quantity-spacing sweep — `formatQuantity`
+  is now the only place that knows the DEC-3 rule. Surfaces audited
+  against the FU's original list:
+  - **`MealPlanShoppingSummary.vue`** — switched the `needs {{ qty }} {{ unit }}`
+    inline to `formatQuantity(ing.total_quantity, ing.unit)`.
+  - **`SequentialBuilderDialog.vue`** — same pattern (kept the `round()`,
+    just routed the result through `formatQuantity`).
+  - **`RecipeCookMode.vue` substitute-ratio caption** and
+  - **`StockItemDetailPage.vue` substitute-ratio caption** — both built
+    `${qty} ${unit} → ${qty} ${unit}` by hand; now each half goes through
+    `formatQuantity`. Safe because FU-034 canonicalises the ratio unit on
+    persist (`"tablespoons"` → `"tbsp"`), so the lowercased no-space
+    inclusion list catches every form. Cook mode's own ingredient-row
+    display path was already on `displayQuantity` → `formatQuantity` from
+    Chunk 2.
+  - **Print view (`dora_api/features/data/export_recipe.py`)** — the
+    server-rendered Jinja template was emitting `{{ quantity }} {{ unit }}`
+    with an always-on space. Added a Python mirror **`format_quantity`** in
+    `dora_api/domain/units.py` (R-003: the no-space inclusion list lives
+    next to `UNIT_TABLE`, the existing single source of truth for units)
+    and the template now calls it via a passed kwarg. Server + client
+    spacing are guaranteed identical.
+  - **FU items now N/A:** `RecipeDetailPage.vue` and `RecipeEditDialog.vue`
+    use **separate** qty + unit `q-input`s (no concatenation to format);
+    `RecipeCard.vue` and the cookbook overview don't render `qty + unit`
+    at all (just name, time, servings, tags). The shopping-list bullet was
+    already marked N/A by the FU's own 2026-06-12 update. The "Print/export
+    view" item pointed at the SPA hub page (`ExportPrint.vue`) which is a
+    list of export actions — the actual recipe print template was the
+    server-side Jinja, fixed above.
+- **Bound to:** the unit-canonicalisation work in `dora_api/domain/units.py`
+  + FU-034 substitute ratios — canonical forms feed naturally into the
+  formatter because matching is case-insensitive and the inclusion list
+  covers every canonical "tight" unit (ml, g, kg, L, mg, oz, lb, fl oz,
+  pt, qt). No drift risk between server-canonicalised units and
+  client-side formatting.
+- **Standards close-gate:**
+  - **R-003 (single source)** — the rule is now stated **once per language**
+    (TS `formatQuantity.ts`, Python `units.py:format_quantity`); inclusion
+    lists are mirrored by intent (5-line frozenset / 1-line `ReadonlySet`)
+    with a comment on each side flagging the sync requirement. No call
+    site re-implements the rule.
+  - **R-001 (componentisation)** — no new components; surfaces routed
+    through the existing helper.
+- **Verification:** `vue-tsc --noEmit` clean. Python compile not run
+  (no interpreter in this session's env); the only Python change is a
+  small pure helper + a Jinja `{% set %}`, both syntactically trivial.
+  Browser verify of the print view + meal-plan summary + substitute
+  ratio captions deferred — captured below if you'd like a verify pass.
+- **Carry-over:** spawned a new [[FU-321]] — browser-verify the four
+  routed display surfaces in a real Quasar build before trusting that
+  every spacing case lands the right way ("1L" / "1 tbsp" / unitless
+  fallbacks / ratios in both directions).
+
 ## [RESOLVED] FU-092 — Audit ALL implicit / automatic / "magic" behaviour
 - **Raised:** 2026-06-09 (user, during C-7 cart-button design — started
   as the "preferred product" worry, broadened to every automatic

@@ -119,7 +119,7 @@
     import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';
     import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
     import { useQuasar } from 'quasar';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { ref } from 'vue';
 
     defineProps<{
@@ -162,7 +162,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not rename the template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             saving.value = false;
@@ -188,7 +188,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not delete the template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

@@ -89,7 +89,7 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
     import TtsApiService, { type TtsVoice } from 'src/services/api/ttsApiService';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const props = defineProps<{
         modelValue: string;
@@ -162,7 +162,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: `Could not preview ${voice.label}.`,
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             stopPlayback();
         } finally {

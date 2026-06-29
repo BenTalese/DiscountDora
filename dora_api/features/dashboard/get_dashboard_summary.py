@@ -19,6 +19,7 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -161,14 +162,16 @@ class GetDashboardSummaryHandler:
         ).scalar_one()
 
         # ── Meal plan: upcoming entries within the next week ──────────────
-        _Window = date.today() + timedelta(days=7)
+        # R-021 — "today" is the household-tz boundary, not server-local.
+        _Today = household_today(self.repository)
+        _Window = _Today + timedelta(days=7)
         upcoming_entries_entities = (
             self.repository
             .get(MealPlanEntry)
             .include(MealPlanEntry.Fields.RECIPE)
             .all(
                 EntityField(MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR)
-                .between(date.today(), _Window)
+                .between(_Today, _Window)
             )
         )
         upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))

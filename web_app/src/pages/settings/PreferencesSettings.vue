@@ -134,7 +134,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { ref, watch } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -158,7 +158,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not change cooking style.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -241,7 +241,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || ''
+            caption: toastCaption(err)
         });
     }
 

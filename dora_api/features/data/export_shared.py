@@ -1,6 +1,9 @@
 """Helpers shared by every CSV / print-view export endpoint."""
 import re
-from datetime import date, datetime
+from datetime import datetime
+
+from dora_api.features.app_settings.clock import household_today
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 def slugify(value: str) -> str:
@@ -10,7 +13,9 @@ def slugify(value: str) -> str:
 
 
 def export_filename(prefix: str, list_name: str, extension: str) -> str:
-    today = date.today().isoformat()
+    # R-021 — the date stamp on a download is the household's calendar day
+    # ("recipe-bolognese-2026-06-29.csv"), not the server's.
+    today = household_today(SqlAlchemyRepository()).isoformat()
     return f"{prefix}-{slugify(list_name)}-{today}.{extension}"
 
 

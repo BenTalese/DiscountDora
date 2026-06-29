@@ -546,7 +546,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("image", LargeBinary, nullable=True),
         Column("instructions", String, nullable=True),
         Column("is_favourite", Boolean, nullable=False),
-        Column("last_made_on", DateTime(timezone=True), nullable=True),
+        # R-021 — "last made on" is a calendar day (the household's), not a
+        # wall-clock instant. Stored as Date; the time portion was always
+        # meaningless. Migration `9f3a2c6e1b08` truncates legacy datetimes.
+        Column("last_made_on", Date, nullable=True),
         Column("name", String(255), nullable=False),
         Column("prep_time_minutes", Integer, nullable=True),
         Column("recipe_collection_id", UUIDType, ForeignKey("RecipeCollection.id", ondelete="SET NULL"), nullable=True),
@@ -738,7 +741,10 @@ def configure_mappings(db: SQLAlchemy):
         Column("theme", String(20), nullable=False, server_default="system"),
         Column("font_family", String(20), nullable=False, server_default="default"),
         Column("font_size", String(2), nullable=False, server_default="md"),
-        Column("onboarding_completed_at", DateTime, nullable=True),
+        # FU-174 — wall-clock event; the `timezone=True` flag was missing
+        # so DoraJSONProvider had to retag naive reads as UTC. Now declared
+        # consistently with every other wall-clock column (R-021).
+        Column("onboarding_completed_at", DateTime(timezone=True), nullable=True),
         Column("last_backup_at", DateTime(timezone=True), nullable=True),
         Column("email_verified", Boolean, nullable=False, server_default=false()),
         Column("password_changed_at", DateTime(timezone=True), nullable=True),

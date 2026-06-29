@@ -32,7 +32,7 @@
                         <q-item-label>{{ ing.stock_item_name }}</q-item-label>
                         <q-item-label caption>
                             <span v-if="ing.total_quantity !== null">
-                                needs {{ ing.total_quantity }} {{ ing.unit ?? '' }} ·
+                                needs {{ formatQuantity(ing.total_quantity, ing.unit) }} ·
                             </span>
                             {{ listStatusLabel(ing.stock_item_id) }}
                         </q-item-label>
@@ -95,6 +95,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { formatQuantity } from 'src/helpers/formatQuantity';
     import type { MealPlan, MealPlanIngredient } from 'src/models/mealPlan';
 
     const { batchEnabled } = useBatchEnabled();

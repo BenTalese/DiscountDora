@@ -81,7 +81,7 @@
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, reactive, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
@@ -172,7 +172,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save feature flag.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             savingFeatures.value.delete(key);
@@ -194,7 +194,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not save scanning setting.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             savingScanning.value = false;

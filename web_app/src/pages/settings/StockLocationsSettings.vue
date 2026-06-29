@@ -54,7 +54,7 @@
     import { computed, onMounted, ref } from 'vue';
     import type { LocationKind, LocationNode } from 'src/models/location';
     import { useLocationStore } from 'src/stores/locationStore';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import BaseButton from 'src/components/BaseButton.vue';
     import LocationRow from 'src/components/settings/LocationRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -98,7 +98,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             cancelRename();
@@ -139,7 +139,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: `Could not add ${kind}.`,
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -182,7 +182,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

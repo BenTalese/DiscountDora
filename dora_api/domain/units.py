@@ -341,6 +341,32 @@ def normalise_unit(unit: str) -> str:
     return unit.strip().lower().replace("°", "")
 
 
+# FU-097 / DEC-3 — server mirror of `web_app/src/helpers/formatQuantity.ts`.
+# Inclusion list MUST stay in sync with `NO_SPACE_UNITS` over there.
+_NO_SPACE_UNITS: frozenset[str] = frozenset({
+    "ml", "g", "kg", "l", "mg", "oz", "lb", "floz", "pt", "qt",
+})
+
+
+def format_quantity(quantity: Any, unit: Any) -> str:
+    """Pretty-print a quantity + unit pair using the DEC-3 spacing rule.
+
+    Mass/volume abbreviations sit tight against the number ("250g", "2ml");
+    everything else gets a space ("1 tbsp", "2 cloves"). Either side may be
+    None / empty.
+    """
+    qty = "" if quantity is None or quantity == "" else str(quantity)
+    trimmed_unit = "" if unit is None else str(unit).strip()
+    if not qty and not trimmed_unit:
+        return ""
+    if not trimmed_unit:
+        return qty
+    if not qty:
+        return trimmed_unit
+    no_space = trimmed_unit.lower() in _NO_SPACE_UNITS
+    return f"{qty}{trimmed_unit}" if no_space else f"{qty} {trimmed_unit}"
+
+
 def find_unit(unit: str) -> UnitDef | None:
     """Return the :class:`UnitDef` for *unit* or None. Plural fallback: ``cups``
     is in the table directly; for one-off plurals not enumerated we'd strip

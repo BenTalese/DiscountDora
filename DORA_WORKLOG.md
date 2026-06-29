@@ -9,6 +9,698 @@ next.
 
 ---
 
+## 2026-06-29 — FU-326 closed: shared `useDragDropList` composable + R-022 / ADR-018
+
+**Why:** ingredient DnD (FU-118) pushed the count of hand-rolled DnD
+surfaces to three (shopping-list lines, recipe steps, recipe
+ingredients). The user said "do 326 now" — extract the abstraction
+before another surface lands.
+
+**What shipped:**
+- **`web_app/src/composables/useDragDropList.ts`** — generic, typed.
+  Owns drag state + dragstart/over/leave/drop wiring; exposes
+  `bind(item) → { handleProps, rowProps, rowClass, isDragging,
+  isDropOver }`. Options: `mime` (unique MIME per logical list),
+  `getId`, `onDrop`, optional `canDragStart` (per-row + global
+  drag gate; reflected in the `draggable` attribute reactively)
+  and `canDropOn` (per-pair drop-target predicate). Composable
+  doesn't care about row shape — same API powers both "handle
+  mode" (small grip is the only draggable element, row body
+  stays interactive) and "whole-row mode" (spread both
+  handleProps + rowProps on the row).
+- **`web_app/src/css/dnd.scss`** — `.dora-dnd-row` (outline
+  reservation + transitions), `--dragging` (0.5 opacity),
+  `--drop-over` (`--brand-primary` outline ring), `.dora-dnd-handle`
+  (grab cursors + sunken hover). Wired into `quasar.config.ts`
+  after `colours.scss`.
+- **`RecipeStepsEditor.vue` + `RecipeStepRow.vue`** — siblings-only
+  preserved via `canDropOn`. Row now accepts a single
+  `dragBindings: DragDropRowBindings` prop instead of emitting
+  three drag lifecycle events; per-component DnD CSS gone (replaced
+  by `.dora-dnd-row` / `.dora-dnd-handle` shared classes).
+- **`RecipeDetailPage.vue`** — ingredient list refactored to the
+  composable; drop effect still does "reinsert at target's slot
+  AND copy `section_client_id`" (FU-118 semantics). ~75 lines of
+  plumbing removed; per-row DnD CSS removed.
+- **`ShoppingListDetail.vue`** — line reorder refactored; the
+  existing `canReorder` computed (list status / grouping / bulk
+  mode) becomes `canDragStart`, so the browser's drag affordance
+  reactively turns off when reorder isn't allowed. Optimistic
+  local reorder + API persist + reload-on-failure preserved.
+  ~70 lines removed.
+- **`docs/01_charter/ENGINEERING_STANDARDS.md`** — promoted to
+  **R-022** ("DnD reorderable lists go through `useDragDropList`")
+  and **ADR-018** (the extraction rationale + consequences). The
+  R rule names the violation signals so the next audit finds drift
+  in one grep (`@dragstart` listener with no composable import;
+  hand-rolled `--dragging`/`--drop-over` CSS; raw
+  `application/x-dora-…` MIME outside the composable).
+
+**Engineering-standards check:** clean.
+- R-001: this *is* the R-001 follow-through — three duplicates
+  consolidated into one composable + one stylesheet.
+- R-002: reused `--brand-primary`, `--surface-sunken`, `--motion-
+  fast`/`--motion-ease`, `--radius-sm`. No new tokens.
+- R-003: drag state owned by the composable; consumers' `form.*`
+  arrays remain the single source of truth for ordering.
+- R-005 (portable data access): unaffected — DnD is pure SPA
+  state; only ShoppingListDetail's `api.reorderLinesAsync` ever
+  touches the server, and that path is unchanged.
+- R-008 (code-style minimalism): code shrank net.
+- R-011 (use the framework's idiomatic pattern): vanilla HTML5
+  drag-and-drop — same as before, just centralised. No new
+  third-party DnD library.
+
+**Promoted rule:** R-022 with ADR-018. Both indexed in
+`ENGINEERING_STANDARDS.md`.
+
+**Verify:** added to `DORA_VERIFY.md` under Cross-cutting — one
+checklist covers "all three DnD lists behave the same way" since
+the visual affordance is now identical.
+
+**Next:** user-driven.
+
+---
+
+## 2026-06-29 — FU-118 closed: ingredient DnD + duplicate-ingredient assessment
+
+**Why:** user asked for FU-118 (drag-and-drop for moving ingredients between
+sections) and a sanity check on whether duplicate ingredients across (or
+within) sections should be enforced or allowed. FU-094's steps DnD pattern
+was already in place, so this was the right time to ship.
+
+**What shipped (DnD):**
+- **`RecipeDetailPage.vue`** — added a drag handle (`drag_indicator`) on
+  each ingredient row, drag state (`draggingIngredientClientId`,
+  `dragOverIngredientClientId`) + handlers (`onIngredientDragStart`,
+  `onIngredientDragEnd`, `onIngredientRowDragOver`,
+  `onIngredientRowDragLeave`, `onIngredientRowDrop`). Drop logic:
+  re-insert source at target's index in `form.ingredients` AND copy
+  `target.section_client_id` to source — single gesture covers
+  reorder-within-section and move-between-sections.
+- **CSS** — `outline` reservation on `.ingredient-row` so the drop-over
+  ring doesn't shift the row 2px when it lights up; `--brand-primary`
+  ring on the actively-hovered drop target; 0.5 opacity on the source
+  while dragging; grab/grabbing cursors on the handle. Mirrors the
+  `RecipeStepRow` affordances so the two editors feel the same.
+- **Key change** — switched the v-for key from `idx` to
+  `ing.client_id ?? idx` so reordering doesn't reuse DOM and accidentally
+  reuse input state across rows. `client_id` is always present in
+  practice (assigned by `addIngredient`; hydrated from
+  `recipe_ingredient_id` on edit).
+- **Differs from steps DnD intentionally**: steps are siblings-only
+  (parent/child nesting); ingredients have no nesting, only section
+  grouping. Cross-section IS the goal here, so no sibling check.
+- **Empty sections** — still need the per-row Section picker (you can't
+  drop onto something that doesn't exist). That's by design; adding
+  section-header drop zones would be a bigger restructure for a
+  marginal win.
+
+**What shipped (assessment — no code, no schema change):**
+- Confirmed `RecipeIngredient` has no `UniqueConstraint` on
+  `(recipe_id, stock_item_id)` or `(recipe_id, section_id, stock_item_id)`
+  (`persistence/table_mappings.py:607-622`). Both create + update
+  handlers accept duplicates verbatim.
+- Confirmed all the downstream consumers that *want* a deduped view
+  already dedup on `stock_item_id`:
+  - Cookability / missing count — `RecipeCard.vue:173`
+    `[...new Set(...filter(is_missing).map(stock_item_id))]`.
+  - Shopping-list picker —
+    `RecipeIngredientPickerDialog.vue:187-194` builds a `Map` keyed by
+    `stock_item_id`, and the "any required occurrence demotes the row
+    from optional" rule correctly handles mixed required/optional dupes.
+  - Ingredient-set filter on Stock Overview (added in the FU-109 close-out
+    this morning) — uses a `Set` of ids.
+  - `RecipesOverview.vue:800` "uses ingredient" filter — Set of ids.
+- **Recommendation: don't enforce uniqueness at any level.** Cross-section
+  duplicates are common in real cookbook patterns (oil/flour/salt across
+  multiple sections with different quantities/notes/units). Same-section
+  duplicates are usually mistakes but occasionally legit ("1 tbsp to fry
+  / 1 tbsp to drizzle"); the standard cookbook idiom ("3 tbsp oil,
+  divided") prefers one row but the cost of *forcing* this exceeds the
+  benefit. Status quo wins. Full reasoning in the FU-118 resolution
+  block in `DORA_FOLLOWUPS_RESOLVED.md`.
+
+**Engineering-standards check:** clean.
+- R-001 (componentisation-first): I deliberately did NOT extract the
+  ingredient row into its own component despite the new handlers; the
+  row template is heavily coupled to RecipeDetailPage helpers
+  (`rowOptionsFor`, `onIngredientChosen`, `isMissingItem`,
+  `levelColourFor`, `sectionOptions`, `createInlineStockItem`,
+  `ingredientFilter`, `AddToListButton`) and a faithful extraction
+  would need ~10 props with no other consumer in sight. Inline-on-
+  page is the smaller, faithful move. If a second editor surface ever
+  needs the row (e.g. a "build recipe from list" dialog), that's the
+  right time to extract.
+- R-002 (theme tokens): reused `--brand-primary`, `--surface-sunken`,
+  `--motion-fast`/`--motion-ease`, `--radius-sm` — no new tokens or
+  hardcoded colours.
+- R-003 (single source of truth): `form.ingredients` stays the canonical
+  ordering store. The DnD only mutates that one array + the row's
+  `section_client_id`; nothing parallel.
+- R-005 (portable data access) / R-020 (deferred-save surface):
+  RecipeDetailPage is already a deferred-save form; the DnD goes
+  through `markDirty()` like every other field edit, so the
+  unsaved-changes guard fires correctly. No server-side change needed.
+- The steps DnD pattern is what this borrows from. If a third DnD
+  surface lands without a shared abstraction, that's the point to
+  promote to an `R-0NN` and add a `useDragDropList`-style composable.
+  Two instances is the "rule of three minus one" — close enough that
+  the abstraction is becoming visible, but not yet urgent. **Logged
+  as a finding (FU-326) in `DORA_FOLLOWUPS.md`.**
+
+**Verify (manual):** added to `DORA_VERIFY.md` under Cookbook & recipes.
+
+**Next:** user-driven.
+
+---
+
+## 2026-06-29 — FU-109 closed + recipe-ingredients deep-link filter
+
+**Why:** user reviewed FU-109 (the lingering "should the would-be-cookable
+dim come back?" decision) and confirmed **keep removed everywhere**. While
+on the surface that owned the loudest case for the dim — `StockItemDetailPage`'s
+Recipes-using-this tab — he asked for a small new affordance: a button on
+each recipe card that filters Stock Overview to the recipe's ingredient set,
+so "what else would I need to cook this?" is one click away.
+
+**What shipped:**
+- **RecipeCard.vue** — dropped the unused `highlightStockItemIds` prop. Added
+  `showFilterByIngredients` (default off) + `filter-by-ingredients(recipeId)`
+  emit; renders a `filter_list` icon button in the actions row when on.
+- **StockItemDetailPage.vue** — removed the dead `:highlight-stock-item-ids`
+  binding; flipped `:show-filter-by-ingredients` on, and routes the emit to
+  `/stock?recipe=<id>` via a new `onFilterStockByRecipe` handler.
+- **useStockFilters.ts** — new `recipeFilter: Ref<string|null>` +
+  `recipeFilterContext` (resolves `{name, ids}` from the recipe id; iterates
+  `recipe.ingredients.stock_item_id`). Filter predicate excludes items not
+  in the ingredient set; `activeFilterCount` and `clearFilters` updated.
+- **StockOverview.vue** — `watch(route.query.recipe, …, immediate)` syncs the
+  query into the composable's ref, and opens the filter panel on landing so
+  the chip is visible. New removable chip in the filter bar (`menu_book` icon,
+  `Ingredients of: <recipe name>`) — falls back to "this recipe" while
+  recipes hydrate. `clearAllFilters` wraps the composable's `clearFilters` to
+  also strip `?recipe=` from the URL so back/refresh can't reinstate.
+- **FU-109 moved** from `DORA_FOLLOWUPS.md` (deleted) to
+  `DORA_FOLLOWUPS_RESOLVED.md` (top, with the resolution note).
+- **CHANGELOG.md** — one "Added" entry (deep-link filter) + one "Changed"
+  entry (FU-109 resolution).
+
+**Engineering-standards check:** no violations introduced.
+- R-003 (single-source-of-truth / state-ownership): the new filter ref lives
+  in `useStockFilters` alongside every other filter; StockOverview only
+  consumes + bridges from the query string. Recipe → ingredient-id-set
+  resolution happens once in the composable, not in the page.
+- R-002 (theme tokens) / R-001 (componentisation): the chip reuses the same
+  q-chip pattern as the cart-state chip directly above it; no new colours
+  or one-off styles.
+- The new action on `RecipeCard` is gated behind a default-false prop, so
+  every existing call site (RecipesOverview, MealPlanRecipePicker, etc.)
+  keeps its previous footer layout unchanged.
+
+**Verify (manual):** added to `DORA_VERIFY.md` under Stock.
+
+**Next:** user-driven — back to whatever's next on their list.
+
+---
+
+## 2026-06-29 — Verify checklist split from followups ledger (process refactor)
+
+**Why:** the user flagged the workflow as not working — verify items
+spread across `DORA_FOLLOWUPS.md` made it impossible to do a focused
+verify session. They proposed a separate document for verifications,
+self-managed (delete as you go, no archive), grouped by area, with an
+urgency flag.
+
+**What shipped:**
+- **New `DORA_VERIFY.md`** — flat checklist grouped by app surface
+  (Cookbook, Cook mode, Meal plans, Shopping lists, Stock, Dashboard,
+  Alerts, Settings, Onboarding, Products & pricing, Build/install,
+  Cross-cutting). Newest within each surface at top. Each item has a
+  short title + `— origin FU-NNN` suffix, then verb-first `[ ]`
+  checkboxes. `⚠️` heading prefix flags blocking items (none flagged
+  this pass — the user said "if urgency matters, flag those"; nothing
+  in the current batch genuinely blocks).
+- **38 pure-verify FUs drained** from `DORA_FOLLOWUPS.md` (322, 321,
+  305, 301, 295's verify-arm, 292, 291, 290, two FU-286s, 283, 230,
+  222, 218, 214, 206, 205, 202, 192, 183, 179, 165, 151, 142, 145,
+  135, 132, 130, 124, 123, 121, 119, 116, 114, 112, 111, 110, 105,
+  103, 101, 100, 099-V, 096, 093, 091, 089, 088, 076, 073, 072, 069,
+  068, 066, 060, 051) + one orphan recipe-image-steps block.
+  Followups file: 3926 → 2280 lines (-42%).
+- **FU-295 preserved** — it's the "didn't reproduce statically"
+  shape that the user's design call kept in followups (`type=finding`).
+  Updated its body to point at the verify item in `DORA_VERIFY.md`.
+- **`CLAUDE.md` ritual updated** — session-start rule explicitly
+  says **do NOT** pre-scan `DORA_VERIFY.md` (it's the user's
+  personal walk-through, not "open work" to surface); session-end
+  ritual has a new explicit routing rule: pure browser-verify →
+  `DORA_VERIFY.md`, everything else → `DORA_FOLLOWUPS.md`.
+  Quick "pick the right ledger" guide added with concrete examples.
+
+**Decisions made (all user-led):**
+- **No archive for verify items.** User deletes them as he goes; the
+  pre-release systems test catches anything that slips. Simpler than
+  the followups two-file pattern.
+- **No stable IDs for verify items.** Verifications aren't
+  cross-referenced; the `origin FU-NNN` suffix is the only grep handle
+  back. (Less ceremony than the FU-NNN system.)
+- **Don't pre-scan verify at session start.** The verify file is for
+  the user's verify sessions, not for agents to surface in their
+  "open work" summary. Mandated in `CLAUDE.md`.
+- **"Reported defect didn't reproduce" stays in `DORA_FOLLOWUPS.md`**
+  as `type=finding`. The verify of "did the bug actually go away"
+  can also live in `DORA_VERIFY.md`, but the FU is the stateful
+  record until the bug is confirmed gone.
+
+**Files touched:**
+- `DORA_VERIFY.md` (new, ~500 lines)
+- `DORA_FOLLOWUPS.md` (-1646 lines)
+- `CLAUDE.md` (session-start rule + session-end ledger routing)
+- `CHANGELOG.md`, `DORA_WORKLOG.md`
+
+**Verification:** no code changed; the docs change is mechanical
+(read FU bodies, group/transcribe into DORA_VERIFY checklist form,
+delete source). Did one spot-check after the drain: 38 expected
+removals, 38 reported by the drain script. Followups file
+post-drain still parses as valid markdown; no orphan refs.
+
+**Engineering-standards close-gate:** N/A (docs / process change,
+no code). No new ADR — this is a workflow refinement, not a
+recurring engineering decision.
+
+**Next up:** the user picks a surface from `DORA_VERIFY.md` and
+walks it. Anything spawning a real bug → opens an FU in
+`DORA_FOLLOWUPS.md`.
+
+---
+
+## 2026-06-29 — FU-174 + FU-107 closed (app-wide household-tz sweep)
+
+**Why:** user asked to "ensure all datetimes are being treated in a
+sensible, logical, industry standard way — across recording of them as
+well as display of them to the end user (timezone aware)". This is the
+FU-174 sweep the C-2.K work explicitly deferred ("introduces the
+mechanism for the planner surface; app-wide rollout is FU-174"), plus
+FU-107 which was effectively delivered by ADR-007 / `DoraJSONProvider`
+back on 2026-06-12 and was just hanging in the open ledger.
+
+**What shipped:**
+- **Standards:** new **R-021** ("Calendar-day logic runs in the
+  household timezone") + **ADR-016** added to
+  `docs/01_charter/ENGINEERING_STANDARDS.md`. The FU-174 entry
+  explicitly asked for this promotion ("Promote the household-tz
+  date rule into an ADR + a new R-0NN").
+- **Server sweep (15 sites + 1 naive-now):** every `date.today()` in
+  feature code → `household_today(self.repository)`. Touched:
+  alerts/get_alerts, dashboard/get_dashboard_summary, assistant/tools
+  (9 call sites), waste/waste, budget/budget (2 handlers),
+  locations/attention (signature change: `today: date` required —
+  callers `get_location_tree` + `get_stock_item_detail` updated),
+  recipes/get_recipes (at-risk horizon), suggestions/generators
+  (2 sites), alerts/act_on_alert (extend-expiry base),
+  assistant/confirm_actions (push-expiry fallback),
+  stock_items/update_stock_item (`opened_on` auto-stamp),
+  stock_items/create_stock_item (`opened_on` + naive
+  `datetime.now()` → `datetime.now(UTC)`), data/export_shared
+  (download timestamp), recipes/cook_recipe (`last_made_on` write).
+  One **documented carve-out**: `format_list_date` in the
+  ShoppingList entity (display-only fallback for a `@property` with
+  no repo access).
+- **Schema cleanup (migration `d2f7a9c4b1e8`):**
+  - `Recipe.last_made_on`: `DateTime(timezone=True)` → `Date`. The
+    column was always semantically a calendar day; the time portion
+    was meaningless. Entity / DTOs / call sites lifted; cook_recipe
+    write changed; `get_recipes._stale` dropped the obsolete
+    `.date()` cast.
+  - `User.onboarding_completed_at`: `DateTime` →
+    `DateTime(timezone=True)`. Matches every other wall-clock
+    column; stored values were already naive UTC.
+  - This migration is also the **merge** for the two open heads
+    (`b7e2d9a4c1f5` + `c4a8e2b9d7f5`).
+- **Client annotation:** `localTodayIso()` in `weekDates.ts` and its
+  one use in `useMealPlanner.ts` now carry inline R-021 comments —
+  the function is a display-only pre-load fallback, never used for
+  state or persistence; the server's `today` is authoritative the
+  moment it arrives.
+- **Tests:** new `tests/e2e/dora_api/test_household_tz_boundaries.py`
+  (4 cases) sets `AppSetting.timezone = Pacific/Kiritimati` (UTC+14)
+  and asserts `/meal-plans/today`, alerts handler, dashboard summary,
+  and waste-rescue feed all evaluate boundaries against the
+  household zone. Each test brackets in `try/finally`.
+
+**Decisions made:**
+- Sweep scope: **all** household-boundary `date.today()` sites in
+  feature code — not a "load-bearing surfaces only" subset. The
+  user's wording was unambiguous ("ensure all datetimes…"), and
+  R-021 is a much stronger rule if there are zero exceptions to
+  point at in a code review.
+- `Recipe.last_made_on` type: switched to `Date` rather than left as
+  `DateTime`. The time portion was meaningless ("when did you cook
+  this? — 14:32:00.123Z" is silly), and lifting it to `Date` removes
+  one bit of accidental-precision ambiguity from every call site.
+- Domain-entity `format_list_date` carve-out: documented in place
+  rather than refactored to thread `today` through `display_name`.
+  Property has no repo access; refactoring would ripple to every
+  DTO caller of `display_name`. The risk is bounded to a once-a-year
+  edge case in display only — pure formatting, never decisions.
+
+**Files touched (count):**
+- Server: 17 files modified (`error_translation` no longer in scope
+  — that was FU-099); 1 new migration; 1 new test file.
+- Client: 2 files (`weekDates.ts`, `useMealPlanner.ts` comments).
+- Docs: ENGINEERING_STANDARDS.md (R-021 + ADR-016),
+  DORA_FOLLOWUPS.md, DORA_FOLLOWUPS_RESOLVED.md, CHANGELOG.md,
+  DORA_WORKLOG.md.
+
+**Verification:** `vue-tsc --noEmit` clean. No Python interpreter in
+this session's env — server-side suite not run; the new tz boundary
+tests + the 45 router-test assertions FU-099 updated this morning +
+the existing `test_meal_plan_today` cover the contract. The migration
+is straightforward (batch_alter_table on two columns, both
+nullable), but should be applied + smoke-tested on a Postgres
+instance before deploy.
+
+**Engineering-standards close-gate:** clean.
+- **R-021** + **ADR-016** landed (the explicit FU-174 ask).
+- **R-003** (single source): `household_today(repository)` is the
+  only entry point for "what day is it"; tests use the same helper.
+- **R-005** (portable data access): migration uses `batch_alter_table`
+  (SQLite-safe) and portable type changes; no engine-specific SQL.
+- **R-006** (clean migrations): one migration, non-destructive type
+  lifts; reversible downgrade.
+
+**Next up:**
+- Apply migration on a Postgres dev instance, smoke-test the
+  type changes.
+- [[FU-099-V]] / [[FU-321]] verify pass should also eyeball the
+  `last_made_on` display in cookbook surfaces (now a date string
+  vs. a datetime string).
+
+---
+
+## 2026-06-29 — FU-323 closed (error-toast polish straggler)
+
+**Why:** while the FU-099 context was still warm, user asked to
+finish the 10 sites the FU-099 sweep had deliberately deferred — the
+`message: describeApiError(e)` toasts in `ApiAccessSettings.vue` (8
+toast sites + 1 inline banner) and `StoresSettings.vue` (2 toast
+sites + 2 inline banner sites). These worked correctly post-FU-099
+(friendly copy + console.warn ref) but didn't show the ref in the
+user-facing toast.
+
+**What shipped:**
+- All 10 toast sites migrated to
+  `message: '<action context>', caption: toastCaption(e)`. Action
+  context is page-specific ("Couldn't toggle the API key.",
+  "Couldn't drop the mapping.", `Couldn't delete ${store.name}.`,
+  etc.) so the user knows *what failed* on the lead line and gets
+  the *why* + correlation ref on the caption.
+- 3 inline `loadError.value = describeApiError(e)` banner sites
+  routed through `toastCaption(e)` instead — banners carry the
+  ref-id suffix too, matching toast behaviour.
+- Imports cleaned: `describeApiError` removed from both files;
+  `toastCaption` added.
+
+**Files touched:**
+- `web_app/src/pages/settings/ApiAccessSettings.vue`
+- `web_app/src/pages/settings/StoresSettings.vue`
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`
+
+**Verification:** `vue-tsc --noEmit` clean. Browser-verify lands
+under [[FU-099-V]] — same pass.
+
+**Engineering-standards close-gate:** clean.
+- R-001 / R-003: `toastCaption` already the single source for the
+  shape; no new code path, no new helper. Pure migration onto the
+  rule established by FU-099. No new ADR.
+
+**Next up:** still [[FU-099-V]] when env is available.
+
+---
+
+## 2026-06-29 — FU-099 closed (error-handling pass)
+
+**Why:** user asked to analyse the current error-handling implementation
+and "fix and polish it" to industry standard — top-line complaint that
+raw Pydantic strings ("Extra inputs not allowed") were leaking to
+end users. Plan written first per FU-099's discuss-first instruction;
+seven design decisions captured via AskUserQuestion before any code
+landed (see `docs/04_proposals/IMPL_PLAN_ERROR_HANDLING.md` §1).
+
+**What shipped:**
+- Server: `error_translation.py` table (~30 Pydantic codes → friendly
+  copy + `FRIENDLY_FALLBACK`). `ErrorEntry` dataclass
+  (`{msg, code, raw}`) replacing bare strings inside `ProblemDetails.errors[field]`.
+  `_lift_errors` helper inside `api_response.py` so existing
+  `bad_request` / `business_rule_violation` / `entity_existence_failure`
+  call sites keep their plain-string signatures (50+ feature-code
+  sites untouched). Middleware lift uses Pydantic's structured
+  `err["type"]` + `err["msg"]` to populate `ErrorEntry`.
+- Tests: 45 existing assertion sites updated via new helpers
+  `validation_err(code, raw)` / `domain_err(msg)` in
+  `tests/e2e/dora_api/_error_assertions.py` (single-source so the
+  translation table can evolve without touching individual tests).
+  New `test_error_translation.py` (6 e2e cases) pins the wire-shape
+  contract.
+- Client: `ApiErrorEntry` matches the server wire. `extractFieldErrors`
+  reads `msg`. `describeApiError` now returns the generic
+  "Couldn't save — check the highlighted fields." for any error with
+  field-keyed entries (per-field copy goes inline). New
+  `correlationSuffix(err)` → ` · ref: <8-char>`. New
+  `toastCaption(err)` combines the two — drop-in for the old
+  `describeApiError(err) || ''` idiom.
+- Client axios: 4xx now `console.warn`'d alongside 5xx, same shape.
+  Every API failure carries the correlation id to DevTools.
+- Client composable: new `useFormErrors()` —
+  `{ fieldErrors, generalError, handleSaveError, reset, correlationSuffix }`.
+- Migrations:
+  - **Shape C (4 sites, 3 migrated):** RecipeEditDialog,
+    CreateStockItemDialog, LoginPage on `useFormErrors`.
+    WelcomeWizard kept its direct `extractFieldErrors` call
+    (custom routing — not a fit for the simple composable).
+  - **Shape B sweep (95 substitutions across 33 files):**
+    `caption: describeApiError(err) || ''` →
+    `caption: toastCaption(err)` via a one-shot Node script. Imports
+    auto-cleaned (`describeApiError` removed where unused). vue-tsc
+    clean post-sweep.
+
+**Decisions made (in design discussion):**
+- **Server-side translation** (not client) — copy lives in Python,
+  shared across any future API client. User chose this over my
+  initial recommendation (client-side mapper) and the reasoning
+  was sound: shared across future clients > "copy lives in TS".
+- **Inline + brief generic toast** — per-field copy on the input,
+  generic confirmation in the toast caption.
+- **~15 codes + fallback** (turned into ~30 in practice — the
+  inclusion list grew to cover what schemas in this repo emit).
+- **Always console.warn on 4xx** + `ref: <id>` in every toast.
+- **Wire shape `{msg, code, raw}`** — preserves the dev path.
+- **Keep current network/5xx copy**, add ref.
+- **Single PR sweep** to avoid a two-pattern drift period.
+
+**Files touched:**
+- Server: `error_translation.py` (new), `api_response.py`,
+  `middleware.py`, `_error_assertions.py` (new test helper),
+  `test_error_translation.py` (new), 3 router test files updated.
+- Client: `apiErrorHandler.ts`, `axiosHttpClient.ts`,
+  `useFormErrors.ts` (new), 4 shape-C dialogs/pages, 33 shape-B
+  sites swept.
+- Docs: `docs/04_proposals/IMPL_PLAN_ERROR_HANDLING.md` (new),
+  `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`,
+  `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:** `vue-tsc --noEmit` clean. No Python interpreter
+available in this session, so the server-side test suite isn't run;
+the new e2e tests + the 45 updated assertions pin the contract.
+Browser-verify of the full pipeline (friendly copy + ref + 4xx
+console + unknown-code fallback) logged as **[[FU-099-V]]**.
+
+**Engineering-standards close-gate:** clean.
+- R-001 (componentisation): `useFormErrors` lifts the repeated
+  catch-block plumbing; one composable, four (now three) call sites.
+  The translation table is its own module; the toast-caption builder
+  is its own helper. No five-liners remain across migrated forms.
+- R-003 (single source): `PYDANTIC_FRIENDLY` is the sole code-to-copy
+  map; tests assert through the same translator via the
+  `validation_err` helper so a future change to the table cascades
+  automatically. `correlationSuffix` is the sole ref-id format.
+  `toastCaption` is the sole toast-caption builder.
+- R-007 (scope discipline): inclusion list = the codes our schemas
+  actually emit; unknown codes hit the fallback. No pre-built
+  per-field bespoke copy.
+- No new ADR — R-001 + R-003 already cover the principles applied.
+  If FU-323 or future drift produces a fresh recurrence, then
+  promote.
+
+**Next up:**
+- [[FU-323]] — polish: 10 surviving `message: describeApiError(e)`
+  toasts in ApiAccessSettings + StoresSettings should adopt the
+  message + caption + ref pattern. Opportunistic.
+- [[FU-099-V]] — browser verify when env available. Bundle with
+  [[FU-321]] / [[FU-322]] / [[FU-096]] in a single pass.
+
+---
+
+## 2026-06-29 — FU-098 closed (unsaved-changes guard sweep)
+
+**Why:** user asked to finish FU-098, framing the audit as "could
+only be where there's a dedicated save button right?" — exactly the
+right heuristic (no Save button → either inline/auto-save or no
+deferred state, neither needs a guard).
+
+**Audit result:** the composable `useUnsavedChangesGuard` already
+existed and was wired into `RecipeDetailPage` + `StockItemDetailPage`
+via FU-156 (2026-06-12 — predates this session). Exhaustive sweep
+turned up exactly two remaining surfaces with the "Save button +
+locally-deferred draft + `unchanged` computed" shape:
+
+- **`AccountSettings.vue`** — username + email each have a Save
+  button and their own draft. Guard wired on
+  `!usernameUnchanged || !emailUnchanged`. Profile picture (saves
+  immediately on pick/clear) and password change (single-action
+  with security-driven nav-strip expectation) deliberately
+  excluded.
+- **`AdminSystemAssistantSettings.vue`** — three drafts for the
+  AI config (enabled / baseUrl / model) gated by `unchanged`.
+  Guard wired on `!unchanged.value`.
+
+**Deliberately NOT guarded, with reasons captured in the resolved
+ledger entry:**
+- `RecipeCookMode` — session state is transient, not draft.
+- `ShoppingListDetail` — every line edit saves on blur.
+- ~10 settings pages that save-on-blur/toggle/change.
+- ~10 settings pages whose only Save button lives inside an add/
+  edit/rename dialog (dialog state ≠ page form state).
+- Meal-plan pages (board mutations write immediately;
+  "Save template" lives inside a popover).
+- Standalone dialogs/drawers (not pages).
+
+**Files touched:**
+- `web_app/src/pages/settings/AccountSettings.vue`
+- `web_app/src/pages/settings/AdminSystemAssistantSettings.vue`
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`
+
+**Verification:** `vue-tsc --noEmit` clean. Browser verify of the
+two new guard sites logged as **[[FU-322]]** for the next
+verify-pass.
+
+**Engineering-standards close-gate:** clean.
+- R-001 (componentisation): no new code shapes — the existing
+  composable was reused with no copy-paste.
+- R-003 (single source): policy lives in one file; call sites only
+  supply the dirty predicate.
+- **New rule landed: R-020 + ADR-015** — at the user's explicit
+  request after closing the sweep ("ensure there's an engineering
+  rule — anywhere you can delay saving changes (dedicated save
+  button), there is the discard guard"). The recurrence (FU-156 in
+  June, FU-098 today) was already the rule-worthy signal in
+  hindsight; the user calling it out makes it explicit. R-020 pins
+  the predicate shape, the four standing exclusion categories
+  (inline-save / real-time session / dialog-only / password field),
+  and the violation-grep target for reviewers. Updated all four
+  already-wired call sites (`RecipeDetailPage`,
+  `StockItemDetailPage`, `AccountSettings`,
+  `AdminSystemAssistantSettings`) so the inline comment names
+  **R-020** rather than the FU id — makes the rule discoverable
+  from any site.
+
+**Next up:**
+- [[FU-322]] when env is available — browser-verify the prompt
+  fires (and only fires) on dirty state in the two new sites.
+- Sensible to bundle with [[FU-321]] (FU-097 verify) + [[FU-096]]
+  (cook-mode verify) in a single verify-pass session.
+
+---
+
+## 2026-06-29 — FU-097 closed (quantity-spacing sweep)
+
+**Why:** user asked to do FU-097, with a heads-up to be mindful of the
+unit/measurement work that landed after the FU was raised (mainly the
+`dora_api/domain/units.py` canonical authority + FU-034 substitute
+ratios, which canonicalise units like `"tablespoons"` → `"tbsp"` at
+persist).
+
+**What shipped:**
+- New helper **`format_quantity`** in `dora_api/domain/units.py` —
+  Python mirror of `web_app/src/helpers/formatQuantity.ts`, same DEC-3
+  no-space inclusion list, sat next to `UNIT_TABLE` so the rule lives
+  with the existing single source of truth for units.
+- **`MealPlanShoppingSummary.vue`** — `needs {{ qty }} {{ unit }}` →
+  `needs {{ formatQuantity(qty, unit) }}`.
+- **`SequentialBuilderDialog.vue`** — same pattern (kept the existing
+  `round()`, just routed through `formatQuantity`).
+- **`RecipeCookMode.vue` substitute-ratio caption** — each half of the
+  `qty unit → qty unit` string now goes through `formatQuantity`.
+- **`StockItemDetailPage.vue` substitute-ratio caption** — same fix.
+- **`dora_api/features/data/export_recipe.py` print template** —
+  the Jinja `{% if quantity %}{{ quantity }}{% endif %}{% if unit %} {{ unit }}{% endif %}`
+  collapsed into a single `{% set qty_label = format_quantity(...) %}`
+  call. `format_quantity` passed in via the `render_template_string`
+  kwargs (no Jinja env-level filter registration needed for a
+  template-string).
+
+**Surfaces in the FU's original list that turned out to be N/A:**
+- `RecipeDetailPage.vue`, `RecipeEditDialog.vue` — both use separate
+  qty + unit `q-input`s (editor surfaces, no display concatenation).
+- `RecipeCard.vue`, cookbook overview cards — these don't render
+  `qty + unit` at all (name + time + servings + tags only).
+- `ShoppingListDetail.vue` + shop-mode card — already noted N/A in the
+  FU's 2026-06-12 update (list quantities are unitless integers).
+- The "Print/export view (`ExportPrint.vue`)" pointer in the FU was
+  misleading — that file is the SPA hub of export actions; the actual
+  recipe print template that rendered "250 g" wrong was the
+  server-side Jinja string, fixed above.
+
+**Decisions made:**
+- Server vs client: chose to *mirror* the helper in Python rather than
+  pre-format on the server and ship the string to the SPA, because the
+  TS side already exists with the same shape, and pre-formatting would
+  couple the recipe DTO to display concerns. R-003 is preserved by
+  comment-pinning the two inclusion lists ("MUST stay in sync") and
+  keeping them right next to each other in their respective files.
+- Re-checked unit canonicalisation interaction with FU-034: the
+  substitute API now persists `"tablespoons"` → `"tbsp"`, but the
+  client formatter lowercases for matching anyway, so canonical forms
+  ("L", "tbsp") and aliases ("litre", "tablespoons" — if anything
+  ever bypasses canonicalisation) both route to the right branch.
+  No drift risk introduced.
+
+**Files touched:**
+- `web_app/src/components/MealPlanShoppingSummary.vue`
+- `web_app/src/components/SequentialBuilderDialog.vue`
+- `web_app/src/pages/RecipeCookMode.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `dora_api/domain/units.py`
+- `dora_api/features/data/export_recipe.py`
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`
+
+**Verification:** `vue-tsc --noEmit` clean. No Python interpreter in
+this session's environment, so `py_compile` not run; the Python
+changes are a pure helper (no I/O, no deps) plus a Jinja `{% set %}`
+call — both syntactically trivial. Browser verify of the five
+touched display surfaces logged as **[[FU-321]]** for the next
+verify-pass.
+
+**Engineering-standards close-gate:** clean.
+- R-003 (single source): rule is stated once per language; inclusion
+  lists are mirrored by intent and comment-pinned. No call site
+  re-implements it.
+- R-001 (componentisation): no new components; existing helper reused.
+- No new ADR — `formatQuantity`'s `R-003`/DEC-3 framing is already in
+  place from Cook Mode Chunk 2 and the existing rule covers it.
+
+**Next up:**
+- [[FU-321]] when env is available — the static rollout still wants a
+  browser-verify pass across the five surfaces before trusting that
+  "250g" / "1 tbsp" / unitless fallbacks / two-sided ratios all land
+  right. Sensible to fold into the [[FU-096]] cook-mode verify pass.
+
+---
+
 ## 2026-06-28 — FU-092 closed (magic-behaviour audit)
 
 **Why:** user said "FU-092 lets do a proper investigation and report on

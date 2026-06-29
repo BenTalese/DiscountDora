@@ -40,7 +40,11 @@ export default defineConfig((ctx): any => {
             // kill-switch. Loads after the design tokens, before component css.
             'motion.scss',
             'app.scss',
-            'colours.scss'
+            'colours.scss',
+            // R-022 / FU-326 — shared DnD affordances (dragging dim,
+            // drop-target ring, handle grip). Loaded after colours so
+            // it can reference `--brand-primary` / `--surface-sunken`.
+            'dnd.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

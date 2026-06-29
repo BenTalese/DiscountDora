@@ -67,7 +67,7 @@
             <FilterToggleButton
                 v-model="filtersExpanded"
                 :active-count="filters.activeFilterCount.value"
-                @clear="filters.clearFilters"
+                @clear="clearAllFilters"
             />
             <!-- C-1 Chunk 3 / FU-106 — inline image-toggle. Flips the
                  per-user `show_stock_images` flag; the row's image
@@ -112,7 +112,7 @@
             v-model="filtersExpanded"
             :toolbar="false"
             :active-count="filters.activeFilterCount.value"
-            @clear="filters.clearFilters"
+            @clear="clearAllFilters"
         >
             <template #filters>
             <div class="row q-gutter-sm items-center">
@@ -164,6 +164,22 @@
             >
                 <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
                 {{ filters.cartFilter.value === 'on_list' ? 'On a list' : 'Not on any list' }}
+            </q-chip>
+
+            <!-- Recipe-ingredients filter — set via deep-link from a
+                 recipe card on the stock-item detail page. The chip is
+                 the only UI surface for the filter (no dropdown);
+                 removing it clears the deep-link state. -->
+            <q-chip
+                v-if="filters.recipeFilter.value !== null"
+                clickable
+                color="primary"
+                text-color="white"
+                removable
+                @remove="clearRecipeFilter"
+            >
+                <q-icon :name="ICONS.menu_book" size="14px" class="q-mr-xs" />
+                {{ recipeFilterChipLabel }}
             </q-chip>
 
             <q-select
@@ -443,7 +459,7 @@
     import StockGroupApiService from 'src/services/api/stockGroupApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService from 'src/services/api/stocktakeApiService';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
@@ -533,6 +549,47 @@
     // Filter panel expanded state — shared between the toolbar's
     // FilterToggleButton and the FilterBar's collapsible panel.
     const filtersExpanded = ref(false);
+
+    // ── Recipe-ingredients deep-link filter ─────────────────────────────
+    // Triggered by the "filter to this recipe's ingredients" action on
+    // RecipeCard (currently surfaced on StockItemDetailPage). The query
+    // param is the only entry point; the chip is the only on-page UI.
+    // The label falls back to "this recipe" while the recipe list is
+    // still hydrating so the chip never reads "Ingredients of: " bare.
+    const recipeFilterChipLabel = computed(() => {
+        const ctx = filters.recipeFilterContext.value;
+        const name = ctx?.name ?? 'this recipe';
+        return `Ingredients of: ${name}`;
+    });
+    // Wrap useStockFilters' clearFilters so the recipe deep-link param is
+    // stripped from the URL alongside the in-memory state. Without this
+    // wrap, "Clear filters" would zero the chip but leave ?recipe= on the
+    // URL — a refresh/back would silently reinstate the filter.
+    function clearAllFilters() {
+        filters.clearFilters();
+        if (route.query.recipe) {
+            const next = { ...route.query };
+            delete next.recipe;
+            void router.replace({ path: route.path, query: next });
+        }
+    }
+    function clearRecipeFilter() {
+        filters.recipeFilter.value = null;
+        // Strip the param so a refresh/back-nav doesn't restore the
+        // filter the user just dismissed.
+        if (route.query.recipe) {
+            const next = { ...route.query };
+            delete next.recipe;
+            void router.replace({ path: route.path, query: next });
+        }
+    }
+    function applyRecipeQuery(value: unknown) {
+        const id = typeof value === 'string' && value.length > 0 ? value : null;
+        if (filters.recipeFilter.value !== id) filters.recipeFilter.value = id;
+        // Open the filter panel so the chip is visible on landing.
+        if (id) filtersExpanded.value = true;
+    }
+    watch(() => route.query.recipe, applyRecipeQuery, { immediate: true });
 
     // C-1 Chunk 2 / L97 — options for the level dropdown. Built off the
     // stockLevelStore so order matches the rest of the app.
@@ -774,7 +831,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove from list.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             bulkBusy.value = false;
@@ -812,7 +869,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not move items.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             bulkBusy.value = false;

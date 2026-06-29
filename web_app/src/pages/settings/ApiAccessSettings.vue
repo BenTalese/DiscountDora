@@ -326,7 +326,7 @@
         type IngestionStoreMapping
     } from 'src/services/api/ingestionSourcesApiService';
     import { computed, onMounted, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const api = new IngestionSourcesApiService();
@@ -369,7 +369,7 @@
             const items = await api.listMappingsAsync(sourceId);
             mappingsBySource.value = { ...mappingsBySource.value, [sourceId]: items };
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't load mappings.", caption: toastCaption(e) });
         }
     }
 
@@ -390,7 +390,7 @@
                 )
             };
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't update the mapping.", caption: toastCaption(e) });
         }
     }
 
@@ -412,7 +412,7 @@
                         )
                     };
                 } catch (e) {
-                    $q.notify({ type: 'negative', message: describeApiError(e) });
+                    $q.notify({ type: 'negative', message: "Couldn't drop the mapping.", caption: toastCaption(e) });
                 }
             })();
         });
@@ -422,7 +422,7 @@
         try {
             stores.value = await api.listStoresAsync();
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't load stores.", caption: toastCaption(e) });
         }
     }
 
@@ -432,7 +432,7 @@
         try {
             sources.value = await api.listAsync();
         } catch (e) {
-            loadError.value = describeApiError(e);
+            loadError.value = toastCaption(e);
         } finally {
             loading.value = false;
         }
@@ -456,7 +456,7 @@
             createOpen.value = false;
             revealOpen.value = true;
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't create the API key.", caption: toastCaption(e) });
         } finally {
             creating.value = false;
         }
@@ -487,7 +487,7 @@
             sources.value = sources.value.map(s => (s.id === updated.id ? updated : s));
             renameOpen.value = false;
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't rename the API key.", caption: toastCaption(e) });
         } finally {
             renaming.value = false;
         }
@@ -499,7 +499,7 @@
             const updated = await api.updateAsync(src.id, { enabled: !src.enabled });
             sources.value = sources.value.map(s => (s.id === updated.id ? updated : s));
         } catch (e) {
-            $q.notify({ type: 'negative', message: describeApiError(e) });
+            $q.notify({ type: 'negative', message: "Couldn't toggle the API key.", caption: toastCaption(e) });
         } finally {
             togglingId.value = null;
         }
@@ -519,7 +519,7 @@
                     await api.deleteAsync(src.id);
                     sources.value = sources.value.filter(s => s.id !== src.id);
                 } catch (e) {
-                    $q.notify({ type: 'negative', message: describeApiError(e) });
+                    $q.notify({ type: 'negative', message: "Couldn't revoke the API key.", caption: toastCaption(e) });
                 } finally {
                     revokingId.value = null;
                 }

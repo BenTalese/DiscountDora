@@ -1,11 +1,11 @@
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.recipe import Recipe
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import RECIPE_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
@@ -36,7 +36,8 @@ class CookRecipeHandler:
         if not _Recipe:
             return CookRecipeResponse(recipe_not_found = True)
         _Recipe.available_meals = (_Recipe.available_meals or 0) + request.meals_cooked
-        _Recipe.last_made_on = datetime.now(UTC)
+        # R-021 — last_made_on is now a Date stamp (which household day).
+        _Recipe.last_made_on = household_today(self.repository)
         self.repository.save_changes()
         return CookRecipeResponse(available_meals = _Recipe.available_meals)
 

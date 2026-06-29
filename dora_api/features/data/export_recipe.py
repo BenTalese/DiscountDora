@@ -15,6 +15,7 @@ from uuid import UUID
 
 from flask import Response, render_template_string, request
 
+from dora_api.domain.units import format_quantity
 from dora_api.features.data.export_shared import (
     PRINT_CSS,
     PRINT_TOOLBAR,
@@ -79,10 +80,9 @@ _PRINT_TEMPLATE = """<!doctype html>
       {% for ingredient in recipe.ingredients %}
         <div class="ingredient">
           <span class="item-name">{{ ingredient.stock_item_name }}</span>
-          {% if ingredient.quantity is not none or ingredient.unit %}
-            —
-            {% if ingredient.quantity is not none %}{{ ingredient.quantity }}{% endif %}
-            {% if ingredient.unit %} {{ ingredient.unit }}{% endif %}
+          {% set qty_label = format_quantity(ingredient.quantity, ingredient.unit) %}
+          {% if qty_label %}
+            — {{ qty_label }}
           {% endif %}
           {% if ingredient.notes %}
             <div class="item-notes">{{ ingredient.notes }}</div>
@@ -110,6 +110,7 @@ def _render_print_view(recipe: RecipeDto) -> str:
         generated_at=generated_at,
         css=PRINT_CSS,
         toolbar=PRINT_TOOLBAR,
+        format_quantity=format_quantity,
     )
 
 

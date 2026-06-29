@@ -226,7 +226,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -303,7 +303,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -327,7 +327,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not rename.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             editingId.value = null;
@@ -354,7 +354,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not delete.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -377,7 +377,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create list.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -396,7 +396,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not load template.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             editorOpen.value = false;
         }
@@ -427,7 +427,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not add item.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -446,7 +446,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not update quantity.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }
@@ -493,7 +493,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not remove item.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

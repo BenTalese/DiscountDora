@@ -169,7 +169,7 @@
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { usePushSubscription } from 'src/composables/usePushSubscription';
     import { computed, ref, watch } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -229,7 +229,7 @@
             type: 'negative',
             position: 'bottom-right',
             message,
-            caption: describeApiError(err) || ''
+            caption: toastCaption(err)
         });
     }
 

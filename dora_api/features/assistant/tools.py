@@ -42,6 +42,7 @@ from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
+from dora_api.features.app_settings.clock import household_today
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 _Logger = logging.getLogger(__name__)
@@ -906,7 +907,8 @@ def search_stock(args: dict) -> list[dict]:
     if _truthy(args.get("low_only")):
         conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(LOW_STOCK_SEQUENCE))
     if _truthy(args.get("expiring_soon")):
-        horizon = date.today() + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
+        # R-021 — expiring-soon horizon evaluates in household timezone.
+        horizon = household_today(repo) + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(horizon))
     if _truthy(args.get("flagged_only")):
@@ -1323,7 +1325,9 @@ def whats_expiring(args: dict) -> list[dict]:
         horizon_days = int(args.get("within_days", EXPIRING_SOON_WINDOW_DAYS))
     except (TypeError, ValueError):
         horizon_days = EXPIRING_SOON_WINDOW_DAYS
-    cutoff = date.today() + timedelta(days=max(0, horizon_days))
+    # R-021 — expiring lookup boundary uses the household timezone.
+    today = household_today(repo)
+    cutoff = today + timedelta(days=max(0, horizon_days))
     query = (
         repo.get(StockItem)
         .include(StockItem.Fields.STOCK_LEVEL)
@@ -1334,7 +1338,6 @@ def whats_expiring(args: dict) -> list[dict]:
         EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(cutoff),
     ]
     items: list[StockItem] = query.all(_combine_and(conditions))
-    today = date.today()
     rows = []
     for item in items:
         if not item.expiry_date:
@@ -1410,12 +1413,14 @@ def pantry_health(_args: dict) -> list[dict]:
     out = sum(1 for i in items if is_out_of_stock(i.stock_level))
     flagged = sum(1 for i in items if i.is_flagged)
     open_items = sum(1 for i in items if i.is_open)
-    horizon = date.today() + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
+    # R-021 — household-tz boundary for the expiring/expired buckets.
+    today = household_today(repo)
+    horizon = today + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
     expiring_soon = sum(
         1 for i in items
-        if i.expiry_date and i.expiry_date <= horizon and i.expiry_date >= date.today()
+        if i.expiry_date and i.expiry_date <= horizon and i.expiry_date >= today
     )
-    expired = sum(1 for i in items if i.expiry_date and i.expiry_date < date.today())
+    expired = sum(1 for i in items if i.expiry_date and i.expiry_date < today)
     return [{
         "total_items": total,
         "low_count": low,
@@ -1432,10 +1437,13 @@ def pantry_health(_args: dict) -> list[dict]:
 def meal_plan_for_date(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
     anchor_str = (args.get("date") or "").strip()
+    # R-021 — when the user says "what's planned" without a date, "today"
+    # is the household's today, not the server's.
+    fallback_today = household_today(repo)
     try:
-        anchor = datetime.strptime(anchor_str, "%Y-%m-%d").date() if anchor_str else date.today()
+        anchor = datetime.strptime(anchor_str, "%Y-%m-%d").date() if anchor_str else fallback_today
     except ValueError:
-        anchor = date.today()
+        anchor = fallback_today
     try:
         days_ahead = max(0, int(args.get("days_ahead", 0)))
     except (TypeError, ValueError):
@@ -1864,7 +1872,8 @@ def find_location(args: dict) -> list[dict]:
         .all(EntityField(StockItem, StockItem.Fields.STOCK_LOCATION_ID).in_(location_ids))
     )
 
-    today = date.today()
+    # R-021 — household-tz "today" for urgency thresholds.
+    today = household_today(repo)
     horizon = today + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
 
     def is_urgent(it: StockItem) -> bool:
@@ -1935,9 +1944,12 @@ _MONTH_NAMES = ["january", "february", "march", "april", "may", "june",
 
 
 def _resolve_month(raw: str) -> int:
+    # R-021 — "this month" is the household-tz month (matters at the
+    # last/first day of a month when server-local has already rolled over).
+    fallback_month = household_today(SqlAlchemyRepository()).month
     raw = raw.strip().lower()
     if not raw:
-        return date.today().month
+        return fallback_month
     try:
         n = int(raw)
         if 1 <= n <= 12:
@@ -1947,7 +1959,7 @@ def _resolve_month(raw: str) -> int:
     for i, name in enumerate(_MONTH_NAMES, start=1):
         if raw.startswith(name[:3]):
             return i
-    return date.today().month
+    return fallback_month
 
 
 def seasonal_picks(args: dict) -> list[dict]:
@@ -2348,7 +2360,8 @@ def purchase_price_stats(args: dict) -> list[dict]:
 
     days_since_last_purchase: int | None = None
     if last_completed_at is not None:
-        days_since_last_purchase = max(0, (date.today() - last_completed_at.date()).days)
+        # R-021 — "days since" is a calendar gap; anchor on household today.
+        days_since_last_purchase = max(0, (household_today(repo) - last_completed_at.date()).days)
 
     quantities = [s[5] for s in samples if s[5] is not None]
     average_quantity: float | None = None

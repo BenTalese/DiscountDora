@@ -87,6 +87,14 @@
                     {{ recipe.is_favourite ? 'Remove from favourites' : 'Mark favourite' }}
                 </q-tooltip>
             </BaseButton>
+            <BaseButton
+                v-if="showFilterByIngredients"
+                variant="icon"
+                :icon="ICONS.filter_list"
+                @click.stop="emit('filter-by-ingredients', recipe.recipe_id)"
+            >
+                <q-tooltip>Filter stock to this recipe's ingredients</q-tooltip>
+            </BaseButton>
             <!-- FU-006: ambiguous — unelevated round dense with dynamic primary/warning colour; no BaseButton variant fits a coloured raised icon-button. Left as raw q-btn for review. -->
             <q-btn
                 unelevated
@@ -131,16 +139,21 @@
     const props = withDefaults(
         defineProps<{
             recipe: Recipe;
-            highlightStockItemIds?: string[];
             /** C-waste W4 — when true, render the "Uses N expiring"
              *  chip if the recipe carries a positive count. Off by
              *  default; the cookbook flips it on while its filter is
              *  active so the badge stays scoped to that intent. */
             showExpiringBadge?: boolean;
+            /** When true, render a "Filter stock to this recipe's
+             *  ingredients" action in the card footer. Off by default;
+             *  the stock-item detail page flips it on inside its
+             *  "Recipes using this" tab so the user can jump from a
+             *  recipe back to the rest of its pantry footprint. */
+            showFilterByIngredients?: boolean;
         }>(),
         {
-            highlightStockItemIds: () => [],
             showExpiringBadge: false,
+            showFilterByIngredients: false,
         },
     );
 
@@ -150,6 +163,7 @@
         (e: 'toggle-favourite', recipeId: string): void;
         (e: 'add-missing', recipeId: string, stockItemIds: string[]): void;
         (e: 'add-all-to-list', recipeId: string): void;
+        (e: 'filter-by-ingredients', recipeId: string): void;
     }>();
 
     const imgFailed = ref(false);

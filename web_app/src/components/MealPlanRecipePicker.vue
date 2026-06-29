@@ -140,7 +140,7 @@
     import type { Recipe } from 'src/models/recipe';
     import type { RecipeTray } from 'src/composables/useMealPlanner';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { computed, ref } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
@@ -214,7 +214,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not log cook.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             logging.value = false;

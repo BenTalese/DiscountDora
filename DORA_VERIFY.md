@@ -1,0 +1,730 @@
+# Dora Verification Checklist
+
+Things that can only be confirmed by running the app and clicking. Grouped by
+surface — pick a surface, walk it top-to-bottom.
+
+**Workflow:**
+- Newest within each surface is at the top.
+- Delete items as you verify them — no archive needed, the end-of-pre-release
+  systems test catches anything that slips.
+- Prefix `⚠️` on a heading means **blocking** other work — do those first.
+- If a verification turns up a real bug, open a regular follow-up in
+  `DORA_FOLLOWUPS.md` for the fix; this file is for "does it work, yes/no".
+- "Origin FU-NNN" on each item is just a grep handle back to the work that
+  spawned it; no two-way link, no archive.
+
+---
+
+## Cookbook & recipes
+
+### Ingredient DnD — reorder + cross-section move — origin FU-118
+- [ ] Open a recipe in edit mode that has 2+ sections + several ingredients in each. Each ingredient row has a drag handle (`drag_indicator` icon) on the far left, with grab cursor on hover
+- [ ] Grab an ingredient by the handle (NOT by the row body — text inputs and selects should keep their normal click/drag-to-select behaviour); the source row dims to ~50% opacity while dragging
+- [ ] Hover over another ingredient row → only that row lights with a primary-coloured outline ring (no flash on other rows; no row-shift)
+- [ ] Drop within the same section → the source row lands at the target's slot; section_client_id unchanged; "Save" enables (dirty)
+- [ ] Drop onto an ingredient in a *different* section → the source row lands at the target's slot AND the Section picker on the moved row now reads the target's section; "Save" enables
+- [ ] Drop onto an unsectioned row → moved ingredient becomes unsectioned (Section picker reads "(Main)")
+- [ ] Save → reload → order + section assignments round-trip exactly as left
+- [ ] Drag and release outside any row → no change; source row returns to 100% opacity, no drop-over ring lingers
+- [ ] Drag → press Esc / cancel → state cleans up (no stale dragging-row visuals)
+- [ ] Drop on the *same* row (no movement) → no change, no save dirtying
+- [ ] Section picker still works as before (for moving into an *empty* section that has no rows to drop onto)
+- [ ] Same stock item appearing in multiple sections still renders as separate rows with distinct quantities/notes/optional flags (verify post-DnD that this stayed working, since the FU also includes a duplicate-ingredient assessment — duplicates remain allowed by design)
+
+### Cookbook Chunk 6 — structured recipe steps — origin FU-093
+- [ ] `alembic upgrade head` applies migration `c9d4f8e2a5b6` on SQLite **and** Postgres; `verify_mappings()` passes for `RecipeStep`
+- [ ] Switch toggle to **Structured**, add a top step (text + hint + ingredient + tool), add a sub-step, reorder via ↑/↓, save → reload → structure round-trips
+- [ ] Switch to **Freeform**, save → `steps[]` wiped server-side; the textarea content remains
+- [ ] Toggle back to **Structured**, add steps, save → editor reflects new state
+- [ ] URL importer: import a recipe with schema.org `HowToStep` → editor auto-fills Structured. Import a `recipeInstructions`-only string → editor stays in Freeform with textarea filled
+- [ ] `HowToSection` import produces top-level "section" steps with sub-steps
+- [ ] Delete an ingredient referenced by a step → the chip disappears + save round-trips without errors
+- [ ] Save a step with empty text → server returns 400 with "Every step must have non-empty text."
+- [ ] Backup → restore round-trips `RecipeStep` / `RecipeStepIngredient` / `RecipeStepTool` in FK-correct order
+
+### Cookbook Chunk 7 — source URL + URL importer — origin FU-103
+- [ ] `alembic upgrade head` applies `d0e5f1a3b8c7` on SQLite + Postgres; `verify_mappings()` passes for the reshaped Recipe
+- [ ] Detail-page Source URL card appears under Instructions; typed value round-trips through save → reload; clearing the field → save → reload empty
+- [ ] Entering an `http(s)://` URL reveals the "Open" ghost button; non-http hides it
+- [ ] Importer: import from a schema.org-rich site → URL lands in `source` field (not appended to instructions); steps/ingredients parsed
+- [ ] Degraded fallback: import a no-JSON-LD page → no 422; title + body text land in name/instructions; warning toast "Couldn't auto-structure that page" fires; `source` is set
+- [ ] Overview "Import from URL" button opens dialog → paste URL → new recipe in cache → router lands on detail
+- [ ] Unmatched-ingredients toast counts them ("3 ingredients couldn't be matched")
+- [ ] An existing recipe with the old in-instructions "Source: …" still loads
+- [ ] Backup → restore round-trips `source` column
+
+### Cookbook Chunk 8 — recipe versions + detail-endpoint fix — origin FU-105
+- [ ] `alembic upgrade head` applies `e1f6a2b4c8d9` on SQLite + Postgres; `verify_mappings()` passes
+- [ ] Open a recipe with structured steps → editor's Structured/Freeform toggle populates correctly (latent bug from Chunk 6 / cook-mode Chunk 5)
+- [ ] Open recipe → kebab → "New version". Singleton source allocates a `version_group_id` + back-fills source. Both share the id
+- [ ] Already-grouped source: copy reuses the group
+- [ ] "Other versions" card lists siblings on both source and copy; singletons hide the card
+- [ ] Naming: first "New version" → "(v2)"; second click on source → "(v3)"; click on copy → also next number (server counts siblings, not parent)
+- [ ] New version inherits ingredients, tools, structured steps (with sub-step + ingredient refs remapped), tags, cuisine, category, collection, source URL, image — image shows without re-upload
+- [ ] Edit copy → save → source unchanged. Same the other way
+- [ ] Delete one version → siblings stay; "Other versions" card updates
+- [ ] Meal-plan picker + cookable filter see both siblings; allocations stay per-recipe
+- [ ] Backup → restore round-trips `version_group_id`
+
+### Cookbook Chunk 9 — cost + simple nutrition, opt-in — origin FU-116
+- [ ] `alembic upgrade head` applies `e5b9d2c8a4f3`; `verify_mappings()` passes
+- [ ] Both flags off (default): no kcal input next to servings; no cost/nutrition cards; cookbook overview has no Kcal sort/filter
+- [ ] Turn on Nutrition (Simple, install layer on): kcal input appears next to servings; value persists across save/reload
+- [ ] Nutrition card appears in detail sidebar when a kcal value is set
+- [ ] Cookbook overview: Sort by → Kcal option; flip direction toggles label between "Highest kcal first" / "Lowest kcal first"; recipes with no kcal sink to the bottom
+- [ ] Kcal ≤ filter narrows the list; recipes with no kcal value remain visible
+- [ ] Turn on Money (install layer on): recipes with linked products + offers show "Estimated cost" card with $, help tooltip, "(N / M ingredients priced)" badge
+- [ ] Cost math: pick a 3-ingredient recipe with linked products. Compute expected `Σ qty × current offer price ÷ size_value`. Card matches to 2dp
+- [ ] No linked products: cost card hidden
+- [ ] Partial coverage: card renders with "(2 / 5 ingredients priced)"
+- [ ] Old freeform Nutrition expansion gone from detail page; an existing recipe with a `nutrition` text value still saves cleanly
+- [ ] Money OFF + Nutrition ON: cost hidden, kcal surfaces visible
+- [ ] Money ON + Nutrition OFF: cost visible, no kcal surfaces
+- [ ] Wire shape: changing kcal sends `{ kcal: <int> }` only; clearing sends `{ kcal: null }`
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — both new cards read
+
+### Cookbook Chunk 10 — multi-part recipes via named sections — origin FU-119
+- [ ] `alembic upgrade head` applies `f6c8e3a9b1d2` on SQLite + Postgres; `verify_mappings()` passes for `RecipeSection` + `section_id` on ingredient/step
+- [ ] Existing recipes still load (no sections = flat list, location grouping)
+- [ ] Create a recipe with two sections ("Sauce", "Filling"), assign per ingredient, save, reload → sections persist; RecipeCard shows "2 parts" badge
+- [ ] Cook mode: ingredient panel groups under section names; step card shows the section as a chip; "All steps" repeats header at each transition
+- [ ] Delete a section → rows fall back to "Main" (SET NULL), save/reload → no orphans, no FK error
+- [ ] Rename a section without touching rows → rows stay pinned (editor sends ingredients[] + sections[] together)
+
+### Cookbook Chunk 4 — detail page cleanup — origin FU-089
+- [ ] Sticky top toolbar: Mark cooked (prominent) / Cook mode / Log cook / Print / Save / kebab(Delete) — stays at the top on narrow window
+- [ ] Mark cooked bumps pool +1 + last-cooked; Log cook... logs N; Print opens print view; no CSV
+- [ ] Name editable; blank blocks save with inline error
+- [ ] Ingredient row without a stock item blocks save (prompt); unchanged name save succeeds
+- [ ] Ingredient rows show a single chip (Missing wins) + tinted when missing
+- [ ] Cookable/missing box readable in dark themes
+- [ ] Cook-mode guard: unsaved edits OR not cookable → confirm dialog with working Cancel; outside click doesn't navigate; "Save & start" only proceeds on save success
+- [ ] Cook mode exit returns to recipe detail page (not overview)
+- [ ] "Available meals" label; meal ± shows no not-allowed cursor flash
+
+### Cookbook Chunk 3 — card redesign + naming — origin FU-088
+- [ ] Cards render with placeholder media tile, emphasised name, chips, dietary chips, meals box; equal-height in grid row
+- [ ] MealStepper ± adjusts cooked pool live (decrement disabled at 0); also on recipe detail page and stock-item detail's recipe cards
+- [ ] Allocated badge appears only when `committed_meals > 0`; **red** when `available_meals < committed_meals`, neutral otherwise — API must return `committed_meals` field
+- [ ] Card has only Cook as primary; kebab = add-all-to-list + add-to-meal-plan (no Edit/Duplicate/Delete); clicking the card opens detail
+- [ ] Collection groups are collapsible rounded boxes (header toggles, chevron flips)
+- [ ] Naming: menu reads "Cookbook"; `g r` + command palette "Go to Cookbook"; detail breadcrumb "Cookbook"
+
+### Cookbook Chunk 3+ revision (FU-088 → cookbook card revision) — origin FU-088 (revision)
+- [ ] Image hide/show toggle works (per-user, persists across sessions)
+- [ ] Allocated badge appears + drops correctly from overview
+- [ ] Meals-cooked field relocates to planner correctly
+- [ ] Meta-line swap renders correctly
+- [ ] Optional ingredients render with `(optional)` hint + dimmed rows in cook mode
+- [ ] Cookable signalled via cook-button colour (no separate dim)
+- [ ] Difficulty filter + sort axis works
+- [ ] Picker modal opens with per-ingredient checkboxes + Optional separator
+- [ ] New footer layout `[♥][chef-hat][add-to-list]`
+- [ ] Time-of-day vocabulary in edit dialog
+- [ ] Per-row Optional checkbox in both editors
+- [ ] Cookability still server-derived
+
+### Cookbook Chunk 5 — images + tools — origin FU-091
+- [ ] `alembic upgrade head` applies `b8e3f1a6d2c4` on SQLite + Postgres; `verify_mappings()` passes for `Tool`
+- [ ] `GET /api/tools` returns seeded tools; Settings → Recipe tags & categories has a Tools editor (create/rename/delete + recipe counts)
+- [ ] Recipe create/update round-trips `tool_ids`; edit dialog + detail page tools multiselect populate + save
+- [ ] Overview Tools tri-state filter (include/exclude) works
+- [ ] Upload on detail page → save → image shows on detail + card (via `GET /recipes/<id>/image`); change + remove work; cache-busts after save; >4MB rejected client-side; create dialog can attach image
+- [ ] Backup → restore round-trips Tool/RecipeTool + recipe images
+
+### Cookbook Chunk 2 — tag taxonomy — remaining items — origin FU-085
+- [ ] Item 3: `repository.get(Recipe).all()` selectin-loads `recipe.cuisine`/`.category` (no null cuisine/category in assistant + global_search)
+- [ ] Item 5: overview cuisine/category single-selects filter end-to-end; tri-state DietaryTagFilter cycles +/−/neutral and stays open; RecipeCard shows names + tag chips
+- [ ] Item 6 (FU-147): on seeded "egg fried rice", two dietary tags pre-populate the picker; saving with no edit doesn't clear them; adding/removing tags + saving round-trips
+- [ ] Item 8: backup → restore round-trips Cuisine/Category/DietaryTag/RecipeTag in FK-correct order
+- [ ] Item 9 (FU-150): assistant `search_recipes`/`suggest_recipes` filter by cuisine + dietary tags (Python-side / name-resolved)
+
+### FU-085 fixes — second-round verify items — origin FU-151
+- [ ] FU-148 — Cookbook overview "Time of day" dropdown filters to Breakfast/Lunch/Dinner/Dessert/Snack/Any; clearable
+- [ ] FU-149 — "# ingredients ≤" filter narrows the list; "# ingredients" sort axis orders ascending by default; direction toggle flips
+- [ ] FU-150 step 1 — "i need a vegetarian recipe" lists vegetarian; header says "Filtering by: vegetarian recipe"
+- [ ] FU-150 — "i need an asian recipe" applies cuisine filter
+- [ ] FU-150 — "show me a breakfast recipe" applies timeOfDay filter
+- [ ] FU-150 — "i need a recipe" with no other terms prompts for name/ingredient/cuisine/tag
+
+### Recipe image-steps mode — origin (orphan FU at 2026-06-25, RECIPE_IMAGE_STEPS)
+- [ ] Recipe detail mode toggle shows Structured / Freeform / Image; right editor renders for each
+- [ ] Mode flip is non-destructive — Structured → Image → Freeform → Structured preserves each payload
+- [ ] Image-mode editor: pick multiple files from disk; pick via mobile camera prompt (`accept="image/*" capture="environment"`); reorder via ↑/↓; remove; cap warning at 20
+- [ ] Save with `steps_mode='image'` posts `step_images[]` as data URLs; `/api/recipes/<id>/step-images/<image_id>` returns the original at the right MIME
+- [ ] Cook mode in image-mode renders full-width scroll gallery; tap-to-zoom opens; ingredient panel + finish flow + B8 substitute swaps + Sous Chef behave as before
+- [ ] Auto-detect timer card hidden; standalone timer affordance still usable (manual via Sous Chef commands)
+- [ ] New-version of an image-mode recipe clones the step images
+- [ ] Alembic migration applies cleanly on existing DB; `steps_mode` backfilled to `'structured'` only where `RecipeStep` rows exist
+
+---
+
+## Cook mode
+
+### Cook Mode Chunks 1–3 — origin FU-096
+- [ ] Chunk 3 ingredient grouping: open cook mode for a recipe with ingredients across several locations → one card per *base* location (sub-areas collapse); no-location ingredients land in "No location" group
+- [ ] No mid-cook stock-level chips: StockItemChip gone from the row; substitute chips + undo still render
+- [ ] Quantity spacing: `unit="g"` reads `"250g"`; `unit="tbsp"` reads `"1 tbsp"`; `unit=null` reads just qty
+- [ ] Chunk 2 — voice button reads **Sous Chef** with a tooltip; (?) opens popover listing 8 commands
+- [ ] Chunk 2 timer: detect a "10 minutes" step → fill-bar below MM:SS → empties as time runs → at 0 turns negative colour, toast fires, short beep plays (no-ops on iOS/PWA without gesture); reset clears
+- [ ] Chunk 1 finish flow: mark ingredients used, finish → dialog shows one row per used ingredient with current level chip, action chips (Down one / Out / Unchanged, default Down one), override dropdown, per-row Add-to-list
+- [ ] `meals_cooked` defaults to **0**; Done with 0 → toast "All eaten — hope it was good."; N>0 → "You saved N meals — enjoy." (with pluralisation)
+- [ ] Per-row override beats action: pick explicit level for one row → Done flips that row's stock_level_id to the override; `Unchanged` rows leave stock alone
+- [ ] Fail-soft: a row pointing at a deleted stock item shouldn't stop the others (Promise.allSettled)
+- [ ] Click-out cancels: open finish dialog, click outside → dialog closes, **no** level/cook calls fired
+- [ ] Session swap interaction: swap an ingredient to its substitute, finish → the substitute's level (not the original) updates
+
+### Cook Mode Chunk 5 — highlight + tools + hints — origin FU-100
+- [ ] Open cook mode on a structured recipe → named ingredient rows tint + get a left accent; tools panel shows below ingredients (only when recipe lists tools); step-referenced tools light up, others dim
+- [ ] Sub-step shows the "Sub-step" chip above the headline
+- [ ] Step with a hint renders the hint line with lightbulb icon
+- [ ] Unstructured fallback: recipe with only `instructions` → text-matched highlight fires when ingredient names appear in step text
+- [ ] No tools panel when the recipe lists no tools
+- [ ] Tick state really gone — no checkbox on ingredient rows; no checkbox in "All steps"; tap step text to jump
+- [ ] Finish flow lists *every* ingredient on the recipe (with swaps applied), regardless of mid-cook interaction
+- [ ] Voice: "Done" command gone from Sous Chef help; Next/Previous/Repeat/timer verbs still work
+- [ ] Step navigation via "All steps" jumps to the right index; sub-steps indented in the list
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — highlight tint reads in dark mode
+
+### Cook Mode Chunk 6 — cooking-for headcount rescale — origin FU-101
+- [ ] Default: recipe with `servings=4` shows 4 in "Cooking for" input; `servings=null` shows 1
+- [ ] Rescale up: 4→6 multiplies ingredient quantities by 1.5× (200g → 300g; 2 eggs → 3)
+- [ ] Rescale down: 4→2 halves them (200g → 100g; 4 eggs → 2)
+- [ ] Fraction snap: 4-serving with `1 cup`, scaled to 3 → `¾ cup`; scaled to 6 → `1½ cup`
+- [ ] Countable rounding: 4-serving with `1 egg`, scaled to 3 → `1 egg` (0.75 rounds up, floored at 1); scaled to 6 → `2 eggs`
+- [ ] Floor at 1: countable that would round to 0 stays at 1
+- [ ] Sub-tolerance fractions: `0.5 cups` × 1.0 shows `½ cup`
+- [ ] Blur clamp: clear input → blur → re-clamps to 1; quantities don't NaN
+- [ ] Min=1: typing 0 + blur → re-clamps to 1
+- [ ] Session-only: rescale, exit, come back → input shows original `servings`; saved recipe unchanged
+- [ ] Gram fraction edge: `7.5g` renders `7½ g`. If that reads weird in practice, flip g/kg/ml/l/mg to integer rounding in `scaleQuantity.ts`
+
+---
+
+## Meal plans
+
+### Meal Planner R-Phase 1 extraction + Phases 2–6 — origin FU-305
+- [ ] Left palette: search filters trays; click-add into a focused slot; drag-and-drop from a recipe row to a day-slot (mouse only); pool ± / log-cook dialog; "Cancel" clears focused-target banner
+- [ ] Middle column: ↑/↓ arrows, top/bottom buttons, vertical-swipe on mobile, calendar click all move the focused week; URL `?monday=` persists across reload (F29)
+- [ ] Per-day slot rows render entries, drop targets accept dragged recipes, "Other" row appears for off-vocabulary historical entries
+- [ ] Today badge + past-day dim still render; entry chip view/cook/remove/adjust wires through
+- [ ] Clear-week + print buttons in header work
+- [ ] Right column: calendar, this-week-shopping count, ingredient list with hover-highlights, AddToList button, cook-by warning, "Full ingredient demand" expansion, generate-list + C-7 target picker
+- [ ] Templates card: save / apply / apply-recurring / manage-templates flows
+- [ ] Sequential-builder dialog opens, lists recipes, builds + generates the list
+
+### Meal Plans C-2 — full surface walk — origin FU-179
+- [ ] Carousel nav — ↑/↓ arrows + keys + mobile swipe move weeks with slide animation; `prefers-reduced-motion` disables; `weekRangeLabel` updates
+- [ ] Tap-add — tap a day's slot (highlights + banner shows target), tap a recipe → entry lands in **that** slot (NOT always "Dinner", F35). Re-adding to same slot increments servings
+- [ ] Drag — desktop drag onto slot adds; touch disables drag, tap-add works (no scroll-jank)
+- [ ] Implicit create — first add to an unplanned week silently creates the plan; sidebar switches from "no meals planned" to shopping summary
+- [ ] Inline servings — ± stepper adjusts live, removes at 0; view/cook/remove work
+- [ ] Past days dimmed + reject taps/drops; Today badge on right day; Thu-8am-AEST drop repro (F29) no longer 400s (ties to C-2.K)
+- [ ] Left list — search filters; "N free" + inline ± pool stepper + log-cook work; no cookable colour/check
+- [ ] Off-vocab — entry with deleted/legacy slot renders under "Other"
+- [ ] Sidebar/generate work bound to focused week; "Jump to a plan" focuses chosen week; "Clear this week" empties it
+- [ ] **C-2.D calendar** — right column ~6 weeks; status underlines (green planned / amber short / dotted-grey all-consumed / none empty); today has a dot; focused week outlined; clicking a week jumps carousel (and back); month banner + arrows page the window; `?monday=YYYY-MM-DD` resumes on that week; old "Jump to a plan" dropdown is gone
+- [ ] **C-2.H sidebar** — each needed-ingredient row shows list status ("on <list>" / "not on a list") + add-to-list button (multi-list opens picker); hovering (desktop) outlines using meals; per-item stock chips use **app-wide colours**; membership loads on the planner
+- [ ] **C-2.I trays** — left column groups into Favourites · Haven't-had (oldest/never first) · Frequently-planned · All recipes; curated trays hide when empty; searching collapses to "Results"; 21-day "haven't had" window spot-check; "frequently planned" ranks by plan frequency
+- [ ] **C-2.F templates** — right column "Save this week as a template" (only with meals) → name + description; "Apply a template…" forks onto focused week (past skipped; toast shows added/skipped); confirm before replacing existing future meals; editing/deleting a template leaves a week forked from it untouched
+- [ ] **C-2.G sets + recurring + manage** — `/meal-plans/templates` (via Manage templates) lists templates (rename/clone/delete) + sets (new/edit-with-↑↓-reorder/delete); "Apply recurring…" applies a template or rotating set over ≤26 weeks; set rotates templates week-by-week; 26-week cap + "pick exactly one source" surface as toasts
+- [ ] **C-2.J sequential builder** — planner's "Plan step-by-step" opens 3-step flow (pick → preview → build & generate) ending on done with Print (Email shown disabled). Cancel writes nothing; preview's buy/in-stock matches sidebar; build spreads meals across upcoming days + generate-list modal fires; Print opens the week's print view
+
+---
+
+## Shopping lists
+
+### Shopping list UX v2 — origin FU-165
+- [ ] Rail order + auto-scroll + next-up marker works
+- [ ] Mobile dropdown opens + picks
+- [ ] Rename → clear name → list self-labels (and re-labels when shop day changes)
+- [ ] Shop-day button tones (today/overdue) correct
+- [ ] Doughnut + totals render correctly
+- [ ] Start shopping → sticky footer → restock-review modal (incl. per-item level tweak) → Reopen reverses it
+- [ ] Quick-add mid-shop works
+- [ ] Row actions: price button, swap, remove
+- [ ] Group-by toggle works
+- [ ] Bulk select works
+- [ ] Print view works
+- [ ] No empty-state flash on load
+- [ ] Drag-reorder lands on the exact row you drop on (FU-161 root cause was fixed in P6-01 Chunk 6 — confirm it stays fixed)
+- [ ] Dashboard card + Dora-chat add-to-list still work (both touched)
+
+### Cart Button Chunk 2 — combined modal for 2+ products — origin FU-130
+- [ ] 0 linked products → row cart click adds silently. No modal. One toast
+- [ ] 1 linked product → same silent add. No modal
+- [ ] 2+ linked products → row cart click opens `QuickAddSheet` pre-populated with stock item; target-list dropdown + offer radio + quantity editable; Add → one toast
+- [ ] 2+ products AND 2+ drafts → still one surface, no stacked modals
+- [ ] `linked_product_count` on `/stock-items` JSON; 0 with no rows; increments as products linked
+- [ ] Bulk variant unaffected — resolves target once + one summary toast regardless of per-item counts
+- [ ] **Known repro (2026-06-14):** picker modal NOT popping up when adding to a list with 2+ linked products (silent-add path firing instead). Likely candidates: `linked_product_count` not hydrating, `shouldUseCombinedModal.value` false from store mismatch, or `selected-product-id` short-circuit firing on wrong surface. Capture which screen + which item it fails on
+
+### Cart Button Chunk 3 — standalone product lines + rules 1–3 — origin FU-132
+- [ ] Migration `d7c9e4a8c2b1` applies on SQLite + Postgres; `verify_mappings()` passes for the now-nullable `stock_item_id` + new `product_id` FK
+- [ ] Rule 1: POST `/api/shopping-lists/<id>/lines` with only `product_id` creates a line; DTO carries `product_id` + null `stock_item_id`. CHECK constraint rejects body with neither (400 before DB)
+- [ ] Rule 2: draft list has product-only line for P, P not yet linked. POST `/api/stock-items/<S>/products` with `product_id=P` → orphan line upgrades (`stock_item_id` becomes S, or folded into existing stock-item line with P set)
+- [ ] Rule 3: stock-item line for S + separate product-only line for P (P linked to S). DELETE stock-item line by line-id → nested product line gone. Same for cart-button remove-by-stock-item
+- [ ] No regressions on stock-item-only adds — existing dedupe by `stock_item_id` still wins
+- [ ] TS compile: `ShoppingListLine.stock_item_id: string | null` doesn't break consumers
+
+### Cart Button Chunk 3 UI — origin FU-145
+- [ ] Add a product-only line via My Products row ("Add as product") on unlinked product → line lands with product chip + tinted "product only" background
+- [ ] Link the product to a stock item later → parent stock-item line appears (rule 2 backend) AND product nests visually under it (rule 2 frontend)
+- [ ] Remove nested product → rule-4 modal fires; "Yes" removes both, "No" leaves the parent
+- [ ] Remove product-only line whose linked stock item is NOT on the list → no modal
+- [ ] Inline-product Axis B with 0 / 1 / 2+ drafts: 0 → "create a draft first" toast; 1 → silent add; 2+ → radio picker, both picks work
+- [ ] Linked products on My Products row still hit `onAddSingle` (stock-item path); ticking nested children works; bulk mode handles parents + children
+
+### Cart Button Chunk 4 — meal-plan generate via Axis B — origin FU-135
+- [ ] 0 draft lists: no picker; creates new list named `Meals: <plan>`; toast "Shopping list created with N items."; routes to new list
+- [ ] 1 draft list: picker opens with that draft preselected + "+ Create new list" row; OK on draft → backend merges, toast "Added N items to your list.", routes to that list
+- [ ] 2+ draft lists: lists all drafts (first preselected) + "+ Create new list"; both picks work
+- [ ] Cancel/dismiss: no list, no toast, no nav
+- [ ] `nothing_to_add` path still emits info toast and doesn't navigate
+
+### State Ownership Chunk 6 — snapshot-at-add — origin FU-142
+- [ ] Add line with selected offer → budget's `projected_active` (or post-finish `spent`) reflects planning-time price; price the offer up via companion + confirm snapshot is the original value
+- [ ] Change `selected_product_id` via offer chip → snapshot re-captures at new offer's current price
+- [ ] Clear selection → snapshot clears (line shows as "no priced intent" in any UI surfacing it)
+- [ ] Tick an already-snapshotted line → tick does NOT overwrite snapshot
+- [ ] Untick → snapshot persists
+- [ ] Tick a legacy line (created before this chunk with `picked_offer_price` NULL) → belt-and-braces hook fills snapshot first time
+
+### P6-01 Chunk 3 — list lifecycle — origin FU-066
+- [ ] DRAFT detail → *Start shopping* → router lands on /shop directly
+- [ ] SHOPPING /shop → tick a few items → kebab *Finish & restock* AND footer button → dialog lists ticked items (capped at 8 + "and N more") → restock + archive
+- [ ] SHOPPING /shop → back-arrow → tooltip "Back to editing", status flips to DRAFT, lands on detail (no bounce-back)
+- [ ] DONE detail → *Reopen* → restock changes reverse; status returns to DRAFT
+- [ ] PWA "Shop now" — 1 SHOPPING → resume; else 1 DRAFT → open; else overview
+- [ ] Open in Pesto Light + Pesto Dark + Cherry Cola Dark — dialog / primary-button styling reads
+
+### P6-01 Chunk 4 — unified "New shopping list" dialog — origin FU-068
+- [ ] Toolbar *New list* → *Empty + Create new* → empty list, routes in
+- [ ] *Empty + auto-fill: low-or-out + new* → equivalent of old "From all low/out stock"
+- [ ] *Template + new* → uses `instantiateAsync`; lines match template
+- [ ] *Recipe + new* → bulk-adds the recipe's ingredient stock items
+- [ ] *Meal plan + new* → bulk-adds `getIngredientsAsync` results
+- [ ] *Empty + auto-fill: flagged + essentials-only + merge into existing* → equivalent of old "Top up the primary list"
+- [ ] *Template + merge* — temp-list-then-delete dance leaves no orphan list in overview (refresh after)
+- [ ] Empty-state — no active lists and stock has low/out → kickstart "New list" opens dialog with *low-or-out* pre-ticked
+- [ ] Cancel discards the form (re-open shows defaults)
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark
+
+### P6-01 Chunk 5 — merged list selector + landing — origin FU-069
+- [ ] `/shopping-lists` with multiple → lands on SHOPPING if any, else newest DRAFT, else newest DONE
+- [ ] `/shopping-lists` with zero → empty-state renders New list; click → dialog → submit routes to created list
+- [ ] Detail selector: dropdown opens with Active (current highlighted), Archived below separator, + New list at top, Manage templates… at bottom
+- [ ] Active row kebab → Copy unticked / Archive / Delete behave correctly; Archived row → Copy archived / Delete
+- [ ] Deleting currently-open list bounces to landing + landing picks next list
+- [ ] + New list in selector opens dialog; submit routes to created list
+- [ ] Switching to a different list via selector loads its detail (status watcher / shop-mode redirect still works for SHOPPING)
+- [ ] Mobile width: dropdown usable
+
+### P6-01 Chunk 6 — in-store polish + drag-reorder — origin FU-073
+- [ ] Start shopping → tap *Skip* → next item → refresh → skipped item still at end
+- [ ] Tap the centre qty number → dialog → type "12" → Save → row shows 12; refresh → still 12
+- [ ] Tap **Peek list** → modal lists ticked + unticked → tap an unticked → modal closes + that item is next-up; refresh → still next-up
+- [ ] Detail page (DRAFT): drag line from position 1 → position 5 → lands at index 5; drag 5 → 1 → lands at index 1; off-by-one is gone (FU-161 root cause)
+- [ ] Detail header: old back-arrow is gone (replaced by list selector)
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark
+
+### Chunk 6 audit: pricing + group-by-aisle — origin FU-072
+- [ ] Price editor still opens mid-shop and saves `actual_unit_price`
+- [ ] Toggling group-by-location → none → group-by-merchant doesn't quietly mutate saved order
+
+### P6-01 Chunk 7 — planned shop day — origin FU-076
+- [ ] Migration `e1a4c7b2f9d0` applies; restart API + web app
+- [ ] Open a list → header chip reads "No shop day" → click → date dialog → save 2026-07-01 → chip updates → refresh → still set
+- [ ] Clear the date via Clear button → chip → "No shop day"
+- [ ] Create a list via *New list* dialog with a date → detail loads → chip shows the date
+- [ ] Set a DRAFT's date to today → navigate to `/shopping-lists` → lands on that draft (priority pick)
+- [ ] With today set: in-detail banner appears with info-tone "Shopping day is today."
+- [ ] With a past date set + status still DRAFT: warning-tone banner "Planned shop day was … — still unfinished."
+- [ ] Selector dropdown: list with planned date sorts ahead of unscheduled lists; today's list at top of its band
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark
+
+### Shopping lists Chunk 2 — 2+-draft picker + Shop-now routing + Set-primary removal — origin FU-060
+- [ ] 2+ drafts: stock-overview cart click pops disambiguation dialog; chosen draft persists across cart clicks (sessionStorage); finishing the chosen draft clears the hint and the next cart click re-prompts
+- [ ] 0 drafts: cart click shows "No draft list" dialog → "Open lists" lands on overview
+- [ ] PWA "Shop now": 1 SHOPPING → shop mode; 1 DRAFT (no SHOPPING) → that draft's detail; anything else → overview
+- [ ] No "Set as primary" / "Make primary" / "Primary" badge / Primary chip is visible anywhere (overview, detail, ShoppingListTemplates, ExportPrint primary chip)
+- [ ] Migration `d5e9f3b2a1c8` applies cleanly on a real dev DB
+
+---
+
+## Stock
+
+### Recipe-ingredients deep-link filter — origin FU-109 close-out
+- [ ] Open a stock-item detail page → Recipes-using-this tab. Every recipe card carries a filter icon between the favourite heart and the cook button. Hover tooltip: "Filter stock to this recipe's ingredients"
+- [ ] Click that filter icon → lands on Stock Overview with `?recipe=<id>` in the URL, filter panel auto-opens, removable chip reads "Ingredients of: &lt;recipe name&gt;" with a menu-book icon
+- [ ] The list narrows to the recipe's ingredient stock items (combine with other filters, e.g. level/location, still works)
+- [ ] Click the chip's × → filter clears, chip disappears, URL no longer has `?recipe=`. Refresh/back doesn't reinstate
+- [ ] "Clear filters" on the FilterBar also strips `?recipe=` (not just zeroes the chip)
+- [ ] Pasting `/stock?recipe=<bogus-id>` doesn't blank the list — the unresolved id silently disables the filter (no chip rendered)
+- [ ] RecipeCard's filter button is **only** on the stock-item-detail Recipes tab — not on Cookbook overview, Meal Plan recipe picker, or anywhere else `RecipeCard` is rendered
+
+### Recipe card no longer dims on incomplete-set surfaces — origin FU-109
+- [ ] Stock-item detail → Recipes tab: cards never render at reduced opacity, regardless of whether restocking this single item would make them cookable. The "Missing N ingredients" copy on the card face is the only signal
+- [ ] Cookbook overview with "Uses ingredients" filter active: same — no dim
+
+### Stock Item Detail — C-1b focused pass + C-1b.1 marquee — origin FU-202
+- [ ] Header: back/close · name · (Show QR if scanning on) · Delete. Secondary toolbar row (Mark open / Set expiry / Add to list) GONE. Level chip no longer in header — lives under Name on Overview tab
+- [ ] Level row sits between Name and Location; dropdown opens, picks a level, "Updated X ago" refreshes to "just now" on save
+- [ ] Location / Stock group clear: with a location set, click picker × (and `Tab`-blur after deleting text) → picker stays empty after refresh. Same for stock group. Network tab shows `{"clear_stock_location": true}` / `{"clear_stock_group": true}`
+- [ ] "—" placeholders on Location / Stock group / Usual store / Expiry / Level when unset
+- [ ] Notes reads as a row in basics list (auto-grows on type, blur saves)
+- [ ] Padding — full-page and embedded peek mode breathe (q-pa-md); nothing touches edge
+- [ ] DoraTabs sliding underline: switching tabs slides + wobbles, settles to accent. Same on `pages/data/BarcodesQR.vue` and `HelpPage.vue`
+- [ ] Splitter peek opens at 50%; clamped to [40%, 65%] while peeking; closing restores list to 100%
+- [ ] **C-1b.5 lifecycle timeline:** History tab shows multiple event kinds (level changes with Restocked/Dropped labels, waste events, past list-adds with provenance, synthetic Opened entry when open). Empty items: "Nothing logged for this item yet…". Busy item: newest → oldest, capped sensibly
+- [ ] **C-1b.4 Recipes tab:** heart toggles favourite (and remove); on cookable recipe, "Add all to list" lands every ingredient on primary draft. Lists tab: dead `open_in_new` gone; primary draft has styled Primary badge. Substitutes: per-row "Swap into list" gone; Remove still works; curated list stays
+- [ ] **C-1b.3 Products tab:** empty Products → centred Find & link a product CTA → seeded `/product-search?q=<name>`; non-empty shows quieter Link another in header; cheapest linked product visually highlighted (chip + tinted card); no Get cheapest toolbar button; with Products off, the Products tab disappears entirely + a stranded `?section=products` URL falls back to Overview
+- [ ] **C-1b.1 marquee:** header has back/close · name · level chip = editor (click → menu) · space · Delete top-right (danger-ghost) in both modes
+- [ ] Toolbar: Mark open · Set expiry · Add-to-list · (Show QR) — no Restock, no Find-deals
+- [ ] Overview is a single column where every row is its own editor: name (blur saves), location, stock group (new), expiry value + ±1d/+7d/+14d + date dialog + × clear, open toggle with "Opened {date}" + tooltip, essential toggle, auto-add toggle, level-updated read-only, Notes calm at bottom
+- [ ] Editors save immediately on change/blur without a Save button — toggle/select round-trips and page reflects the new value
+- [ ] Unsaved-changes guard still fires for in-progress text edits (name/notes)
+- [ ] Tabs legible in light + dark + any other theme (active tab + indicator stay readable)
+- [ ] Show QR tooltip explains the QR vs real-barcode distinction
+- [ ] **Round-2 additions:**
+  - [ ] Level updated really updates — "Updated X ago" flips to "just now", then drifts forward; same on Stock Overview row
+  - [ ] Splitter gripper reachable on long lists — dots stay centred on viewport (sticky)
+  - [ ] Overview tab's image / inputs have even breathing room
+  - [ ] Peek panel scroll: whole detail panel scrolls with the page; nothing scrolls inside the panel; name + Delete never hidden
+  - [ ] DoraTabs hover: inactive tab text transitions to accent, no surface-tint background
+  - [ ] Footer counts: Well-stocked (positive), Sufficient (warning), Low (negative), Out (muted/grey); "Auto-add" default text colour like "Shown"; label is "Essential" (not Flagged); sits between level stats and Auto-add
+  - [ ] Row buttons cluster: expiry / flag / open / cart same round shape + size. Click flag → toggles essential (left stripe + warning-tint icon)
+
+### Stock Item Detail + Stock Overview feedback pass — origin FU-222
+- [ ] Stock Overview row — image / level / name have visible breathing room; right cluster (expiry, open, cart) larger; recipe-count chip gone; hover no longer "lifts" — surface tints + border picks up accent; first row's outline doesn't clip under page chrome
+- [ ] Essential indicator: flag → 3px warning stripe on left edge + flag icon in right cluster
+- [ ] Open icon pops in Pesto dark (primary, not barely-visible secondary)
+- [ ] Footer counts: "Shown" reads in default text colour (not primary); per-level counts use stock-level palette; Flagged / Auto-add / Needs attention keep semantic tones
+- [ ] Filter toggle on Stock Overview, My Products, Cookbook overview: "Filters" button + badge + "Clear" all in main toolbar row; no second toolbar row above the filter panel
+
+### Stock Overview Chunk 2 — top toolbar + filters + footer — origin FU-121
+- [ ] Top toolbar order: New item · Export · Bulk select · Scan · Stocktake · (spacer) · Search. Bulk select shows "Cancel" once on
+- [ ] Filter bar closed by default on every page using `FilterBar` (Stock Overview, Cookbook overview, anywhere else); click Filters → panel expands; click again → collapses; active-filter badge surfaces while collapsed
+- [ ] Level filter is a single "Any level" dropdown; selecting filters; clearable; no floating count badges
+- [ ] "Used in a recipe" filter is gone
+- [ ] Search placeholder reads "Search" (no parenthesised hint)
+- [ ] Footer counts in order: Shown · Well-stocked · Sufficient · Low · Out · Flagged · Auto-add · Needs attention. Reflect filtered set; recompute live
+- [ ] No console errors from dropped `usedInRecipeOnly` / `getStockLevelColour` references
+
+### Stock Overview Chunk 4 — expiry control — origin FU-123
+- [ ] No expiry set → tap expiry button → q-date picker (popup on desktop, dialog on mobile). Picking future date PATCHes + row reflects new date (icon tone via existing logic); past blocked by `dateOptionsFuture`
+- [ ] Expiry set → tap → menu: **+1 day · +7 days · +14 days · Clear** (no +30). Each PATCH the right ISO; Clear nulls + button reverts to date-picker state
+- [ ] Tone outline flips: <7 days future → `stock-row--warn` (amber); past → `stock-row--alert` (red)
+- [ ] No regressions on right-cluster (#recipes, open/in-use, cart)
+
+### Stock Overview Chunk 5 — responsive detail nav + long-press — origin FU-124
+- [ ] Desktop (≥ md): tap row → splitter peek opens with shared `StockItemDetailPage` embedded; tap again → closes
+- [ ] Mobile (< md): tap row → full-page nav to `/stock/<id>`; no drawer/peek; same `StockItemDetailPage` renders non-embedded; back returns to overview with state preserved
+- [ ] Bulk mode (any breakpoint): tap toggles selection (no nav, no peek)
+- [ ] Long-press on mobile: enters bulk-select + ticks held item; subsequent taps add/remove; Cancel exits
+- [ ] Long-press on desktop: no-op (`<md` guard)
+- [ ] Resize across md breakpoint while a peek open — peek stays attached; future row-taps use the new breakpoint's behaviour
+
+### Offers sidecar — origin FU-230
+- [ ] During chunk-8 C5 state-matrix walk: open a stock item linked to a product with a current offer (e.g. seeded Milk or Olive Oil) with money on; the widget shows "Current shelf prices: …"
+
+---
+
+## Dashboard
+
+### Dashboard rebuild — full walk Phases 0–7 — origin FU-301
+- [ ] **Phase 0** — cards keyboard-focus + middle-click; the dark-mode question reads correctly
+- [ ] **Phase 1** — welcome rotates per day; empty states read well; primary-list footer link works
+- [ ] **Phase 2** — zone bands render in order; within-zone reorder persists across reload AND another device (exercises FU-292's backend); hidden cards stay hidden
+- [ ] **Phase 3** — alert summary chips + peek + "See all" → `/alerts`
+- [ ] **Phase 4** — Money band shows only with money enabled; savings range toggle re-fetches; best_deals hidden without products; money empty states
+- [ ] **Phase 5** — restock Add works (toast + list refresh); Add-item dialog creates + refreshes; Add-to-list sheet works
+- [ ] **Phase 6** — opt-in "This fortnight" calendar (enable via Cards menu) renders 14-day grid with correct dots; tapping a day expands detail + links work
+- [ ] **Phase 7** — at 360/768/1280: zones stack, quick-action bar wraps, touch targets comfortable
+- [ ] **FU-293 extraction:** every card looks identical after DashboardCard extraction — shell border/padding/shadow, header icon/title, hover lift on clickable cards (Pantry/week-ahead/budget), header action link/text styling + hover
+
+### Dashboard `dashboard_layout` backend — origin FU-292
+- [ ] Run the migration on a Python-capable machine
+- [ ] Run the e2e suite (incl. `test__dashboard_layout__set_and_clear`)
+- [ ] Browser-walk: reorder/hide cards, reload, confirm layout persists and follows the user to another device/browser
+
+---
+
+## Alerts & notifications
+
+### Alerts C-9.1 — spine — remaining browser smoke — origin FU-183
+- [ ] Bell badge equals actionable list count
+- [ ] Snooze persists across a reload (server-side)
+- [ ] Dismiss hides everywhere
+- [ ] Existing inline actions work with the new scoped key
+- [ ] **C-9.2:** admin System-settings threshold fields save + round-trip; disabling a kind removes it from list + drops badge; promoting/demoting moves a kind between badge/FYI
+- [ ] **C-9.3:** Alerts hub page (summary tiles + tiered active list + Manage panel + collapsible History) renders; bell is now a slim peek (top rows + bulk-add + "Open Alerts"); shared `AlertRow` actions work from both; History lists past dismiss/snooze/read with stock name resolved; dark-mode clean; no bell/page divergence
+- [ ] **C-9.4 forward-looking nudges:** with next week's plan empty, `no_planned_meals` FYI row shows and deep-links to `/meal-plans`; planning a meal clears it. `shopping_day` FYI row shows for a list with `planned_shop_date` within 3 days, deep-links; marking list done clears it. Both render through shared `AlertRow` (icon/colour/theme), no stock name, snooze/dismiss work
+- [ ] **C-9.5 subscriptions / price-watch tier:** money flag ON + armed price alert → Price watch region lists it (product · merchant · "notify below $X" · last-alerted); View opens price-history explorer with that product; Remove deletes (row gone + toast); empty-state clean; hidden when money flag OFF
+- [ ] **C-9.6 Upcoming fortnight timeline (Phase A):** Upcoming mini-calendar renders on hub; days with events show correct per-category dots (warning expiry, primary shopping, positive meal); out-of-window dimmed, today ringed; clicking a day expands its detail list + links navigate (expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`); refresh works; empty-state clean; dark-mode clean (token dots survive theme switch)
+
+### C-9.7 alerts email digest — origin FU-205
+- [ ] Settings → Preferences shows new "Alerts email digest" card after Weekly deals; heading + caption read across all themes
+- [ ] **SMTP-gating (R-014):** without `DORA_SMTP_USERNAME`, master toggle disabled, caption "Email isn't set up on this install yet — ask an admin…". With env set + restart: toggle enabled, caption hides; `GET /api/health` shows `features.email_smtp_configured: true`
+- [ ] Opt-in round-trip: master toggle on → toast → cadence select appears (Daily default); switch Weekly → day select; pick a day; reload survives. Network panel: master sends `{alerts_email_enabled, alerts_email_cadence}` together; later edits send single changed field
+- [ ] `GET /api/auth/me` returns `alerts_email_enabled`, `alerts_email_cadence`, `alerts_email_day` on user payload
+- [ ] Real SMTP send: real env + opted-in + an expired stock item → trigger job → inbox receives digest with actionable item in "Needs action", "Open Alerts" button linking to `<DORA_PUBLIC_URL>/alerts`, plain-text fallback
+- [ ] Dedup: trigger again → no second email; mark item not-expired/delete → trigger → no email + `last_emailed_at` clears; re-add same name → trigger → fresh email
+- [ ] Weekly day gating: cadence=weekly, day=Monday; non-Monday → trigger → no email; Monday → email lands
+- [ ] Schedule fires: confirm `alerts_digest` job in APScheduler's job list (07:00 CronTrigger)
+
+### C-9.8 web-push channel — origin FU-206
+*Prereq: generate VAPID keys per FU-207*
+- [ ] **VAPID gating (R-014):** no `DORA_VAPID_*` → Push card toggle disabled, caption "Push isn't set up on this install yet — ask an admin…"; `GET /api/health` shows `features.push_vapid_configured: false`; `GET /api/alerts/push/vapid-public-key` → 404
+- [ ] Set VAPID env, restart → toggle enabled, caption hides; health flag true; key endpoint returns the public key
+- [ ] Subscribe flow: toggle on → browser permission prompt → allow → toast → toggle stays on, caption "This device is subscribed…". DevTools → Application → Service Workers: SW at `/push-sw.js` registered + activated
+- [ ] Receive: create expired stock item → trigger `send_alerts_push()` → OS notification "Dashy Dora — <name> has expired". Click → focuses an existing Dora tab on `/alerts` (or opens new one)
+- [ ] Dedup: trigger again → no second notification. Mark item not-expired → trigger → no notification + `last_pushed_at` clears. Re-add expired → trigger → fresh notification
+- [ ] Multi-device: subscribe a second browser (e.g. mobile Chrome on same LAN) → trigger → both buzz
+- [ ] Permission denied: fresh profile, deny prompt → caption "Notifications are blocked…"; toggle stays off; subscribe button greys
+- [ ] Dead-subscription pruning: DevTools → Application → Push → unregister SW. Trigger → backend gets 404/410, `PushSubscription` deleted, no further attempts
+- [ ] Unsubscribe: toggle off → toast → `PushSubscription` gone server-side; browser registration gone (DevTools confirms)
+- [ ] Schedule fires: confirm `alerts_push` job registered with `CronTrigger(minute=30)`; an actionable alert created at :25 produces a notification within 5 minutes
+
+---
+
+## Settings
+
+### Visual rebuild Phase 3 — cross-theme walk — origin FU-283
+- [ ] Walk every settings page in Pesto Light + Pesto Dark + Cherry Cola Dark
+- [ ] Confirm: sticky nav, dropped card chrome, DoraSegmented in sunken-fill mode, theme card 2px accent border + check_circle badge, page padding breath all read
+
+### Settings Phase 4 — profile picture — origin FU-286
+- [ ] `flask db upgrade` applies `a4f7c2e9b6d1` up **and** down, single head
+- [ ] `pytest tests/e2e/dora_api/test_auth_flows.py` green (two new tests + no regressions)
+- [ ] Browser: upload picture on Account → appears immediately on menu bar (cache-bust), Account header, admin Users row; clear → all revert to icon/initials; hard-refresh both states survive; >4.5MB image rejected with a usable message
+
+### API access page (C-10 Phase B) — origin FU-218
+- [ ] Sidebar entry appears under Admin · global (admin only)
+- [ ] `New key` opens dialog → reveals raw key once → copy works → list shows new row with `Never used` + `Accepted 0 / Skipped 0 / Failed 0`
+- [ ] Expanding the row shows "Store mappings" panel
+- [ ] Push a record from a bearer client against an unknown store → reload → source row shows pending badge + mapping appears in panel marked "pending"
+- [ ] Merchant picker assigns it → badge clears
+- [ ] Disable / enable / rename / revoke all round-trip
+- [ ] Revoked key is rejected by `/api/ingest` immediately
+
+### Decommission scraping (Phase D) — re-pointed nav — origin FU-186
+- [ ] Re-pointed Product Search nav opens the admin-configured URL in a new tab (data-gated; R-014 disabled-with-hint when URL unset)
+- [ ] System Settings input for `AppSetting.product_search_url` works (saves + round-trips)
+
+### Ingestion: quarantine queue — origin FU-190
+- [ ] Push records with unknown store names → they quarantine + appear on the API access page as pending
+- [ ] Admin assigns the mapping → next push for the same name succeeds (no longer quarantined)
+
+---
+
+## Onboarding
+
+### Onboarding C-5.1 / C-5.2 / C-5.3 / C-5.4 / C-5.5 / C-5.6 — origin FU-192
+- [ ] **C-5.1:** header reads "Skip"; bailing mid-wizard applies nothing — no username/theme/font change, no seeded groups/locations, no stock items
+- [ ] Finish applies everything in dependency order (prefs → seeds → queued first items) and lands on `/`
+- [ ] "Show me X" on the tour applies the draft then navigates (does NOT navigate if apply fails — e.g. invalid display name jumps back to welcome with error)
+- [ ] Theme picks persist as `system`/`pesto`/`pesto-dark` and repaint
+- [ ] Import line reads "spreadsheet or another app" and links to `/data/import`
+- [ ] Mid-wizard refresh resumes draft including queued first items
+- [ ] On a genuinely fresh DB (no dev seed), the "already have groups/locations" copy does NOT appear and seed checkboxes are enabled (folds FU-041)
+- [ ] **C-5.2:** first-run opens on story; scenes auto-advance, hero loop pauses for exploration
+- [ ] Loop draws itself once, then stages + Dora are tappable + detail panel updates
+- [ ] Persona preview toggles provisional Insight chip + Dora-centre copy; previewed persona persists in draft for C-5.3 fork
+- [ ] Rail jumps freely Story↔Setup, nothing gated; Skip to setup + Skip work from any scene
+- [ ] Reduced-motion: no autoplay/draw, final state shown, fully usable
+- [ ] Keyboard: every node / persona / rail dot tabbable with visible focus
+- [ ] Layout holds at narrow phone width
+- [ ] **C-5.3 (first user):** persona step shows 3 preset cards + Customise pre-selected from hero preview
+- [ ] Cooking drops explainer + shortens wizard; Spend/Everything show stock-vs-product explainer before seeding
+- [ ] Customise reveals flat flag toggles; (products-off + money-on) combo reachable
+- [ ] Flags land only on Finish — bailing changes nothing
+- [ ] After Finish: install reflects chosen flags (Settings → System); first user's money/nutrition prefs match
+- [ ] A second (non-first) user sees no persona / explainer
+- [ ] **C-5.4:** welcome's "how many people do you cook for?" saves on Finish (blank leaves unset); cook mode with headcount → serving scaler pre-scaled; without headcount → falls back to recipe's servings
+- [ ] **C-5.5:** seed step renders 5 starter packs; ticking a pack header selects all items (tri-state when partial); expanding lets you tick individual items
+- [ ] First-item step's group/location pickers offer names (defaults + pack groups + existing); queued items in slim added list (removable)
+- [ ] Finish: ticked pack items + first items pre-located, no duplicates on re-run
+- [ ] **C-5.6:** final step shows confetti (suppressed under reduced-motion); OnboardingLoop recap (no autoplay, tappable); persona-relevant flow-cards Open each area + link to guides; Alerts card → `/alerts` (FU-015)
+- [ ] Finish / "Open X" completes onboarding (router guard clears)
+
+### Onboarding de-persona — remaining items — origin FU-210
+- [ ] Hero-loop renders well without persona shaping
+- [ ] No persona/Customise/products step in setup
+- [ ] Defaults applied; spend via Settings
+- [ ] Draft resume works
+- [ ] Story plays without LOOP_INSIGHT
+- [ ] Renamed chips ("Mostly cooking" / "Watching spend" / "All of it") read sensibly
+- [ ] Finish step is clean
+- [ ] `WelcomeWizard.vue` admin step does NOT say "scrape" merchants (stale post-divorce copy)
+
+### Onboarding sell-copy honesty (P3 Honest gate) — origin FU-184
+- [ ] Walk the running app and confirm each loop-stage claim in `onboardingContent.ts` (`LOOP_STAGES`, `LOOP_CENTRE`, `LOOP_INSIGHT`, `NARRATIVE_SCENES`, `PERSONA_PREVIEWS`) is literally true
+- [ ] Does finishing a shop really auto-restock?
+- [ ] Does cook mode decrement stock?
+- [ ] Does price memory + "inflated price" signal exist? (If not, soften/cut)
+- [ ] Cut/soften anything the app doesn't back
+- [ ] **Don't promise the Insight beat** unless it's actually built
+
+---
+
+## Products & pricing
+
+### My Products + Price History — feedback gaps — origin FU-214
+- [ ] **My Products** — L193 "mark inactive: Extra inputs not permitted" is gone
+- [ ] L195 link-icon grey/green styling correct (the handoff itself is FU-208)
+- [ ] L198 inactive-product styling legible
+- [ ] L205/L206 GAP — only a generic "Select on-deal" bulk exists; build "select low-stock-on-deal" / "out-of-stock-on-deal" variants, OR confirm the generic suffices
+- [ ] L197 — only mark-inactive (soft) exists, no hard delete (confirm acceptable under ingestion model)
+- [ ] **Price History** — L218 selecting products updates the chart
+- [ ] L219 card not squished + notify placeholder visible
+- [ ] L220 notify-under formats as a price
+- [ ] L221/L222 %off text size + chip colour consistent (componentised)
+- [ ] L223 hover bubble is theme-aware (today: white-on-white in dark mode)
+- [ ] L225 graph reaches the box edge
+- [ ] L160 — confirm no *other* Dora search bar has the dark-mode white-on-white contrast bug
+
+### My Products → stock-item "Link…" — origin FU-208
+- [ ] From My Products, "Link…" → pick stock item → product links and shows as linked (no bounce)
+- [ ] Error toast on failure
+
+### PreferredBuy — origin FU-211
+- [ ] Stock item detail: add / rename / reorder (up-down) / remove preferred-buy entries
+- [ ] CASCADE on item delete (preferred buys go too)
+
+### Shopping line preferred-buy hint — origin FU-215
+- [ ] Pick a preferred-buy hint on a shopping line → persists across reload
+- [ ] Clear the hint → persists across reload
+
+### Stock-item Prices section — origin FU-213
+- [ ] Log a price observation → derived unit_cost shows correctly
+- [ ] Remove a price observation
+- [ ] Section is hidden when money features are off
+
+### Cost consumers rebased to unit-cost helper — origin FU-216
+- [ ] Stock-value report numbers look right (observation-only items now contribute, where previously they didn't)
+- [ ] Recipe cost estimate numbers look right (observation fallback)
+- [ ] Any tests pinning totals for observation-only items — update if broken
+
+---
+
+## Build / install / desktop
+
+### Docker + desktop builds bundle the default voice — origin FU-286
+- [ ] Next Docker image build: `GET /api/tts/voices` returns Amy with `status: "ready"` on first boot, before any user touches Settings → Voice
+- [ ] Desktop bundle (Linux first): `<dist>/Dora/voices/en_US-amy-medium.onnx` (+ `.json`) present; same UI behaviour
+- [ ] If Amy isn't Ready, check: GitHub Actions / build runner blocking HF download (look for WARN line); spec's `if os.path.isdir(...)` guard hiding a path mismatch; `bundled_voices_dir`'s `_MEIPASS`/`packaging/voices` path search missing the runner's layout
+
+### Piper synthesis + browser walk — origin FU-291
+*Needs env with Piper present (Docker, desktop bundle, or `pip install piper-tts` on Linux/macOS)*
+- [ ] Settings → Voice: download a voice → it flips to Ready
+- [ ] Preview each voice; switch engine
+- [ ] Dora chat with "speak replies" on
+- [ ] Cook mode Sous Chef stepping
+- [ ] 503 → browser fallback when Piper is absent
+
+### Piper-binary auto-provisioning — Docker + desktop — origin FU-290
+- [ ] Run Docker build → confirm `piper` on PATH in the image
+- [ ] Linux desktop build (`packaging/build-linux.sh`) → bundle contains `piper/` and the app synthesises
+- [ ] Windows desktop build (when scripts land per FU-288) → same
+
+---
+
+## Cross-cutting
+
+### Drag-and-drop affordance parity (post `useDragDropList` refactor) — origin FU-326
+- [ ] **Shopping list lines** (`/shopping-lists/<id>`): on a list that's not done and not mid-shopping with no grouping active and bulk mode off, grab any row → source row dims to ~50% opacity, drop-target row lights with a primary-coloured outline ring. Drop reorders, server persists, refresh round-trips
+- [ ] **Shopping list — reorder gates**: list is `done` → no drag (cursor stays default; can't pick up). List `shopping` → no drag. Activate grouping → no drag. Enter bulk mode → no drag. Return to "active draft, no grouping, no bulk" → drag resumes
+- [ ] **Recipe steps** (recipe edit, Structured mode): grab a top-level step → source dims, drop-target ring lights; drop within sibling group reorders. Try to drop a top-step onto a sub-step (different parent) → no drop accepted (no ring on dragover). Top-steps still can't become sub-steps via drag (intentional — that's the separate sub-step affordance)
+- [ ] **Recipe ingredients** (recipe edit, "Ingredients" card): grab a row → dim + drop ring exactly the same shape and colour as the two surfaces above. Within same section reorders; across sections also moves the row and copies the target's section assignment
+- [ ] **Visual identity check**: side-by-side, the three surfaces use the same opacity, same ring colour, same ring thickness, same handle hover treatment. Open browser devtools → both surfaces apply `.dora-dnd-row` / `--dragging` / `--drop-over` classes (not `shopping-line-dragging` / `recipe-step-row--dragging` / `ingredient-row--dragging`)
+- [ ] **Cross-list isolation**: start dragging a shopping line, hover over the recipe editor's ingredient list (in a second tab won't work — single-tab check). Start a recipe-step drag while in the recipe-steps editor → only steps light up, never ingredients (because the MIME is distinct per list)
+
+### Error-handling rollout — origin FU-099-V
+- [ ] **Friendly translation** — submit a recipe with `servings = "abc"` → inline `error-message` on Servings reads "Must be a whole number." (not "Input should be a valid integer..."); toast caption is the generic "Couldn't save — check the highlighted fields." with `· ref: <8-char>` suffix
+- [ ] **Domain error** — create a stock item with a name that already exists → toast caption shows the friendly domain message + ref suffix
+- [ ] **5xx path** — induce a 500 (e.g. stop API mid-save) → existing global toast still fires with "ref: <8-char>" (no regression)
+- [ ] **Network drop** — kill the API → "Can't reach the server…" caption renders; no `ref:` suffix
+- [ ] **Dev visibility** — DevTools: every failed API call (400/401/403/404/422/5xx) shows `[api] METHOD path → status code (correlation-id)` with structured `details` blob
+- [ ] **Unknown Pydantic code** — induce one (custom validator raising non-standard error) → toast reads "This value isn't valid."; DevTools shows `raw` + `code` so a dev can add it to `PYDANTIC_FRIENDLY`
+
+### `formatQuantity` rollout — origin FU-321
+- [ ] Meal-plan "This week's shopping" — `unit="g"` reads `"needs 250g · …"`; `unit="tbsp"` reads `"needs 1 tbsp · …"`; null unit reads just the quantity
+- [ ] Sequential Builder Dialog preview list — same three cases; rounded number is what `formatQuantity` receives
+- [ ] Substitute ratio caption on stock-item detail: `1 tbsp → 3 tsp` reads exactly that (both halves spaced); direction "this → that"
+- [ ] Substitute ratio caption in cook-mode swap picker: same ratio reads identically. `250 g → 1 cup` reads `"250g → 1 cup"` (asymmetric — mass tight, volume spaced)
+- [ ] Recipe print view (window.open from RecipeDetailPage export): `2 tbsp olive oil` → `"olive oil — 2 tbsp"`; `250 g flour` → `"flour — 250g"`; `1 onion` (no unit) → `"onion — 1"`; `salt` (both null) → just the name, no em-dash
+
+### Unsaved-changes guard rollout — origin FU-322
+- [ ] **AccountSettings** — edit `usernameDraft`, click a sidebar link → confirm dialog. Cancel → still on page. Confirm → nav completes. Repeat for `emailDraft`. Revert draft → nav with no prompt
+- [ ] **AccountSettings exclusions** — pick a new profile picture (saves immediately) then nav → no prompt. Type a new-password value (don't submit) then nav → no prompt
+- [ ] **AdminSystemAssistantSettings** — flip `enabledDraft`, edit `baseUrlDraft`, edit `modelDraft` in any combination, then nav → prompt. Save → next nav passes through clean
+- [ ] **beforeunload** — dirty page refresh → native "Leave site?" prompt. Clean page refresh → no prompt
+
+### Chunks 3–5 client + DB-backed query paths — origin FU-051
+- [ ] `npm install` + `npm run lint` + `quasar dev` boots cleanly
+- [ ] Recipes overview: cookable filter + footer count + compare dialog
+- [ ] Recipe card chip renders
+- [ ] Recipe detail sidebar + editor "Missing" badge
+- [ ] Meal-plans palette
+- [ ] Dashboard "Cookable tonight" + count
+- [ ] Dora's "what's missing" answers
+- [ ] Dashboard primary-list stats + shopping-list detail headline totals (Chunk 5) — confirm $ remaining / savings / counts match what the lines imply
+- [ ] Server: `GET /api/recipes?cookable=true|false`, `?max_missing=1`, `/api/dashboard/summary`, `GET /api/shopping-lists/<id>` (check `totals` block) against seeded data
+
+### Cookbook C-cross Chunk 1 — feature-flag panel — origin FU-110
+- [ ] `alembic upgrade head` applies `a3b8e2f4c1d7` on SQLite + Postgres; `verify_mappings()` passes for reshaped `AppSetting`
+- [ ] As admin: Settings → System → **Features** panel — five toggles (Meal planning ON, Money / Nutrition / Companion ingestion / Weekly deals emailer all OFF); captions read
+- [ ] Each toggle on → toast + persists across reload
+- [ ] Each toggle off → toast + persists
+- [ ] As non-admin: panel renders "no admin permissions" banner; toggles not visible
+- [ ] `curl /api/health` JSON carries `features.meal_planning` / `features.money` / `features.nutrition` / `features.companion_ingestion` / `features.deals_email` alongside pre-existing `auth` / `audit` / `scanning` / `multi_user` / `email` / `assistant`; values match panel
+- [ ] Composable freshness: `flagsLoaded.value` is `true`, computeds match panel; flipping in tab 1 only refreshes tab 1's cache (per-session, documented)
+- [ ] Migration safety: install using meal planning sees `meal_planning_enabled=True` after migration
+- [ ] Save error path: disable network / PATCH 500-out → toggle reverts + negative toast
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — panel reads in all
+
+### C-cross Chunk 2 — per-user money opt-in — origin FU-111
+- [ ] `alembic upgrade head` applies `b5c1d9a4e3f2`; `verify_mappings()` passes for reshaped User
+- [ ] As regular user: Settings → Account → new **Money & budgets** card appears above Grocery budget with toggle, off by default
+- [ ] **Install ON, user OFF (default):** toggle enabled, Grocery budget hidden. Flip on → toast → Grocery budget appears → set budget + period → reload → toggle on, budget settings persisted
+- [ ] **Toggle off again:** toast → Grocery budget hides → reload → toggle off, **but saved budget is still on server** (flip back on → same value)
+- [ ] **Install OFF (admin disables in System → Features → Money):** per-user toggle disabled with caption "This install has money features turned off…"; Grocery budget stays hidden
+- [ ] PATCH wire: flip sends `{ money_features_enabled: true|false }` only (DevTools)
+- [ ] `GET /api/users/me` carries `money_features_enabled` in response
+- [ ] Composable: `useMoneyEnabled().moneyEnabled.value` = `installEnabled && userEnabled`
+- [ ] Error path: PATCH 500s → toggle reverts + negative toast
+- [ ] Pesto Light + Dark + Cherry Cola Dark
+
+### C-cross Chunk 3 — per-user nutrition mode + reserved seam — origin FU-112
+- [ ] `alembic upgrade head` applies `c8d3f4a9b2e1`; `verify_mappings()` passes for reshaped User + AppSetting
+- [ ] Settings → Account → **Nutrition** card: three-way toggle reads **Off** by default; captions read
+- [ ] **Install OFF, user Off (default):** whole toggle disabled, caption "This install has nutrition turned off…"
+- [ ] Admin enables `nutrition_enabled` in System → Features. Return to Account → Nutrition: Off + Simple now clickable, Complex disabled. Caption explains complex needs a source
+- [ ] Flip to Simple → toast → reload → still Simple
+- [ ] Flip back to Off → toast → reload → still Off
+- [ ] Server rejects complex without seam: PATCH `{ nutrition_mode: 'complex' }` → 400 with "Complex nutrition mode needs a nutrition data source configured…"
+- [ ] Configure the seam: admin PATCH `{ nutrition_db_source: 'usda-fdc' }` → `GET /api/health` reports `features.nutrition_complex_available: true`
+- [ ] Refresh Settings: Complex now clickable. Pick it → toast → reload → still Complex
+- [ ] Re-empty the seam: PATCH `nutrition_db_source: ''`. Refresh: user remains on Complex server-side (no auto-rewrite), but Complex option disabled + caption updates. User can switch back to Off/Simple
+- [ ] PATCH wire: `{ nutrition_mode: '<mode>' }` only
+- [ ] `/me` carries `nutrition_mode`
+- [ ] Pesto Light + Dark + Cherry Cola Dark
+
+### C-cross Chunk 5 — image-display opt-in + deferred image column — origin FU-114
+- [ ] `alembic upgrade head` applies `d4a7c9b3e8f1`; `verify_mappings()` passes for reshaped User
+- [ ] New user: `show_recipe_images` + `show_stock_images` both default **true**. Existing users post-migration same (server default `'1'`)
+- [ ] Cookbook overview header has **image** icon button next to "Import from URL". Tooltip "Hide recipe photos · saved across sessions"
+- [ ] Cards render photos as today
+- [ ] Recipe detail with image → header preview shows photo
+- [ ] **Click toggle:** icon flips to `image_not_supported`; toast "Recipe photos hidden."
+- [ ] Cards now show coloured-initial placeholder; DevTools Network: `GET /api/recipes/<id>/image` is **NOT** called for visible cards
+- [ ] Recipe detail (with image): header preview shows placeholder; **editor's pick/clear still work** — pick new image → preview shows freshly-picked image (dirty-form branch ignores opt-in). Save → reload → preview hides again (saved image gated)
+- [ ] **Toggle back on:** toast "Recipe photos shown."; cards + detail show photos; saved images survived
+- [ ] `/me` carries `show_recipe_images` + `show_stock_images` on every load. Toggle PATCH sends only `{ show_recipe_images: bool }`
+- [ ] Cross-session persistence: flip toggle, sign out, sign back in → state remains. Second device → same
+- [ ] **FU-090 perf fix:** load cookbook overview with N≥10 recipes that all have images. Payload substantially smaller (image bytes no longer in rows; only `has_image: bool`). Backend logs / `sqlalchemy.echo` show no `SELECT image FROM Recipe` on list path
+- [ ] **Stock-side flag round-trips** even though no UI writes it yet (FU-106 will land C-1 row redesign): `PATCH /me` body `{ show_stock_images: false }` survives reload
+- [ ] Pesto Light + Pesto Dark + Cherry Cola Dark — new icon button reads in all
+
+---

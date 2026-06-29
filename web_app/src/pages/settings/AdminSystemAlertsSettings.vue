@@ -69,7 +69,7 @@
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, reactive, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -116,7 +116,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not save alert thresholds.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             savingThresholds.value = false;

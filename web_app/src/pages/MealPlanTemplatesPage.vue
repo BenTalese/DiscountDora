@@ -145,7 +145,7 @@
     import { useQuasar } from 'quasar';
     import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';
     import MealPlanTemplateSetApiService from 'src/services/api/mealPlanTemplateSetApiService';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
     import { useMealPlanTemplateSetStore } from 'src/stores/mealPlanTemplateSetStore';
     import { computed, onMounted, ref } from 'vue';
@@ -246,7 +246,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Could not save the set.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             savingSet.value = false;
@@ -271,7 +271,7 @@
             $q.notify({
                 type: 'negative', position: 'bottom-right',
                 message: 'Something went wrong.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
     }

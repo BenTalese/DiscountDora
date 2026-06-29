@@ -9,8 +9,16 @@ export function isoDate(value: string): string {
     return new Date(value).toISOString().slice(0, 10);
 }
 
-/** Today as YYYY-MM-DD from the browser's *local* calendar parts. A pre-load
- *  fallback only — the household "today" from the server (C-2.K) is preferred. */
+/** Today as YYYY-MM-DD from the browser's *local* calendar parts.
+ *
+ *  R-021 carve-out — display-only, pre-server-response fallback. The
+ *  household "today" is owned by the server (`AppSetting.timezone` →
+ *  `household_today()` → `mealPlanStore.todayIso`); state and decisions
+ *  must use that. This helper exists so the calendar can paint a "today"
+ *  cell on the very first frame before the store has hydrated — once the
+ *  server response lands, the binding flips and any one-day discrepancy
+ *  resolves automatically. Never use this to gate persisted state, build
+ *  a server payload, or decide which day a value belongs to. */
 export function localTodayIso(): string {
     const d = new Date();
     const month = String(d.getMonth() + 1).padStart(2, '0');

@@ -64,8 +64,10 @@ class AlertActionHandler:
         if action == ACTION_RESET_EXPIRY:
             item.expiry_date = None
         elif action == ACTION_EXTEND_EXPIRY:
-            from datetime import date as _date
-            base = item.expiry_date or _date.today()
+            # R-021 — when no expiry is set, "extend by 7 days" anchors
+            # on household-tz today, not server-local.
+            from dora_api.features.app_settings.clock import household_today
+            base = item.expiry_date or household_today(self.repository)
             item.expiry_date = base + timedelta(days=7)
         elif action == ACTION_MARK_RESTOCKED:
             well_stocked = level_for_status(

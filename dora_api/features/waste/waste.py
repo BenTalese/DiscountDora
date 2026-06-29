@@ -29,6 +29,7 @@ from dora_api.domain.entities.stock_item_waste_event import (
     StockItemWasteEvent, WASTE_REASON_VALUES,
 )
 from dora_api.domain.stock_status import is_missing
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import WASTE_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.infrastructure.api_response import (bad_request, no_content,
@@ -88,7 +89,8 @@ class GetWasteRescueHandler:
 
     def handle(self, horizon_days: int) -> WasteRescueDto:
         horizon_days = max(0, min(horizon_days, _MAX_HORIZON_DAYS))
-        today = date.today()
+        # R-021 — waste-rescue horizon is a household calendar window.
+        today = household_today(self.repository)
         cutoff = today + timedelta(days=horizon_days)
 
         items: list[StockItem] = (

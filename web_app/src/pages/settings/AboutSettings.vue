@@ -106,7 +106,7 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
 
@@ -147,7 +147,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not restart onboarding.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         } finally {
             restartingOnboarding.value = false;

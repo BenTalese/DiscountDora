@@ -39,6 +39,7 @@ from dora_api.features.shopping_lists.manage_shopping_list import (
     UpdateShoppingListHandler, UpdateShoppingListRequest)
 from dora_api.features.shopping_lists.manage_shopping_list_lines import (
     AddLineHandler, AddLineRequest, UpdateLineHandler, UpdateLineRequest)
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.stock_items.move_stock_item import (
     MoveStockItemHandler, MoveStockItemRequest)
 from dora_api.features.stock_items.update_stock_item import (
@@ -253,7 +254,8 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
             "summary": "Zero days isn't really pushing anything, mate.",
             "candidates": [],
         }
-    base = item.expiry_date or date.today()
+    # R-021 — fallback base for the expiry push is household-tz today.
+    base = item.expiry_date or household_today(SqlAlchemyRepository())
     new_expiry = base + timedelta(days=days)
     direction = "back" if days < 0 else "forward"
     delta = f"{abs(days)} day{'s' if abs(days) != 1 else ''}"

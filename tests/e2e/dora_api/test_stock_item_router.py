@@ -7,6 +7,7 @@ from dora_api.features.stock_items.create_stock_item import \
     CreateStockItemRequest
 from dora_api.features.stock_items.update_stock_item import \
     UpdateStockItemRequest
+from tests.e2e.dora_api._error_assertions import domain_err, validation_err
 from tests.support import is_valid_datetime, is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -98,9 +99,9 @@ def test__create_stock_item__CreatingStockItemWithIncorrectDataTypes__CannotBeDe
     assert _Response.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "name": ["Input should be a valid string"],
-            "stock_level_id": ["UUID input should be a string, bytes or UUID object"],
-            "stock_location_id": ["Input should be a valid UUID, invalid length: expected length 32 for simple format, found 3"]
+            "name": [validation_err("string_type", "Input should be a valid string")],
+            "stock_level_id": [validation_err("uuid_type", "UUID input should be a string, bytes or UUID object")],
+            "stock_location_id": [validation_err("uuid_parsing", "Input should be a valid UUID, invalid length: expected length 32 for simple format, found 3")]
         },
         "status": 400,
         "title": "Malformed request.",
@@ -134,7 +135,7 @@ def test__create_stock_item__StockItemAlreadyExists__IsBusinessRuleViolation(api
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            '': ["A stock item with the name 'PeTers NeoPOLitan IcE CrEam' already exists."],
+            '': [domain_err("A stock item with the name 'PeTers NeoPOLitan IcE CrEam' already exists.")],
         },
        'status': 422,
        'title': 'Business rule violation.',
@@ -150,8 +151,8 @@ def test__create_stock_item__EmptyRequest__IsRequiredInputsValidationFailure(api
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'name': ["Field required"],
-            'stock_level_id': ["Field required"]
+            'name': [validation_err("missing", "Field required")],
+            'stock_level_id': [validation_err("missing", "Field required")]
         },
        'status': 400,
        'title': 'Malformed request.',
@@ -173,7 +174,7 @@ def test__create_stock_item__StockLevelDoesNotExist__IsEntityExistenceFailure(ap
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'stock_level_id': [f"StockLevel with the ID '{_FakeID}' was not found."]
+            'stock_level_id': [domain_err(f"StockLevel with the ID '{_FakeID}' was not found.")]
         },
        'status': 422,
        'title': 'Entity was not found.',
@@ -196,7 +197,7 @@ def test__create_stock_item__StockLocationDoesNotExist__IsEntityExistenceFailure
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'stock_location_id': [f"StockLocation with the ID '{_FakeID}' was not found."]
+            'stock_location_id': [domain_err(f"StockLocation with the ID '{_FakeID}' was not found.")]
         },
        'status': 422,
        'title': 'Entity was not found.',
@@ -231,7 +232,7 @@ def test__create_stock_item__ExtraAttributes__IsBadRequest(api, stock_level_id):
     assert _Response.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "poopusgoopus": ["Extra inputs are not permitted"]
+            "poopusgoopus": [validation_err("extra_forbidden", "Extra inputs are not permitted")]
         },
         "status": 400,
         "title": "Malformed request.",
@@ -506,7 +507,7 @@ def test__update_stock_item__OtherStockItemHasSameName__CannotUpdateToDuplicateN
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            '': ["A stock item with the name 'super AWESOME pizza' already exists."]
+            '': [domain_err("A stock item with the name 'super AWESOME pizza' already exists.")]
         },
         "status": 422,
         "title": "Business rule violation.",
@@ -567,7 +568,7 @@ def test__update_stock_item__ExtraAttributes__IsBadRequest(api):
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "poopusgoopus": ["Extra inputs are not permitted"]
+            "poopusgoopus": [validation_err("extra_forbidden", "Extra inputs are not permitted")]
         },
         "status": 400,
         "title": "Malformed request.",

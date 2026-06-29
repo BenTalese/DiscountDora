@@ -114,7 +114,17 @@ class ShoppingListLine(BaseEntity):
 
 def format_list_date(value: date, today: date | None = None) -> str:
     """Human label for a list's date-derived display name ("Sat 14 Jun");
-    the year is appended only when it isn't the current one."""
+    the year is appended only when it isn't the current one.
+
+    R-021 carve-out: this is a pure display formatter, called from
+    `ShoppingList.display_name` (a @property with no repository access).
+    The `today` fallback is server-local — at worst, this can drop or
+    keep "current year" mistakenly for a handful of hours around 31 Dec
+    in households whose offset crosses the year line vs. the server's.
+    The fallback is documented; callers with a repository handy SHOULD
+    pass `household_today(repository)`. Display-only — never used for
+    date-boundary logic.
+    """
     today = today or date.today()
     fmt = "%a %d %b" if value.year == today.year else "%a %d %b %Y"
     return value.strftime(fmt)

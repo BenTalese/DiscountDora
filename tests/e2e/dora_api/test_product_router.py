@@ -5,6 +5,7 @@ import requests
 
 from dora_api.features.products.create_product import CreateProductRequest
 from dora_api.features.products.update_product import UpdateProductRequest
+from tests.e2e.dora_api._error_assertions import domain_err, validation_err
 from tests.support import is_valid_uuid
 
 #region ---------------- setup ----------------
@@ -65,19 +66,19 @@ def test__create_product__CreatingProductWithIncorrectDataTypes__CannotBeDeseria
     assert _Response.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "brand": ["Input should be a valid string"],
-            "image": ["Input should be a valid string"],
-            "is_active": ["Input should be a valid boolean, unable to interpret input"],
-            "is_available": ["Input should be a valid boolean, unable to interpret input"],
-            "store_name": ["Input should be a valid string"],
-            "merchant_stockcode": ["Input should be a valid string"],
-            "name": ["Input should be a valid string"],
-            "price_now": ["Input should be a valid number, unable to parse string as a number"],
-            "price_was": ["Input should be a valid number, unable to parse string as a number"],
-            "size": ["Input should be a valid string"],
-            "size_unit": ["Input should be a valid string"],
-            "size_value": ["Input should be a valid number, unable to parse string as a number"],
-            "web_url": ["Input should be a valid string"]
+            "brand": [validation_err("string_type", "Input should be a valid string")],
+            "image": [validation_err("string_type", "Input should be a valid string")],
+            "is_active": [validation_err("bool_parsing", "Input should be a valid boolean, unable to interpret input")],
+            "is_available": [validation_err("bool_parsing", "Input should be a valid boolean, unable to interpret input")],
+            "store_name": [validation_err("string_type", "Input should be a valid string")],
+            "merchant_stockcode": [validation_err("string_type", "Input should be a valid string")],
+            "name": [validation_err("string_type", "Input should be a valid string")],
+            "price_now": [validation_err("float_parsing", "Input should be a valid number, unable to parse string as a number")],
+            "price_was": [validation_err("float_parsing", "Input should be a valid number, unable to parse string as a number")],
+            "size": [validation_err("string_type", "Input should be a valid string")],
+            "size_unit": [validation_err("string_type", "Input should be a valid string")],
+            "size_value": [validation_err("float_parsing", "Input should be a valid number, unable to parse string as a number")],
+            "web_url": [validation_err("string_type", "Input should be a valid string")]
         },
         "status": 400,
         "title": "Malformed request.",
@@ -122,7 +123,7 @@ def test__create_product__PriceNowAtZeroBoundary__IsBadRequest(api):
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json()['errors']['price_now'] == ['Input should be greater than 0']
+    assert _Response.json()['errors']['price_now'] == [validation_err("greater_than", "Input should be greater than 0")]
 
 
 def test__create_product__PriceWasAtZeroBoundary__IsBadRequest(api):
@@ -142,7 +143,7 @@ def test__create_product__PriceWasAtZeroBoundary__IsBadRequest(api):
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json()['errors']['price_was'] == ['Input should be greater than 0']
+    assert _Response.json()['errors']['price_was'] == [validation_err("greater_than", "Input should be greater than 0")]
 
 
 def test__create_product__PriceNowJustAboveZeroBoundary__ProductCreated(api):
@@ -180,7 +181,7 @@ def test__create_product__SizeValueAtZeroBoundary__IsBadRequest(api):
 
     assert _Response.status_code == 400
     assert _Response.headers['Content-Type'] == 'application/problem+json'
-    assert _Response.json()['errors']['size_value'] == ['Input should be greater than 0']
+    assert _Response.json()['errors']['size_value'] == [validation_err("greater_than", "Input should be greater than 0")]
 
 
 def test__create_product__EmptyStringOnRequiredField__IsBadRequest(api):
@@ -267,15 +268,15 @@ def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'is_active': ['Field required'],
-            'is_available': ['Field required'],
-            'store_name': ['Field required'],
-            'name': ['Field required'],
-            'price_now': ['Field required'],
-            'price_was': ['Field required'],
-            'size': ['Field required'],
-            'size_unit': ['Field required'],
-            'size_value': ['Field required'],
+            'is_active': [validation_err("missing", "Field required")],
+            'is_available': [validation_err("missing", "Field required")],
+            'store_name': [validation_err("missing", "Field required")],
+            'name': [validation_err("missing", "Field required")],
+            'price_now': [validation_err("missing", "Field required")],
+            'price_was': [validation_err("missing", "Field required")],
+            'size': [validation_err("missing", "Field required")],
+            'size_unit': [validation_err("missing", "Field required")],
+            'size_value': [validation_err("missing", "Field required")],
         },
         'status': 400,
         'title': 'Malformed request.',
@@ -344,7 +345,7 @@ def test__create_product__ExtraAttributes__IsBadRequest(api):
     assert _Response.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "poopusgoopus": ["Extra inputs are not permitted"]
+            "poopusgoopus": [validation_err("extra_forbidden", "Extra inputs are not permitted")]
         },
         "status": 400,
         "title": "Malformed request.",
@@ -360,15 +361,15 @@ def test__create_product__EmptyRequest__IsRequiredInputsValidationFailure(api):
     assert _Response.json() == {
         'detail': 'See errors property for more details.',
         'errors': {
-            'is_active': ["Field required"],
-            'is_available': ["Field required"],
-            'store_name': ["Field required"],
-            'name': ["Field required"],
-            'price_now': ["Field required"],
-            'price_was': ["Field required"],
-            'size': ["Field required"],
-            'size_unit': ["Field required"],
-            'size_value': ["Field required"],
+            'is_active': [validation_err("missing", "Field required")],
+            'is_available': [validation_err("missing", "Field required")],
+            'store_name': [validation_err("missing", "Field required")],
+            'name': [validation_err("missing", "Field required")],
+            'price_now': [validation_err("missing", "Field required")],
+            'price_was': [validation_err("missing", "Field required")],
+            'size': [validation_err("missing", "Field required")],
+            'size_unit': [validation_err("missing", "Field required")],
+            'size_value': [validation_err("missing", "Field required")],
         },
        'status': 400,
        'title': 'Malformed request.',
@@ -688,7 +689,7 @@ def test__update_product__UpdatingPriceNowWithoutPriceWas__IsValidationFailure(a
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "": ["price_now and price_was must both be set."]
+            "": [domain_err("price_now and price_was must both be set.")]
         },
         "status": 422,
         "title": "Business rule violation.",
@@ -710,7 +711,7 @@ def test__update_product__UpdatingPriceWasWithoutPriceNow__IsValidationFailure(a
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "": ["price_now and price_was must both be set."]
+            "": [domain_err("price_now and price_was must both be set.")]
         },
         "status": 422,
         "title": "Business rule violation.",
@@ -786,7 +787,7 @@ def test__update_product__ExtraAttributes__IsBadRequest(api):
     assert _PatchResponse.json() == {
         "detail": "See errors property for more details.",
         "errors": {
-            "poopusgoopus": ["Extra inputs are not permitted"]
+            "poopusgoopus": [validation_err("extra_forbidden", "Extra inputs are not permitted")]
         },
         "status": 400,
         "title": "Malformed request.",

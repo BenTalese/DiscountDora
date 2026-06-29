@@ -184,11 +184,12 @@
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -262,6 +263,10 @@
             modelDraft.value === saved.value.model
     );
 
+    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
+    // Dirty iff any of the three drafts diverges from `saved.value`.
+    useUnsavedChangesGuard(computed(() => !unchanged.value));
+
     // Save is gated on: something changed AND (if enabling, valid inputs).
     // Disabling is always valid — turning AI off doesn't need a URL/model.
     const canSave = computed(() => {
@@ -293,7 +298,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not save AI settings.',
-                caption: describeApiError(err) || ''
+                caption: toastCaption(err)
             });
         } finally {
             saving.value = false;

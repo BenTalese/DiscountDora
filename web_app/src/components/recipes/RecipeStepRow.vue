@@ -1,29 +1,23 @@
 <template>
-    <!-- FU-094 — drag-and-drop reorder. The whole row listens for
-         dragover/drop, but `draggable` lives only on the handle so the
-         textareas/selects below stay clickable + selectable. Siblings-
-         only constraint: dragover only allows a drop when the dragged
-         row shares this row's `parent_client_id` (a top-step can't
-         become a sub-step via drag — that change-of-nesting is its own
-         affordance and out of scope here). -->
+    <!-- FU-094 / R-022 — drag-and-drop reorder via `useDragDropList`.
+         The parent editor owns the drag state + sibling-pair predicate
+         and passes per-row bindings down through `dragBindings`. The
+         row spreads `rowProps` on its outer wrapper (drop target) and
+         `handleProps` on the handle icon (the only draggable element),
+         so textareas/selects below stay normally clickable. -->
     <div
         class="recipe-step-row q-mb-sm"
         :class="{
             'recipe-step-row--sub': row.depth === 1,
-            'recipe-step-row--drop-over': isDropOver,
-            'recipe-step-row--dragging': isBeingDragged,
+            ...dragBindings.rowClass,
         }"
-        @dragover="onRowDragOver"
-        @dragleave="onRowDragLeave"
-        @drop="onRowDrop"
+        v-bind="dragBindings.rowProps"
     >
         <div class="recipe-step-row__header row items-center q-gutter-xs no-wrap">
             <div
-                class="recipe-step-row__handle dora-text-muted"
-                draggable="true"
+                class="dora-dnd-handle dora-text-muted"
                 aria-label="Drag to reorder"
-                @dragstart="onHandleDragStart"
-                @dragend="onHandleDragEnd"
+                v-bind="dragBindings.handleProps"
             >
                 <q-icon :name="ICONS.drag_indicator" />
                 <q-tooltip>Drag to reorder among siblings</q-tooltip>
@@ -141,6 +135,7 @@
     import { computed, ref } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
+    import type { DragDropRowBindings } from 'src/composables/useDragDropList';
     import type {
         StepRowView,
         EditableStep,
@@ -157,25 +152,15 @@
         // sections leave the picker entirely off-screen.
         sectionOptions?: SectionOption[];
         canAddSubStep: boolean;
-        /** FU-094 — client_id currently being dragged (parent owns this state
-         *  so cross-row dragover can validate against the source). null when
-         *  no drag is in progress. */
-        draggingClientId?: string | null;
-        /** Parent of the row currently being dragged. Sibling check on
-         *  dragover compares this against `row.parent_client_id`. */
-        draggingParentId?: string | null;
+        /** FU-094 / R-022 — per-row DnD bindings supplied by the parent's
+         *  `useDragDropList`. Spread `handleProps` on the drag handle and
+         *  `rowProps` + `rowClass` on the row body. */
+        dragBindings: DragDropRowBindings;
     }>();
-
     const emit = defineEmits<{
         (e: 'update', updated: EditableStep): void;
         (e: 'add-sub'): void;
         (e: 'remove'): void;
-        // FU-094 — lifecycle events for drag-and-drop reorder. The parent
-        // (RecipeStepsEditor) owns the steps array and the dragging state;
-        // the row just emits intents.
-        (e: 'drag-start', clientId: string, parentClientId: string | null): void;
-        (e: 'drag-end'): void;
-        (e: 'drop-on-row', targetClientId: string): void;
     }>();
 
     function patch(partial: Partial<EditableStep>) {
@@ -220,55 +205,6 @@
         set: (v) => patch({ section_client_id: v ?? null }),
     });
 
-    // ── FU-094: drag-and-drop reorder ────────────────────────────────────
-    // The handle is the only draggable element; the row itself is the drop
-    // target. The parent owns the dragging state so we can validate
-    // sibling-ness (same parent_client_id) at dragover time.
-    const DRAG_MIME = 'application/x-dora-recipe-step';
-
-    const isDropOver = ref(false);
-    const isBeingDragged = computed(
-        () => props.draggingClientId === props.row.client_id,
-    );
-    const isValidDropTarget = computed(() => {
-        if (props.draggingClientId == null) return false;
-        if (props.draggingClientId === props.row.client_id) return false;
-        // Siblings-only: same parent_client_id. A drag from another
-        // nesting level can hover but won't drop.
-        return props.draggingParentId === props.row.parent_client_id;
-    });
-
-    function onHandleDragStart(event: DragEvent): void {
-        if (!event.dataTransfer) return;
-        event.dataTransfer.setData(DRAG_MIME, props.row.client_id);
-        event.dataTransfer.effectAllowed = 'move';
-        // Use the whole row as the drag image so the user sees the row
-        // they're moving, not the tiny handle icon.
-        const rowEl = (event.target as HTMLElement | null)
-            ?.closest('.recipe-step-row') as HTMLElement | null;
-        if (rowEl) event.dataTransfer.setDragImage(rowEl, 0, 0);
-        emit('drag-start', props.row.client_id, props.row.parent_client_id);
-    }
-    function onHandleDragEnd(): void {
-        emit('drag-end');
-    }
-    function onRowDragOver(event: DragEvent): void {
-        if (!event.dataTransfer?.types.includes(DRAG_MIME)) return;
-        if (!isValidDropTarget.value) return;
-        // preventDefault enables drop. Without it the browser rejects.
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        isDropOver.value = true;
-    }
-    function onRowDragLeave(): void {
-        isDropOver.value = false;
-    }
-    function onRowDrop(event: DragEvent): void {
-        isDropOver.value = false;
-        if (!isValidDropTarget.value) return;
-        event.preventDefault();
-        emit('drop-on-row', props.row.client_id);
-    }
 </script>
 
 <style scoped lang="scss">
@@ -290,28 +226,10 @@
         font-weight: 500;
         font-size: 0.85em;
     }
-    /* FU-094 — drag affordances. The handle is the only "grab me"
-       element; the row body keeps default cursor so textareas + selects
-       behave normally. */
-    .recipe-step-row__handle {
-        cursor: grab;
-        padding: 2px 4px;
-        border-radius: var(--radius-sm, 4px);
-        display: inline-flex;
-        align-items: center;
-    }
-    .recipe-step-row__handle:hover {
-        background: var(--surface-sunken);
-    }
-    .recipe-step-row__handle:active {
-        cursor: grabbing;
-    }
-    .recipe-step-row--dragging {
-        opacity: 0.5;
-    }
-    .recipe-step-row--drop-over {
-        box-shadow: 0 0 0 2px var(--brand-primary);
-    }
+    /* FU-094 / R-022 — drag affordances live in src/css/dnd.scss
+       (.dora-dnd-row / .dora-dnd-handle). The composable applies the
+       classes via `rowClass`; the template uses .dora-dnd-handle on
+       the handle wrapper. No per-component DnD CSS needed. */
     /* FU-117 — keep the section picker compact in the header row so it
        doesn't crowd the move/sub-step/remove buttons. */
     .recipe-step-row__section-select {

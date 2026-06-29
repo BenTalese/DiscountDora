@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +10,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.types import EMPTY_UUID
 from dora_api.features.app_settings.access import get_or_create_app_setting
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.features.stock_items.get_stock_items import get_stock_items
 from dora_api.infrastructure.api_response import (business_rule_violation,
@@ -97,14 +98,17 @@ class CreateStockItemHandler:
             notes = None,
             stock_group = _StockGroup,
             stock_level = _StockLevel,
-            stock_level_last_updated = datetime.now(),
+            # R-021 — wall-clock event (UTC); the schema's `timezone=True` flag
+            # is preserved on serialisation via DoraJSONProvider.
+            stock_level_last_updated = datetime.now(timezone.utc),
             stock_location = _StockLocation,
             stocktake_alerts_are_enabled = False,
             expiry_date = request.expiry_date,
             is_flagged = request.is_flagged,
             auto_add_when_low = request.auto_add_when_low,
             is_open = request.is_open,
-            opened_on = date.today() if request.is_open else None,
+            # R-021 — opened_on is the household calendar day, not server-local.
+            opened_on = household_today(self.repository) if request.is_open else None,
         )
 
         self.repository.add(_NewStockItem)

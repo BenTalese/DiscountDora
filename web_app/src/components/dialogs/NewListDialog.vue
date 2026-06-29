@@ -148,7 +148,7 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import { describeApiError } from 'src/services/errorHandling/apiErrorHandler';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { computed, reactive, ref, watch } from 'vue';
 
     type StartFrom = 'empty' | 'template' | 'recipe' | 'meal_plan';
@@ -344,7 +344,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not create list.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
             creating.value = false;
             return;
@@ -405,7 +405,7 @@
                 type: 'negative',
                 position: 'bottom-right',
                 message: 'Could not pre-fill from the chosen source.',
-                caption: describeApiError(err) || '',
+                caption: toastCaption(err),
             });
         }
 
@@ -437,7 +437,7 @@
                     type: 'negative',
                     position: 'bottom-right',
                     message: 'Could not auto-fill from stock.',
-                    caption: describeApiError(err) || '',
+                    caption: toastCaption(err),
                 });
             } finally {
                 autogenerating.value = false;

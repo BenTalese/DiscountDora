@@ -118,7 +118,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import { NormalisedApiError } from 'src/services/api/axiosHttpClient';
-    import { extractFieldErrors } from 'src/services/errorHandling/apiErrorHandler';
+    import { useFormErrors } from 'src/composables/useFormErrors';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, reactive, ref } from 'vue';
     import { useRoute, useRouter } from 'vue-router';
@@ -143,19 +143,14 @@
     const mode = ref<'login' | 'register'>('login');
     const showPassword = ref(false);
     const submitting = ref(false);
-    const generalError = ref<string | null>(null);
-    const fieldErrors = ref<Record<string, string>>({});
+    // FU-099 — R-001 form-error plumbing.
+    const { fieldErrors, generalError, handleSaveError, reset: resetErrors } = useFormErrors();
 
     const form = reactive({
         username: '',
         password: '',
         email: ''
     });
-
-    function resetErrors() {
-        generalError.value = null;
-        fieldErrors.value = {};
-    }
 
     function clearField(field: string) {
         if (fieldErrors.value[field]) {
@@ -200,16 +195,13 @@
             ) {
                 generalError.value = 'Sign-in failed. Check your username and password.';
             } else {
-                const extracted = extractFieldErrors(err);
-                fieldErrors.value = extracted.fieldErrors;
-                generalError.value =
-                    extracted.generalError ??
-                    (mode.value === 'login'
+                handleSaveError(
+                    err,
+                    mode.value === 'login'
                         ? 'Sign-in failed. Please try again.'
-                        : 'Registration failed. Please review the form and try again.');
+                        : 'Registration failed. Please review the form and try again.',
+                );
             }
-             
-            console.warn('auth submit failed', err);
         } finally {
             submitting.value = false;
         }

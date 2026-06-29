@@ -19,15 +19,39 @@ export const useRecipeStore = defineStore('recipe', () => {
 
     const collator = new Intl.Collator('en', { sensitivity: 'base' });
 
+    let recipesHydrated = false;
+    let recipesInflight: Promise<void> | null = null;
+    let collectionsHydrated = false;
+    let collectionsInflight: Promise<void> | null = null;
+
     const getRecipesAsync = () =>
         recipeApiService.getAllAsync().then((page) => {
             recipes.value = [...page.items].sort((a, b) => collator.compare(a.name, b.name));
+            recipesHydrated = true;
         });
 
     const getRecipeCollectionsAsync = () =>
         recipeCollectionApiService.getAllAsync().then((page) => {
             recipeCollections.value = [...page.items].sort((a, b) => collator.compare(a.name, b.name));
+            collectionsHydrated = true;
         });
+
+    /** R-016 — lazy hydration for the recipes list. Call this in `onMounted`
+     *  when you need the collection populated but don't care about a forced
+     *  refresh. Call `getRecipesAsync` directly for an explicit refetch
+     *  (post-mutation, pull-to-refresh). */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (recipesHydrated) return Promise.resolve();
+        recipesInflight ??= getRecipesAsync().finally(() => { recipesInflight = null; });
+        return recipesInflight;
+    };
+
+    /** R-016 — lazy hydration for the collections list (independent fetch). */
+    const ensureCollectionsLoadedAsync = (): Promise<void> => {
+        if (collectionsHydrated) return Promise.resolve();
+        collectionsInflight ??= getRecipeCollectionsAsync().finally(() => { collectionsInflight = null; });
+        return collectionsInflight;
+    };
 
     const createRecipeAsync = async (command: CreateRecipeCommand) => {
         const resource = await recipeApiService.createAsync(command);
@@ -97,6 +121,8 @@ export const useRecipeStore = defineStore('recipe', () => {
         recipeCollections: readonly(recipeCollections),
         getRecipesAsync,
         getRecipeCollectionsAsync,
+        ensureLoadedAsync,
+        ensureCollectionsLoadedAsync,
         createRecipeAsync,
         updateRecipeAsync,
         deleteRecipeAsync,

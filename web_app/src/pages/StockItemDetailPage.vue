@@ -2023,11 +2023,11 @@
         // FU-189 — populate the usual-store picker. R-016 ensureLoaded.
         void storesStore.ensureLoadedAsync();
         await Promise.all([
-            stockLevelStore.getStockLevelsAsync(),
-            locationStore.refreshAsync(),
-            stockItemStore.getStockItemsAsync(),
-            recipeStore.getRecipesAsync(),
-            shoppingListStore.refreshAsync(),
+            stockLevelStore.ensureLoadedAsync(),
+            locationStore.ensureLoadedAsync(),
+            stockItemStore.ensureLoadedAsync(),
+            recipeStore.ensureLoadedAsync(),
+            shoppingListStore.ensureLoadedAsync(),
         ]);
         await loadDetail();
     });

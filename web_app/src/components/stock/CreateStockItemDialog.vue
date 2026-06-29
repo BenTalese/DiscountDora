@@ -168,9 +168,7 @@
         (open) => {
             if (open) {
                 resetForm();
-                if (locationStore.tree.length === 0) {
-                    void locationStore.refreshAsync();
-                }
+                void locationStore.ensureLoadedAsync();
             }
         },
     );

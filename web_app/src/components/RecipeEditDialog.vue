@@ -346,8 +346,8 @@
 
     onMounted(async () => {
         // Vocab lists for the cuisine/category selects (load if not already cached).
-        recipeVocabStore.getAllAsync().catch(() => undefined);
-        mealSlotStore.getMealSlotsAsync().catch(() => undefined);
+        recipeVocabStore.ensureLoadedAsync().catch(() => undefined);
+        mealSlotStore.ensureLoadedAsync().catch(() => undefined);
         try {
             tagCatalogue.value = await recipeApi.getTagCatalogueAsync();
         } catch {

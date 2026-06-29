@@ -658,13 +658,13 @@ export function useMealPlanner() {
                 mealPlanStore.getMealPlansAsync(),
                 mealPlanStore.getShortfallAsync(),
                 mealPlanStore.getTodayAsync(),
-                mealSlotStore.getMealSlotsAsync(),
+                mealSlotStore.ensureLoadedAsync(),
                 mealPlanTemplateStore.getTemplatesAsync(),
                 mealPlanTemplateSetStore.getSetsAsync(),
-                recipeStore.getRecipesAsync(),
-                stockItemStore.getStockItemsAsync(),
-                stockLevelStore.getStockLevelsAsync(),
-                shoppingListStore.refreshAsync(),
+                recipeStore.ensureLoadedAsync(),
+                stockItemStore.ensureLoadedAsync(),
+                stockLevelStore.ensureLoadedAsync(),
+                shoppingListStore.ensureLoadedAsync(),
             ]);
             // Resume on the URL's week if present (F28), else the household's
             // current week (server tz, C-2.K).

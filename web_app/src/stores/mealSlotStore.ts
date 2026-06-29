@@ -21,14 +21,28 @@ export const useMealSlotStore = defineStore('mealSlot', () => {
             .map((s) => s.name),
     );
 
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
+
     const getMealSlotsAsync = async () => {
         mealSlots.value = await mealSlotApi.getAllAsync();
+        hydrated = true;
+    };
+
+    /** R-016 — lazy hydration. Meal slots are household reference data; the
+     *  settings page mutates via the api service directly, so cached readers
+     *  can short-circuit on second visits. */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= getMealSlotsAsync().finally(() => { inflight = null; });
+        return inflight;
     };
 
     return {
         mealSlots,
         mealSlotNames,
         getMealSlotsAsync,
+        ensureLoadedAsync,
     };
 });
 

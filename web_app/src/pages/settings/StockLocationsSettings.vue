@@ -188,9 +188,7 @@
     }
 
     onMounted(() => {
-        if (locationStore.tree.length === 0) {
-            void locationStore.refreshAsync();
-        }
+        void locationStore.ensureLoadedAsync();
     });
 </script>
 

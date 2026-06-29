@@ -182,6 +182,21 @@ Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs
 - Set `DORA_ALLOW_DESTRUCTIVE=true` only when you intentionally want to drop & re-seed the database on startup. Debug mode no longer auto-wipes data.
 - Apply schema changes: `flask db migrate -m "<description>"` (review the generated file — see [dora_api/persistence/migrations/README](dora_api/persistence/migrations/README)) then `flask db upgrade`.
 - List endpoints accept standard query params: `?filter=name:ct:pasta&filter=is_favourite:eq:true&sort=name:asc&page=1&limit=50`. Responses are `{ items, total, page, limit }`.
+- **Push notifications (optional, VAPID keys).** Alerts that fire while the SPA is closed are delivered via the Web Push protocol (RFC 8030), which authenticates the application server to the push service via VAPID (RFC 8292). Without keys configured, `push_sender.py` runs in **dry-run** mode — pushes are logged but never sent, and the frontend's Push toggle stays disabled (per R-014, the feature is visible-but-disabled, not absent). To turn pushes on:
+  1. **Generate a key pair** with `py-vapid` (bundled with `pywebpush`):
+     ```bash
+     python -m py_vapid --gen --applicationServerKey
+     ```
+     Writes `private_key.pem` to the current directory and prints the matching base64url-encoded public key to stdout. Treat the private key like any other secret.
+  2. **Set three env vars** (in `.env` for dev, or your secret store for prod):
+     ```
+     DORA_VAPID_PUBLIC_KEY=<base64url public key printed above>
+     DORA_VAPID_PRIVATE_KEY=<PEM contents OR base64url, single line>
+     DORA_VAPID_SUBJECT=mailto:admin@your-domain.example
+     ```
+     `DORA_VAPID_SUBJECT` is the contact URL the push service uses to reach you if delivery breaks (`mailto:` or `https://`). Omitting any of the three leaves the sender in dry-run.
+  3. Restart the API. The frontend's **Settings → Notifications → Push** toggle becomes enabled; subscribing happens browser-side and is bound to the configured public key.
+
 - **AI assistant (optional, bring-your-own-LLM):** Dora's chat can be backed by a language model you host yourself. It's off by default and falls back to a rule-based helper. Dora does **not** bundle, download, or dictate a model. To turn it on: (1) run an OpenAI-compatible LLM server that supports tool-calling — [Ollama](https://ollama.com) is the easy option: `ollama pull qwen2.5:7b` then `ollama serve`; (2) sign in as an admin and go to **Settings → System → AI assistant**; (3) enable it and enter your server's base URL (e.g. `http://localhost:11434`) and model name (e.g. `qwen2.5:7b`), then save. The model must be tool-capable (qwen2.5, llama3.1, etc.). The LLM runs wherever you host it (a desktop/home server); other devices reach Dora over the network as usual.
 
 ### Desktop bundle (Linux AppImage)

@@ -5,7 +5,114 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Dashboard "Next to cook" card is meal-plan-driven — FU-298 (L272)
+  (2026-06-29).** The old "Cookable tonight" card showed the top 3
+  fully-in-stock recipes regardless of whether the user had planned
+  them. The new card pulls the next 3 *planned* meals from
+  `meal_plan.upcoming_entries`, deduped by recipe, and tags each with
+  a server-derived ready / missing-N badge (green "Ready" / amber
+  "Missing N" / grey "No ingredients"). Empty state now invites
+  planning a meal (link to `/meal-plans`). Backend
+  `UpcomingMealPlanEntry` DTO gained `recipe_id` (for deep-linking)
+  and `missing_count` (`null` for empty recipes, `0` = ready, `>0` =
+  N missing) — reuses the existing `load_recipe_cookability` map
+  already computed for the recipe summary so no extra DB round-trip.
+- **Dashboard budget card is money-gated — FU-297 (2026-06-29).**
+  Added `gate: 'money'` to the budget CardDef, matching savings /
+  spend / pantry-value. Budget surfaces are all dollar-denominated
+  (even the "no target set" copy reads "$X.YZ spent so far"), so the
+  Money-zone gate posture applies (ADR-005). With money features
+  off, budget no longer renders and the `/api/budget/status` fetch
+  is skipped.
+- **Dashboard Cards menu has drag-and-drop reorder — FU-294 / D4
+  (2026-06-29).** Desktop power-user extra layered on the existing
+  tap-up/down (which stays — C13's mobile-mandatory alternative).
+  Reuses the shared `useDragDropList` composable (R-022 / ADR-018);
+  drag is constrained to within-zone, same persistence path as tap.
+  Handle column hides on `$q.platform.is.mobile`.
+
+### Fixed
+- **Voice toggle appears on browsers without SpeechSynthesis when
+  Piper is configured — FU-289 (2026-06-29).**
+  `useSpeechOutput().available` now reflects Piper too: on a browser
+  that lacks `window.speechSynthesis`, the composable does a one-time
+  session-cached probe of `GET /api/tts/voices` and flips `available`
+  true when the server reports `configured: true`. The Settings →
+  Voice "Let Dora speak her replies" toggle and the chat mute button
+  now appear in that scenario. Browsers with SpeechSynthesis are
+  unaffected — they never hit the probe.
+
+### Changed
+- **VocabListEditor empty-state is customisable per taxonomy — FU-285
+  (2026-06-29).** The hardcoded "No {nounPlural} yet. Create one to
+  start tagging recipes." now accepts an optional `emptyAction`
+  override threaded through `TaxonomyManagerPage`. Recipe cuisines /
+  categories / tools / dietary tags keep the recipe-shaped default;
+  the meal-slots page now reads "Create one to schedule meals
+  against." (slots aren't tags — the old wording read oddly on a
+  freshly-emptied slot page).
+
+### Documentation
+- **README — install docs cover VAPID key generation (FU-207,
+  2026-06-29).** New "Push notifications (optional, VAPID keys)"
+  section under § Local dev quick reference: command to generate a
+  key pair with `py-vapid`, the three `DORA_VAPID_*` env vars, and
+  the dry-run / disabled-toggle behaviour when any is missing.
+
+### Fixed
+- **`PATCH stock_location_id: null` regression test (FU-203,
+  2026-06-29).** The clear path was already fixed (the FK-set mirror
+  of the C-1b.1 stock_group fix); added the missing e2e regression so
+  the next `lazy="noload"`-flavoured bug can't sneak back in.
+
 ### Changed (engineering / no user-visible behaviour change)
+- **R-016 lazy hydration extended to 5 more stores + app-wide
+  sweep (2026-06-29).** `ensureLoadedAsync()` added to
+  `recipeStore` (split into `ensureLoadedAsync` for recipes +
+  `ensureCollectionsLoadedAsync` for collections — independent
+  fetches), `shoppingListStore`, `locationStore`,
+  `recipeVocabStore`, `mealSlotStore`. Every page / composable /
+  component that was calling the raw refetcher unconditionally
+  in `onMounted` (or guarding with the textbook
+  `if (store.items.length === 0)` smell) was migrated:
+  RecipeDetailPage, RecipesOverview, StockItemDetailPage,
+  StockOverview, DashboardPage, RecipeCookMode, ShoppingListDetail,
+  StockLocationsSettings, useMealPlanner, RecipeEditDialog,
+  DoraChat, QuickAddSheet, CreateStockItemDialog. Truly dynamic
+  stores (`alertStore`, `mealPlanStore`, `suggestionStore`)
+  deliberately left on their force-refresh paths — lazy caching
+  is the wrong default for volatile data.
+- **R-016 lazy-hydration sweep across recipe + stock pages — FU-221
+  (2026-06-29).** `onMounted` Promise.all blocks on
+  `RecipeDetailPage.vue`, `RecipesOverview.vue`,
+  `StockItemDetailPage.vue`, and `StockOverview.vue` now call
+  `stockItemStore.ensureLoadedAsync()` / `stockLevelStore.ensureLoadedAsync()`
+  instead of the raw `getXAsync()` refetchers. Avoids redundant
+  collection refetches when re-entering these pages without unmount.
+  Stores without the helper (`recipeStore`, `shoppingListStore`,
+  `locationStore`, `recipeVocabStore`, `mealSlotStore`) were left
+  unchanged per R-007 — extending those is a separate sweep.
+  `MealPlansOverview.vue`, also flagged in FU-221, has since shrunk
+  to 507 lines and no longer fetches stores in `onMounted` (only a
+  planner-view redirect).
+- **FU-215 (Shopping-list preferred-buy hint) closed (2026-06-29).**
+  No code change — browser-verified the flow that went in 2026-06-17.
+  Picking a hint on a line persists across reload; clearing removes
+  it. Dangling ids after a PreferredBuy delete still tolerated
+  (render no hint).
+- **FU-216 (cost consumers — observation fallback) closed
+  (2026-06-29).** No code change — browser-verified the additive
+  fallback that went in 2026-06-17. Stock-value report and recipe
+  cost-estimate card now pick up `StockItemPriceObservation` values
+  for items without a linked-product price.
+- **`UpdateMeCommand` TS type carries `household_headcount` (FU-204,
+  2026-06-29).** C-5.4 added the field to the backend
+  `UpdateMeRequest` + `AuthenticatedUserDto` but not the TS Command,
+  so any frontend call site sending `{ household_headcount: N }`
+  would typecheck against `Record<string, never>`-ish. Drift audited
+  across every Pydantic field on `UpdateMeRequest` vs every key on
+  `UpdateMeCommand`; only this one was missing.
 - **All three drag-and-drop lists now share one composable + stylesheet
   — FU-326 / R-022 / ADR-018 (2026-06-29).** Shopping-list line reorder,
   structured-step reorder, and ingredient reorder all routed onto the

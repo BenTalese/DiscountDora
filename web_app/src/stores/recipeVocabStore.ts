@@ -35,6 +35,9 @@ export const useRecipeVocabStore = defineStore('recipeVocab', () => {
         tools.value = await toolApi.getAllAsync();
     };
 
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
+
     const getAllAsync = async () => {
         await Promise.all([
             getCuisinesAsync(),
@@ -42,6 +45,16 @@ export const useRecipeVocabStore = defineStore('recipeVocab', () => {
             getDietaryTagsAsync(),
             getToolsAsync(),
         ]);
+        hydrated = true;
+    };
+
+    /** R-016 — lazy hydration. The vocab tables are reference data; settings
+     *  CRUD bypasses the store and talks to the api services directly, so
+     *  callers reading the cached vocab can short-circuit on second visits. */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= getAllAsync().finally(() => { inflight = null; });
+        return inflight;
     };
 
     return {
@@ -54,6 +67,7 @@ export const useRecipeVocabStore = defineStore('recipeVocab', () => {
         getDietaryTagsAsync,
         getToolsAsync,
         getAllAsync,
+        ensureLoadedAsync,
     };
 });
 

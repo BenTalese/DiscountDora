@@ -9,6 +9,582 @@ next.
 
 ---
 
+## 2026-06-29 — FU-294 / FU-297 / FU-298 closed (dashboard polish)
+
+**Why:** user batch-closed three dashboard follow-ups left over from
+the Phase 2 / 4 / 5 rebuild. FU-297 (budget money-gate) was a
+consistency finding, FU-298 (cookable card rebuild) was a slated
+Phase-5 item with a design call carved out, FU-294 (drag-and-drop
+card reorder) had been waiting for a DnD primitive — which landed as
+`useDragDropList` in FU-326, removing the only blocker.
+
+**What shipped:**
+- **FU-297 — budget is money-gated.** Added `gate: 'money'` to the
+  budget `CardDef` in `DashboardPage.vue`'s `CARD_DEFS` (with an
+  inline note recording the call). Short-circuited `loadBudget()`
+  on `!moneyEnabled.value` so the `/api/budget/status` fetch is
+  skipped when the card can't render — mirrors the existing
+  `loadSavings` / `loadSpendByStore` / `loadPantryValue` guards.
+- **FU-298 — "Next to cook" card rebuilt (L272 satisfied).**
+  - **Backend** (`dora_api/features/dashboard/get_dashboard_summary.py`):
+    extended `UpcomingMealPlanEntry` with `recipe_id: UUID` and
+    `missing_count: Optional[int]`. Reused the
+    `load_recipe_cookability()` map already computed for the
+    cookable_count tally — one query, both consumers (R-003 /
+    R-007). `missing_count` is `None` for empty recipes (no
+    ingredients to evaluate), `0` for ready-to-cook, `>0` for the
+    missing count.
+  - **Frontend** (`web_app/src/pages/DashboardPage.vue`,
+    `web_app/src/models/dashboard.ts`): replaced `cookableTonight`
+    with `nextToCook` (driven off `summary.meal_plan.upcoming_entries`,
+    deduped by `recipe_id`, capped at 3). Each row renders the
+    relative day + slot ("Tomorrow dinner") and a coloured
+    `q-badge`: positive "Ready", warning "Missing N", grey-6 "No
+    ingredients". Empty state changed to "Nothing planned for the
+    next week" with a `/meal-plans` deep link. Card label retitled
+    "Next to cook". Dropped the now-unused `Recipe` type import +
+    `recipes` `storeToRefs` destructure. New CSS modifier
+    `.dora-cook-row--with-badge` adds the 4th grid column; the
+    restock card (same base class) stays at 3 columns.
+- **FU-294 — drag-and-drop dashboard card reorder.** Wired
+  `useDragDropList<CardId>` into the Cards menu rows. The handle
+  is a left-side `q-item-section avatar` carrying
+  `dora-dnd-handle` + the composable's `handleProps`; the `q-item`
+  itself carries `dora-dnd-row` + `rowProps` (handle mode, two
+  separate sections). Constraints: `canDragStart` gates on
+  `!$q.platform.is.mobile` (desktop-only — C13's tap path stays
+  uncluttered on touch), `canDropOn` rejects cross-zone drops
+  (matching the existing tap `canMove` semantics), `onDrop`
+  splices the source row into the target's index and calls the
+  shared `persistLayout()` (same write path the tap reorder uses,
+  so a drag and a tap are indistinguishable on the wire). Mime
+  is `application/x-dora-dashboard-card` — drags from this list
+  can't land in any other DnD surface.
+
+**Decisions made:**
+- **Card title changed to "Next to cook".** The old "Cookable
+  tonight" implied a stock-driven surface; the rebuilt card is
+  *plan-driven* (cookability is a secondary annotation). Keeping
+  the old title would have misled users about what the badge
+  means. The `cookable` *card id* stays — renaming would
+  invalidate everyone's saved dashboard layout (`dashboard_layout`
+  references the id, not the label).
+- **Single-query cookability reuse, not a separate join.** The
+  backend already calls `load_recipe_cookability()` for the
+  recipe summary's `cookable_count`. Extending it for the
+  upcoming entries is a lookup-by-id, not a new query — R-003
+  (cookability rule in one place) and R-007 (no scope creep on
+  DB cost).
+- **`missing_count: Optional[int]` rather than a `cookable: bool`
+  + separate `missing: int`.** A single nullable count captures
+  all three states (None = no ingredients, 0 = ready, >0 = N
+  missing) without redundancy. Booleans next to counts always
+  drift; nullable count is the canonical shape.
+- **Dedupe upcoming entries by `recipe_id` in the SPA, not the
+  backend.** The backend's `upcoming_entries` are the raw plan
+  rows (the meal-plan card's 7-day strip uses them ungrouped to
+  show "what's on each day"). Dedupe is a card-specific concern
+  for the next-to-cook card only.
+- **Drag handle uses the shared `dora-dnd-handle` class, not a
+  bespoke one.** Visual parity with the other DnD surfaces
+  (shopping-list lines, recipe steps, recipe ingredients) is the
+  whole point of R-022 / FU-326. No reason to invent a new look
+  for this surface.
+- **`gate: 'money'` on budget is a routine ADR-005 application,
+  not a new ADR.** ADR-005 already says "dollar surfaces gate on
+  money"; budget is a dollar surface. Recording the call inline
+  in `CARD_DEFS` + in the ledger is enough — a new ADR would be
+  ceremony.
+- **Dropped the dead `recipes` ref / `Recipe` import after the
+  cookable rewrite.** The next-to-cook card no longer reads from
+  the recipe store; leaving them in is exactly the
+  unused-symbol drift that R-007's close-gate exists to catch.
+  Kept `recipeStore.ensureLoadedAsync()` in `loadAll` since the
+  dashboard often funnels into cookbook nav and the warmup is
+  cheap.
+
+**Files touched:**
+- `dora_api/features/dashboard/get_dashboard_summary.py` —
+  DTO extension + cookability join.
+- `web_app/src/models/dashboard.ts` — TS type matching the DTO.
+- `web_app/src/pages/DashboardPage.vue` — three FUs' worth of
+  changes (gate, card rewrite, DnD wiring + handle template + CSS
+  modifier).
+- `DORA_FOLLOWUPS.md` — removed FU-294, FU-297, FU-298.
+- `DORA_FOLLOWUPS_RESOLVED.md` — three new RESOLVED entries.
+- `DORA_VERIFY.md` — three new verify sections under Dashboard.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `npx vue-tsc --noEmit` from `web_app/` → **clean**.
+- `npx eslint src/pages/DashboardPage.vue src/models/dashboard.ts`
+  → **clean**.
+- `./.venv/bin/pytest tests/e2e/dora_api/ -k "dashboard or summary"`
+  → 1 pass, 1 fail (the failing one is FU-328's pre-existing
+  `test__dashboard__upcoming_window_anchored_on_household_today`
+  which asserts a flat `upcoming_meal_plan_entries` key that
+  doesn't exist in the real DTO — unrelated to this work).
+- Full-suite pytest: **535 passed, 4 failed + 1 flaky** under
+  ordering (the flaky one — `test__register_barcode__against_product__lookup_traverses_via_product`
+  — passes in isolation, passes on clean stash; not caused by
+  this work). All known failures pre-existed.
+- FU-294/297/298 browser pass owed — three new sections added to
+  `DORA_VERIFY.md`.
+
+**Engineering-standards close-gate:** clean.
+- R-003 — cookability rule still in one place (`load_recipe_cookability`);
+  the new consumer reads the map, doesn't recompute.
+- R-007 — each FU stayed in its lane; the only adjacent cleanup
+  (drop dead `Recipe` import + `recipes` ref) was a direct
+  consequence of the rewrite, not unrelated polish.
+- R-016 — `recipeStore.ensureLoadedAsync()` kept in `loadAll`
+  for navigation warm-up; the new card doesn't read from it but
+  cookbook navigation does.
+- R-022 / ADR-018 — fourth surface adopts the shared DnD
+  composable; visual parity with the existing three (handle grip,
+  source-dim, drop-target ring) is automatic via the class names.
+
+**Next up:** the three FUs need browser passes — particularly
+FU-294 (drag-drop behaviour) since this is the first new DnD
+surface since R-022 landed. Otherwise the dashboard rebuild's
+outstanding Phase-5 ticket list is shorter by three.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-285 / FU-288 / FU-289 closed; FU-288 collision resolved
+
+**Why:** user batch-closed three follow-ups. FU-285 (VocabListEditor
+empty-state copy) and FU-289 (`useSpeechOutput.available` ignores
+Piper) were real code work. FU-288 had a **ledger numbering collision**
+— two open items both numbered FU-288. User picked the
+profile-picture-test-fix one to address; the build-scripts one was
+renumbered to FU-327 to clear the collision.
+
+**What shipped:**
+- **FU-285** — added an optional `emptyAction` prop to
+  `web_app/src/components/settings/VocabListEditor.vue`
+  (defaults to the existing recipe-shaped copy via `withDefaults`).
+  Threaded the prop through `TaxonomyManagerPage.vue` with a
+  `computed`-driven `v-bind` that **only forwards when set**, so
+  `exactOptionalPropertyTypes`'s strict-undefined rule stays
+  honoured and the child's default keeps owning the fallback.
+  `RecipeMealSlotsSettings.vue` now overrides with
+  `empty-action="Create one to schedule meals against."` — picked
+  this wording because slots aren't "tagged" (they're assigned to
+  meal-plan entries), so "tagging recipes" / "tagging entries" both
+  read awkwardly. The four other Recipe* settings pages are
+  untouched and keep the original copy.
+- **FU-288 (test fixes)** — ran the three named tests directly:
+  `test__profile_picture__set_fetch_and_clear`,
+  `test__profile_picture__rejects_oversize_data_url`,
+  `test__get_users__GettingUsers__GetsAllExpectedAttributes`.
+  All **pass** on this box. `git stash` confirms they pass on
+  clean HEAD too — fixed at some point between FU raising
+  (2026-06-23) and now, likely as part of one of the recent
+  follow-up commits. No code change needed.
+  **However**, the full-suite run uncovered **4 *different*
+  pre-existing failures** (data_router chunked-upload,
+  household_tz_boundaries dashboard upcoming-window,
+  product_router PriceNowAtZeroBoundary, recipe_is_planned future
+  unconsumed entry). Logged as new finding **FU-328** so they
+  don't get silently dropped — see DORA_FOLLOWUPS.md.
+- **FU-289** — added a session-cached `probePiperConfigured()` at
+  module scope in `web_app/src/composables/useSpeechOutput.ts`.
+  Resolves the `configured` flag from `GET /api/tts/voices`
+  once and dedupes across composable instances (DoraChat,
+  RecipeCookMode, VoiceSettings all call `useSpeechOutput()`
+  independently — one probe each was wasteful). The probe **only
+  fires when the browser lacks `window.speechSynthesis`**, so the
+  common case pays nothing extra. When the probe resolves true,
+  `available.value` flips to true, so the Settings → Voice toggle
+  and the chat mute button stop hiding on Piper-only browsers.
+- **FU-288 collision cleanup** — renumbered the build-scripts
+  FU-288 → FU-327 in `DORA_FOLLOWUPS.md` with an inline note
+  recording the renumber + reason. Cross-checked the rest of the
+  ledger for collisions — none.
+
+**Decisions made:**
+- **`emptyAction` as a prop, not a slot.** Slots are more flexible
+  but the empty-state copy is a single short sentence; a prop is
+  the simpler shape and matches the existing `description` /
+  `usageLabel` props on the same component. If a future caller
+  needs richer markup (icon, link), promote then.
+- **Conditional `v-bind` forwarding in TaxonomyManagerPage.**
+  `exactOptionalPropertyTypes: true` rejects passing `undefined`
+  to a typed-as-`string` prop. Two options: (a) loosen the child's
+  prop to `string | undefined`, (b) conditionally forward via
+  `v-bind`. Chose (b) so `withDefaults` keeps owning the fallback
+  string in one place (the child) — adding `| undefined` to the
+  child's type would leak the wrapper's contract into the
+  child's API.
+- **Probe gated on `!browserAvailable`.** Could probe
+  unconditionally for consistency, but the only behaviour that
+  changes is `available` flipping false → true; on browsers with
+  SpeechSynthesis, that's already true synchronously, so the
+  probe would be pure waste. Conditional probe is the right
+  trade-off (R-007 — solve the FU, don't expand).
+- **Cache the probe as a `Promise<boolean>` at module scope, not
+  in a Pinia store.** The `configured` flag is install-time server
+  state — doesn't change at runtime barring a server restart;
+  session-level caching is enough. A Pinia store would be over-
+  engineering for one boolean.
+- **Don't flip FU-288 to RESOLVED silently when the named tests
+  pass — keep CLAUDE.md's mandate honoured.** Ran them at
+  runtime (not a static read), confirmed three-of-three pass on
+  clean HEAD, and logged the *new* pre-existing failures as
+  FU-328 so the audit trail stays honest.
+
+**Files touched:**
+- `web_app/src/components/settings/VocabListEditor.vue` — new prop.
+- `web_app/src/components/settings/TaxonomyManagerPage.vue` —
+  passthrough + computed binding.
+- `web_app/src/pages/settings/RecipeMealSlotsSettings.vue` —
+  override.
+- `web_app/src/composables/useSpeechOutput.ts` — module-scope
+  Piper probe + conditional `available` upgrade.
+- `DORA_FOLLOWUPS.md` — removed FU-285, FU-289, FU-288 (tests);
+  renumbered FU-288 (build scripts) → FU-327; added FU-328.
+- `DORA_FOLLOWUPS_RESOLVED.md` — three new RESOLVED entries.
+- `DORA_VERIFY.md` — two new verify sections.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `./.venv/bin/pytest` of the three FU-288 tests → **3/3 pass**
+  on working tree and on `git stash` clean HEAD.
+- `npx vue-tsc --noEmit` from `web_app/` → **clean**.
+- `npx eslint` on the four touched frontend files → **clean**.
+- Full-suite pytest baseline: **536 passed, 4 failed** (the new
+  finding FU-328; identical on clean stash).
+- FU-289 browser pass not run (no live env this session).
+
+**Engineering-standards close-gate:** clean.
+- R-007 — scope held: FU-289 didn't expand into "rewrite the
+  composable" or "preload Piper into a Pinia store"; FU-285 added
+  exactly one prop, not a slot system.
+- R-019 — no codegen / no magic; the probe is a literal `fetch
+  via TtsApiService.getVoicesAsync` with a `.catch(() => false)`,
+  explicit and verbose.
+- No new R-0NN candidate. (One *could* be argued for "cache
+  install-time server flags at module scope, not in Pinia" — but
+  it's a single case so far; promote when a second instance
+  shows up.)
+
+**Next up:** FU-328's four pre-existing test failures are now
+visible in the open ledger — each belongs to a different feature
+area and they should be picked off opportunistically when their
+respective areas are touched. FU-327 (Windows / macOS build
+scripts) remains opportunistic — needs runner hardware.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — R-016 extension to 5 more stores + app-wide sweep
+
+**Why:** the FU-221 close-out flagged an open question — should
+`recipeStore` / `shoppingListStore` / `locationStore` /
+`recipeVocabStore` / `mealSlotStore` grow `ensureLoadedAsync()` too?
+User answered yes ("we want consistency"), so this work unit
+extends R-016 to all five and sweeps the call sites that were
+left flagged as "leave alone" in the prior unit.
+
+**What shipped:**
+- **`ensureLoadedAsync()` added to 5 more Pinia stores**, following
+  the canonical `productStore` two-flag pattern (`hydrated` + `inflight`,
+  set inside the underlying refetch so explicit calls flip it too):
+  - `recipeStore` — split into **`ensureLoadedAsync()`** (recipes) and
+    **`ensureCollectionsLoadedAsync()`** (collections), since the two
+    collections are independent fetches.
+  - `shoppingListStore` — wraps `refreshAsync` (summaries + membership).
+  - `locationStore` — wraps `refreshAsync` (the location tree).
+  - `recipeVocabStore` — wraps `getAllAsync` (loads all four vocab
+    tables; per-vocab helpers would be over-engineering).
+  - `mealSlotStore` — wraps `getMealSlotsAsync`.
+- **App-wide call-site sweep.** Every page/composable/component that
+  was either (a) calling the raw refetcher unconditionally in
+  `onMounted` / `watch`-on-open, or (b) guarding with an explicit
+  `if (store.items.length === 0)` smell (the R-016 violation signal),
+  was migrated:
+  - `pages/RecipeDetailPage.vue` `onMounted` — 4 refetchers → `ensureX()`.
+  - `pages/RecipesOverview.vue` `onMounted` — 5 refetchers → `ensureX()`.
+  - `pages/StockItemDetailPage.vue` `onMounted` — `locationStore`,
+    `recipeStore`, `shoppingListStore` → `ensureLoadedAsync()`.
+  - `pages/StockOverview.vue` `onMounted` — `locationStore`,
+    `shoppingListStore`, `recipeStore` → `ensureLoadedAsync()`.
+  - `pages/DashboardPage.vue` `loadAll` — collapsed the
+    `recipes.value.length === 0 ? recipeStore.getRecipesAsync() : Promise.resolve()`
+    smell into a flat `recipeStore.ensureLoadedAsync()`;
+    `shoppingListStore.refreshAsync()` → `ensureLoadedAsync()`.
+  - `pages/RecipeCookMode.vue` `onMounted` — collapsed two
+    `if (length === 0)` smells (`recipeStore`, `locationStore`)
+    and `shoppingListStore.refreshAsync()` → `ensureLoadedAsync()`;
+    `recipeVocabStore.tools.length === 0 ? getToolsAsync() : Promise.resolve()`
+    → `recipeVocabStore.ensureLoadedAsync()` (loads all four vocab
+    tables, but they're tiny — consistency wins over the per-table
+    micro-optimisation).
+  - `pages/ShoppingListDetail.vue` — collapsed `if (store.summaries.length === 0)
+    await store.refreshAsync()` → `await store.ensureLoadedAsync()`.
+  - `pages/settings/StockLocationsSettings.vue` — collapsed
+    `if (locationStore.tree.length === 0)` smell.
+  - `composables/useMealPlanner.ts` `onMounted` — 4 refetchers →
+    `ensureX()` (mealSlot / recipe / stockItem / stockLevel /
+    shoppingList).
+  - `components/RecipeEditDialog.vue` `onMounted` — vocab + meal-slot
+    seeds → `ensureLoadedAsync()`.
+  - `components/dora/DoraChat.vue` `ensureRecipeData` — collapsed two
+    length-check smells; the helper is now an unconditional
+    `Promise.all` of four `ensureLoadedAsync()` calls (each store
+    short-circuits internally).
+  - `components/QuickAddSheet.vue` `watch(isOpen)` — sheet open
+    seed → `shoppingListStore.ensureLoadedAsync()`.
+  - `components/stock/CreateStockItemDialog.vue` `watch(modelValue)` —
+    collapsed `if (locationStore.tree.length === 0)` smell.
+
+**Decisions made:**
+- **`recipeStore` got two helpers, not one.** Recipes and recipe
+  collections are independent fetches against different endpoints and
+  pages don't always need both. Single `ensureLoadedAsync()` would
+  have over-fetched. Named `ensureLoadedAsync` / `ensureCollectionsLoadedAsync`.
+- **`recipeVocabStore.ensureLoadedAsync()` loads all four vocab
+  tables**, even when a caller only needs one (e.g. RecipeCookMode only
+  reads `tools`). Per-vocab helpers (`ensureToolsLoadedAsync` etc.) would
+  be over-engineering for tables that total a few KB; consistency +
+  one mental model wins. If a per-vocab need ever materialises, the
+  underlying `getToolsAsync` etc. still exist as the force-refetch
+  affordance.
+- **`alertStore` / `mealPlanStore` / `suggestionStore` deliberately
+  NOT extended.** Their data is *dynamic* (alerts/suggestions change
+  by the minute; meal plans change as the user edits the week) — the
+  right semantic for those is "force-refresh on visit", which is what
+  the existing `refreshAsync` / `getMealPlansAsync` calls do. Adding
+  `ensureLoadedAsync` would invite call sites to skip the refresh,
+  which is the wrong default for dynamic data. R-016's carve-out
+  ("stores whose state is purely client-local") doesn't quite cover
+  this, but the spirit ("don't lazy-cache truly volatile data") does.
+- **Other reference-data stores (`stockLocationStore`,
+  `alertPrefsStore`, `mealPlanTemplateStore`,
+  `mealPlanTemplateSetStore`) NOT extended this pass.** R-007 — user
+  named five stores; sticking to those keeps scope honest. They're
+  candidates if another consistency sweep comes up.
+- **Pre-existing `ShoppingListDetail.vue:1246` lint error (DnD
+  `onDrop` async-handler typing)** — unrelated to this work; reproduced
+  on a clean stash. Not touched.
+
+**Files touched:**
+- `web_app/src/stores/recipeStore.ts`
+- `web_app/src/stores/shoppingListStore.ts`
+- `web_app/src/stores/locationStore.ts`
+- `web_app/src/stores/recipeVocabStore.ts`
+- `web_app/src/stores/mealSlotStore.ts`
+- `web_app/src/pages/RecipeDetailPage.vue`
+- `web_app/src/pages/RecipesOverview.vue`
+- `web_app/src/pages/StockItemDetailPage.vue`
+- `web_app/src/pages/StockOverview.vue`
+- `web_app/src/pages/DashboardPage.vue`
+- `web_app/src/pages/RecipeCookMode.vue`
+- `web_app/src/pages/ShoppingListDetail.vue`
+- `web_app/src/pages/settings/StockLocationsSettings.vue`
+- `web_app/src/composables/useMealPlanner.ts`
+- `web_app/src/components/RecipeEditDialog.vue`
+- `web_app/src/components/dora/DoraChat.vue`
+- `web_app/src/components/QuickAddSheet.vue`
+- `web_app/src/components/stock/CreateStockItemDialog.vue`
+- `CHANGELOG.md`, `DORA_WORKLOG.md`, `DORA_VERIFY.md`.
+
+**Verification:**
+- `npx vue-tsc --noEmit` from `web_app/` → **clean**.
+- `npx eslint` on every touched file → only the pre-existing
+  `ShoppingListDetail.vue:1246` error; no new findings.
+- No runtime test run — the migration is a behavioural-equivalence
+  swap (lazy first call still hits the network; the cached subsequent
+  call is the whole point and is observable in DevTools Network).
+
+**Engineering-standards close-gate:** clean.
+- R-016 — extended consistently to the five stores the user named;
+  every call site sweep follows the rule's "Apply" guidance verbatim;
+  every carve-out is justified above.
+- R-007 — stopped exactly at the five stores asked for; resisted the
+  drift to alertPrefs / stockLocation / mealPlanTemplate this pass.
+- No new R-0NN candidate; this is a deepening of an existing rule,
+  not a new pattern. ADR-011's "Consequences" paragraph (which
+  flagged the five pages and the stores-without-helper as
+  opportunistic) is now satisfied — left intact as the historical
+  record rather than backdated.
+
+**Next up:** if a future task wants similar treatment for
+`stockLocationStore` / `alertPrefsStore` / `mealPlanTemplateStore` /
+`mealPlanTemplateSetStore`, the pattern is now well-trodden.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-215 / FU-216 / FU-221 closed
+
+**Why:** user batch-closed three follow-ups. FU-215 (shopping-line
+preferred-buy hint) and FU-216 (cost consumers — observation fallback)
+were both code-complete since 2026-06-17 with only browser verification
+outstanding; user confirmed live they're behaving. FU-221 (R-016
+lazy-hydration sweep across the remaining five flagged pages) was the
+actual code work for the session.
+
+**What shipped:**
+- **FU-221** — migrated `onMounted` Promise.all blocks across the four
+  pages where the target stores expose `ensureLoadedAsync()`:
+  - `web_app/src/pages/RecipeDetailPage.vue:2170` —
+    `stockItemStore.getStockItemsAsync` +
+    `stockLevelStore.getStockLevelsAsync` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/RecipesOverview.vue:1328` —
+    `stockItemStore.getStockItemsAsync` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/StockItemDetailPage.vue:2019` —
+    `stockLevelStore.getStockLevelsAsync` +
+    `stockItemStore.getStockItemsAsync` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/StockOverview.vue:982` —
+    `stockItemStore.getStockItemsAsync` +
+    `stockLevelStore.getStockLevelsAsync` → `ensureLoadedAsync()`.
+  `MealPlansOverview.vue` was the fifth file on the FU's list but has
+  since shrunk to 507 lines; its current `onMounted` only does the
+  A/B planner-view redirect and no longer fetches stores — nothing
+  to migrate, called out in the RESOLVED note.
+- **FU-215 / FU-216** — no code change; moved both blocks from
+  `DORA_FOLLOWUPS.md` to `DORA_FOLLOWUPS_RESOLVED.md` with browser-
+  verified state notes (user confirmed live).
+
+**Decisions made:**
+- **Out-of-scope stores left alone.** FU-221's wording explicitly
+  carved out "once they grow the helper" for stores that don't yet
+  expose `ensureLoadedAsync()`. So calls into `recipeStore`,
+  `shoppingListStore`, `locationStore`, `recipeVocabStore`,
+  `mealSlotStore`, and the page-local `stockGroupApi.getAllAsync()`
+  in `StockItemDetailPage` were left unchanged — R-007 scope. If
+  the user wants those stores to grow `ensureLoadedAsync()` too,
+  that's a separate sweep (no new FU opened — see "Open questions").
+- **No verify-doc cleanup for FU-215 / FU-216.** Per CLAUDE.md the
+  user manages `DORA_VERIFY.md` by deleting items as he walks them;
+  existing entries stay until he ticks them off.
+- **Added a small FU-221 verify entry under Cross-cutting** — the
+  change is invisible end-to-end *unless* you watch the network tab
+  on re-navigation; called that check out plus a post-mutation
+  refresh smoke check so the R-016 carve-outs don't silently regress.
+
+**Files touched:**
+- `web_app/src/pages/RecipeDetailPage.vue` — `onMounted` migrated.
+- `web_app/src/pages/RecipesOverview.vue` — `onMounted` migrated.
+- `web_app/src/pages/StockItemDetailPage.vue` — `onMounted` migrated.
+- `web_app/src/pages/StockOverview.vue` — `onMounted` migrated.
+- `DORA_FOLLOWUPS.md` — removed FU-215, FU-216, FU-221 blocks.
+- `DORA_FOLLOWUPS_RESOLVED.md` — prepended the three RESOLVED entries.
+- `DORA_VERIFY.md` — added FU-221 Cross-cutting verify entry.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `npx vue-tsc --noEmit` from `web_app/` → **clean**.
+- `npx eslint` on the four touched pages → **clean**.
+- No runtime test run — the migration is a pure swap of one store
+  helper for another with identical signature; pages still
+  `await Promise.all([...])` the same shape.
+
+**Engineering-standards close-gate:** clean.
+- R-016 honoured — the four pages now follow the standing rule.
+- R-007 honoured — out-of-scope stores left alone (would have been
+  drift from the FU's stated scope).
+- No new R-0NN candidate; this is straightforward R-016 application.
+
+**Next up:** if the user wants `ensureLoadedAsync()` on the remaining
+stores (recipe / shoppingList / location / recipeVocab / mealSlot),
+that's a separate ADR-011 application sweep — open a new FU when he
+asks. Otherwise the next session picks up from the prior worklog's
+"FU-208 browser pass" thread or wherever the user redirects.
+
+**Open questions for user:** should `recipeStore` / `shoppingListStore`
+/ `locationStore` / `recipeVocabStore` / `mealSlotStore` grow
+`ensureLoadedAsync()` too? Not opened as an FU yet to keep the open
+ledger clean — flag it back if you want one.
+
+---
+
+## 2026-06-29 — FU-203 / FU-204 / FU-207 closed; FU-208 static re-verified
+
+**Why:** user batch-closed four follow-ups: 203 (stock_location clear
+bug), 204 (UpdateMeCommand drift), 207 (VAPID install docs), 208
+(MyProducts Link flow static verify).
+
+**What shipped:**
+- **FU-203** — the actual `_StockItem._stock_location_id = None` fix
+  already shipped at `update_stock_item.py:128-139` (both
+  `clear_stock_location` and the bare-null branch). Added the missing
+  regression test
+  `test__get_stock_item_detail__stock_location_roundtrips_via_patch`
+  in `tests/e2e/dora_api/test_stock_item_router.py` (mirrors the
+  stock_group roundtrip test): create with location → assert it
+  round-trips on detail → PATCH `stock_location_id: null` → assert
+  null. Test passes (2.07s).
+- **FU-204** — diffed every Pydantic field on `UpdateMeRequest` against
+  every key on `UpdateMeCommand`. Only `household_headcount` was
+  missing (the C-9.7 alerts-email triplet had landed correctly across
+  all three layers). Added it with the C-5.4 doc comment.
+  `npx vue-tsc --noEmit` clean.
+- **FU-207** — added "Push notifications (optional, VAPID keys)" to
+  README's § Local dev quick reference, clustered with the existing
+  optional-BYO sections (AI assistant, etc.). Covers the
+  `python -m py_vapid --gen --applicationServerKey` command, the three
+  `DORA_VAPID_*` env vars, and the dry-run / disabled-toggle
+  behaviour when any is missing.
+- **FU-208** — static re-verified the link flow:
+  `MyProductsPage.vue:1013` `confirmLink()` posts to
+  `/stock-items/{id}/products` via `linkProductAsync`, reloads,
+  toasts. Repo-wide grep for `link_product_id` returns only the doc
+  comment at `MyProductsPage.vue:984` (no dead nav remains). The
+  endpoint exists at `link_product_to_stock_item.py:104`. Per
+  CLAUDE.md mandate (only flip to RESOLVED after a real browser
+  click-through), **FU-208 stays OPEN** with a state-note recording
+  today's static re-verification — folds into the next stock /
+  products smoke session.
+
+**Decisions made:**
+- **FU-203 stays a "static fix + regression test" job.** The FK-set
+  fix was already present; the missing piece was a test that proves
+  it. Adding only the test (rather than re-writing the handler) keeps
+  scope tight (R-007 / R-019).
+- **No code change for FU-208 this session.** Static read says the
+  rebuild is correct end-to-end; a browser pass is the only thing
+  that can flip it. Updating the state note is the honest move
+  (CLAUDE.md: "Only flip it to RESOLVED once it's actually been
+  verified not-broken in the running app").
+- **TS audit method for FU-204 was diff, not types-codegen.** No
+  shared TS-from-Pydantic generator in the repo; a manual field-by-
+  field comparison is the documented R-019-friendly approach here.
+
+**Files touched:**
+- `dora_api/features/stock_items/update_stock_item.py` — no change
+  (already correct; verified).
+- `tests/e2e/dora_api/test_stock_item_router.py` — new regression
+  test.
+- `web_app/src/services/api/authApiService.ts` — added
+  `household_headcount?: number | null`.
+- `README.md` — VAPID section.
+- `DORA_FOLLOWUPS.md`, `DORA_FOLLOWUPS_RESOLVED.md`, `CHANGELOG.md`,
+  `DORA_WORKLOG.md`.
+
+**Verification:**
+- New e2e: `./.venv/bin/pytest tests/e2e/dora_api/test_stock_item_router.py::test__get_stock_item_detail__stock_location_roundtrips_via_patch -xvs` → **PASSED**.
+- `npx vue-tsc --noEmit` from `web_app/` → **clean** after the TS
+  Command addition.
+- FU-208 is *not* browser-verified this session (no live env).
+
+**Engineering-standards close-gate:** clean. R-007 honoured (FU-203's
+fix didn't expand into the surrounding handler; just the test);
+R-019 honoured (FU-204 audit was a hand-diff, not a magic codegen).
+
+**Next up:** FU-208's browser pass is the one remaining piece in this
+batch; folds into the next stock / products smoke session.
+
+**Open questions for user:** none.
+
+---
+
 ## 2026-06-29 — FU-326 closed: shared `useDragDropList` composable + R-022 / ADR-018
 
 **Why:** ingredient DnD (FU-118) pushed the count of hand-rolled DnD

@@ -14,6 +14,7 @@
         :usage-label="usageLabel ?? 'recipe'"
         :preserves-label="preservesLabel ?? false"
         :reorderable="reorderable ?? false"
+        v-bind="emptyActionBinding"
         :items="items"
         :loading="loading"
         :busy="busy"
@@ -28,7 +29,7 @@
     import { useQuasar } from 'quasar';
     import VocabListEditor from 'src/components/settings/VocabListEditor.vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
-    import { onMounted, ref } from 'vue';
+    import { computed, onMounted, ref } from 'vue';
 
     export type VocabItem = { id: string; name: string; recipe_count?: number };
 
@@ -41,6 +42,10 @@
             usageLabel?: string;
             preservesLabel?: boolean;
             reorderable?: boolean;
+            // Empty-state tail shown under "No {nounPlural} yet." Optional —
+            // VocabListEditor falls back to the recipe-shaped default when
+            // unset.
+            emptyAction?: string;
             // Data access is injected by the caller so this wrapper stays
             // service-agnostic (R-003: each type already owns its CRUD
             // endpoints; we don't duplicate that knowledge here).
@@ -60,6 +65,12 @@
     const items = ref<VocabItem[]>([]);
     const loading = ref(false);
     const busy = ref(false);
+    // Only forward `emptyAction` when the caller set it, so VocabListEditor's
+    // `withDefaults` keeps the recipe-shaped fallback for the four pages that
+    // don't override (exactOptionalPropertyTypes is on).
+    const emptyActionBinding = computed(() =>
+        props.emptyAction !== undefined ? { emptyAction: props.emptyAction } : {},
+    );
 
     function notifyError(message: string, err: unknown) {
         $q.notify({

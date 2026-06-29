@@ -1275,16 +1275,16 @@
     // Cookability is server-owned (§3.2): each ingredient carries `is_missing`.
     // We still load stock data here for the assistant's `getStock` context.
     async function ensureRecipeData() {
-        const loads: Promise<unknown>[] = [];
-        if (recipes.value.length === 0) loads.push(recipeStore.getRecipesAsync());
-        loads.push(stockItemStore.ensureLoadedAsync());
-        loads.push(stockLevelStore.ensureLoadedAsync());
-        // FU-150 — make sure dietary tags + cuisines are loaded so the
-        // chat handler can resolve ids → names for substring matching.
-        if ((recipeVocabStore.dietaryTags ?? []).length === 0) {
-            loads.push(recipeVocabStore.getAllAsync());
-        }
-        if (loads.length > 0) await Promise.all(loads);
+        // R-016 — every store guards its own re-entry, so call the helpers
+        // unconditionally; the no-op short-circuit lives in the store.
+        // FU-150 — recipeVocab covers dietary tags + cuisines, which the
+        // chat handler resolves ids → names against for substring matching.
+        await Promise.all([
+            recipeStore.ensureLoadedAsync(),
+            stockItemStore.ensureLoadedAsync(),
+            stockLevelStore.ensureLoadedAsync(),
+            recipeVocabStore.ensureLoadedAsync(),
+        ]);
     }
 
     function missingIdsForRecipe(recipeId: string): { id: string; name: string }[] {

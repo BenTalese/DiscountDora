@@ -703,6 +703,28 @@ def test__get_stock_item_detail__stock_group_roundtrips_via_patch(api, stock_lev
     assert _DetailCleared['stock_group_name'] is None
 
 
+def test__get_stock_item_detail__stock_location_roundtrips_via_patch(api, stock_level_id, stock_location_id):
+    # FU-203 regression — `stock_location` relationship is mapped lazy="noload",
+    # so a bare `stock_location = None` doesn't dirty the FK column. The handler
+    # has to set `_stock_location_id` directly when clearing. Mirrors the
+    # stock_group roundtrip test above; same trap, same fix shape.
+    _Created = requests.post(base_route, json=CreateStockItemRequest(
+        name='FU-203 Detail Location Roundtrip',
+        stock_level_id=stock_level_id,
+        stock_location_id=stock_location_id,
+    ).model_dump(mode="json")).json()
+    _ItemId = _Created["stock_item_id"]
+
+    _DetailWithLocation = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert _DetailWithLocation['stock_location_id'] == stock_location_id
+
+    assert requests.patch(
+        f'{base_route}/{_ItemId}', json={'stock_location_id': None},
+    ).status_code == 204
+    _DetailCleared = requests.get(f'{base_route}/{_ItemId}/detail').json()
+    assert _DetailCleared['stock_location_id'] is None
+
+
 def test__delete_stock_item__DeletedItemNoLongerReturnedInGetAll(api):
     _StockItemRequest = CreateStockItemRequest(
         name="Item To Verify Gone",

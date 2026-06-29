@@ -297,7 +297,7 @@
         const loads: Promise<unknown>[] = [];
         loads.push(stockItemStore.ensureLoadedAsync());
         loads.push(stockLevelStore.ensureLoadedAsync());
-        loads.push(shoppingListStore.refreshAsync());
+        loads.push(shoppingListStore.ensureLoadedAsync());
         // Frequently-added is best-effort; failure shouldn't block the
         // sheet, so swallow errors and fall back to low/out ordering.
         loads.push(

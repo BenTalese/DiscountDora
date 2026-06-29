@@ -2410,9 +2410,7 @@
         // linked stock item for the rule-4 modal and for nested-display
         // grouping.
         await productStore.ensureLoadedAsync();
-        if (store.summaries.length === 0) {
-            await store.refreshAsync();
-        }
+        await store.ensureLoadedAsync();
         await load();
         scrollRailToSelection();
     });

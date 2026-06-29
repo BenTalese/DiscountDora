@@ -17,14 +17,39 @@ import TtsApiService from 'src/services/api/ttsApiService';
  * is idempotent: calling it again (or `cancel()`) supersedes any in-flight or
  * playing utterance, including a slow Piper fetch that hasn't resolved yet.
  *
- * `available.value` reflects browser SpeechSynthesis support (the universal
- * fallback); the per-page output toggle hides when it's false.
+ * `available.value` is true when *any* output path is usable: browser
+ * SpeechSynthesis OR a server-configured Piper. It starts at the synchronous
+ * browser-only answer; the per-session Piper probe (deduped across
+ * composable instances) flips it true async if Piper alone would work, so the
+ * Settings → Voice toggle and the chat mute button appear on browsers without
+ * SpeechSynthesis (FU-289).
  */
+const ttsProbe = new TtsApiService();
+// Cached per session — `configured` is install-time server state, not
+// per-request. Resolves true when Piper would handle a `speak()`.
+let piperConfiguredProbe: Promise<boolean> | null = null;
+function probePiperConfigured(): Promise<boolean> {
+    piperConfiguredProbe ??= ttsProbe
+        .getVoicesAsync()
+        .then((r) => r.configured === true)
+        .catch(() => false);
+    return piperConfiguredProbe;
+}
+
 export function useSpeechOutput() {
     const browserAvailable =
         typeof window !== 'undefined' && 'speechSynthesis' in window;
     const available = ref<boolean>(browserAvailable);
     const speaking = ref<boolean>(false);
+
+    // If the browser already covers it, no need to probe. Otherwise ask the
+    // server whether Piper is configured — when yes, flip `available` true so
+    // the output toggle stops hiding on browsers without SpeechSynthesis.
+    if (!browserAvailable) {
+        void probePiperConfigured().then((piperOk) => {
+            if (piperOk) available.value = true;
+        });
+    }
 
     const authStore = useAuthStore();
     const ttsApi = new TtsApiService();

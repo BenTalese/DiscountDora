@@ -26,6 +26,9 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
         return summaries.value.find((s) => s.shopping_list_id === id) ?? null;
     });
 
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
+
     const refreshAsync = async () => {
         loading.value = true;
         loadError.value = null;
@@ -36,6 +39,7 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
             ]);
             summaries.value = s;
             membership.value = m;
+            hydrated = true;
         } catch (err) {
             // Surface to the console explicitly — the catch used to set
             // `loadError` silently and the UI rendered nothing useful,
@@ -47,6 +51,16 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
         }
     };
 
+    /** R-016 — lazy hydration. Use this in `onMounted` when you need
+     *  summaries/membership populated but don't care about a forced refresh.
+     *  Call `refreshAsync` directly for an explicit refetch (post-mutation,
+     *  pull-to-refresh, explicit reload). */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= refreshAsync().finally(() => { inflight = null; });
+        return inflight;
+    };
+
     return {
         summaries: readonly(summaries),
         membership: readonly(membership),
@@ -54,7 +68,8 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
         loadError: readonly(loadError),
         quickAddTargetListId,
         quickAddTargetSummary,
-        refreshAsync
+        refreshAsync,
+        ensureLoadedAsync
     };
 });
 

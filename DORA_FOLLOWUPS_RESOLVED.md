@@ -10,6 +10,245 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-298 — Dashboard "Cookable tonight" upgrade (L272: meal-plan-driven + ready/missing)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
+- **Type:** follow-up — was slated as a Phase-5 item.
+- **Resolution (2026-06-29):** rebuilt the card per L272.
+  **Backend** (`dora_api/features/dashboard/get_dashboard_summary.py`):
+  extended `UpcomingMealPlanEntry` with `recipe_id: UUID` (for
+  deep-linking) and `missing_count: Optional[int]` (`None` for empty
+  recipes, `0` = ready, `>0` = N missing). The handler reuses the
+  same `load_recipe_cookability()` map already computed for the
+  recipe summary — one query, both consumers (R-003: cookability
+  rule in one place; R-007: no extra DB round-trips).
+  **Frontend** (`web_app/src/pages/DashboardPage.vue`): replaced the
+  client-side `cookableTonight` computed (which filtered every
+  cached recipe by `recipe.cookable`) with a `nextToCook` computed
+  driven off `summary.meal_plan.upcoming_entries` — deduped by
+  `recipe_id` (same recipe planned twice in a week shows once,
+  earliest), capped at 3. Each row now renders the relative day +
+  slot (e.g. "Tomorrow dinner · serves 4") and a coloured
+  `q-badge`: green "Ready", amber "Missing 2", grey "No
+  ingredients". Empty state changed to "Nothing planned for the
+  next week" with a `/meal-plans` deep link. Card label retitled
+  "Next to cook" (clearer about what it shows; the old title
+  implied stock-driven). Dropped the no-longer-used `Recipe` type
+  import and the `recipes` storeToRefs destructure. New CSS:
+  `.dora-cook-row--with-badge` modifier (a 4th `auto` column for
+  the badge); restock card unchanged. `vue-tsc` + `eslint` clean.
+  **Tests:** the DTO change is additive (existing tests
+  assert nothing about `recipe_id` / `missing_count`); full pytest
+  suite still 535/540 (the 4 FU-328 pre-existing failures + one
+  flake under suite ordering).
+
+## [RESOLVED] FU-297 — Budget card isn't money-gated (consistency with the Money zone)
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
+- **Type:** finding (consistency, pre-existing).
+- **Resolution (2026-06-29):** added `gate: 'money'` to the budget
+  CardDef in `DashboardPage.vue`'s `CARD_DEFS` array, matching
+  savings / spend / pantry-value. Budget surfaces are *all*
+  dollar-denominated — even the "no target set" body reads "$X.YZ
+  spent so far. Set a target" — so the Money-zone gate posture
+  applies (ADR-005). Also short-circuited `loadBudget()` on
+  `!moneyEnabled.value` (mirrors `loadSavings` / `loadSpendByStore`
+  / `loadPantryValue`) so we don't fetch `/api/budget/status` when
+  the card can't render. Inline comment in `CARD_DEFS` records the
+  reasoning so a future reader doesn't reverse the call without
+  reading the FU. No standalone ADR opened — the call is a
+  routine application of ADR-005's "dollar surfaces gate on money"
+  policy, recorded in code + ledger. `vue-tsc` + `eslint` clean.
+
+## [RESOLVED] FU-294 — Dashboard card reorder: drag-handles (literal DnD) not built
+- **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).
+- **Type:** follow-up (enhancement).
+- **Resolution (2026-06-29):** wired `useDragDropList<CardId>` (the
+  shared composable from FU-326 / R-022) into the Cards menu rows.
+  - **Mime:** `application/x-dora-dashboard-card` (each list owns
+    its mime per the composable contract — drags from this list
+    can't land in any other DnD surface).
+  - **Drag gate:** `canDragStart: () => !$q.platform.is.mobile`
+    so the handle column hides on touch (C13's tap-mandatory
+    mobile path stays uncluttered; drag is the desktop power-user
+    extra).
+  - **Drop constraint:** `canDropOn` rejects cross-zone drops, so
+    a card never visually leaves its zone (matches the existing
+    tap `canMove` semantics).
+  - **Drop effect:** splice-out / splice-in at the target's
+    current index, then `persistLayout()` (same persistence path
+    the tap reorder uses, so a drag and a tap reorder are
+    indistinguishable on the wire).
+  - Handle is a `q-item-section avatar` carrying `dora-dnd-handle`
+    + the composable's `handleProps`; the `q-item` itself carries
+    `dora-dnd-row` + `rowProps` (handle mode per the composable's
+    two surface shapes). The existing tap up/down + visibility
+    toggle controls stay in place — the drag is purely additive.
+  `vue-tsc` + `eslint` clean. **Browser verify still owed**: the
+  composable was previously verified across three other DnD
+  surfaces (R-022 verify); this one needs a desktop click-through
+  to confirm grab → drop reorders within zone, drop-target ring
+  lights, cross-zone drop is rejected, and saved order survives
+  reload. Logged in `DORA_VERIFY.md`.
+
+## [RESOLVED] FU-289 — `useSpeechOutput.available` ignores Piper when browser has no SpeechSynthesis
+- **Raised:** 2026-06-23 (Piper TTS wiring).
+- **Type:** finding (minor edge).
+- **Resolution (2026-06-29):** added a session-cached
+  `probePiperConfigured()` at module scope in
+  `web_app/src/composables/useSpeechOutput.ts` that resolves the
+  `configured` flag from `GET /api/tts/voices` (one request shared
+  across composable instances; cached for the session because
+  Piper-configured is install-time server state, not per-request).
+  The composable now only fires the probe when
+  `'speechSynthesis' in window` is false — the synchronous browser-
+  available answer stays the default, so the common case pays nothing
+  extra. When the probe resolves true on a SpeechSynthesis-less
+  browser, `available.value` flips to true, so the Settings → Voice
+  toggle and the chat mute button (`voiceOutputAvailable` in
+  `DoraChat.vue`, `VoiceSettings.vue`) appear. Failures (no Piper
+  configured, endpoint absent, network error) keep `available`
+  unchanged. `npx vue-tsc --noEmit` + `npx eslint` clean.
+
+## [RESOLVED] FU-288 — Three profile-picture e2e tests fail (pre-existing; FU-286 "no Python env" premise is stale)
+- **Raised:** 2026-06-23 (found while running the suite for the TTS
+  work).
+- **Type:** finding.
+- **Resolution (2026-06-29):** ran the three named tests directly —
+  all **pass**. Confirmed via `git stash` that they pass on clean
+  HEAD too, so they were fixed at some point between the FU being
+  raised (2026-06-23) and now (likely in one of the recent
+  follow-up commits). No code change required for the three named
+  tests. **However, a fresh full-suite run on this box turned up
+  a *different* set of 4 pre-existing failures** (data_router /
+  household_tz_boundaries / product_router / recipe_is_planned) —
+  logged as a new finding in `DORA_FOLLOWUPS.md` (FU-328). The
+  FU-286 "no Python env" premise remains stale: 540 tests collected,
+  4 fail, 536 pass on this machine.
+
+## [RESOLVED] FU-285 — `VocabListEditor` empty-state copy is recipe-specific
+- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
+- **Type:** leftover (cosmetic copy mismatch).
+- **Resolution (2026-06-29):** added an optional `emptyAction` prop to
+  `web_app/src/components/settings/VocabListEditor.vue` (defaults to
+  the existing `Create one to start tagging recipes.` so the four
+  recipe-shaped Recipe* pages are unaffected). Threaded the prop
+  through `TaxonomyManagerPage.vue` with a `computed`-driven
+  `v-bind` that only forwards when the caller actually set it, so
+  `exactOptionalPropertyTypes`'s strict-undefined rule is honoured
+  and `withDefaults` keeps owning the fallback. `RecipeMealSlotsSettings.vue`
+  now overrides with `empty-action="Create one to schedule meals against."`
+  — the wording avoids "tagging" (slots aren't tags) and reads
+  naturally for an empty slots page on a brand-new install.
+  `vue-tsc` + `eslint` clean.
+
+## [RESOLVED] FU-221 — Migrate remaining unconditional `getXAsync()` onMounted calls to `ensureLoadedAsync()`
+- **Raised:** 2026-06-18 (R-016 introduction).
+- **Type:** follow-up (R-016 sweep).
+- **Resolution (2026-06-29):** swept the five pages flagged in the FU
+  for stores that already expose the `ensureLoadedAsync()` helper
+  (`stockItemStore`, `stockLevelStore`, `storesStore`, `productStore` —
+  per `docs/01_charter/ENGINEERING_STANDARDS.md` R-016 / ADR-011):
+  - `web_app/src/pages/RecipeDetailPage.vue` `onMounted` —
+    `stockItemStore.getStockItemsAsync()` →
+    `stockItemStore.ensureLoadedAsync()`;
+    `stockLevelStore.getStockLevelsAsync()` →
+    `stockLevelStore.ensureLoadedAsync()`.
+  - `web_app/src/pages/RecipesOverview.vue` `onMounted` —
+    `stockItemStore.getStockItemsAsync()` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/StockItemDetailPage.vue` `onMounted` —
+    `stockLevelStore.getStockLevelsAsync()` +
+    `stockItemStore.getStockItemsAsync()` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/StockOverview.vue` `onMounted` —
+    `stockItemStore.getStockItemsAsync()` +
+    `stockLevelStore.getStockLevelsAsync()` → `ensureLoadedAsync()`.
+  - `web_app/src/pages/MealPlansOverview.vue` — file has since shrunk
+    to 507 lines and its current `onMounted` no longer fetches stores
+    (only does the A/B planner-view redirect); nothing to migrate.
+  Calls into stores that do **not** yet expose the helper
+  (`recipeStore.getRecipesAsync`, `recipeStore.getRecipeCollectionsAsync`,
+  `shoppingListStore.refreshAsync`, `locationStore.refreshAsync`,
+  `recipeVocabStore.getAllAsync`, `mealSlotStore.getMealSlotsAsync`,
+  page-local `stockGroupApi.getAllAsync`) were **left alone** per R-007
+  scope discipline + the FU's own "once they grow the helper" carve-out
+  — extending more stores is a separate sweep.
+  `npx vue-tsc --noEmit` clean; `npx eslint` on the four touched pages
+  clean.
+
+## [RESOLVED] FU-216 — Rebase cost consumers onto `get_stock_item_unit_cost_at` (FU-213 follow-on)
+- **Raised:** 2026-06-17 (FU-213 split).
+- **Type:** deferred job (build).
+- **Resolution (2026-06-29):** browser-verified the additive
+  observation fallback that landed 2026-06-17 (stock-value report's
+  `StockValueOverTimeHandler` per-bucket loop and `get_recipes.py`
+  `_compute_estimated_cost` per-ingredient — each previously fell
+  through to nothing when no linked-product price existed; now picks
+  up the latest observation via `get_stock_item_unit_cost_at`).
+  Phase A env-verify (2026-06-17) was already GREEN: full suite
+  381/381 incl. all report + recipe-cost tests; no fixture pinned old
+  totals broke (the fallback only contributes for observation-only
+  items, which the fixtures don't trigger). User confirmed live
+  numbers on the stock-value report and the recipe cost-estimate card
+  read sensibly. Full product-cost unification into the helper is no
+  longer required for the user goal — the additive fallback is the
+  resolution.
+
+## [RESOLVED] FU-215 — PreferredBuy shopping-list hint (the FU-211 sub-part)
+- **Raised:** 2026-06-17 (FU-211 split).
+- **Type:** deferred job (build).
+- **Resolution (2026-06-29):** browser-verified the per-line hint
+  flow that landed 2026-06-17. Stack:
+  `ShoppingListLine.preferred_buy_id` (plain UUID, **no FK** per the
+  FU-178 batch-mode lesson — dangling ids after a PreferredBuy delete
+  are tolerated and just render no hint) + migration `c4e6a8b1d3f5`;
+  `preferred_buy_id` + `clear_preferred_buy` on the generic line PATCH;
+  the detail serializer bulk-loads each item's PreferredBuy labels onto
+  the line DTO; per-line hint dropdown in `ShoppingListDetail.vue`
+  (pick/clear, optimistic + rollback). Phase A env-verify (2026-06-17)
+  was already GREEN: `tests/e2e/dora_api/test_shopping_line_preferred_buy.py`
+  2/2 (set + clear + DTO labels), migration applies clean on the FU-209
+  head, `vue-tsc` + `eslint` clean. User confirmed live that picking a
+  hint persists across reload and clearing it removes the hint text.
+
+## [RESOLVED] FU-207 — Document VAPID key generation in install docs
+- **Raised:** 2026-06-17 (C-9.8 impl).
+- **Type:** documentation.
+- **Resolution (2026-06-29):** added a "Push notifications (optional,
+  VAPID keys)" subsection under § Local dev quick reference in
+  `README.md`, clustered with the existing optional-BYO sections. Covers:
+  why VAPID is needed (RFC 8292 short note), the
+  `python -m py_vapid --gen --applicationServerKey` command, the three
+  `DORA_VAPID_*` env vars, the dry-run / disabled-Push-toggle behaviour
+  when any is missing (per R-014). The inline docstring in
+  `push_sender.py` stays — it's the source of truth the README
+  paraphrases.
+
+## [RESOLVED] FU-204 — `UpdateMeCommand` TS type missing `household_headcount` (drift audit)
+- **Raised:** 2026-06-17 (C-9.7).
+- **Type:** finding / cleanup.
+- **Resolution (2026-06-29):** ran the audit. Mapped every Pydantic
+  field on `UpdateMeRequest`
+  (`dora_api/features/auth/update_me.py:28`) to the matching key on
+  `UpdateMeCommand`
+  (`web_app/src/services/api/authApiService.ts:26`). Only
+  `household_headcount` was missing — the C-9.7 alerts-email triplet
+  had landed correctly across all three layers, and no other drift
+  surfaced. Added `household_headcount?: number | null` to
+  `UpdateMeCommand` with the C-5.4 doc comment.
+  `npx vue-tsc --noEmit` passes clean.
+
+## [RESOLVED] FU-203 — `PATCH stock_location_id: null` clear path + regression test
+- **Raised:** 2026-06-16 (C-1b.1 backend pass).
+- **Type:** finding (bug, likely).
+- **Resolution (2026-06-29):** the FK-set fix already shipped at
+  `update_stock_item.py:128-139` (both `clear_stock_location` and the
+  bare-null branch set `_stock_location_id` directly, mirroring the
+  C-1b.1 stock_group shape that motivated the FU). Added the missing
+  e2e regression test
+  `test__get_stock_item_detail__stock_location_roundtrips_via_patch` in
+  `tests/e2e/dora_api/test_stock_item_router.py` (mirrors the existing
+  stock_group test): create with location → assert it round-trips on
+  detail → PATCH `stock_location_id: null` → assert detail reads null.
+  Test passes in 2.07s.
+
 ## [RESOLVED] FU-326 — Extract a shared `useDragDropList` composable + affordance stylesheet
 - **Raised:** 2026-06-29 (immediately on FU-118 close — three DnD
   surfaces with hand-rolled state had crossed the rule-of-three line).

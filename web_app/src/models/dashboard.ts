@@ -28,10 +28,15 @@ export type MealSummary = {
 };
 
 export type UpcomingMealPlanEntry = {
+    recipe_id: string;
     recipe_name: string;
     scheduled_for: string; // ISO date
     slot: string;
     servings: number;
+    /** FU-298 — count of missing ingredients for this entry's recipe, derived
+     *  server-side from the shared cookability map. `null` for empty recipes
+     *  (no ingredients); `0` = ready to cook; > 0 = N missing. */
+    missing_count: number | null;
 };
 
 export type MealPlanSummary = {

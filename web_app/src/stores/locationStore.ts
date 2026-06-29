@@ -15,16 +15,30 @@ export const useLocationStore = defineStore('location', () => {
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
+    let hydrated = false;
+    let inflight: Promise<void> | null = null;
+
     const refreshAsync = async () => {
         loading.value = true;
         loadError.value = null;
         try {
             tree.value = await api.getTreeAsync();
+            hydrated = true;
         } catch (err) {
             loadError.value = String(err);
         } finally {
             loading.value = false;
         }
+    };
+
+    /** R-016 — lazy hydration. Use this in `onMounted` when you need the
+     *  location tree populated but don't care about a forced refresh.
+     *  Call `refreshAsync` directly for an explicit refetch (post-mutation,
+     *  pull-to-refresh, explicit reload). */
+    const ensureLoadedAsync = (): Promise<void> => {
+        if (hydrated) return Promise.resolve();
+        inflight ??= refreshAsync().finally(() => { inflight = null; });
+        return inflight;
     };
 
     const createAsync = async (command: CreateLocationCommand) => {
@@ -84,6 +98,7 @@ export const useLocationStore = defineStore('location', () => {
         loading: readonly(loading),
         loadError: readonly(loadError),
         refreshAsync,
+        ensureLoadedAsync,
         createAsync,
         updateAsync,
         deleteAsync,

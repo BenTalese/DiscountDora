@@ -53,6 +53,27 @@ long session summary. Distinct from the other logs:
 # Open
 
 
+## [OPEN] FU-328 — Four pre-existing pytest failures (data_router / household_tz / product / recipe_is_planned)
+- **Raised:** 2026-06-29 (FU-288 resolution — full-suite run uncovered a
+  *different* set of failures than FU-288 originally named).
+- **Type:** finding (pre-existing drift; confirmed on a clean stash).
+- **What:** `./.venv/bin/pytest tests/` shows **4 failures, all pre-existing**,
+  unrelated to the three profile-picture tests FU-288 named (those all pass
+  now). Confirmed via `git stash` — they fail on clean HEAD too:
+  - `tests/e2e/dora_api/test_data_router.py::test__chunked_upload__chunk_offset_mismatch__is_400`
+  - `tests/e2e/dora_api/test_household_tz_boundaries.py::test__dashboard__upcoming_window_anchored_on_household_today`
+  - `tests/e2e/dora_api/test_product_router.py::test__update_product__PriceNowAtZeroBoundary__IsBadRequest`
+  - `tests/e2e/dora_api/test_recipe_is_planned.py::test__recipes__is_planned_true_when_future_unconsumed_entry_exists`
+  Suite totals: 4 failed, 536 passed.
+- **Why deferred:** out of scope of the FU-288 / FU-285 / FU-289 work unit
+  (R-007); each failure belongs to its own feature area (data import,
+  household-tz boundaries, product validation, planner-derived `is_planned`).
+- **Recommended resolution:** opportunistic per area — when next touching
+  data-import / dashboard upcoming-window / product validation / `is_planned`
+  derivation, run that test first, see what it expects, and either fix the
+  code or update the assertion. Don't bundle as one "fix the 4" job — each
+  failure is its own story.
+
 ## [OPEN] FU-320 — Document every auto-behaviour in the in-app help and point at the setting that controls it
 - **Raised:** 2026-06-28 (FU-092 magic-behaviour audit close-out).
 - **Type:** documentation / discoverability.
@@ -435,36 +456,6 @@ long session summary. Distinct from the other logs:
   query support there, then de-clickable the donut card and link each legend
   row/segment to the matching filtered view.
 
-## [OPEN] FU-298 — Dashboard "Cookable tonight" upgrade (L272: meal-plan-driven + ready/missing)
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
-- **Type:** follow-up — was slated as a Phase-5 item.
-- **What:** feedback L272 wanted the cookable card to show the **next recipes to
-  cook from the meal plan** with an at-a-glance **ready / missing-N-ingredients**
-  flag. The current card shows the top-3 **cookable-now** recipes (all in stock) —
-  related but not the same (it's not meal-plan-driven and doesn't surface
-  almost-cookable recipes).
-- **Why deferred:** overlaps the meal-plan card + needs a small design call on how
-  "next to cook" (plan order) interacts with "cookable now" (stock); didn't want to
-  bundle a design question into the Phase-5 mechanical work.
-- **Recommended resolution:** when reworking meal-plan/cookbook surfaces — drive the
-  card off `meal_plan.upcoming_entries`, joining each recipe's cookability to show
-  ready vs missing-N, deep-linking to the recipe.
-
-## [OPEN] FU-297 — Budget card isn't money-gated (consistency with the Money zone)
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
-- **Type:** finding (consistency, pre-existing).
-- **What:** the Phase-4 Money widgets (savings / spend / pantry value) gate on
-  `useMoneyEnabled` (ADR-005 — dollar surfaces need money on). The **budget**
-  card does **not** — it renders whenever `budgetStatus` loads, even with money
-  features off (showing a passive "spent this week"). So with money off, the
-  Money zone shows budget but hides savings — slightly inconsistent.
-- **Why deferred:** changing budget's gating is out of Phase-4 scope (R-007) and
-  may be intentional (budget as the soft entry point to money). Flagging for a
-  deliberate call, not fixing blind.
-- **Recommended resolution:** opportunistic — decide whether budget should gate
-  on `moneyEnabled` like the other dollar surfaces (add `gate: 'money'` to its
-  CardDef) or stay an ungated nudge; document the choice in ADR-005.
-
 ## [OPEN] FU-296 — Dashboard "price drops" widget (needs server "new low" signal)
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 4).
 - **Type:** deferred job.
@@ -493,23 +484,11 @@ long session summary. Distinct from the other logs:
   under "Dashboard rebuild" (it's the same click that exercises the Phase-3
   alert card → `/alerts` link). Close this FU once that pass is green.
 
-## [OPEN] FU-294 — Dashboard card reorder: drag-handles (literal DnD) not built
-- **Raised:** 2026-06-24 (Dashboard rebuild Phase 2).
-- **Type:** follow-up (enhancement).
-- **What:** D4 asked for "draggable rows" to reorder dashboard cards. Phase 2
-  shipped **within-zone up/down (tap) reorder** in the Cards menu — C13's
-  *required* alternative (mobile + keyboard-accessible) — but not literal
-  drag-and-drop handles. No drag library exists in the SPA.
-- **Why deferred:** native HTML5 DnD is fiddly and **can't be browser-verified
-  on this machine**; shipping untested DnD is riskier than the solid tap path.
-  C13 frames drag as the power-user *extra*, desktop-only, tap mandatory — so
-  the mandate is met.
-- **Recommended resolution:** opportunistic / when browser-verifiable — add
-  `draggable` rows (desktop only, `!$q.platform.is.mobile`) constrained
-  within-zone, on top of the existing `moveCard`/order model.
-
-## [OPEN] FU-288 — Windows + macOS desktop build scripts for the Piper bundle
-- **Raised:** 2026-06-24 (Piper platform audit).
+## [OPEN] FU-327 — Windows + macOS desktop build scripts for the Piper bundle
+- **Raised:** 2026-06-24 (Piper platform audit). Renumbered from FU-288
+  on 2026-06-29 to resolve a ledger numbering collision (two open items
+  shared FU-288 — this build-script one and a separate profile-picture
+  test-fix item; the latter took FU-288 and was resolved that day).
 - **Type:** deferred job.
 - **What:** `packaging/build-linux.sh` is the only platform build script. The
   spec (`dora.spec`) is platform-agnostic, but the Piper binary fetch
@@ -562,40 +541,6 @@ long session summary. Distinct from the other logs:
   - Document the timer-narration limitation in `RecipeCookMode.vue` (it
     already half-acknowledges it at line 944).
 
-## [OPEN] FU-289 — `useSpeechOutput.available` ignores Piper when browser has no SpeechSynthesis
-- **Raised:** 2026-06-23 (Piper TTS wiring).
-- **Type:** finding (minor edge).
-- **What:** `useSpeechOutput().available` reflects only browser
-  `window.speechSynthesis` support. On the rare browser that lacks it **but**
-  has Piper configured server-side, the Settings → Voice "Let Dora speak her
-  replies" toggle and the chat mute button stay hidden, so the user can't enable
-  output even though the neural voice would work.
-- **Why deferred:** edge case (modern browsers all expose SpeechSynthesis);
-  out of scope to make `available` query Piper async this unit (R-007).
-- **Recommended resolution:** opportunistic — if it matters, have `available`
-  also consider the `GET /api/tts/voices` `configured` flag (async) so the
-  toggle appears when Piper alone can speak.
-
-## [OPEN] FU-288 — Three profile-picture e2e tests fail (pre-existing; FU-286 "no Python env" premise is stale)
-- **Raised:** 2026-06-23 (found while running the suite for the TTS work).
-- **Type:** finding.
-- **What:** running `pytest tests/` shows **3 failures, all pre-existing** (they
-  fail identically on clean HEAD — confirmed via `git stash`):
-  `test_auth_flows.py::test__profile_picture__set_fetch_and_clear`,
-  `test_auth_flows.py::test__profile_picture__rejects_oversize_data_url`, and
-  `test_user_router.py::test__get_users__GettingUsers__GetsAllExpectedAttributes`
-  (the last asserts a frozen attribute set that no longer matches the user-list
-  DTO after `has_image` was added). They are unrelated to the TTS change.
-  Separately, this run **proves the backend pytest suite runs on this box** (508
-  passed) — so FU-286's "this machine has no Python env / backend never
-  executed" premise is **stale** (matches the standing memory note).
-- **Why deferred:** out of scope of the TTS unit (R-007); pre-existing drift
-  from the profile-picture (Phase 4) work.
-- **Recommended resolution:** now/opportunistic for the profile-picture owner —
-  update the stale assertions (the `_User.keys() == {...}` frozen set; the two
-  profile-picture flows) and re-run; and update FU-286 to reflect that the
-  backend does run here.
-
 ## [OPEN] FU-287 — Cross-app undo off after dashboard "push expiry"
 - **Raised:** 2026-06-23 (Dashboard `/design-critique` pass).
 - **Type:** finding.
@@ -609,21 +554,6 @@ long session summary. Distinct from the other logs:
   not the dashboard rebuild scope (R-007).
 - **Recommended resolution:** confirm in browser, then route to the undo/toast
   owner (likely the global notify/undo layer).
-
-## [OPEN] FU-285 — `VocabListEditor` empty-state copy is recipe-specific
-- **Raised:** 2026-06-23 (Settings rebuild Phase 3).
-- **Type:** leftover (cosmetic copy mismatch).
-- **What:** the empty-state row in `web_app/src/components/settings/VocabListEditor.vue`
-  reads `No {{ nounPlural }} yet. Create one to start tagging recipes.` That
-  works for cuisines/categories/tools/dietary tags but is slightly off for
-  **meal slots** ("entries" are the consumer, not "recipes"). Phase 3 left it
-  as-is — a single-string mismatch on the empty state, only visible on a
-  freshly-emptied taxonomy page.
-- **Why deferred:** out of scope for the visual rebuild; needs a prop or
-  slot threaded through `TaxonomyManagerPage` so the caller can override
-  the empty-state tail. Trivial but not load-bearing.
-- **Recommended resolution:** opportunistic — pick up next time a Recipe*
-  page is touched, or fold into a Phase 3b polish pass.
 
 ## [OPEN] FU-284 — settings mobile nav still horizontal-scroll fallback (Phase 5 owes top tab strip)
 - **Raised:** 2026-06-23 (Settings rebuild Phase 3).
@@ -817,28 +747,6 @@ long session summary. Distinct from the other logs:
   so the whole "stores are user-curated, never auto-created" rule lands in one
   pass and the SPA's product-create UI gets a store picker at the same time.
 
-## [OPEN] FU-221 — Migrate remaining unconditional `getXAsync()` onMounted calls to `ensureLoadedAsync()`
-- **Raised:** 2026-06-18 (R-016 introduction)
-- **Type:** follow-up (R-016 sweep)
-- **What:** After R-016 / ADR-011 landed, the obvious `if (length === 0) await getXAsync()`
-  cohort across DoraChat / QuickAddSheet / RecipeCookMode / ShoppingListDetail /
-  MyProductsPage / BarcodesQR / ShoppingListTemplates / StocktakeRunner / WastePage was
-  migrated. **Still calling the raw `getXAsync()` unconditionally in `onMounted`** (so they
-  refetch on every visit instead of trusting the boot warmup + cache):
-  `web_app/src/pages/MealPlansOverview.vue:1144-1145`,
-  `web_app/src/pages/RecipeDetailPage.vue:2081-2082`,
-  `web_app/src/pages/RecipesOverview.vue:1271`,
-  `web_app/src/pages/StockItemDetailPage.vue:1646-1648`,
-  `web_app/src/pages/StockOverview.vue:773-774`.
-  Each is bundled with other `refreshAsync()` / `getRecipesAsync()` calls whose semantics
-  weren't audited in this pass, so they were left alone.
-- **Why deferred:** R-007 scope discipline — the rule + the boot fix were the user's ask;
-  case-by-case audit of the rest belongs in its own sweep.
-- **Recommended resolution:** opportunistic — when next touching each page, swap
-  `stockItemStore.getStockItemsAsync()` → `ensureLoadedAsync()` (and same for stockLevel,
-  recipeStore, etc. once they grow the helper). Pull-to-refresh / post-mutation refresh
-  paths stay on the raw `getXAsync()` — see R-016 carve-outs.
-
 ## [OPEN] FU-220 — Repurpose `OnboardingLoop` in Help + consider menu re-ordering
 - **Raised:** 2026-06-17 (FU-210 revisit — user direction)
 - **Type:** follow-up (UX + IA)
@@ -858,57 +766,6 @@ long session summary. Distinct from the other logs:
   component (`OnboardingLoop.vue`) usable in non-onboarding contexts when you tackle this —
   it currently lives under `components/onboarding/`; consider promoting it to a more general
   location if Help also uses it (e.g. `components/dora/AppLoopDiagram.vue`).
-
-## [OPEN] FU-216 — Rebase cost consumers onto `get_stock_item_unit_cost_at` (FU-213 follow-on)
-- **Raised:** 2026-06-17 (FU-213 split)
-- **Type:** deferred job (build)
-- **What:** Give a stock item's unit cost ONE derivation. Extend the FU-213 helper
-  `get_stock_item_unit_cost_at` with the **product-derived branch** (cheapest linked offer when
-  Products is on, else the latest direct observation), then rebase the two existing consumers onto
-  it: the **stock-value report** (`features/reports/reports.py` `StockValueOverTimeHandler` /
-  `_cheapest_as_of`) and the **recipe cost estimate** (`features/recipes/get_recipes.py`
-  `_compute_estimated_cost`) — both currently derive "cheapest most-recent linked-product price"
-  inline.
-- **Why deferred:** touches existing tested report/recipe logic; safer with a running app + the e2e
-  suite. FU-213 shipped the substrate + helper + the stock-item surface without disturbing them.
-- **Recommended resolution:** when an env is up; pairs with the FU-213 verify. Design:
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.2.
-- **Update 2026-06-17 — code-complete (static-only), done additively.** Did NOT extend the helper
-  with a product branch or rewrite the consumers' product-cost logic. Instead kept each consumer's
-  tested linked-product path and added an **observation fallback** where it previously found nothing
-  (`reports.py` `StockValueOverTimeHandler` bucket loop, `when=cursor`; `get_recipes.py`
-  `_compute_estimated_cost` per-ingredient). Lowest blast radius. **NUMERIC behavior change** (items
-  priced only by observation now contribute) — **verify live + update any tests pinning totals for
-  observation-only items.** Full product-cost unification into the helper is no longer needed for
-  the user goal; close this once verified.
-- **Update 2026-06-17 — backend numeric verify GREEN.** Phase A env-verify ran the full suite
-  (381/381 incl. all report + recipe-cost tests); **no test pinned old totals broke** (the additive
-  fallback only contributes when no linked-product price exists, which the existing fixtures don't
-  trigger). Browser pass on the stock-value report + recipe estimate surfaces still pending.
-
-## [OPEN] FU-215 — PreferredBuy shopping-list hint (the FU-211 sub-part)
-- **Raised:** 2026-06-17 (FU-211 split)
-- **Type:** deferred job (build)
-- **What:** Surface a stock item's `PreferredBuy` labels as a **hint on its shopping-list line**
-  (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Add `ShoppingListLine.preferred_buy_id` (nullable FK, ON
-  DELETE SET NULL) + migration; show the chosen label as hint text on the line; let the user pick
-  one of the item's preferred buys for that line. **No pricing/product semantics** — purely a
-  reminder. Split from FU-211 because it touches the shopping-list line model/UI + its own migration.
-- **Why deferred:** keeps FU-211 a clean, completable chunk; needs the shopping-list line surface
-  (interacts with the redesign).
-- **Recommended resolution:** after FU-211 verifies; pairs with shopping-list work. Design:
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.1.
-- **Update 2026-06-17 — code-complete (static-only).** Added `ShoppingListLine.preferred_buy_id`
-  (plain UUID, **no FK** per the FU-178 batch-mode lesson; migration `c4e6a8b1d3f5`); `preferred_buy_id`
-  + `clear_preferred_buy` on the generic line PATCH; the detail serializer bulk-loads each item's
-  PreferredBuy labels onto the line DTO; a per-line hint dropdown in `ShoppingListDetail.vue`
-  (pick/clear, optimistic + rollback). Dangling id after a PreferredBuy delete is tolerated (no hint
-  shown). **Verify:** pytest (set/clear + detail labels) + migration up/down + `vue-tsc`/eslint +
-  browser (pick/clear a hint, persists across reload).
-- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
-  `tests/e2e/dora_api/test_shopping_line_preferred_buy.py` 2/2 (set + clear + DTO labels). Migration
-  `c4e6a8b1d3f5` applies clean on top of the (now-renamed) FU-209 head. `vue-tsc` + `eslint` clean.
-  **Browser pass still pending.**
 
 ## [OPEN] FU-213 — Price substrate: `StockItemPriceObservation` + server cost helper + consumers
 - **Raised:** 2026-06-17 (products-as-overlay pivot — carried from the now-resolved FU-182)
@@ -1039,61 +896,15 @@ long session summary. Distinct from the other logs:
   + a toast, instead of the dead `link_product_id` navigation. **Keep OPEN until browser-verified:**
   from My Products, "Link…" → pick stock item → the product links and shows as linked (no bounce),
   error toast on failure.
-
-## [OPEN] FU-207 — Document VAPID key generation in install docs
-- **Raised:** 2026-06-17 (C-9.8 impl)
-- **Type:** documentation / deferred job
-- **What:** The push channel needs three env vars (`DORA_VAPID_PUBLIC_KEY`,
-  `DORA_VAPID_PRIVATE_KEY`, `DORA_VAPID_SUBJECT`) — current guidance is only
-  inline in `dora_api/infrastructure/push_sender.py`'s module docstring. Add a
-  short section to README + install docs covering:
-  - Why VAPID is needed (RFC 8292 authentication of the application server to
-    the push service).
-  - How to generate a key pair: `python -m py_vapid --gen --applicationServerKey`
-    (bundled with pywebpush; writes `private_key.pem` + prints the public key in
-    base64url form).
-  - How to set the env vars (incl. that `DORA_VAPID_SUBJECT` should be a contact
-    `mailto:` URL the push service can reach the admin on).
-  - Note that omitting any of them puts the sender in dry-run mode and disables
-    the Push toggle on the frontend (R-014).
-- **Why deferred:** docs land separately from code; the chunk's functionality is
-  fully working without them — only adoption is harder.
-- **Recommended resolution:** opportunistic — fold into the next docs touch-up,
-  or the install/deploy hardening pass for Phase 3 / Phase 4 commercialise.
-
-## [OPEN] FU-204 — `UpdateMeCommand` TS type missing `household_headcount` (and now alerts-email shipped right; check for other drift)
-- **Raised:** 2026-06-17 (C-9.7 — surfaced while adding the alerts-email fields)
-- **Type:** finding / cleanup
-- **What:** `web_app/src/services/api/authApiService.ts:16` `UpdateMeCommand` is the TS
-  surface used by `authStore.updateMeAsync(command)`. C-5.4 added `household_headcount`
-  to the backend `UpdateMeRequest` + the `AuthenticatedUserDto` but **forgot the
-  `UpdateMeCommand` type** — so any frontend call site that tries to send
-  `{ household_headcount: N }` typechecks against `Record<string, never>`-ish and
-  errors. (Likely silent today because the headcount writer is sending a different way
-  or hasn't been wired into PATCH yet.) C-9.7 added the alerts-email triplet to all
-  three layers correctly; do a quick audit of every Pydantic field on `UpdateMeRequest`
-  vs every key on `UpdateMeCommand` to flush any other drift.
-- **Why deferred:** out of C-9.7's scope (R-007); fixing C-5.4's residue inline would
-  bury the worklog trail.
-- **Recommended resolution:** opportunistic — quick types diff + add the missing
-  entries; cite this FU + the originating C-5.4 chunk in the commit/worklog.
-
-## [OPEN] FU-203 — `PATCH stock_location_id: null` likely fails to clear the location (same root cause as the C-1b.1 stock_group fix)
-- **Raised:** 2026-06-16 (C-1b.1 backend pass)
-- **Type:** finding (bug, likely)
-- **What:** `update_stock_item.py` clears `stock_location` via `_StockItem.stock_location = None`.
-  The relationship is mapped `lazy="noload"`, so the attribute reads as `None` even when an FK
-  exists; SQLAlchemy sees no change and the `stock_location_id` column never goes to NULL. C-1b.1
-  hit the identical bug for `stock_group` and fixed it by also setting the FK column
-  (`_StockItem._stock_group_id = None`). The same one-line fix should apply to `_stock_location_id`.
-  Pattern reaches the user via the existing detail page's clearable location `q-select` — clicking
-  the × and saving silently doesn't clear.
-- **Why deferred:** scope discipline — C-1b.1 is the inline stock-group picker; the location clear
-  is adjacent and the fix is mechanical, but should land with its own regression test rather than
-  riding on the stock-group test. Logging per R-007 instead of silently expanding scope.
-- **Recommended resolution:** **now or opportunistically with C-1b.1** — apply the FK-set fix in
-  `update_stock_item.py` and add an e2e: set location, PATCH `stock_location_id: null`, GET detail,
-  assert null. Quick + low-risk; the only reason it's a separate FU is brief discipline.
+- **Update 2026-06-29 — static re-verified.** Confirmed
+  `MyProductsPage.vue:1013` `confirmLink()` posts to
+  `/stock-items/{id}/products` via `linkProductAsync`, reloads, and toasts.
+  Repo-wide grep for `link_product_id` returns only the doc comment at
+  `MyProductsPage.vue:984` (no other consumer; no dead nav remains). The
+  endpoint exists at `link_product_to_stock_item.py:104`. **Still OPEN —
+  CLAUDE.md mandate: only flip to RESOLVED once the click-through has been
+  exercised in a running browser.** Folds into the next stock / products
+  smoke session.
 
 ## [OPEN] FU-200 — Admin bootstrap is a fiction: first registrant becomes self-verified admin
 - **Raised:** 2026-06-16 (senior/tech-lead review)

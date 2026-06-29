@@ -1299,9 +1299,7 @@
 
         const recipeId = route.params.id as string;
         try {
-            if (recipeStore.recipes.length === 0) {
-                await recipeStore.getRecipesAsync();
-            }
+            await recipeStore.ensureLoadedAsync();
             // C-3 Chunk 5 — the list endpoint doesn't return `steps[]`
             // (only `has_structured_steps`), and cook mode needs structured
             // steps for per-step highlights / hints. Always fetch detail so
@@ -1315,9 +1313,7 @@
 
         // Warm the locations tree so ingredient breadcrumbs render without
         // a flash. Fire-and-forget — cook mode is usable without it.
-        if (locationStore.tree.length === 0) {
-            void locationStore.refreshAsync();
-        }
+        void locationStore.ensureLoadedAsync();
 
         // Stock items + levels back the ingredient chips and the finish flow;
         // membership/primary feed the "add ran-out items" step; tools vocab
@@ -1325,8 +1321,8 @@
         await Promise.all([
             stockItemStore.ensureLoadedAsync(),
             stockLevelStore.ensureLoadedAsync(),
-            shoppingListStore.refreshAsync(),
-            recipeVocabStore.tools.length === 0 ? recipeVocabStore.getToolsAsync() : Promise.resolve(),
+            shoppingListStore.ensureLoadedAsync(),
+            recipeVocabStore.ensureLoadedAsync(),
         ]);
     });
 

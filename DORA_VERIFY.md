@@ -443,6 +443,26 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] **Phase 7** — at 360/768/1280: zones stack, quick-action bar wraps, touch targets comfortable
 - [ ] **FU-293 extraction:** every card looks identical after DashboardCard extraction — shell border/padding/shadow, header icon/title, hover lift on clickable cards (Pantry/week-ahead/budget), header action link/text styling + hover
 
+### Dashboard "Next to cook" card (meal-plan-driven) — origin FU-298
+- [ ] Plan a meal in the next 7 days → it appears in the card with the relative day + slot ("Tomorrow dinner") and a green "Ready" badge when nothing is missing
+- [ ] Remove one of that recipe's ingredients from stock → reload → badge flips to amber "Missing 1" (or N)
+- [ ] Plan the same recipe twice in the week → it appears once in the card (deduped by recipe_id, earliest slot wins)
+- [ ] Recipe with no ingredients planned → grey "No ingredients" badge (the card still surfaces it; "Cook" still navigates)
+- [ ] Click recipe name → deep links to `/cookbook/{recipe_id}`; click "Cook" → `/cookbook/{recipe_id}/cook`
+- [ ] Empty state when nothing is planned for the next week → "Nothing planned for the next week" + "Plan a meal →" link to `/meal-plans`
+
+### Dashboard budget money-gate — origin FU-297
+- [ ] Money features OFF: budget card is hidden from the dashboard AND from the Cards menu (same posture as savings / spend / pantry)
+- [ ] DevTools network: with money OFF, no `GET /api/budget/status` request fires on dashboard load
+- [ ] Money features ON: budget card renders as before — both the "set a target" empty state and the live spend/progress body
+
+### Dashboard Cards menu drag-and-drop reorder — origin FU-294
+- [ ] **Desktop** (Cards menu open): grab a card row by the left-side drag handle → row dims, drop-target row gets a primary ring, drop reorders within the zone, layout persists across reload
+- [ ] **Cross-zone drop is rejected**: drag a Today-zone card over a Money-zone row → no drop-target ring, no drop accepted
+- [ ] **Tap up/down still works** alongside drag (mobile and keyboard mandate, C13)
+- [ ] **Mobile** (or touch-emulated): drag handle column is hidden — only tap arrows + visibility toggle visible
+- [ ] **Reload + cross-device** persistence (same backend as `dashboard_layout` — exercises FU-292 too): drag-reordered layout follows the user
+
 ### Dashboard `dashboard_layout` backend — origin FU-292
 - [ ] Run the migration on a Python-capable machine
 - [ ] Run the e2e suite (incl. `test__dashboard_layout__set_and_clear`)
@@ -498,6 +518,15 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] `flask db upgrade` applies `a4f7c2e9b6d1` up **and** down, single head
 - [ ] `pytest tests/e2e/dora_api/test_auth_flows.py` green (two new tests + no regressions)
 - [ ] Browser: upload picture on Account → appears immediately on menu bar (cache-bust), Account header, admin Users row; clear → all revert to icon/initials; hard-refresh both states survive; >4.5MB image rejected with a usable message
+
+### VocabListEditor empty-state copy — origin FU-285
+- [ ] Settings → Kitchen setup → Meal slots: with no slots configured, empty-state row reads "No meal slots yet. Create one to schedule meals against." (not "…tagging recipes")
+- [ ] Settings → Kitchen setup → Cuisines / Categories / Tools / Dietary tags: with the taxonomy emptied, empty-state row still reads "No {plural} yet. Create one to start tagging recipes." (default unchanged)
+
+### Speech-output toggle on browser without SpeechSynthesis — origin FU-289
+- [ ] In a browser lacking `window.speechSynthesis` (or with it stubbed to undefined via DevTools), Settings → Voice's "Let Dora speak her replies" toggle is **visible** (not hidden) when `GET /api/tts/voices` returns `configured: true`
+- [ ] DoraChat mute button is visible in the same scenario
+- [ ] Toggle stays hidden when Piper is not configured (the endpoint either 503s or returns `configured: false`)
 
 ### API access page (C-10 Phase B) — origin FU-218
 - [ ] Sidebar entry appears under Admin · global (admin only)
@@ -631,6 +660,20 @@ surface — pick a surface, walk it top-to-bottom.
 ---
 
 ## Cross-cutting
+
+### R-016 lazy hydration sweep — five pages — origin FU-221
+- [ ] Cold-load each of `/recipes`, `/recipes/<id>`, `/stock`, `/stock/<id>` — page renders normally (stock items + stock levels populate, no blank pickers / missing names)
+- [ ] In DevTools Network, navigate away from one of those pages and back without a full reload — no second `GET /stock-items` or `GET /stock-levels` fires (the store's `ensureLoadedAsync` short-circuits when already hydrated)
+- [ ] Post-mutation refresh paths still work (e.g. create a stock item → list updates; rename one → name updates) — those still call the raw `getXAsync()` and must not have been broken by the sweep
+
+### R-016 extension to recipe / shoppingList / location / recipeVocab / mealSlot stores
+- [ ] Cold-load `/dashboard`, `/meal-plans`, `/shopping-lists/<id>`, `/cookbook/<id>/cook`, settings → Stock Locations — every page renders normally (recipes, lists, locations, vocab, meal slots all populate)
+- [ ] DevTools Network: navigate dashboard → meal-plans → dashboard → meal-plans without full reload — `GET /recipes`, `GET /shopping-lists`, `GET /locations`, `GET /cuisines`/`/categories`/`/dietary-tags`/`/tools`, `GET /meal-slots` fire **once** total, not on every revisit
+- [ ] Recipe create / edit / delete still refreshes the overview (post-mutation calls `recipeStore.getRecipesAsync()` directly — must keep working)
+- [ ] Shopping-list mutations (add line, finish shopping, remove from list) still refresh summaries (post-mutation calls `shoppingListStore.refreshAsync()` — must keep working)
+- [ ] Location CRUD on settings → Stock Locations still refreshes the tree (post-mutation calls `locationStore.refreshAsync()` — must keep working)
+- [ ] QuickAddSheet open → shopping-list summaries appear; CreateStockItemDialog open → location picker has options
+- [ ] DoraChat: ask a recipe-aware question on a cold session — recipes + vocab populate before the answer; ask again on a warm session — no second fetch
 
 ### Drag-and-drop affordance parity (post `useDragDropList` refactor) — origin FU-326
 - [ ] **Shopping list lines** (`/shopping-lists/<id>`): on a list that's not done and not mid-shopping with no grouping active and bulk mode off, grab any row → source row dims to ~50% opacity, drop-target row lights with a primary-coloured outline ring. Drop reorders, server persists, refresh round-trips

@@ -7,7 +7,8 @@ its data out of this single response.
 import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 from sqlalchemy import func, select
 
@@ -68,10 +69,16 @@ class MealSummary:
 
 @dataclass(frozen=True, slots=True)
 class UpcomingMealPlanEntry:
+    recipe_id: UUID
     recipe_name: str
     scheduled_for: date
     slot: str
     servings: int
+    # FU-298 — cookability flag for the dashboard's "Next to cook" card.
+    # Derived from the shared cookability map (R-003), so the rule lives in one
+    # place. `None` for empty recipes (no ingredients to evaluate); otherwise
+    # the count of missing ingredients (0 = ready to cook).
+    missing_count: Optional[int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,15 +182,19 @@ class GetDashboardSummaryHandler:
             )
         )
         upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))
-        upcoming_entries_dto: List[UpcomingMealPlanEntry] = [
-            UpcomingMealPlanEntry(
+        # FU-298 — reuse the cookability map already computed for the recipe
+        # summary above so we don't load ingredients twice.
+        upcoming_entries_dto: List[UpcomingMealPlanEntry] = []
+        for e in upcoming_entries_entities:
+            missing, ingredient_count = cookability.get(e.recipe.id, (0, 0))
+            upcoming_entries_dto.append(UpcomingMealPlanEntry(
+                recipe_id = e.recipe.id,
                 recipe_name = e.recipe.name,
                 scheduled_for = e.scheduled_for,
                 slot = e.slot,
                 servings = e.servings,
-            )
-            for e in upcoming_entries_entities
-        ]
+                missing_count = missing if ingredient_count > 0 else None,
+            ))
 
         return DashboardSummaryDto(
             stock_items = StockItemSummary(

@@ -1329,19 +1329,19 @@
         loading.value = true;
         try {
             await Promise.all([
-                recipeStore.getRecipesAsync(),
-                recipeStore.getRecipeCollectionsAsync(),
-                stockItemStore.getStockItemsAsync(),
-                shoppingListStore.refreshAsync(),
+                recipeStore.ensureLoadedAsync(),
+                recipeStore.ensureCollectionsLoadedAsync(),
+                stockItemStore.ensureLoadedAsync(),
+                shoppingListStore.ensureLoadedAsync(),
                 // FU-081 — `is_planned` is now server-derived (RecipeDto
                 // field), so this page no longer needs to fetch meal plans
                 // for the "Planned" filter. The store hydration is left to
                 // other surfaces that genuinely need it.
                 // C-4 Chunk 2 — vocabularies for the cuisine/category/dietary
                 // filters (sourced from the editable settings tables).
-                recipeVocabStore.getAllAsync(),
+                recipeVocabStore.ensureLoadedAsync(),
                 // C-2.A — household meal-slot vocabulary for the time-of-day filter.
-                mealSlotStore.getMealSlotsAsync(),
+                mealSlotStore.ensureLoadedAsync(),
                 // Disclaimer text for the dietary filter. Errors non-fatal.
                 recipeApi.getTagCatalogueAsync()
                     .then((c) => { tagCatalogue.value = c; })

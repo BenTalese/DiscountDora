@@ -981,11 +981,11 @@
 
     onMounted(async () => {
         await Promise.all([
-            stockItemStore.getStockItemsAsync(),
-            stockLevelStore.getStockLevelsAsync(),
-            locationStore.refreshAsync(),
-            shoppingListStore.refreshAsync(),
-            recipeStore.getRecipesAsync(),
+            stockItemStore.ensureLoadedAsync(),
+            stockLevelStore.ensureLoadedAsync(),
+            locationStore.ensureLoadedAsync(),
+            shoppingListStore.ensureLoadedAsync(),
+            recipeStore.ensureLoadedAsync(),
             loadStockGroups(),
             loadStocktakeCount(),
         ]);

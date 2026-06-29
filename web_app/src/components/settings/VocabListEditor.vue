@@ -64,7 +64,7 @@
             </q-item>
             <q-item v-if="!loading && items.length === 0">
                 <q-item-section class="dora-text-muted text-center">
-                    No {{ nounPlural }} yet. Create one to start tagging recipes.
+                    No {{ nounPlural }} yet. {{ emptyAction }}
                 </q-item-section>
             </q-item>
         </q-list>
@@ -97,8 +97,14 @@
             reorderable?: boolean;
             usageLabel?: string;
             preservesLabel?: boolean;
+            emptyAction?: string;
         }>(),
-        { reorderable: false, usageLabel: 'recipe', preservesLabel: false },
+        {
+            reorderable: false,
+            usageLabel: 'recipe',
+            preservesLabel: false,
+            emptyAction: 'Create one to start tagging recipes.',
+        },
     );
 
     const emit = defineEmits<{

@@ -2169,12 +2169,12 @@
     // â”€â”€ Mount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     onMounted(async () => {
         await Promise.all([
-            recipeStore.getRecipeCollectionsAsync(),
-            stockItemStore.getStockItemsAsync(),
-            stockLevelStore.getStockLevelsAsync(),
-            shoppingListStore.refreshAsync(),
-            recipeVocabStore.getAllAsync(),
-            mealSlotStore.getMealSlotsAsync(),
+            recipeStore.ensureCollectionsLoadedAsync(),
+            stockItemStore.ensureLoadedAsync(),
+            stockLevelStore.ensureLoadedAsync(),
+            shoppingListStore.ensureLoadedAsync(),
+            recipeVocabStore.ensureLoadedAsync(),
+            mealSlotStore.ensureLoadedAsync(),
         ]);
         await loadRecipe();
     });

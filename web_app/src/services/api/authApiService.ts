@@ -59,6 +59,10 @@ export type UpdateMeCommand = {
      *  survive a toggle (only rendering is suppressed). */
     show_recipe_images?: boolean;
     show_stock_images?: boolean;
+    /** Onboarding C-5.4 — household cooking headcount (1–99). Server clears
+     *  when `null` is sent. Drives serving-aware suggestions / shopping
+     *  quantity hints. */
+    household_headcount?: number | null;
     /** C-9.7 — alerts email digest channel. Cadence is `'off' | 'daily'
      *  | 'weekly'`; `alerts_email_day` is the weekly send day Mon=0 …
      *  Sun=6 (ignored on the daily cadence; saved either way). */

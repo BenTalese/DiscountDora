@@ -30,7 +30,28 @@
                                 <q-item-label header class="dora-cards-menu-zone">
                                     {{ group.zone.label }}
                                 </q-item-label>
-                                <q-item v-for="card in group.cards" :key="card.id">
+                                <q-item
+                                    v-for="card in group.cards"
+                                    :key="card.id"
+                                    :class="cardDnd.bind(card.id).rowClass"
+                                    v-bind="cardDnd.bind(card.id).rowProps"
+                                >
+                                    <!-- FU-294 — desktop-only drag handle. The
+                                         up/down buttons remain (C13's
+                                         tap-mandatory alternative); drag is
+                                         the power-user extra. The handle's
+                                         `draggable` attribute is gated by
+                                         `$q.platform.is.mobile` so touch
+                                         devices keep tap-only. -->
+                                    <q-item-section
+                                        v-if="cardDragEnabled"
+                                        avatar
+                                        class="dora-dnd-handle"
+                                        v-bind="cardDnd.bind(card.id).handleProps"
+                                    >
+                                        <q-icon :name="ICONS.drag_indicator" />
+                                        <q-tooltip>Drag to reorder within {{ ZONE_LABEL[card.zone] }}</q-tooltip>
+                                    </q-item-section>
                                     <q-item-section avatar>
                                         <q-icon :name="card.icon" />
                                     </q-item-section>
@@ -475,7 +496,7 @@
                  surface via the existing "Needs your attention" card's
                  `expired` / `expiring_soon` alert kinds. -->
 
-            <!-- ───── Cookable tonight (P12) ──────────────────────────────── -->
+            <!-- ───── Next to cook (FU-298: meal-plan-driven, ready/missing) ─ -->
             <div
                 v-if="isCardVisible('cookable')"
                 class="col-12 col-sm-6 col-lg-6"
@@ -483,60 +504,52 @@
             >
                 <DashboardCard :icon="ICONS.restaurant_menu">
                     <template #title>
-                        Cookable tonight
-                        <span
-                            v-if="summary && summary.recipes.cookable_count > 0"
-                            class="dora-text-muted text-body2"
-                        >({{ summary.recipes.cookable_count }})</span>
+                        Next to cook
                     </template>
                     <template #action>
                         <router-link
                             class="dora-card-action dora-card-link"
-                            to="/cookbook?cookable=true"
+                            to="/meal-plans"
                         >
-                            See more →
+                            Meal plan →
                         </router-link>
                     </template>
-                    <ul v-if="cookableTonight.length > 0" class="dora-cook-list">
+                    <ul v-if="nextToCook.length > 0" class="dora-cook-list">
                         <li
-                            v-for="r in cookableTonight"
-                            :key="r.recipe_id"
-                            class="dora-cook-row"
+                            v-for="entry in nextToCook"
+                            :key="`${entry.recipe_id}-${entry.scheduled_for}-${entry.slot}`"
+                            class="dora-cook-row dora-cook-row--with-badge"
                         >
                             <router-link
                                 class="dora-cook-name"
-                                :to="`/cookbook/${r.recipe_id}`"
+                                :to="`/cookbook/${entry.recipe_id}`"
                             >
-                                <q-icon
-                                    v-if="r.is_favourite"
-                                    name="favorite"
-                                    color="negative"
-                                    size="14px"
-                                    class="q-mr-xs"
-                                />
-                                {{ r.name }}
+                                {{ entry.recipe_name }}
                             </router-link>
                             <span class="dora-cook-meta">
-                                <span v-if="recipeTotalTime(r) !== null">
-                                    {{ recipeTotalTime(r) }}m
-                                </span>
-                                <span v-if="r.servings">
-                                    · serves {{ r.servings }}
+                                {{ formatEntryWhen(entry) }}
+                                <span v-if="entry.servings">
+                                    · serves {{ entry.servings }}
                                 </span>
                             </span>
+                            <q-badge
+                                :color="nextToCookBadgeColor(entry)"
+                                :label="nextToCookBadgeLabel(entry)"
+                                class="dora-cook-badge"
+                            />
                             <BaseButton
                                 variant="ghost"
                                 dense
                                 size="sm"
                                 :icon="ICONS.restaurant"
                                 label="Cook"
-                                @click="goTo(`/cookbook/${r.recipe_id}/cook`)"
+                                @click="goTo(`/cookbook/${entry.recipe_id}/cook`)"
                             />
                         </li>
                     </ul>
                     <div v-else class="dora-empty">
-                        Nothing's fully in stock right now.
-                        <router-link class="dora-empty-cta" to="/cookbook">Browse recipes →</router-link>
+                        Nothing planned for the next week.
+                        <router-link class="dora-empty-cta" to="/meal-plans">Plan a meal →</router-link>
                     </div>
                 </DashboardCard>
             </div>
@@ -983,7 +996,6 @@
     import type { Product } from 'src/models/product';
     import { discountPercent } from 'src/helpers/scrapedProductOfferLogic';
     import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
-    import type { Recipe } from 'src/models/recipe';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
     import BudgetApiService, {
@@ -1010,7 +1022,9 @@
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
+    import { useDragDropList } from 'src/composables/useDragDropList';
     import { computed, onMounted, ref, watch } from 'vue';
+    import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
 
     type CardId =
@@ -1074,7 +1088,11 @@
         // is enabled); spend + pantry value are opt-in glances. best_deals is
         // gated on product data-presence (§2.4).
         { id: 'savings', label: 'Savings captured', icon: ICONS.savings, zone: 'money', gate: 'money' },
-        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money' },
+        // Budget is money-gated like the other Money widgets (FU-297). Even the
+        // "no target set" body shows dollar amounts ("$X.YZ spent so far"), so
+        // it's not a money-neutral card and shouldn't render when the user has
+        // money features off — same posture as savings / spend / pantry value.
+        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money', gate: 'money' },
         { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money', gate: 'products' },
         { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
         { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
@@ -1083,6 +1101,7 @@
 
     const authStore = useAuthStore();
     const router = useRouter();
+    const $q = useQuasar();
     const { currentUser } = storeToRefs(authStore);
 
     // Feature gates for the Money/Products cards (Phase 4). `moneyEnabled`
@@ -1107,8 +1126,6 @@
 
     const recipeStore = useRecipeStore();
     const shoppingListStore = useShoppingListStore();
-
-    const { recipes } = storeToRefs(recipeStore);
 
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
@@ -1343,6 +1360,36 @@
         persistLayout();
     }
 
+    // FU-294 — drag-handle reorder for the Cards menu. Sits on top of the
+    // existing tap up/down: drag is the desktop power-user extra; tap is the
+    // mobile/keyboard mandate (C13). Same-zone-only via `canDropOn`.
+    // `cardDragEnabled` gates the handle on non-touch — `$q.platform.is.mobile`
+    // includes tablets so touch-first surfaces keep the tap path uncluttered.
+    const ZONE_LABEL: Record<ZoneId, string> = Object.fromEntries(
+        ZONES.map((z) => [z.id, z.label]),
+    ) as Record<ZoneId, string>;
+    const cardDragEnabled = computed(() => !$q.platform.is.mobile);
+    const cardDnd = useDragDropList<CardId>({
+        mime: 'application/x-dora-dashboard-card',
+        getId: (id) => id,
+        canDragStart: () => cardDragEnabled.value,
+        canDropOn: (source, target) => ZONE_OF.get(source) === ZONE_OF.get(target),
+        onDrop: ({ id: sourceId }, { id: targetId }) => {
+            if (sourceId === targetId) return;
+            const next = [...cardOrder.value];
+            const fromIdx = next.indexOf(sourceId as CardId);
+            const toIdx = next.indexOf(targetId as CardId);
+            if (fromIdx < 0 || toIdx < 0) return;
+            const [moved] = next.splice(fromIdx, 1);
+            // Insert at the target's *current* index after removal — drop-on
+            // semantics (the dragged row takes the target's slot, the target
+            // shifts toward where the dragged row came from).
+            next.splice(toIdx, 0, moved!);
+            cardOrder.value = next;
+            persistLayout();
+        },
+    });
+
     // Cards grouped by zone for the toggle menu (display order). Gated-off cards
     // are dropped (so the menu never offers an unavailable card), and zones with
     // nothing left collapse.
@@ -1575,30 +1622,37 @@
     // only suggest real recipes, so require at least one ingredient.
     // Favourites bubble up first within the cookable subset so your usuals
     // show up before the long tail.
-    function recipeIsCookable(recipe: Recipe): boolean {
-        return recipe.cookable && recipe.ingredients.length > 0;
-    }
-
-    const cookableTonight = computed<Recipe[]>(() => {
-        const cookable = recipes.value.filter(recipeIsCookable);
-        cookable.sort((a, b) => {
-            // Favourites win the tiebreak; then last-made-recent (so you
-            // rotate your repertoire rather than seeing the same three
-            // recipes every night); then alphabetical.
-            if (a.is_favourite !== b.is_favourite) return a.is_favourite ? -1 : 1;
-            const al = a.last_made_on ?? '';
-            const bl = b.last_made_on ?? '';
-            if (al !== bl) return bl.localeCompare(al);
-            return a.name.localeCompare(b.name);
-        });
-        return cookable.slice(0, 3);
+    // FU-298 — "Next to cook" is meal-plan-driven now (feedback L272):
+    // upcoming entries from `summary.meal_plan.upcoming_entries`, deduped by
+    // recipe so the same recipe scheduled twice in the week only shows once
+    // (earliest slot wins), capped at 3, each tagged with a ready / missing-N
+    // badge from the server-derived `missing_count`.
+    const nextToCook = computed<UpcomingMealPlanEntry[]>(() => {
+        const entries = summary.value?.meal_plan.upcoming_entries ?? [];
+        const seen = new Set<string>();
+        const picks: UpcomingMealPlanEntry[] = [];
+        for (const e of entries) {
+            if (seen.has(e.recipe_id)) continue;
+            seen.add(e.recipe_id);
+            picks.push(e);
+            if (picks.length >= 3) break;
+        }
+        return picks;
     });
 
-    function recipeTotalTime(recipe: Recipe): number | null {
-        if (recipe.prep_time_minutes === null && recipe.cook_time_minutes === null) {
-            return null;
-        }
-        return (recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0);
+    function formatEntryWhen(entry: UpcomingMealPlanEntry): string {
+        const day = formatRelativeDay(entry.scheduled_for);
+        return `${day} ${entry.slot.toLowerCase()}`;
+    }
+    function nextToCookBadgeLabel(entry: UpcomingMealPlanEntry): string {
+        if (entry.missing_count === null) return 'No ingredients';
+        if (entry.missing_count === 0) return 'Ready';
+        return `Missing ${entry.missing_count}`;
+    }
+    function nextToCookBadgeColor(entry: UpcomingMealPlanEntry): string {
+        if (entry.missing_count === 0) return 'positive';
+        if (entry.missing_count === null) return 'grey-6';
+        return 'warning';
     }
 
     // ── Best deals on your saved products ────────────────────────────────
@@ -1675,6 +1729,8 @@
     }
 
     async function loadBudget() {
+        // FU-297 — budget is money-gated; skip the fetch when money is off.
+        if (!moneyEnabled.value) { budgetStatus.value = null; return; }
         try {
             budgetStatus.value = await budgetApi.getStatusAsync();
         } catch {
@@ -1872,10 +1928,8 @@
             // the card is actually shown (R-016 lazy hydration).
             isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
             suggestionStore.refreshAsync(),
-            recipes.value.length === 0
-                ? recipeStore.getRecipesAsync()
-                : Promise.resolve(),
-            shoppingListStore.refreshAsync(),
+            recipeStore.ensureLoadedAsync(),
+            shoppingListStore.ensureLoadedAsync(),
         ]);
         // Primary list detail depends on the shoppingListStore refresh
         // having landed, so it runs after.
@@ -2577,6 +2631,14 @@
         padding: 8px 10px;
         background: var(--surface-elevated);
         border-radius: 10px;
+    }
+    /* Next-to-cook rows carry an extra badge column between meta and the
+       Cook button (FU-298). Restock rows are unchanged. */
+    .dora-cook-row--with-badge {
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
+    }
+    .dora-cook-badge {
+        font-weight: 600;
     }
     .dora-cook-name {
         color: var(--c-ink);

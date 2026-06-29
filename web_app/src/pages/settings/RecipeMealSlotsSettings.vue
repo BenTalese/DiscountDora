@@ -5,6 +5,7 @@
         noun="meal slot"
         noun-plural="meal slots"
         usage-label="entry"
+        empty-action="Create one to schedule meals against."
         :preserves-label="true"
         :reorderable="true"
         :load="load"

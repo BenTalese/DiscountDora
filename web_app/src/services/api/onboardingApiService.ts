@@ -1,6 +1,7 @@
 import type {
     OnboardingCatalog,
     OnboardingState,
+    SeedDemoResult,
     SeedItemsRequest,
     SeedItemsResult,
     SeedRequest,
@@ -39,5 +40,14 @@ export default class OnboardingApiService {
         await this.httpClient.post<SeedItemsResult, SeedItemsRequest>(
             '/onboarding/seed-items',
             request,
+        );
+
+    /** FU-194 — opt-in demo dataset (one recipe + the StockItems it needs + a
+     *  current-week MealPlan with one entry). Idempotent server-side: a
+     *  second call returns `seeded: false` if the demo recipe already exists. */
+    seedDemoAsync = async (): Promise<SeedDemoResult> =>
+        await this.httpClient.post<SeedDemoResult, Record<string, never>>(
+            '/onboarding/seed-demo',
+            {},
         );
 }

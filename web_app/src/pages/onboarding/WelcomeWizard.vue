@@ -244,6 +244,36 @@
                     </router-link>
                 </div>
 
+                <!-- FU-194 / L38 — opt-in demo dataset. Plain rows (no
+                     `is_demo` marking) so the user deletes them like any
+                     other recipe / item / plan if they aren't useful. -->
+                <div class="col-12">
+                    <q-card
+                        flat
+                        bordered
+                        class="seed-card"
+                        :class="{ 'seed-card--picked': form.seedDemo }"
+                        @click="form.seedDemo = !form.seedDemo"
+                    >
+                        <q-card-section class="row items-center">
+                            <q-icon :name="ICONS.restaurant_menu" size="28px" class="q-mr-sm" color="primary" />
+                            <div class="col">
+                                <div class="text-subtitle1">Add a demo recipe + this-week meal plan</div>
+                                <div class="text-caption dora-text-muted">
+                                    Off by default. Creates a working
+                                    "Spaghetti Aglio e Olio" recipe (with the
+                                    three pantry items it needs) and schedules
+                                    it for dinner this week, so the cookbook +
+                                    planner aren't empty on first open.
+                                    Everything's plain — rename or delete it
+                                    like any other entry.
+                                </div>
+                            </div>
+                            <q-checkbox v-model="form.seedDemo" @click.stop />
+                        </q-card-section>
+                    </q-card>
+                </div>
+
                 <!-- Starter packs (L37) — tick a pack to add its common items. -->
                 <div v-if="(catalog?.packs?.length ?? 0) > 0" class="col-12">
                     <div class="text-subtitle1 q-mt-sm">Starter packs</div>
@@ -673,6 +703,10 @@
         headcount: number | null;
         seedGroups: boolean;
         seedLocations: boolean;
+        // FU-194 — optional demo dataset (one recipe + a current-week meal
+        // plan). Default off because it inserts plain rows the user then
+        // has to clean up if they didn't actually want demo content.
+        seedDemo: boolean;
         stepIndex: number;
     };
 
@@ -694,6 +728,7 @@
         headcount: null,
         seedGroups: true,
         seedLocations: true,
+        seedDemo: false,
         stepIndex: 0,
     });
 
@@ -919,6 +954,14 @@
         ];
         if (items.length > 0) {
             await onboardingApi.seedItemsAsync({ items });
+        }
+        // FU-194 — optional demo dataset. After the items pass so the demo
+        // can reuse a starter-pack "Spaghetti pasta" / "Garlic" / "Olive oil"
+        // if the user picked them; otherwise the demo creates its own. The
+        // server is idempotent (`seeded: false` when the demo recipe already
+        // exists) so a re-finish never duplicates.
+        if (form.seedDemo) {
+            await onboardingApi.seedDemoAsync();
         }
     }
 

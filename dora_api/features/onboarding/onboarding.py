@@ -1,11 +1,12 @@
 """F1 — first-run wizard backend.
 
-Three endpoints power the /welcome wizard:
+Four endpoints power the /welcome wizard:
 
-  GET  /api/onboarding/state    — snapshot of what the user has + has done
-  POST /api/onboarding/complete — stamp onboarding_completed_at = NOW()
-  POST /api/onboarding/seed     — import bundled default groups / locations
-  POST /api/onboarding/restart  — clear the completion timestamp
+  GET  /api/onboarding/state     — snapshot of what the user has + has done
+  POST /api/onboarding/complete  — stamp onboarding_completed_at = NOW()
+  POST /api/onboarding/seed      — import bundled default groups / locations
+  POST /api/onboarding/seed-demo — one-off demo recipe + meal-plan (FU-194)
+  POST /api/onboarding/restart   — clear the completion timestamp
 
 Seed catalogues live as JSON next to this file so designers can edit
 without touching Python. They're idempotent: a second seed call won't
@@ -16,7 +17,7 @@ re-import without thinking about the bookkeeping).
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -24,12 +25,17 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict
 
+from dora_api.domain.entities.meal_plan import MealPlan
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.domain.entities.user import User
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.routers import ONBOARDING_ROUTER
 from dora_api.infrastructure.api_response import (no_content, not_found, ok,
@@ -489,5 +495,178 @@ def seed_items_onboarding():
     _LOGGER.info(
         "Onboarding seed-items (user %s): +%d/-%d",
         user_id, result.created, result.skipped,
+    )
+    return ok(result)
+
+
+# ─── Demo recipe + meal-plan (FU-194 / L38) ──────────────────────────
+# Optional toggle in the wizard's starter-data step. Creates one plain
+# Recipe (Aglio e Olio — three ingredients) with the StockItems it needs
+# (created if missing — RecipeIngredient → StockItem FKs are non-nullable)
+# and a MealPlan for the current household week with one dinner entry.
+# Rows are *unmarked* — the user can rename or delete them like any other,
+# per the FU's "no is_demo marking" rule. Idempotent: if the demo recipe
+# (by name) already exists, the whole call is a no-op so a second click
+# never duplicates anything.
+
+
+# Mirrors the seed.py shape so the demo dataset matches what a dev seed
+# would produce. Quantities/units kept simple — the point is a working
+# end-to-end recipe + plan, not a curated cookbook.
+_DEMO_RECIPE_NAME = "Spaghetti Aglio e Olio"
+_DEMO_INSTRUCTIONS = (
+    "1. Boil a large pot of salted water and cook the spaghetti until al dente.\n"
+    "2. Meanwhile, gently heat the olive oil with the sliced garlic until fragrant, about 3 minutes.\n"
+    "3. Toss the drained pasta through the garlic oil and serve."
+)
+_DEMO_INGREDIENTS = [
+    {"name": "Spaghetti pasta", "quantity": 250.0, "unit": "g"},
+    {"name": "Garlic cloves",   "quantity":   4.0, "unit": "cloves"},
+    {"name": "Olive oil",       "quantity":  60.0, "unit": "ml"},
+]
+
+
+@dataclass(frozen=True, slots=True)
+class SeedDemoResultDto:
+    # `False` means the demo already existed (idempotent no-op); otherwise
+    # the call wrote the rows. `items_created` counts only the StockItems
+    # the demo had to create (existing items by name are reused).
+    seeded: bool
+    items_created: int
+    recipe_created: bool
+    meal_plan_created: bool
+
+
+class SeedDemoHandler:
+    def __init__(self):
+        self.repository = SqlAlchemyRepository()
+
+    def handle(self) -> SeedDemoResultDto:
+        # Idempotency: skip the whole thing if the demo recipe already
+        # exists (same by-name discipline the other seed endpoints use).
+        if self._find_recipe_by_name(_DEMO_RECIPE_NAME) is not None:
+            return SeedDemoResultDto(False, 0, False, False)
+
+        # StockItems first — RecipeIngredient.stock_item_id is non-nullable.
+        # We reuse existing items by name (so a user who already added
+        # "Spaghetti pasta" in the starter pack doesn't get a duplicate),
+        # and create the ones that don't exist yet.
+        items_created = 0
+        ingredient_items: list[StockItem] = []
+        existing_items = {
+            it.name.strip().lower(): it
+            for it in self.repository.get(StockItem).all()
+        }
+        # Most-stocked level is the sensible default (mirrors seed-items
+        # for the starter packs); migrations always seed at least one row.
+        levels = self.repository.get(StockLevel).all()
+        if not levels:
+            _LOGGER.warning("Seed-demo skipped: no stock levels configured.")
+            return SeedDemoResultDto(False, 0, False, False)
+        well_stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+        now = datetime.now(timezone.utc)
+        for spec in _DEMO_INGREDIENTS:
+            name = spec["name"]
+            existing = existing_items.get(str(name).strip().lower())
+            if existing is not None:
+                ingredient_items.append(existing)
+                continue
+            item = StockItem(
+                days_until_stocktake_alert=0,
+                image=None,
+                name=str(name),
+                notes=None,
+                stock_group=None,
+                stock_level_last_updated=now,
+                stock_level=well_stocked,
+                stock_location=None,
+                stocktake_alerts_are_enabled=False,
+            )
+            self.repository.add(item)
+            ingredient_items.append(item)
+            items_created += 1
+
+        ingredients = [
+            RecipeIngredient(
+                notes=None,
+                quantity=float(spec["quantity"]),
+                stock_item=item,
+                unit=str(spec["unit"]),
+            )
+            for spec, item in zip(_DEMO_INGREDIENTS, ingredient_items)
+        ]
+        for ri in ingredients:
+            self.repository.add(ri)
+
+        recipe = Recipe(
+            available_meals=0,
+            category=None,
+            cook_time_minutes=15,
+            cuisine=None,
+            difficulty="Easy",
+            image=None,
+            ingredients=ingredients,
+            instructions=_DEMO_INSTRUCTIONS,
+            is_favourite=False,
+            last_made_on=None,
+            name=_DEMO_RECIPE_NAME,
+            prep_time_minutes=5,
+            recipe_collection=None,
+            servings=2,
+            source=None,
+            time_of_day="Dinner",
+            version_group_id=None,
+            kcal=None,
+            steps_mode="freeform",
+            created_at=now,
+        )
+        self.repository.add(recipe)
+
+        # MealPlan anchored on the current household-week's Monday so the
+        # entry lands inside the dashboard's "next 7 days" window.
+        today = household_today(self.repository)
+        monday = today - timedelta(days=today.weekday())
+        # Schedule the entry at "today or later, this week" so the user
+        # sees it in the dashboard's Next-to-cook card immediately. Default
+        # to today's slot when today is mid-week; fall back to Wednesday on
+        # an early-week mount so the entry is visibly *upcoming*.
+        scheduled_for = today if today >= monday else monday
+        entry = MealPlanEntry(
+            recipe=recipe,
+            scheduled_for=scheduled_for,
+            servings=2,
+            slot="Dinner",
+        )
+        self.repository.add(MealPlan(
+            name=None,
+            start_date=monday,
+            entries=[entry],
+        ))
+        self.repository.save_changes()
+        return SeedDemoResultDto(
+            seeded=True,
+            items_created=items_created,
+            recipe_created=True,
+            meal_plan_created=True,
+        )
+
+    def _find_recipe_by_name(self, name: str) -> Recipe | None:
+        target = name.strip().lower()
+        for r in self.repository.get(Recipe).all():
+            if (r.name or "").strip().lower() == target:
+                return r
+        return None
+
+
+@ONBOARDING_ROUTER.route("/seed-demo", methods=["POST"])
+def seed_demo_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    result = get_container().inject(SeedDemoHandler).handle()
+    _LOGGER.info(
+        "Onboarding seed-demo (user %s): seeded=%s items=+%d recipe=%s plan=%s",
+        user_id, result.seeded, result.items_created,
+        result.recipe_created, result.meal_plan_created,
     )
     return ok(result)

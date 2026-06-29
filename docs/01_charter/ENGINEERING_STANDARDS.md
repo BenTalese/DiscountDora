@@ -795,6 +795,50 @@ exceptions, which still must be commented) · **Source** (where it was establish
   recipe steps [FU-094], recipe ingredients [FU-118]) made the
   duplication obvious.
 
+### R-023 — Test naming + shared response matchers
+- **Rule:** Tests follow the behavioural pattern
+  `test__<unit>__<condition>__<result>` (two-underscore separators,
+  greppable, readable in the failure summary). Router tests asserting
+  RFC-7807 problem-detail bodies or `{items,total,page,limit}` list
+  envelopes use the **shared matchers** in `tests/support.py`
+  (`assert_problem`, `assert_envelope`) — never inline the dicts.
+  Source-of-truth for the contract lives in one place; one update
+  there propagates when the shape moves.
+- **Why:** Two reasons fused into one rule. (1) The suite carried two
+  naming conventions side-by-side
+  (`test__get_x__Condition__Result` vs `test_create_with_…_roundtrips`),
+  which made the failure summary jagged and prevented consistent
+  grep / parametrize patterns. (2) FU-166 spent days re-aligning ~40
+  inline problem-detail assertions when the error contract moved; the
+  matchers reduce that to one fix in one file. Both are R-001 (single
+  shared primitive) applied to tests.
+- **Apply:**
+  - New tests: name `test__<unit_under_test>__<condition>__<result>`.
+    Examples: `test__create_product__OnZeroPrice__Returns400`,
+    `test__get_recipes__WhenCookableFilterOn__OnlyReturnsFullyStocked`.
+  - Use `assert_problem(resp, 400, field="name")` instead of writing
+    `assert resp.status_code == 400; assert resp.headers['Content-Type']
+    == 'application/problem+json'; assert 'name' in resp.json()['errors']`.
+  - Use `items = assert_envelope(resp)` instead of re-parsing the
+    `{items,total,page,limit}` shape. Pass `expect_total=N` to also
+    assert the count.
+  - Don't migrate green tests blindly — touch the matcher when you're
+    already in the file editing that test. Standing inline assertions
+    are flagged but not failure-blocking.
+- **Violation signal:**
+  - A new test using camelCase or `test_create_with_…` shape.
+  - An inline
+    `assert resp.headers['Content-Type'] == 'application/problem+json'`
+    in a new test.
+  - A list test re-asserting the `{items,total}` keys by hand.
+- **Carve-outs (must be commented):** legacy tests using the older
+  naming may stay until they're next touched. When you edit one, rename
+  it. Don't open a "rename all tests" PR — the migration is per-edit.
+- **Source:** ADR-019; FU-169 / PROPOSAL_TEST_SUITE_IMPROVEMENTS Phase 1
+  (2026-06-29). The naming-convention split + the ~40 inline
+  problem-detail assertions were both surfaced during FU-166's
+  test-client conversion.
+
 ---
 
 ## ADR process (evaluate every task)
@@ -1265,6 +1309,46 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
     reordering for accessibility are all extensions to this one
     composable rather than three parallel implementations.
 - **Promotes rule:** R-022.
+
+### ADR-019 — Test naming + shared response matchers
+- **Date / task:** 2026-06-29 (FU-169 Phase 1 —
+  `PROPOSAL_TEST_SUITE_IMPROVEMENTS.md` §C / §F).
+- **Status:** accepted.
+- **Context:** FU-166 spent days realigning ~40 inline RFC-7807
+  problem-detail assertions across the router suite when the error
+  contract moved (the same `assert resp.status_code == 400;
+  assert resp.headers['Content-Type'] == 'application/problem+json';
+  assert 'errors' in resp.json()` triplet, written out every time).
+  The same audit found two naming conventions running in parallel —
+  `test__get_x__Condition__Result` (older router tests) and
+  `test_create_with_..._roundtrips` (newer suites) — which made the
+  failure summary jagged and prevented uniform parametrize / grep
+  patterns. Both are duplication-of-contract problems: the test
+  suite is asserting the same shape (or naming the same thing) in
+  many places, so a contract or convention move ripples through ~40
+  files instead of one.
+- **Decision:** Adopt **`assert_problem` + `assert_envelope`** in
+  `tests/support.py` as the canonical matchers for the two repeated
+  shapes; the proposal's §C names exactly these two. Adopt the
+  behavioural naming convention
+  `test__<unit>__<condition>__<result>` for new tests, with a
+  per-edit migration policy for existing names (don't open a
+  rename-all PR; rename when you're already editing the file).
+  Codified as R-023.
+- **Consequences:**
+  - **Future contract moves are a one-file fix.** When the
+    problem-detail shape changes again, `assert_problem` is the
+    single update site; ditto for the list envelope.
+  - **Per-edit migration** keeps the rename cost amortised — every
+    PR that touches a test brings it into line, no big-bang
+    cleanup needed.
+  - The shared matchers add ~80 lines to `tests/support.py`; this
+    pays back the moment more than ~6 callers exist, which is
+    already true.
+  - **Doesn't ban inline assertions in non-router tests.** Domain
+    unit tests assert plain objects; the matchers are for the
+    HTTP-contract surfaces only.
+- **Promotes rule:** R-023.
 
 ### ADR-016 — Calendar-day boundaries run in the household timezone
 - **Date / task:** 2026-06-29 (FU-174 close-out sweep; mechanism shipped

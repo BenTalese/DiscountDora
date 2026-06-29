@@ -9,6 +9,598 @@ next.
 
 ---
 
+## 2026-06-29 — FU-229 closed (spend-by-store ladder)
+
+**Why:** user asked to "do FU-229 keeping current logic for pricing
+data in mind". The FU was a real behaviour-inconsistency bug carved
+out of FU-227 chunk 5: the K2 ladder
+(`shopping_lists._line_price.line_paid_unit_price`) landed across
+budget / waste / assistant / suggestions but never made it into
+`reports.py`. Spend-by-store kept reading `picked_offer_price`
+straight from the SQL projection, so any user till-receipt
+`actual_unit_price` override was invisible to that report.
+
+**What ran:**
+- Refreshed the pricing-data picture before touching code:
+  - `_line_price.line_paid_unit_price` is the R-003 chokepoint:
+    `actual` > `picked` > None. Operates on entity objects.
+  - Savings handler (`reports.py` ~746) computes
+    `list_price_at_pick − picked_offer_price` — RRP vs committed
+    offer accounting, snapshot-by-design. **Not** "what you paid".
+    The FU explicitly carves it out; leave alone.
+  - Spend-by-store handler (`reports.py` ~340) is "what did I
+    spend" — should follow the ladder. Bug.
+  - Storage: `actual_unit_price` (user till-receipt override) and
+    `picked_offer_price` (offer snapshot at commit-time) are both
+    nullable columns on `ShoppingListLine`.
+  - Portability (FU-045): `or_` + Python-level coalesce work on
+    both Postgres and SQLite; no dialect-specific SQL needed.
+- **Code change** to `dora_api/features/reports/reports.py`
+  `SpendByStoreHandler.handle`:
+  - Added `or_` to the `sqlalchemy` import.
+  - Added `ShoppingListLine.actual_unit_price` to the SELECT
+    projection.
+  - Relaxed the WHERE filter from `picked_offer_price.isnot(None)`
+    to `or_(picked.isnot(None), actual.isnot(None))`. Matches
+    budget/waste posture: any line with a captured price counts.
+  - Kept `selected_product_id.isnot(None)` — store grouping
+    needs a product.
+  - Per-row: `unit_price = float(actual if actual is not None else picked)`.
+    Python expression of the ladder over column-projected rows
+    (the FU's explicit carve-out — the helper takes entities, this
+    handler takes flat rows). Inline comment cites R-003 +
+    `line_paid_unit_price` so a future reader knows where the
+    canonical ladder lives and why this is a duplicate shape.
+  - Savings handler untouched.
+- **New regression test:**
+  `tests/e2e/dora_api/test_spend_by_store.py` —
+  `test__spend_by_store__honours_actual_unit_price_over_picked`.
+  Builds an isolated scenario: unique store name → product with
+  `price_now=10` (so `picked_offer_price=10` snapshots when the
+  product is selected on a line) → PATCH `actual_unit_price=7` +
+  tick → finish → assert the spend-by-store row reads `spend=7.0`,
+  not `10.0`. Uses a unique `store_name` per run so the dev-seed
+  Woolworths/Coles spend doesn't perturb the assertion. Named per
+  R-023 (`test__<unit>__<condition>__<result>`).
+
+**Decisions made:**
+- **Python-level ladder, not SQL `COALESCE`.** Both work; the
+  Python expression `actual if actual is not None else picked`
+  reads more clearly next to the existing per-row loop and stays
+  consistent with the handler's existing posture (it already
+  unwraps tuple columns and does Python arithmetic). R-019 —
+  explicit/verbose/consistent over clever.
+- **Kept entity-load alternative off the table.** The FU named
+  both paths ("project alongside and COALESCE in SQL **or** load
+  entities and reuse `line_paid_unit_price`"). Going entity-load
+  would be a wholesale handler rewrite for an unproven cost
+  benefit; the column-projection variant is the minimal-blast-radius
+  fix. The duplication-with-helper is acknowledged inline.
+- **One focused regression test, not a reports-wide suite.**
+  Reports is currently in the FU-169 §4 untested-surface gap
+  (proposal flags it ⚠️). The right home for a reports test
+  suite is FU-169 Phase 3; this FU's scope is "fix the ladder
+  bug + pin it", which one test does. R-007.
+- **Isolated test data, no shared-row arithmetic.** Dev-seed has
+  Woolworths spend; finding "my row" by unique store name avoids
+  any add/subtract gymnastics on shared totals.
+
+**Files touched:**
+- `dora_api/features/reports/reports.py` — `or_` import; spend-by-
+  store handler ladder.
+- `tests/e2e/dora_api/test_spend_by_store.py` — new regression test.
+- `DORA_FOLLOWUPS.md` — removed FU-229 block.
+- `DORA_FOLLOWUPS_RESOLVED.md` — RESOLVED entry with the pricing-
+  data context.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `./.venv/bin/pytest tests/e2e/dora_api/test_spend_by_store.py`
+  → **1 passed**.
+- Full suite: **537 passed**, 5 failed. 4 are the FU-328
+  pre-existing set; the 5th
+  (`test__register_barcode__against_product__lookup_traverses_via_product`)
+  is the known order-dependent flake (passes in isolation, passes
+  on clean stash). No new failures caused by this change.
+
+**Engineering-standards close-gate:** clean.
+- R-003 — the canonical ladder still lives in
+  `_line_price.line_paid_unit_price`; the spend-by-store SQL-path
+  duplication is acknowledged inline with a pointer back to the
+  helper.
+- R-007 — scope held: fixed the named bug, added one focused
+  regression test, didn't sweep the broader reports-untested-surface
+  gap (that belongs to FU-169 Phase 3).
+- R-019 — Python-level ladder is explicit/verbose; no codegen, no
+  hidden COALESCE in SQL.
+- R-023 — new test follows the `test__<unit>__<condition>__<result>`
+  naming convention.
+- No new R-0NN candidate.
+
+**Next up:** browser-verify the spend-by-store card on the
+dashboard / reports page reflects an `actual_unit_price` override
+(the user's call to enter one at the till). Verify item didn't
+exist in `DORA_VERIFY.md` for this; not adding one because spend-
+by-store doesn't have an existing FU-section to hang it under and
+the regression test covers the numeric correctness end-to-end.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-210 closed (onboarding de-persona, verify-only outstanding)
+
+**Why:** user asked to "do" FU-210; on inspection it was already
+code-complete after the 2026-06-17 user-directed reversal of an
+over-deletion. Only browser-verify remained, which under the new
+close-when-only-verify-left policy is enough to close.
+
+**What ran:**
+- Read the three 2026-06-17 update sections on FU-210 and confirmed
+  the corrected scope landed (persona FORK removed, LOOP_INSIGHT
+  stripped, PERSONA_PREVIEWS re-labelled to outcome chips, satellite
+  + recap removed, cinematic Story kept, persona preview kept with
+  new chip wording). vue-tsc + eslint clean per the FU; pytest
+  401/401 per the FU.
+- **Static-confirmed one of the verify items** before closing — grep
+  over `WelcomeWizard.vue` and `onboardingContent.ts` for "scrape" /
+  "merchant" returned no matches; the "admin step does NOT say
+  scrape merchants" check in DORA_VERIFY.md (line 588) can be ticked
+  without a click-through.
+- **Moved FU-210 to RESOLVED** with the final ship list and a
+  pointer to the existing DORA_VERIFY.md section for the remaining
+  7 genuine browser-pass items.
+
+**Decisions made:**
+- Honoured the user's earlier reversal direction — the over-deletion
+  (deleting `OnboardingLoop.vue` / `OnboardingStory.vue` /
+  `OnboardingScene.vue` / `onboardingContent.ts`) stays reverted; the
+  narrower edits stay. The persona FORK in setup (removed in the
+  first pass) stays removed.
+- Loop-in-Help + menu reordering remain split to FU-220 (an
+  IA-design-pass FU; not a removal blocker).
+
+**Files touched:**
+- `DORA_FOLLOWUPS.md` — removed FU-210 block.
+- `DORA_FOLLOWUPS_RESOLVED.md` — new RESOLVED entry.
+- `DORA_WORKLOG.md` — this entry.
+
+**Verification:** none needed — code work has been complete since
+2026-06-17 (vue-tsc/eslint clean; pytest 401/401 per the FU's own
+update). One verify item statically confirmed today; the other 7
+stay in DORA_VERIFY.md for the user's next walk.
+
+**Engineering-standards close-gate:** clean (no code change this
+unit).
+
+**Next up:** nothing follow-on. This is the second application of
+the new close-when-only-verify-left policy (the first was FU-211 /
+FU-213 earlier today); it landed cleanly.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-211 / FU-213 closed; close-policy clarified
+
+**Why:** user asked why FU-211 and FU-213 were still open after the
+build work had landed. Both had been sitting in a "code-complete +
+backend-green since 2026-06-17, browser pass still pending" state.
+User clarified the close policy: **if a verify is all that's left,
+the follow-up should be closed** — verify items live in
+`DORA_VERIFY.md` and he walks them at his own pace.
+
+**What ran:**
+- **Saved the policy as a memory** at
+  `/home/benny/.claude/projects/-home-benny-Repos-DiscountDora/memory/feedback_close_when_only_verify_left.md`,
+  added to `MEMORY.md` index. Includes the carve-out for the
+  CLAUDE.md "reported defect that didn't reproduce" rule (those
+  still stay open as `type=finding` with "confirm in browser" —
+  different category, different rule).
+- **Closed FU-213** (price substrate). Moved to RESOLVED with the
+  full ship list + a pointer to the DORA_VERIFY.md section that
+  carries the outstanding browser-pass steps. The cost-consumer
+  sub-part was already split to FU-216 and closed earlier this
+  session.
+- **Closed FU-211** (PreferredBuy on stock-item). Same shape — moved
+  to RESOLVED, verify lives in DORA_VERIFY.md. The shopping-list
+  hint sub-part had already been split to FU-215 and closed.
+
+**Decisions made:**
+- **Policy applies to build tasks, not reported defects.** CLAUDE.md
+  still requires that a defect the user reported, that didn't
+  reproduce in a static read, stays `[OPEN]` with `type=finding`
+  until verified not-broken in the running app. That rule was for
+  *investigation* outcomes, not for *new-build* tasks. The memory
+  records that carve-out explicitly so future sessions don't
+  conflate the two.
+- **No CLAUDE.md change.** The new policy is consistent with
+  CLAUDE.md as written — the prior "hold open until browser
+  verified" pattern I'd been applying to build tasks was an
+  unstated extension, not a stated rule. The memory entry is the
+  right place for the working-style preference.
+
+**Files touched:**
+- `~/.claude/projects/.../memory/feedback_close_when_only_verify_left.md`
+  — new memory entry.
+- `~/.claude/projects/.../memory/MEMORY.md` — index pointer.
+- `DORA_FOLLOWUPS.md` — removed FU-211 + FU-213 blocks.
+- `DORA_FOLLOWUPS_RESOLVED.md` — two new RESOLVED entries.
+- `DORA_WORKLOG.md` — this entry.
+
+**Verification:** none needed — policy change + ledger move; no code
+touched. The two FUs' build work has been backend-green since
+2026-06-17; verify checklists for both already exist in
+`DORA_VERIFY.md` (under "PreferredBuy — origin FU-211" and
+"Stock-item Prices section — origin FU-213") and stay there for the
+user's next walk.
+
+**Engineering-standards close-gate:** clean (no code).
+
+**Next up:** apply the new close-when-only-verify-left policy on
+future similar FUs. Backlog scan: candidates worth checking are any
+remaining "code-complete + backend-green + browser pass pending"
+entries — none jump out from the current open ledger but the policy
+applies if/when one surfaces.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-154 closed (R-003 product shadows); FU-169 Phase 1 partial
+
+**Why:** user asked to assess + fix FU-154 (page-local product/stock
+collections bypassing their stores) and to do FU-169 (test-suite
+improvements proposal) "if possible".
+
+**What shipped — FU-154:**
+- Audited every `ref<T[]>` in `pages/` per the FU's recommended grep
+  method, cross-referenced against the 17 Pinia stores. The
+  "likely widespread" hedge in the FU turned out to apply only to
+  `productStore`: three pages (MyProducts, PriceHistory, Reports)
+  each duplicated `productStore.products`. Other matches were
+  intentional page-local state (picker options, bulk selections,
+  dropdown caches).
+- Fixed all three:
+  - `MyProductsPage.vue` — `useProductStore` import,
+    `storeToRefs(productStore).products` replaces the local ref,
+    `loadAll()` now calls `productStore.getProductsAsync()`. Bulk
+    updates still go through `productApi.updateAsync` directly and
+    are followed by `loadAll()` for the store-side refresh.
+  - `PriceHistoryPage.vue` — same pattern, aliased
+    `products` → `candidates` via destructuring so the rest of the
+    page reads unchanged. Dropped the unused `ProductApiService`.
+  - `ReportsPage.vue` — same pattern, aliased to `allProducts`;
+    `loadProductsCatalogue()` now drives the store. Dropped the
+    unused imports.
+- `productStore.products` initialised to `[]` (not `undefined`) so
+  callers never see a tri-state. Existing `ShoppingListDetail.vue`
+  caller already used `?.find` so the change is safe.
+
+**What shipped — FU-169 Phase 1 (the no-deps slice):**
+- **`pytest.ini`** at repo root: `testpaths = tests` so `pytest`
+  (no args) now collects unit + e2e together (541 tests, up from
+  the 540 e2e-only path CI runs). `xfail_strict = true`,
+  `addopts = -ra`, marker registry (`unit`/`e2e`/`slow`/`scraper`),
+  and `filterwarnings` silencing the fuzzywuzzy and pytest-asyncio
+  noise the proposal §3.9 called out.
+- **Shared response matchers** in `tests/support.py` —
+  `assert_problem(resp, status, *, field=None, detail=None,
+  title=None)` returning the parsed body; `assert_envelope(resp,
+  *, expect_total=None)` returning `items`. These replace the
+  ~40-callsite inline triplet
+  (status + content-type + errors-key check) and the manual
+  `{items, total, page, limit}` shape assertions.
+- **Naming convention codified** as R-023 +
+  ADR-019 in ENGINEERING_STANDARDS:
+  `test__<unit>__<condition>__<result>`, per-edit migration. No
+  rename-all sweep — R-001 / R-007 discipline (migrate when you're
+  already in the file).
+
+**What's deliberately NOT done in FU-169** (each needs a user
+decision; flagged in the updated open FU):
+1. **`pytest-cov` reporting** — needs a pip dep + ~10-20% slower
+   runs. Proposal says "no gate yet" so it's report-only. Awaiting
+   confirmation before adding.
+2. **Un-comment `.github/workflows/ci.yml`** — the whole CI file
+   has been commented out since `20176e8` ("Comment out github
+   workflows temporarily") and CI hasn't run since. Phase 1's "CI
+   runs the whole suite" can't land without first un-commenting
+   AND changing `pytest tests/e2e/dora_api` → `pytest`. Material
+   change to deployment posture — flagged for user.
+3. **Retrofit ~40 inline problem-detail assertions** to use
+   `assert_problem` — R-023 explicitly says "per-edit migration,
+   don't open a rename-all PR". The matchers are available for any
+   new test or any old one being touched, but the sweep stays a
+   no-op.
+
+**Decisions made:**
+- **`productStore.products` default `[]` not `undefined`**, fixing
+  the one caller that needed `?.find`. Stores should hand
+  consumers a stable shape — the tri-state was a footgun the
+  storeToRefs aliasing surfaces would have inherited.
+- **Per-edit naming-convention migration**, not a rename sweep.
+  R-001 / R-007 / R-019 discipline: the codified rule + matchers
+  pay for themselves on the next edit; doing 200 cosmetic renames
+  in one PR is the opposite of "trust the net" the proposal asks
+  for.
+- **Used `pytest.ini` not `pyproject.toml`.** No existing
+  `pyproject.toml` in the repo; spinning one up just for `[tool.
+  pytest.ini_options]` would be heavier than needed (R-007). When
+  other tools (coverage config, ruff, etc.) want a home,
+  `pyproject.toml` becomes the right move.
+- **Kept the FU-169 entry OPEN** instead of resolving it. ~60% of
+  Phase 1 landed; the remaining items aren't done because of three
+  user-facing decisions, not because they're complete. Resolving
+  it now would bury the open decisions.
+
+**Files touched:**
+- `web_app/src/stores/productStore.ts` — `products` default `[]`.
+- `web_app/src/pages/MyProductsPage.vue` — FU-154 fix.
+- `web_app/src/pages/PriceHistoryPage.vue` — FU-154 fix.
+- `web_app/src/pages/ReportsPage.vue` — FU-154 fix.
+- `pytest.ini` — **new file**, FU-169 Phase 1 config.
+- `tests/support.py` — `assert_problem` + `assert_envelope`.
+- `docs/01_charter/ENGINEERING_STANDARDS.md` — R-023 + ADR-019.
+- `DORA_FOLLOWUPS.md` — removed FU-154, updated FU-169 in place.
+- `DORA_FOLLOWUPS_RESOLVED.md` — FU-154 RESOLVED entry.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `./.venv/bin/pytest` (no args, picks up `pytest.ini`) → **538
+  passed, 3 failed** (all 3 are FU-328 pre-existing; the 4th flake
+  from earlier passed under this ordering — net unchanged).
+- `npx vue-tsc --noEmit` from `web_app/` → **clean**.
+- `npx eslint` on the four touched frontend files → **clean**.
+- Warning summary is now empty (filterwarnings doing its job).
+
+**Engineering-standards close-gate:** clean.
+- R-003 — three product shadows collapsed back to one source of
+  truth.
+- R-001 — `assert_problem` / `assert_envelope` are the canonical
+  shapes; new tests reach for them.
+- R-007 — held the line on the retrofit sweep; scope stayed on the
+  no-deps slice + the per-edit migration policy.
+- New ADR-019 / R-023 are routine "shared primitive" extensions;
+  no new patterns invented.
+
+**Next up:** user decisions on (a) `pytest-cov`, (b) uncommenting
+CI, (c) whether to retrofit any of the inline problem-detail
+assertions. All three documented in the updated FU-169.
+
+**Open questions for user:**
+- pytest-cov dep — add to requirements + `pytest.ini` `addopts`?
+  Report-only per the proposal; no fail-gate.
+- Un-comment `.github/workflows/ci.yml` — the workflow is
+  entirely commented out (since 20176e8 "Comment out github
+  workflows temporarily"); is now the right moment to revive it?
+- Retrofit any of the ~40 inline problem-detail assertions, or
+  leave them all for the per-edit migration path?
+
+---
+
+## 2026-06-29 — FU-143 closed as moot (pre-release, no legacy rows)
+
+**Why:** user asked whether FU-143's `picked_offer_price` backfill
+was actually owed pre-release with no active users.
+
+**What ran:** verified the FU's two premises against current code:
+- The "legacy rows" the FU would backfill don't exist on this
+  codebase — pre-release, no users, zero rows match
+  `selected_product_id IS NOT NULL AND picked_offer_price IS NULL`.
+- The runtime safety net the FU named is still in place:
+  `UpdateLineHandler` snapshots on tick when missing
+  (`manage_shopping_list_lines.py:252-253`); finish-list fallback
+  snapshots any ticked line that arrives without one
+  (`manage_shopping_list.py:250-251`). Any future legacy row
+  accruing across a deployment drains organically on next
+  interaction.
+
+**Decision (user-approved):** close as moot. If a snapshot-semantics
+change post-launch later requires a real backfill, that's a fresh
+FU with a known row count and a defined migration window — not this
+one.
+
+**Files touched:**
+- `DORA_FOLLOWUPS.md` — removed FU-143.
+- `DORA_FOLLOWUPS_RESOLVED.md` — RESOLVED entry with the
+  no-rows-to-fix receipt + the still-intact safety-net cite.
+- `DORA_WORKLOG.md` — this entry.
+
+**Verification:** none needed — assessment only, no code change.
+
+**Engineering-standards close-gate:** clean. R-007 honoured (didn't
+build a backfill for a population that doesn't exist).
+
+**Next up:** nothing.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-133 assessed and closed (no extraction)
+
+**Why:** user asked for a value re-assessment of FU-133 (extract
+`pickGenerateTarget` into a shared `TargetListPicker`) now that the
+meal-planner has been through a couple of rebuild rounds.
+
+**What ran:** SPA-wide audit of `$q.dialog({type:'radio',...})` sites
+— 7 in total. The matrix is in the RESOLVED entry. Findings:
+- FU-133's distinguishing feature (the "+ Create new list" branch +
+  the tri-state result) is unique to that one call site.
+- The other 6 sites are similar-but-not-same — extracting would
+  force a parameter-bag API across divergent filters, empty-states,
+  and OK labels.
+- No shape-identical second consumer materialised in the
+  meal-planner rebuilds; the rebuild moved the picker from
+  `MealPlansOverview.vue` into `useMealPlanner.ts` but didn't spawn
+  a sibling.
+
+**Decision (user-approved):** close FU-133 as "assessed — keep
+inlined" rather than do the extraction or hold the FU open
+indefinitely. Triggers to revisit are recorded in the RESOLVED
+entry (3rd "+ Create new" picker; radio-dialog visual overhaul;
+or a thin `useShoppingListPicker` composable that owns *only*
+the dialog plumbing).
+
+**Files touched:**
+- `DORA_FOLLOWUPS.md` — removed FU-133.
+- `DORA_FOLLOWUPS_RESOLVED.md` — RESOLVED entry with the audit
+  matrix as the receipt.
+- `DORA_WORKLOG.md` — this entry.
+
+**Verification:** none needed — assessment only, no code change.
+
+**Engineering-standards close-gate:** clean. R-001 honoured (the
+extract-on-2nd-consumer carve-out remains the rule; no premature
+abstraction). The audit itself counts as the receipt for the
+judgement call.
+
+**Next up:** nothing follow-on. The triggers to revisit are
+documented in the RESOLVED entry.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-06-29 — FU-187 / FU-194 closed (assistant tz consistency + onboarding demo data)
+
+**Why:** user batch-closed two leftover follow-ups. FU-187 was the
+C-9.2 carve-out left dangling on the assistant; FU-194 was the
+C-5.5 demo-data toggle deferred because the prior dev box couldn't
+run the seed (this one can, so the FK graph could be verified).
+
+**What shipped:**
+- **FU-187** — `dora_api/features/assistant/tools.py`. Added a small
+  module-local helper `_resolve_expiring_window(repo)` that wraps
+  `effective_expiring_soon_window(AppSetting)` — the same pattern
+  the alerts handler + location tree use. Threaded it through the
+  four sites that previously read `EXPIRING_SOON_WINDOW_DAYS`
+  directly: `search_stock` (`expiring_soon` filter),
+  `whats_expiring` (default for `within_days`), pantry-summary
+  urgency buckets, location urgency check. Dropped the bare
+  constant import (no longer used in the body). Updated the
+  module-level comment to record that the assistant now honours the
+  override.
+- **FU-194 — backend.**
+  `dora_api/features/onboarding/onboarding.py` grew
+  `SeedDemoHandler` + `POST /api/onboarding/seed-demo`. The handler:
+    1. Skip-by-name idempotency: if a recipe named "Spaghetti Aglio
+       e Olio" already exists, return
+       `{seeded: false, items_created: 0, recipe_created: false,
+       meal_plan_created: false}` without writing.
+    2. Resolve / create the three StockItems
+       ("Spaghetti pasta", "Garlic cloves", "Olive oil") at the
+       most-stocked level — reuse by name when one already exists.
+    3. Build three RecipeIngredient rows (qty/unit baked in) and
+       the Recipe (freeform instructions, no collection — the FK is
+       nullable so we skip fabricating one).
+    4. Create a MealPlan anchored on this household-week's Monday
+       with one MealPlanEntry: today, Dinner, 2 servings (so it
+       lands inside the dashboard Next-to-cook window immediately).
+  Rows are plain — no `is_demo` column, no marker. The user can
+  rename or delete them like any other entry, per the FU spec.
+- **FU-194 — frontend.**
+  - `web_app/src/models/onboarding.ts` — new `SeedDemoResult` type
+    matching the DTO.
+  - `web_app/src/services/api/onboardingApiService.ts` —
+    `seedDemoAsync(): Promise<SeedDemoResult>`.
+  - `web_app/src/pages/onboarding/WelcomeWizard.vue`:
+    - new `seedDemo: boolean` on `WizardDraft` (default `false`,
+      persisted via the existing `...form` localStorage spread —
+      no extra plumbing).
+    - new `.seed-card` in the seed step ("Add a demo recipe +
+      this-week meal plan"). Off by default; clicking the card
+      toggles; clear caption that the rows are plain.
+    - `applyDraft()` calls `seedDemoAsync()` *after*
+      `seedItemsAsync()` so the demo can pick up a starter-pack
+      "Spaghetti pasta" / "Garlic" / "Olive oil" by name if the
+      user ticked one.
+- **FU-194 — tests.**
+  Added `test__onboarding_seed_demo__is_idempotent` to
+  `tests/e2e/dora_api/test_onboarding_flags.py`. Asserts the DTO
+  shape, that two consecutive calls return identical bodies, and
+  that exactly one recipe by that name exists afterward (regardless
+  of which idempotency branch we landed in — clean DB vs already-
+  seeded). Suite went from 536 → 537 passing.
+
+**Decisions made:**
+- **No `RecipeCollection` for the demo.**
+  `Recipe.recipe_collection: RecipeCollection | None` is nullable
+  (table_mappings.py:555 `nullable=True`), so we can skip
+  fabricating one. R-007 — solve the FU's "demo recipe with a
+  meal plan" ask, don't pull in collection scaffolding the user
+  didn't request.
+- **No `is_demo` marker on rows.** The FU explicitly wanted plain
+  rows ("user-deletable rows (no is_demo marking)"). Trade-off:
+  no single-click "remove the demo data" later, but adding a
+  marker would contradict the FU's stated intent and surprise the
+  user when their rename of "Spaghetti pasta" → "Spaghetti" left
+  the row half-detached.
+- **Schedule the demo plan entry for today, not Wednesday.** The
+  FU and `seed.py` use Wednesday Dinner, but anchoring on
+  `household_today` is friendlier when onboarding finishes
+  mid-week (dashboard Next-to-cook shows the entry on first open
+  rather than two days into the future).
+- **Demo-recipe idempotency at the recipe-name level** mirrors the
+  groups/locations/seed-items endpoints. Risk: dev DBs running
+  `seed.py` already have a recipe by that name, so the demo skips.
+  That's the right behaviour — the dev DB already has demo
+  content; re-running the toggle should be a no-op.
+- **Helper `_resolve_expiring_window(repo)` at module scope, not
+  per-call inlined.** Three of the four FU-187 sites are
+  one-liners; the helper keeps the AppSetting fetch in one place
+  (R-019 / R-003 — explicit, verbose, every site reads the same
+  source). Cost: one extra `repo.get(AppSetting).all()` per
+  assistant call, but that's tiny next to the LLM round-trip and
+  matches how alerts already does it.
+
+**Files touched:**
+- `dora_api/features/assistant/tools.py` — FU-187 helper + 4 call
+  sites + import cleanup.
+- `dora_api/features/onboarding/onboarding.py` — FU-194 handler +
+  route + imports.
+- `tests/e2e/dora_api/test_onboarding_flags.py` — new FU-194 test
+  + endpoint constants.
+- `web_app/src/models/onboarding.ts` — `SeedDemoResult` type.
+- `web_app/src/services/api/onboardingApiService.ts` —
+  `seedDemoAsync`.
+- `web_app/src/pages/onboarding/WelcomeWizard.vue` — new
+  `seedDemo` form flag + new card + call site in `applyDraft`.
+- `DORA_FOLLOWUPS.md` — removed FU-187, FU-194.
+- `DORA_FOLLOWUPS_RESOLVED.md` — two new RESOLVED entries.
+- `DORA_VERIFY.md` — two new verify sections under Onboarding.
+- `CHANGELOG.md`, `DORA_WORKLOG.md`.
+
+**Verification:**
+- `./.venv/bin/pytest tests/e2e/dora_api/test_onboarding_flags.py`
+  → **7 passed** (6 existing + the new FU-194 idempotency test).
+- Full suite: **537 passed, 4 pre-existing failures** (FU-328 set;
+  no new regressions, no new flakes this run).
+- `npx vue-tsc --noEmit` → **clean**.
+- `npx eslint` on the three touched frontend files → **clean**.
+- Browser verify still owed for both (live `expiring_soon_window_days`
+  re-tune + assistant Q&A for FU-187; wizard click-through with the
+  toggle on/off for FU-194). Sections added to `DORA_VERIFY.md`.
+
+**Engineering-standards close-gate:** clean.
+- R-003 — assistant now reads cookability / expiring rules from the
+  same resolver every other surface uses; no second literal.
+- R-007 — FU-194 didn't grow into "rewrite seed.py" or "add an
+  is_demo column"; the demo is a focused new endpoint + one card.
+- R-019 — the FU-187 helper is plain code (fetch, call resolver,
+  return); no codegen or reflection.
+- No new R-0NN candidate; both FUs are routine applications of
+  existing rules.
+
+**Next up:** both need browser verification (see DORA_VERIFY.md
+sections); the FU-194 path additionally folds into the L38 line in
+`COVERAGE_GAPS.md` next time that index is swept.
+
+**Open questions for user:** none.
+
+---
+
 ## 2026-06-29 — FU-294 / FU-297 / FU-298 closed (dashboard polish)
 
 **Why:** user batch-closed three dashboard follow-ups left over from

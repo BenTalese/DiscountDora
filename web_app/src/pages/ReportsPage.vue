@@ -221,8 +221,8 @@
     import { use } from 'echarts/core';
     import { CanvasRenderer } from 'echarts/renderers';
     import { Notify } from 'quasar';
-    import type { Product } from 'src/models/product';
-    import ProductApiService from 'src/services/api/productApiService';
+    import { useProductStore } from 'src/stores/productStore';
+    import { storeToRefs } from 'pinia';
     import ReportsApiService, {
         type KeepsRunningOutResponse,
         type StoreSpendResponse,
@@ -249,8 +249,11 @@
 
     const router = useRouter();
     const reportsApi = new ReportsApiService();
-    const productApi = new ProductApiService();
     const stockApi = new StockItemApiService();
+    // FU-154 — products read through the store so a save on product-search
+    // is visible here without a hard refresh (R-003).
+    const productStore = useProductStore();
+    const { products: allProducts } = storeToRefs(productStore);
 
     const RANGE_OPTIONS: { label: string; value: ReportRange }[] = [
         { label: '30 days', value: '30d' },
@@ -278,7 +281,6 @@
     const savings = ref<SavingsCapturedResponse | null>(null);
     const priceTrends = ref<PriceTrendsResponse | null>(null);
 
-    const allProducts = ref<Product[]>([]);
     const selectedProductIds = ref<string[]>([]);
     const productOptions = ref<{ label: string; value: string }[]>([]);
 
@@ -467,14 +469,16 @@
     }
     async function loadProductsCatalogue() {
         try {
-            const page = await productApi.getAllAsync();
-            allProducts.value = page.items;
-            productOptions.value = page.items.slice(0, 50).map((p) => ({
+            // FU-154 — hydrate via the store so other surfaces see the same
+            // product list (R-003). The page-local `productOptions` is just
+            // a derived display slice, not a shadow of the catalog.
+            await productStore.getProductsAsync();
+            productOptions.value = allProducts.value.slice(0, 50).map((p) => ({
                 label: `${p.name} · ${p.store_name}`,
                 value: p.product_id,
             }));
         } catch {
-            allProducts.value = [];
+            productOptions.value = [];
         }
     }
 

@@ -41,7 +41,7 @@ from typing import Dict, List
 from uuid import UUID
 
 from flask import request
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
@@ -349,18 +349,30 @@ class SpendByStoreHandler:
         if not list_ids:
             return []
 
-        # Ticked lines with a captured snapshot. Untickable / no-snapshot
-        # rows are silently skipped — they're not "spend".
+        # Ticked lines with *any* captured price — the user's till-receipt
+        # override (actual_unit_price) wins over the offer snapshot
+        # (picked_offer_price). Matches the budget / waste / assistant /
+        # suggestions ladder via `line_paid_unit_price` (R-003 chokepoint in
+        # `shopping_lists/_line_price.py`); FU-229 carve-out — this handler
+        # works on column-projected rows rather than entity objects, so the
+        # ladder is expressed here as `actual if actual is not None else picked`
+        # instead of calling the helper. Lines with neither price stay
+        # silently skipped — they're not "spend". `selected_product_id IS
+        # NOT NULL` stays because store grouping needs a product.
         line_rows = session.execute(
             select(
                 ShoppingListLine.shopping_list_id,
                 ShoppingListLine.selected_product_id,
                 ShoppingListLine.quantity,
                 ShoppingListLine.picked_offer_price,
+                ShoppingListLine.actual_unit_price,
             ).where(
                 ShoppingListLine.shopping_list_id.in_(list_ids),
                 ShoppingListLine.is_ticked == True,  # noqa: E712
-                ShoppingListLine.picked_offer_price.isnot(None),
+                or_(
+                    ShoppingListLine.picked_offer_price.isnot(None),
+                    ShoppingListLine.actual_unit_price.isnot(None),
+                ),
                 ShoppingListLine.selected_product_id.isnot(None),
             )
         ).all()
@@ -378,12 +390,13 @@ class SpendByStoreHandler:
         spend_by_store: Dict[UUID | None, float] = {}
         lists_by_store: Dict[UUID | None, set] = {}
         names: Dict[UUID | None, str] = {}
-        for list_id, product_id, quantity, picked in line_rows:
+        for list_id, product_id, quantity, picked, actual in line_rows:
             store = store_by_product.get(product_id)
             store_id = store.id if store else None
+            unit_price = float(actual if actual is not None else picked)
             spend_by_store[store_id] = (
                 spend_by_store.get(store_id, 0.0)
-                + float(picked) * float(quantity or 1)
+                + unit_price * float(quantity or 1)
             )
             lists_by_store.setdefault(store_id, set()).add(list_id)
             names[store_id] = store.name if store else "Unknown"

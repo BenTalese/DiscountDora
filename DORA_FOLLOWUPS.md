@@ -567,30 +567,6 @@ long session summary. Distinct from the other logs:
   DoraSegmented overflow shape.
 - **Recommended resolution:** later during Phase 5 (mobile pass).
 
-## [OPEN] FU-229 — reports.py spend-by-store ignores `actual_unit_price` (ladder divergence)
-- **Raised:** 2026-06-22 (FU-227 chunk 5 — K2 ladder extract).
-- **Type:** finding (behaviour inconsistency).
-- **What:** the K2 extract collapsed the **actual→picked** ladder
-  (`line_paid_unit_price`) across `budget.py`, `waste.py`, `assistant/tools.py`
-  and `suggestions/generators.py`. `reports.py` was on the plan's K2 list but
-  does **not** apply that ladder: its spend-by-store (`reports.py:~354`) and
-  savings (`SavingsCapturedHandler` ~746) handlers use SQL column projection of
-  `picked_offer_price` only and never reference `actual_unit_price`.
-  - Savings (`list_price_at_pick − picked_offer_price`) is **correctly**
-    snapshot-based — it measures RRP-vs-committed-offer, not what you paid. No
-    change wanted there.
-  - **Spend-by-store**, though, is "what did I spend" and arguably should prefer
-    `actual_unit_price` when set, to match budget/waste/assistant. Today a
-    user's till-receipt override is invisible to spend-by-store.
-- **Why deferred:** folding `actual_unit_price` into the SQL projection changes
-  report numbers — a behaviour change beyond chunk-5 scope (R-007), and not
-  ratified by the user. The ladder helper operates on entity objects, not the
-  column-projected rows these queries return, so it's not a drop-in.
-- **Recommended resolution:** opportunistic — next reports pass or the Postgres
-  migration (FU-045) when these queries get revisited. Decide explicitly whether
-  spend-by-store should prefer actual paid; if yes, project `actual_unit_price`
-  alongside and COALESCE in SQL (or load entities and reuse `line_paid_unit_price`).
-
 ## [OPEN] FU-228 — Phase E rename test rot: ~53 tests still use `merchant` / `purchased_merchant_id`
 - **Raised:** 2026-06-22 (FU-227 chunk 1 — surfaced when running full pytest).
 - **Type:** finding.
@@ -767,114 +743,6 @@ long session summary. Distinct from the other logs:
   it currently lives under `components/onboarding/`; consider promoting it to a more general
   location if Help also uses it (e.g. `components/dora/AppLoopDiagram.vue`).
 
-## [OPEN] FU-213 — Price substrate: `StockItemPriceObservation` + server cost helper + consumers
-- **Raised:** 2026-06-17 (products-as-overlay pivot — carried from the now-resolved FU-182)
-- **Type:** deferred job (build)
-- **What:** Land `StockItemPriceObservation(stock_item_id, price, qty, unit, observed_at, source)`
-  (per-unit derived server-side — the user enters total + qty) + the server-owned
-  `get_stock_item_unit_cost_at(stock_item, when)` helper (R-003), and rebase the two most-affected
-  consumers (stock-value report fallback, recipe cost estimate) onto it. Gated by the **Money**
-  opt-in (not products). No merchant attribution in the everyday layer. This is
-  PROPOSAL_SIMPLE_MODE §2.1's substrate, carried forward intact.
-- **Why deferred:** doc pass first; depends on the Money opt-in surface.
-- **Recommended resolution:** Phase 1 loop / Phase 3 polish. Design:
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.2 (+ surviving PROPOSAL_SIMPLE_MODE §2.1).
-- **Update 2026-06-17 — CORE code-complete (static-only).** Built the substrate end-to-end:
-  `StockItemPriceObservation` entity + table + map + migration `b3d5f7a9c2e4`; the server-owned
-  `get_stock_item_unit_cost_at` helper (`domain/stock_status.py`, R-003); CRUD
-  (`/stock-items/{id}/price-observations`); `price_observations` + `unit_cost` on the detail DTO; a
-  **money-gated "Prices" section** on the detail Overview (`useMoneyEnabled()`). **Deferred → FU-216:**
-  rebasing the stock-value report + recipe cost estimate onto the helper (+ the product-derived cost
-  branch). **Verify:** pytest (CRUD + unit-cost) + migration up/down + `vue-tsc`/eslint + browser
-  (log/remove a price; section hidden when money off).
-- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
-  `tests/e2e/dora_api/test_price_observations.py` 4/4 (add → derived unit_cost=3 on 6/2, latest-wins,
-  delete clears, non-positive rejected). Migration `b3d5f7a9c2e4` applies clean. `vue-tsc` + `eslint`
-  clean. **Browser pass still pending** (log/remove + money-gate visibility).
-
-## [OPEN] FU-211 — `PreferredBuy` — everyday free-text "what I buy" on the stock item
-- **Raised:** 2026-06-17 (products-as-overlay pivot)
-- **Type:** deferred job (build — new feature)
-- **What:** New `PreferredBuy(id, stock_item_id FK cascade, label free-text, position, created_at)`
-  table + migration. **Always-available** everyday construct (NOT gated by products or money) — a
-  short list of free-text labels per stock item (e.g. "Vitasoy Oat Milky 1L") as a memory aid +
-  shopping hint. Surface: a "Preferred buys" section on Stock Item Detail (add/edit/delete/reorder).
-  Shopping-list hint: `ShoppingListLine.preferred_buy_id` (nullable FK, SET NULL), shown as
-  selectable hint text on the line, **no pricing/product semantics**. Strictly separate from
-  `Product` (no upgrade/demote bridge — the "two separate systems" principle).
-- **Why deferred:** doc pass first.
-- **Recommended resolution:** **Phase 0/1** — independent of the gate work; can land alongside
-  FU-209/210. Design: `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §3.1.
-- **Update 2026-06-17 — CORE code-complete (static-only).** Built the stock-item surface end-to-end:
-  `PreferredBuy` entity + table + map + migration `a2c4e6f8b1d3`; CRUD at
-  `/stock-items/{id}/preferred-buys` (add/rename/delete/reorder); `preferred_buys` on the detail DTO;
-  model + API service methods; the "Preferred buys" editor on the detail Overview (add / inline
-  rename / up-down reorder / remove via `withBusyReload`). Not executed (no env). The **shopping-line
-  hint** (`ShoppingListLine.preferred_buy_id`) is split to **FU-215**. **Verify:** pytest + migration
-  up/down + `vue-tsc`/eslint + browser (add/rename/reorder/remove; CASCADE on item delete).
-- **Update 2026-06-17 — backend GREEN.** Phase A env-verify:
-  `tests/e2e/dora_api/test_preferred_buys.py` 5/5 (add→detail, rename, delete, reorder, blank
-  rejected, cross-item scope). Migration `a2c4e6f8b1d3` applies clean. `vue-tsc` + `eslint` clean.
-  **Browser pass still pending.**
-
-## [OPEN] FU-210 — Onboarding de-persona: remove persona fork + all product framing
-- **Raised:** 2026-06-17 (products-as-overlay pivot)
-- **Type:** deferred job (build — a *removal*)
-- **What:** Remove the C-5.3 **persona fork** (Cooking/Spend/Everything) and the `products_enabled`
-  dimension it set; remove **all product framing** + the **stock-vs-product explainer** from
-  onboarding (the everyday user never meets products). **Keep** the structural C-5 chunks (cinematic
-  intro, hero loop, starter packs, household headcount, finish celebration) but **un-personalized** —
-  drop the C-5.2 persona preview + C-5.6 persona-relevant tailoring; show the full loop + full card
-  set. **Money/budgeting becomes a Settings toggle only** (decided with the user) — onboarding shows
-  the feature exists, no fork/forced choice. NB: the persona fork + flag have **already shipped**, so
-  this is a removal, not just a plan edit.
-- **Why deferred:** doc pass first; sizeable frontend change.
-- **Recommended resolution:** **with/after FU-209** (the flag drop). Design:
-  `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §5; supersedes parts of `PROPOSAL_ONBOARDING.md`
-  / `IMPL_PLAN_ONBOARDING.md`. Re-validate onboarding sell-copy (FU-184) after.
-- **Update 2026-06-17 — persona FORK removed, code-complete (static-only); illustrative PREVIEW
-  deferred.** Removed from `WelcomeWizard.vue` + `onboardingContent.ts`: the persona step,
-  `personaChoice`/`customFlags`/`effectiveInstallFlags`, `selectPersona`/`applyPersona` (no more
-  install-flag / per-user-pref writes at onboarding), the `AppSettingsApiService` use, and
-  `PERSONA_PRESETS`/`INSTALL_FLAG_META`/`InstallFlags`/etc. Flow-cards no longer gate on persona
-  flags. Repo grep confirms **zero dangling refs**. Fresh installs now use `AppSetting` defaults +
-  enable features in Settings (money is its own Settings toggle). **Still OPEN for:** (a) remove the
-  **illustrative hero-loop persona preview** (`OnboardingLoop.vue` + `OnboardingStory.vue` +
-  `personaPreview` + `PERSONA_PREVIEWS`) — do it with a running app so the loop renders well without
-  persona shaping; (b) **browser-verify** (no persona/Customise/products step; defaults applied;
-  spend via Settings; draft resume) + `vue-tsc`/eslint.
-- **Update 2026-06-17 — TAIL DONE (static).** Removed the cinematic Story/Loop intro and the Finish
-  step's loop recap. Deleted `OnboardingLoop.vue`, `OnboardingStory.vue`, `OnboardingScene.vue`, and
-  `onboardingContent.ts` (`PERSONA_PREVIEWS`, `PersonaPreview`, `DEFAULT_PERSONA_PREVIEW`,
-  `PersonaPreviewKey`, `NARRATIVE_SCENES`, `LOOP_STAGES`, `LOOP_CENTRE`, `LOOP_INSIGHT` — all
-  unreferenced after the removal). `WelcomeWizard.vue` stripped: `view`/`storySceneIndex`/
-  `personaPreview` refs gone, draft persistence simplified, rail collapses to the single Setup
-  section. `vue-tsc` + `eslint` clean; full backend pytest **401/401** still green. **Still OPEN
-  for browser-verify only** — the wizard's behaviour change is FE-only and needs a running app to
-  confirm the flow reads sensibly + draft resume works.
-- **Update 2026-06-17 — TAIL was MIS-INTERPRETED. Partially reverted via direction from the user.**
-  The above "TAIL DONE" pass deleted too much. Restored from `git checkout 941d478^ --`:
-  `OnboardingLoop.vue`, `OnboardingStory.vue`, `OnboardingScene.vue`, `onboardingContent.ts`,
-  and the pre-removal shape of `WelcomeWizard.vue` (Story stage + Setup view + persona-preview
-  state + draft persistence). Then made the **actually-intended** edits:
-  - `onboardingContent.ts` — stripped `LOOP_INSIGHT` (dimmed "Spend smarter / coming soon"
-    satellite, P3-Honest violation since it advertised an unbuilt feature); re-framed
-    `PERSONA_PREVIEWS` labels from persona identities ("Cooking" / "Spend" / "Everything") to
-    outcome chips ("Mostly cooking" / "Watching spend" / "All of it"). Keys unchanged so any
-    draft state survives. Dropped the now-unused `insight: boolean` field on `PersonaPreview`.
-  - `OnboardingLoop.vue` — removed the LOOP_INSIGHT satellite button + its `focusedKey === 'insight'`
-    branches + the `lightbulb` mood swap + the dead `.loop-insight*` CSS. Re-worded the persona
-    preview's aria-label + chip header from "Preview for / persona" to "What you're here for".
-  - `WelcomeWizard.vue` Finish step — removed the OnboardingLoop recap ("Here's the loop you just
-    set up — tap any stage…"); the cinematic Story still plays the hero loop earlier so the recap
-    was repetitive. Confetti + flow-cards kept.
-  - The cinematic Story stage stays **as-is** (un-persona scene visuals were already the case —
-    `NARRATIVE_SCENES` doesn't fork by persona).
-  - The persona FORK in setup (removed in the earlier pass) **stays removed** per user direction.
-  - Loop-in-Help + main-menu/help-section reordering → **FU-220**.
-  - **Verified:** `vue-tsc --noEmit` clean; `npm run lint` clean; full pytest **401/401** green.
-  - **Still OPEN for browser-verify** — confirm Story plays without LOOP_INSIGHT, the renamed
-    chips read sensibly, Finish step is clean, draft resume still works.
 
 ## [OPEN] FU-208 — My Products → stock-item "Link…" flow is a silent dead-end
 - **Raised:** 2026-06-17 (products-as-overlay pivot — code investigation)
@@ -954,36 +822,47 @@ long session summary. Distinct from the other logs:
   middleware (or SameSite=Strict + Origin allow-list); require `current_password` re-proof on email
   change + notify old address. **Confirm in a running app.**
 
-## [OPEN] FU-196 — Postgres target unreachable in running app; review's lower-severity hardening batch
+## [OPEN] FU-196 — Review's lower-severity hardening batch
 - **Raised:** 2026-06-16 (senior/tech-lead review)
 - **Type:** finding (architecture + hardening)
-- **What:** Umbrella for the review's MEDIUM/LOW items. (a) Postgres is the R-005 standard target but
-  `configuration_manager.py:145` hardcodes `sqlite:///`, no PG branch/driver — **overlaps FU-045**, add
-  a Postgres CI lane. (b) In-request multi-commit, no unit-of-work, global handler doesn't roll back
-  (`create_recipe.py:258/302/317/347`, `startup.py:140-150`). (c) Reflection-based wiring has no
-  boot-time resolved-route assertion (`startup.py:135`, `service_wiring.py:17`, `decorators.py:13`).
-  (d) `requests==2.31.0` CVE-2024-35195 → bump ≥2.32.4; `fuzzywuzzy` unmaintained. (e) assistant
-  endpoints unthrottled (`ask_assistant.py:331,367`); `SESSION_COOKIE_SECURE` off by default
-  (`app.py:64`); no app-wide security headers; no account-deletion endpoint (GDPR). (f) orphaned base
-  components `CardComponent.vue`/`SelectComponent.vue`; ~237 prompt-ID comments to sweep pre-release;
-  `.npmrc` pnpm-only keys warn on every npm command. Full detail in the review doc.
-- **Why deferred:** read-only review; these are Tier-2/Tier-3 polish, not ship-blockers.
-- **Recommended resolution:** Tier-2 (a–e) before "professional"; Tier-3 (f) pre public release.
-  Postgres CI lane folds into FU-045.
-
-## [OPEN] FU-194 — Onboarding demo data (L38) — deferred from C-5.5
-- **Raised:** 2026-06-16 (Onboarding C-5.5)
-- **Type:** deferred job
-- **What:** C-5.5 left out the optional **demo recipe (+ meal / meal-plan)** toggle (proposal §3.5,
-  feedback L38). It was the highest-risk piece to build blind: a Recipe needs a RecipeCollection +
-  **non-nullable** RecipeIngredient → StockItem FKs + a MealPlan/Entry, and this machine has **no
-  Python** to test the seed — a bug would 500 on Finish. Everything else in C-5.5 shipped.
-- **Why deferred:** explicitly optional in the proposal; far safer to build where the backend can be
-  run + tested so the FK graph is verified.
-- **Recommended resolution:** on a provisioned machine (alongside FU-193), or a small dedicated chunk:
-  add `POST /api/onboarding/seed-demo` (+ a warned toggle in the starter-data step) creating plain,
-  user-deletable rows (**no `is_demo` marking**), mirroring `seed.py`'s `make_recipe`/`make_item`/
-  `plan_entry`. Then flip L38 in COVERAGE_GAPS.
+- **What:** Umbrella for the review's MEDIUM/LOW items still real after
+  FU-045's Postgres switch.
+  - **(b)** In-request multi-commit, no unit-of-work, global handler
+    doesn't roll back (`create_recipe.py:258/302/317/347`,
+    `startup.py:140-150`).
+  - **(c)** Reflection-based wiring has no boot-time resolved-route
+    assertion (`startup.py:135`, `service_wiring.py:17`,
+    `decorators.py:13`).
+  - **(d)** `requests` CVE-2024-35195 → confirm resolved version
+    ≥2.32.4 (only transitive via `requests_cache==1.1.1`);
+    `fuzzywuzzy==0.18.0` is unmaintained — replace with `rapidfuzz`
+    or drop.
+  - **(e)** Assistant endpoints unthrottled
+    (`ask_assistant.py:331,367`); `SESSION_COOKIE_SECURE` env-driven
+    via `DORA_SECURE_COOKIES` but defaults off (`app.py:90`); no
+    app-wide security headers; no account-deletion endpoint (GDPR).
+  - **(f)** Orphaned `SelectComponent.vue` (no callers; `CardComponent.vue`
+    already removed); ~237 prompt-ID comments to sweep pre-release;
+    `.npmrc` pnpm-only keys warn on every npm command.
+  Full detail in the review doc.
+- **Why deferred:** read-only review; these are Tier-2/Tier-3 polish,
+  not ship-blockers.
+- **Recommended resolution:** Tier-2 (b–e) before "professional";
+  Tier-3 (f) pre public release.
+- **Update 2026-06-29 — (a) struck.** The original (a) sub-item
+  ("Postgres unreachable; `configuration_manager.py:145` hardcodes
+  `sqlite:///`") is **resolved by [[FU-045]]** (closed 2026-06-26):
+  `get_db_connection_string()` rewritten with `DORA_DB_URL` +
+  per-component env vars + docker-compose Postgres default;
+  `psycopg[binary]` added; portable boolean defaults swept across 24
+  table-mapping sites and 12 migration sites. The downstream "add a
+  Postgres CI lane" carve-out from FU-045 close stays — but it's
+  double-blocked behind the currently-commented-out
+  `.github/workflows/ci.yml` (see [[FU-169]] for the CI revival
+  decision); spinning a separate FU for it is premature until CI is
+  back on. Trimmed in place rather than split — (b)–(f) are still
+  cleanly umbrella-able under "review hardening batch", they share a
+  source and a tier.
 
 ## [OPEN] FU-195 — Onboarding starter-data: in-page import + groups/locations "some" (trims from C-5.5)
 - **Raised:** 2026-06-16 (Onboarding C-5.5)
@@ -1014,26 +893,6 @@ long session summary. Distinct from the other logs:
   now would be speculative (charter: don't pre-build). User confirmed skipping it for C-9.5.
 - **Recommended resolution:** **when** the companion/ingestion path (C-10) defines a back-in-stock
   signal — then add a second tier to `SubscriptionsPanel.vue` (same list/manage shape) reading it.
-
-## [OPEN] FU-187 — Assistant ignores the configurable expiring-soon window (uses the constant default)
-- **Raised:** 2026-06-15 (Alerts C-9.2 — threshold threading)
-- **Type:** finding / consistency gap
-- **What:** C-9.2 moved the expiring-soon window onto `AppSetting.expiring_soon_window_days`
-  and threaded it through the alerts evaluator (`get_alerts.py`) and the location heatmap
-  (`attention.py`, via `get_location_tree` + `get_stock_item_detail`) using one resolver,
-  `stock_status.effective_expiring_soon_window`. The **assistant** (`features/assistant/
-  tools.py`, ~4 sites near lines 903/1480/1570/2025) still reads the bare
-  `EXPIRING_SOON_WINDOW_DAYS` *default* constant, so if an admin changes the household window
-  the assistant's "expiring soon" answers won't match the alerts list / heatmap. This is the
-  constant-as-default carve-out the impl plan explicitly allowed for C-9.2; flagged inline at
-  the `tools.py` import. It's the one default (R-003 — not a second literal), just not
-  honouring the override.
-- **Why deferred:** threading the `AppSetting` fetch through the 4 assistant tool sites was
-  out of C-9.2's tested scope (acceptance named only bell/page/heatmap); low impact (assistant
-  expiry answers only drift if an admin retunes the window).
-- **Recommended resolution:** opportunistic — when the assistant's expiry tools are next
-  touched, or fold into the FU-174 app-wide date/threshold sweep. Pass the resolved window
-  (same `effective_expiring_soon_window`) into the 4 sites.
 
 ## [RESOLVED?] FU-186 — Decommission in-app live product search / `merchant_api` + standalone `emailer/` (scraping-divorce ripple)
 > **Update 2026-06-17 — Phase D landed.** `merchant_api/` + `emailer/` directories deleted from this
@@ -1349,6 +1208,35 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** start **Phase 1** opportunistically (half-day,
   no-regret); sequence the rest per the proposal. Relates to FU-045 (Postgres
   CI, Phase 4) and FU-161 (Aldi scraper — Phase 4 gives it a net).
+- **Update 2026-06-29 — Phase 1 partially landed (no-deps slice).** Done in
+  this session:
+  - **`pytest.ini`** at repo root: `testpaths = tests` (so bare `pytest`
+    collects unit + e2e), `xfail_strict = true`, `addopts = -ra`, the
+    `unit`/`e2e`/`slow`/`scraper` marker registry, and `filterwarnings`
+    silencing the fuzzywuzzy and pytest-asyncio noise the proposal §3.9
+    flagged.
+  - **Shared response matchers in `tests/support.py`** — `assert_problem(resp,
+    status, *, field=None, detail=None, title=None)` and
+    `assert_envelope(resp, *, expect_total=None)`. Returns the parsed body /
+    items so callers can drill deeper without re-parsing.
+  - **Naming convention codified** as R-023 + ADR-019 in ENGINEERING_STANDARDS:
+    `test__<unit>__<condition>__<result>`, per-edit migration policy (don't
+    open a rename-all PR).
+  - Suite still 538/541 green (3 failures are FU-328 pre-existing; the
+    flaky 4th from earlier passed under this run's ordering).
+- **Still owed for Phase 1** (each needs a user decision):
+  1. **`pytest-cov` reporting** — adds a pip dep and slows runs ~10-20%;
+     proposal says "no gate yet" so it's report-only. Want me to add it?
+  2. **Un-comment `.github/workflows/ci.yml`** — the entire workflow has
+     been commented out since `20176e8` ("Comment out github workflows
+     temporarily") and CI hasn't run since. Phase 1's "CI runs the whole
+     suite" can't land without first un-commenting, then changing
+     `pytest tests/e2e/dora_api` → `pytest`. This is the bigger ask.
+  3. **Retrofit ~40 inline problem-detail assertions** to use
+     `assert_problem` — R-023 explicitly says "per-edit migration, don't
+     open a rename-all PR", so this is intentionally not done as a sweep.
+     The matchers are available for any new test or any old one that gets
+     touched.
 
 ## [OPEN] FU-161 — Shopping list drag-and-drop "index off" (feedback L414) — confirm in browser
 - **Raised:** 2026-06-12 (shopping-list UX design session; original report L414, 06-Jun feedback)
@@ -1387,37 +1275,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — when the user
   next needs Aldi pricing data, or as a focused session in the
   companion repo.
-
-## [OPEN] FU-154 — Page-local product/stock collections bypass their stores (R-003 smell, likely widespread)
-- **Raised:** 2026-06-12 (during FU-014 image-bug investigation)
-- **Type:** finding
-- **What:** `MyProductsPage.vue` keeps its own local `products = ref<Product[]>([])`
-  populated by a direct `productApi.getAllAsync()` in `onMounted` (line 583/1070),
-  bypassing `productStore.products` entirely — even though `ProductSearch.vue`'s
-  save goes through `productStore.createProductAsync()` which keeps the store
-  fresh. Result: a product saved on the search page doesn't appear on My Products
-  until the user hard-refreshes the page (confirmed by user, 2026-06-12). This is
-  a textbook R-003 (state-ownership / single source of truth) violation — two
-  sources of truth for the same domain collection.
-- **Why it's likely widespread:** the same pattern (page-local `ref<T[]>` +
-  direct API call in `onMounted` for a collection that has a Pinia store) almost
-  certainly exists on other pages. Quick suspects to audit:
-  - `DashboardPage.vue` (modified in current branch)
-  - `StockOverview.vue`, `StockItemDetailPage.vue`
-  - `RecipesOverview.vue`, `RecipeDetailPage.vue`
-  - `MealPlansOverview.vue`, `WastePage.vue`
-  Audit method: grep for `= ref<.*\[\]>\(\[\]\)` + `\.getAllAsync\(\)`
-  / `\.get.*Async\(\)` inside `pages/` and cross-reference what Pinia store
-  already owns that collection.
-- **Confirmed problem area:** `web_app/src/pages/MyProductsPage.vue` (lines
-  583, 587–607, 1070). Saved product invisible until refresh.
-- **Recommended resolution:** scoped Wave-A-ish prompt — (1) audit all `pages/`
-  for the pattern, (2) for each hit, replace the local ref + onMounted-fetch with
-  `storeToRefs(theStore)` + `theStore.refresh()`-equivalent, (3) make sure the
-  store's create/update/delete methods refresh state so reactivity is automatic.
-  Don't relocate fine client-only computeds (per R-003 addendum). Treat
-  `MyProductsPage` as the canonical fix to copy.
-- **Cross-ref:** ENGINEERING_STANDARDS R-003 (state ownership).
 
 ## [OPEN] FU-153 — Assistant LLM config: per-user, reachability probe, multi-provider
 - **Raised:** 2026-06-12 (user feedback during FU-085 verify)
@@ -1563,31 +1420,6 @@ long session summary. Distinct from the other logs:
   useful "I found a bug" affordance — but it now navigates to
   Help instead of pointing at an external tracker.
 
-## [OPEN] FU-143 — Backfill `picked_offer_price` for legacy lines
-- **Raised:** 2026-06-12 (State Ownership Chunk 6 impl)
-- **Type:** deferred job (optional)
-- **What:** Chunk 6 moved the offer-price snapshot from
-  *tick* to *add* / *select*. Rows created before this change
-  with a non-NULL `selected_product_id` but NULL
-  `picked_offer_price` (never ticked) won't have a snapshot
-  until the user later ticks them (the belt-and-braces hook
-  at `manage_shopping_list_lines.py` UpdateLineHandler tick
-  path + the finish-list fallback at `manage_shopping_list.
-  py:212-215`). A one-off script could snapshot-fill every
-  legacy row with `selected_product_id IS NOT NULL AND
-  picked_offer_price IS NULL`, picking the current offer for
-  the chosen product.
-- **Why deferred:** Optional. The belt-and-braces paths drain
-  legacy rows organically; nothing breaks if a never-ticked
-  legacy row stays unsnapshotted (it just doesn't appear in
-  budget / waste aggregates until ticked). At pre-release
-  scale this is fine to skip.
-- **Recommended resolution:** opportunistic — only worth
-  doing if a user later complains "budget number doesn't
-  match what's in my old draft lists". Then a small Alembic
-  data migration or one-shot script clears the deficit in a
-  single pass.
-
 ## [OPEN] FU-134 — Audit other `autoGenerate` call sites for Axis-B routing
 - **Raised:** 2026-06-12 (Cart Button Chunk 4 impl)
 - **Type:** follow-up
@@ -1610,22 +1442,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — re-evaluate when the
   `AddToListButton variant="bulk"` work lands for recipes (FU-131
   vicinity) and again when the global shortcut surface gets touched.
-
-## [OPEN] FU-133 — Promote generate-target picker into a shared `TargetListPicker`
-- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl)
-- **Type:** follow-up (R-001 carve-out)
-- **What:** `pickGenerateTarget` in
-  `web_app/src/pages/MealPlansOverview.vue` is a one-shot `$q.dialog`
-  radio picker (drafts + "+ Create new"). If a second surface needs
-  the same shape (likely candidates: FU-134 audit, future bulk
-  add-all-missing flows), extract it as
-  `components/dialogs/TargetListPickerDialog.vue` with props
-  `{ drafts, allowCreateNew, title?, message? }` and one resolved
-  payload type `{ kind: 'existing', id } | { kind: 'new' } | null`.
-- **Why deferred:** single consumer today — promoting now would be
-  speculative abstraction (R-001 judgement carve-out).
-- **Recommended resolution:** when FU-134's audit lands a second
-  consumer.
 
 ## [OPEN] FU-144 — Cart-state awareness for product-anchored adds
 - **Raised:** 2026-06-12 (FU-131 impl)

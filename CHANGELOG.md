@@ -5,6 +5,56 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Spend-by-store report now honours `actual_unit_price` overrides —
+  FU-229 (2026-06-29).** The Money-zone "Spend by store" widget
+  previously summed only the `picked_offer_price` snapshot from each
+  ticked line and ignored the user's till-receipt
+  `actual_unit_price` override. A line where the user typed a
+  different price at the till counted as the offer's headline price
+  instead of what was actually paid. The handler now applies the
+  same `actual → picked` ladder used by budget, waste, the assistant
+  and suggestions (`shopping_lists._line_price.line_paid_unit_price`).
+  Savings ("RRP − picked") deliberately stays snapshot-only — it
+  measures the deal, not what you paid.
+
+### Fixed
+- **Products saved on product-search now show up immediately on My
+  Products, Price History, and Reports — FU-154 (2026-06-29).**
+  Three pages each kept their own `ref<Product[]>` populated by a
+  direct `productApi.getAllAsync()` call, bypassing
+  `productStore.products`. So a product saved on the search page
+  (which writes through the store) was invisible until a hard
+  refresh on any of those three surfaces. Each page now reads
+  `products` via `storeToRefs(productStore)` and triggers refreshes
+  through `productStore.getProductsAsync()`; the store
+  initialises `products` to `[]` (not `undefined`) so consumers
+  never see a tri-state. R-003 (state ownership) violation closed.
+
+### Added
+- **Onboarding "demo dataset" toggle — FU-194 / L38 (2026-06-29).**
+  New opt-in card on the wizard's starter-data step ("Add a demo
+  recipe + this-week meal plan"). Off by default. When ticked,
+  Finish calls `POST /api/onboarding/seed-demo`, which creates one
+  plain "Spaghetti Aglio e Olio" recipe (with the three pantry
+  items it needs — reused by name if already present from a starter
+  pack), and a current-week meal plan with one Dinner entry today.
+  Rows aren't marked as demo — the user renames or deletes them
+  like any other entry. The endpoint is idempotent: a second call
+  with the recipe already present returns `seeded: false` and
+  writes nothing.
+
+### Fixed
+- **Assistant honours the household-configured expiring-soon window
+  — FU-187 (2026-06-29).** The four assistant tools that filter on
+  "expiring soon" (`search_stock` with `expiring_soon`,
+  `whats_expiring`, the pantry summary, the location urgency check)
+  used to read the bare `EXPIRING_SOON_WINDOW_DAYS` default
+  constant. They now resolve through `effective_expiring_soon_window`
+  / `AppSetting.expiring_soon_window_days`, so an admin retune of
+  the household window is reflected everywhere — assistant answers,
+  alerts list, and the location heatmap all agree.
+
 ### Changed
 - **Dashboard "Next to cook" card is meal-plan-driven — FU-298 (L272)
   (2026-06-29).** The old "Cookable tonight" card showed the top 3

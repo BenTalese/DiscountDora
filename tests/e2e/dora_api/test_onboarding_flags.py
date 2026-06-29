@@ -15,7 +15,10 @@ APP_SETTINGS = f"{BASE}/app-settings"
 ME = f"{BASE}/auth/me"
 CATALOG = f"{BASE}/onboarding/catalog"
 SEED_ITEMS = f"{BASE}/onboarding/seed-items"
+SEED_DEMO = f"{BASE}/onboarding/seed-demo"
 STOCK_ITEMS = f"{BASE}/stock-items"
+RECIPES = f"{BASE}/recipes"
+MEAL_PLANS = f"{BASE}/meal-plans"
 
 
 # ── products data-presence gate (FU-209) ────────────────────────────
@@ -109,3 +112,28 @@ def test__onboarding_seed_items__creates_prelocated_and_dedupes(api):
     assert second.json() == {"created": 0, "skipped": 1}
     still_one = requests.get(f"{STOCK_ITEMS}?filter=name:eq:{unique_name}").json()["items"]
     assert len(still_one) == 1
+
+
+# ── FU-194 demo dataset toggle ───────────────────────────────────────
+
+
+def test__onboarding_seed_demo__is_idempotent(api):
+    # The dev seed already ships an "Spaghetti Aglio e Olio" recipe, so the
+    # first call here lands as a no-op (`seeded: false`) AND a second call
+    # behaves identically — that's the contract: never duplicate.
+    first = requests.post(SEED_DEMO)
+    assert first.status_code == 200
+    body_one = first.json()
+    assert set(body_one.keys()) == {
+        "seeded", "items_created", "recipe_created", "meal_plan_created",
+    }
+    # On a freshly-seeded DB the recipe already exists, so seeded=False;
+    # on a clean DB (no seed) it'd be seeded=True with recipe_created=True.
+    # Whichever branch we landed in, a second call must match exactly.
+    second = requests.post(SEED_DEMO)
+    assert second.status_code == 200
+    assert second.json() == body_one
+    # Either way, exactly one recipe by that name exists afterward.
+    recipes = requests.get(RECIPES).json().get("items", [])
+    matches = [r for r in recipes if r.get("name") == "Spaghetti Aglio e Olio"]
+    assert len(matches) == 1

@@ -10,6 +10,346 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-229 — reports.py spend-by-store ignores `actual_unit_price` (ladder divergence)
+- **Raised:** 2026-06-22 (FU-227 chunk 5 — K2 ladder extract).
+- **Type:** finding (behaviour inconsistency).
+- **Resolution (2026-06-29):** spend-by-store now honours the
+  `actual_unit_price → picked_offer_price` ladder, matching budget /
+  waste / assistant / suggestions. Savings deliberately stays
+  snapshot-only (RRP − picked, not what you paid) per the FU's
+  carve-out.
+  - **`dora_api/features/reports/reports.py` `SpendByStoreHandler`:**
+    - Added `ShoppingListLine.actual_unit_price` to the SELECT
+      projection.
+    - Relaxed the WHERE filter from
+      `picked_offer_price.isnot(None)` to
+      `or_(picked_offer_price.isnot(None), actual_unit_price.isnot(None))`
+      — matches budget/waste posture (any line with a captured
+      price counts as spend). Kept the
+      `selected_product_id.isnot(None)` filter because store
+      grouping needs a product.
+    - Per-row unwrap: `float(actual if actual is not None else picked)`
+      — Python-level expression of the ladder (R-003 chokepoint in
+      `_line_price.line_paid_unit_price` is the canonical helper for
+      entity objects; this is the FU's explicit carve-out for the
+      column-projection path, with an inline comment naming the
+      duplication + reason).
+    - Added `or_` to the existing `sqlalchemy` import.
+    - Behaviour change: a user's till-receipt override now flows into
+      spend-by-store totals. Previously invisible.
+  - **`dora_api/features/reports/reports.py` `SavingsCapturedHandler`:**
+    untouched. `list_price_at_pick − picked_offer_price` is
+    snapshot-of-deal accounting; the actual paid price would muddle
+    the savings claim.
+  - **New regression test:**
+    `tests/e2e/dora_api/test_spend_by_store.py` —
+    `test__spend_by_store__honours_actual_unit_price_over_picked`.
+    Creates a unique store + product (`price_now=10`), adds a line
+    selecting that product (snapshots `picked_offer_price=10`),
+    PATCHes `actual_unit_price=7` + tick, finishes the list, and
+    asserts the spend-by-store row reads `spend=7.0` not `10.0`.
+    Isolated per-test data (unique store name) so the dev-seed
+    Woolworths/Coles spend doesn't perturb the assertion.
+  - **Verification.** New test passes; full suite **537 passed** /
+    5 pre-existing failures (the FU-328 set + the
+    `test__register_barcode__against_product__lookup_traverses_via_product`
+    flake that's order-dependent; both unaffected by this change).
+    No new test failures introduced.
+- **Pricing-data nuance kept in mind** (per user direction):
+  - Savings = snapshot accounting — not "what you paid". Untouched.
+  - Spend-by-store = "what did I spend" — ladder applied.
+  - Postgres / SQLite portability respected (FU-045 in effect):
+    `or_` + Python-level null-coalesce work on both engines; no
+    SQL-dialect-specific functions.
+
+## [RESOLVED] FU-210 — Onboarding de-persona: remove persona fork + all product framing
+- **Raised:** 2026-06-17 (products-as-overlay pivot).
+- **Type:** deferred job (build — a *removal*).
+- **Resolution (2026-06-29):** code work was complete on 2026-06-17
+  (after a user-directed reversal of an over-deletion); closed now
+  under the close-when-only-verify-left policy. Final ship list,
+  reflecting the corrected scope:
+  - **Persona FORK removed from setup** — `WelcomeWizard.vue` + `onboardingContent.ts`
+    lost the persona step, `personaChoice` / `customFlags` /
+    `effectiveInstallFlags`, `selectPersona` / `applyPersona`, the
+    `AppSettingsApiService` use, and `PERSONA_PRESETS` /
+    `INSTALL_FLAG_META` / `InstallFlags`. No install-flag / per-user-pref
+    writes happen at onboarding any more. Flow-cards no longer gate
+    on persona flags. Fresh installs use `AppSetting` defaults; money
+    is its own Settings toggle.
+  - **`LOOP_INSIGHT` stripped from `onboardingContent.ts`** — the dim
+    "Spend smarter / coming soon" satellite was a P3-Honest violation
+    (advertised an unbuilt feature). Dropped the now-unused
+    `insight: boolean` field on `PersonaPreview`.
+  - **`PERSONA_PREVIEWS` re-labelled to outcome chips** — "Cooking" /
+    "Spend" / "Everything" → "Mostly cooking" / "Watching spend" /
+    "All of it". Keys unchanged so any saved draft survives.
+  - **`OnboardingLoop.vue`** — LOOP_INSIGHT satellite button + its
+    `focusedKey === 'insight'` branches + the `lightbulb` mood swap
+    + the dead `.loop-insight*` CSS all removed. Persona-preview
+    aria-label + chip header re-worded from "Preview for / persona"
+    to "What you're here for".
+  - **`WelcomeWizard.vue` Finish step** — OnboardingLoop recap
+    ("Here's the loop you just set up — tap any stage…") removed;
+    the cinematic Story plays the hero loop earlier so the recap was
+    repetitive. Confetti + flow-cards kept.
+  - **Cinematic Story stage stays as-is** — `NARRATIVE_SCENES` was
+    never persona-forked.
+  - **Loop-in-Help + main-menu/help-section reordering split to
+    [[FU-220]]** (Help-IA design pass; not a removal blocker).
+  - Verified: `vue-tsc --noEmit` clean; `npm run lint` clean; full
+    pytest 401/401 green.
+- **Static-confirmed verify item** (`DORA_VERIFY.md` line 588 —
+  "WelcomeWizard.vue admin step does NOT say 'scrape' merchants"):
+  grep over `WelcomeWizard.vue` + `onboardingContent.ts` for
+  "scrape" / "merchant" returned no matches as of 2026-06-29. That
+  bullet can be ticked without a click-through.
+- **Outstanding verify** (`DORA_VERIFY.md` → "Onboarding de-persona
+  — remaining items — origin FU-210"): the other 7 items are real
+  browser-pass checks (hero-loop renders without persona shaping;
+  no persona/Customise/products step in setup; defaults applied,
+  spend via Settings; draft resume works; Story plays without
+  LOOP_INSIGHT; renamed chips read sensibly; Finish step is clean).
+  User walks at his own time.
+
+## [RESOLVED] FU-213 — Price substrate: `StockItemPriceObservation` + server cost helper + consumers
+- **Raised:** 2026-06-17 (products-as-overlay pivot — carried from the
+  now-resolved FU-182).
+- **Type:** deferred job (build).
+- **Resolution (2026-06-29):** code-complete and backend-green since
+  2026-06-17; closed now because browser-verify is the only outstanding
+  work, and that lives in `DORA_VERIFY.md` (per the
+  close-when-only-verify-left policy). What shipped:
+  - `StockItemPriceObservation` entity + table + map; migration
+    `b3d5f7a9c2e4` applies clean.
+  - Server-owned `get_stock_item_unit_cost_at(stock_item, when)`
+    helper in `domain/stock_status.py` (R-003 — one source for the
+    per-unit cost rule).
+  - CRUD at `/stock-items/{id}/price-observations`; `price_observations`
+    + `unit_cost` on the detail DTO.
+  - Money-gated "Prices" section on the stock-item detail Overview
+    (`useMoneyEnabled()`).
+  - Cost-consumer rebase (stock-value report + recipe cost estimate)
+    split to [[FU-216]] and resolved 2026-06-29.
+  - Tests: `tests/e2e/dora_api/test_price_observations.py` 4/4
+    (add → derived `unit_cost=3` on 6/2, latest-wins, delete clears,
+    non-positive rejected). `vue-tsc` + `eslint` clean.
+  - **Outstanding verify (DORA_VERIFY.md → "Stock-item Prices section
+    — origin FU-213"):** log a price observation → derived `unit_cost`
+    shows correctly; remove a price observation; section is hidden
+    when Money features are off. User walks at his own time.
+
+## [RESOLVED] FU-211 — `PreferredBuy` — everyday free-text "what I buy" on the stock item
+- **Raised:** 2026-06-17 (products-as-overlay pivot).
+- **Type:** deferred job (build — new feature).
+- **Resolution (2026-06-29):** code-complete and backend-green since
+  2026-06-17; closed now because browser-verify is the only outstanding
+  work, and that lives in `DORA_VERIFY.md`. What shipped:
+  - `PreferredBuy(id, stock_item_id FK cascade, label, position,
+    created_at)` entity + table + map; migration `a2c4e6f8b1d3`
+    applies clean.
+  - CRUD at `/stock-items/{id}/preferred-buys` (add / rename / delete
+    / reorder); `preferred_buys` on the detail DTO; model + API
+    service methods.
+  - "Preferred buys" editor on the stock-item detail Overview (add /
+    inline rename / up-down reorder / remove via `withBusyReload`).
+  - Always-available (NOT gated by products or money); strictly
+    separate from `Product` per the "two separate systems" principle.
+  - The shopping-list hint (`ShoppingListLine.preferred_buy_id`) was
+    split to [[FU-215]] and resolved 2026-06-29.
+  - Tests: `tests/e2e/dora_api/test_preferred_buys.py` 5/5
+    (add → detail, rename, delete, reorder, blank rejected, cross-item
+    scope). `vue-tsc` + `eslint` clean.
+  - **Outstanding verify (DORA_VERIFY.md → "PreferredBuy — origin
+    FU-211"):** stock-item detail → add / rename / reorder (up-down)
+    / remove preferred-buy entries; CASCADE on item delete (preferred
+    buys go too). User walks at his own time.
+
+## [RESOLVED] FU-154 — Page-local product/stock collections bypass their stores (R-003 smell, likely widespread)
+- **Raised:** 2026-06-12 (during FU-014 image-bug investigation).
+- **Type:** finding.
+- **Resolution (2026-06-29):** audited every `ref<T[]>` in `pages/`
+  per the FU's recommended grep method, cross-referenced against the
+  17 Pinia stores, and fixed every store-shadow case.
+  - **Audit findings.** Only product had real shadows; three pages
+    duplicated `productStore.products`:
+    1. `MyProductsPage.vue:598` — the confirmed user-visible bug
+       (save on product-search invisible until refresh).
+    2. `PriceHistoryPage.vue:259` — `candidates = ref<Product[]>([])`
+       populated by direct `productApi.getAllAsync()`.
+    3. `ReportsPage.vue:281` — `allProducts = ref<Product[]>([])`,
+       same pattern.
+    Other `ref<T[]>` matches across `pages/` were intentional
+    page-local state (per-page picker options, filter selections,
+    bulk-selection sets, dropdown caches) — not shadows of any
+    Pinia-owned collection. None of the recipe / stock-item /
+    meal-plan stores had page-local shadows.
+  - **Fixes.**
+    - `MyProductsPage.vue` — added `useProductStore` import,
+      replaced local `products = ref<Product[]>([])` with
+      `storeToRefs(productStore).products`, swapped
+      `productApi.getAllAsync()` → `productStore.getProductsAsync()`
+      inside `loadAll`. Bulk-update calls (`productApi.updateAsync`
+      in the inactive-marking loop) stay direct + are followed by
+      `loadAll()` which now also refreshes the store.
+    - `PriceHistoryPage.vue` — same pattern, kept `candidates` as
+      the local name (aliased to the store ref via `storeToRefs`)
+      so the rest of the page reads unchanged. Dropped the now-
+      unused `ProductApiService` import.
+    - `ReportsPage.vue` — same pattern; `allProducts` aliased to
+      the store ref; `loadProductsCatalogue()` calls
+      `productStore.getProductsAsync()` then derives the
+      page-local `productOptions` display slice. Dropped the
+      `ProductApiService` import.
+  - **`productStore.products` initialised to `[]` not `undefined`.**
+    The store was declared `ref<Product[]>()` (implicit `undefined`
+    until first hydration), which made the aliased refs needlessly
+    nullable. One caller (`ShoppingListDetail.vue:2119`) already
+    used `?.find` so it stays safe through the change.
+  - **Verification.** `npx vue-tsc --noEmit` clean; `npx eslint`
+    on the four touched files clean; backend suite unaffected
+    (538/541, 3 pre-existing FU-328 failures).
+  - **Cross-ref**: ENGINEERING_STANDARDS R-003 (state ownership) —
+    one source of truth per domain collection.
+
+## [RESOLVED] FU-143 — Backfill `picked_offer_price` for legacy lines
+- **Raised:** 2026-06-12 (State Ownership Chunk 6 impl).
+- **Type:** deferred job (optional).
+- **Resolution (2026-06-29 — closed as moot, no code change).** User
+  asked whether anything was actually owed here pre-release with no
+  active users. Audited the FU's premise and the belt-and-braces
+  hooks:
+  - The FU describes a **one-shot backfill** of pre-existing rows
+    matching `selected_product_id IS NOT NULL AND
+    picked_offer_price IS NULL`. Pre-release with no users → **zero
+    such rows exist**; there is nothing to backfill.
+  - The runtime safety net the FU named is intact:
+    `manage_shopping_list_lines.py:252-253` — `UpdateLineHandler`
+    snapshots on tick when `picked_offer_price` is missing;
+    `manage_shopping_list.py:250-251` — finish-list fallback
+    snapshots any ticked line that arrives without one. Any future
+    "legacy row" accruing across a deployment is drained by those
+    hooks on the next interaction.
+  - **Decision:** close. If a snapshot-semantics change post-launch
+    later requires a real backfill, that's a fresh FU with a known
+    row count and a defined migration window — not this one.
+
+## [RESOLVED] FU-133 — Promote generate-target picker into a shared `TargetListPicker`
+- **Raised:** 2026-06-12 (Cart Button Chunk 4 impl).
+- **Type:** follow-up (R-001 carve-out).
+- **Resolution (2026-06-29 — assessed, kept inlined).** User asked
+  for a value re-assessment after the meal-planner rebuild rounds.
+  Audited every `$q.dialog({type:'radio',...})` site in the SPA — 7
+  total: `useMealPlanner.pickGenerateTarget` (the FU's source, now
+  moved out of `MealPlansOverview.vue` into the composable),
+  `AddToListButton.onInlineProductClick`,
+  `AddToListButton` "Add to another", `useStockItemActions`
+  cart-shortcut, `StockOverview.pickActiveListId`,
+  `ShoppingListDetail` swap-substitute, `ShoppingListDetail`
+  move-unticked. **Outcome: don't extract yet.**
+  - **FU-133's distinguishing feature (`+ Create new list`) is
+    unique** — no other picker offers a "create" branch or carries
+    the corresponding tri-state result (`id | null = create |
+    undefined = cancelled`). Extracting would force every other
+    consumer to opt out of the option.
+  - **The other 6 sites are similar-but-not-same**: different
+    candidate filters (drafts only / active ∖ on-list / passed-in /
+    other active lists), different empty-state behaviour (toast /
+    sister dialog / upstream-handled), different OK labels.
+    Sharing them would produce a parameter-bag API — exactly the
+    R-001 anti-pattern the original carve-out warned against.
+  - **No "shape-identical second consumer" appeared** in the
+    meal-planner rebuild rounds. The rebuild moved the picker from
+    a page into the composable; it didn't spawn a sibling.
+  - **Triggers to revisit** (none of which fire today): a 3rd
+    "+ Create new" picker; a visual overhaul of the radio dialog
+    where touching 7 nearly-identical surfaces becomes the
+    cheaper-to-extract-once moment; or a thin `useShoppingListPicker`
+    composable that owns *only* the dialog plumbing (cancel/dismiss
+    + tri-state) without trying to share filter/empty-state.
+
+## [RESOLVED] FU-194 — Onboarding demo data (L38) — deferred from C-5.5
+- **Raised:** 2026-06-16 (Onboarding C-5.5).
+- **Type:** deferred job.
+- **Resolution (2026-06-29):** built the demo dataset end-to-end on a
+  Python-capable box so the FK graph could be verified.
+  - **Backend** (`dora_api/features/onboarding/onboarding.py`):
+    `POST /api/onboarding/seed-demo` → `SeedDemoHandler.handle()`
+    creates one Recipe ("Spaghetti Aglio e Olio") plus the three
+    StockItems it needs (RecipeIngredient → StockItem FKs are
+    non-nullable, so items go in first). Reuses existing items by
+    name (so a user who picked the starter pack "Spaghetti pasta"
+    doesn't get a duplicate); creates the rest at the most-stocked
+    level. Then a MealPlan anchored on this household-week's Monday
+    with one MealPlanEntry (today, Dinner, 2 servings) so the dish
+    lands in the dashboard's Next-to-cook card immediately. All
+    rows are **plain** — no `is_demo` marking — per the FU's "the
+    user deletes like any other entry" rule. Idempotent: a second
+    call with the demo recipe already present returns
+    `{seeded: false, items_created: 0, recipe_created: false,
+    meal_plan_created: false}` so re-finishing never duplicates.
+  - **Frontend**: `seedDemoAsync` on `onboardingApiService`;
+    `SeedDemoResult` in `models/onboarding.ts`; new `seedDemo:
+    boolean` flag on the wizard's `WizardDraft` (default `false`,
+    persisted with the rest of the draft via the `...form` spread);
+    new card in the seed step ("Add a demo recipe + this-week
+    meal plan") with the same `.seed-card` chrome as the
+    groups/locations cards. `applyDraft` calls
+    `onboardingApi.seedDemoAsync()` *after* `seedItemsAsync` so the
+    demo can reuse a starter-pack pantry item by name when the user
+    picked one.
+  - **Tests**: new `test__onboarding_seed_demo__is_idempotent` in
+    `tests/e2e/dora_api/test_onboarding_flags.py` — asserts the
+    DTO shape, that two consecutive calls return identical bodies,
+    and that exactly one recipe by that name exists afterward.
+    Full suite: 537 passed, 4 pre-existing FU-328 failures.
+  - **Decisions made**:
+    - **No `RecipeCollection`** — the column is nullable
+      (`Recipe.recipe_collection: RecipeCollection | None`), so
+      the demo doesn't need to fabricate one. Keeps the surface
+      area small.
+    - **Idempotency by recipe name**, mirroring the
+      groups/locations/seed-items endpoints. The whole demo skips
+      if "Spaghetti Aglio e Olio" already exists (including dev
+      DBs where `seed.py` already ran).
+    - **No `is_demo` marker on rows**, per the FU spec. Means we
+      can't later "clean up the demo" with a single DELETE — but
+      the FU explicitly wanted plain rows, and the alternative
+      (marker column + cascade) is the opposite of what the user
+      asked for.
+    - **Schedule for today, not Wednesday.** The FU and the seed
+      example used "Wednesday Dinner", but anchoring on today is
+      friendlier when the user finishes onboarding mid-week — the
+      entry shows up on the dashboard immediately rather than in
+      the future.
+  - **COVERAGE_GAPS**: L38 can now flip from gap → covered when
+    the doc index is next swept.
+
+## [RESOLVED] FU-187 — Assistant ignores the configurable expiring-soon window (uses the constant default)
+- **Raised:** 2026-06-15 (Alerts C-9.2 — threshold threading).
+- **Type:** finding / consistency gap.
+- **Resolution (2026-06-29):** threaded the `AppSetting`-resolved
+  window through the four assistant tool sites that previously read
+  the bare `EXPIRING_SOON_WINDOW_DAYS` constant:
+  - `search_stock` (`expiring_soon` filter): horizon now uses
+    `_resolve_expiring_window(repo)`.
+  - `whats_expiring`: `within_days` default falls back to the
+    resolved window when the arg is missing (so an admin re-tune is
+    honoured for unqualified questions).
+  - Pantry summary (urgency buckets near line 1418).
+  - Location urgency (`urgent_only` filter near line 1877).
+  Added a per-call helper `_resolve_expiring_window(repo)` in
+  `tools.py` that wraps
+  `effective_expiring_soon_window(AppSetting)` — the same pattern
+  the alerts handler + location tree use, so the rule lives in one
+  place (R-003). Dropped the now-unused `EXPIRING_SOON_WINDOW_DAYS`
+  import and replaced the import-site comment with one describing
+  the new state. Backend suite: 537 passed (4 pre-existing
+  FU-328 failures, unchanged); the existing
+  `test__alerts__expiring_soon_window_threshold_re_derives` still
+  passes (the assistant has no direct e2e for expiry-tool wording,
+  but the underlying helper is exercised by the alerts path).
+
 ## [RESOLVED] FU-298 — Dashboard "Cookable tonight" upgrade (L272: meal-plan-driven + ready/missing)
 - **Raised:** 2026-06-24 (Dashboard rebuild Phase 5).
 - **Type:** follow-up — was slated as a Phase-5 item.

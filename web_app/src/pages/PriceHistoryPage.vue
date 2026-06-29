@@ -245,18 +245,21 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
     import { seriesColour } from 'src/composables/usePriceHistoryPalette';
-    import ProductApiService from 'src/services/api/productApiService';
     import type { Product } from 'src/models/product';
     import PriceHistoryApiService, {
         type PriceAlert, type PriceHistorySeries, type PriceRange,
     } from 'src/services/api/priceHistoryApiService';
+    import { useProductStore } from 'src/stores/productStore';
+    import { storeToRefs } from 'pinia';
 
     const $q = useQuasar();
     const route = useRoute();
-    const productApi = new ProductApiService();
     const historyApi = new PriceHistoryApiService();
+    // FU-154 — products come through the store (R-003), so a save on the
+    // product-search surface is visible here without a hard refresh.
+    const productStore = useProductStore();
+    const { products: candidates } = storeToRefs(productStore);
 
-    const candidates = ref<Product[]>([]);
     const selectedIds = ref<string[]>([]);
     const filter = ref('');
     const range = ref<PriceRange>('90d');
@@ -385,8 +388,10 @@
     watch([selectedIds, range], () => { void refreshSeries(); });
 
     onMounted(async () => {
-        const page = await productApi.getAllAsync();
-        candidates.value = page.items ?? [];
+        // FU-154 — hydrate via the store so a save on the product-search
+        // surface (which writes through `productStore.createProductAsync`)
+        // is visible here without a hard refresh.
+        await productStore.getProductsAsync();
         // Deep-link: ?product_id=<id> pre-selects.
         const preselect = (route.query.product_id as string | undefined) ?? null;
         if (preselect && candidates.value.find((p) => p.product_id === preselect)) {

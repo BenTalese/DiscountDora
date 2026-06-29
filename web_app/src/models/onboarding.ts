@@ -72,3 +72,14 @@ export type SeedItemsResult = {
     created: number;
     skipped: number;
 };
+
+// FU-194 — opt-in demo dataset (one recipe + the StockItems it needs + a
+// current-week MealPlan with one entry). The handler is idempotent; `seeded`
+// is `false` when the demo recipe already existed (so a re-finish never
+// duplicates rows).
+export type SeedDemoResult = {
+    seeded: boolean;
+    items_created: number;
+    recipe_created: boolean;
+    meal_plan_created: boolean;
+};

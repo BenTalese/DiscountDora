@@ -576,6 +576,7 @@
     import type { StockItem } from 'src/models/stockItem';
     import ProductApiService from 'src/services/api/productApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
+    import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -587,29 +588,34 @@
     const router = useRouter();
     const productApi = new ProductApiService();
     const stockItemApi = new StockItemApiService();
+    const productStore = useProductStore();
     const shoppingListStore = useShoppingListStore();
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const { addItems } = useShoppingListActions();
 
+    const { products } = storeToRefs(productStore);
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
 
-    const products = ref<Product[]>([]);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
+    // FU-154 — products comes via the store (R-003) so a save on the
+    // product-search surface (which goes through `productStore.createProductAsync`)
+    // is immediately visible here without a hard refresh. `getProductsAsync`
+    // is the force-refetch path the page uses on mount, on retry, and after
+    // bulk mutations below.
     async function loadAll() {
         loading.value = true;
         loadError.value = null;
         try {
-            const [page] = await Promise.all([
-                productApi.getAllAsync(),
+            await Promise.all([
+                productStore.getProductsAsync(),
                 stockItemStore.ensureLoadedAsync(),
                 stockLevelStore.ensureLoadedAsync(),
                 shoppingListStore.refreshAsync(),
             ]);
-            products.value = page.items;
         } catch (err) {
             loadError.value = `Could not load: ${describeApiError(err)}`;
         } finally {

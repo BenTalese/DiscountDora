@@ -30,13 +30,16 @@ from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
-# C-9.2 note: the assistant reads the EXPIRING_SOON_WINDOW_DAYS *default* (not
-# the admin-configured AppSetting.expiring_soon_window_days that alerts + the
-# heatmap now honour). This is the constant-as-default carve-out allowed by
-# IMPL_PLAN_ALERTS C-9.2; threading the override through here is deferred
-# (DORA_FOLLOWUPS FU-187). It's the one default, not a second literal (R-003).
-from dora_api.domain.stock_status import (EXPIRING_SOON_WINDOW_DAYS,
-                                          LOW_STOCK_SEQUENCE, is_out_of_stock,
+from dora_api.domain.entities.app_setting import AppSetting
+# FU-187 — the assistant now honours the admin-configured expiring-soon window
+# (AppSetting.expiring_soon_window_days), matching alerts + the location
+# heatmap. The constant below is still the seeded default; the resolver
+# `effective_expiring_soon_window` layers the override on top (R-003 — one
+# default, never a second literal). `_resolve_expiring_window()` is the
+# repo-aware helper the assistant tools use per call.
+from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
+                                          effective_expiring_soon_window,
+                                          is_out_of_stock,
                                           needs_restock)
 from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
@@ -891,6 +894,16 @@ def _truthy(value: Any) -> bool:
     return str(value).strip().lower() in ("1", "true", "yes")
 
 
+def _resolve_expiring_window(repo) -> int:  # noqa: ANN001 — duck-typed repository
+    """FU-187 — household-configured expiring-soon window for an assistant
+    tool call. Mirrors the alerts/heatmap pattern: one resolver, ``AppSetting``
+    overlaid on the default (R-003). Falls back to ``EXPIRING_SOON_WINDOW_DAYS``
+    when no AppSetting row exists or the column is unset.
+    """
+    settings = repo.get(AppSetting).all()
+    return effective_expiring_soon_window(settings[0] if settings else None)
+
+
 def search_stock(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
     query = (
@@ -908,7 +921,8 @@ def search_stock(args: dict) -> list[dict]:
         conditions.append(EntityField(StockLevel, StockLevel.Fields.SEQUENCE).gte(LOW_STOCK_SEQUENCE))
     if _truthy(args.get("expiring_soon")):
         # R-021 — expiring-soon horizon evaluates in household timezone.
-        horizon = household_today(repo) + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
+        # FU-187 — window honours AppSetting override, not the bare default.
+        horizon = household_today(repo) + timedelta(days=_resolve_expiring_window(repo))
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).is_not_null())
         conditions.append(EntityField(StockItem, StockItem.Fields.EXPIRY_DATE).lte(horizon))
     if _truthy(args.get("flagged_only")):
@@ -1321,10 +1335,14 @@ def suggest_substitution(args: dict) -> list[dict]:
 
 def whats_expiring(args: dict) -> list[dict]:
     repo = SqlAlchemyRepository()
+    # FU-187 — when the caller doesn't specify `within_days`, fall back to the
+    # household-configured window (not the bare default), so the assistant's
+    # answer agrees with alerts + the location heatmap.
+    default_window = _resolve_expiring_window(repo)
     try:
-        horizon_days = int(args.get("within_days", EXPIRING_SOON_WINDOW_DAYS))
+        horizon_days = int(args.get("within_days", default_window))
     except (TypeError, ValueError):
-        horizon_days = EXPIRING_SOON_WINDOW_DAYS
+        horizon_days = default_window
     # R-021 — expiring lookup boundary uses the household timezone.
     today = household_today(repo)
     cutoff = today + timedelta(days=max(0, horizon_days))
@@ -1414,8 +1432,9 @@ def pantry_health(_args: dict) -> list[dict]:
     flagged = sum(1 for i in items if i.is_flagged)
     open_items = sum(1 for i in items if i.is_open)
     # R-021 — household-tz boundary for the expiring/expired buckets.
+    # FU-187 — window honours AppSetting override, not the bare default.
     today = household_today(repo)
-    horizon = today + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
+    horizon = today + timedelta(days=_resolve_expiring_window(repo))
     expiring_soon = sum(
         1 for i in items
         if i.expiry_date and i.expiry_date <= horizon and i.expiry_date >= today
@@ -1873,8 +1892,9 @@ def find_location(args: dict) -> list[dict]:
     )
 
     # R-021 — household-tz "today" for urgency thresholds.
+    # FU-187 — window honours AppSetting override, not the bare default.
     today = household_today(repo)
-    horizon = today + timedelta(days=EXPIRING_SOON_WINDOW_DAYS)
+    horizon = today + timedelta(days=_resolve_expiring_window(repo))
 
     def is_urgent(it: StockItem) -> bool:
         level_bad = needs_restock(it.stock_level)

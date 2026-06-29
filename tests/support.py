@@ -1,5 +1,89 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
+
+
+# ── Shared response matchers (FU-169 / PROPOSAL_TEST_SUITE_IMPROVEMENTS §C)
+# Centralises the two contract shapes every router test re-asserts:
+#  - RFC-7807 problem-detail bodies (used for every 4xx / 5xx)
+#  - the `{items, total, page, limit}` list envelope
+# When the contract moves, one update here replaces ~40 inline dicts. New
+# tests should reach for these matchers rather than re-typing the shape.
+
+
+def assert_problem(
+    response,
+    status: int,
+    *,
+    field: str | None = None,
+    detail: str | None = None,
+    title: str | None = None,
+) -> dict[str, Any]:
+    """Assert ``response`` is an RFC-7807 problem-detail body.
+
+    Checks the status code, ``application/problem+json`` content type, and
+    (optionally) that ``errors[field]`` exists and / or ``detail`` / ``title``
+    contains the given substring.
+
+    Returns the parsed JSON body so callers can drill deeper without
+    re-parsing (``problem = assert_problem(resp, 400, field="name")``).
+    """
+    assert response.status_code == status, (
+        f"expected {status}, got {response.status_code}: {response.text!r}"
+    )
+    content_type = response.headers.get("Content-Type", "")
+    assert content_type.startswith("application/problem+json"), (
+        f"expected application/problem+json, got {content_type!r}"
+    )
+    body = response.json()
+    assert isinstance(body, dict), f"problem body must be an object, got {type(body).__name__}"
+    if field is not None:
+        errors = body.get("errors")
+        assert isinstance(errors, dict), (
+            f"expected errors dict, got {errors!r}"
+        )
+        assert field in errors, (
+            f"expected field {field!r} in errors, got keys={list(errors)}"
+        )
+    if detail is not None:
+        actual_detail = body.get("detail", "")
+        assert detail in actual_detail, (
+            f"expected detail to contain {detail!r}, got {actual_detail!r}"
+        )
+    if title is not None:
+        actual_title = body.get("title", "")
+        assert title in actual_title, (
+            f"expected title to contain {title!r}, got {actual_title!r}"
+        )
+    return body
+
+
+def assert_envelope(response, *, expect_total: int | None = None) -> list:
+    """Assert ``response`` is a 200 list envelope and return ``items``.
+
+    The list endpoints all return ``{items, total, page, limit}``; this
+    matcher centralises the pagination-shape check. Pass ``expect_total``
+    to also assert the count.
+
+    Usage::
+
+        items = assert_envelope(resp, expect_total=5)
+        assert items[0]["name"] == "Foo"
+    """
+    assert response.status_code == 200, (
+        f"expected 200, got {response.status_code}: {response.text!r}"
+    )
+    body = response.json()
+    assert isinstance(body, dict), f"envelope must be an object, got {type(body).__name__}"
+    for key in ("items", "total", "page", "limit"):
+        assert key in body, f"envelope missing {key!r}; keys={list(body)}"
+    items = body["items"]
+    assert isinstance(items, list), f"envelope.items must be a list, got {type(items).__name__}"
+    if expect_total is not None:
+        assert body["total"] == expect_total, (
+            f"expected total={expect_total}, got {body['total']}"
+        )
+    return items
 
 
 def is_valid_datetime(value, format=None):

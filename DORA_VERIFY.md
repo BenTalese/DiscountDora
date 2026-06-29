@@ -587,6 +587,20 @@ surface — pick a surface, walk it top-to-bottom.
 - [ ] Finish step is clean
 - [ ] `WelcomeWizard.vue` admin step does NOT say "scrape" merchants (stale post-divorce copy)
 
+### Onboarding demo dataset toggle — origin FU-194
+- [ ] Wizard's seed step: the "Add a demo recipe + this-week meal plan" card is **off by default** (no auto-tick)
+- [ ] Tick it, walk through to Finish on a fresh account → cookbook shows "Spaghetti Aglio e Olio", stock has Spaghetti pasta / Garlic cloves / Olive oil (created if missing), `/meal-plans` shows a current-week plan with one Dinner entry
+- [ ] Dashboard's "Next to cook" card immediately surfaces the entry (with a Ready / Missing badge depending on stock levels)
+- [ ] Restart onboarding + Finish again with the toggle on → no duplicates (recipe by name still 1, stock items not doubled)
+- [ ] Tick the toggle on an account that already has a Spaghetti pasta starter-pack item → demo reuses it (no second "Spaghetti pasta" row)
+- [ ] Demo rows behave as plain rows: deletable, renamable, no special "demo" badge anywhere
+
+### Assistant honours configurable expiring-soon window — origin FU-187
+- [ ] Settings → app settings: change `expiring_soon_window_days` from 7 to 3 (or via PATCH `/api/app-settings`)
+- [ ] Ask Dora "what's expiring soon?" → only items within 3 days are listed (matching the alerts list and the location heatmap)
+- [ ] Ask Dora the pantry summary → "expiring soon" count agrees with the alerts page
+- [ ] Reset window to 7 → assistant agrees again
+
 ### Onboarding sell-copy honesty (P3 Honest gate) — origin FU-184
 - [ ] Walk the running app and confirm each loop-stage claim in `onboardingContent.ts` (`LOOP_STAGES`, `LOOP_CENTRE`, `LOOP_INSIGHT`, `NARRATIVE_SCENES`, `PERSONA_PREVIEWS`) is literally true
 - [ ] Does finishing a shop really auto-restock?
